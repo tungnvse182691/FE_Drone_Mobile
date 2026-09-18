@@ -1,4 +1,4 @@
-# Completion Log — P1-03 CREW (Phân khu `(crew)`)
+# Completion Log — P1-02 CREW (Phân khu `(crew)`)
 
 > **Mẫu nghiệm thu chuẩn Antigravity Delivery** — Đã điền cho Phase Crew.
 > **Đặt tên file:** `P{person}-{phase}-{tên-phase}-completion.md`
@@ -9,8 +9,9 @@
 
 | Trường | Giá trị |
 |---|---|
-| **Phase** | P1-03 |
+| **Phase** | P1-02 |
 | **Tên phase** | Crew Role — nhóm `(crew)` 11 file theo wireframe M-CREW-01..11 |
+
 | **Người thực hiện** | Tùng |
 | **Ngày hoàn thành** | 2026-09-17 |
 | **AI hỗ trợ** | OpenCode (Big Pickle) + subagent review độc lập |
