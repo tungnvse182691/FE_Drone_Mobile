@@ -60,10 +60,7 @@ export default function PmBatchingScreen() {
   };
 
   return (
-    <SafeAreaScreen
-      scroll
-      header={<AppHeader subtitle="Gộp Đợt Sửa Chữa" showBack fallbackRoute="/(pm)/ai-inbox" />}
-    >
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Gộp Đợt Sửa Chữa" />}>
       <View style={styles.titleRow}>
         <Text style={[typography.titleLg, styles.heading]}>Lập kế hoạch thi công đợt</Text>
         <View style={styles.routeBadge}>
