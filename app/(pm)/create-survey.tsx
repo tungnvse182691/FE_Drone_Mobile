@@ -154,7 +154,10 @@ export default function PmCreateSurveyScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaScreen scroll header={<AppHeader subtitle="Khảo Sát" />}>
+      <SafeAreaScreen
+        scroll
+        header={<AppHeader subtitle="Khảo Sát" showBack fallbackRoute="/(pm)/surveys" />}
+      >
         <Card style={styles.formCard}>
           <Text style={[typography.titleMd, styles.cardTitle]}>Thông tin khảo sát</Text>
           <SelectRow label="Dự án" value={project} onPress={pickProject} />

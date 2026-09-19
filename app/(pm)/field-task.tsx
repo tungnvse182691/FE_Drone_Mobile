@@ -53,7 +53,10 @@ export default function PmFieldTaskScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaScreen scroll header={<AppHeader subtitle="Kiểm Tra Thực Địa" />}>
+      <SafeAreaScreen
+        scroll
+        header={<AppHeader subtitle="Kiểm Tra Thực Địa" showBack fallbackRoute="/(pm)/ai-inbox" />}
+      >
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <Text style={[typography.titleLg, styles.defectId]}>#DF-0231</Text>

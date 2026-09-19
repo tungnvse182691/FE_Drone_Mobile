@@ -64,7 +64,10 @@ export default function PmVerifyAScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaScreen scroll header={<AppHeader subtitle="Hộp Thư AI" />}>
+      <SafeAreaScreen
+        scroll
+        header={<AppHeader subtitle="Hộp Thư AI" showBack fallbackRoute="/(pm)/ai-inbox" />}
+      >
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <Text style={[typography.titleLg, styles.defectId]}>#DF-0231</Text>
