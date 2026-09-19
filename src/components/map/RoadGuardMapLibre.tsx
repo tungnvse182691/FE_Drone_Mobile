@@ -55,38 +55,76 @@ export function RoadGuardMapLibre({
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F8F9FA; font-family: -apple-system, Roboto, sans-serif; }
-    .custom-defect-marker {
+    .custom-defect-container {
+      cursor: pointer;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
+    }
+    .custom-defect-pin {
+      width: 36px;
+      height: 36px;
       background: #E5484D;
       border: 2.5px solid #FFFFFF;
-      border-radius: 50%;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-      color: #fff;
-      font-weight: bold;
-      font-size: 11px;
-      cursor: pointer;
-    }
-    .custom-vehicle-marker {
+      border-radius: 50% 50% 50% 0;
+      transform: rotate(-45deg);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.35);
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
-      background: #3B82F6;
+    }
+    .custom-defect-icon {
+      transform: rotate(45deg);
+      font-size: 16px;
+      line-height: 1;
+    }
+    .custom-defect-label {
+      margin-top: 4px;
+      background: rgba(26, 29, 32, 0.9);
+      color: #FFFFFF;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+      white-space: nowrap;
+    }
+    .custom-vehicle-container {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      width: 40px;
+      height: 40px;
+    }
+    .vehicle-puck {
+      width: 22px;
+      height: 22px;
+      background: #1A73E8;
       border: 3px solid #FFFFFF;
       border-radius: 50%;
-      box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.25);
-      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      z-index: 2;
+    }
+    .vehicle-pulse {
+      position: absolute;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(26, 115, 232, 0.35);
+      animation: pulse 1.8s infinite ease-out;
+      z-index: 1;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.6); opacity: 1; }
+      100% { transform: scale(1.4); opacity: 0; }
     }
     .maplibregl-popup-content {
       border-radius: 12px;
       padding: 10px;
       border: 1px solid #E2E5E9;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     .popup-title {
       font-weight: 700;
@@ -101,7 +139,7 @@ export function RoadGuardMapLibre({
     .popup-btn {
       display: inline-block;
       margin-top: 6px;
-      padding: 4px 10px;
+      padding: 5px 12px;
       background: #C9A227;
       color: #fff;
       border-radius: 6px;
@@ -116,44 +154,46 @@ export function RoadGuardMapLibre({
   <div id="map"></div>
   <script>
     try {
+      // Modern Google Maps style raster tiles
       var styleStreet = {
         version: 8,
         sources: {
-          'osm-tiles': {
+          'google-streets': {
             type: 'raster',
-            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tiles: ['https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'],
             tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors &mdash; Cát Tường GIS'
+            attribution: '&copy; Google Maps &mdash; Cát Tường GIS'
           }
         },
         layers: [
           {
-            id: 'osm-tiles-layer',
+            id: 'google-streets-layer',
             type: 'raster',
-            source: 'osm-tiles',
+            source: 'google-streets',
             minzoom: 0,
-            maxzoom: 19
+            maxzoom: 20
           }
         ]
       };
 
+      // Modern Google Hybrid Satellite style raster tiles
       var styleSatellite = {
         version: 8,
         sources: {
-          'esri-satellite': {
+          'google-satellite': {
             type: 'raster',
-            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'],
             tileSize: 256,
-            attribution: '&copy; Esri &mdash; Cát Tường GIS'
+            attribution: '&copy; Google Satellite &mdash; Cát Tường GIS'
           }
         },
         layers: [
           {
-            id: 'esri-satellite-layer',
+            id: 'google-satellite-layer',
             type: 'raster',
-            source: 'esri-satellite',
+            source: 'google-satellite',
             minzoom: 0,
-            maxzoom: 19
+            maxzoom: 20
           }
         ]
       };
@@ -165,13 +205,14 @@ export function RoadGuardMapLibre({
         zoom: ${zoom},
         interactive: ${interactive},
         attributionControl: false,
-        pitch: 20
+        pitch: 35
       });
 
       var markers = ${markersJson};
       var route = ${routeJson};
 
       map.on('load', function() {
+        // Draw Navigation Route Line
         if (route && route.length > 1) {
           map.addSource('route-source', {
             type: 'geojson',
@@ -185,52 +226,71 @@ export function RoadGuardMapLibre({
             }
           });
 
+          // Route casing (dark gold outline)
           map.addLayer({
             id: 'route-casing',
             type: 'line',
             source: 'route-source',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#8C6D1F', 'line-width': 7, 'line-opacity': 0.4 }
+            paint: { 'line-color': '#8C6D1F', 'line-width': 8, 'line-opacity': 0.6 }
           });
 
+          // Route core (vibrant primary gold)
           map.addLayer({
             id: 'route-line',
             type: 'line',
             source: 'route-source',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#C9A227', 'line-width': 4.5, 'line-opacity': 0.95 }
+            paint: { 'line-color': '#C9A227', 'line-width': 5, 'line-opacity': 1.0 }
+          });
+        }
+
+        // Add Google-style 3D Markers
+        markers.forEach(function(m) {
+          var container = document.createElement('div');
+          
+          if (m.type === 'vehicle') {
+            container.className = 'custom-vehicle-container';
+            container.innerHTML = '<div class="vehicle-pulse"></div><div class="vehicle-puck"></div>';
+          } else {
+            container.className = 'custom-defect-container';
+            container.innerHTML = 
+              '<div class="custom-defect-pin"><div class="custom-defect-icon">⚠️</div></div>' +
+              '<div class="custom-defect-label">' + (m.id || 'Lỗi') + '</div>';
+          }
+
+          var popupContent = '<div style="padding:4px;">' +
+            '<div class="popup-title">' + (m.title || '') + '</div>' +
+            (m.subtitle ? '<div class="popup-sub">' + m.subtitle + '</div>' : '') +
+            '<a class="popup-btn" href="javascript:void(0);" onclick="window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: \\'MARKER_CLICK\\', id: \\'' + m.id + '\\' }))">Xem chi tiết</a>' +
+            '</div>';
+
+          var popup = new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(popupContent);
+
+          new maplibregl.Marker({ element: container, anchor: m.type === 'vehicle' ? 'center' : 'bottom' })
+            .setLngLat(m.coordinate)
+            .setPopup(popup)
+            .addTo(map);
+        });
+
+        // Auto-fit bounds so BOTH vehicle and destination are in full view!
+        if (markers && markers.length > 0) {
+          var bounds = new maplibregl.LngLatBounds();
+          markers.forEach(function(m) { bounds.extend(m.coordinate); });
+          if (route && route.length > 0) {
+            route.forEach(function(c) { bounds.extend(c); });
+          }
+          map.fitBounds(bounds, {
+            padding: { top: 70, bottom: 70, left: 60, right: 60 },
+            maxZoom: 16.5,
+            duration: 800
           });
         }
       });
 
-      // Add MapLibre Markers
-      markers.forEach(function(m) {
-        var el = document.createElement('div');
-        if (m.type === 'vehicle') {
-          el.className = 'custom-vehicle-marker';
-          el.innerHTML = '<div style="width:8px; height:8px; background:#fff; border-radius:50%;"></div>';
-        } else {
-          el.className = 'custom-defect-marker';
-          el.innerHTML = '⚠️';
-        }
-
-        var popupContent = '<div style="padding:4px;">' +
-          '<div class="popup-title">' + (m.title || '') + '</div>' +
-          (m.subtitle ? '<div class="popup-sub">' + m.subtitle + '</div>' : '') +
-          '<a class="popup-btn" href="javascript:void(0);" onclick="window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: \\'MARKER_CLICK\\', id: \\'' + m.id + '\\' }))">Xem chi tiết</a>' +
-          '</div>';
-
-        var popup = new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(popupContent);
-
-        new maplibregl.Marker({ element: el })
-          .setLngLat(m.coordinate)
-          .setPopup(popup)
-          .addTo(map);
-      });
-
       window.zoomIn = function() { map.zoomIn(); };
       window.zoomOut = function() { map.zoomOut(); };
-      window.recenter = function() { map.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${zoom} }); };
+      window.recenter = function() { map.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${zoom}, pitch: 35 }); };
     } catch (e) {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: e.message }));
