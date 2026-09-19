@@ -122,7 +122,7 @@ const MAP_DEFECTS = [
   {
     id: '#DF-0231',
     title: '#DF-0231 • Ổ gà sâu ~6.8cm',
-    subtitle: 'QL.1A Km1842+150 (RỦI RO CAO)',
+    subtitle: 'QL.1A Km1842+150 (Tọa độ chính thức từ đặc tả)',
     coordinate: [107.0125, 10.9634] as [number, number],
     type: 'defect' as const,
     severity: 'high' as const,
@@ -130,7 +130,7 @@ const MAP_DEFECTS = [
   {
     id: '#DF-0230',
     title: '#DF-0230 • Nứt dọc thảm nhựa',
-    subtitle: 'QL.1A Km1841+900 (CHỜ DUYỆT)',
+    subtitle: 'QL.1A Km1841+900 (Mô phỏng ước tính theo lý trình Km)',
     coordinate: [107.0080, 10.9615] as [number, number],
     type: 'defect' as const,
     severity: 'medium' as const,
@@ -138,7 +138,7 @@ const MAP_DEFECTS = [
   {
     id: '#DF-0211',
     title: '#DF-0211 • Ổ gà mặt đường',
-    subtitle: 'QL.1A Km1840+600 (ĐÃ DUYỆT)',
+    subtitle: 'QL.1A Km1840+600 (Mô phỏng ước tính theo lý trình Km)',
     coordinate: [106.9950, 10.9570] as [number, number],
     type: 'defect' as const,
     severity: 'low' as const,
@@ -269,7 +269,7 @@ export default function PmAiInboxScreen() {
 
           <View style={styles.mapNotes}>
             <Text style={[typography.caption, styles.mapNoteText]}>
-              * Dữ liệu GIS hiển thị các vị trí hư hỏng AI phát hiện dọc tuyến QL.1A Đồng Nai (Use Case AI01).
+              * Tọa độ chuẩn: #DF-0231 có tọa độ GPS chính thức từ đặc tả (10.9634, 107.0125 tại Km1842+150). Các vị trí khác là mô phỏng ước tính theo lý trình Km tuyến QL.1A (Use Case AI01).
             </Text>
             <Text style={[typography.caption, styles.mapNoteText]}>
               * Tuyến ĐT.741 Km14+200 (#DF-0228): [Chờ định vị GPS bổ sung từ BE].

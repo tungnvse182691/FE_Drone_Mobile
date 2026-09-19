@@ -102,9 +102,21 @@
 
 ---
 
+## PHASE 1.5 — Tích Hợp Bản Đồ Số MapLibre & GIS Hiện Trường
+
+> Tích hợp công nghệ bản đồ số MapLibre GL JS (WebGL Engine) vào các phân khu của Person 1, phục vụ Use Case AI01 và Dẫn đường thi công M-CREW-04.
+
+- [x] **1.5.1** `src/components/map/RoadGuardMapLibre.tsx` — MapLibre GL JS v4.7.1 WebGL engine, hỗ trợ đa tầng Đường bộ/Vệ tinh + Sơ đồ tim đường ngoại tuyến (Offline Schematic Fallback).
+- [x] **1.5.2** `app/(crew)/navigation.tsx` — M-CREW-04: Thay thế CSS mockup bằng bản đồ dẫn đường GPS thật tới `#WO-118` (450m, `10.9634, 107.0125`).
+- [x] **1.5.3** `app/(pm)/ai-inbox.tsx` — M-PM-04: Tích hợp chế độ xem Bản đồ GIS phát hiện lỗi AI (Use Case AI01), tương tác chạm chọn lỗi và điều hướng sang `verify-a`.
+- [x] **1.5.4** Cài đặt `react-native-webview: 13.16.1` và xác thực `npm run typecheck` đạt 0 lỗi.
+
+---
+
 ## BÀN GIAO CHO HOÀNG
 
 - [ ] Hoàng nhận nhánh `hoang` hoặc checkout từ `tung`
 - [ ] Thông báo Hoàng: clone về, `npm install`, `npx expo start` → fill vào `(drone)` và `(sup)`
 - [ ] Hoàng đọc `HUONG_DAN_HOANG_VIBE_CODE.md` và `docs/planning/RoadGuard_Plan_Person_2.md`
+
 

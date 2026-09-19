@@ -33,27 +33,17 @@ export function RoadGuardMapLibre({
   onMarkerPress,
   style,
   interactive = true,
-  offlineBannerText = 'Ngoại tuyến: Đang dùng bản đồ đệm QL.1A',
+  offlineBannerText = 'Ngoại tuyến: Sơ đồ tim đường vector (Offline Schematic)',
 }: RoadGuardMapProps) {
   const [layerType, setLayerType] = useState<'streets' | 'satellite'>('streets');
   const [loadError, setLoadError] = useState(false);
 
-  // Generate HTML for MapLibre GL JS / Leaflet vector viewer
+  // Generate HTML for MapLibre GL JS (Official WebGL Engine)
   const mapHtml = useMemo(() => {
     const markersJson = JSON.stringify(markers);
     const routeJson = JSON.stringify(routeCoordinates);
     const centerLng = center[0];
     const centerLat = center[1];
-
-    const tileUrl =
-      layerType === 'satellite'
-        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-    const tileAttribution =
-      layerType === 'satellite'
-        ? '&copy; Esri &mdash; Cát Tường GIS'
-        : '&copy; OpenStreetMap contributors &mdash; Cát Tường GIS';
 
     return `
 <!DOCTYPE html>
@@ -61,8 +51,8 @@ export function RoadGuardMapLibre({
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F8F9FA; font-family: -apple-system, Roboto, sans-serif; }
     .custom-defect-marker {
@@ -78,6 +68,7 @@ export function RoadGuardMapLibre({
       color: #fff;
       font-weight: bold;
       font-size: 11px;
+      cursor: pointer;
     }
     .custom-vehicle-marker {
       display: flex;
@@ -89,10 +80,11 @@ export function RoadGuardMapLibre({
       border: 3px solid #FFFFFF;
       border-radius: 50%;
       box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.25);
+      cursor: pointer;
     }
-    .leaflet-popup-content-wrapper {
+    .maplibregl-popup-content {
       border-radius: 12px;
-      padding: 4px;
+      padding: 10px;
       border: 1px solid #E2E5E9;
       box-shadow: 0 4px 12px rgba(0,0,0,0.12);
     }
@@ -124,73 +116,121 @@ export function RoadGuardMapLibre({
   <div id="map"></div>
   <script>
     try {
-      var map = L.map('map', {
-        zoomControl: false,
-        attributionControl: false,
-        dragging: ${interactive},
-        touchZoom: ${interactive},
-        scrollWheelZoom: ${interactive}
-      }).setView([${centerLat}, ${centerLng}], ${zoom});
+      var styleStreet = {
+        version: 8,
+        sources: {
+          'osm-tiles': {
+            type: 'raster',
+            tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+            tileSize: 256,
+            attribution: '&copy; OpenStreetMap contributors &mdash; Cát Tường GIS'
+          }
+        },
+        layers: [
+          {
+            id: 'osm-tiles-layer',
+            type: 'raster',
+            source: 'osm-tiles',
+            minzoom: 0,
+            maxzoom: 19
+          }
+        ]
+      };
 
-      L.tileLayer('${tileUrl}', {
-        maxZoom: 19,
-        attribution: '${tileAttribution}'
-      }).addTo(map);
+      var styleSatellite = {
+        version: 8,
+        sources: {
+          'esri-satellite': {
+            type: 'raster',
+            tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+            tileSize: 256,
+            attribution: '&copy; Esri &mdash; Cát Tường GIS'
+          }
+        },
+        layers: [
+          {
+            id: 'esri-satellite-layer',
+            type: 'raster',
+            source: 'esri-satellite',
+            minzoom: 0,
+            maxzoom: 19
+          }
+        ]
+      };
+
+      var map = new maplibregl.Map({
+        container: 'map',
+        style: '${layerType}' === 'satellite' ? styleSatellite : styleStreet,
+        center: [${centerLng}, ${centerLat}],
+        zoom: ${zoom},
+        interactive: ${interactive},
+        attributionControl: false,
+        pitch: 20
+      });
 
       var markers = ${markersJson};
       var route = ${routeJson};
 
-      // Draw route if provided
-      if (route && route.length > 1) {
-        var latLngs = route.map(function(pt) { return [pt[1], pt[0]]; });
-        var routePolyline = L.polyline(latLngs, {
-          color: '#C9A227',
-          weight: 5,
-          opacity: 0.9,
-          dashArray: '1, 8',
-          lineCap: 'round'
-        }).addTo(map);
+      map.on('load', function() {
+        if (route && route.length > 1) {
+          map.addSource('route-source', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'LineString',
+                coordinates: route
+              }
+            }
+          });
 
-        // Solid under-route line
-        L.polyline(latLngs, {
-          color: '#8C6D1F',
-          weight: 7,
-          opacity: 0.35
-        }).addTo(map);
-      }
+          map.addLayer({
+            id: 'route-casing',
+            type: 'line',
+            source: 'route-source',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#8C6D1F', 'line-width': 7, 'line-opacity': 0.4 }
+          });
 
-      // Add markers
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route-source',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#C9A227', 'line-width': 4.5, 'line-opacity': 0.95 }
+          });
+        }
+      });
+
+      // Add MapLibre Markers
       markers.forEach(function(m) {
-        var iconHtml = '';
-        var className = 'custom-defect-marker';
+        var el = document.createElement('div');
         if (m.type === 'vehicle') {
-          className = 'custom-vehicle-marker';
-          iconHtml = '<div style="width:8px; height:8px; background:#fff; border-radius:50%;"></div>';
+          el.className = 'custom-vehicle-marker';
+          el.innerHTML = '<div style="width:8px; height:8px; background:#fff; border-radius:50%;"></div>';
         } else {
-          iconHtml = '⚠️';
+          el.className = 'custom-defect-marker';
+          el.innerHTML = '⚠️';
         }
 
-        var customIcon = L.divIcon({
-          className: className,
-          html: iconHtml,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15]
-        });
-
-        var marker = L.marker([m.coordinate[1], m.coordinate[0]], { icon: customIcon }).addTo(map);
-        
         var popupContent = '<div style="padding:4px;">' +
           '<div class="popup-title">' + (m.title || '') + '</div>' +
           (m.subtitle ? '<div class="popup-sub">' + m.subtitle + '</div>' : '') +
           '<a class="popup-btn" href="javascript:void(0);" onclick="window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: \\'MARKER_CLICK\\', id: \\'' + m.id + '\\' }))">Xem chi tiết</a>' +
           '</div>';
 
-        marker.bindPopup(popupContent);
+        var popup = new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(popupContent);
+
+        new maplibregl.Marker({ element: el })
+          .setLngLat(m.coordinate)
+          .setPopup(popup)
+          .addTo(map);
       });
 
       window.zoomIn = function() { map.zoomIn(); };
       window.zoomOut = function() { map.zoomOut(); };
-      window.recenter = function() { map.setView([${centerLat}, ${centerLng}], ${zoom}); };
+      window.recenter = function() { map.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${zoom} }); };
     } catch (e) {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: e.message }));
