@@ -97,7 +97,7 @@
 > Tạo đủ file với placeholder UI — KHÔNG cần logic, chỉ cần routing không 404
 
 - [x] **1.4.1** `app/(drone)/_layout.tsx` + 7 file `.tsx` placeholder
-- [ ] **1.4.2** `app/(sup)/_layout.tsx` + 7 file `.tsx` placeholder
+- [x] **1.4.2** `app/(sup)/_layout.tsx` + 7 file `.tsx` placeholder
 - [ ] **1.4.3** Xác nhận: 4 vai trò chuyển đổi được, BottomNav render đúng
 
 ---
