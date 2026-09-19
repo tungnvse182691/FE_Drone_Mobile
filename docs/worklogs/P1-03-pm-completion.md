@@ -158,3 +158,51 @@ npm run typecheck
 # soi 3 file: app/(pm)/assign-crew.tsx  wo-confirm.tsx  profile.tsx
 # (repo chưa có commit nào → KHÔNG dùng git diff được)
 ```
+
+---
+
+# ĐỢT 5 — Tinh chỉnh toàn diện UI/UX theo HTML Wireframe, Date Picker & Điều hướng (2026-09-19)
+
+> Hoàn thiện trải nghiệm người dùng theo đúng bản vẽ Figma `CAT TUONG/` và nguyên mẫu `RoadGuard_Wireframes/index.html`.
+
+## Thông tin cơ bản
+
+| Trường | Giá trị |
+|---|---|
+| **Phase** | P1-03 Đợt 5 (Refinement & Polish) |
+| **Tên** | Đồng bộ 100% UI Figma/HTML: DatePickerField, AppHeader Back, Trang chủ PM, 5 Tabs BottomNav, Verify-A Bounding Box |
+| **Người thực hiện** | Tùng |
+| **Ngày hoàn thành** | 2026-09-19 |
+| **AI hỗ trợ** | Antigravity AI |
+
+## Danh sách hạng mục đã thực hiện
+
+1. **Thành phần DatePickerField (`src/components/DatePickerField.tsx`)**:
+   - Tích hợp `@react-native-community/datetimepicker` cho Android & iOS.
+   - Hỗ trợ chuẩn HTML5 `<input type="date">` cho Web.
+   - Cập nhật `create-survey.tsx`: Chạm chọn ngày trực quan (không cần gõ tay), kiểm tra ràng buộc `Hạn nộp >= Ngày bay`.
+2. **Nút Back thông minh (`src/components/AppHeader.tsx`)**:
+   - Bổ sung nút quay lại `<` cho toàn bộ các màn hình con (`verify-a`, `verify-b`, `field-task`, `create-survey`, `batching`).
+   - Tự động gọi `router.back()` hoặc `fallbackRoute` nếu mở trực tiếp.
+3. **Nâng cấp Trang chủ PM (`app/(pm)/home.tsx`) chuẩn Figma**:
+   - 2 Thẻ KPI lớn: `Chờ xác minh (12)` và `Chờ Supervisor (5)`.
+   - Khối sự cố `#DF-0231` kèm nút `Xác minh AI` dẫn vào `verify-a`.
+   - Khối công việc `#WO-118` kèm nút vàng `Kiểm tra & Nghiệm thu` dẫn thẳng vào `wo-confirm`.
+   - Thẻ sự cố đã duyệt `#DF-0228` kèm nút `Giao việc Repair Crew` dẫn vào `assign-crew`.
+4. **Chuẩn hóa 5 Tab BottomNav (`app/(pm)/_layout.tsx`)**:
+   - Đủ 5 Tab theo Figma: `Tổng quan` • `Khảo sát` • `Lỗi AI (10)` • `Gộp đợt` • `Hồ sơ`.
+5. **Redesign màn hình Xác minh AI Biến thể A (`app/(pm)/verify-a.tsx`)**:
+   - Khung giả lập mặt đường bê tông nhựa asphalt (`#0F172A`).
+   - AI Bounding Box đỏ rực có nhãn `AI #01 • 89%` và `Rạn nứt ~1.2m`.
+   - Huy hiệu thời gian video `00:42`, thanh trích xuất video gốc.
+   - Bảng thông số 2x2: Độ tin cậy AI 89.4%, Tuyến đường, Tọa độ GPS, Độ chính xác.
+   - 3 nút hành động chuẩn wireframe: `Xác nhận lỗi thật` (vào batching) / `Từ chối — lỗi giả` / `Yêu cầu khảo sát lại`.
+6. **Bảo vệ Phân quyền & Chống Leak Role (`app/_layout.tsx`)**:
+   - Khóa chặn `ROLE_GROUPS` tránh nhảy chéo role khi F5 trên web.
+7. **Phase 1.4 Placeholders (`(drone)` & `(sup)`)**:
+   - Tạo đủ 7 màn placeholder cho `(drone)` và 7 màn placeholder cho `(sup)` kèm `_layout.tsx` để bàn giao cho Hoàng.
+
+## Kết quả kiểm tra
+- [x] `npm run typecheck` — **0 lỗi** trên toàn bộ codebase.
+- [x] Đầy đủ 40 màn hình chuẩn theo tài liệu `Wireframe_Specification.md`.
+- [x] Đã đẩy code sạch lên nhánh `tung` trên GitHub.
