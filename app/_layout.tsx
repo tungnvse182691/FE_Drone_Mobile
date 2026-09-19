@@ -13,6 +13,7 @@ import {
 import { colors, typography } from '../src/design-tokens';
 import { useAuthStore } from '../src/store/auth';
 import { ROLE_HOMES } from '../src/constants/routes';
+import { RoleCode } from '../src/types/enums';
 
 
 
@@ -54,6 +55,12 @@ export default function RootLayout() {
   );
 }
 
+const ROLE_GROUPS: Record<RoleCode, string> = {
+  [RoleCode.DRONE_OPERATOR]: '(drone)',
+  [RoleCode.REPAIR_CREW]: '(crew)',
+  [RoleCode.PROJECT_MANAGER]: '(pm)',
+  [RoleCode.SUPERVISOR]: '(sup)',
+};
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const user = useAuthStore((state) => state.user);
@@ -64,7 +71,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
 
   if (!user) {
     if (!inAuthGroup) {
-      return           <Redirect href="/(auth)" />;
+      return <Redirect href="/(auth)" />;
     }
     return children;
   }
@@ -77,6 +84,12 @@ function AuthGuard({ children }: { children: ReactNode }) {
   }
 
   if (inAuthGroup) {
+    return <Redirect href={ROLE_HOMES[user.role_code]} />;
+  }
+
+  // Bảo vệ phân quyền vai trò: chống nhảy chéo sang màn role khác khi F5 trên Web
+  const expectedGroup = ROLE_GROUPS[user.role_code];
+  if (segments[0] && segments[0].startsWith('(') && segments[0] !== expectedGroup) {
     return <Redirect href={ROLE_HOMES[user.role_code]} />;
   }
 

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
-type ToastType = 'success' | 'error' | 'info';
+type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 interface ToastProps {
   type: ToastType;
@@ -13,6 +13,7 @@ interface ToastProps {
 const typeColors: Record<ToastType, string> = {
   success: colors.success,
   error: colors.error,
+  warning: colors.warning,
   info: colors.info,
 };
 

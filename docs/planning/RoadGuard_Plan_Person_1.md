@@ -70,23 +70,23 @@
 > **Màn hình:** M-PM-01 → M-PM-15  
 > ⚠️ Gộp: `M-PM-06/14` → 1 file `verify-b.tsx` | `M-PM-07/M-CREW-05` → 1 file `field-task.tsx` | `M-SUP-07` KHÔNG thuộc phase này
 
-- [ ] **1.3.1** `app/(pm)/_layout.tsx` — BottomNav 4 tab: Home / Surveys / Verify / Profile
-- [ ] **1.3.2** `app/(pm)/home.tsx` — M-PM-01: Dashboard Nguyễn Thùy Lan (PM-0428)
-- [ ] **1.3.3** `app/(pm)/surveys.tsx` — M-PM-02: Danh sách khảo sát (FAB bottom:96 right:16)
-- [ ] **1.3.4** `app/(pm)/create-survey.tsx` — M-PM-03: Tạo yêu cầu khảo sát
-- [ ] **1.3.5** `app/(pm)/ai-inbox.tsx` — M-PM-04: Hộp thư xác minh AI (Defect OPEN)
-- [ ] **1.3.6** `app/(pm)/verify-a.tsx` — M-PM-05: Xác minh Bounding Box AI
-- [ ] **1.3.7** `app/(pm)/verify-b.tsx` — **M-PM-06/14 GỘP** — So sánh đa kỳ & Baseline
-- [ ] **1.3.8** `app/(pm)/field-task.tsx` — **M-PM-07/M-CREW-05 GỘP** — Giao đo thực địa + nhập GroundTruthMeasurement
+- [x] **1.3.1** `app/(pm)/_layout.tsx` — BottomNav 4 tab: Home / Surveys / Verify / Profile
+- [x] **1.3.2** `app/(pm)/home.tsx` — M-PM-01: Dashboard Nguyễn Thùy Lan (PM-0428)
+- [x] **1.3.3** `app/(pm)/surveys.tsx` — M-PM-02: Danh sách khảo sát (FAB bottom:96 right:16)
+- [x] **1.3.4** `app/(pm)/create-survey.tsx` — M-PM-03: Tạo yêu cầu khảo sát
+- [x] **1.3.5** `app/(pm)/ai-inbox.tsx` — M-PM-04: Hộp thư xác minh AI (Defect OPEN)
+- [x] **1.3.6** `app/(pm)/verify-a.tsx` — M-PM-05: Xác minh Bounding Box AI
+- [x] **1.3.7** `app/(pm)/verify-b.tsx` — **M-PM-06/14 GỘP** — So sánh đa kỳ & Baseline
+- [x] **1.3.8** `app/(pm)/field-task.tsx` — **M-PM-07/M-CREW-05 GỘP** — Giao đo thực địa + nhập GroundTruthMeasurement
   > 🔴 **UD-05:** Defect chỉ VERIFIED sau khi có FieldInspectionTask đạt chuẩn — KHÔNG shortcut
-- [ ] **1.3.9** `app/(pm)/batching.tsx` — M-PM-08: Gộp đợt sửa
+- [x] **1.3.9** `app/(pm)/batching.tsx` — M-PM-08: Gộp đợt sửa
   > 🔴 **UD-06:** `estimated_total_cost` = SUM tự tính — KHÔNG có input nhập tay
-- [ ] **1.3.10** `app/(pm)/submit-approval.tsx` — M-PM-09: Trình duyệt #REQ-045 (42.500.000 VNĐ)
-- [ ] **1.3.11** `app/(pm)/resubmit.tsx` — M-PM-10: Chỉnh sửa & gửi lại (REVISION_REQUIRED)
-- [ ] **1.3.12** `app/(pm)/submitted-tab.tsx` — M-PM-11: Tab đã gửi duyệt
-- [ ] **1.3.13** `app/(pm)/assign-crew.tsx` — M-PM-12: Giao việc Crew sau APPROVED
-- [ ] **1.3.14** `app/(pm)/wo-confirm.tsx` — M-PM-13: Xác nhận nghiệm thu hoàn thành
-- [ ] **1.3.15** `app/(pm)/profile.tsx` — M-PM-15: Hồ sơ PM
+- [x] **1.3.10** `app/(pm)/submit-approval.tsx` — M-PM-09: Trình duyệt #REQ-045 (42.500.000 VNĐ)
+- [x] **1.3.11** `app/(pm)/resubmit.tsx` — M-PM-10: Chỉnh sửa & gửi lại (REVISION_REQUIRED)
+- [x] **1.3.12** `app/(pm)/submitted-tab.tsx` — M-PM-11: Tab đã gửi duyệt
+- [x] **1.3.13** `app/(pm)/assign-crew.tsx` — M-PM-12: Giao việc Crew sau APPROVED
+- [x] **1.3.14** `app/(pm)/wo-confirm.tsx` — M-PM-13: Xác nhận nghiệm thu hoàn thành
+- [x] **1.3.15** `app/(pm)/profile.tsx` — M-PM-15: Hồ sơ PM
 
 **📝 Nghiệm thu 1.3:** Login PM → luồng: Inbox AI → Verify B → Field Task → Batching → Submit → Assign Crew → Xuất `docs/worklogs/P1-03-pm-completion.md`
 
