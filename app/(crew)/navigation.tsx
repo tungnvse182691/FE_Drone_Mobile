@@ -7,6 +7,7 @@ import * as Linking from 'expo-linking';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
 
 export default function CrewNavigationScreen() {
   const openGoogleMaps = () => {
@@ -16,34 +17,33 @@ export default function CrewNavigationScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.map}>
-        <View style={styles.landBlockOne} />
-        <View style={styles.landBlockTwo} />
-        <View style={styles.river} />
-        <View style={styles.roadVerticalOne} />
-        <View style={styles.roadVerticalTwo} />
-        <View style={styles.roadHorizontalOne} />
-        <View style={styles.roadHorizontalTwo} />
-        <View style={styles.route} />
-
-        <View style={styles.youMarker}>
-          <View style={styles.youHalo} />
-          <View style={styles.youDot} />
-        </View>
-        <View style={styles.youLabel}>
-          <Text style={[typography.caption, styles.youLabelText]}>Vị trí của bạn</Text>
-        </View>
-
-        <View style={styles.destMarker}>
-          <View style={styles.destDot} />
-          <View style={styles.destStem} />
-        </View>
-        <View style={styles.destLabel}>
-          <View style={styles.destAccent} />
-          <View>
-            <Text style={[typography.caption, styles.destTitle]}>Ổ gà sâu 7cm</Text>
-            <Text style={[typography.labelSm, styles.destSub]}>Km1842+150 QL1A</Text>
-          </View>
-        </View>
+        <RoadGuardMapLibre
+          style={StyleSheet.absoluteFill}
+          center={[107.0110, 10.9628]}
+          zoom={16}
+          markers={[
+            {
+              id: 'vehicle',
+              title: 'Xe sửa chữa (Bạn)',
+              subtitle: 'Cách vị trí lỗi 450 m',
+              coordinate: [107.0090, 10.9620],
+              type: 'vehicle',
+            },
+            {
+              id: 'defect-wo118',
+              title: 'Ổ gà sâu 7cm (#WO-118)',
+              subtitle: 'Km1842+150 QL1A',
+              coordinate: [107.0125, 10.9634],
+              type: 'defect',
+              severity: 'high',
+            },
+          ]}
+          routeCoordinates={[
+            [107.0090, 10.9620],
+            [107.0105, 10.9626],
+            [107.0125, 10.9634],
+          ]}
+        />
 
         <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
           <Ionicons name="arrow-back" size={20} color={colors.neutral} />
@@ -52,15 +52,6 @@ export default function CrewNavigationScreen() {
         <View style={styles.gpsBadge}>
           <View style={styles.gpsDot} />
           <Text style={[typography.caption, styles.gpsText]}>GPS Đang hoạt động</Text>
-        </View>
-
-        <View style={styles.controls}>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}>
-            <Ionicons name="compass-outline" size={20} color={colors.info} />
-          </Pressable>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.controlButton, pressed && styles.pressed]}>
-            <Ionicons name="layers-outline" size={20} color={colors.neutral} />
-          </Pressable>
         </View>
       </View>
 
@@ -111,158 +102,6 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  landBlockOne: {
-    position: 'absolute',
-    top: 110,
-    left: 20,
-    width: 120,
-    height: 150,
-    borderRadius: radius.md,
-    backgroundColor: colors.border,
-  },
-  landBlockTwo: {
-    position: 'absolute',
-    top: 50,
-    left: 220,
-    width: 150,
-    height: 120,
-    borderRadius: radius.md,
-    backgroundColor: colors.border,
-  },
-  river: {
-    position: 'absolute',
-    top: 230,
-    left: -20,
-    right: -20,
-    height: 26,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(59,130,246,0.3)',
-    transform: [{ rotate: '-6deg' }],
-  },
-  roadVerticalOne: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 50,
-    width: 4,
-    backgroundColor: colors.border,
-  },
-  roadVerticalTwo: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 310,
-    width: 4,
-    backgroundColor: colors.border,
-  },
-  roadHorizontalOne: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 380,
-    height: 4,
-    backgroundColor: colors.border,
-  },
-  roadHorizontalTwo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 540,
-    height: 4,
-    backgroundColor: colors.border,
-  },
-  route: {
-    position: 'absolute',
-    top: 480,
-    left: 150,
-    width: 200,
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-    opacity: 0.85,
-    transform: [{ rotate: '-38deg' }],
-  },
-  youMarker: {
-    position: 'absolute',
-    bottom: 210,
-    left: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  youHalo: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: 'rgba(59,130,246,0.25)',
-  },
-  youDot: {
-    width: 16,
-    height: 16,
-    borderRadius: radius.full,
-    backgroundColor: colors.info,
-    borderWidth: 2.5,
-    borderColor: colors.surface,
-  },
-  youLabel: {
-    position: 'absolute',
-    bottom: 176,
-    left: 22,
-    backgroundColor: colors.neutral,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  youLabelText: {
-    color: colors.onPrimary,
-    fontWeight: '700',
-  },
-  destMarker: {
-    position: 'absolute',
-    top: 140,
-    right: 80,
-    alignItems: 'center',
-  },
-  destDot: {
-    width: 16,
-    height: 16,
-    borderRadius: radius.full,
-    backgroundColor: colors.error,
-    borderWidth: 3,
-    borderColor: colors.surface,
-  },
-  destStem: {
-    width: 2,
-    height: 8,
-    backgroundColor: colors.error,
-  },
-  destLabel: {
-    position: 'absolute',
-    top: 160,
-    right: 66,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    gap: spacing.xs,
-  },
-  destAccent: {
-    width: 4,
-    height: 28,
-    backgroundColor: colors.error,
-    borderRadius: radius.sm,
-  },
-  destTitle: {
-    color: colors.neutral,
-    fontWeight: '700',
-  },
-  destSub: {
-    color: colors.secondary,
-  },
   floatingBack: {
     position: 'absolute',
     top: spacing.sm,
@@ -275,6 +114,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 20,
   },
   gpsBadge: {
     position: 'absolute',
@@ -298,22 +138,6 @@ const styles = StyleSheet.create({
   },
   gpsText: {
     color: colors.neutral,
-  },
-  controls: {
-    position: 'absolute',
-    top: 64,
-    right: spacing.md,
-    gap: spacing.sm,
-  },
-  controlButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   pressed: {
     backgroundColor: colors.surfaceAlt,
