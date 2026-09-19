@@ -7,6 +7,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { DatePickerField } from '../../src/components/DatePickerField';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -207,17 +208,25 @@ export default function PmCreateSurveyScreen() {
           ))}
         </View>
 
-        <InputField
+        <DatePickerField
           label="Ngày bay dự kiến *"
           value={flightDate}
-          onChangeText={setFlightDate}
-          placeholder="DD/MM/YYYY"
+          onChange={(val) => {
+            setFlightDate(val);
+            const flight = parseDate(val);
+            const dead = parseDate(deadline);
+            if (flight && (!dead || dead.getTime() < flight.getTime())) {
+              setDeadline(val);
+            }
+          }}
+          placeholder="Chọn ngày (DD/MM/YYYY)"
         />
-        <InputField
+        <DatePickerField
           label="Hạn nộp video *"
           value={deadline}
-          onChangeText={setDeadline}
-          placeholder="DD/MM/YYYY"
+          onChange={setDeadline}
+          minDate={parseDate(flightDate) || undefined}
+          placeholder="Chọn ngày (DD/MM/YYYY)"
         />
         <Text style={[typography.caption, styles.ruleHint]}>
           Hạn nộp video phải cùng ngày hoặc sau Ngày bay dự kiến.

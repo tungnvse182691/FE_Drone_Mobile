@@ -28,7 +28,8 @@
       "expo-status-bar",
       "expo-sqlite",
       "expo-camera",
-      "expo-location"
+      "expo-location",
+      "@react-native-community/datetimepicker"
     ]
   }
 }
