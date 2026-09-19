@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { BottomNav } from '../../src/components/BottomNav';
 
 const PM_TABS = [
-  { icon: 'home-outline' as const, label: 'Trang chủ', route: '/(pm)/home' },
+  { icon: 'home-outline' as const, label: 'Tổng quan', route: '/(pm)/home' },
   {
     icon: 'document-text-outline' as const,
     label: 'Khảo sát',
@@ -12,17 +12,26 @@ const PM_TABS = [
   },
   {
     icon: 'mail-unread-outline' as const,
-    label: 'Hộp thư AI',
+    label: 'Lỗi AI (10)',
     route: '/(pm)/ai-inbox',
     activePrefixes: [
       '/(pm)/ai-inbox',
       '/(pm)/verify-a',
       '/(pm)/verify-b',
       '/(pm)/field-task',
+    ],
+  },
+  {
+    icon: 'layers-outline' as const,
+    label: 'Gộp đợt',
+    route: '/(pm)/batching',
+    activePrefixes: [
       '/(pm)/batching',
       '/(pm)/submit-approval',
       '/(pm)/resubmit',
       '/(pm)/submitted-tab',
+      '/(pm)/assign-crew',
+      '/(pm)/wo-confirm',
     ],
   },
   { icon: 'person-outline' as const, label: 'Hồ sơ', route: '/(pm)/profile' },

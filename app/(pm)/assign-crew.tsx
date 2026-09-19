@@ -66,14 +66,22 @@ export default function PmAssignCrewScreen() {
       type: 'success',
       message: `Đã tạo Work Order #WO-118 và phát lệnh cho ${selected.name}!`,
     });
-    setTimeout(() => router.push('/(crew)/tasks'), 800);
+    setTimeout(() => router.push('/(pm)/submitted-tab'), 800);
+  };
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(pm)/submitted-tab');
+    }
   };
 
   return (
     <SafeAreaScreen scroll>
       <View style={styles.headerBar}>
         <Pressable
-          onPress={() => router.back()}
+          onPress={handleBack}
           accessibilityRole="button"
           style={({ pressed }) => [styles.backBtn, pressed && styles.backPressed]}
         >

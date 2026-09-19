@@ -24,12 +24,20 @@ export default function PmWoConfirmScreen() {
     setTimeout(() => router.push('/(pm)/home'), 800);
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(pm)/home');
+    }
+  };
+
   return (
     <SafeAreaScreen scroll>
       <View style={styles.headerBar}>
         <View style={styles.headerLeft}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleBack}
             accessibilityRole="button"
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
           >
