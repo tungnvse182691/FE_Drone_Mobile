@@ -21,6 +21,7 @@ export default function CrewNavigationScreen() {
           style={StyleSheet.absoluteFill}
           center={[107.0110, 10.9628]}
           zoom={16}
+          controlsTopOffset={56}
           markers={[
             {
               id: 'vehicle',
@@ -45,13 +46,16 @@ export default function CrewNavigationScreen() {
           ]}
         />
 
-        <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
-          <Ionicons name="arrow-back" size={20} color={colors.neutral} />
-        </Pressable>
+        {/* Top Header Bar */}
+        <View style={styles.topHeader}>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
+            <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+          </Pressable>
 
-        <View style={styles.gpsBadge}>
-          <View style={styles.gpsDot} />
-          <Text style={[typography.caption, styles.gpsText]}>GPS Đang hoạt động</Text>
+          <View style={styles.gpsBadge}>
+            <View style={styles.gpsDot} />
+            <Text style={[typography.caption, styles.gpsText]}>GPS Đang hoạt động</Text>
+          </View>
         </View>
       </View>
 
@@ -102,10 +106,16 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  floatingBack: {
+  topHeader: {
     position: 'absolute',
     top: spacing.sm,
     left: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    zIndex: 20,
+  },
+  floatingBack: {
     width: 40,
     height: 40,
     borderRadius: radius.full,
@@ -114,21 +124,27 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
   gpsBadge: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 7,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
   },
   gpsDot: {
     width: 8,

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, Text, Pressable, Platform, StyleProp, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +23,7 @@ export interface RoadGuardMapProps {
   style?: StyleProp<ViewStyle>;
   interactive?: boolean;
   offlineBannerText?: string;
+  controlsTopOffset?: number;
 }
 
 export function RoadGuardMapLibre({
@@ -34,7 +35,9 @@ export function RoadGuardMapLibre({
   style,
   interactive = true,
   offlineBannerText = 'Ngoại tuyến: Sơ đồ tim đường vector (Offline Schematic)',
+  controlsTopOffset = spacing.sm,
 }: RoadGuardMapProps) {
+  const webViewRef = useRef<WebView>(null);
   const [layerType, setLayerType] = useState<'streets' | 'satellite'>('streets');
   const [loadError, setLoadError] = useState(false);
 
@@ -288,9 +291,35 @@ export function RoadGuardMapLibre({
         }
       });
 
-      window.zoomIn = function() { map.zoomIn(); };
-      window.zoomOut = function() { map.zoomOut(); };
-      window.recenter = function() { map.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${zoom}, pitch: 35 }); };
+      window.mapInstance = map;
+      window.zoomIn = function() {
+        if (window.mapInstance) window.mapInstance.zoomIn({ duration: 250 });
+      };
+      window.zoomOut = function() {
+        if (window.mapInstance) window.mapInstance.zoomOut({ duration: 250 });
+      };
+      window.resetNorth = function() {
+        if (window.mapInstance) window.mapInstance.resetNorthPitch({ duration: 350 });
+      };
+      window.recenter = function() {
+        if (!window.mapInstance) return;
+        var markers = ${markersJson};
+        var route = ${routeJson};
+        if (markers && markers.length > 0) {
+          var bounds = new maplibregl.LngLatBounds();
+          markers.forEach(function(m) { bounds.extend(m.coordinate); });
+          if (route && route.length > 0) {
+            route.forEach(function(c) { bounds.extend(c); });
+          }
+          window.mapInstance.fitBounds(bounds, {
+            padding: { top: 70, bottom: 70, left: 60, right: 60 },
+            maxZoom: 16.5,
+            duration: 700
+          });
+        } else {
+          window.mapInstance.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${zoom}, pitch: 35, duration: 700 });
+        }
+      };
     } catch (e) {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: e.message }));
@@ -354,6 +383,7 @@ export function RoadGuardMapLibre({
     <View style={[styles.container, style]}>
       {!loadError ? (
         <WebView
+          ref={webViewRef}
           originWhitelist={['*']}
           source={{ html: mapHtml }}
           style={styles.webview}
@@ -366,30 +396,85 @@ export function RoadGuardMapLibre({
         renderOfflineFallback()
       )}
 
-      {/* Overlay Map Controls */}
+      {/* Overlay Map Controls Toolbar */}
       {interactive && (
-        <View style={styles.controlsOverlay}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setLayerType(prev => (prev === 'streets' ? 'satellite' : 'streets'))}
-            style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
-          >
-            <Ionicons
-              name={layerType === 'satellite' ? 'map' : 'earth'}
-              size={18}
-              color={colors.neutral}
-            />
-          </Pressable>
+        <View style={[styles.controlsStack, { top: controlsTopOffset }]}>
+          {/* Group 1: Map Layers & Offline Mode */}
+          <View style={styles.controlGroup}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Chuyển lớp bản đồ vệ tinh"
+              onPress={() => setLayerType(prev => (prev === 'streets' ? 'satellite' : 'streets'))}
+              style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={layerType === 'satellite' ? 'map' : 'earth'}
+                size={18}
+                color={layerType === 'satellite' ? colors.primary : colors.neutral}
+              />
+            </Pressable>
 
-          <View style={styles.divider} />
+            <View style={styles.divider} />
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setLoadError(prev => !prev)}
-            style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
-          >
-            <Ionicons name={loadError ? 'wifi' : 'cloud-offline-outline'} size={18} color={colors.neutral} />
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Mô phỏng chế độ ngoại tuyến"
+              onPress={() => setLoadError(prev => !prev)}
+              style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
+            >
+              <Ionicons
+                name={loadError ? 'wifi' : 'cloud-offline-outline'}
+                size={18}
+                color={loadError ? colors.warning : colors.neutral}
+              />
+            </Pressable>
+          </View>
+
+          {/* Group 2: Navigation & Orientation */}
+          <View style={styles.controlGroup}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Định vị tâm lộ trình"
+              onPress={() => webViewRef.current?.injectJavaScript('window.recenter && window.recenter(); true;')}
+              style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="locate" size={18} color={colors.primary} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Đặt lại hướng Bắc"
+              onPress={() => webViewRef.current?.injectJavaScript('window.resetNorth && window.resetNorth(); true;')}
+              style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="compass-outline" size={18} color={colors.neutral} />
+            </Pressable>
+          </View>
+
+          {/* Group 3: Zoom In & Zoom Out */}
+          <View style={styles.controlGroup}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Phóng to"
+              onPress={() => webViewRef.current?.injectJavaScript('window.zoomIn && window.zoomIn(); true;')}
+              style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="add" size={20} color={colors.neutral} />
+            </Pressable>
+
+            <View style={styles.divider} />
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Thu nhỏ"
+              onPress={() => webViewRef.current?.injectJavaScript('window.zoomOut && window.zoomOut(); true;')}
+              style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
+            >
+              <Ionicons name="remove" size={20} color={colors.neutral} />
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -416,23 +501,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
-  controlsOverlay: {
+  controlsStack: {
     position: 'absolute',
-    top: spacing.sm,
     right: spacing.sm,
+    flexDirection: 'column',
+    gap: spacing.xs,
+    zIndex: 15,
+  },
+  controlGroup: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
     flexDirection: 'column',
     overflow: 'hidden',
-    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   controlBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
   divider: {
     height: 1,
