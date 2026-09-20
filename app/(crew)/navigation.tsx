@@ -1,5 +1,5 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,70 @@ export default function CrewNavigationScreen() {
   const openGoogleMaps = () => {
     Linking.openURL('https://www.google.com/maps/dir/?api=1&destination=10.9634,107.0125').catch(() => {});
   };
+
+  const COLLAPSED_OFFSET = 142;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const isCollapsedRef = useRef(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const collapseSheet = () => {
+    isCollapsedRef.current = true;
+    setIsCollapsed(true);
+    Animated.spring(translateY, {
+      toValue: COLLAPSED_OFFSET,
+      useNativeDriver: true,
+      bounciness: 4,
+      speed: 14,
+    }).start();
+  };
+
+  const expandSheet = () => {
+    isCollapsedRef.current = false;
+    setIsCollapsed(false);
+    Animated.spring(translateY, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+      speed: 14,
+    }).start();
+  };
+
+  const toggleSheet = () => {
+    if (isCollapsedRef.current) {
+      expandSheet();
+    } else {
+      collapseSheet();
+    }
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderMove: (_, gestureState) => {
+        const base = isCollapsedRef.current ? COLLAPSED_OFFSET : 0;
+        let nextVal = base + gestureState.dy;
+        if (nextVal < -15) nextVal = -15;
+        if (nextVal > COLLAPSED_OFFSET + 15) nextVal = COLLAPSED_OFFSET + 15;
+        translateY.setValue(nextVal);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (!isCollapsedRef.current) {
+          if (gestureState.dy > 35 || gestureState.vy > 0.4) {
+            collapseSheet();
+          } else {
+            expandSheet();
+          }
+        } else {
+          if (gestureState.dy < -35 || gestureState.vy < -0.4) {
+            expandSheet();
+          } else {
+            collapseSheet();
+          }
+        }
+      },
+    })
+  ).current;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -59,23 +123,52 @@ export default function CrewNavigationScreen() {
         </View>
       </View>
 
-      <View style={styles.bottomSheet}>
-        <View style={styles.handle} />
-        <View style={styles.distanceRow}>
-          <View style={styles.distanceInfo}>
-            <Text style={[typography.titleLg, styles.distanceValue]}>
-              450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
-            </Text>
-            <View style={styles.tagRow}>
-              <Chip variant="severity-high" label="Nghiêm trọng" />
-              <Text style={[typography.titleMd, styles.roadTag]}>Km1842+150 QL1A</Text>
+      {/* Interactive Draggable Bottom Sheet */}
+      <Animated.View
+        style={[
+          styles.bottomSheet,
+          { transform: [{ translateY }] },
+        ]}
+      >
+        {/* Drag Handle & Distance Header */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isCollapsed ? 'Mở rộng chi tiết lộ trình' : 'Thu gọn chi tiết lộ trình'}
+          onPress={toggleSheet}
+          style={styles.dragHeader}
+          {...panResponder.panHandlers}
+        >
+          <View style={styles.handleBar}>
+            <View style={styles.handle} />
+          </View>
+
+          <View style={styles.distanceRow}>
+            <View style={styles.distanceInfo}>
+              <Text style={[typography.titleLg, styles.distanceValue]}>
+                450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
+              </Text>
+              <View style={styles.tagRow}>
+                <Chip variant="severity-high" label="Nghiêm trọng" />
+                <Text style={[typography.titleMd, styles.roadTag]}>Km1842+150 QL1A</Text>
+              </View>
+            </View>
+
+            <View style={styles.headerRightControls}>
+              <View style={styles.navCircle}>
+                <Ionicons name="navigate" size={20} color={colors.brandGold} />
+              </View>
+              <View style={styles.togglePill}>
+                <Ionicons
+                  name={isCollapsed ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={colors.neutral}
+                />
+              </View>
             </View>
           </View>
-          <View style={styles.navCircle}>
-            <Ionicons name="navigate" size={24} color={colors.brandGold} />
-          </View>
-        </View>
+        </Pressable>
 
+        {/* Collapsible Content: Address Bar & Actions */}
         <View style={styles.addressBar}>
           <View style={styles.addressLeft}>
             <Ionicons name="location" size={16} color={colors.error} />
@@ -92,7 +185,7 @@ export default function CrewNavigationScreen() {
             <Button variant="primary" title="✓ Đã đến nơi" onPress={() => router.push('/(crew)/progress')} />
           </View>
         </View>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -164,17 +257,29 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     borderTopWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: 2,
+    paddingBottom: spacing.lg,
     gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  dragHeader: {
+    paddingBottom: spacing.xs,
+  },
+  handleBar: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 8,
   },
   handle: {
-    width: 40,
-    height: 4,
+    width: 44,
+    height: 5,
     borderRadius: radius.full,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginTop: -spacing.sm,
-    marginBottom: spacing.xs,
+    backgroundColor: '#D1D5DB',
   },
   distanceRow: {
     flexDirection: 'row',
@@ -199,10 +304,25 @@ const styles = StyleSheet.create({
   roadTag: {
     color: colors.neutral,
   },
+  headerRightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   navCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.lg,
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  togglePill: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
