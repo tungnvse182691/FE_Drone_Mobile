@@ -14,19 +14,22 @@ export default function CrewNavigationScreen() {
     Linking.openURL('https://www.google.com/maps/dir/?api=1&destination=10.9634,107.0125').catch(() => {});
   };
 
-  const COLLAPSED_OFFSET = 142;
+  const [sheetHeight, setSheetHeight] = useState(240);
+  const sheetHeightRef = useRef(240);
   const translateY = useRef(new Animated.Value(0)).current;
   const isCollapsedRef = useRef(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const getCollapsedOffset = () => Math.max(140, sheetHeightRef.current - 56);
 
   const collapseSheet = () => {
     isCollapsedRef.current = true;
     setIsCollapsed(true);
     Animated.spring(translateY, {
-      toValue: COLLAPSED_OFFSET,
+      toValue: getCollapsedOffset(),
       useNativeDriver: true,
-      bounciness: 4,
-      speed: 14,
+      bounciness: 3,
+      speed: 16,
     }).start();
   };
 
@@ -37,7 +40,7 @@ export default function CrewNavigationScreen() {
       toValue: 0,
       useNativeDriver: true,
       bounciness: 4,
-      speed: 14,
+      speed: 16,
     }).start();
   };
 
@@ -54,21 +57,22 @@ export default function CrewNavigationScreen() {
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
       onPanResponderMove: (_, gestureState) => {
-        const base = isCollapsedRef.current ? COLLAPSED_OFFSET : 0;
+        const offset = getCollapsedOffset();
+        const base = isCollapsedRef.current ? offset : 0;
         let nextVal = base + gestureState.dy;
         if (nextVal < -15) nextVal = -15;
-        if (nextVal > COLLAPSED_OFFSET + 15) nextVal = COLLAPSED_OFFSET + 15;
+        if (nextVal > offset + 15) nextVal = offset + 15;
         translateY.setValue(nextVal);
       },
       onPanResponderRelease: (_, gestureState) => {
         if (!isCollapsedRef.current) {
-          if (gestureState.dy > 35 || gestureState.vy > 0.4) {
+          if (gestureState.dy > 30 || gestureState.vy > 0.3) {
             collapseSheet();
           } else {
             expandSheet();
           }
         } else {
-          if (gestureState.dy < -35 || gestureState.vy < -0.4) {
+          if (gestureState.dy < -30 || gestureState.vy < -0.3) {
             expandSheet();
           } else {
             collapseSheet();
@@ -123,8 +127,18 @@ export default function CrewNavigationScreen() {
         </View>
       </View>
 
-      {/* Interactive Draggable Bottom Sheet */}
+      {/* Interactive Draggable Bottom Sheet (Floating overlay over full-screen map) */}
       <Animated.View
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 120 && Math.abs(h - sheetHeightRef.current) > 2) {
+            sheetHeightRef.current = h;
+            setSheetHeight(h);
+            if (isCollapsedRef.current) {
+              translateY.setValue(Math.max(140, h - 56));
+            }
+          }
+        }}
         style={[
           styles.bottomSheet,
           { transform: [{ translateY }] },
@@ -142,30 +156,41 @@ export default function CrewNavigationScreen() {
             <View style={styles.handle} />
           </View>
 
-          <View style={styles.distanceRow}>
-            <View style={styles.distanceInfo}>
-              <Text style={[typography.titleLg, styles.distanceValue]}>
-                450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
-              </Text>
-              <View style={styles.tagRow}>
-                <Chip variant="severity-high" label="Nghiêm trọng" />
-                <Text style={[typography.titleMd, styles.roadTag]}>Km1842+150 QL1A</Text>
+          {isCollapsed ? (
+            <View style={styles.collapsedSummaryRow}>
+              <View style={styles.collapsedLeft}>
+                <Ionicons name="navigate" size={16} color={colors.brandGold} />
+                <Text style={[typography.labelSm, styles.collapsedTitle]}>
+                  450 m &bull; Km1842+150 QL1A
+                </Text>
+              </View>
+              <View style={styles.collapsedRight}>
+                <Text style={[typography.caption, styles.collapsedHint]}>Chạm để mở</Text>
+                <Ionicons name="chevron-up" size={16} color={colors.secondary} />
               </View>
             </View>
+          ) : (
+            <View style={styles.distanceRow}>
+              <View style={styles.distanceInfo}>
+                <Text style={[typography.titleLg, styles.distanceValue]}>
+                  450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
+                </Text>
+                <View style={styles.tagRow}>
+                  <Chip variant="severity-high" label="Nghiêm trọng" />
+                  <Text style={[typography.titleMd, styles.roadTag]}>Km1842+150 QL1A</Text>
+                </View>
+              </View>
 
-            <View style={styles.headerRightControls}>
-              <View style={styles.navCircle}>
-                <Ionicons name="navigate" size={20} color={colors.brandGold} />
-              </View>
-              <View style={styles.togglePill}>
-                <Ionicons
-                  name={isCollapsed ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color={colors.neutral}
-                />
+              <View style={styles.headerRightControls}>
+                <View style={styles.navCircle}>
+                  <Ionicons name="navigate" size={20} color={colors.brandGold} />
+                </View>
+                <View style={styles.togglePill}>
+                  <Ionicons name="chevron-down" size={18} color={colors.neutral} />
+                </View>
               </View>
             </View>
-          </View>
+          )}
         </Pressable>
 
         {/* Collapsible Content: Address Bar & Actions */}
@@ -194,10 +219,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
+    position: 'relative',
   },
   map: {
-    flex: 1,
-    overflow: 'hidden',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   topHeader: {
     position: 'absolute',
@@ -252,6 +281,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -262,24 +295,48 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.sm,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 8,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 10,
+    zIndex: 30,
   },
   dragHeader: {
-    paddingBottom: spacing.xs,
+    paddingBottom: 2,
   },
   handleBar: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   handle: {
     width: 44,
     height: 5,
     borderRadius: radius.full,
     backgroundColor: '#D1D5DB',
+  },
+  collapsedSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  collapsedLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  collapsedTitle: {
+    color: colors.neutral,
+    fontWeight: '700',
+  },
+  collapsedRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  collapsedHint: {
+    color: colors.secondary,
   },
   distanceRow: {
     flexDirection: 'row',
