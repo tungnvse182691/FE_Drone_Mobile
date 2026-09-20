@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { User } from '../types/domain';
 import { RoleCode } from '../types/enums';
+import { appStorage } from './storage';
 
 interface AuthState {
   user: User | null;
@@ -20,6 +21,9 @@ export const useAuthStore = create<AuthState>()(
       login: (user) => set({ user, role: user.role_code, token: user.token }),
       logout: () => set({ user: null, role: null, token: null }),
     }),
-    { name: 'auth-storage' },
+    {
+      name: 'auth-storage',
+      storage: appStorage,
+    },
   ),
 );

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { appStorage } from './storage';
 
 export interface PendingItem {
   id: string;
@@ -40,6 +41,9 @@ export const useOfflineStore = create<OfflineState>()(
         })),
       clear: () => set({ queueCount: 0, pendingItems: [] }),
     }),
-    { name: 'offline-storage' },
+    {
+      name: 'offline-storage',
+      storage: appStorage,
+    },
   ),
 );
