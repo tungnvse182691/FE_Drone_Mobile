@@ -348,7 +348,7 @@ export function RoadGuardMapLibre({
   // Render Fallback Offline Schematic when WebView fails or offline
   const renderOfflineFallback = () => (
     <View style={styles.offlineContainer}>
-      <View style={styles.offlineBanner}>
+      <View style={[styles.offlineBanner, { top: controlsTopOffset, right: interactive ? 52 : spacing.sm }]}>
         <Ionicons name="cloud-offline" size={14} color={colors.warning} />
         <Text style={[typography.labelSm, styles.offlineBannerText]}>{offlineBannerText}</Text>
       </View>
