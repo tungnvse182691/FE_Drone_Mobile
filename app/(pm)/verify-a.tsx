@@ -71,7 +71,7 @@ export default function PmVerifyAScreen() {
         {/* Video Snapshot Card with Bounding Box */}
         <View style={styles.videoCard}>
           <View style={styles.videoCanvas}>
-            {/* Dark asphalt simulation background */}
+            {/* Concrete slab texture with joint */}
             <View style={styles.asphaltBg}>
               <View style={styles.crackLine1} />
               <View style={styles.crackLine2} />
@@ -121,7 +121,7 @@ export default function PmVerifyAScreen() {
             <View>
               <Text style={styles.sectionMetaLabel}>LOẠI SỰ CỐ PHÁT HIỆN</Text>
               <Text style={[typography.titleMd, styles.defectTitle]}>
-                Rạn nứt mai rùa diện hẹp
+                Rạn nứt lưới tấm bê tông diện hẹp
               </Text>
             </View>
             <View style={styles.severityWrap}>
@@ -143,7 +143,7 @@ export default function PmVerifyAScreen() {
             </View>
             <View style={styles.gridCol}>
               <Text style={styles.fieldMetaLabel}>Tuyến đường</Text>
-              <Text style={styles.routeValue}>ĐT.741 • Km14+200</Text>
+              <Text style={styles.routeValue}>Tuyến ĐH.05 • Km02+150</Text>
             </View>
           </View>
 

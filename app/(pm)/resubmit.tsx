@@ -49,7 +49,7 @@ export default function PmResubmitScreen() {
           </Text>
         </View>
         <Text style={[typography.bodyMd, styles.commentBody]}>
-          "Giảm hệ số hao hụt bê tông nhựa từ 8% xuống 5% theo định mức mới và bổ sung thêm 2 người
+          "Giảm hao hụt bê tông xi măng M300 từ 5% xuống 3% theo định mức công tác đổ vỡ cục bộ và bổ sung 2 nhân công đắp lề đất K95
           điều tiết giao thông giờ cao điểm."
         </Text>
       </Card>

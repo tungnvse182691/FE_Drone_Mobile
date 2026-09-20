@@ -11,7 +11,7 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 const CHECKLIST = [
   { label: 'Cập nhật trạng thái', detail: 'Chuyển sang "Đã hoàn thành sửa chữa"', done: true },
   { label: 'Ảnh trước', detail: '1 ảnh toàn cảnh + GPS Watermark', done: true },
-  { label: 'Ảnh sau', detail: '2 ảnh nghiệm thu mặt lớp thảm mới', done: true },
+  { label: 'Ảnh sau', detail: '2 ảnh nghiệm thu bề mặt tấm BTXM hoàn thiện', done: true },
 ];
 
 export default function CrewCompleteScreen() {
@@ -50,11 +50,11 @@ export default function CrewCompleteScreen() {
         <View style={styles.divider} />
         <View style={styles.infoRow}>
           <Text style={[typography.bodyMd, styles.infoLabel]}>Hạng mục:</Text>
-          <Text style={[typography.bodyMd, styles.infoValue]}>Vá ổ gà mặt đường & Gia cố</Text>
+          <Text style={[typography.bodyMd, styles.infoValue]}>Trám vá ổ gà vỡ tấm BTXM</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={[typography.bodyMd, styles.infoLabel]}>Vị trí:</Text>
-          <Text style={[typography.bodyMd, styles.infoValue]}>Km 14+250, QL 1A</Text>
+          <Text style={[typography.bodyMd, styles.infoValue]}>Km02+150, Tuyến ĐH.05</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={[typography.bodyMd, styles.infoLabel]}>Đội thi công:</Text>
@@ -98,7 +98,7 @@ export default function CrewCompleteScreen() {
           <Text style={[typography.labelSm, styles.imageLabel]}>ẢNH SAU</Text>
           <View style={styles.imagePlaceholder}>
             <Ionicons name="image-outline" size={28} color={colors.success} />
-            <Text style={[typography.caption, styles.imagePlaceholderText]}>Mặt thảm C12.5 phẳng</Text>
+            <Text style={[typography.caption, styles.imagePlaceholderText]}>Bề mặt tấm BTXM phẳng</Text>
           </View>
         </View>
       </View>

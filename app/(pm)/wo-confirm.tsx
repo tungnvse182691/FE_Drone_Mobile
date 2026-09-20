@@ -60,7 +60,7 @@ export default function PmWoConfirmScreen() {
             <View style={styles.priorityCircle}>
               <Ionicons name="alert" size={16} color="#D97706" />
             </View>
-            <Text style={[typography.bodyLg, styles.incidentTitle]}>Ổ gà sâu trên mặt đường nhựa</Text>
+            <Text style={[typography.bodyLg, styles.incidentTitle]}>Đổ bù ổ gà sâu vỡ mặt tấm bê tông</Text>
           </View>
           <View style={styles.pendingBadge}>
             <Text style={[typography.labelSm, styles.pendingBadgeText]}>Chờ nghiệm thu</Text>
@@ -70,7 +70,7 @@ export default function PmWoConfirmScreen() {
         <View style={styles.metaList}>
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={15} color={colors.secondary} />
-            <Text style={[typography.caption, styles.metaText]}>Km 14+320, ĐT.741, Bình Dương</Text>
+            <Text style={[typography.caption, styles.metaText]}>Km02+150, Tuyến ĐH.05, Xã Bình Chánh</Text>
           </View>
           <View style={styles.metaRow}>
             <Ionicons name="people-outline" size={15} color={colors.secondary} />
@@ -112,7 +112,7 @@ export default function PmWoConfirmScreen() {
           <Pressable
             accessibilityRole="button"
             style={({ pressed }) => [styles.photoThumb, styles.photoThumbAfter, pressed && styles.pressed]}
-            onPress={() => setToast({ type: 'info', message: 'Xem ảnh sau khi thảm nhựa C12.5' })}
+            onPress={() => setToast({ type: 'info', message: 'Xem ảnh sau khi đổ bê tông xi măng M300 hoàn công' })}
           >
             <Ionicons name="checkmark-circle" size={36} color={colors.success} />
             <View style={[styles.photoTag, styles.photoTagAfter]}>
@@ -120,7 +120,7 @@ export default function PmWoConfirmScreen() {
             </View>
           </Pressable>
           <View style={styles.photoFooter}>
-            <Text style={[typography.caption, styles.photoTitle]}>Đã thảm nhựa C12.5</Text>
+            <Text style={[typography.caption, styles.photoTitle]}>Đã đổ bê tông xi măng M300</Text>
             <Ionicons name="checkmark-circle" size={16} color={colors.success} />
           </View>
         </View>
@@ -161,8 +161,8 @@ export default function PmWoConfirmScreen() {
           <Text style={[typography.labelSm, styles.sectionTitle]}>GHI CHÚ TỪ ĐỘI SỬA CHỮA:</Text>
         </View>
         <Text style={[typography.caption, styles.noteText]}>
-          Đã cào bóc lớp nhựa cũ hư hại, lu lèn nền đá base cấp phối và trải thảm bê tông nhựa nóng
-          C12.5 dày 7cm. Đã kiểm tra độ bằng phẳng và dọn dẹp vệ sinh hiện trường.
+          Đã đục tẩy mảng bê tông nứt vỡ, quét hồ dầu liên kết, đổ bê tông xi măng M300 đá 1x2, hoàn thiện bề mặt và bảo dưỡng ẩm đạt chuẩn TCVN 10380:2014.
+          Đã kiểm tra độ bằng phẳng và dọn dẹp vệ sinh hiện trường.
         </Text>
       </View>
 

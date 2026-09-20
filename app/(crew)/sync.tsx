@@ -29,7 +29,7 @@ const SEGMENTS: { key: SyncSegment; label: string; count: number }[] = [
 const QUEUE_ITEMS: QueueItem[] = [
   {
     name: 'Bằng chứng nghiệm thu #WO-118',
-    meta: 'Km1842+150 QL1A • Trám vá ổ gà',
+    meta: 'Km02+150 Tuyến ĐH.05 • Đổ bù ổ gà tấm BTXM',
     size: '4 ảnh • 14.2 MB',
     status: SyncStatus.UPLOADING,
     progress: 65,

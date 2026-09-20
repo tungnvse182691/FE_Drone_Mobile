@@ -20,7 +20,7 @@ export default function PmFieldTaskScreen() {
   const [depth, setDepth] = useState('7.0');
   const [area, setArea] = useState('14.5');
   const [notes, setNotes] = useState(
-    'Mép nhựa vỡ rộng hơn so với ảnh flycam. Mặt nhựa lún do xe tải nặng, chưa chạm nền móng.',
+    'Mép tấm bê tông vỡ dài 65cm, lề đất bị xói lở sâu 8cm làm hẫng chân tấm do xe tải mỏ cát đi lấn lề, cần đo đạc lập hồ sơ từ chối bảo hành.',
   );
   const [photoAttached, setPhotoAttached] = useState(false);
   const [toast, setToast] = useState<ToastMessage | null>(null);
@@ -60,7 +60,7 @@ export default function PmFieldTaskScreen() {
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <Text style={[typography.titleLg, styles.defectId]}>#DF-0231</Text>
-            <Text style={[typography.caption, styles.defectMeta]}>QL.1A Km1842+150 • Ổ gà sâu mặt đường nhựa</Text>
+            <Text style={[typography.caption, styles.defectMeta]}>Tuyến ĐH.05 Km02+150 • Bể mép tấm & xói mòn lề đường</Text>
           </View>
           <Chip variant="severity-high" label="RỦI RO CAO" />
         </View>

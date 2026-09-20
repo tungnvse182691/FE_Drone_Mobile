@@ -60,7 +60,7 @@ export default function CrewProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${user?.full_name ?? 'Nguyễn Văn Tuấn'}\nMã nhân viên: ${user?.employee_code ?? 'CT-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Đồng Nai\nTrạng thái hoạt động: Đang hoạt động`,
+          `Họ tên: ${user?.full_name ?? 'Nguyễn Văn Tuấn'}\nMã nhân viên: ${user?.employee_code ?? 'CT-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Tuyến ĐH.05\nTrạng thái hoạt động: Đang hoạt động`,
         );
         return;
       case 'help':
@@ -89,7 +89,7 @@ export default function CrewProfileScreen() {
           Mã NV: {user?.employee_code ?? 'CT-RC-084'} • Đội sửa chữa số 2
         </Text>
         <Text style={[typography.caption, styles.unit]}>
-          Đội sửa chữa số 2 — Phụ trách Vá dặm mặt đường Đồng Nai
+          Đội sửa chữa số 2 — Phụ trách Bảo trì đường bê tông ĐH.05
         </Text>
         <Text style={[typography.caption, styles.email]}>{user?.email ?? 'crew@cattuong.vn'}</Text>
 

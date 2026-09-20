@@ -32,8 +32,8 @@ interface SubmitItem {
 const SUBMITTED: SubmitItem[] = [
   {
     id: '#DF-0231',
-    route: 'QL1A (Km1842+150)',
-    title: 'Ổ gà sâu mặt đường nhựa',
+    route: 'Tuyến ĐH.05 (Km02+150)',
+    title: 'Ổ gà sâu vỡ tấm bê tông',
     sentAt: 'Gửi lúc 14:30 • Hôm qua',
     status: 'pending',
     statusLabel: 'Đang chờ',
@@ -44,8 +44,8 @@ const SUBMITTED: SubmitItem[] = [
   },
   {
     id: '#DF-0228',
-    route: 'Tuyến ĐT.741 (Km14+200)',
-    title: 'Rạn nứt mai rùa diện rộng',
+    route: 'Tuyến ĐH.05 (Km03+400)',
+    title: 'Bể mép tấm bê tông tiếp giáp lề',
     sentAt: 'Gửi lúc 09:15 • 24/10/2023',
     status: 'approved',
     statusLabel: 'Đã duyệt — chờ giao việc',
@@ -56,8 +56,8 @@ const SUBMITTED: SubmitItem[] = [
   },
   {
     id: '#DF-0219',
-    route: 'Tuyến QL51 (Km22+400)',
-    title: 'Hư hỏng khe co giãn dầm cầu',
+    route: 'Tuyến NT-08 (Km03+100)',
+    title: 'Nứt vỡ khe co giãn tấm bê tông',
     sentAt: 'Gửi lúc 16:40 • 23/10/2023',
     status: 'rejected',
     statusLabel: 'Bị từ chối',
@@ -70,7 +70,7 @@ const SUBMITTED: SubmitItem[] = [
   },
   {
     id: '#DF-0205',
-    route: 'Tuyến tránh BH (Km05+800)',
+    route: 'Tuyến ĐH.01 (Km01+700)',
     title: 'Đọng nước cục bộ mép đường',
     sentAt: 'Gửi lúc 11:00 • 22/10/2023',
     status: 'approved',
@@ -82,7 +82,7 @@ const SUBMITTED: SubmitItem[] = [
   },
   {
     id: '#DF-0198',
-    route: 'Đường gom KCN Amata',
+    route: 'Tuyến NT-08 (Km02+500)',
     title: 'Sụt lún bề mặt bó vỉa hè',
     sentAt: 'Gửi lúc 08:30 • 21/10/2023',
     status: 'pending',

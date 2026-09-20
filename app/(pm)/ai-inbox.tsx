@@ -41,24 +41,24 @@ const DEFECTS: Record<InboxTab, DefectItem[]> = {
   new: [
     {
       id: '#DF-0231',
-      route: 'QL.1A Km1842+150',
-      title: 'Ổ gà sâu mặt đường nhựa',
+      route: 'Tuyến ĐH.05 Km02+150',
+      title: 'Ổ gà sâu vỡ mặt tấm BTXM',
       detail: 'Sâu ~6.8cm',
       chip: 'severity-high',
       chipLabel: 'RỦI RO CAO',
     },
     {
       id: '#DF-0228',
-      route: 'Tuyến ĐT.741 Km14+200',
-      title: 'Rạn nứt mai rùa diện rộng',
+      route: 'Tuyến ĐH.05 Km03+400',
+      title: 'Bể mép tấm bê tông tiếp giáp lề',
       detail: 'Khoảng 14.5 m²',
       chip: 'severity-medium',
       chipLabel: 'RỦI RO TRUNG BÌNH',
     },
     {
       id: '#DF-0219',
-      route: 'QL.51 Km22+400',
-      title: 'Hư hỏng khe co giãn dầm cầu',
+      route: 'Tuyến NT-08 Km03+100',
+      title: 'Nứt vỡ khe co giãn tấm bê tông',
       detail: 'Chờ phân loại nguyên nhân',
       chip: 'severity-medium',
       chipLabel: 'RỦI RO TRUNG BÌNH',
@@ -67,24 +67,24 @@ const DEFECTS: Record<InboxTab, DefectItem[]> = {
   waiting: [
     {
       id: '#DF-0230',
-      route: 'QL.1A Km1841+900',
-      title: 'Nứt dọc thảm nhựa',
+      route: 'Tuyến ĐH.01 Km02+100',
+      title: 'Nứt gãy xuyên tấm bê tông',
       detail: 'Chờ phi công xác nhận ảnh gốc',
       chip: 'status-pending',
       chipLabel: 'CHỜ DUYỆT',
     },
     {
       id: '#DF-0226',
-      route: 'Tuyến ĐT.741 Km13+400',
-      title: 'Hằn lún vệt bánh xe',
+      route: 'Tuyến ĐH.01 Km01+200',
+      title: 'Lún đọng nước bề mặt tấm',
       detail: 'Chờ dữ liệu so sánh đa kỳ',
       chip: 'status-pending',
       chipLabel: 'CHỜ DUYỆT',
     },
     {
       id: '#DF-0224',
-      route: 'QL.51 Km21+800',
-      title: 'Vỡ mép bê tông vai đường',
+      route: 'Tuyến NT-08 Km02+500',
+      title: 'Bể mép tấm bê tông tiếp giáp lề',
       detail: 'Chờ số đo thực địa',
       chip: 'status-pending',
       chipLabel: 'CHỜ DUYỆT',
@@ -93,24 +93,24 @@ const DEFECTS: Record<InboxTab, DefectItem[]> = {
   approved: [
     {
       id: '#DF-0211',
-      route: 'QL.1A Km1840+600',
-      title: 'Ổ gà mặt đường nhựa',
+      route: 'Tuyến ĐH.05 Km01+100',
+      title: 'Ổ gà sâu vỡ mặt tấm BTXM',
       detail: 'Đã duyệt - Nhập đợt sửa chữa',
       chip: 'approved',
       chipLabel: 'ĐÃ DUYỆT',
     },
     {
       id: '#DF-0208',
-      route: 'Tuyến ĐT.741 Km12+100',
-      title: 'Lún cục bộ nền đường',
+      route: 'Tuyến ĐH.01 Km01+700',
+      title: 'Lún đọng nước bề mặt tấm',
       detail: 'Đã duyệt - Nhập đợt sửa chữa',
       chip: 'approved',
       chipLabel: 'ĐÃ DUYỆT',
     },
     {
       id: '#DF-0203',
-      route: 'QL.51 Km20+500',
-      title: 'Nứt thảm mặt đường',
+      route: 'Tuyến NT-08 Km01+900',
+      title: 'Nứt gãy xuyên tấm bê tông',
       detail: 'Đã duyệt - Nhập đợt sửa chữa',
       chip: 'approved',
       chipLabel: 'ĐÃ DUYỆT',
@@ -122,15 +122,15 @@ const MAP_DEFECTS = [
   {
     id: '#DF-0231',
     title: '#DF-0231 • Ổ gà sâu ~6.8cm',
-    subtitle: 'QL.1A Km1842+150 (Tọa độ chính thức từ đặc tả)',
+    subtitle: 'Tuyến ĐH.05 Km02+150 (Tọa độ chính thức từ đặc tả)',
     coordinate: [107.0125, 10.9634] as [number, number],
     type: 'defect' as const,
     severity: 'high' as const,
   },
   {
     id: '#DF-0230',
-    title: '#DF-0230 • Nứt dọc thảm nhựa',
-    subtitle: 'QL.1A Km1841+900 (Mô phỏng ước tính theo lý trình Km)',
+    title: '#DF-0230 • Nứt gãy xuyên tấm bê tông',
+    subtitle: 'Tuyến ĐH.01 Km02+100 (Mô phỏng ước tính theo lý trình Km)',
     coordinate: [107.0080, 10.9615] as [number, number],
     type: 'defect' as const,
     severity: 'medium' as const,
@@ -138,7 +138,7 @@ const MAP_DEFECTS = [
   {
     id: '#DF-0211',
     title: '#DF-0211 • Ổ gà mặt đường',
-    subtitle: 'QL.1A Km1840+600 (Mô phỏng ước tính theo lý trình Km)',
+    subtitle: 'Tuyến ĐH.05 Km01+100 (Mô phỏng ước tính theo lý trình Km)',
     coordinate: [106.9950, 10.9570] as [number, number],
     type: 'defect' as const,
     severity: 'low' as const,
@@ -226,7 +226,7 @@ export default function PmAiInboxScreen() {
               [107.0125, 10.9634],
             ]}
             onMarkerPress={(id) => setSelectedMapId(id)}
-            offlineBannerText="Ngoại tuyến: Bản đồ GIS tuyến QL.1A Đồng Nai"
+            offlineBannerText="Ngoại tuyến: Bản đồ GIS tuyến ĐH.05 Bình Chánh"
           />
 
           {/* Selected Defect Info Card */}
@@ -269,10 +269,10 @@ export default function PmAiInboxScreen() {
 
           <View style={styles.mapNotes}>
             <Text style={[typography.caption, styles.mapNoteText]}>
-              * Tọa độ chuẩn: #DF-0231 có tọa độ GPS chính thức từ đặc tả (10.9634, 107.0125 tại Km1842+150). Các vị trí khác là mô phỏng ước tính theo lý trình Km tuyến QL.1A (Use Case AI01).
+              * Tọa độ chuẩn: #DF-0231 có tọa độ GPS chính thức từ đặc tả (10.9634, 107.0125 tại Km02+150). Các vị trí khác là mô phỏng ước tính theo lý trình Km tuyến ĐH.05 (Use Case AI01).
             </Text>
             <Text style={[typography.caption, styles.mapNoteText]}>
-              * Tuyến ĐT.741 Km14+200 (#DF-0228): [Chờ định vị GPS bổ sung từ BE].
+              * Tuyến ĐH.05 Km03+400 (#DF-0228): [Chờ định vị GPS bổ sung từ BE].
             </Text>
           </View>
         </View>

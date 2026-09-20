@@ -101,7 +101,7 @@ export default function CrewNavigationScreen() {
             {
               id: 'defect-wo118',
               title: 'Ổ gà sâu 7cm (#WO-118)',
-              subtitle: 'Km1842+150 QL1A',
+              subtitle: 'Km02+150 Tuyến ĐH.05',
               coordinate: [107.0125, 10.9634],
               type: 'defect',
               severity: 'high',
@@ -161,7 +161,7 @@ export default function CrewNavigationScreen() {
               <View style={styles.collapsedLeft}>
                 <Ionicons name="navigate" size={16} color={colors.brandGold} />
                 <Text style={[typography.labelSm, styles.collapsedTitle]}>
-                  450 m &bull; Km1842+150 QL1A
+                  450 m &bull; Km02+150 Tuyến ĐH.05 (BTXM)
                 </Text>
               </View>
               <View style={styles.collapsedRight}>
@@ -177,7 +177,7 @@ export default function CrewNavigationScreen() {
                 </Text>
                 <View style={styles.tagRow}>
                   <Chip variant="severity-high" label="Nghiêm trọng" />
-                  <Text style={[typography.titleMd, styles.roadTag]}>Km1842+150 QL1A</Text>
+                  <Text style={[typography.titleMd, styles.roadTag]}>Km02+150 Tuyến ĐH.05 (Xã Bình Chánh)</Text>
                 </View>
               </View>
 
@@ -197,7 +197,7 @@ export default function CrewNavigationScreen() {
         <View style={styles.addressBar}>
           <View style={styles.addressLeft}>
             <Ionicons name="location" size={16} color={colors.error} />
-            <Text style={[typography.bodyMd, styles.addressText]}>Xã Hố Nai 3, Trảng Bom, Đồng Nai</Text>
+            <Text style={[typography.bodyMd, styles.addressText]}>Xã Bình Chánh, TP. Hồ Chí Minh</Text>
           </View>
           <Text style={[typography.labelSm, styles.coordText]}>10.9634, 107.0125</Text>
         </View>

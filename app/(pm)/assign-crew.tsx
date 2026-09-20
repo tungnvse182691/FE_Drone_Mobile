@@ -34,7 +34,7 @@ const CREWS: CrewOption[] = [
     initials: 'LM',
     name: 'Lê Minh Tuấn',
     detail: 'Cách 4.2 km',
-    meta: 'Đội Xử lý thảm nhựa • Đang làm: 2 việc',
+    meta: 'Đội Sửa chữa Bê tông số 01 • Đang làm: 2 việc',
     metaTone: 'default',
   },
   {
@@ -104,11 +104,11 @@ export default function PmAssignCrewScreen() {
         <View style={styles.locationRow}>
           <Ionicons name="location" size={16} color="#D97706" />
           <Text style={[typography.bodyMd, styles.locationText]}>
-            Km 42+150 — Tuyến Quốc lộ 1A (Trảng Bom, Đồng Nai)
+            Km02+150 — Tuyến ĐH.05 (Xã Bình Chánh, TP.HCM)
           </Text>
         </View>
         <Text style={[typography.caption, styles.defectDesc]}>
-          Ổ gà sâu 6.5cm, nứt mặt bê tông nhựa lân cận
+          Ổ gà vỡ tấm sâu 6.5cm, bể nứt mép tấm BTXM lân cận
         </Text>
 
         <View style={styles.approvedRow}>

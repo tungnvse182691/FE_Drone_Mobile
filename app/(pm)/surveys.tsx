@@ -28,7 +28,7 @@ const GROUPS: SurveyGroup[] = ['Đang bay', 'Đã gửi video', 'Chờ bay'];
 const INITIAL_SURVEYS: SurveyItem[] = [
   {
     id: 'KS12',
-    title: 'ĐT.741 — Cầu Sông Bé (Km14+250)',
+    title: 'Tuyến ĐH.05 — Xã Bình Chánh (Km01 - Km03)',
     group: 'Đang bay',
     chip: 'status-pending',
     chipLabel: 'Đang thực hiện',
@@ -36,7 +36,7 @@ const INITIAL_SURVEYS: SurveyItem[] = [
   },
   {
     id: 'KS11',
-    title: 'QL.1A — Đoạn Trảng Bom (Km1842+100 - Km1845)',
+    title: 'Tuyến ĐH.01 — Xã Tân Thông Hội (Km01 - Km03)',
     group: 'Đã gửi video',
     chip: 'approved',
     chipLabel: 'Đã gửi video',
@@ -44,7 +44,7 @@ const INITIAL_SURVEYS: SurveyItem[] = [
   },
   {
     id: 'KS14',
-    title: 'Đường gom KCN Amata — Biên Hòa (Km02 - Km05)',
+    title: 'Tuyến NT-08 — Xã An Nhơn Tây (Km01 - Km03)',
     group: 'Chờ bay',
     chip: 'severity-medium',
     chipLabel: 'Mới',

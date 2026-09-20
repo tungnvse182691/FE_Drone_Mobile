@@ -89,7 +89,7 @@ export default function PmSubmitApprovalScreen() {
           <View style={styles.infoBox}>
             <View style={styles.infoRow}>
               <Text style={[typography.caption, styles.infoLabel]}>Vị trí:</Text>
-              <Text style={[typography.caption, styles.infoValue]}>Km14+250, ĐT.741, Cầu Sông Bé</Text>
+              <Text style={[typography.caption, styles.infoValue]}>Km02+150, Tuyến ĐH.05, Xã Bình Chánh</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={[typography.caption, styles.infoLabel]}>Tọa độ GPS:</Text>
@@ -192,7 +192,7 @@ export default function PmSubmitApprovalScreen() {
                   NGƯỜI TIẾP NHẬN PHÊ DUYỆT
                 </Text>
                 <Text style={[typography.bodyMd, styles.supervisorName]}>
-                  Lê Hoàng Nam (Supervisor ĐT.741)
+                  Trần Thế Hùng (Supervisor Tuyến ĐH.05)
                 </Text>
               </View>
             </View>
@@ -203,7 +203,7 @@ export default function PmSubmitApprovalScreen() {
         <View style={styles.ctaWrap}>
           <Button variant="primary" title="Gửi phê duyệt" onPress={handleSend} />
           <Text style={[typography.caption, styles.ctaNote]}>
-            Yêu cầu sẽ được chuyển đến Supervisor phụ trách tuyến ĐT.741 để xem xét &amp; cấp ngân
+            Yêu cầu sẽ được chuyển đến Supervisor phụ trách tuyến ĐH.05 để xem xét &amp; cấp ngân
             sách thi công.
           </Text>
         </View>

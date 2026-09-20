@@ -91,14 +91,14 @@ export default function PmHomeScreen() {
         {/* Defect Card #DF-0231 */}
         <Card style={styles.defectCard}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.codeText}>#DF-0231 • TUYẾN QL1A</Text>
+            <Text style={styles.codeText}>#DF-0231 • TUYẾN ĐH.05</Text>
             <Chip variant="severity-high" label="CAO" />
           </View>
-          <Text style={[typography.titleMd, styles.defectTitle]}>Ổ gà sâu mặt đường nhựa</Text>
+          <Text style={[typography.titleMd, styles.defectTitle]}>Ổ gà sâu vỡ tấm bê tông</Text>
           <View style={styles.metaRow}>
             <Ionicons name="location" size={15} color={colors.error} />
             <Text style={[typography.caption, styles.locationText]}>
-              Km1842+150 • Tuyến QL1A (Đồng Nai)
+              Km02+150 • Tuyến ĐH.05 (Xã Bình Chánh)
             </Text>
           </View>
           <Text style={[typography.caption, styles.detailText]}>
@@ -137,16 +137,16 @@ export default function PmHomeScreen() {
         {/* Work Order Card #WO-118 - Chờ nghiệm thu */}
         <Card style={styles.woCard}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.codeText}>#WO-118 • TUYẾN ĐT.741</Text>
+            <Text style={styles.codeText}>#WO-118 • TUYẾN ĐH.01</Text>
             <View style={styles.pendingBadge}>
               <Text style={styles.pendingBadgeText}>Chờ nghiệm thu</Text>
             </View>
           </View>
-          <Text style={[typography.titleMd, styles.defectTitle]}>Ổ gà sâu trên mặt đường nhựa</Text>
+          <Text style={[typography.titleMd, styles.defectTitle]}>Bể mép tấm bê tông & hẫng lề</Text>
           <View style={styles.metaRow}>
             <Ionicons name="people-outline" size={15} color={colors.secondary} />
             <Text style={[typography.caption, styles.metaText]}>
-              Đội sửa chữa số 2 (Trần Văn Nam) • Km 14+320
+              Đội sửa chữa số 2 (Trần Văn Nam) • Km02+150 Tuyến ĐH.01
             </Text>
           </View>
           <View style={styles.metaRow}>
@@ -167,12 +167,12 @@ export default function PmHomeScreen() {
         {/* Card đã duyệt - Chờ giao việc */}
         <Card style={styles.woCard}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.codeText}>#DF-0228 • TUYẾN ĐT.741</Text>
+            <Text style={styles.codeText}>#DF-0228 • TUYẾN ĐH.01</Text>
             <View style={styles.approvedBadge}>
               <Text style={styles.approvedBadgeText}>Đã duyệt đợt</Text>
             </View>
           </View>
-          <Text style={[typography.titleMd, styles.defectTitle]}>Rạn nứt mai rùa diện rộng</Text>
+          <Text style={[typography.titleMd, styles.defectTitle]}>Nứt gãy tấm bê tông diện rộng</Text>
           <View style={styles.metaRow}>
             <Ionicons name="shield-checkmark" size={15} color={colors.success} />
             <Text style={[typography.caption, styles.metaText]}>

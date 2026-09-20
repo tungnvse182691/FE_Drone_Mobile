@@ -66,8 +66,8 @@ export default function CrewWoDetailScreen() {
             <Text style={[typography.caption, styles.priorityText]}>Ưu tiên xử lý trong 4h</Text>
           </View>
         </View>
-        <Text style={[typography.titleMd, styles.defectTitle]}>Trám vá ổ gà sâu 7cm — Km1842+150 QL1A</Text>
-        <Text style={[typography.caption, styles.defectLocation]}>Xã Hố Nai 3, Huyện Trảng Bom, Tỉnh Đồng Nai</Text>
+        <Text style={[typography.titleMd, styles.defectTitle]}>Đổ bù ổ gà sâu 7cm — Km02+150 Tuyến ĐH.05</Text>
+        <Text style={[typography.caption, styles.defectLocation]}>Xã Bình Chánh, TP. Hồ Chí Minh</Text>
         <View style={styles.detailBox}>
           <View style={styles.detailRow}>
             <Ionicons name="pricetag-outline" size={16} color={colors.brandGold} />
@@ -105,7 +105,7 @@ export default function CrewWoDetailScreen() {
             <View style={styles.destPinDot} />
           </View>
           <View style={styles.destBadge}>
-            <Text style={[typography.caption, styles.destBadgeText]}>Km1842+150</Text>
+            <Text style={[typography.caption, styles.destBadgeText]}>Km02+150</Text>
           </View>
           <View style={styles.currentPin}>
             <View style={styles.currentPinDot} />
@@ -123,30 +123,30 @@ export default function CrewWoDetailScreen() {
           </View>
           <View style={styles.engineerInfo}>
             <Text style={[typography.titleMd, styles.engineerTitle]}>Chỉ dẫn thi công hiện trường</Text>
-            <Text style={[typography.caption, styles.engineerMeta]}>KS. Nguyễn Văn Hùng • Ban Duy tu QL1A</Text>
+            <Text style={[typography.caption, styles.engineerMeta]}>KS. Nguyễn Văn Hùng • Kỹ thuật viên Nhà thầu Cát Tường</Text>
           </View>
         </View>
         <View style={styles.instructionBox}>
           <Text style={[typography.bodyMd, styles.instructionText]}>
-            Cần dọn sạch đất cát trong lòng hố trước khi tưới nhựa dính bám. Sử dụng khoảng{' '}
-            <Text style={styles.strong}>1.2 tấn</Text> bê tông nhựa nguội, đầm cóc kỹ tối thiểu{' '}
-            <Text style={styles.strong}>4 lượt</Text> xung quanh mép nối.
+            Cần đục tẩy toàn bộ mảng bê tông vỡ vụn, dùng máy nén khí xịt sạch bụi cát, quét lớp hồ dầu xi măng liên kết.
+            Sử dụng khoảng <Text style={styles.strong}>0.8 m³</Text> bê tông xi măng M300 đá 1x2, đầm dùi kỹ tối thiểu{' '}
+            <Text style={styles.strong}>4 lượt</Text> xung quanh mép tấm nối.
           </Text>
           <View style={styles.safetyBox}>
             <Ionicons name="warning-outline" size={15} color={colors.warning} />
             <Text style={[typography.caption, styles.safetyText]}>
-              <Text style={styles.strongGold}>An toàn:</Text> Đặt biển cảnh báo công trường và chóp nón giao thông cách 50m hướng đi TP. Biên Hòa.
+              <Text style={styles.strongGold}>An toàn:</Text> Đặt biển cảnh báo công trường và chóp nón giao thông cách 50m hướng đi trung tâm huyện Bình Chánh.
             </Text>
           </View>
         </View>
         <View style={styles.suppliesRow}>
           <View style={styles.supplyItem}>
             <Ionicons name="car-outline" size={14} color={colors.brandGold} />
-            <Text style={[typography.caption, styles.supplyText]}>Vật tư: Bê tông nhựa C12.5</Text>
+            <Text style={[typography.caption, styles.supplyText]}>Vật tư: Bê tông xi măng M300 đá 1x2</Text>
           </View>
           <View style={styles.supplyItem}>
             <Ionicons name="build" size={14} color={colors.brandGold} />
-            <Text style={[typography.caption, styles.supplyText]}>Thiết bị: Đầm cóc & chổi cước</Text>
+            <Text style={[typography.caption, styles.supplyText]}>Thiết bị: Đầm dùi & máy xoa nền</Text>
           </View>
         </View>
       </Card>

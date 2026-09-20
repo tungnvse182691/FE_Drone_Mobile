@@ -12,7 +12,7 @@ import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
-const PROJECTS = ['QL.1A - Đồng Nai', 'ĐT.741 - Tuyến tỉnh', 'Vành Đai 3 - TP.HCM'];
+const PROJECTS = ['Tuyến ĐH.05 - Bình Chánh', 'Tuyến ĐH.01 - Củ Chi', 'Tuyến NT-08 - An Nhơn Tây'];
 
 const REASONS = ['Định kỳ 6 tháng', 'Sau đợt mưa bão'];
 
@@ -99,8 +99,8 @@ function SelectRow({ label, value, onPress }: SelectRowProps) {
 }
 
 export default function PmCreateSurveyScreen() {
-  const [project, setProject] = useState('QL.1A - Đồng Nai');
-  const [segment, setSegment] = useState('Km1842 - Km1845');
+  const [project, setProject] = useState('Tuyến ĐH.05 - Bình Chánh');
+  const [segment, setSegment] = useState('Km02 - Km04');
   const [reason, setReason] = useState('Định kỳ 6 tháng');
   const [altitude, setAltitude] = useState('45');
   const [flightDate, setFlightDate] = useState('');
@@ -165,7 +165,7 @@ export default function PmCreateSurveyScreen() {
             label="Phân đoạn khảo sát"
             value={segment}
             onChangeText={setSegment}
-            placeholder="Ví dụ: Km1842 - Km1845"
+            placeholder="Ví dụ: Km02 - Km04"
           />
           <View style={styles.fieldGroup}>
             <Text style={[typography.labelLg, styles.fieldLabel]}>Lý do khảo sát</Text>

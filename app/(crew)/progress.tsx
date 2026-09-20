@@ -9,8 +9,8 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const CONSTRUCTION_STEPS = [
   'Đặt biển cảnh báo & chóp nón an toàn cách 50m.',
-  'Cào bóc lớp nhựa cũ hư hỏng dày 7cm.',
-  'Tưới nhựa dính bám & rải thảm BTN C12.5.',
+  'Đục tẩy bê tông hư hỏng, vệ sinh lòng hố sâu 7cm.',
+  'Quét hồ dầu liên kết xi măng & đổ bê tông M300 đá 1x2.',
   'Lu lèn phẳng mặt và thu dọn hiện trường.',
 ];
 
@@ -18,7 +18,7 @@ const QUICK_TAGS = ['+ Đã đủ vật liệu', '+ Thời tiết mưa lớn', '
 
 export default function CrewProgressScreen() {
   const [checked, setChecked] = useState<boolean[]>([true, true, true, false]);
-  const [note, setNote] = useState('Đã hoàn tất đầm cóc và đổ 1.2 tấn bê tông nhựa nguội, bề mặt phẳng theo chuẩn nghiệm thu Km1842+150.');
+  const [note, setNote] = useState('Đã hoàn tất đầm dùi và đổ 0.8 m³ bê tông xi măng M300, làm phẳng bề mặt tấm theo cốt cao độ chuẩn, che phủ bảo dưỡng ẩm.');
 
   const doneCount = checked.filter(Boolean).length;
   const progress = Math.round((doneCount / CONSTRUCTION_STEPS.length) * 100);
@@ -50,13 +50,13 @@ export default function CrewProgressScreen() {
             <View style={styles.woTag}>
               <Text style={[typography.labelSm, styles.woTagText]}>#WO-118</Text>
             </View>
-            <Text style={[typography.caption, styles.summaryRoad]}>Km1842+150 QL1A</Text>
+            <Text style={[typography.caption, styles.summaryRoad]}>Km02+150 Tuyến ĐH.05</Text>
           </View>
           <View style={styles.summaryIcon}>
             <Ionicons name="build" size={18} color={colors.brandGold} />
           </View>
         </View>
-        <Text style={[typography.titleMd, styles.summaryTitle]}>Trám vá ổ gà sâu 7cm — Hố Nai 3, Trảng Bom</Text>
+        <Text style={[typography.titleMd, styles.summaryTitle]}>Đổ bù ổ gà vỡ tấm sâu 7cm — Xã Bình Chánh</Text>
       </Card>
 
       <Card style={styles.card}>

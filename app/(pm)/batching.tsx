@@ -19,21 +19,21 @@ interface DefectItem {
 const DEFECTS: DefectItem[] = [
   {
     id: '#DF-0231',
-    title: 'Lún nứt Km1842+150',
+    title: 'Lún nứt Tuyến ĐH.05 Km02+150',
     cost: 42500000,
     area: 14.5,
-    detail: 'Sâu ~6.8cm • Diện tích: 14.5 m² • Cào bóc & vá thảm BTN C12.5',
+    detail: 'Sâu ~6.8cm • Diện tích: 14.5 m² • Đắp bù BTXM M300 đá 1x2',
   },
   {
     id: '#DF-0248',
-    title: 'Nứt lưới mai rùa Vành Đai 3',
+    title: 'Bể mép tấm bê tông Tuyến ĐH.01',
     cost: 32400000,
     area: 18.0,
-    detail: 'Dài 18m • Diện tích: 18.0 m² • Cào bóc 5cm & thảm lại',
+    detail: 'Dài 18m • Diện tích: 18.0 m² • Đục tẩy 5cm & đổ bù BTXM',
   },
   {
     id: '#DF-0256',
-    title: 'Tấm đan rãnh vỡ TL769',
+    title: 'Tấm đan rãnh vỡ Tuyến ĐX.12',
     cost: 15200000,
     area: 6.0,
     detail: 'Thay thế 6 tấm đan bê tông đúc sẵn 50x100cm',
@@ -64,7 +64,7 @@ export default function PmBatchingScreen() {
       <View style={styles.titleRow}>
         <Text style={[typography.titleLg, styles.heading]}>Lập kế hoạch thi công đợt</Text>
         <View style={styles.routeBadge}>
-          <Text style={[typography.labelSm, styles.routeBadgeText]}>QL1A Km1842 - Km1845</Text>
+          <Text style={[typography.labelSm, styles.routeBadgeText]}>Tuyến ĐH.05 (Km01 - Km03)</Text>
         </View>
       </View>
       <Text style={[typography.caption, styles.headingMeta]}>

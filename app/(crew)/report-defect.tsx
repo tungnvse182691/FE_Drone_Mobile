@@ -10,9 +10,9 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const DEFECT_TYPES = [
   'Ổ gà',
-  'Nứt lưới',
-  'Lún vệt',
-  'Xói lở taluy',
+  'Bể mép tấm',
+  'Lún đọng nước',
+  'Xói mòn lề đường',
 ];
 
 const SEVERITY_OPTIONS = [
@@ -62,7 +62,7 @@ export default function CrewReportDefectScreen() {
         <Text style={[typography.labelLg, styles.fieldLabel]}>Tọa độ GPS phát hiện tự động</Text>
         <View style={styles.gpsField}>
           <Ionicons name="location-outline" size={16} color={colors.secondary} />
-          <Text style={[typography.bodyMd, styles.gpsText]}>Km1842+320 QL1A</Text>
+          <Text style={[typography.bodyMd, styles.gpsText]}>Km02+320 Tuyến ĐH.05</Text>
         </View>
       </View>
 

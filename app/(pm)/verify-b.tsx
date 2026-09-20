@@ -90,7 +90,7 @@ export default function PmVerifyBScreen() {
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <Text style={[typography.titleLg, styles.defectId]}>#DF-0231</Text>
-            <Text style={[typography.caption, styles.defectMeta]}>QL.1A Km1842+150 • Ổ gà sâu mặt đường nhựa</Text>
+            <Text style={[typography.caption, styles.defectMeta]}>Tuyến ĐH.05 Km02+150 • Ổ gà sâu vỡ tấm bê tông xi măng</Text>
           </View>
           <Chip variant="severity-high" label="RỦI RO CAO" />
         </View>
@@ -169,7 +169,7 @@ export default function PmVerifyBScreen() {
         <View style={styles.warningBanner}>
           <Ionicons name="warning" size={18} color={colors.error} />
           <Text style={[typography.bodyMd, styles.warningText]}>
-            Rủi ro cao: cần cào bóc thảm lại trước khi gia cố lớp móng nền đường.
+            Rủi ro cao: cần đục bỏ mảng bê tông vỡ, xử lý nền móng tấm trước khi đổ lại BTXM.
           </Text>
         </View>
 

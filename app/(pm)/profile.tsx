@@ -55,7 +55,7 @@ export default function PmProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${user?.full_name ?? 'Nguyễn Thùy Lan'}\nMã nhân sự: ${user?.employee_code ?? 'PM-0428'}\nVai trò: Quản lý Dự án (Cát Tường Project Manager)\nBan QLDA phụ trách: Tuyến Quốc Lộ 1A, Tuyến ĐT.741 Đồng Nai`,
+          `Họ tên: ${user?.full_name ?? 'Nguyễn Thùy Lan'}\nMã nhân sự: ${user?.employee_code ?? 'PM-0428'}\nVai trò: Quản lý Dự án (Cát Tường Project Manager)\nBan QLDA phụ trách: Tuyến ĐH.05, Tuyến ĐH.01 (Đường BTXM Nông Thôn)`,
         );
         return;
       default:
@@ -95,7 +95,7 @@ export default function PmProfileScreen() {
       <View style={styles.scopeCard}>
         <View style={styles.scopeCol}>
           <Text style={[typography.labelSm, styles.scopeLabel]}>DỰ ÁN PHỤ TRÁCH</Text>
-          <Text style={[typography.bodyMd, styles.scopeValue]}>QL.1A & Tuyến ĐT.741</Text>
+          <Text style={[typography.bodyMd, styles.scopeValue]}>Tuyến ĐH.05 & Tuyến ĐH.01 (Đường BTXM Nông Thôn)</Text>
         </View>
         <View style={styles.scopeDivider} />
         <View style={styles.scopeCol}>

@@ -26,28 +26,28 @@ interface CrewTask {
 export const CREW_TASKS: CrewTask[] = [
   {
     code: '#WO-118',
-    title: 'Trám vá ổ gà sâu 7cm — Km1842+150 QL1A',
+    title: 'Đổ bù ổ gà vỡ tấm sâu 7cm — Km02+150 Tuyến ĐH.05',
     distance: 'Cách 450m',
     chip: 'severity-high',
     chipLabel: 'Nghiêm trọng',
   },
   {
     code: '#WO-116',
-    title: 'Xử lý nứt lưới & sụt lún taluy — ĐT.743B',
+    title: 'Sửa chữa bể mép tấm bê tông — Km03+120 Tuyến ĐH.01',
     distance: 'Cách 1.8 km',
     chip: 'severity-medium',
     chipLabel: 'Trung bình',
   },
   {
     code: '#WO-114',
-    title: 'Bù lún mố cầu Suối Cả — Tỉnh lộ 769',
+    title: 'Gia cố lún sụt mố cầu — Km04+800 Tuyến ĐH.01',
     distance: 'Cách 3.5 km',
     chip: 'severity-medium',
     chipLabel: 'Trung bình',
   },
   {
     code: '#WO-109',
-    title: 'Sơn dặm vạch kẻ đường phản quang — Vành Đai 3',
+    title: 'Đắp bù lề đường xói lở bảo vệ mép tấm — Km01+450 Tuyến NT-08',
     distance: 'Cách 5.2 km',
     chip: 'severity-low',
     chipLabel: 'Thấp',
@@ -57,7 +57,7 @@ export const CREW_TASKS: CrewTask[] = [
 const CREW_COMPLETED_TASKS: CrewTask[] = [
   {
     code: '#WO-115',
-    title: 'Trám vá ổ gà rải rác — Km1841+900 QL1A',
+    title: 'Xử lý vũng lún đọng nước mặt bê tông — Km02+900 Tuyến ĐH.05',
     distance: 'Cách 200m',
     chip: 'approved',
     chipLabel: 'Đã nghiệm thu',
@@ -65,7 +65,7 @@ const CREW_COMPLETED_TASKS: CrewTask[] = [
   },
   {
     code: '#WO-112',
-    title: 'Bù lún mặt đường đầu cầu — Cầu Suối Cả, TL769',
+    title: 'Bù phẳng mặt tấm đầu cầu lún sụt — Km03+400 Tuyến NT-08',
     distance: 'Cách 3.5 km',
     chip: 'approved',
     chipLabel: 'Đã nghiệm thu',
@@ -73,7 +73,7 @@ const CREW_COMPLETED_TASKS: CrewTask[] = [
   },
   {
     code: '#WO-108',
-    title: 'Sửa chữa hằn lún vệt bánh xe — Km1840+300 QL1A',
+    title: 'Bơm keo trám nứt gãy xuyên tấm BTXM — Km01+300 Tuyến ĐX.12',
     distance: 'Cách 900m',
     chip: 'approved',
     chipLabel: 'Đã nghiệm thu',
@@ -81,7 +81,7 @@ const CREW_COMPLETED_TASKS: CrewTask[] = [
   },
   {
     code: '#WO-105',
-    title: 'Xử lý nứt lưới mặt đường bê tông — ĐT.743B',
+    title: 'Gia cố khe co giãn tiếp giáp tấm bê tông — Tuyến ĐH.01',
     distance: 'Cách 1.8 km',
     chip: 'approved',
     chipLabel: 'Đã nghiệm thu',
@@ -89,7 +89,7 @@ const CREW_COMPLETED_TASKS: CrewTask[] = [
   },
   {
     code: '#WO-102',
-    title: 'Sơn dặm hoàn thiện vạch kẻ phản quang — Vành Đai 3',
+    title: 'Đắp gia cố lề đất K95 chống sụt mép — Tuyến NT-08',
     distance: 'Cách 5.2 km',
     chip: 'approved',
     chipLabel: 'Đã nghiệm thu',
