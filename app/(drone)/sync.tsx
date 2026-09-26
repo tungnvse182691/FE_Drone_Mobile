@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -136,7 +136,7 @@ export default function DroneSyncScreen() {
       {/* Toast Notification */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="information-circle" size={18} color={colors.surface} />
+          <MaterialIcons name="info" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -219,7 +219,7 @@ export default function DroneSyncScreen() {
       <View style={styles.itemsList}>
         {activeItems.length === 0 ? (
           <Card style={styles.emptyCard}>
-            <Ionicons name="checkmark-circle-outline" size={36} color={colors.success} />
+            <MaterialIcons name="check-circle" size={36} color={colors.success} />
             <Text style={[typography.bodyMd, { color: colors.secondary, marginTop: 6 }]}>
               Không có tệp nào trong danh sách
             </Text>
@@ -230,13 +230,13 @@ export default function DroneSyncScreen() {
               <View style={styles.itemMain}>
                 <View style={styles.itemIconWrap}>
                   {item.type === 'video' && (
-                    <Ionicons name="videocam" size={20} color={colors.primary} />
+                    <MaterialIcons name="videocam" size={20} color={colors.primary} />
                   )}
                   {item.type === 'photo' && (
-                    <Ionicons name="images" size={20} color={colors.info} />
+                    <MaterialIcons name="photo-library" size={20} color={colors.info} />
                   )}
                   {item.type === 'form' && (
-                    <Ionicons name="document-text" size={20} color={colors.secondary} />
+                    <MaterialIcons name="description" size={20} color={colors.secondary} />
                   )}
                 </View>
 
@@ -252,7 +252,7 @@ export default function DroneSyncScreen() {
               <View style={styles.statusBadge}>
                 {item.status === 'uploading' && (
                   <View style={styles.uploadingPill}>
-                    <Ionicons name="sync" size={12} color={colors.info} />
+                    <MaterialIcons name="sync" size={12} color={colors.info} />
                     <Text style={styles.uploadingText}>
                       {syncing ? `Đang tải (${uploadPercent}%)` : item.statusText}
                     </Text>
@@ -267,7 +267,7 @@ export default function DroneSyncScreen() {
                 )}
                 {item.status === 'confirmed' && (
                   <View style={styles.confirmedPill}>
-                    <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                    <MaterialIcons name="verified-user" size={12} color={colors.success} />
                     <Text style={styles.confirmedText}>{item.statusText}</Text>
                   </View>
                 )}
@@ -280,7 +280,7 @@ export default function DroneSyncScreen() {
       {/* Safe Local Purge Section */}
       <Card style={styles.purgeCard}>
         <View style={styles.purgeHeader}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={colors.success} />
+          <MaterialIcons name="verified" size={20} color={colors.success} />
           <Text style={[typography.labelSm, styles.purgeTitle]}>
             QUY TRÌNH DỌN DẸP BẢN SAO AN TOÀN (SAFE LOCAL PURGE)
           </Text>
@@ -296,7 +296,7 @@ export default function DroneSyncScreen() {
           disabled={purged}
           accessibilityRole="button"
         >
-          <Ionicons name="trash-outline" size={16} color={purged ? colors.secondary : colors.error} />
+          <MaterialIcons name="delete" size={16} color={purged ? colors.secondary : colors.error} />
           <Text style={[typography.labelSm, { color: purged ? colors.secondary : colors.error }]}>
             {purged ? 'Đã giải phóng an toàn 196.6 MB' : 'Dọn dẹp bản sao an toàn sau đối soát'}
           </Text>

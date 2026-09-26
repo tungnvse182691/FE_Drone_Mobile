@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -94,7 +94,7 @@ export default function SupervisorHomeScreen() {
           onPress={() => router.push('/(sup)/risk')}
           accessibilityRole="button"
         >
-          <Ionicons name="warning-outline" size={20} color={colors.warning} />
+          <MaterialIcons name="warning" size={20} color={colors.warning} />
         </Pressable>
       </View>
 
@@ -109,7 +109,7 @@ export default function SupervisorHomeScreen() {
           <Card style={styles.kpiCard}>
             <View style={styles.kpiTop}>
               <Text style={[typography.caption, styles.kpiLabel]}>Rủi ro cao</Text>
-              <Ionicons name="warning" size={14} color={colors.error} />
+              <MaterialIcons name="warning" size={14} color={colors.error} />
             </View>
             <Text style={[typography.headlineLg, styles.kpiNumError]}>2</Text>
             <View style={styles.urgentTag}>
@@ -127,7 +127,7 @@ export default function SupervisorHomeScreen() {
           <Card style={styles.kpiCard}>
             <View style={styles.kpiTop}>
               <Text style={[typography.caption, styles.kpiLabel]}>Chờ duyệt</Text>
-              <Ionicons name="time" size={14} color={colors.warning} />
+              <MaterialIcons name="schedule" size={14} color={colors.warning} />
             </View>
             <Text style={[typography.headlineLg, styles.kpiNumWarning]}>5</Text>
             <Text style={[typography.caption, styles.kpiSubNote]}>3 đơn mới</Text>
@@ -143,7 +143,7 @@ export default function SupervisorHomeScreen() {
           <Card style={styles.kpiCard}>
             <View style={styles.kpiTop}>
               <Text style={[typography.caption, styles.kpiLabel]}>Đã xong</Text>
-              <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+              <MaterialIcons name="check-circle" size={14} color={colors.success} />
             </View>
             <Text style={[typography.headlineLg, styles.kpiNumSuccess]}>18</Text>
             <Text style={[typography.caption, styles.kpiSubSuccess]}>+4 so với T9</Text>
@@ -181,7 +181,7 @@ export default function SupervisorHomeScreen() {
             <Card style={styles.approvalCard}>
               <View style={styles.cardHeaderRow}>
                 <View style={styles.locRow}>
-                  <Ionicons name="location-outline" size={14} color={colors.secondary} />
+                  <MaterialIcons name="location-on" size={14} color={colors.secondary} />
                   <Text style={[typography.caption, styles.roadCode]}>
                     {item.code} • {item.road}
                   </Text>

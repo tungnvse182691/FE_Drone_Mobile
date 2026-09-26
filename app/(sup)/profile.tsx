@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -34,7 +34,7 @@ export default function SupervisorProfileScreen() {
       {/* Toast Alert */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="information-circle" size={18} color={colors.surface} />
+          <MaterialIcons name="info" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -42,9 +42,9 @@ export default function SupervisorProfileScreen() {
       {/* Profile Header Card */}
       <View style={styles.headerBox}>
         <View style={styles.avatarWrap}>
-          <Ionicons name="person" size={44} color={colors.primaryDark} />
+          <MaterialIcons name="person" size={44} color={colors.primaryDark} />
           <View style={styles.badgeVerified}>
-            <Ionicons name="checkmark" size={12} color={colors.surface} />
+            <MaterialIcons name="check" size={12} color={colors.surface} />
           </View>
         </View>
 
@@ -53,7 +53,7 @@ export default function SupervisorProfileScreen() {
         </Text>
 
         <View style={styles.roleTag}>
-          <Ionicons name="shield" size={12} color={colors.brandGold} />
+          <MaterialIcons name="security" size={12} color={colors.brandGold} />
           <Text style={styles.roleTagText}>SUPERVISOR • GIÁM SÁT TRƯỞNG</Text>
         </View>
 
@@ -93,7 +93,7 @@ export default function SupervisorProfileScreen() {
           style={[styles.switchBtn, activeTab === 'personal' && styles.switchBtnActive]}
           onPress={() => setActiveTab('personal')}
         >
-          <Ionicons
+          <MaterialIcons
             name="person-outline"
             size={16}
             color={activeTab === 'personal' ? colors.primaryDark : colors.secondary}
@@ -109,8 +109,8 @@ export default function SupervisorProfileScreen() {
           style={[styles.switchBtn, activeTab === 'governance' && styles.switchBtnActive]}
           onPress={() => setActiveTab('governance')}
         >
-          <Ionicons
-            name="cog-outline"
+          <MaterialIcons
+            name="settings"
             size={16}
             color={activeTab === 'governance' ? colors.primaryDark : colors.secondary}
           />
@@ -135,7 +135,7 @@ export default function SupervisorProfileScreen() {
               onPress={() => showToast('Mở danh sách 4 gói thầu hạ tầng bảo hành')}
             >
               <View style={styles.menuLeft}>
-                <Ionicons name="folder-outline" size={18} color={colors.secondary} />
+                <MaterialIcons name="folder-open" size={18} color={colors.secondary} />
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>Dự án phụ trách</Text>
                   <Text style={[typography.caption, styles.menuSubNote]}>
@@ -143,7 +143,7 @@ export default function SupervisorProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+              <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
             </Pressable>
 
             <View style={styles.rowDivider} />
@@ -153,7 +153,7 @@ export default function SupervisorProfileScreen() {
               onPress={() => showToast('Mở danh sách 3 đội Repair Crew')}
             >
               <View style={styles.menuLeft}>
-                <Ionicons name="people-outline" size={18} color={colors.secondary} />
+                <MaterialIcons name="people-outline" size={18} color={colors.secondary} />
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>Đội thi công & sửa chữa</Text>
                   <Text style={[typography.caption, styles.menuSubNote]}>
@@ -161,7 +161,7 @@ export default function SupervisorProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+              <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
             </Pressable>
 
             <View style={styles.rowDivider} />
@@ -171,7 +171,7 @@ export default function SupervisorProfileScreen() {
               onPress={() => router.push('/(sup)/risk')}
             >
               <View style={styles.menuLeft}>
-                <Ionicons name="location-outline" size={18} color={colors.secondary} />
+                <MaterialIcons name="location-on" size={18} color={colors.secondary} />
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>Khu vực giám sát</Text>
                   <Text style={[typography.caption, styles.menuSubNote]}>
@@ -179,7 +179,7 @@ export default function SupervisorProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+              <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
             </Pressable>
           </Card>
 
@@ -188,7 +188,7 @@ export default function SupervisorProfileScreen() {
           <Card style={styles.menuCard}>
             <View style={styles.menuRow}>
               <View style={styles.menuLeft}>
-                <Ionicons name="notifications-outline" size={18} color={colors.secondary} />
+                <MaterialIcons name="notifications-none" size={18} color={colors.secondary} />
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>
                     Thông báo phê duyệt khẩn cấp
@@ -213,7 +213,7 @@ export default function SupervisorProfileScreen() {
               onPress={() => router.push('/(auth)/force-change-password')}
             >
               <View style={styles.menuLeft}>
-                <Ionicons name="lock-closed-outline" size={18} color={colors.secondary} />
+                <MaterialIcons name="lock-outline" size={18} color={colors.secondary} />
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>Đổi mật khẩu</Text>
                   <Text style={[typography.caption, styles.menuSubNote]}>
@@ -221,14 +221,14 @@ export default function SupervisorProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+              <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
             </Pressable>
 
             <View style={styles.rowDivider} />
 
             <View style={styles.menuRow}>
               <View style={styles.menuLeft}>
-                <Ionicons name="moon-outline" size={18} color={colors.secondary} />
+                <MaterialIcons name="dark-mode" size={18} color={colors.secondary} />
                 <Text style={[typography.bodyMd, styles.menuMainText]}>Chế độ tối (Dark Mode)</Text>
               </View>
               <Switch
@@ -251,7 +251,7 @@ export default function SupervisorProfileScreen() {
           </Text>
           <Card style={styles.govCard}>
             <View style={styles.govHeader}>
-              <Ionicons name="ribbon-outline" size={18} color={colors.primary} />
+              <MaterialIcons name="military-tech" size={18} color={colors.primary} />
               <Text style={[typography.labelSm, styles.govTitle]}>
                 DANH MỤC QUY CHUẨN ÁP DỤNG
               </Text>
@@ -312,7 +312,7 @@ export default function SupervisorProfileScreen() {
           </Text>
           <Card style={styles.legalHoldCard}>
             <View style={styles.legalHoldHeader}>
-              <Ionicons name="lock-closed" size={20} color={colors.brandGold} />
+              <MaterialIcons name="lock" size={20} color={colors.brandGold} />
               <View style={styles.legalHoldInfo}>
                 <Text style={[typography.titleMd, styles.legalHoldTitle]}>Chế độ bảo lưu bất biến</Text>
                 <Text style={[typography.caption, styles.legalHoldSub]}>
@@ -335,7 +335,7 @@ export default function SupervisorProfileScreen() {
             </View>
 
             <View style={styles.lockedItem}>
-              <Ionicons name="document-lock" size={16} color={colors.brandGold} />
+              <MaterialIcons name="lock" size={16} color={colors.brandGold} />
               <Text style={styles.lockedItemText}>
                 01 gói thầu đang áp dụng Legal Hold: Tuyến ĐH.05 Gói thầu XL-01 (Đến 2028)
               </Text>
@@ -347,7 +347,7 @@ export default function SupervisorProfileScreen() {
       {/* Logout Action */}
       <View style={styles.logoutSection}>
         <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button">
-          <Ionicons name="log-out-outline" size={18} color={colors.error} />
+          <MaterialIcons name="logout" size={18} color={colors.error} />
           <Text style={[typography.labelLg, styles.logoutButtonText]}>Đăng xuất tài khoản</Text>
         </Pressable>
 

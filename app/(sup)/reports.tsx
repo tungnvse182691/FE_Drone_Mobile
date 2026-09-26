@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -86,7 +86,7 @@ export default function SupervisorReportsScreen() {
       {/* Export Action Banner */}
       <Card style={styles.exportBannerCard}>
         <View style={styles.exportLeft}>
-          <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+          <MaterialIcons name="description" size={24} color={colors.primary} />
           <View style={styles.exportTextGroup}>
             <Text style={[typography.titleMd, styles.exportTitle]}>Trích xuất hồ sơ kiểm định</Text>
             <Text style={[typography.caption, styles.exportSub]}>
@@ -126,7 +126,7 @@ export default function SupervisorReportsScreen() {
             <Card style={styles.orderCard}>
               <View style={styles.orderLeft}>
                 <View style={styles.checkCircle}>
-                  <Ionicons name="checkmark" size={16} color={colors.success} />
+                  <MaterialIcons name="check" size={16} color={colors.success} />
                 </View>
 
                 <View style={styles.orderInfo}>
@@ -146,7 +146,7 @@ export default function SupervisorReportsScreen() {
                 </View>
               </View>
 
-              <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+              <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
             </Card>
           </Pressable>
         ))}

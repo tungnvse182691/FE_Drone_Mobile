@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -107,7 +107,7 @@ export default function DroneLogScreen() {
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>ĐÃ NỘP KHẢO SÁT (6)</Text>
         <View style={styles.sortContainer}>
-          <Ionicons name="swap-vertical-outline" size={14} color={colors.secondary} />
+          <MaterialIcons name="swap-vert" size={14} color={colors.secondary} />
           <Text style={[typography.caption, styles.sortText]}>Mới nhất</Text>
         </View>
       </View>
@@ -145,7 +145,7 @@ export default function DroneLogScreen() {
                     </View>
                   ) : (
                     <View style={styles.donePill}>
-                      <Ionicons name="checkmark-circle-outline" size={13} color={colors.success} />
+                      <MaterialIcons name="check-circle" size={13} color={colors.success} />
                       <Text style={styles.donePillText}>ĐÃ CÓ KẾT QUẢ</Text>
                     </View>
                   )}
@@ -155,7 +155,7 @@ export default function DroneLogScreen() {
                 <View style={styles.cardContentRow}>
                   {/* Dark video thumbnail with play circle */}
                   <View style={styles.videoThumbnailBox}>
-                    <Ionicons name="play" size={20} color={colors.surface} />
+                    <MaterialIcons name="play-arrow" size={20} color={colors.surface} />
                   </View>
 
                   {/* Info details */}
@@ -164,7 +164,7 @@ export default function DroneLogScreen() {
                       {log.title}
                     </Text>
                     <View style={styles.locRow}>
-                      <Ionicons name="location-outline" size={13} color={colors.secondary} />
+                      <MaterialIcons name="location-on" size={13} color={colors.secondary} />
                       <Text style={[typography.caption, styles.locText]} numberOfLines={1}>
                         {log.location}
                       </Text>
@@ -179,7 +179,7 @@ export default function DroneLogScreen() {
                 <View style={styles.cardBottomRow}>
                   <View style={styles.statusNoteGroup}>
                     {isProcessing && (
-                      <Ionicons name="sync-outline" size={14} color={colors.secondary} />
+                      <MaterialIcons name="sync" size={14} color={colors.secondary} />
                     )}
                     <Text
                       style={[

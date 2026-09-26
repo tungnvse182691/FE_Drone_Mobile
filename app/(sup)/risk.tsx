@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
@@ -91,7 +91,7 @@ export default function SupervisorRiskScreen() {
           onPress={() => router.push('/(sup)/home')}
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.topBarCenter}>
@@ -104,7 +104,7 @@ export default function SupervisorRiskScreen() {
         </View>
 
         <View style={styles.circleIconButton}>
-          <Ionicons name="map-outline" size={18} color={colors.secondary} />
+          <MaterialIcons name="map" size={18} color={colors.secondary} />
         </View>
       </View>
 
@@ -164,7 +164,7 @@ export default function SupervisorRiskScreen() {
 
                 <View style={styles.linkGroup}>
                   <Text style={[typography.labelSm, styles.linkText]}>Chi tiết</Text>
-                  <Ionicons name="chevron-forward" size={14} color={colors.brandGold} />
+                  <MaterialIcons name="chevron-right" size={14} color={colors.brandGold} />
                 </View>
               </View>
             </Card>

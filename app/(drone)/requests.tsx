@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -150,7 +150,7 @@ export default function DroneRequestsScreen() {
           ĐOẠN ĐƯỜNG CẦN KIỂM TRA ({filteredRequests.length})
         </Text>
         <View style={styles.filterChip}>
-          <Ionicons name="navigate-outline" size={14} color={colors.primary} />
+          <MaterialIcons name="near-me" size={14} color={colors.primary} />
           <Text style={[typography.caption, styles.filterChipText]}>Ưu tiên gần bạn</Text>
         </View>
       </View>
@@ -193,7 +193,7 @@ export default function DroneRequestsScreen() {
                 <Text style={[typography.titleMd, styles.roadTitle]}>{item.title}</Text>
 
                 <View style={styles.locationRow}>
-                  <Ionicons name="location-outline" size={16} color={colors.secondary} />
+                  <MaterialIcons name="location-on" size={16} color={colors.secondary} />
                   <Text style={[typography.bodyMd, styles.locationText]}>{item.location}</Text>
                 </View>
 
@@ -203,7 +203,7 @@ export default function DroneRequestsScreen() {
                   </Text>
                   <View style={styles.detailArrow}>
                     <Text style={[typography.labelSm, styles.detailLink]}>Chi tiết</Text>
-                    <Ionicons name="arrow-forward" size={14} color={colors.primary} />
+                    <MaterialIcons name="arrow-forward" size={14} color={colors.primary} />
                   </View>
                 </View>
               </Card>

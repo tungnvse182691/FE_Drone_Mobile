@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -125,7 +125,7 @@ export default function SupervisorSignoffScreen() {
           onPress={() => router.push('/(sup)/home')}
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.topBarCenter}>
@@ -143,7 +143,7 @@ export default function SupervisorSignoffScreen() {
       {/* Toast Alert */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="information-circle" size={18} color={colors.surface} />
+          <MaterialIcons name="info" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -197,21 +197,21 @@ export default function SupervisorSignoffScreen() {
 
         <View style={styles.checklist}>
           <View style={styles.checkItem}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <MaterialIcons name="check-circle" size={18} color={colors.success} />
             <Text style={[typography.bodyMd, styles.checkText]}>
               Đội trưởng <Text style={styles.boldText}>{currentWo.crewLeader}</Text> đã nộp báo cáo hoàn thành & ký số (14:35)
             </Text>
           </View>
 
           <View style={styles.checkItem}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <MaterialIcons name="check-circle" size={18} color={colors.success} />
             <Text style={[typography.bodyMd, styles.checkText]}>
               PM <Text style={styles.boldText}>{currentWo.pmName}</Text> đã kiểm tra thực tế đạt tiêu chuẩn êm thuận (15:10)
             </Text>
           </View>
 
           <View style={styles.checkItem}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <MaterialIcons name="check-circle" size={18} color={colors.success} />
             <Text style={[typography.bodyMd, styles.checkText]}>
               Đầy đủ 4 cặp ảnh Trước/Sau Watermark GPS & video flycam nghiệm thu
             </Text>
@@ -238,7 +238,7 @@ export default function SupervisorSignoffScreen() {
             </Text>
           </View>
           <View style={styles.lockBadge}>
-            <Ionicons name="shield-checkmark" size={14} color={colors.success} />
+            <MaterialIcons name="verified-user" size={14} color={colors.success} />
             <Text style={styles.lockText}>Bảo mật</Text>
           </View>
         </View>
@@ -249,7 +249,7 @@ export default function SupervisorSignoffScreen() {
           onPress={() => setConfirmed(!confirmed)}
         >
           <View style={[styles.checkbox, confirmed && styles.checkboxActive]}>
-            {confirmed && <Ionicons name="checkmark" size={14} color={colors.surface} />}
+            {confirmed && <MaterialIcons name="check" size={14} color={colors.surface} />}
           </View>
           <Text style={[typography.bodyMd, styles.confirmText]}>
             Tôi xác nhận đợt sửa <Text style={styles.boldText}>{currentWo.woCode}</Text> đã hoàn thành đạt chuẩn kỹ thuật và đồng ý đóng đợt để chuyển trạng thái tuyến đường về <Text style={styles.boldText}>An toàn / Bình thường</Text>.
@@ -292,7 +292,7 @@ export default function SupervisorSignoffScreen() {
           onPress={handleRequestReview}
           accessibilityRole="button"
         >
-          <Ionicons name="refresh-outline" size={18} color={colors.secondary} />
+          <MaterialIcons name="refresh" size={18} color={colors.secondary} />
           <Text style={[typography.labelLg, styles.requestReviewText]}>
             Yêu cầu kiểm tra lại / Làm lại
           </Text>

@@ -3,20 +3,22 @@ import { StyleSheet, View } from 'react-native';
 import { BottomNav } from '../../src/components/BottomNav';
 
 const DRONE_TABS = [
-  { icon: 'home-outline' as const, label: 'Trang chủ', route: '/(drone)/home' },
+  { icon: 'home', iconFamily: 'material' as const, label: 'Trang chủ', route: '/(drone)/home' },
   {
-    icon: 'airplane-outline' as const,
+    icon: 'flight-takeoff',
+    iconFamily: 'material' as const,
     label: 'Khảo sát',
     route: '/(drone)/requests',
     activePrefixes: ['/(drone)/request', '/(drone)/log'],
   },
   {
-    icon: 'cloud-outline' as const,
+    icon: 'sync',
+    iconFamily: 'material' as const,
     label: 'Đồng bộ',
     route: '/(drone)/sync',
     activePrefixes: ['/(drone)/sync', '/(drone)/upload'],
   },
-  { icon: 'person-outline' as const, label: 'Hồ sơ', route: '/(drone)/profile' },
+  { icon: 'person', iconFamily: 'material' as const, label: 'Hồ sơ', route: '/(drone)/profile' },
 ];
 
 

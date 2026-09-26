@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -166,7 +166,7 @@ export default function DroneRequestDetailScreen() {
           onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.topBarCenter}>
@@ -175,7 +175,7 @@ export default function DroneRequestDetailScreen() {
         </View>
 
         <View style={styles.circleIconButton}>
-          <Ionicons name="share-social-outline" size={18} color={colors.secondary} />
+          <MaterialIcons name="share" size={18} color={colors.secondary} />
         </View>
       </View>
 
@@ -216,7 +216,7 @@ export default function DroneRequestDetailScreen() {
         </View>
 
         <View style={styles.locationDivider}>
-          <Ionicons name="location" size={18} color={colors.primary} />
+          <MaterialIcons name="location-on" size={18} color={colors.primary} />
           <Text style={[typography.bodyMd, styles.locationFull]}>{current.location}</Text>
         </View>
       </Card>
@@ -224,7 +224,7 @@ export default function DroneRequestDetailScreen() {
       {/* Flight Parameters Card */}
       <Card style={styles.paramCard}>
         <View style={styles.paramCardHeader}>
-          <Ionicons name="settings-outline" size={18} color={colors.primary} />
+          <MaterialIcons name="settings" size={18} color={colors.primary} />
           <Text style={[typography.labelSm, styles.paramHeaderTitle]}>THÔNG SỐ KỸ THUẬT BAY (PM CẤU HÌNH)</Text>
         </View>
 
@@ -255,7 +255,7 @@ export default function DroneRequestDetailScreen() {
       <Card style={styles.mapCard}>
         <View style={styles.mapHeader}>
           <View style={styles.mapHeaderLeft}>
-            <Ionicons name="map-outline" size={16} color={colors.primary} />
+            <MaterialIcons name="map" size={16} color={colors.primary} />
             <Text style={[typography.labelSm, styles.mapHeaderTitle]}>RANH GIỚI HÀNH LANG BAY GIS</Text>
           </View>
           <Text style={[typography.caption, styles.gpsCoord]}>{current.coordinates}</Text>
@@ -279,12 +279,12 @@ export default function DroneRequestDetailScreen() {
               <Text style={styles.pinText}>{current.targetPoint}</Text>
             </View>
             <View style={styles.pinIconWrap}>
-              <Ionicons name="pin" size={24} color={colors.error} />
+              <MaterialIcons name="place" size={24} color={colors.error} />
             </View>
           </View>
 
           <View style={styles.mapsLinkOverlay}>
-            <Ionicons name="navigate-circle" size={16} color={colors.primary} />
+            <MaterialIcons name="navigation" size={16} color={colors.primary} />
             <Text style={styles.mapsLinkText}>Mở Google Maps</Text>
           </View>
         </View>
@@ -294,7 +294,7 @@ export default function DroneRequestDetailScreen() {
       <Card style={styles.instructionCard}>
         <View style={styles.instructionHeader}>
           <View style={styles.instructionHeaderLeft}>
-            <Ionicons name="person-circle-outline" size={18} color={colors.primary} />
+            <MaterialIcons name="account-circle" size={18} color={colors.primary} />
             <Text style={[typography.labelSm, styles.instructionTitle]}>CHỈ ĐẠO TỪ PROJECT MANAGER</Text>
           </View>
           <Text style={[typography.caption, styles.instructionTime]}>{current.instructionTime}</Text>
@@ -330,7 +330,7 @@ export default function DroneRequestDetailScreen() {
           onPress={() => setRejectModalVisible(true)}
           accessibilityRole="button"
         >
-          <Ionicons name="close-circle-outline" size={18} color={colors.error} />
+          <MaterialIcons name="cancel" size={18} color={colors.error} />
           <Text style={[typography.labelLg, styles.rejectButtonText]}>
             Từ chối nhiệm vụ (KS03)
           </Text>
@@ -347,7 +347,7 @@ export default function DroneRequestDetailScreen() {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View style={styles.modalIconWrap}>
-                <Ionicons name="warning-outline" size={24} color={colors.error} />
+                <MaterialIcons name="warning" size={24} color={colors.error} />
               </View>
               <Text style={[typography.titleMd, styles.modalTitle]}>
                 Từ chối nhiệm vụ bay #REQ-KS-089
@@ -370,7 +370,7 @@ export default function DroneRequestDetailScreen() {
 
             {rejectionSent && (
               <View style={styles.successBanner}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                <MaterialIcons name="check-circle" size={16} color={colors.success} />
                 <Text style={styles.successBannerText}>Đã gửi lý do từ chối về PM Quân!</Text>
               </View>
             )}

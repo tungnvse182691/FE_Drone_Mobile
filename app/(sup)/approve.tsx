@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -232,7 +232,7 @@ export default function SupervisorApproveScreen() {
       {/* Toast Alert */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="information-circle" size={18} color={colors.surface} />
+          <MaterialIcons name="info" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -247,7 +247,7 @@ export default function SupervisorApproveScreen() {
               onPress={() => router.push('/(sup)/home')}
               accessibilityRole="button"
             >
-              <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+              <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
             </Pressable>
 
             <View style={styles.topBarCenter}>
@@ -260,7 +260,7 @@ export default function SupervisorApproveScreen() {
             </View>
 
             <View style={styles.circleIconButton}>
-              <Ionicons name="filter-outline" size={18} color={colors.primary} />
+              <MaterialIcons name="filter-list" size={18} color={colors.primary} />
             </View>
           </View>
 
@@ -351,7 +351,7 @@ export default function SupervisorApproveScreen() {
 
                   <View style={styles.listCardMeta}>
                     <View style={styles.listPmWrap}>
-                      <Ionicons name="person-circle-outline" size={16} color={colors.secondary} />
+                      <MaterialIcons name="account-circle" size={16} color={colors.secondary} />
                       <Text style={[typography.caption, styles.listPmName]}>
                         {item.pmName}
                       </Text>
@@ -389,7 +389,7 @@ export default function SupervisorApproveScreen() {
               onPress={() => setViewMode('list')}
               accessibilityRole="button"
             >
-              <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+              <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
             </Pressable>
 
             <View style={styles.topBarCenter}>
@@ -406,7 +406,7 @@ export default function SupervisorApproveScreen() {
               onPress={() => setViewMode('list')}
               accessibilityRole="button"
             >
-              <Ionicons name="list" size={18} color={colors.primary} />
+              <MaterialIcons name="view-list" size={18} color={colors.primary} />
             </Pressable>
           </View>
 
@@ -582,7 +582,7 @@ export default function SupervisorApproveScreen() {
               {/* Photo Thumbnail */}
               <View style={styles.mediaBox}>
                 <View style={styles.mediaPlaceholderPhoto}>
-                  <Ionicons name="camera" size={28} color={colors.primary} />
+                  <MaterialIcons name="photo-camera" size={28} color={colors.primary} />
                   <Text style={styles.mediaLabel}>{currentDossier.media.photoTitle}</Text>
                   <Text style={styles.mediaSubLabel}>{currentDossier.media.photoSub}</Text>
                 </View>
@@ -591,7 +591,7 @@ export default function SupervisorApproveScreen() {
               {/* Video Thumbnail */}
               <View style={styles.mediaBox}>
                 <View style={styles.mediaPlaceholderVideo}>
-                  <Ionicons name="videocam" size={28} color={colors.info} />
+                  <MaterialIcons name="videocam" size={28} color={colors.info} />
                   <Text style={styles.mediaLabel}>{currentDossier.media.videoTitle}</Text>
                   <Text style={styles.mediaSubLabel}>{currentDossier.media.videoSub}</Text>
                 </View>
@@ -603,7 +603,7 @@ export default function SupervisorApproveScreen() {
           <Card style={styles.pmNoteCard}>
             <View style={styles.pmNoteHeader}>
               <View style={styles.pmSenderGroup}>
-                <Ionicons name="chatbox-ellipses" size={16} color={colors.primary} />
+                <MaterialIcons name="chat" size={16} color={colors.primary} />
                 <Text style={[typography.labelSm, styles.pmSenderName]}>
                   Ý KIẾN THẨM ĐỊNH CỦA {currentDossier.pmName.toUpperCase()}
                 </Text>
@@ -637,7 +637,7 @@ export default function SupervisorApproveScreen() {
               onPress={handleReject}
               accessibilityRole="button"
             >
-              <Ionicons name="close" size={18} color={colors.error} />
+              <MaterialIcons name="close" size={18} color={colors.error} />
               <Text style={[typography.labelLg, styles.rejectBtnText]}>Từ chối</Text>
             </Pressable>
 

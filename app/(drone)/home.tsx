@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -18,7 +18,7 @@ interface DroneTask {
   priority: 'urgent' | 'pending';
   chipVariant: 'severity-high' | 'severity-medium' | 'severity-low';
   chipLabel: string;
-  iconName: keyof typeof Ionicons.glyphMap;
+  iconName: keyof typeof MaterialIcons.glyphMap;
   iconBg: string;
   iconColor: string;
 }
@@ -44,7 +44,7 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     priority: 'pending',
     chipVariant: 'severity-medium',
     chipLabel: 'CHỜ KHẢO SÁT',
-    iconName: 'compass',
+    iconName: 'explore',
     iconBg: '#FEF3E2',
     iconColor: colors.warning,
   },
@@ -56,7 +56,7 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     priority: 'pending',
     chipVariant: 'severity-low',
     chipLabel: 'CHỜ KHẢO SÁT',
-    iconName: 'git-branch',
+    iconName: 'alt-route',
     iconBg: '#FEF3E2',
     iconColor: colors.warning,
   },
@@ -108,7 +108,7 @@ export default function DroneHomeScreen() {
       {/* Toast Alert */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.surface} />
+          <MaterialIcons name="check-circle" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -129,42 +129,31 @@ export default function DroneHomeScreen() {
         </View>
       </View>
 
-      {/* KPI Card */}
-      <Card style={styles.kpiCard}>
-        <View style={styles.kpiInfo}>
-          <Text style={[typography.caption, styles.kpiLabel]}>NHIỆM VỤ HÔM NAY</Text>
-          <View style={styles.kpiValueRow}>
-            <Text style={[typography.headlineLg, styles.kpiNumber]}>{tasks.length}</Text>
-            <Text style={[typography.bodyMd, styles.kpiDesc]}>yêu cầu khảo sát mới</Text>
+      {/* Minimal Unified KPI & Telemetry Strip */}
+      <Card style={styles.metricStripCard}>
+        <View style={styles.metricMainRow}>
+          <View style={styles.metricIconWrap}>
+            <MaterialIcons name="flight-takeoff" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.metricContent}>
+            <Text style={[typography.headlineLg, styles.metricNumber]}>{tasks.length}</Text>
+            <Text style={[typography.caption, styles.metricDesc]}>yêu cầu khảo sát hôm nay</Text>
           </View>
         </View>
-        <View style={styles.kpiIcon}>
-          <Ionicons name="airplane" size={26} color={colors.primary} />
+
+        <View style={styles.metricDivider} />
+
+        <View style={styles.telemetryStripRow}>
+          <View style={styles.telemetryTag}>
+            <MaterialIcons name="cloud-queue" size={15} color={colors.secondary} />
+            <Text style={[typography.caption, styles.telemetryTagText]}>Gió 8.4 km/h • An toàn</Text>
+          </View>
+          <View style={styles.telemetryTag}>
+            <MaterialIcons name="battery-charging-full" size={15} color={colors.success} />
+            <Text style={[typography.caption, styles.telemetryTagText]}>Pin M350: 98% (4 cụm)</Text>
+          </View>
         </View>
       </Card>
-
-      {/* Telemetry / Weather Snapshot */}
-      <View style={styles.telemetryRow}>
-        <Card style={styles.telemetryCard}>
-          <View style={styles.telemetryIconContainer}>
-            <Ionicons name="cloudy-outline" size={18} color={colors.secondary} />
-          </View>
-          <View style={styles.telemetryTextGroup}>
-            <Text style={[typography.caption, styles.telemetryLabel]}>Gió thực tế</Text>
-            <Text style={[typography.bodyMd, styles.telemetryValue]}>8.4 km/h • An toàn</Text>
-          </View>
-        </Card>
-
-        <Card style={styles.telemetryCard}>
-          <View style={styles.telemetryIconContainer}>
-            <Ionicons name="battery-charging-outline" size={18} color={colors.success} />
-          </View>
-          <View style={styles.telemetryTextGroup}>
-            <Text style={[typography.caption, styles.telemetryLabel]}>Pin Matrice 350</Text>
-            <Text style={[typography.bodyMd, styles.telemetryValue]}>4 cụm • 98%</Text>
-          </View>
-        </Card>
-      </View>
 
       {/* Quick Access Actions */}
       <View style={styles.quickAccessRow}>
@@ -178,7 +167,7 @@ export default function DroneHomeScreen() {
           }
           accessibilityRole="button"
         >
-          <Ionicons name="card-outline" size={18} color={colors.primaryDark} />
+          <MaterialIcons name="sd-card" size={18} color={colors.primaryDark} />
           <Text style={[typography.labelSm, styles.quickButtonText]}>Nạp thẻ SD</Text>
         </Pressable>
 
@@ -192,7 +181,7 @@ export default function DroneHomeScreen() {
           }
           accessibilityRole="button"
         >
-          <Ionicons name="time-outline" size={18} color={colors.primaryDark} />
+          <MaterialIcons name="history" size={18} color={colors.primaryDark} />
           <Text style={[typography.labelSm, styles.quickButtonText]}>Nhật ký bay</Text>
         </Pressable>
 
@@ -201,7 +190,7 @@ export default function DroneHomeScreen() {
           onPress={() => router.push('/(drone)/sync')}
           accessibilityRole="button"
         >
-          <Ionicons name="cloud-upload-outline" size={18} color={colors.primaryDark} />
+          <MaterialIcons name="sync" size={18} color={colors.primaryDark} />
           <Text style={[typography.labelSm, styles.quickButtonText]}>Đồng bộ</Text>
         </Pressable>
       </View>
@@ -227,7 +216,7 @@ export default function DroneHomeScreen() {
           >
             <Card style={styles.taskCardItem}>
               <View style={[styles.taskIconBox, { backgroundColor: task.iconBg }]}>
-                <Ionicons name={task.iconName} size={20} color={task.iconColor} />
+                <MaterialIcons name={task.iconName} size={20} color={task.iconColor} />
               </View>
 
               <View style={styles.taskContentBox}>
@@ -266,7 +255,7 @@ export default function DroneHomeScreen() {
                 </Text>
               </View>
 
-              <Ionicons name="chevron-forward" size={18} color={colors.secondary} />
+              <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
             </Card>
           </Pressable>
         ))}
@@ -278,7 +267,7 @@ export default function DroneHomeScreen() {
         onPress={() => setModalVisible(true)}
         accessibilityRole="button"
       >
-        <Ionicons name="add-circle-outline" size={20} color={colors.surface} />
+        <MaterialIcons name="add-circle-outline" size={20} color={colors.surface} />
         <Text style={styles.createTaskBtnText}>Tạo nhiệm vụ bay ngoài kế hoạch</Text>
       </Pressable>
 
@@ -305,7 +294,7 @@ export default function DroneHomeScreen() {
                 onPress={() => setModalVisible(false)}
                 accessibilityRole="button"
               >
-                <Ionicons name="close" size={20} color={colors.secondary} />
+                <MaterialIcons name="close" size={20} color={colors.secondary} />
               </Pressable>
             </View>
 
@@ -466,32 +455,17 @@ const styles = StyleSheet.create({
   readyText: {
     color: colors.secondary,
   },
-  kpiCard: {
+  metricStripCard: {
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: radius.md,
+  },
+  metricMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    gap: spacing.md,
   },
-  kpiInfo: {
-    flex: 1,
-  },
-  kpiLabel: {
-    color: colors.secondary,
-  },
-  kpiValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  kpiNumber: {
-    color: colors.primary,
-  },
-  kpiDesc: {
-    color: colors.neutral,
-    flexShrink: 1,
-  },
-  kpiIcon: {
+  metricIconWrap: {
     width: 44,
     height: 44,
     borderRadius: radius.md,
@@ -499,36 +473,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  telemetryRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  telemetryCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.sm,
-  },
-  telemetryIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  telemetryTextGroup: {
+  metricContent: {
     flex: 1,
   },
-  telemetryLabel: {
+  metricNumber: {
+    color: colors.primary,
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  metricDesc: {
     color: colors.secondary,
+    marginTop: 2,
   },
-  telemetryValue: {
+  metricDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.sm,
+  },
+  telemetryStripRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  telemetryTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  telemetryTagText: {
     color: colors.neutral,
     fontSize: 12,
-    fontWeight: '600',
   },
   quickAccessRow: {
     flexDirection: 'row',

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -29,7 +29,7 @@ export default function DroneProfileScreen() {
       {/* Toast Notification */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="information-circle" size={18} color={colors.surface} />
+          <MaterialIcons name="info" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -37,9 +37,9 @@ export default function DroneProfileScreen() {
       {/* Avatar & Personal Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarCircle}>
-          <Ionicons name="person" size={44} color={colors.primaryDark} />
+          <MaterialIcons name="person" size={44} color={colors.primaryDark} />
           <View style={styles.verifiedCheck}>
-            <Ionicons name="checkmark" size={12} color={colors.surface} />
+            <MaterialIcons name="check" size={12} color={colors.surface} />
           </View>
         </View>
 
@@ -52,7 +52,7 @@ export default function DroneProfileScreen() {
         </Text>
 
         <View style={styles.roleChip}>
-          <Ionicons name="airplane" size={14} color={colors.brandGold} />
+          <MaterialIcons name="flight-takeoff" size={14} color={colors.brandGold} />
           <Text style={styles.roleChipText}>DRONE OPERATOR</Text>
         </View>
       </View>
@@ -82,19 +82,19 @@ export default function DroneProfileScreen() {
       {/* Hardware / Devices Card */}
       <Card style={styles.deviceCard}>
         <View style={styles.deviceHeader}>
-          <Ionicons name="hardware-chip-outline" size={18} color={colors.primary} />
+          <MaterialIcons name="memory" size={18} color={colors.primary} />
           <Text style={[typography.labelSm, styles.deviceTitle]}>THIẾT BỊ PHÂN BỔ HIỆN TRƯỜNG</Text>
         </View>
 
         <View style={styles.deviceList}>
           <View style={styles.deviceRow}>
-            <Ionicons name="airplane-outline" size={16} color={colors.secondary} />
+            <MaterialIcons name="flight-takeoff" size={16} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.deviceName]}>
               Flycam DJI Matrice 350 RTK (Seri: M350-HH-02)
             </Text>
           </View>
           <View style={styles.deviceRow}>
-            <Ionicons name="radio-outline" size={16} color={colors.secondary} />
+            <MaterialIcons name="cell-tower" size={16} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.deviceName]}>
               Trạm tham chiếu mặt đất D-RTK 2 High-Precision
             </Text>
@@ -109,10 +109,10 @@ export default function DroneProfileScreen() {
           onPress={() => showToast('Mở thông tin chi tiết phi công')}
         >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="person-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="person" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Thông tin cá nhân</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+          <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.menuDivider} />
@@ -122,10 +122,10 @@ export default function DroneProfileScreen() {
           onPress={() => router.push('/(auth)/force-change-password')}
         >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="lock-closed-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="lock" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Đổi mật khẩu</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+          <MaterialIcons name="chevron-right" size={16} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.menuDivider} />
@@ -135,7 +135,7 @@ export default function DroneProfileScreen() {
           onPress={() => router.push('/(drone)/sync')}
         >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="sync-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="sync" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Cài đặt đồng bộ ngoại tuyến</Text>
           </View>
           <Text style={[typography.caption, styles.menuSubText]}>Chỉ Wi-Fi</Text>
@@ -145,7 +145,7 @@ export default function DroneProfileScreen() {
 
         <View style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
-            <Ionicons name="moon-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="dark-mode" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Chế độ tối (Dark Mode)</Text>
           </View>
           <Switch
@@ -163,7 +163,7 @@ export default function DroneProfileScreen() {
           onPress={() => showToast('Đã dọn dẹp 142 MB bộ nhớ cache ứng dụng')}
         >
           <View style={styles.menuItemLeft}>
-            <Ionicons name="trash-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="delete" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Dọn dẹp cache máy</Text>
           </View>
           <Text style={[typography.caption, styles.menuSubText]}>142 MB</Text>
@@ -173,7 +173,7 @@ export default function DroneProfileScreen() {
       {/* Logout Action */}
       <View style={styles.logoutContainer}>
         <Pressable style={styles.logoutBtn} onPress={handleLogout} accessibilityRole="button">
-          <Ionicons name="log-out-outline" size={20} color={colors.error} />
+          <MaterialIcons name="logout" size={20} color={colors.error} />
           <Text style={[typography.labelLg, styles.logoutText]}>Đăng xuất tài khoản</Text>
         </Pressable>
 

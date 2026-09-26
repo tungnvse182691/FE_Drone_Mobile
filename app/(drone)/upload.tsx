@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -119,7 +119,7 @@ export default function DroneUploadScreen() {
           }
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.topBarCenter}>
@@ -167,7 +167,7 @@ export default function DroneUploadScreen() {
       <Card style={styles.contextCard}>
         <View style={styles.contextLeft}>
           <View style={styles.contextIcon}>
-            <Ionicons name="airplane" size={20} color={colors.primary} />
+            <MaterialIcons name="flight-takeoff" size={20} color={colors.primary} />
           </View>
           <View>
             <Text style={[typography.caption, styles.contextLabel]}>MỤC TIÊU KHẢO SÁT</Text>
@@ -202,15 +202,15 @@ export default function DroneUploadScreen() {
             onPress={() => router.push('/(drone)/requests')}
             accessibilityRole="button"
           >
-            <Ionicons name="close" size={16} color={colors.neutral} />
+            <MaterialIcons name="close" size={16} color={colors.neutral} />
           </Pressable>
 
           <View style={styles.playButtonOverlay}>
-            <Ionicons name="image-outline" size={32} color="rgba(255,255,255,0.7)" />
+            <MaterialIcons name="image" size={32} color="rgba(255,255,255,0.7)" />
           </View>
 
           <View style={styles.durationPill}>
-            <Ionicons name="time-outline" size={13} color={colors.surface} />
+            <MaterialIcons name="schedule" size={13} color={colors.surface} />
             <Text style={styles.durationText}>02:45</Text>
           </View>
         </View>
@@ -218,7 +218,7 @@ export default function DroneUploadScreen() {
         <View style={styles.fileDetails}>
           <View style={styles.fileRow}>
             <View style={styles.fileNameGroup}>
-              <Ionicons name="film-outline" size={16} color={colors.primary} />
+              <MaterialIcons name="movie" size={16} color={colors.primary} />
               <Text style={[typography.bodyMd, styles.fileName]}>{config.videoName}</Text>
             </View>
             <Text style={[typography.caption, styles.fileSize]}>{config.videoSize}</Text>
@@ -229,7 +229,7 @@ export default function DroneUploadScreen() {
       {/* GPS Location Field */}
       <Card style={styles.gpsCard}>
         <View style={styles.gpsIconBox}>
-          <Ionicons name="location" size={20} color={colors.success} />
+          <MaterialIcons name="location-on" size={20} color={colors.success} />
         </View>
         <View style={styles.gpsInfo}>
           <View style={styles.gpsTopRow}>
@@ -266,7 +266,7 @@ export default function DroneUploadScreen() {
       {/* Network Mode Card */}
       <Card style={styles.networkCard}>
         <View style={styles.networkTitleGroup}>
-          <Ionicons name="wifi-outline" size={18} color={colors.primary} />
+          <MaterialIcons name="wifi" size={18} color={colors.primary} />
           <Text style={[typography.bodyMd, styles.networkTitle]}>
             Chế độ kết nối hiện trường:
           </Text>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -84,7 +84,7 @@ export default function SupervisorExportModalScreen() {
           onPress={() => router.push('/(sup)/reports')}
           accessibilityRole="button"
         >
-          <Ionicons name="arrow-back" size={20} color={colors.secondary} />
+          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.topBarCenter}>
@@ -97,14 +97,14 @@ export default function SupervisorExportModalScreen() {
         </View>
 
         <View style={styles.circleIconButton}>
-          <Ionicons name="archive-outline" size={18} color={colors.primary} />
+          <MaterialIcons name="archive" size={18} color={colors.primary} />
         </View>
       </View>
 
       {/* Toast Alert */}
       {toastMsg && (
         <View style={styles.toast}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <MaterialIcons name="check-circle" size={18} color={colors.success} />
           <Text style={styles.toastText}>{toastMsg}</Text>
         </View>
       )}
@@ -149,7 +149,7 @@ export default function SupervisorExportModalScreen() {
       {/* Capacity Note */}
       <Card style={styles.capacityCard}>
         <View style={styles.capacityHeader}>
-          <Ionicons name="information-circle" size={18} color={colors.warning} />
+          <MaterialIcons name="info" size={18} color={colors.warning} />
           <Text style={styles.capacityTitle}>Ước tính gói dữ liệu hoàn công:</Text>
         </View>
         <Text style={[typography.bodyMd, styles.capacityDesc]}>

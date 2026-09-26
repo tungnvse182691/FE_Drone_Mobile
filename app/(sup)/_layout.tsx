@@ -5,24 +5,28 @@ import { BottomNav } from '../../src/components/BottomNav';
 
 const SUPERVISOR_TABS = [
   {
-    icon: 'shield-outline' as const,
+    icon: 'verified-user',
+    iconFamily: 'material' as const,
     label: 'Trang chủ',
     route: '/(sup)/home',
   },
   {
-    icon: 'checkmark-circle-outline' as const,
+    icon: 'fact-check',
+    iconFamily: 'material' as const,
     label: 'Phê duyệt',
     route: '/(sup)/approve',
     activePrefixes: ['/(sup)/approve', '/(sup)/signoff'],
   },
   {
-    icon: 'bar-chart-outline' as const,
+    icon: 'bar-chart',
+    iconFamily: 'material' as const,
     label: 'Báo cáo',
     route: '/(sup)/reports',
     activePrefixes: ['/(sup)/reports', '/(sup)/export-modal', '/(sup)/risk'],
   },
   {
-    icon: 'person-outline' as const,
+    icon: 'person',
+    iconFamily: 'material' as const,
     label: 'Hồ sơ',
     route: '/(sup)/profile',
   },
