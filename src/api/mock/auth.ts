@@ -9,12 +9,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
       full_name: 'Nguyen Van Drone',
       email: 'drone@hoanghai.vn',
       employee_code: 'NV001',
-      must_change_password: true,
+      must_change_password: false,
       project_ids: ['P001', 'P002'],
       token: 'mock-token-drone-001',
       refresh_token: 'mock-refresh-drone-001',
     },
-    password: '123456',
+    password: '1',
   },
   'pm@hoanghai.vn': {
     user: {
@@ -23,12 +23,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
       full_name: 'Tran Thi PM',
       email: 'pm@hoanghai.vn',
       employee_code: 'NV002',
-      must_change_password: true,
+      must_change_password: false,
       project_ids: ['P001'],
       token: 'mock-token-pm-001',
       refresh_token: 'mock-refresh-pm-001',
     },
-    password: '123456',
+    password: '1',
   },
   'crew@hoanghai.vn': {
     user: {
@@ -37,12 +37,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
       full_name: 'Le Van Crew',
       email: 'crew@hoanghai.vn',
       employee_code: 'NV003',
-      must_change_password: true,
+      must_change_password: false,
       project_ids: ['P001'],
       token: 'mock-token-crew-001',
       refresh_token: 'mock-refresh-crew-001',
     },
-    password: '123456',
+    password: '1',
   },
   'sup@hoanghai.vn': {
     user: {
@@ -51,12 +51,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
       full_name: 'Pham Van Sup',
       email: 'sup@hoanghai.vn',
       employee_code: 'NV004',
-      must_change_password: true,
+      must_change_password: false,
       project_ids: ['P001'],
       token: 'mock-token-sup-001',
       refresh_token: 'mock-refresh-sup-001',
     },
-    password: '123456',
+    password: '1',
   },
 };
 
