@@ -1,7 +1,7 @@
 ---
 version: alpha
-name: Cát Tường Field
-description: Hệ thống thiết kế cho app quản lý bảo hành & sửa chữa hạ tầng đường bộ của công ty Cát Tường — Android, phong cách minimalism, dùng bởi Drone Operator, Project Manager, Supervisor và Repair Crew.
+name: Hoàng Hải Field (RoadGuard)
+description: Hệ thống thiết kế cho app quản lý bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải — Android, phong cách minimalism, dùng bởi Drone Operator, Project Manager, Supervisor và Repair Crew.
 colors:
   primary: "#C9A227"
   brand-gold: "#8C6D1F"
@@ -133,13 +133,17 @@ components:
 
 ## Overview
 
-Cát Tường Field là app di động dành cho đội ngũ hiện trường và quản lý của công ty xây dựng Cát Tường, phục vụ việc khảo sát bằng drone, xác minh lỗi, phê duyệt và sửa chữa hạ tầng đường bộ trong giai đoạn bảo hành. Người dùng là kỹ thuật viên, công nhân, kỹ sư và quản lý — phần lớn thao tác ngoài công trường, đôi khi không có mạng, ít quen thao tác app phức tạp.
+Hoàng Hải Field (RoadGuard) là app di động dành cho đội ngũ hiện trường và quản lý của Công ty TNHH Xây dựng Bê tông Hoàng Hải, phục vụ việc khảo sát bằng drone, xác minh lỗi, phê duyệt và sửa chữa hạ tầng đường bộ trong giai đoạn bảo hành. Người dùng là kỹ thuật viên, công nhân, kỹ sư và quản lý — phần lớn thao tác ngoài công trường, đôi khi không có mạng, ít quen thao tác app phức tạp.
 
 Vì vậy giao diện đi theo triết lý **minimalism thực dụng**: mỗi màn hình chỉ hiển thị đúng thông tin cần để ra quyết định hoặc thực hiện một hành động, không có yếu tố trang trí thừa. Cảm giác tổng thể là "gọn, rõ, đáng tin cậy" — giống một công cụ chuyên nghiệp hơn là một app tiêu dùng nhiều màu sắc. Vàng đồng thương hiệu chỉ xuất hiện ở đúng nơi cần thu hút chú ý (hành động chính, trạng thái đang hoạt động), phần còn lại của giao diện trung tính để không gây xao nhãng.
 
+### Quy tắc phân tách Logo Thương hiệu
+- **Màn Splash / Loading:** Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
+- **Màn hình nội bộ, AppHeader, Form Đăng nhập, App Icon:** Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
+
 ## Colors
 
-- **Primary (#C9A227):** Vàng đồng thương hiệu Cát Tường. Chỉ dùng cho nút hành động chính (CTA), tab/mục đang được chọn, và số liệu nổi bật trên dashboard. Không dùng cho nền lớn hay text thường.
+- **Primary (#C9A227):** Vàng đồng thương hiệu Hoàng Hải. Chỉ dùng cho nút hành động chính (CTA), tab/mục đang được chọn, và số liệu nổi bật trên dashboard. Không dùng cho nền lớn hay text thường.
 - **Primary Dark (#6B5219):** Biến thể đậm của vàng đồng, dùng cho trạng thái nhấn (pressed) của nút chính, hoặc icon/badge cần độ tương phản cao hơn trên nền sáng.
 - **Secondary (#2D3748):** Xám than dùng cho viền, icon phụ, text thứ cấp (label, caption, dòng mô tả).
 - **Neutral (#1A1D20):** Gần đen, dùng cho text chính (tiêu đề, nội dung quan trọng) để đảm bảo độ tương phản và dễ đọc ngoài trời nắng.
@@ -150,9 +154,9 @@ Vì vậy giao diện đi theo triết lý **minimalism thực dụng**: mỗi m
 
 ## Typography
 
-Hệ thống sử dụng font **Sansation** cho logo nhận diện thương hiệu Cát Tường và tiêu đề lớn (`headline-lg`), kết hợp cùng **Roboto** (font mặc định Android) cho toàn bộ nội dung chức năng để giữ cảm giác trực quan, chuẩn nhận diện và dễ đọc ngoài công trường.
+Hệ thống sử dụng font **Sansation** cho logo nhận diện thương hiệu Hoàng Hải và tiêu đề lớn (`headline-lg`), kết hợp cùng **Roboto** (font mặc định Android) cho toàn bộ nội dung chức năng để giữ cảm giác trực quan, chuẩn nhận diện và dễ đọc ngoài công trường.
 
-- **Headline (24px/500, Sansation):** Dùng cho chữ logo nhận diện Cát Tường, tiêu đề màn hình quan trọng và số liệu KPI nổi bật trên dashboard.
+- **Headline (24px/500, Sansation):** Dùng cho chữ logo nhận diện Hoàng Hải, tiêu đề màn hình quan trọng và số liệu KPI nổi bật trên dashboard.
 - **Title Large (20px/500):** Tiêu đề trong top app bar.
 - **Title Medium (16px/500):** Tiêu đề card, tên mục trong danh sách.
 - **Body Large (16px/400):** Nội dung chính — mô tả lỗi, ghi chú, hướng dẫn.

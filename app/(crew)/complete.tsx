@@ -111,8 +111,8 @@ export default function CrewCompleteScreen() {
             <Text style={[typography.caption, styles.statLabel]}>Diện tích sửa chữa</Text>
           </View>
           <View style={styles.statCol}>
-            <Text style={[typography.titleLg, styles.statValueGold]}>1.25 tấn</Text>
-            <Text style={[typography.caption, styles.statLabel]}>Tiêu hao vật liệu</Text>
+            <Text style={[typography.titleLg, styles.statValueGold]}>~6.8 cm</Text>
+            <Text style={[typography.caption, styles.statLabel]}>Chiều sâu xử lý</Text>
           </View>
         </View>
       </Card>

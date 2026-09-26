@@ -4,15 +4,26 @@
 
 ---
 
+## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
+**Mọi quy định trong mục Chuẩn Hóa Canonical (26/09/2026) có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
+- **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, `@hoanghai.vn`, prefix `HH-`).
+- **Quy tắc Logo:** Splash/Loading = `assets/logo_hoanghai.png` (có tên công ty); Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png` (chỉ xe bồn, không chữ).
+- **UD-06:** Tầng UI Mobile (`app/`) **TUYỆT ĐỐI ZERO CHI PHÍ/TIỀN TỆ**, cấm định mức vật tư tiêu hao. Bắt buộc hiển thị bộ 3: Phương án xử lý + Kích thước hình học hư hại (m², cm, m) + Thời hạn.
+- **Vật liệu & Tuyến:** Bê tông xi măng TCVN 10380:2014, 4K RGB + DSM (OpenDroneMap), TUYỆT ĐỐI CẤM LiDAR, Tuyến ĐH.05 Bình Chánh là Pilot Primary Corridor.
+- **5 Mã Defect:** `src/constants/defect-types.ts` (`POTH_DEEP`, `DEPR_POND`, `EDGE_BRK`, `SLAB_CRK`, `SHLD_EROS`).
+- **Ma trận màn:** 40 màn mobile cốt lõi (4 vai trò) + 4 màn Reporter là Planned Delta đã frozen trên HTML wireframe.
+
+---
+
 ## Context nhanh
 
-**RoadGuard** là hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của nhà thầu Cát Tường. App mobile phục vụ **4 vai trò**:
-- **Drone Operator** — tiếp nhận lệnh bay,upload video/ảnh từ thẻ nhớ SD, nhật ký chuyến bay, đồng bộ ngoại tuyến
-- **Repair Crew** — nhận công việc sửa chữa, dẫn đường GPS, chụp ảnh nghiệm thu, báo cáo lỗi phát sinh
-- **Project Manager** — tạo yêu cầu khảo sát, xác minh lỗi AI (bounding box + đa kỳ), gộp đợt sửa, trình phê duyệt, giao việc crew
-- **Supervisor** — phê duyệt hồ sơ, tổng quan rủi ro, xuất báo cáo PDF/ZIP, ký đóng đợt, quản trị dự án + nhân sự
+**RoadGuard** là hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**. App mobile phục vụ **4 vai trò cốt lõi**:
+- **Drone Operator** — tiếp nhận lệnh bay, upload video/ảnh từ thẻ nhớ SD, nhật ký chuyến bay, đồng bộ ngoại tuyến (7 màn)
+- **Repair Crew** — nhận công việc sửa chữa, dẫn đường GPS, chụp ảnh nghiệm thu, báo cáo lỗi phát sinh (10 màn)
+- **Project Manager** — tạo yêu cầu khảo sát, xác minh lỗi AI (bounding box + đa kỳ), gộp đợt sửa, trình phê duyệt, giao việc crew (14 màn)
+- **Supervisor** — phê duyệt hồ sơ, tổng quan rủi ro, xuất báo cáo PDF/ZIP, ký đóng đợt, quản trị dự án + nhân sự (7 màn)
 
-**40 màn hình frozen** (HTML `index.html` + `Wireframe_Specification.md`), mã `M-XXX`. **109 Use Case, 70 User Stories**. Backend: ASP.NET Core / SQL Server (`geography(4326)`). GPS ưu tiên UTM zone 32648 (EPSG:32648).
+**40 màn hình mobile đã implement** + **4 màn Reporter (Planned Delta)**. Backend: ASP.NET Core / SQL Server (`geography(4326)`). GPS ưu tiên UTM zone 32648 (EPSG:32648).
 
 ---
 
@@ -24,8 +35,7 @@ FE_AppMobile/
     _layout.tsx                          # Root layout: SessionProvider + AuthGuard
     (auth)/
       _layout.tsx                        # Stack auth, không có BottomNav
-      index.tsx                          # M-AUTH-01: Splash / Loading
-      login.tsx                          # M-AUTH-02: Đăng nhập (email + password)
+      index.tsx                          # M-AUTH-01/02: Đăng nhập & Màn chào
       force-change-password.tsx          # BÙ GAP CN10/US-01: bắt buộc đổi mật khẩu lần đầu
     (drone)/
       _layout.tsx                        # BottomNav 4 tab: Home / Requests / Sync / Profile
@@ -379,12 +389,12 @@ export interface GroundTruthMeasurement {
   notes?: string;
 }
 
-// ── REPAIR BATCH (UD-06 — estimated_total_cost tự tính) ──
+// ── REPAIR BATCH (UD-06 — TẦNG UI MOBILE ZERO CHI PHÍ / BACKEND SNAPSHOT ONLY) ──
 export interface RepairItem {
   id: string;
   defect_id: string;
-  estimated_cost: number;
-  actual_cost?: number;
+  estimated_cost?: number;        // Backend internal snapshot — CẤM RENDER TRÊN UI MOBILE
+  actual_cost?: number;           // Backend internal snapshot — CẤM RENDER TRÊN UI MOBILE
   status: string;
   description?: string;
 }
@@ -394,7 +404,7 @@ export interface RepairBatchVersion {
   batch_id: string;
   version_no: number;
   status: RepairBatchStatus;
-  estimated_total_cost: number;    // = SUM(RepairItem.estimated_cost) — KHÔNG nhập tay
+  estimated_total_cost?: number;  // Backend internal snapshot — CẤM RENDER TRÊN UI MOBILE
   items: RepairItem[];
   submitted_at?: string;
   approved_at?: string;
@@ -577,8 +587,8 @@ npx expo install @expo-google-assets/roboto
     "scheme": "roadguard",
     "plugins": ["expo-router", "expo-camera", "expo-location"],
     "android": {
-      "package": "com.cattuong.roadguard",
-      "adaptiveIcon": { "foregroundImage": "./assets/adaptive-icon.png", "backgroundColor": "#C9A227" }
+      "package": "com.hoanghai.roadguard",
+      "adaptiveIcon": { "foregroundImage": "./assets/android-icon-foreground.png", "backgroundColor": "#FFFFFF" }
     }
   }
 }
@@ -600,12 +610,14 @@ npx expo install @expo-google-assets/roboto
 
 ## Quy tắc CRITICAL cho AI scaffolding
 
-1. **KHÔNG dùng Redux Toolkit** — dùng Zustand (nhẹ, đủ)
-2. **KHÔNG dùng React Navigation thuần** — dùng Expo Router (file-based, map trực tiếp mã màn)
-3. **Mỗi `_layout.tsx` role** phải render BottomNav 4 tab với đúng routes
-4. **AuthGuard**: nếu chưa login → redirect `(auth)/login`; nếu `must_change_password` → redirect `force-change-password`
-5. **`RepairBatchVersion.estimated_total_cost`** = SUM(items[].estimated_cost), KHÔNG tạo input field
-6. **`geometry`** trong Defect dùng GeoJSON standard (tương thích `geography(4326)` SQL Server)
-7. **Upload queue** trạng thái: LOCAL → QUEUED → UPLOADING → SERVER_CONFIRMED. CHECKSUM SHA-256 trước khi gửi.
-8. **FAB** trong `tasks.tsx` và `surveys.tsx`: `position: absolute, bottom: 96, right: 16, zIndex: 30`
-9. **Comment/không comment** theo yêu cầu AI — đây là scaffolding, KHÔNG comment trừ khi user yêu cầu
+1. **KHÔNG dùng Redux Toolkit** — dùng Zustand (nhẹ, đủ).
+2. **KHÔNG dùng React Navigation thuần** — dùng Expo Router (file-based, map trực tiếp mã màn).
+3. **Mỗi `_layout.tsx` role** phải render BottomNav 4 tab với đúng routes.
+4. **AuthGuard an toàn ReactFabric:** Giữ `<Stack screenOptions={{ headerShown: false }} />` luôn mount ổn định. Redirection phải đặt trong `useEffect` + `router.replace(...)` tới `(auth)` hoặc `(auth)/force-change-password`. CẤM dùng `<Redirect />` conditionally bọc ngoài `<Stack />` trong `RootLayout`.
+5. **UD-06 Zero Presentation Cost:** Tầng giao diện mobile `app/` TUYỆT ĐỐI KHÔNG CÓ INPUT HOẶC TEXT TIỀN NÔNG (VNĐ / dự toán). Bắt buộc thay bằng bộ 3: Phương án xử lý kỹ thuật + Kích thước hình học hư hại (m², cm, m) + Thời hạn hoàn thành.
+6. **Vật liệu & Khảo sát:** Bê tông xi măng TCVN 10380:2014, 4K RGB + DSM (OpenDroneMap), TUYỆT ĐỐI CẤM LiDAR, Tuyến ĐH.05 Bình Chánh là Pilot Primary Corridor.
+7. **5 Mã Defect chuẩn:** Single source of truth tại `src/constants/defect-types.ts` (`POTH_DEEP`, `DEPR_POND`, `EDGE_BRK`, `SLAB_CRK`, `SHLD_EROS`).
+8. **`geometry`** trong Defect dùng GeoJSON standard (tương thích `geography(4326)` SQL Server).
+9. **Upload queue** trạng thái: LOCAL → QUEUED → UPLOADING → SERVER_CONFIRMED. CHECKSUM SHA-256 trước khi gửi.
+10. **FAB** trong `tasks.tsx` và `surveys.tsx`: `position: absolute, bottom: 96, right: 16, zIndex: 30`.
+11. **Logo:** Splash/Loading = `assets/logo_hoanghai.png`; Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png`.
