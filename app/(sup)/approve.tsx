@@ -186,6 +186,8 @@ export default function SupervisorApproveScreen() {
   const [note, setNote] = useState('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [approvedCodes, setApprovedCodes] = useState<string[]>([]);
+  const [rejectedCodes, setRejectedCodes] = useState<string[]>([]);
 
   useEffect(() => {
     if (params.code && DOSSIERS[params.code]) {
@@ -195,6 +197,7 @@ export default function SupervisorApproveScreen() {
   }, [params.code]);
 
   const currentDossier = DOSSIERS[selectedCode] ?? DOSSIERS['#DF-0231'];
+  const isCurrentApproved = approvedCodes.includes(currentDossier.code);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -203,10 +206,14 @@ export default function SupervisorApproveScreen() {
 
   const handleApprove = () => {
     setLoading(true);
-    showToast(`Đang ký duyệt phương án kỹ thuật cho đợt sửa ${currentDossier.batchCode}...`);
+    showToast(`Đang ký duyệt phương án kỹ thuật cho hồ sơ ${currentDossier.code}...`);
     setTimeout(() => {
       setLoading(false);
-      router.push('/(sup)/signoff');
+      setApprovedCodes((prev) => [...prev, currentDossier.code]);
+      showToast(`✅ Đã phê duyệt phương án kỹ thuật ${currentDossier.code}. Lệnh thi công đã được chuyển đến Đội thi công.`);
+      setTimeout(() => {
+        setViewMode('list');
+      }, 1200);
     }, 800);
   };
 
@@ -215,7 +222,8 @@ export default function SupervisorApproveScreen() {
       showToast('⚠️ Vui lòng nhập lý do từ chối vào ô ghi chú (Quy tắc SC07)!');
       return;
     }
-    showToast(`Đã từ chối và trả hồ sơ ${currentDossier.batchCode} cho ${currentDossier.pmName} bổ sung.`);
+    setRejectedCodes((prev) => [...prev, currentDossier.code]);
+    showToast(`Đã từ chối và trả hồ sơ ${currentDossier.code} cho ${currentDossier.pmName} bổ sung.`);
     setTimeout(() => {
       setViewMode('list');
     }, 1000);
@@ -334,13 +342,23 @@ export default function SupervisorApproveScreen() {
 
                     <Chip
                       variant={
-                        item.risk === 'RỦI RO CAO'
+                        approvedCodes.includes(item.code)
+                          ? 'severity-low'
+                          : rejectedCodes.includes(item.code)
+                          ? 'severity-high'
+                          : item.risk === 'RỦI RO CAO'
                           ? 'severity-high'
                           : item.risk === 'TRUNG BÌNH'
                           ? 'severity-medium'
                           : 'severity-low'
                       }
-                      label={item.risk}
+                      label={
+                        approvedCodes.includes(item.code)
+                          ? 'ĐÃ DUYỆT PHƯƠNG ÁN'
+                          : rejectedCodes.includes(item.code)
+                          ? 'Y/C BỔ SUNG'
+                          : item.risk
+                      }
                     />
                   </View>
 
@@ -633,18 +651,36 @@ export default function SupervisorApproveScreen() {
           {/* Action Buttons */}
           <View style={styles.actionRow}>
             <Pressable
-              style={styles.rejectBtn}
-              onPress={handleReject}
+              style={[styles.rejectBtn, isCurrentApproved && styles.btnDisabled]}
+              onPress={isCurrentApproved ? undefined : handleReject}
               accessibilityRole="button"
+              disabled={isCurrentApproved}
             >
-              <MaterialIcons name="close" size={18} color={colors.error} />
-              <Text style={[typography.labelLg, styles.rejectBtnText]}>Từ chối</Text>
+              <MaterialIcons
+                name="close"
+                size={18}
+                color={isCurrentApproved ? colors.secondary : colors.error}
+              />
+              <Text
+                style={[
+                  typography.labelLg,
+                  styles.rejectBtnText,
+                  isCurrentApproved && { color: colors.secondary },
+                ]}
+              >
+                Từ chối
+              </Text>
             </Pressable>
 
             <View style={styles.approveBtnWrap}>
               <Button
-                variant="primary"
-                title={`Phê duyệt (${currentDossier.code})`}
+                variant={isCurrentApproved ? 'secondary' : 'primary'}
+                title={
+                  isCurrentApproved
+                    ? `Đã duyệt phương án (${currentDossier.code})`
+                    : `Phê duyệt (${currentDossier.code})`
+                }
+                disabled={isCurrentApproved}
                 loading={loading}
                 onPress={handleApprove}
               />
@@ -902,20 +938,27 @@ const styles = StyleSheet.create({
   },
   pmNoteHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   pmSenderGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
+    minWidth: 180,
   },
   pmSenderName: {
     color: colors.neutral,
     fontWeight: 'bold',
+    flexShrink: 1,
   },
   pmNoteTime: {
     color: colors.secondary,
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   pmQuote: {
     color: colors.secondary,
@@ -961,6 +1004,10 @@ const styles = StyleSheet.create({
   rejectBtnText: {
     color: colors.error,
     fontWeight: 'bold',
+  },
+  btnDisabled: {
+    opacity: 0.5,
+    borderColor: colors.border,
   },
   approveBtnWrap: {
     flex: 2,

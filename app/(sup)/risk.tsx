@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -103,9 +103,20 @@ export default function SupervisorRiskScreen() {
           </Text>
         </View>
 
-        <View style={styles.circleIconButton}>
-          <MaterialIcons name="map" size={18} color={colors.secondary} />
-        </View>
+        <Pressable
+          style={styles.circleIconButton}
+          onPress={() =>
+            Alert.alert(
+              'Bản đồ rủi ro GIS',
+              'Đang tích hợp bản đồ lớp phủ vệ tinh và khuyết tật đường bộ hệ tọa độ VN-2000.',
+              [{ text: 'Đóng' }],
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Bản đồ rủi ro"
+        >
+          <MaterialIcons name="map" size={18} color={colors.primary} />
+        </Pressable>
       </View>
 
       {/* Summary KPI Card */}

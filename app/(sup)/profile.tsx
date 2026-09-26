@@ -58,7 +58,7 @@ export default function SupervisorProfileScreen() {
         </View>
 
         <Text style={[typography.caption, styles.metaRole]}>
-          Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'NV-8842'}
+          Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'HH-8842'}
         </Text>
         <Text style={[typography.caption, styles.metaEmail]}>
           hung.tran@hoanghai.vn • 15 năm kinh nghiệm

@@ -1,8 +1,10 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../design-tokens';
+import { useAuthStore } from '../store/auth';
+import { RoleCode } from '../types/enums';
 
 interface AppHeaderProps {
   subtitle: string;
@@ -12,6 +14,8 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }: AppHeaderProps) {
+  const role = useAuthStore((state) => state.role);
+
   const handleBack = () => {
     if (onBack) {
       onBack();
@@ -22,6 +26,28 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
     } else {
       router.back();
     }
+  };
+
+  const handleAvatarPress = () => {
+    if (role === RoleCode.SUPERVISOR) {
+      router.push('/(sup)/profile');
+    } else if (role === RoleCode.DRONE_OPERATOR) {
+      router.push('/(drone)/profile');
+    } else if (role === RoleCode.REPAIR_CREW) {
+      router.push('/(crew)/profile');
+    } else if (role === RoleCode.PROJECT_MANAGER) {
+      router.push('/(pm)/profile');
+    } else {
+      router.push('/(sup)/profile');
+    }
+  };
+
+  const handleNotificationPress = () => {
+    Alert.alert(
+      'Thông báo hệ thống',
+      'Hiện tại không có cảnh báo mới. Tất cả các tuyến đường đang trong tầm kiểm soát.',
+      [{ text: 'Đóng' }],
+    );
   };
 
   return (
@@ -46,13 +72,23 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
       </View>
 
       <View style={styles.actionGroup}>
-        <View style={styles.iconButton}>
+        <Pressable
+          style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
+          onPress={handleNotificationPress}
+          accessibilityRole="button"
+          accessibilityLabel="Thông báo"
+        >
           <Ionicons name="notifications-outline" size={20} color={colors.secondary} />
           <View style={styles.dot} />
-        </View>
-        <View style={styles.avatar}>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.avatar, pressed && styles.actionPressed]}
+          onPress={handleAvatarPress}
+          accessibilityRole="button"
+          accessibilityLabel="Trang cá nhân"
+        >
           <Ionicons name="person" size={18} color={colors.primaryDark} />
-        </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -132,5 +168,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  actionPressed: {
+    opacity: 0.7,
+    backgroundColor: colors.border,
   },
 });
