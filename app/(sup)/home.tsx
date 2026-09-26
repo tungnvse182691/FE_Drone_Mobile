@@ -85,7 +85,7 @@ export default function SupervisorHomeScreen() {
             Chào, {user?.full_name ?? 'Kỹ sư Trần Thế Hùng'}
           </Text>
           <Text style={[typography.caption, styles.greetingSub]}>
-            Giám sát kỹ thuật hiện trường • Mã NV: {user?.employee_code ?? 'NV-8842'}
+            Giám sát kỹ thuật hiện trường • Mã NV: {user?.employee_code ?? 'HH-8842'}
           </Text>
         </View>
 

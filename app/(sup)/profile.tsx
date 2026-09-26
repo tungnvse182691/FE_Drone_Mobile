@@ -35,7 +35,7 @@ const PROJECTS_DATA: ProjectWarranty[] = [
     id: '2',
     code: 'TUYẾN QL.1A',
     name: 'QL.1A — Đoạn Trảng Bom (Km1842 - Km1845)',
-    contractor: 'Tổng công ty Xây dựng Cát Tường Infra',
+    contractor: 'Công ty TNHH Xây dựng Bê tông Hoàng Hải',
     warrantyPeriod: '06/2024 — 06/2027 (36 tháng)',
     status: 'ỔN ĐỊNH',
     variant: 'severity-low',
@@ -53,7 +53,7 @@ const PROJECTS_DATA: ProjectWarranty[] = [
     id: '4',
     code: 'VÀNH ĐAI 3',
     name: 'Tuyến Vành Đai 3 TP.HCM (Đoạn Tân Kiên)',
-    contractor: 'Liên danh Nhà thầu Cát Tường - CIENCO',
+    contractor: 'Liên danh Nhà thầu Hoàng Hải - CIENCO',
     warrantyPeriod: '03/2025 — 03/2028 (36 tháng)',
     status: 'LEGAL HOLD',
     variant: 'status-pending',
@@ -91,7 +91,7 @@ const CREWS_DATA: RepairCrew[] = [
   },
   {
     id: '3',
-    name: 'Đội xử lý thảm nhựa Cát Tường',
+    name: 'Đội xử lý thảm nhựa Hoàng Hải',
     leader: 'Lê Minh Tuấn',
     workersCount: 7,
     phone: '0903.112.233',
@@ -204,7 +204,7 @@ export default function SupervisorProfileScreen() {
         </View>
 
         <Text style={[typography.caption, styles.metaRole]}>
-          Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'NV-8842'}
+          Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'HH-8842'}
         </Text>
         <Text style={[typography.caption, styles.metaEmail]}>
           hung.tran@hoanghai.vn • 15 năm kinh nghiệm

@@ -234,7 +234,7 @@ export default function SupervisorSignoffScreen() {
           <View>
             <Text style={[typography.titleMd, styles.engineerName]}>Kỹ sư Trần Thế Hùng</Text>
             <Text style={[typography.caption, styles.engineerRole]}>
-              Giám sát trưởng Ban QLDA Miền Đông • Mã NV: <Text style={styles.boldText}>NV-8842</Text>
+              Giám sát trưởng Ban QLDA Miền Đông • Mã NV: <Text style={styles.boldText}>HH-8842</Text>
             </Text>
           </View>
           <View style={styles.lockBadge}>
