@@ -6,6 +6,8 @@ import { InputField } from '../../src/components/InputField';
 import { colors, spacing, typography } from '../../src/design-tokens';
 import { login as apiLogin } from '../../src/api/mock/auth';
 import { useAuthStore } from '../../src/store/auth';
+import { useRouter } from 'expo-router';
+import { ROLE_HOMES } from '../../src/constants/routes';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -13,13 +15,20 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
+  const router = useRouter();
 
   const handleLogin = async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await apiLogin(email, password);
-      login(response.data.user);
+      const loggedUser = response.data.user;
+      login(loggedUser);
+      if (loggedUser.must_change_password) {
+        router.replace('/(auth)/force-change-password');
+      } else {
+        router.replace(ROLE_HOMES[loggedUser.role_code] as any);
+      }
     } catch {
       setError('Sai tài khoản hoặc mật khẩu');
     } finally {

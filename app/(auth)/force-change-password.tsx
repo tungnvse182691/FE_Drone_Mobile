@@ -18,6 +18,7 @@ export default function ForceChangePasswordScreen() {
   const [loading, setLoading] = useState(false);
   const user = useAuthStore((state) => state.user);
   const login = useAuthStore((state) => state.login);
+  const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
 
   const handleChangePassword = async () => {
@@ -26,6 +27,10 @@ export default function ForceChangePasswordScreen() {
     }
     if (newPassword !== confirmPassword) {
       setError('Mật khẩu mới không khớp');
+      return;
+    }
+    if (newPassword === oldPassword) {
+      setError('Mật khẩu mới không được trùng mật khẩu cũ');
       return;
     }
     setLoading(true);
@@ -90,6 +95,14 @@ export default function ForceChangePasswordScreen() {
               onPress={handleChangePassword}
               loading={loading}
               disabled={!oldPassword || !newPassword || !confirmPassword}
+            />
+            <Button
+              variant="secondary"
+              title="Hủy & Quay lại Đăng nhập"
+              onPress={() => {
+                logout();
+                router.replace('/(auth)');
+              }}
             />
           </View>
         </View>
