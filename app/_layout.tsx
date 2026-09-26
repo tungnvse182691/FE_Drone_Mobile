@@ -1,10 +1,10 @@
 import 'react-native-gesture-handler';
-import { ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ReactNode, useEffect } from 'react';
+import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { Redirect, Stack, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import {
   Roboto_400Regular,
   Roboto_500Medium,
@@ -39,8 +39,12 @@ export default function RootLayout() {
   if (!fontsLoaded) {
     return (
       <View style={styles.loading}>
+        <Image
+          source={require('../assets/logo_hoanghai.png')}
+          style={styles.loadingLogo}
+          resizeMode="contain"
+        />
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[typography.titleMd, styles.loadingText]}>RoadGuard</Text>
       </View>
     );
   }
@@ -65,35 +69,41 @@ const ROLE_GROUPS: Record<RoleCode, string> = {
 function AuthGuard({ children }: { children: ReactNode }) {
   const user = useAuthStore((state) => state.user);
   const segments: string[] = useSegments();
+  const router = useRouter();
 
-  const inAuthGroup = segments[0] === '(auth)';
-  const inForceChange = segments[1] === 'force-change-password';
+  useEffect(() => {
+    if (!segments || segments.length === 0) return;
 
-  if (!user) {
-    if (!inAuthGroup) {
-      return <Redirect href="/(auth)" />;
+    const inAuthGroup = segments[0] === '(auth)';
+    const inForceChange = segments[1] === 'force-change-password';
+
+    if (!user) {
+      if (!inAuthGroup) {
+        router.replace('/(auth)');
+      }
+      return;
     }
-    return children;
-  }
 
-  if (user.must_change_password) {
-    if (!inForceChange) {
-      return <Redirect href="/(auth)/force-change-password" />;
+    if (user.must_change_password) {
+      if (!inForceChange) {
+        router.replace('/(auth)/force-change-password');
+      }
+      return;
     }
-    return children;
-  }
 
-  if (inAuthGroup) {
-    return <Redirect href={ROLE_HOMES[user.role_code]} />;
-  }
+    if (inAuthGroup) {
+      router.replace(ROLE_HOMES[user.role_code] as any);
+      return;
+    }
 
-  // Bảo vệ phân quyền vai trò: chống nhảy chéo sang màn role khác khi F5 trên Web
-  const expectedGroup = ROLE_GROUPS[user.role_code];
-  if (segments[0] && segments[0].startsWith('(') && segments[0] !== expectedGroup) {
-    return <Redirect href={ROLE_HOMES[user.role_code]} />;
-  }
+    // Bảo vệ phân quyền vai trò: chống nhảy chéo sang màn role khác khi F5 trên Web
+    const expectedGroup = ROLE_GROUPS[user.role_code];
+    if (segments[0] && segments[0].startsWith('(') && segments[0] !== expectedGroup) {
+      router.replace(ROLE_HOMES[user.role_code] as any);
+    }
+  }, [user, segments]);
 
-  return children;
+  return <>{children}</>;
 }
 
 const styles = StyleSheet.create({
@@ -101,11 +111,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
-    backgroundColor: colors.surfaceAlt,
+    gap: 20,
+    backgroundColor: '#FFFFFF',
   },
-  loadingText: {
-    color: colors.primary,
-    fontFamily: 'Sansation',
+  loadingLogo: {
+    width: 220,
+    height: 120,
   },
 });
