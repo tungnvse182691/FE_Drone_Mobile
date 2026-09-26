@@ -2,12 +2,12 @@ import { User } from '../../types/domain';
 import { RoleCode } from '../../types/enums';
 
 const MOCK_USERS: Record<string, { user: User; password: string }> = {
-  'drone@cattuong.vn': {
+  'drone@hoanghai.vn': {
     user: {
       id: 'U001',
       role_code: RoleCode.DRONE_OPERATOR,
       full_name: 'Nguyen Van Drone',
-      email: 'drone@cattuong.vn',
+      email: 'drone@hoanghai.vn',
       employee_code: 'NV001',
       must_change_password: true,
       project_ids: ['P001', 'P002'],
@@ -16,12 +16,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
     },
     password: '123456',
   },
-  'pm@cattuong.vn': {
+  'pm@hoanghai.vn': {
     user: {
       id: 'U002',
       role_code: RoleCode.PROJECT_MANAGER,
       full_name: 'Tran Thi PM',
-      email: 'pm@cattuong.vn',
+      email: 'pm@hoanghai.vn',
       employee_code: 'NV002',
       must_change_password: true,
       project_ids: ['P001'],
@@ -30,12 +30,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
     },
     password: '123456',
   },
-  'crew@cattuong.vn': {
+  'crew@hoanghai.vn': {
     user: {
       id: 'U003',
       role_code: RoleCode.REPAIR_CREW,
       full_name: 'Le Van Crew',
-      email: 'crew@cattuong.vn',
+      email: 'crew@hoanghai.vn',
       employee_code: 'NV003',
       must_change_password: true,
       project_ids: ['P001'],
@@ -44,12 +44,12 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
     },
     password: '123456',
   },
-  'sup@cattuong.vn': {
+  'sup@hoanghai.vn': {
     user: {
       id: 'U004',
       role_code: RoleCode.SUPERVISOR,
       full_name: 'Pham Van Sup',
-      email: 'sup@cattuong.vn',
+      email: 'sup@hoanghai.vn',
       employee_code: 'NV004',
       must_change_password: true,
       project_ids: ['P001'],

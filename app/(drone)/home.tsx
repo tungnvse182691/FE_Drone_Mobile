@@ -27,8 +27,8 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
   {
     code: '#REQ-KS-089',
     displayCode: 'Mã: KS-741',
-    title: 'Đoạn ĐT.741 - Cầu Sông Bé',
-    subtitle: 'Khảo sát sạt lở mép taluy âm • Cần LiDAR',
+    title: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
+    subtitle: 'Xói lở vai đường mép taluy âm • Cần ảnh 4K RGB & DSM (ODM)',
     priority: 'urgent',
     chipVariant: 'severity-high',
     chipLabel: 'KHẨN CẤP',
@@ -39,8 +39,8 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
   {
     code: '#REQ-KS-090',
     displayCode: 'Mã: KS-104',
-    title: 'Đoạn QL1A - Km 104+200',
-    subtitle: 'Kiểm tra lún nứt mặt đường • 2.4 km',
+    title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
+    subtitle: 'Kiểm tra ổ gà sâu & nứt tấm bê tông • 2.4 km',
     priority: 'pending',
     chipVariant: 'severity-medium',
     chipLabel: 'CHỜ KHẢO SÁT',
@@ -51,7 +51,7 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
   {
     code: '#REQ-KS-088',
     displayCode: 'Mã: KS-VD3',
-    title: 'Đường Vành Đai 3 - Gói XL-02',
+    title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     subtitle: 'Ảnh trực quan 3D tiến độ thi công hạ tầng',
     priority: 'pending',
     chipVariant: 'severity-low',
@@ -316,7 +316,7 @@ export default function DroneHomeScreen() {
               </Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="Ví dụ: Tuyến ĐT.741 - Km 15+800 (Gần Cầu Sông Bé)"
+                placeholder="Ví dụ: Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)"
                 placeholderTextColor={colors.secondary}
                 value={newRoadName}
                 onChangeText={setNewRoadName}
@@ -329,8 +329,8 @@ export default function DroneHomeScreen() {
               <View style={styles.choiceWrap}>
                 {[
                   'Sạt lở mép taluy âm sau bão',
-                  'Hố lún nứt mặt đường cấp bách',
-                  'Va quẹt kết cấu dầm cầu',
+                  'Ổ gà sâu & nứt tấm bê tông',
+                  'Vỡ mép tấm do va quẹt phương tiện',
                 ].map((reason) => (
                   <Pressable
                     key={reason}

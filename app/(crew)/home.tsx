@@ -41,7 +41,7 @@ export default function CrewHomeScreen() {
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Đội Sửa Chữa" />}>
         <Text style={[typography.titleLg, styles.greeting]}>Chào, {user?.full_name ?? 'Nguyễn Văn Tuấn'}</Text>
-        <Text style={[typography.caption, styles.greetingMeta]}>Kỹ thuật viên • Đội 01 • Mã NV: {user?.employee_code ?? 'CT-RC-084'}</Text>
+        <Text style={[typography.caption, styles.greetingMeta]}>Kỹ thuật viên • Đội 01 • Mã NV: {user?.employee_code ?? 'HH-RC-084'}</Text>
 
         <Card style={styles.teamCard}>
           <Text style={[typography.labelSm, styles.teamName]}>ĐỘI 01</Text>

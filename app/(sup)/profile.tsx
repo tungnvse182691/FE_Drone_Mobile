@@ -61,7 +61,7 @@ export default function SupervisorProfileScreen() {
           Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'NV-8842'}
         </Text>
         <Text style={[typography.caption, styles.metaEmail]}>
-          hung.tran@cattuong.vn • 15 năm kinh nghiệm
+          hung.tran@hoanghai.vn • 15 năm kinh nghiệm
         </Text>
       </View>
 
@@ -175,7 +175,7 @@ export default function SupervisorProfileScreen() {
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>Khu vực giám sát</Text>
                   <Text style={[typography.caption, styles.menuSubNote]}>
-                    QL.1A, QL.51, ĐT.741, Vành Đai 3
+                    Vĩnh Lộc B, Cầu Bà Lát, Tân Kiên
                   </Text>
                 </View>
               </View>
@@ -262,7 +262,7 @@ export default function SupervisorProfileScreen() {
                 <Text style={styles.stdCodeText}>TCVN 8819:2011</Text>
               </View>
               <Text style={[typography.caption, styles.stdDesc]}>
-                Mặt đường bê tông nhựa nóng — Yêu cầu thi công và nghiệm thu độ chặt, độ rỗng dư.
+                Bê tông xi măng mác 300 cho bê tông nông thôn — Yêu cầu độ bám dính và độ đồng đều.
               </Text>
             </View>
 
@@ -337,7 +337,7 @@ export default function SupervisorProfileScreen() {
             <View style={styles.lockedItem}>
               <Ionicons name="document-lock" size={16} color={colors.brandGold} />
               <Text style={styles.lockedItemText}>
-                01 gói thầu đang áp dụng Legal Hold: QL.1A Gói thầu XL-01 (Đến 2028)
+                01 gói thầu đang áp dụng Legal Hold: Tuyến ĐH.05 Gói thầu XL-01 (Đến 2028)
               </Text>
             </View>
           </Card>
@@ -352,7 +352,7 @@ export default function SupervisorProfileScreen() {
         </Pressable>
 
         <Text style={[typography.caption, styles.footerVersion]}>
-          Cát Tường Field v2.4.1 (Build 2026.09) • Hệ thống Giám sát bảo hành Cát Tường
+          Hoàng Hải Field v2.4.1 (Build 2026.09) • Hệ thống Giám sát bảo hành Hoàng Hải
         </Text>
       </View>
     </SafeAreaScreen>

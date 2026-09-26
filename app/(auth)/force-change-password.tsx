@@ -55,7 +55,7 @@ export default function ForceChangePasswordScreen() {
             style={styles.logoImage}
             resizeMode="contain"
           />
-          <Text style={[typography.headlineLg, styles.brand]}>{'CÁT TƯỜNG'}</Text>
+          <Text style={[typography.headlineLg, styles.brand]}>{'HOÀNG HẢI'}</Text>
           <Text style={[typography.titleLg, styles.title]}>Đổi mật khẩu</Text>
           <Text style={[typography.caption, styles.subtitle]}>
             Bạn phải đổi mật khẩu trước khi sử dụng ứng dụng

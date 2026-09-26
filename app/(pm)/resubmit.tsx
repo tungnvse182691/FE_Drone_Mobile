@@ -49,16 +49,19 @@ export default function PmResubmitScreen() {
           </Text>
         </View>
         <Text style={[typography.bodyMd, styles.commentBody]}>
-          "Giảm hao hụt bê tông xi măng M300 từ 5% xuống 3% theo định mức công tác đổ vỡ cục bộ và bổ sung 2 nhân công đắp lề đất K95
+          "Điều chỉnh phương án đắp bù: cắt viền tấm vỡ cục bộ, đục tẩy tạo nhám và đổ bù bê tông xi măng M300 với lượng vật tư vừa đủ, đồng thời bổ sung 2 nhân công đắp lề đất K95
           điều tiết giao thông giờ cao điểm."
         </Text>
       </Card>
 
       <Card style={styles.formCard}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Dự toán sau điều chỉnh (VNĐ)</Text>
-        <View style={styles.costBox}>
-          <Text style={[typography.bodyLg, styles.costValue]}>
-            17.650.000 đ (Đã giảm 850.000 đ)
+        <Text style={[typography.labelLg, styles.fieldLabel]}>Phương án xử lý sau điều chỉnh</Text>
+        <View style={styles.techBox}>
+          <Text style={[typography.bodyLg, styles.techValue]}>
+            Cắt viền tấm, đục tẩy tạo nhám, quét dính bám SikaLatex, đổ bù BTXM M300
+          </Text>
+          <Text style={[typography.caption, styles.techMeta]}>
+            Khối lượng 14.5 m² • Thời hạn hoàn thành: Trong 3 ngày
           </Text>
         </View>
         <InputField
@@ -136,7 +139,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     marginBottom: spacing.sm,
   },
-  costBox: {
+  techBox: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
@@ -145,9 +148,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
   },
-  costValue: {
+  techValue: {
     color: colors.success,
-    fontFamily: 'monospace',
+    lineHeight: 20,
+  },
+  techMeta: {
+    color: colors.secondary,
+    marginTop: spacing.xs,
   },
   ctaWrap: {
     marginBottom: spacing.sm,

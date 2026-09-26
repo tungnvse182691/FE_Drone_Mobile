@@ -40,7 +40,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
         ) : null}
         <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
         <View>
-          <Text style={[typography.titleMd, styles.brand]}>CÁT TƯỜNG</Text>
+          <Text style={[typography.titleMd, styles.brand]}>HOÀNG HẢI</Text>
           <Text style={[typography.caption, styles.subtitle]}>{subtitle}</Text>
         </View>
       </View>

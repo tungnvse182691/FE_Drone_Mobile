@@ -22,8 +22,8 @@ const PROJECT_RISKS: ProjectRiskItem[] = [
   {
     id: '1',
     code: '#DF-0231',
-    name: 'QL.1A — Đoạn Trảng Bom (Km1842+100 - Km1845)',
-    sub: 'Tỉnh Đồng Nai • Tuyến huyết mạch xe tải nặng',
+    name: 'Tuyến ĐH.05 — Cầu Bà Lát (Km01+850)',
+    sub: 'Cầu dây văng qua sông • Nguy cơ ổ gà sâu lan trên mặt cầu',
     riskLevel: 'severity-high',
     riskLabel: 'CAO',
     openDefects: 4,
@@ -32,8 +32,8 @@ const PROJECT_RISKS: ProjectRiskItem[] = [
   {
     id: '2',
     code: '#DF-0220',
-    name: 'Cầu Đồng Nai Mới (Nhịp T4 - T5)',
-    sub: 'Vành đai giao thông trọng điểm, lưu lượng lớn',
+    name: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
+    sub: 'Đoạn giao cắt đường huyện, lưu lượng lớn',
     riskLevel: 'severity-high',
     riskLabel: 'CAO',
     openDefects: 3,
@@ -42,8 +42,8 @@ const PROJECT_RISKS: ProjectRiskItem[] = [
   {
     id: '3',
     code: '#DF-0229',
-    name: 'Tuyến ĐT.741 — Cầu Sông Bé (Km14+250)',
-    sub: 'Tỉnh Bình Dương - Bình Phước • Nguy cơ lún sụt taluy',
+    name: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km02+180)',
+    sub: 'Đoạn gần mố cầu bờ Nam • Nguy cơ vỡ mép tấm',
     riskLevel: 'severity-medium',
     riskLabel: 'VỪA',
     openDefects: 2,
@@ -52,18 +52,18 @@ const PROJECT_RISKS: ProjectRiskItem[] = [
   {
     id: '4',
     code: '#DF-0219',
-    name: 'Tuyến Vành Đai 3 (Km24+600)',
-    sub: 'Phân đoạn TP. Thủ Đức - Nhơn Trạch',
-    riskLevel: 'severity-medium',
-    riskLabel: 'VỪA',
+    name: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+200)',
+    sub: 'Đoạn ngoài đồng nông nghiệp, vai đường yếu',
+    riskLevel: 'severity-high',
+    riskLabel: 'CAO',
     openDefects: 2,
     repairingDefects: 1,
   },
   {
     id: '5',
     code: '#DF-0215',
-    name: 'Tuyến gom KCN Amata — Biên Hòa (Km02 - Km05)',
-    sub: 'Đoạn nội khu công nghiệp Amata',
+    name: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+450)',
+    sub: 'Đoạn nằm trong vùng ngập cục bộ',
     riskLevel: 'severity-low',
     riskLabel: 'THẤP',
     openDefects: 1,
@@ -72,8 +72,8 @@ const PROJECT_RISKS: ProjectRiskItem[] = [
   {
     id: '6',
     code: '#DF-0210',
-    name: 'Tỉnh Lộ 769 (Km08+950)',
-    sub: 'Tuyến kết nối đại công trường Sân bay Long Thành',
+    name: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
+    sub: 'Đoạn dân cư ven đường • Nguy cơ xói lở vai đường',
     riskLevel: 'severity-low',
     riskLabel: 'THẤP',
     openDefects: 0,
@@ -99,7 +99,7 @@ export default function SupervisorRiskScreen() {
             Tổng quan rủi ro dự án
           </Text>
           <Text style={[typography.caption, styles.topBarSub]}>
-            Hệ thống Giám sát kỹ thuật Cát Tường
+            Hệ thống Giám sát kỹ thuật Hoàng Hải
           </Text>
         </View>
 

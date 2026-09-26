@@ -60,13 +60,13 @@ export default function CrewProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${user?.full_name ?? 'Nguyễn Văn Tuấn'}\nMã nhân viên: ${user?.employee_code ?? 'CT-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Tuyến ĐH.05\nTrạng thái hoạt động: Đang hoạt động`,
+          `Họ tên: ${user?.full_name ?? 'Nguyễn Văn Tuấn'}\nMã nhân viên: ${user?.employee_code ?? 'HH-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Tuyến ĐH.05\nTrạng thái hoạt động: Đang hoạt động`,
         );
         return;
       case 'help':
         Alert.alert(
           'Trợ giúp & Hỗ trợ kỹ thuật',
-          'Hotline: 1900 8866\nEmail: hotro@cattuong.vn',
+          'Hotline: 1900 8866\nEmail: hotro@hoanghai.vn',
         );
         return;
     }
@@ -86,12 +86,12 @@ export default function CrewProfileScreen() {
 
         <Text style={[typography.titleLg, styles.name]}>{user?.full_name ?? 'Nguyễn Văn Tuấn'}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
-          Mã NV: {user?.employee_code ?? 'CT-RC-084'} • Đội sửa chữa số 2
+          Mã NV: {user?.employee_code ?? 'HH-RC-084'} • Đội sửa chữa số 2
         </Text>
         <Text style={[typography.caption, styles.unit]}>
           Đội sửa chữa số 2 — Phụ trách Bảo trì đường bê tông ĐH.05
         </Text>
-        <Text style={[typography.caption, styles.email]}>{user?.email ?? 'crew@cattuong.vn'}</Text>
+        <Text style={[typography.caption, styles.email]}>{user?.email ?? 'crew@hoanghai.vn'}</Text>
 
         <View style={styles.roleChip}>
           <Ionicons name="build" size={14} color={colors.brandGold} />
@@ -156,7 +156,7 @@ export default function CrewProfileScreen() {
       </Pressable>
 
       <Text style={[typography.caption, styles.footer]}>
-        Cát Tường Field v2.4.1 (Build 142) • Repair Crew Edition
+        Hoàng Hải Field v2.4.1 (Build 142) • Repair Crew Edition
       </Text>
 
       {toast ? <Toast type="info" message={toast} /> : null}

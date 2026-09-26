@@ -20,35 +20,35 @@ const COMPLETED_ORDERS: CompletedWorkOrder[] = [
   {
     id: '1',
     woCode: '#WO-118',
-    road: 'QL.1A — Km 1842+100 (Trảng Bom)',
+    road: 'Tuyến ĐH.05 — Cầu Bà Lát (Km01+850)',
     completedDate: '26/10/2023',
     pmName: 'Nguyễn Thùy Lan',
   },
   {
     id: '2',
     woCode: '#WO-115',
-    road: 'Tuyến ĐT.741 — Cầu Sông Bé',
+    road: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km02+180)',
     completedDate: '24/10/2023',
     pmName: 'Trần Văn Nam',
   },
   {
     id: '3',
     woCode: '#WO-112',
-    road: 'QL.51 — Ngã ba Vũng Tàu',
+    road: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
     completedDate: '21/10/2023',
     pmName: 'Lê Minh Tuấn',
   },
   {
     id: '4',
     woCode: '#WO-109',
-    road: 'Đường gom KCN Amata (Km02)',
+    road: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+450)',
     completedDate: '18/10/2023',
     pmName: 'Nguyễn Thùy Lan',
   },
   {
     id: '5',
     woCode: '#WO-104',
-    road: 'Tỉnh Lộ 769 — Km 08+950',
+    road: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+200)',
     completedDate: '14/10/2023',
     pmName: 'Nguyễn Thùy Lan',
   },
@@ -68,10 +68,10 @@ export default function SupervisorReportsScreen() {
         </Card>
 
         <Card style={styles.kpiCard}>
-          <Text style={[typography.caption, styles.kpiLabel]}>Kinh phí duyệt</Text>
+          <Text style={[typography.caption, styles.kpiLabel]}>Tuyến triển khai</Text>
           <View style={styles.kpiNumberRow}>
-            <Text style={[typography.headlineLg, styles.kpiNeutral]}>648</Text>
-            <Text style={[typography.caption, styles.kpiUnit]}>triệu</Text>
+            <Text style={[typography.headlineLg, styles.kpiNeutral]}>3</Text>
+            <Text style={[typography.caption, styles.kpiUnit]}>tuyến</Text>
           </View>
         </Card>
 

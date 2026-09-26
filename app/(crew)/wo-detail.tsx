@@ -123,7 +123,7 @@ export default function CrewWoDetailScreen() {
           </View>
           <View style={styles.engineerInfo}>
             <Text style={[typography.titleMd, styles.engineerTitle]}>Chỉ dẫn thi công hiện trường</Text>
-            <Text style={[typography.caption, styles.engineerMeta]}>KS. Nguyễn Văn Hùng • Kỹ thuật viên Nhà thầu Cát Tường</Text>
+            <Text style={[typography.caption, styles.engineerMeta]}>KS. Nguyễn Văn Hùng • Kỹ thuật viên Nhà thầu Hoàng Hải</Text>
           </View>
         </View>
         <View style={styles.instructionBox}>

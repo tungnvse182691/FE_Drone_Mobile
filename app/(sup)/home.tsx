@@ -16,7 +16,8 @@ interface ApprovalRequest {
   title: string;
   sender: string;
   timeAgo: string;
-  cost: string;
+  method: string;
+  deadline: string;
   riskVariant: 'severity-high' | 'severity-medium';
   riskLabel: string;
 }
@@ -25,44 +26,48 @@ const PENDING_APPROVALS: ApprovalRequest[] = [
   {
     id: '1',
     code: '#DF-0231',
-    road: 'QL.1A (Km1842+150)',
-    title: 'Xử lý ổ gà sâu & nứt mặt đường bê tông nhựa',
+    road: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
+    title: 'Xử lý ổ gà sâu & nứt tấm bê tông nông thôn',
     sender: 'PM Nguyễn Thùy Lan',
     timeAgo: '10 phút trước',
-    cost: '42.500.000 đ',
+    method: 'Cắt viền, đục tẩy tạo nhám, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 3 ngày',
     riskVariant: 'severity-high',
     riskLabel: 'RỦI RO CAO',
   },
   {
     id: '2',
     code: '#DF-0229',
-    road: 'Tuyến ĐT.741 (Km14+250)',
-    title: 'Trám khe co giãn dầm cầu Sông Bé',
+    road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
+    title: 'Vỡ mép tấm & hư hỏng khe co giãn tại đoạn cầu',
     sender: 'PM Trần Văn Nam',
     timeAgo: '1 giờ trước',
-    cost: '18.200.000 đ',
+    method: 'Đục tẩy tạo nhám, quét dính bám SikaLatex, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 5 ngày',
     riskVariant: 'severity-medium',
     riskLabel: 'TRUNG BÌNH',
   },
   {
     id: '3',
     code: '#DF-0220',
-    road: 'Cầu Đồng Nai Mới (Nhịp T4-T5)',
-    title: 'Xử lý nứt bê tông bản mặt cầu & lún mố',
+    road: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
+    title: 'Xử lý xói lở vai đường & lún nền mặt cầu',
     sender: 'PM Trần Thế Hùng',
     timeAgo: '3 giờ trước',
-    cost: '65.000.000 đ',
+    method: 'Gia cố mái taluy bằng đá hộc kết hợp quét dính bám Aside',
+    deadline: 'Trong 7 ngày',
     riskVariant: 'severity-high',
     riskLabel: 'RỦI RO CAO',
   },
   {
     id: '4',
     code: '#DF-0219',
-    road: 'QL.51 (Km22+400)',
-    title: 'Hư hỏng khe co giãn dầm cầu vượt Vũng Tàu',
+    road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200)',
+    title: 'Hư hỏng khe co giãn tấm bê tông dọc đoạn tuyến',
     sender: 'PM Lê Minh Tuấn',
     timeAgo: 'Hôm qua',
-    cost: '32.000.000 đ',
+    method: 'Vệ sinh, quét dính bám Aside, đổ bù bằng vữa bê tông xi măng mác 300',
+    deadline: 'Trong 5 ngày',
     riskVariant: 'severity-high',
     riskLabel: 'RỦI RO CAO',
   },
@@ -197,9 +202,12 @@ export default function SupervisorHomeScreen() {
               </View>
 
               <View style={styles.cardFooter}>
-                <View>
-                  <Text style={[typography.caption, styles.costLabel]}>Chi phí ước tính</Text>
-                  <Text style={[typography.titleMd, styles.costValue]}>{item.cost}</Text>
+                <View style={styles.footerInfo}>
+                  <Text style={[typography.caption, styles.methodLabel]}>Phương án kỹ thuật</Text>
+                  <Text style={[typography.caption, styles.methodValue]}>{item.method}</Text>
+                  <Text style={[typography.caption, styles.deadlineValue]}>
+                    Thời hạn: {item.deadline}
+                  </Text>
                 </View>
 
                 <View style={styles.viewDetailBtn}>
@@ -394,13 +402,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 4,
   },
-  costLabel: {
+  methodLabel: {
     color: colors.secondary,
     fontSize: 10,
   },
-  costValue: {
+  footerInfo: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  methodValue: {
     color: colors.neutral,
-    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  deadlineValue: {
+    color: colors.secondary,
+    fontSize: 10,
   },
   viewDetailBtn: {
     backgroundColor: colors.surfaceAlt,

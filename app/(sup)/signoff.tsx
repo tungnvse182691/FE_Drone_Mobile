@@ -13,49 +13,55 @@ interface SignoffWorkOrder {
   crewLeader: string;
   pmName: string;
   area: string;
-  cost: string;
+  method: string;
+  deadline: string;
 }
 
 const SIGNOFF_DATA: Record<string, SignoffWorkOrder> = {
   '#WO-118': {
     woCode: '#WO-118',
-    roadTitle: 'Đợt sửa chữa QL1A Km1842+150',
+    roadTitle: 'Đợt sửa chữa Tuyến ĐH.05 — Cầu Bà Lát (Km01+850)',
     crewLeader: 'Trần Văn Vượng',
     pmName: 'Nguyễn Thùy Lan',
     area: '14.5 m²',
-    cost: '42.500.000 VNĐ',
+    method: 'Đục tẩy tạo nhám, quét dính bám Aside, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 5 ngày',
   },
   '#WO-115': {
     woCode: '#WO-115',
-    roadTitle: 'Trám khe co giãn dầm cầu Sông Bé ĐT.741',
+    roadTitle: 'Sửa khe co giãn Tuyến ĐH.05 — Vĩnh Lộc B (Km02+180)',
     crewLeader: 'Phan Văn Nam',
     pmName: 'Trần Văn Nam',
     area: '8.5 m',
-    cost: '18.200.000 VNĐ',
+    method: 'Vệ sinh khe, đục tẩy mép vỡ, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 3 ngày',
   },
   '#WO-112': {
     woCode: '#WO-112',
-    roadTitle: 'Gia cường khe co giãn QL.51 Ngã ba Vũng Tàu',
+    roadTitle: 'Gia cố vai đường Tuyến ĐH.05 — Tân Kiên (Km03+100)',
     crewLeader: 'Lê Minh Tuấn',
     pmName: 'Lê Minh Tuấn',
     area: '10.2 m²',
-    cost: '32.000.000 VNĐ',
+    method: 'Gia cố mái taluy bằng đá hộc, quét dính bám Aside',
+    deadline: 'Trong 7 ngày',
   },
   '#WO-109': {
     woCode: '#WO-109',
-    roadTitle: 'Nâng cổ hố ga đường gom KCN Amata (Km02)',
+    roadTitle: 'Nâng cổ hố ga Tuyến ĐH.05 — Vĩnh Lộc B (Km01+450)',
     crewLeader: 'Vũ Quốc Khánh',
     pmName: 'Nguyễn Thùy Lan',
     area: '6.5 m²',
-    cost: '15.600.000 VNĐ',
+    method: 'Đào bỏ phần nền lún, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 7 ngày',
   },
   '#WO-104': {
     woCode: '#WO-104',
-    roadTitle: 'Bù phụ cấp phối đá dăm Tỉnh Lộ 769 (Km08+950)',
+    roadTitle: 'Thay tấm bê tông nứt Tuyến ĐH.05 — Vĩnh Lộc B (Km01+200)',
     crewLeader: 'Hoàng Văn Thái',
     pmName: 'Lê Minh Tuấn',
     area: '18.0 m²',
-    cost: '24.800.000 VNĐ',
+    method: 'Cắt viền tấm, đục tẩy, quét dính bám SikaLatex, đổ bù bê tông mác 300',
+    deadline: 'Trong 5 ngày',
   },
 };
 
@@ -180,6 +186,15 @@ export default function SupervisorSignoffScreen() {
           </View>
         </View>
 
+        <View style={styles.dossierMeta}>
+          <Text style={[typography.caption, styles.dossierLabel]}>
+            Phương án kỹ thuật đã thực hiện: {currentWo.method}
+          </Text>
+          <Text style={[typography.caption, styles.dossierLabel]}>
+            Khối lượng sửa chữa: {currentWo.area} • Thời hạn: {currentWo.deadline}
+          </Text>
+        </View>
+
         <View style={styles.checklist}>
           <View style={styles.checkItem}>
             <Ionicons name="checkmark-circle" size={18} color={colors.success} />
@@ -237,7 +252,7 @@ export default function SupervisorSignoffScreen() {
             {confirmed && <Ionicons name="checkmark" size={14} color={colors.surface} />}
           </View>
           <Text style={[typography.bodyMd, styles.confirmText]}>
-            Tôi xác nhận đợt sửa <Text style={styles.boldText}>{currentWo.woCode}</Text> ({currentWo.cost}) đã hoàn thành đạt chuẩn kỹ thuật và đồng ý đóng đợt để chuyển trạng thái tuyến đường về <Text style={styles.boldText}>An toàn / Bình thường</Text>.
+            Tôi xác nhận đợt sửa <Text style={styles.boldText}>{currentWo.woCode}</Text> đã hoàn thành đạt chuẩn kỹ thuật và đồng ý đóng đợt để chuyển trạng thái tuyến đường về <Text style={styles.boldText}>An toàn / Bình thường</Text>.
           </Text>
         </Pressable>
 
@@ -415,6 +430,13 @@ const styles = StyleSheet.create({
     color: colors.brandGold,
     fontWeight: 'bold',
     fontSize: 12,
+  },
+  dossierMeta: {
+    gap: 4,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   checklist: {
     gap: 8,

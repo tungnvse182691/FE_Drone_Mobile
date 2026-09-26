@@ -11,7 +11,8 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 interface DefectItem {
   id: string;
   title: string;
-  cost: number;
+  method: string;
+  dueDays: number;
   area: number;
   detail: string;
 }
@@ -20,21 +21,24 @@ const DEFECTS: DefectItem[] = [
   {
     id: '#DF-0231',
     title: 'Lún nứt Tuyến ĐH.05 Km02+150',
-    cost: 42500000,
+    method: 'Đắp bù BTXM M300 đá 1x2',
+    dueDays: 3,
     area: 14.5,
     detail: 'Sâu ~6.8cm • Diện tích: 14.5 m² • Đắp bù BTXM M300 đá 1x2',
   },
   {
     id: '#DF-0248',
     title: 'Bể mép tấm bê tông Tuyến ĐH.01',
-    cost: 32400000,
+    method: 'Đục tẩy 5cm & đổ bù BTXM',
+    dueDays: 5,
     area: 18.0,
     detail: 'Dài 18m • Diện tích: 18.0 m² • Đục tẩy 5cm & đổ bù BTXM',
   },
   {
     id: '#DF-0256',
     title: 'Tấm đan rãnh vỡ Tuyến ĐX.12',
-    cost: 15200000,
+    method: 'Thay thế 6 tấm đan bê tông đúc sẵn 50x100cm',
+    dueDays: 10,
     area: 6.0,
     detail: 'Thay thế 6 tấm đan bê tông đúc sẵn 50x100cm',
   },
@@ -42,7 +46,7 @@ const DEFECTS: DefectItem[] = [
 
 const DEFAULT_SELECTED = ['#DF-0231', '#DF-0248'];
 
-const formatCost = (value: number) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+const dueLabel = (days: number) => `Trong ${days} ngày`;
 
 export default function PmBatchingScreen() {
   const [selected, setSelected] = useState<string[]>(DEFAULT_SELECTED);
@@ -52,8 +56,15 @@ export default function PmBatchingScreen() {
   };
 
   const chosen = DEFECTS.filter((d) => selected.includes(d.id));
-  const totalCost = chosen.reduce((sum, item) => sum + item.cost, 0);
   const totalArea = chosen.reduce((sum, item) => sum + item.area, 0);
+  const minDueDays = chosen.length > 0 ? Math.min(...chosen.map((item) => item.dueDays)) : 0;
+  const maxDueDays = chosen.length > 0 ? Math.max(...chosen.map((item) => item.dueDays)) : 0;
+  const dueRange =
+    chosen.length === 0
+      ? '—'
+      : minDueDays === maxDueDays
+        ? dueLabel(minDueDays)
+        : `${dueLabel(minDueDays)} – ${dueLabel(maxDueDays)}`;
 
   const handleSubmit = () => {
     router.push('/(pm)/submit-approval');
@@ -68,7 +79,7 @@ export default function PmBatchingScreen() {
         </View>
       </View>
       <Text style={[typography.caption, styles.headingMeta]}>
-        Tích chọn các hư hỏng lân cận để thi công cùng một đợt, tối ưu dự toán máy lu và nhân công
+        Tích chọn các hư hỏng lân cận để thi công cùng một đợt, tối ưu máy lu và nhân công
         trước khi trình Giám sát phê duyệt:
       </Text>
 
@@ -97,11 +108,16 @@ export default function PmBatchingScreen() {
                 <Text style={[typography.labelLg, styles.itemId, !checked && styles.itemIdOff]}>
                   {defect.id} • {defect.title}
                 </Text>
-                <Text style={[typography.labelLg, styles.itemCost, !checked && styles.itemCostOff]}>
-                  {formatCost(defect.cost)} đ
+                <Text style={[typography.labelLg, styles.itemDue, !checked && styles.itemDueOff]}>
+                  {dueLabel(defect.dueDays)}
                 </Text>
               </View>
-              <Text style={[typography.caption, styles.itemDetail]}>{defect.detail}</Text>
+              <Text style={[typography.caption, styles.itemMethod]}>
+                Phương án: {defect.method}
+              </Text>
+              <Text style={[typography.caption, styles.itemDetail]}>
+                Khối lượng: {defect.detail}
+              </Text>
             </View>
           </Pressable>
         );
@@ -118,12 +134,12 @@ export default function PmBatchingScreen() {
           <Text style={[typography.caption, styles.summaryValue]}>{selected.length} hư hỏng</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={[typography.caption, styles.summaryLabel]}>Tổng diện tích thi công:</Text>
+          <Text style={[typography.caption, styles.summaryLabel]}>Tổng khối lượng thi công:</Text>
           <Text style={[typography.caption, styles.summaryValue]}>{totalArea.toFixed(1)} m²</Text>
         </View>
         <View style={[styles.summaryRow, styles.summaryTotalRow]}>
-          <Text style={[typography.labelLg, styles.summaryTotalLabel]}>Tổng dự toán kinh phí đợt:</Text>
-          <Text style={[typography.titleMd, styles.summaryTotalCost]}>{formatCost(totalCost)} VNĐ</Text>
+          <Text style={[typography.labelLg, styles.summaryTotalLabel]}>Hạn hoàn thành đợt sửa:</Text>
+          <Text style={[typography.titleMd, styles.summaryTotalValue]}>{dueRange}</Text>
         </View>
       </Card>
 
@@ -135,8 +151,8 @@ export default function PmBatchingScreen() {
           onPress={handleSubmit}
         />
         <Text style={[typography.caption, styles.ctaNote]}>
-          Quy tắc nghiệp vụ: Đợt sửa phải được Ban Giám sát phê duyệt ngân sách trước khi PM phân
-          công Repair Crew thi công.
+          Quy tắc nghiệp vụ: Đợt sửa phải được Ban Giám sát phê duyệt hồ sơ kỹ thuật trước khi PM
+          phân công Repair Crew thi công.
         </Text>
       </View>
     </SafeAreaScreen>
@@ -210,11 +226,15 @@ const styles = StyleSheet.create({
   itemIdOff: {
     color: colors.secondary,
   },
-  itemCost: {
+  itemDue: {
     color: colors.neutral,
   },
-  itemCostOff: {
+  itemDueOff: {
     color: colors.secondary,
+  },
+  itemMethod: {
+    color: colors.neutral,
+    lineHeight: 16,
   },
   itemDetail: {
     color: colors.secondary,
@@ -263,9 +283,8 @@ const styles = StyleSheet.create({
   summaryTotalLabel: {
     color: colors.neutral,
   },
-  summaryTotalCost: {
+  summaryTotalValue: {
     color: colors.primary,
-    fontFamily: 'monospace',
   },
   ctaWrap: {
     marginBottom: spacing.sm,

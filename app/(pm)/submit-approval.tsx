@@ -10,15 +10,10 @@ import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
-const BATCH_COST = 74900000;
-const ITEM_COST = 42500000;
-
 type ToastMessage = {
   type: 'success' | 'warning' | 'error' | 'info';
   message: string;
 };
-
-const formatCost = (value: number) => value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
 export default function PmSubmitApprovalScreen() {
   const [priority, setPriority] = useState('Ưu tiên trung bình (Trong 7 ngày)');
@@ -148,18 +143,31 @@ export default function PmSubmitApprovalScreen() {
             </Text>
           </View>
 
-          <View style={styles.costGroup}>
+          <View style={styles.techGroup}>
             <Text style={[typography.labelLg, styles.fieldLabel]}>
-              Chi phí sửa chữa ước tính (VNĐ) <Text style={styles.required}>*</Text>
+              Phương án xử lý đề xuất <Text style={styles.required}>*</Text>
             </Text>
-            <View style={styles.costBox}>
-              <Text style={[typography.titleMd, styles.costValue]}>{formatCost(BATCH_COST)}</Text>
-              <Text style={[typography.labelLg, styles.costUnit]}>VNĐ</Text>
+            <View style={styles.techBox}>
+              <Text style={[typography.bodyMd, styles.techValue]}>
+                Đắp bù BTXM M300 đá 1x2 sau khi đục tẩy, quét dính bám SikaLatex
+              </Text>
             </View>
-            <Text style={[typography.caption, styles.costNote]}>
-              Tổng dự toán đợt #REQ-045 tự tính từ các hư hỏng đã chọn (chi tiết #DF-0231:{' '}
-              {formatCost(ITEM_COST)} VNĐ).
+            <Text style={[typography.caption, styles.techNote]}>
+              Phương án áp dụng cho #DF-0231, đã đối chiếu với hồ sơ khảo sát #REQ-045.
             </Text>
+          </View>
+
+          <View style={styles.infoBox}>
+            <View style={styles.infoRow}>
+              <Text style={[typography.caption, styles.infoLabel]}>Khối lượng:</Text>
+              <Text style={[typography.caption, styles.infoValue]}>
+                14.5 m² • Độ sâu ổ gà ~6.8cm
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[typography.caption, styles.infoLabel]}>Thời hạn hoàn thành:</Text>
+              <Text style={[typography.caption, styles.infoValue]}>Trong 3 ngày</Text>
+            </View>
           </View>
 
           <View style={styles.fieldGroup}>
@@ -416,7 +424,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  costGroup: {
+  techGroup: {
     marginBottom: spacing.md,
   },
   fieldLabel: {
@@ -426,10 +434,7 @@ const styles = StyleSheet.create({
   required: {
     color: colors.error,
   },
-  costBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  techBox: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
@@ -437,14 +442,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
   },
-  costValue: {
+  techValue: {
     color: colors.neutral,
-    fontFamily: 'monospace',
+    lineHeight: 20,
   },
-  costUnit: {
-    color: colors.secondary,
-  },
-  costNote: {
+  techNote: {
     color: colors.secondary,
     marginTop: spacing.xs,
     lineHeight: 15,

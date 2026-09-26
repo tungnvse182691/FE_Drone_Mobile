@@ -40,7 +40,7 @@ const EXPORT_OPTIONS: ExportOption[] = [
   {
     id: '4',
     title: '4. Nhật ký chuyến bay & tọa độ RTK',
-    desc: 'Dữ liệu hành lang bay, cao độ LiDAR và tệp KML',
+    desc: 'Dữ liệu hành lang bay, mô hình độ cao số DSM và tệp KML',
     format: 'KML/SRT',
     defaultChecked: true,
   },

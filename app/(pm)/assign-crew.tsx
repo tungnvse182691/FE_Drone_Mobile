@@ -42,7 +42,7 @@ const CREWS: CrewOption[] = [
     initials: 'ND',
     name: 'Nguyễn Đức Cường',
     detail: 'Cách 6.5 km',
-    meta: 'Đội Sửa chữa Cát Tường 2 • Đang làm: 3 việc',
+    meta: 'Đội Sửa chữa Hoàng Hải 2 • Đang làm: 3 việc',
     metaTone: 'default',
   },
   {

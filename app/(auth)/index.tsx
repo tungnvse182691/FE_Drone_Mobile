@@ -35,7 +35,7 @@ export default function LoginScreen() {
       >
         <View style={styles.container}>
           <Image source={require('../../assets/logo.png')} style={styles.logoImage} resizeMode="contain" />
-          <Text style={[typography.headlineLg, styles.logo]}>CÁT TƯỜNG</Text>
+          <Text style={[typography.headlineLg, styles.logo]}>HOÀNG HẢI</Text>
           <Text style={[typography.caption, styles.subtitle]}>
             Hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ
           </Text>
@@ -45,7 +45,7 @@ export default function LoginScreen() {
               label="Email"
               value={email}
               onChangeText={setEmail}
-              placeholder="email@cattuong.vn"
+              placeholder="email@hoanghai.vn"
             />
             <InputField
               label="Mật khẩu"

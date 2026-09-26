@@ -32,8 +32,8 @@ const FIELD_CONFIG_ROWS = [
 ];
 
 const LEGAL_ROWS = [
-  { icon: 'headset-outline' as const, label: 'Hỗ trợ kỹ thuật nội bộ Cát Tường', value: '1900 8866', mono: true, gold: true },
-  { icon: 'information-circle-outline' as const, label: 'Phiên bản Cát Tường Field', value: 'v2.4.12-pro', mono: true },
+  { icon: 'headset-outline' as const, label: 'Hỗ trợ kỹ thuật nội bộ Hoàng Hải', value: '1900 8866', mono: true, gold: true },
+  { icon: 'information-circle-outline' as const, label: 'Phiên bản Hoàng Hải Field', value: 'v2.4.12-pro', mono: true },
 ];
 
 export default function PmProfileScreen() {
@@ -55,7 +55,7 @@ export default function PmProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${user?.full_name ?? 'Nguyễn Thùy Lan'}\nMã nhân sự: ${user?.employee_code ?? 'PM-0428'}\nVai trò: Quản lý Dự án (Cát Tường Project Manager)\nBan QLDA phụ trách: Tuyến ĐH.05, Tuyến ĐH.01 (Đường BTXM Nông Thôn)`,
+          `Họ tên: ${user?.full_name ?? 'Nguyễn Thùy Lan'}\nMã nhân sự: ${user?.employee_code ?? 'PM-0428'}\nVai trò: Quản lý Dự án (Hoàng Hải Project Manager)\nBan QLDA phụ trách: Tuyến ĐH.05, Tuyến ĐH.01 (Đường BTXM Nông Thôn)`,
         );
         return;
       default:
@@ -84,7 +84,7 @@ export default function PmProfileScreen() {
         </View>
 
         <Text style={[typography.titleLg, styles.name]}>{user?.full_name ?? 'Nguyễn Thùy Lan'}</Text>
-        <Text style={[typography.caption, styles.email]}>{user?.email ?? 'lan.nguyen@cattuonginfra.vn'}</Text>
+        <Text style={[typography.caption, styles.email]}>{user?.email ?? 'lan.nguyen@hoanghai.vn'}</Text>
 
         <View style={styles.roleChip}>
           <Ionicons name="construct-outline" size={15} color={colors.brandGold} />

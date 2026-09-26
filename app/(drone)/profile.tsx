@@ -48,7 +48,7 @@ export default function DroneProfileScreen() {
         </Text>
 
         <Text style={[typography.caption, styles.userSub]}>
-          Mã NV: {user?.employee_code ?? 'CT-2089'} • Đội Khảo sát Số 1
+          Mã NV: {user?.employee_code ?? 'HH-2089'} • Đội Khảo sát Số 1
         </Text>
 
         <View style={styles.roleChip}>
@@ -90,7 +90,7 @@ export default function DroneProfileScreen() {
           <View style={styles.deviceRow}>
             <Ionicons name="airplane-outline" size={16} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.deviceName]}>
-              Flycam DJI Matrice 350 RTK (Seri: M350-CT-02)
+              Flycam DJI Matrice 350 RTK (Seri: M350-HH-02)
             </Text>
           </View>
           <View style={styles.deviceRow}>
@@ -178,7 +178,7 @@ export default function DroneProfileScreen() {
         </Pressable>
 
         <Text style={[typography.caption, styles.versionFootnote]}>
-          Cát Tường Field v2.4.1 (Build 2026.09) • Thiết kế chuẩn hiện trường
+          Hoàng Hải Field v2.4.1 (Build 2026.09) • Thiết kế chuẩn hiện trường
         </Text>
       </View>
     </SafeAreaScreen>

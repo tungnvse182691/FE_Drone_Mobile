@@ -20,8 +20,8 @@ interface SyncItem {
 const INITIAL_QUEUE: SyncItem[] = [
   {
     id: '1',
-    name: 'DJI_0482_SURVEY_DT741.MP4',
-    meta: '184.2 MB · Đoạn ĐT.741',
+    name: 'DJI_0482_SURVEY_DH05.MP4',
+    meta: '184.2 MB · Tuyến ĐH.05 - Tân Kiên',
     type: 'video',
     status: 'uploading',
     statusText: 'Đang tải lên (65%)',
@@ -50,8 +50,8 @@ const INITIAL_QUEUE: SyncItem[] = [
 const COMPLETED_QUEUE: SyncItem[] = [
   {
     id: 'c1',
-    name: 'DJI_0481_SURVEY_DT741_PART1.MP4',
-    meta: '178.5 MB · Đoạn ĐT.741',
+    name: 'DJI_0481_SURVEY_DH05_PART1.MP4',
+    meta: '178.5 MB · Tuyến ĐH.05 - Vĩnh Lộc B',
     type: 'video',
     status: 'confirmed',
     statusText: 'Đã đối soát SHA-256',
@@ -59,8 +59,8 @@ const COMPLETED_QUEUE: SyncItem[] = [
   },
   {
     id: 'c2',
-    name: 'DJI_0480_SURVEY_SONGBE.MP4',
-    meta: '192.1 MB · Cầu Sông Bé',
+    name: 'DJI_0480_SURVEY_BALAT.MP4',
+    meta: '192.1 MB · Cầu Bà Lát (Km01+850)',
     type: 'video',
     status: 'confirmed',
     statusText: 'Đã đối soát SHA-256',
@@ -68,8 +68,8 @@ const COMPLETED_QUEUE: SyncItem[] = [
   },
   {
     id: 'c3',
-    name: 'DJI_0479_SURVEY_QL1A.MP4',
-    meta: '165.4 MB · Km1842+150',
+    name: 'DJI_0479_SURVEY_DH05.MP4',
+    meta: '165.4 MB · Km01+850',
     type: 'video',
     status: 'confirmed',
     statusText: 'Đã đối soát SHA-256',

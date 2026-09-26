@@ -7,13 +7,9 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES } from '../../src/constants/defect-types';
 
-const DEFECT_TYPES = [
-  'Ổ gà',
-  'Bể mép tấm',
-  'Lún đọng nước',
-  'Xói mòn lề đường',
-];
+const DEFECT_TYPES = DEFECT_TYPE_OPTIONS;
 
 const SEVERITY_OPTIONS = [
   { label: 'Khẩn cấp', color: colors.error, bg: '#FDECEC', border: colors.error },
@@ -22,7 +18,7 @@ const SEVERITY_OPTIONS = [
 ];
 
 export default function CrewReportDefectScreen() {
-  const [defectType, setDefectType] = useState<string>(DEFECT_TYPES[0]);
+  const [defectType, setDefectType] = useState<string>(DEFECT_TYPE_CODES.POTH_DEEP);
   const [severity, setSeverity] = useState<string>('Khẩn cấp');
   const [notes, setNotes] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -70,16 +66,16 @@ export default function CrewReportDefectScreen() {
         <Text style={[typography.labelLg, styles.fieldLabel]}>Phân loại lỗi</Text>
         <View style={styles.chipRow}>
           {DEFECT_TYPES.map((type) => {
-            const active = type === defectType;
+            const active = type.code === defectType;
             return (
               <Pressable
-                key={type}
+                key={type.code}
                 style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setDefectType(type)}
+                onPress={() => setDefectType(type.code)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
               >
-                <Text style={[typography.labelSm, active ? styles.chipTextActive : styles.chipText]}>{type}</Text>
+                <Text style={[typography.labelSm, active ? styles.chipTextActive : styles.chipText]}>{type.label}</Text>
               </Pressable>
             );
           })}

@@ -7,6 +7,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
 
 interface ApprovalDossier {
   id: string;
@@ -14,9 +15,10 @@ interface ApprovalDossier {
   batchCode: string;
   road: string;
   risk: 'RỦI RO CAO' | 'TRUNG BÌNH' | 'THẤP';
-  defectType: string;
+  defectCode: DefectTypeCode;
   pmName: string;
-  cost: string;
+  method: string;
+  deadline: string;
   measurements: { label: string; value: string }[];
   media: {
     photoTitle: string;
@@ -33,13 +35,14 @@ const DOSSIERS: Record<string, ApprovalDossier> = {
     id: '1',
     code: '#DF-0231',
     batchCode: '#REQ-045',
-    road: 'QL.1A — Km 1842+100 (Trảng Bom, Đồng Nai)',
+    road: 'Tuyến ĐH.05 — Cầu Bà Lát (Km01+850)',
     risk: 'RỦI RO CAO',
-    defectType: 'Lún nứt mặt bê tông nhựa',
+    defectCode: 'POTH_DEEP',
     pmName: 'PM Nguyễn Thùy Lan',
-    cost: '42.500.000 VNĐ',
+    method: 'Cắt viền tấm, đục tẩy tạo nhám, quét dính bám SikaLatex, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 3 ngày',
     measurements: [
-      { label: 'Độ sâu vệt lún', value: '~6.8cm' },
+      { label: 'Độ sâu ổ gà', value: '~6.8cm' },
       { label: 'Diện tích xử lý', value: '14.5 m²' },
     ],
     media: {
@@ -50,122 +53,127 @@ const DOSSIERS: Record<string, ApprovalDossier> = {
     },
     pmTime: 'Hôm qua 15:40',
     pmQuote:
-      '“Vết nứt bề mặt có dấu hiệu lan rộng nhanh do xe tải trọng lớn qua lại liên tục sau đợt mưa lớn. Đã xác minh thực địa sáng nay, cần đội cơ giới cào bóc thảm lại diện tích khoảng 15m² trước khi hư hại sâu vào lớp móng base.”',
+      '“Ổ gà sâu phát triển nhanh sau đợt mưa lớn do nước đọng tích tụ tại khe tấm. Đã xác minh thực địa sáng nay, cần cắt viền tấm và đục tẩy toàn bộ diện tích trước khi hư hại lan xuống lớp móng bê tông lót bên dưới.”',
   },
   '#DF-0229': {
     id: '2',
     code: '#DF-0229',
     batchCode: '#REQ-044',
-    road: 'Tuyến ĐT.741 — Km 14+250 (Cầu Sông Bé, Bình Dương)',
+    road: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km02+180)',
     risk: 'TRUNG BÌNH',
-    defectType: 'Trám khe co giãn dầm cầu Sông Bé',
+    defectCode: 'EDGE_BRK',
     pmName: 'PM Trần Văn Nam',
-    cost: '18.200.000 VNĐ',
+    method: 'Đục tẩy tạo nhám, quét dính bám SikaLatex, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 5 ngày',
     measurements: [
       { label: 'Độ mở khe co giãn', value: '~3.2cm' },
-      { label: 'Chiều dài khe nứt', value: '8.5 m' },
+      { label: 'Chiều dài vỡ mép tấm', value: '8.5 m' },
     ],
     media: {
-      photoTitle: 'Ảnh vết nứt khe dầm',
-      photoSub: 'Bong tróc trám mastic',
-      videoTitle: 'Video flycam quét dầm',
+      photoTitle: 'Ảnh vỡ mép tấm',
+      photoSub: 'Bong tróc khe co giãn',
+      videoTitle: 'Video flycam quét khe',
       videoSub: 'Thời lượng 00:58',
     },
     pmTime: 'Hôm nay 08:30',
     pmQuote:
-      '“Khe co giãn phía mố cầu bờ Nam có dấu hiệu xô lệch và bong tróc lớp trám cao su kết nối sau đợt ngập lũ. Cần đục tẩy trám mastic chèn khe lại trước kỳ bảo trì định kỳ tháng 11.”',
+      '“Khe co giãn phía mố cầu bờ Nam có dấu hiệu xô lệch kết hợp vỡ mép tấm bê tông sau đợt ngập lũ. Cần đục tẩy vệ sinh và đổ bù lại bằng bê tông xi măng mác 300 trước kỳ bảo trì định kỳ tháng 11.”',
   },
   '#DF-0219': {
     id: '3',
     code: '#DF-0219',
     batchCode: '#REQ-042',
-    road: 'QL.51 — Km 22+400 (Ngã ba Vũng Tàu, Biên Hòa)',
+    road: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+200)',
     risk: 'RỦI RO CAO',
-    defectType: 'Hư hỏng khe co giãn dầm cầu vượt',
+    defectCode: 'SHLD_EROS',
     pmName: 'PM Lê Minh Tuấn',
-    cost: '32.000.000 VNĐ',
+    method: 'Gia cố mái taluy bằng đá hộc kết hợp quét dính bám Aside',
+    deadline: 'Trong 7 ngày',
     measurements: [
-      { label: 'Độ sụt lún mép', value: '~4.5cm' },
+      { label: 'Chiều rộng vệt xói lở', value: '~4.5m' },
       { label: 'Diện tích xử lý', value: '10.2 m²' },
     ],
     media: {
-      photoTitle: 'Ảnh hiện trạng gối cầu',
-      photoSub: 'Nứt bê tông mố',
+      photoTitle: 'Ảnh hiện trạng vai đường',
+      photoSub: 'Xói lở lớp đất vai',
       videoTitle: 'Video flycam 4K',
       videoSub: 'Thời lượng 01:10',
     },
     pmTime: '2 ngày trước',
     pmQuote:
-      '“Gối dầm cầu xuất hiện vết nứt lan rộng, cần cẩu kích nâng dầm để gia cường bản thép đáy và bơm keo epoxy chống thấm trước khi cho phép xe siêu trường siêu trọng lưu thông.”',
+      '“Vai đường xói lở sâu khoảng 4.5m, lớp đất bị cuốn trôi sau đợt mưa lớn. Cần gia cố mái taluy bằng đá hộc và quét dính bám Aside trước khi sạt lở lan xuống taluy đào.”',
   },
   '#DF-0220': {
     id: '4',
     code: '#DF-0220',
     batchCode: '#REQ-041',
-    road: 'Cầu Đồng Nai Mới — Nhịp T4-T5',
+    road: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
     risk: 'RỦI RO CAO',
-    defectType: 'Vết nứt bề mặt bản mặt cầu & lún mố',
+    defectCode: 'SLAB_CRK',
     pmName: 'PM Trần Thế Hùng',
-    cost: '65.000.000 VNĐ',
+    method: 'Cắt viền tấm, đục tẩy tạo nhám, quét dính bám SikaLatex, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 5 ngày',
     measurements: [
       { label: 'Bề rộng khe nứt', value: '~5.0mm' },
       { label: 'Chiều dài đoạn nứt', value: '22.0 m' },
     ],
     media: {
-      photoTitle: 'Ảnh nứt bê tông nhịp T4',
+      photoTitle: 'Ảnh nứt tấm bê tông',
       photoSub: 'Thước đo vết nứt 5mm',
-      videoTitle: 'Video flycam quét gầm dầm',
+      videoTitle: 'Video flycam quét mặt đường',
       videoSub: 'Thời lượng 01:45',
     },
     pmTime: '3 ngày trước',
     pmQuote:
-      '“Bản mặt cầu nhịp T4 xuất hiện mạng vết nứt chân chim kéo dài. Đã thử nghiệm tải trọng và cần cào bóc lớp phủ epoxy, dán sợi carbon CFRP gia cường đáy bản.”',
+      '“Mạng vết nứt chân chim kéo dài trên tấm bê tông nông thôn dày 18-22cm. Đề nghị cắt viền tấm, đục tẩy tạo nhám, quét dính bám SikaLatex và đổ bù bằng bê tông xi măng mác 300.”',
   },
   '#DF-0215': {
     id: '5',
     code: '#DF-0215',
     batchCode: '#REQ-039',
-    road: 'Tuyến gom KCN Amata — Km 02+300 (Biên Hòa)',
+    road: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+450)',
     risk: 'THẤP',
-    defectType: 'Sụt lún hố ga thoát nước mặt',
+    defectCode: 'DEPR_POND',
     pmName: 'PM Nguyễn Thùy Lan',
-    cost: '15.600.000 VNĐ',
+    method: 'Đào bỏ phần nền lún, đục tẩy tạo nhám, quét dính bám Aside, đổ bù bê tông xi măng mác 300',
+    deadline: 'Trong 7 ngày',
     measurements: [
-      { label: 'Chênh cao nắp ga', value: '~4.2cm' },
-      { label: 'Khu vực thảm lại', value: '6.5 m²' },
+      { label: 'Độ lún nền so với cốt', value: '~4.2cm' },
+      { label: 'Diện tích cần đào thay', value: '6.5 m²' },
     ],
     media: {
-      photoTitle: 'Ảnh đo cao độ nắp ga',
-      photoSub: 'Chênh 4.2cm so với mặt đường',
-      videoTitle: 'Video rà quét mặt đường',
+      photoTitle: 'Ảnh đo cao độ nền',
+      photoSub: 'Lún nền 4.2cm so với mặt đường',
+      videoTitle: 'Video rà soát nền đường',
       videoSub: 'Thời lượng 00:45',
     },
     pmTime: '4 ngày trước',
     pmQuote:
-      '“Nắp đan hố ga bị lún lệch so với cốt mặt đường gom KCN, gây tiếng ồn và nguy cơ va quẹt cho xe máy. Cần nâng cổ ga và bù thảm bê tông nhựa hạt mịn.”',
+      '“Nền đường lún võng do nước đọng tích tụ, gây tiếng ồn và nguy cơ va chạm cho xe máy. Cần đào bỏ phần nền lún, đục tẩy tạo nhám, quét dính bám Aside và đổ bù bằng bê tông xi măng mác 300.”',
   },
   '#DF-0210': {
     id: '6',
     code: '#DF-0210',
     batchCode: '#REQ-038',
-    road: 'Tỉnh Lộ 769 — Km 08+950 (Long Thành, Đồng Nai)',
+    road: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
     risk: 'THẤP',
-    defectType: 'Rạn nứt mai rùa mép lề đường',
+    defectCode: 'SHLD_EROS',
     pmName: 'PM Lê Minh Tuấn',
-    cost: '24.800.000 VNĐ',
+    method: 'Gia cố vai đường bằng đá hộc, quét dính bám Aside và tưới nhũ tương dính bám',
+    deadline: 'Trong 7 ngày',
     measurements: [
-      { label: 'Chiều rộng vệt rạn', value: '~1.8m' },
+      { label: 'Chiều rộng vệt xói lở', value: '~1.8m' },
       { label: 'Chiều dài đoạn sửa', value: '18.0 m' },
     ],
     media: {
-      photoTitle: 'Ảnh rạn nứt mai rùa',
-      photoSub: 'Nứt bề mặt lề đường',
+      photoTitle: 'Ảnh xói lở vai đường',
+      photoSub: 'Rạn nứt bề mặt vai',
       videoTitle: 'Video flycam 4K',
       videoSub: 'Thời lượng 01:05',
     },
     pmTime: '5 ngày trước',
     pmQuote:
-      '“Đoạn đường kết nối công trường sân bay Long Thành, có hiện tượng rạn nứt mai rùa lề phụ do xe bồn dừng đỗ. Cần gia cố bù phụ cấp phối đá dăm và tưới nhũ tương dính bám.”',
+      '“Vai đường xói lở lan rộng do mưa rửa dòng, đá hộc nền đã lộ ra. Cần gia cố lại vai bằng đá hộc, quét dính bám Aside và tưới nhũ tương dính bám trước mùa mưa.”',
   },
 };
 
@@ -195,7 +203,7 @@ export default function SupervisorApproveScreen() {
 
   const handleApprove = () => {
     setLoading(true);
-    showToast(`Đang ký duyệt ngân sách ${currentDossier.cost} cho đợt sửa ${currentDossier.batchCode}...`);
+    showToast(`Đang ký duyệt phương án kỹ thuật cho đợt sửa ${currentDossier.batchCode}...`);
     setTimeout(() => {
       setLoading(false);
       router.push('/(sup)/signoff');
@@ -337,7 +345,9 @@ export default function SupervisorApproveScreen() {
                   </View>
 
                   <Text style={[typography.titleMd, styles.listCardRoad]}>{item.road}</Text>
-                  <Text style={[typography.bodyMd, styles.listCardDefect]}>{item.defectType}</Text>
+                  <Text style={[typography.bodyMd, styles.listCardDefect]}>
+                    {item.defectCode} — {defectTypeLabel(item.defectCode)}
+                  </Text>
 
                   <View style={styles.listCardMeta}>
                     <View style={styles.listPmWrap}>
@@ -350,11 +360,14 @@ export default function SupervisorApproveScreen() {
                   </View>
 
                   <View style={styles.listCardFooter}>
-                    <View>
-                      <Text style={[typography.caption, styles.listCostLabel]}>
-                        Kinh phí đề xuất
+                    <View style={styles.listInfoCol}>
+                      <Text style={[typography.caption, styles.listInfoLabel]}>
+                        Phương án kỹ thuật
                       </Text>
-                      <Text style={[typography.titleMd, styles.listCostValue]}>{item.cost}</Text>
+                      <Text style={[typography.caption, styles.listInfoValue]}>{item.method}</Text>
+                      <Text style={[typography.caption, styles.listInfoLabel]}>
+                        Thời hạn: {item.deadline}
+                      </Text>
                     </View>
 
                     <View style={styles.listInspectBtn}>
@@ -463,11 +476,11 @@ export default function SupervisorApproveScreen() {
 
                     <Text
                       style={[
-                        styles.selectorChipCost,
-                        isSelected && styles.selectorChipCostActive,
+                        styles.selectorChipDeadline,
+                        isSelected && styles.selectorChipDeadlineActive,
                       ]}
                     >
-                      {dossier.cost.replace(' VNĐ', '')}
+                      {dossier.deadline}
                     </Text>
                   </Pressable>
                 );
@@ -521,7 +534,7 @@ export default function SupervisorApproveScreen() {
               <View style={styles.gridItem}>
                 <Text style={[typography.caption, styles.gridLabel]}>Loại khiếm khuyết</Text>
                 <Text style={[typography.bodyMd, styles.gridValue]}>
-                  {currentDossier.defectType}
+                  {currentDossier.defectCode} — {defectTypeLabel(currentDossier.defectCode)}
                 </Text>
               </View>
 
@@ -533,12 +546,17 @@ export default function SupervisorApproveScreen() {
               </View>
             </View>
 
-            {/* Cost & Measurements highlight */}
-            <View style={styles.costSection}>
-              <View>
-                <Text style={[typography.caption, styles.costLabel]}>Chi phí ước tính duyệt:</Text>
-                <Text style={[typography.headlineLg, styles.costValue]}>
-                  {currentDossier.cost}
+            {/* Method & Measurements highlight */}
+            <View style={styles.methodSection}>
+              <View style={styles.listInfoCol}>
+                <Text style={[typography.caption, styles.methodLabel]}>
+                  Phương án kỹ thuật đề xuất:
+                </Text>
+                <Text style={[typography.labelLg, styles.methodValue]}>
+                  {currentDossier.method}
+                </Text>
+                <Text style={[typography.caption, styles.methodLabel]}>
+                  Thời hạn thực hiện: {currentDossier.deadline}
                 </Text>
               </View>
 
@@ -743,13 +761,13 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     fontWeight: '500',
   },
-  selectorChipCost: {
+  selectorChipDeadline: {
     color: colors.primary,
     fontWeight: 'bold',
     fontSize: 11,
     marginTop: 2,
   },
-  selectorChipCostActive: {
+  selectorChipDeadlineActive: {
     color: colors.primaryDark,
   },
   dossierCard: {
@@ -801,7 +819,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  costSection: {
+  methodSection: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingTop: spacing.xs,
@@ -809,10 +827,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
-  costLabel: {
+  methodLabel: {
     color: colors.secondary,
   },
-  costValue: {
+  methodValue: {
     color: colors.primary,
     marginTop: 2,
   },
@@ -1040,12 +1058,16 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     marginTop: 4,
   },
-  listCostLabel: {
+  listInfoLabel: {
     color: colors.secondary,
   },
-  listCostValue: {
+  listInfoValue: {
     color: colors.primary,
     fontWeight: 'bold',
+  },
+  listInfoCol: {
+    flex: 1,
+    paddingRight: spacing.sm,
   },
   listInspectBtn: {
     backgroundColor: '#FEF9E7',

@@ -27,7 +27,7 @@ export interface RoadGuardMapProps {
 }
 
 export function RoadGuardMapLibre({
-  center = [107.0125, 10.9634], // QL.1A Km1842+150 Trảng Bom, Đồng Nai
+  center = [106.5722, 10.7411],
   zoom = 15,
   markers = [],
   routeCoordinates = [],
@@ -165,7 +165,7 @@ export function RoadGuardMapLibre({
             type: 'raster',
             tiles: ['https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'],
             tileSize: 256,
-            attribution: '&copy; Google Maps &mdash; Cát Tường GIS'
+            attribution: '&copy; Google Maps &mdash; Ho&agrave;ng Hải GIS'
           }
         },
         layers: [
@@ -187,7 +187,7 @@ export function RoadGuardMapLibre({
             type: 'raster',
             tiles: ['https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'],
             tileSize: 256,
-            attribution: '&copy; Google Satellite &mdash; Cát Tường GIS'
+            attribution: '&copy; Google Satellite &mdash; Ho&agrave;ng Hải GIS'
           }
         },
         layers: [
@@ -373,7 +373,7 @@ export function RoadGuardMapLibre({
         <View style={styles.schematicDefect}>
           <Ionicons name="warning" size={16} color={colors.surface} />
           <View style={styles.defectPulse} />
-          <Text style={[typography.caption, styles.defectLabel]}>Km1842+150</Text>
+          <Text style={[typography.caption, styles.defectLabel]}>Cầu Bà Lát · Km01+850</Text>
         </View>
       </View>
     </View>
@@ -481,7 +481,7 @@ export function RoadGuardMapLibre({
       {/* Brand Badge */}
       <View style={styles.brandBadge}>
         <Ionicons name="navigate" size={12} color={colors.primary} />
-        <Text style={[typography.labelSm, styles.brandBadgeText]}>MapLibre &bull; Cát Tường GIS</Text>
+        <Text style={[typography.labelSm, styles.brandBadgeText]}>MapLibre &bull; Ho&agrave;ng Hải GIS</Text>
       </View>
     </View>
   );

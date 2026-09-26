@@ -66,7 +66,7 @@ const SUBMITTED: SubmitItem[] = [
     action: 'resubmit',
     actionLabel: 'Gửi lại phê duyệt',
     reason:
-      'Dự toán chi phí vượt hạn mức bảo hành, yêu cầu khảo sát lại kích thước vết nứt và bổ sung báo giá vật tư chi tiết.',
+      'Phương án xử lý chưa phù hợp với đặc điểm hư hỏng, yêu cầu khảo sát lại kích thước vết nứt và bổ sung mô tả kỹ thuật thi công chi tiết.',
   },
   {
     id: '#DF-0205',
