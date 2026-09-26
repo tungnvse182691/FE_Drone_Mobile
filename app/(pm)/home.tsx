@@ -8,15 +8,17 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { useAuthStore } from '../../src/store/auth';
 
 export default function PmHomeScreen() {
+  const user = useAuthStore((state) => state.user);
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
       {/* User Greeting Header */}
       <View style={styles.greetingHeader}>
         <View style={styles.greetingRow}>
           <View style={styles.greetingTitleWrap}>
-            <Text style={[typography.headlineLg, styles.greetingName]}>Chào, Chị Lan</Text>
+            <Text style={[typography.headlineLg, styles.greetingName]}>Chào, {user?.full_name ?? 'Chị Lan'}</Text>
             <View style={styles.roleBadge}>
               <Text style={styles.roleBadgeText}>PM QUẢN LÝ</Text>
             </View>

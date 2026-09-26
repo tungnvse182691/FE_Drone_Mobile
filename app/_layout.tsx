@@ -103,6 +103,21 @@ function AuthGuard({ children }: { children: ReactNode }) {
     }
   }, [user, segments]);
 
+  const inAuthGroup = segments[0] === '(auth)';
+  // Ngăn chặn flicker: nếu chưa đăng nhập và chưa ở màn (auth), hiển thị splash sạch của Hoàng Hải thay vì render lén màn nội bộ
+  if (!user && !inAuthGroup) {
+    return (
+      <View style={styles.loading}>
+        <Image
+          source={require('../assets/logo_hoanghai.png')}
+          style={styles.loadingLogo}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return <>{children}</>;
 }
 
