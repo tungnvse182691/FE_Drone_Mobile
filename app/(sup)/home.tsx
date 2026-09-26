@@ -52,7 +52,7 @@ const PENDING_APPROVALS: ApprovalRequest[] = [
     code: '#DF-0220',
     road: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     title: 'Xử lý xói lở vai đường & lún nền mặt cầu',
-    sender: 'PM Trần Thế Hùng',
+    sender: 'PM Trần Văn Nam',
     timeAgo: '3 giờ trước',
     method: 'Gia cố mái taluy bằng đá hộc kết hợp quét dính bám Aside',
     deadline: 'Trong 7 ngày',
@@ -85,7 +85,7 @@ export default function SupervisorHomeScreen() {
             Chào, {user?.full_name ?? 'Kỹ sư Trần Thế Hùng'}
           </Text>
           <Text style={[typography.caption, styles.greetingSub]}>
-            Giám sát kỹ thuật hiện trường • Mã NV: {user?.employee_code ?? 'HH-8842'}
+            Giám sát kỹ thuật hiện trường • Mã NV: {user?.employee_code ?? 'NV-8842'}
           </Text>
         </View>
 

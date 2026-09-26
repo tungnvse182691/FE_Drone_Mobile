@@ -110,7 +110,7 @@ const DOSSIERS: Record<string, ApprovalDossier> = {
     road: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
     risk: 'RỦI RO CAO',
     defectCode: 'SLAB_CRK',
-    pmName: 'PM Trần Thế Hùng',
+    pmName: 'PM Trần Văn Nam',
     method: 'Cắt viền tấm, đục tẩy tạo nhám, quét dính bám SikaLatex, đổ bù bê tông xi măng mác 300',
     deadline: 'Trong 5 ngày',
     measurements: [

@@ -24,36 +24,36 @@ interface ProjectWarranty {
 const PROJECTS_DATA: ProjectWarranty[] = [
   {
     id: '1',
-    code: 'GÓI THẦU XL-01',
+    code: 'TUYẾN ĐH.05',
     name: 'Tuyến ĐH.05 — Cầu Bà Lát (Km01+850)',
-    contractor: 'Công ty Cổ phần Xây dựng Hoàng Hải',
+    contractor: 'Ban QLDA Giao thông & Hạ tầng Bình Chánh',
     warrantyPeriod: '12/2024 — 12/2027 (36 tháng)',
     status: 'RỦI RO CAO',
     variant: 'severity-high',
   },
   {
     id: '2',
-    code: 'GÓI THẦU XL-02',
-    name: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km02+180)',
-    contractor: 'Tổng công ty Xây dựng CIENCO 4',
+    code: 'TUYẾN QL.1A',
+    name: 'QL.1A — Đoạn Trảng Bom (Km1842 - Km1845)',
+    contractor: 'Tổng công ty Xây dựng Cát Tường Infra',
     warrantyPeriod: '06/2024 — 06/2027 (36 tháng)',
     status: 'ỔN ĐỊNH',
     variant: 'severity-low',
   },
   {
     id: '3',
-    code: 'GÓI THẦU XL-03',
-    name: 'Tuyến ĐH.05 — Tân Kiên (Km03+100)',
-    contractor: 'Công ty CP Đầu tư & Xây dựng Thăng Long',
+    code: 'TUYẾN ĐT.741',
+    name: 'Tuyến ĐT.741 — Cầu Sông Bé (Km14+250)',
+    contractor: 'Công ty CP Phát triển Hạ tầng Đông Nam Bộ',
     warrantyPeriod: '09/2023 — 09/2026 (36 tháng)',
     status: 'ĐANG SỬA CHỮA',
     variant: 'severity-medium',
   },
   {
     id: '4',
-    code: 'GÓI THẦU XL-04',
-    name: 'Tuyến ĐH.05 — Vĩnh Lộc B (Km01+450)',
-    contractor: 'Công ty Cổ phần Xây dựng Hoàng Hải',
+    code: 'VÀNH ĐAI 3',
+    name: 'Tuyến Vành Đai 3 TP.HCM (Đoạn Tân Kiên)',
+    contractor: 'Liên danh Nhà thầu Cát Tường - CIENCO',
     warrantyPeriod: '03/2025 — 03/2028 (36 tháng)',
     status: 'LEGAL HOLD',
     variant: 'status-pending',
@@ -73,29 +73,29 @@ interface RepairCrew {
 const CREWS_DATA: RepairCrew[] = [
   {
     id: '1',
-    name: 'Đội sửa chữa số 1 (Vĩnh Lộc)',
+    name: 'Đội cơ giới 01 (Trần Văn Vượng)',
     leader: 'Trần Văn Vượng',
     workersCount: 8,
     phone: '0912.345.678',
-    area: 'Tuyến Km01+000 đến Km02+500',
+    area: 'Phụ trách thi công lệnh #WO-118 (Km1842 QL1A)',
     status: 'Đang thi công',
   },
   {
     id: '2',
-    name: 'Đội sửa chữa số 2 (Cầu Bà Lát)',
-    leader: 'Phạm Quốc Toàn',
+    name: 'Đội sửa chữa số 2 (Nguyễn Văn Tuấn)',
+    leader: 'Nguyễn Văn Tuấn (HH-RC-084)',
     workersCount: 6,
     phone: '0988.765.432',
-    area: 'Khu vực cầu dây văng & mố cầu bờ Nam',
+    area: 'Phụ trách vá dặm & xử lý nứt ĐT.741',
     status: 'Sẵn sàng điều động',
   },
   {
     id: '3',
-    name: 'Đội phản ứng nhanh số 3 (Tân Kiên)',
-    leader: 'Vũ Đình Hưng',
-    workersCount: 5,
+    name: 'Đội xử lý thảm nhựa Cát Tường',
+    leader: 'Lê Minh Tuấn',
+    workersCount: 7,
     phone: '0903.112.233',
-    area: 'Xử lý ổ gà cấp bách & gia cố sạt lở vai',
+    area: 'Xử lý mặt đường nhựa & khe co giãn ĐH.05',
     status: 'Sẵn sàng điều động',
   },
 ];
@@ -204,7 +204,7 @@ export default function SupervisorProfileScreen() {
         </View>
 
         <Text style={[typography.caption, styles.metaRole]}>
-          Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'HH-8842'}
+          Ban QLDA Miền Đông • Mã NV: {user?.employee_code ?? 'NV-8842'}
         </Text>
         <Text style={[typography.caption, styles.metaEmail]}>
           hung.tran@hoanghai.vn • 15 năm kinh nghiệm
@@ -217,10 +217,10 @@ export default function SupervisorProfileScreen() {
           style={styles.statCol}
           onPress={() => setModalProjectsVisible(true)}
           accessibilityRole="button"
-          accessibilityLabel="Xem 4 gói thầu"
+          accessibilityLabel="Xem 4 tuyến đường bảo hành"
         >
           <Text style={[typography.headlineLg, styles.statNumber]}>4</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Gói thầu</Text>
+          <Text style={[typography.caption, styles.statLabel]}>Tuyến đường</Text>
           <Text style={styles.statActionNote}>Chạm để xem</Text>
         </Pressable>
 
@@ -308,7 +308,7 @@ export default function SupervisorProfileScreen() {
                 <View>
                   <Text style={[typography.bodyMd, styles.menuMainText]}>Dự án phụ trách</Text>
                   <Text style={[typography.caption, styles.menuSubNote]}>
-                    4 gói thầu hạ tầng đang bảo hành (Xem danh sách)
+                    4 tuyến đường hạ tầng đang bảo hành (Xem danh sách)
                   </Text>
                 </View>
               </View>
@@ -536,7 +536,7 @@ export default function SupervisorProfileScreen() {
             <View style={styles.lockedItem}>
               <MaterialIcons name="lock" size={16} color={colors.brandGold} />
               <Text style={styles.lockedItemText}>
-                01 gói thầu đang áp dụng Legal Hold: Tuyến ĐH.05 Gói thầu XL-01 (Đến 2028)
+                01 tuyến đang áp dụng Legal Hold: Tuyến Vành Đai 3 TP.HCM (Đến 2028)
               </Text>
             </View>
           </Card>
@@ -566,9 +566,9 @@ export default function SupervisorProfileScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={[typography.titleMd, styles.modalTitle]}>Dự án & Gói thầu phụ trách</Text>
+                <Text style={[typography.titleMd, styles.modalTitle]}>Dự án & Tuyến đường phụ trách</Text>
                 <Text style={[typography.caption, styles.modalSub]}>
-                  4 gói thầu hạ tầng đang trong thời hạn bảo hành
+                  4 tuyến đường trọng điểm đang trong thời hạn bảo hành
                 </Text>
               </View>
               <Pressable
