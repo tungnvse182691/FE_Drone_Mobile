@@ -5,16 +5,16 @@ import { BottomNav } from '../../src/components/BottomNav';
 const DRONE_TABS = [
   { icon: 'home-outline' as const, label: 'Trang chủ', route: '/(drone)/home' },
   {
-    icon: 'document-text-outline' as const,
-    label: 'Yêu cầu',
+    icon: 'airplane-outline' as const,
+    label: 'Khảo sát',
     route: '/(drone)/requests',
-    activePrefixes: ['/(drone)/request'],
+    activePrefixes: ['/(drone)/request', '/(drone)/log'],
   },
   {
-    icon: 'cloud-upload-outline' as const,
+    icon: 'cloud-outline' as const,
     label: 'Đồng bộ',
     route: '/(drone)/sync',
-    activePrefixes: ['/(drone)/sync', '/(drone)/upload', '/(drone)/log'],
+    activePrefixes: ['/(drone)/sync', '/(drone)/upload'],
   },
   { icon: 'person-outline' as const, label: 'Hồ sơ', route: '/(drone)/profile' },
 ];

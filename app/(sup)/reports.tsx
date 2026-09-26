@@ -1,44 +1,289 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
-import { colors, spacing, typography } from '../../src/design-tokens';
+import { Button } from '../../src/components/Button';
+import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
-export default function SupReportsScreen() {
+interface CompletedWorkOrder {
+  id: string;
+  woCode: string;
+  road: string;
+  completedDate: string;
+  pmName: string;
+}
+
+const COMPLETED_ORDERS: CompletedWorkOrder[] = [
+  {
+    id: '1',
+    woCode: '#WO-118',
+    road: 'QL.1A — Km 1842+100 (Trảng Bom)',
+    completedDate: '26/10/2023',
+    pmName: 'Nguyễn Thùy Lan',
+  },
+  {
+    id: '2',
+    woCode: '#WO-115',
+    road: 'Tuyến ĐT.741 — Cầu Sông Bé',
+    completedDate: '24/10/2023',
+    pmName: 'Trần Văn Nam',
+  },
+  {
+    id: '3',
+    woCode: '#WO-112',
+    road: 'QL.51 — Ngã ba Vũng Tàu',
+    completedDate: '21/10/2023',
+    pmName: 'Lê Minh Tuấn',
+  },
+  {
+    id: '4',
+    woCode: '#WO-109',
+    road: 'Đường gom KCN Amata (Km02)',
+    completedDate: '18/10/2023',
+    pmName: 'Nguyễn Thùy Lan',
+  },
+  {
+    id: '5',
+    woCode: '#WO-104',
+    road: 'Tỉnh Lộ 769 — Km 08+950',
+    completedDate: '14/10/2023',
+    pmName: 'Nguyễn Thùy Lan',
+  },
+];
+
+export default function SupervisorReportsScreen() {
   return (
-    <SafeAreaScreen header={<AppHeader subtitle="Ban Giám Sát" />}>
-      <Card style={styles.card}>
-        <Text style={[typography.titleMd, styles.title]}>M-SUP-04: Báo cáo & Thống kê kinh phí</Text>
-        <Text style={[typography.bodyMd, styles.desc]}>
-          Màn hình giữ chỗ (Placeholder) — Đang chờ Hoàng (Person 2) triển khai.
-        </Text>
-        <Text style={[typography.caption, styles.detail]}>
-          Chỉ số kinh phí đã duyệt (648 triệu), 18 việc hoàn thành, 100% đạt nghiệm thu.
-        </Text>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Báo cáo & Nghiệm thu" />}>
+      {/* 3 Stat KPI Cards */}
+      <View style={styles.kpiRow}>
+        <Card style={styles.kpiCard}>
+          <Text style={[typography.caption, styles.kpiLabel]}>Đã hoàn thành</Text>
+          <View style={styles.kpiNumberRow}>
+            <Text style={[typography.headlineLg, styles.kpiGold]}>18</Text>
+            <Text style={[typography.caption, styles.kpiUnit]}>việc</Text>
+          </View>
+        </Card>
+
+        <Card style={styles.kpiCard}>
+          <Text style={[typography.caption, styles.kpiLabel]}>Kinh phí duyệt</Text>
+          <View style={styles.kpiNumberRow}>
+            <Text style={[typography.headlineLg, styles.kpiNeutral]}>648</Text>
+            <Text style={[typography.caption, styles.kpiUnit]}>triệu</Text>
+          </View>
+        </Card>
+
+        <Card style={styles.kpiCard}>
+          <Text style={[typography.caption, styles.kpiLabel]}>Nghiệm thu</Text>
+          <View style={styles.kpiNumberRow}>
+            <Text style={[typography.headlineLg, styles.kpiSuccess]}>100%</Text>
+          </View>
+        </Card>
+      </View>
+
+      {/* Export Action Banner */}
+      <Card style={styles.exportBannerCard}>
+        <View style={styles.exportLeft}>
+          <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+          <View style={styles.exportTextGroup}>
+            <Text style={[typography.titleMd, styles.exportTitle]}>Trích xuất hồ sơ kiểm định</Text>
+            <Text style={[typography.caption, styles.exportSub]}>
+              Xuất báo cáo PDF đóng dấu số hoặc gói ZIP bằng chứng
+            </Text>
+          </View>
+        </View>
+
+        <Button
+          variant="primary"
+          title="Xuất PDF / ZIP"
+          onPress={() => router.push('/(sup)/export-modal')}
+        />
       </Card>
+
+      {/* Section Header */}
+      <View style={styles.sectionHeader}>
+        <Text style={[typography.labelSm, styles.sectionTitle]}>
+          DANH SÁCH CÔNG VIỆC ĐÃ NGHIỆM THU
+        </Text>
+        <Text style={[typography.caption, styles.sectionMeta]}>Hiển thị 5 / 18 việc</Text>
+      </View>
+
+      {/* Work Orders List */}
+      <View style={styles.listContainer}>
+        {COMPLETED_ORDERS.map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => {
+              router.push({
+                pathname: '/(sup)/signoff',
+                params: { code: item.woCode, woCode: item.woCode },
+              });
+            }}
+            accessibilityRole="button"
+          >
+            <Card style={styles.orderCard}>
+              <View style={styles.orderLeft}>
+                <View style={styles.checkCircle}>
+                  <Ionicons name="checkmark" size={16} color={colors.success} />
+                </View>
+
+                <View style={styles.orderInfo}>
+                  <View style={styles.orderTitleRow}>
+                    <Text style={[typography.titleMd, styles.roadText]}>{item.road}</Text>
+                    <View style={styles.donePill}>
+                      <Text style={styles.donePillText}>Đạt</Text>
+                    </View>
+                  </View>
+
+                  <Text style={[typography.caption, styles.woSub]}>
+                    {item.woCode} • Hoàn thành: {item.completedDate}
+                  </Text>
+                  <Text style={[typography.caption, styles.pmText]}>
+                    Xác nhận bởi PM: <Text style={styles.boldText}>{item.pmName}</Text>
+                  </Text>
+                </View>
+              </View>
+
+              <Ionicons name="chevron-forward" size={16} color={colors.secondary} />
+            </Card>
+          </Pressable>
+        ))}
+      </View>
     </SafeAreaScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    padding: spacing.lg,
-    marginVertical: spacing.md,
+  kpiRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  kpiCard: {
+    flex: 1,
+    padding: spacing.sm,
+    gap: 2,
+  },
+  kpiLabel: {
+    color: colors.secondary,
+  },
+  kpiNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    marginTop: 2,
+  },
+  kpiGold: {
+    color: colors.primary,
+  },
+  kpiNeutral: {
+    color: colors.neutral,
+  },
+  kpiSuccess: {
+    color: colors.success,
+  },
+  kpiUnit: {
+    color: colors.secondary,
+  },
+  exportBannerCard: {
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: '#FEF3E2',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  exportLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  title: {
-    color: colors.primary,
-    textAlign: 'center',
+  exportTextGroup: {
+    flex: 1,
   },
-  desc: {
+  exportTitle: {
     color: colors.neutral,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontWeight: 'bold',
   },
-  detail: {
+  exportSub: {
     color: colors.secondary,
-    textAlign: 'center',
+    marginTop: 2,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  sectionTitle: {
+    color: colors.secondary,
+  },
+  sectionMeta: {
+    color: colors.secondary,
+  },
+  listContainer: {
+    gap: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  orderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+    padding: spacing.sm,
+  },
+  orderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+    marginRight: spacing.xs,
+  },
+  checkCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: '#E9F7EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orderInfo: {
+    flex: 1,
+  },
+  orderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  roadText: {
+    color: colors.neutral,
+    fontSize: 13,
+    flex: 1,
+  },
+  donePill: {
+    backgroundColor: '#E9F7EC',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  donePillText: {
+    color: colors.success,
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  woSub: {
+    color: colors.secondary,
+    marginTop: 1,
+  },
+  pmText: {
+    color: colors.secondary,
+    marginTop: 1,
+    fontSize: 11,
+  },
+  boldText: {
+    fontWeight: 'bold',
+    color: colors.neutral,
   },
 });
