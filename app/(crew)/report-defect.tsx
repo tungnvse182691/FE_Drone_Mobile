@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
@@ -8,6 +8,8 @@ import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES } from '../../src/constants/defect-types';
+import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
+import { getCrewTaskById } from './tasks';
 
 const DEFECT_TYPES = DEFECT_TYPE_OPTIONS;
 
@@ -18,13 +20,21 @@ const SEVERITY_OPTIONS = [
 ];
 
 export default function CrewReportDefectScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const task = getCrewTaskById(params.id);
   const [defectType, setDefectType] = useState<string>(DEFECT_TYPE_CODES.POTH_DEEP);
   const [severity, setSeverity] = useState<string>('Khẩn cấp');
   const [notes, setNotes] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
+  const gpsText = useMemo(() => {
+    const session = getCrewFieldSession();
+    const coords = session?.task_id === task.id ? session.coordinates ?? task.coordinates : task.coordinates;
+    return `${task.chainage} Tuyến ${task.route_code} • ${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
+  }, [task.id, task.chainage, task.route_code, task.coordinates]);
+
   const handleSubmit = () => {
-    setToast('Đã gửi báo cáo lỗi phát sinh cho Quản lý dự án Tuấn');
+    setToast('Đã gửi báo cáo lỗi phát sinh cho Quản lý dự án');
     setTimeout(() => router.back(), 1500);
   };
 
@@ -49,7 +59,7 @@ export default function CrewReportDefectScreen() {
         <View style={styles.bannerRow}>
           <Ionicons name="warning-outline" size={16} color={colors.warning} />
           <Text style={[typography.bodyMd, styles.bannerText]}>
-            Lỗi này sẽ được gửi về PM xác minh, không gộp vào #WO-118
+            Lỗi này sẽ được gửi về PM xác minh, không gộp vào {task.wo_code}
           </Text>
         </View>
       </Card>
@@ -58,7 +68,7 @@ export default function CrewReportDefectScreen() {
         <Text style={[typography.labelLg, styles.fieldLabel]}>Tọa độ GPS phát hiện tự động</Text>
         <View style={styles.gpsField}>
           <Ionicons name="location-outline" size={16} color={colors.secondary} />
-          <Text style={[typography.bodyMd, styles.gpsText]}>Km02+320 Tuyến ĐH.05</Text>
+          <Text style={[typography.bodyMd, styles.gpsText]}>{gpsText}</Text>
         </View>
       </View>
 
@@ -107,11 +117,18 @@ export default function CrewReportDefectScreen() {
 
       <View style={styles.fieldGroup}>
         <Text style={[typography.labelLg, styles.fieldLabel]}>Ảnh chụp hiện trường hư hỏng</Text>
-        <View style={styles.photoPlaceholder}>
+        <Pressable
+          style={({ pressed }) => [styles.photoPlaceholder, pressed && styles.pressed]}
+          onPress={() =>
+            router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, mode: 'BEFORE' } })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Chụp ảnh hiện trường có Watermark"
+        >
           <Ionicons name="camera-outline" size={32} color={colors.primary} />
           <Text style={[typography.labelSm, styles.photoText]}>Chạm để chụp ảnh có Watermark</Text>
           <Text style={[typography.caption, styles.photoHint]}>Gắn nhãn vị trí hiện tại</Text>
-        </View>
+        </Pressable>
       </View>
 
       <View style={styles.fieldGroup}>

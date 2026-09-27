@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Hoàng Hải Field (RoadGuard)
-description: Hệ thống thiết kế cho app quản lý bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải — Android, phong cách minimalism, dùng bởi Drone Operator, Project Manager, Supervisor và Repair Crew.
+description: Hệ thống thiết kế cho app di động quản lý bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải — Android, phong cách minimalism thực dụng, dùng bởi Repair Crew (Đội sửa chữa), Drone Operator (Phi công) và Reporter (Người dân / Đại diện Ban QLDA).
 colors:
   primary: "#C9A227"
   brand-gold: "#8C6D1F"
@@ -125,6 +125,31 @@ components:
     textColor: "{colors.secondary}"
     typography: "{typography.label-sm}"
     rounded: "{rounded.full}"
+  chip-mode-inspect-repair:
+    backgroundColor: "#E9F7EC"
+    textColor: "{colors.success}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.full}"
+  chip-mode-measure-only:
+    backgroundColor: "#F1F3F5"
+    textColor: "{colors.secondary}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.full}"
+  chip-fasttrack-eligible:
+    backgroundColor: "#E9F7EC"
+    textColor: "{colors.success}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.full}"
+  chip-fasttrack-exceeded:
+    backgroundColor: "#FEF3E2"
+    textColor: "{colors.warning}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.full}"
+  chip-fasttrack-locked:
+    backgroundColor: "#FDECEC"
+    textColor: "{colors.error}"
+    typography: "{typography.label-sm}"
+    rounded: "{rounded.full}"
   bottom-nav:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.secondary}"
@@ -133,70 +158,107 @@ components:
 
 ## Overview
 
-Hoàng Hải Field (RoadGuard) là app di động dành cho đội ngũ hiện trường và quản lý của Công ty TNHH Xây dựng Bê tông Hoàng Hải, phục vụ việc khảo sát bằng drone, xác minh lỗi, phê duyệt và sửa chữa hạ tầng đường bộ trong giai đoạn bảo hành. Người dùng là kỹ thuật viên, công nhân, kỹ sư và quản lý — phần lớn thao tác ngoài công trường, đôi khi không có mạng, ít quen thao tác app phức tạp.
+Hoàng Hải Field (RoadGuard) là app di động dành cho đội ngũ hiện trường và người dân phản ánh của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**, phục vụ khảo sát drone, xác minh đo đạc hiện trường, sửa chữa bảo hành theo cơ chế Fast Track, và tiếp nhận phản ánh hư hại mặt đường bê tông nông thôn (TCVN 10380:2014).
 
-Vì vậy giao diện đi theo triết lý **minimalism thực dụng**: mỗi màn hình chỉ hiển thị đúng thông tin cần để ra quyết định hoặc thực hiện một hành động, không có yếu tố trang trí thừa. Cảm giác tổng thể là "gọn, rõ, đáng tin cậy" — giống một công cụ chuyên nghiệp hơn là một app tiêu dùng nhiều màu sắc. Vàng đồng thương hiệu chỉ xuất hiện ở đúng nơi cần thu hút chú ý (hành động chính, trạng thái đang hoạt động), phần còn lại của giao diện trung tính để không gây xao nhãng.
+App phục vụ **3 nhóm người dùng hiện trường**:
+1. **Repair Crew (Kỹ thuật viên sửa chữa):** Tiếp nhận công việc, xem chế độ `INSPECT_AND_REPAIR` / `MEASURE_ONLY`, tự đánh giá `FastTrackPolicyVersion` để sửa nhanh tại chỗ, chụp ảnh BEFORE/AFTER và đồng bộ ngoại tuyến SQLite.
+2. **Drone Operator (Phi công):** Nhận lệnh bay, dẫn đường GPS đến Điểm tiếp cận / Điểm tập kết (Access Point), tải dữ liệu ảnh/video 4K RGB từ thẻ nhớ SD.
+3. **Reporter (Người dân & Đại diện Ban QLDA):** Đăng nhập xác thực OTP Gmail, gửi phản ánh kèm GPS + 3 ảnh, tra cứu tiến độ công khai qua mã tracking, đánh giá chất lượng nghiệm thu 1–5 sao.
+
+Giao diện tuân thủ triết lý **minimalism thực dụng**: mỗi màn hình chỉ hiển thị đúng thông tin cần để ra quyết định hoặc thực hiện một hành động, không có chi tiết trang trí thừa. Vàng đồng thương hiệu `#C9A227` chỉ xuất hiện ở đúng nơi cần thu hút chú ý (hành động chính, tab active, KPI).
 
 ### Quy tắc phân tách Logo Thương hiệu
 - **Màn Splash / Loading:** Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
 - **Màn hình nội bộ, AppHeader, Form Đăng nhập, App Icon:** Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
 
+### Quy tắc Phi tài chính UD-06 (Zero Cost)
+- **TUYỆT ĐỐI ZERO CHI PHÍ** trên toàn bộ màn hình Mobile. Cấm hiển thị VNĐ, dự toán, kinh phí, đơn giá, định mức xi măng/cát đá.
+- Mọi thông tin thi công chỉ hiển thị: **Phương án kỹ thuật** + **Kích thước hư hại hình học** (m², cm, m) + **Thời hạn xử lý**.
+
+---
+
 ## Colors
 
-- **Primary (#C9A227):** Vàng đồng thương hiệu Hoàng Hải. Chỉ dùng cho nút hành động chính (CTA), tab/mục đang được chọn, và số liệu nổi bật trên dashboard. Không dùng cho nền lớn hay text thường.
-- **Primary Dark (#6B5219):** Biến thể đậm của vàng đồng, dùng cho trạng thái nhấn (pressed) của nút chính, hoặc icon/badge cần độ tương phản cao hơn trên nền sáng.
-- **Secondary (#2D3748):** Xám than dùng cho viền, icon phụ, text thứ cấp (label, caption, dòng mô tả).
-- **Neutral (#1A1D20):** Gần đen, dùng cho text chính (tiêu đề, nội dung quan trọng) để đảm bảo độ tương phản và dễ đọc ngoài trời nắng.
-- **Surface (#FFFFFF) / Surface Alt (#F8F9FA):** Trắng tinh cho card/nút, trắng ngà cho nền màn hình — tạo phân lớp nhẹ nhàng mà không cần đổ bóng nặng.
-- **Border (#E2E5E9):** Viền mảnh dùng thay cho shadow ở hầu hết các trường hợp.
-- **Success (#2F9E44) / Warning (#F59E0B) / Error (#E5484D):** Ba màu ngữ nghĩa dùng riêng cho badge mức độ nghiêm trọng và trạng thái phê duyệt — tách biệt hoàn toàn khỏi vàng đồng thương hiệu để tránh nhầm lẫn giữa "màu thương hiệu" và "màu cảnh báo".
-- **Info (#3B82F6):** Dùng hạn chế cho các thông báo mang tính trung lập (ví dụ trạng thái đang xử lý).
+- **Primary (#C9A227):** Vàng đồng thương hiệu Hoàng Hải. Chỉ dùng cho nút hành động chính (CTA), tab đang chọn, icon rating sao và KPI nổi bật. Không dùng cho nền lớn.
+- **Primary Dark (#6B5219):** Trạng thái nhấn (pressed) của nút chính.
+- **Secondary (#2D3748):** Xám than dùng cho viền, icon phụ, text thứ cấp (label, caption).
+- **Neutral (#1A1D20):** Gần đen, dùng cho text chính, đảm bảo độ tương phản cao ngoài nắng gắt.
+- **Surface (#FFFFFF) / Surface Alt (#F8F9FA):** Trắng tinh cho card, trắng ngà cho nền màn hình.
+- **Border (#E2E5E9):** Viền mảnh 1px.
+- **Success (#2F9E44) / Warning (#F59E0B) / Error (#E5484D):** Màu ngữ nghĩa cho badge mức độ khuyết tật, trạng thái Fast Track, không nhầm lẫn với vàng thương hiệu.
+- **Info (#3B82F6):** Trạng thái đang xử lý, đồng bộ.
+
+---
 
 ## Typography
 
-Hệ thống sử dụng font **Sansation** cho logo nhận diện thương hiệu Hoàng Hải và tiêu đề lớn (`headline-lg`), kết hợp cùng **Roboto** (font mặc định Android) cho toàn bộ nội dung chức năng để giữ cảm giác trực quan, chuẩn nhận diện và dễ đọc ngoài công trường.
+Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và tiêu đề lớn (`headline-lg`), kết hợp cùng **Roboto** cho toàn bộ nội dung chức năng:
+- **Headline (24px/500, Sansation):** Logo nhận diện Hoàng Hải, tiêu đề màn hình chính, số liệu KPI.
+- **Title Large (20px/500):** Tiêu đề top bar.
+- **Title Medium (16px/500):** Tiêu đề card, mã công việc `#WO-xxx`, mã phản ánh `#REP-xxx`.
+- **Body Large (16px/400):** Nội dung chính, mô tả lỗi, phương án kỹ thuật.
+- **Body Medium (14px/400):** Nội dung phụ, kích thước đo đạc (dài, rộng, sâu).
+- **Label Large (14px/500):** Chữ trên nút bấm chính/phụ.
+- **Label Small (11px/500, letter-spacing rộng):** Badge/Chip trạng thái, viết hoa.
+- **Caption (12px/400):** Tọa độ GPS, timestamp, metadata thiết bị.
 
-- **Headline (24px/500, Sansation):** Dùng cho chữ logo nhận diện Hoàng Hải, tiêu đề màn hình quan trọng và số liệu KPI nổi bật trên dashboard.
-- **Title Large (20px/500):** Tiêu đề trong top app bar.
-- **Title Medium (16px/500):** Tiêu đề card, tên mục trong danh sách.
-- **Body Large (16px/400):** Nội dung chính — mô tả lỗi, ghi chú, hướng dẫn.
-- **Body Medium (14px/400):** Nội dung phụ, mô tả thứ cấp.
-- **Label Large (14px/500):** Chữ trên nút bấm.
-- **Label Small (11px/500, letter-spacing rộng):** Chữ trong badge/chip trạng thái, luôn viết hoa.
-- **Caption (12px/400):** Timestamp, ghi chú nhỏ, metadata.
+---
 
-## Layout
+## Layout & Components
 
-Bố cục theo dạng **card đơn cột**, không dùng lưới nhiều cột (vì đây là app điện thoại, thao tác một tay ngoài công trường). Lề màn hình cố định 16px, khoảng cách giữa các khối nội dung 24px, padding bên trong card 16px. Toàn bộ hệ thống spacing tuân theo thang 8px (4px chỉ dùng cho các điều chỉnh vi mô như khoảng cách icon–chữ).
+- **Card đơn cột:** Lề màn hình 16px, padding card 16px, spacing 8px / 16px / 24px.
+- **Mỗi màn hình tối đa 1 CTA chính** màu vàng đồng `{colors.primary}`.
+- **Chips Task Mode & Fast Track (Chữ thuần, tuyệt đối KHÔNG chứa emoji/icon màu tự chế):**
+  - `[Đo & Sửa nhanh]`: Nền `#E9F7EC`, chữ xanh lá `#2F9E44`.
+  - `[Chỉ đo đợt]`: Nền `#F1F3F5`, chữ xám `#2D3748`.
+  - `[Đạt Policy Sửa Nhanh]`: Nền xanh lá nhạt `#E9F7EC`, chữ xanh lá `#2F9E44`, xuất hiện khi kích thước đo $\le$ ngưỡng quy định.
+  - `[Vượt Policy - Chuyển PM]`: Nền cam nhạt `#FEF3E2`, chữ cam `#F59E0B`, hướng dẫn gửi số đo về cho PM duyệt.
+- **Reporter Tracking Timeline:**
+  - Trục dọc 5 bước hiển thị rõ ràng tiến độ: `Gửi phản ánh` $\rightarrow$ `Đã tiếp nhận` $\rightarrow$ `Khảo sát/Đo đạc` $\rightarrow$ `Đang sửa chữa` $\rightarrow$ `Hoàn thành nghiệm thu`.
+- **Đánh giá chất lượng 1–5 sao:**
+  - 5 ngôi sao kích thước 32px, tô màu vàng đồng `#C9A227` khi được chọn, kèm ô góp ý ngắn gọn.
+- **Xác thực OTP 6 số:**
+  - 6 ô nhập riêng biệt kích thước 44x48px, tự động nhảy focus khi nhập, hỗ trợ gửi lại mã sau 60s.
 
-Nguyên tắc quan trọng nhất: **mỗi màn hình có tối đa một hành động chính** (nút gold filled), các hành động phụ dùng nút outline hoặc text link nhạt màu hơn hẳn — để người dùng ngoài công trường không phải suy nghĩ nên bấm gì trước.
-
-## Elevation & Depth
-
-Không dùng shadow đậm hay gradient. Phân lớp thị giác đạt được bằng **tương phản nền** (surface-alt cho nền màn hình, surface trắng tinh cho card) kết hợp viền mảnh 1px màu border khi cần phân tách rõ. Chỉ nút nổi (FAB) mới có shadow rất nhẹ để gợi ý có thể bấm.
-
-## Shapes
-
-Bo góc nhất quán, mềm mại vừa phải: 12px cho card, 8px cho nút và ô nhập liệu, 20px cho các khối lớn như bottom sheet, bo tròn hoàn toàn (full) cho mọi chip/badge trạng thái. Không trộn góc bo và góc vuông trong cùng một màn hình.
-
-## Components
-
-- **Button Primary:** Nền vàng đồng `{colors.primary}`, chữ trắng, bo góc `{rounded.md}`, chỉ một nút loại này trên mỗi màn hình.
-- **Button Secondary (outline):** Nền trong suốt, viền xám than, chữ đen — dùng cho hành động thay thế (ví dụ "Từ chối", "Chỉ đường").
-- **Button Text:** Không nền không viền, dùng cho hành động ít quan trọng nhất trên màn hình (ví dụ "Yêu cầu khảo sát lại").
-- **Card:** Nền trắng, bo góc lớn, padding 16px — khối chứa chính cho danh sách và chi tiết.
-- **Input Field:** Nền trắng ngà, viền mảnh, bo góc 8px, không có icon trang trí thừa.
-- **Chip mức độ nghiêm trọng:** ba biến thể high/medium/low dùng đúng 3 màu ngữ nghĩa (error/warning/success), không dùng vàng đồng.
-- **Chip trạng thái (pending/approved/rejected):** nền xám nhạt trung tính, chỉ đổi màu chữ.
-- **Bottom Navigation:** 4 mục cố định theo vai trò, icon+label, mục đang chọn tô màu vàng đồng, các mục còn lại màu xám than.
+---
 
 ## Do's and Don'ts
 
 - Do dùng vàng đồng `{colors.primary}` cho đúng một hành động chính trên mỗi màn hình.
-- Do dùng ba màu ngữ nghĩa (success/warning/error) riêng biệt cho mức độ nghiêm trọng — không tái sử dụng màu thương hiệu cho việc này.
-- Do giữ nhiều khoảng trắng, không lấp đầy màn hình bằng chi tiết trang trí.
-- Do đảm bảo tương phản văn bản đạt WCAG AA (tối thiểu 4.5:1) vì người dùng thường thao tác ngoài trời nắng.
-- Don't dùng gradient hoặc shadow đậm ở bất kỳ đâu.
-- Don't trộn nhiều font trong cùng một màn hình — chỉ dùng Roboto.
-- Don't đặt quá một nút "filled" màu vàng đồng trên cùng một màn hình.
-- Don't dùng nhiều hơn 2 mức bo góc khác nhau trong cùng một view.
+- Do hiển thị rõ Task Mode (`INSPECT_AND_REPAIR` vs `MEASURE_ONLY`) trên màn hình chi tiết công việc của Crew.
+- Do hiển thị kết quả kiểm tra Fast Track Policy ngay khi Crew nhập đủ 3 kích thước (dài x rộng x sâu).
+- Do giữ tương phản văn bản đạt chuẩn WCAG AA ngoài trời nắng.
+- Don't đưa bất kỳ thông tin chi phí, giá tiền hay định mức vật tư tiêu hao vào giao diện (UD-06).
+- Don't tự ý cho phép Crew sửa nhanh khi công việc đang ở chế độ `MEASURE_ONLY` (BR-09).
+- Don't dùng gradient hoặc shadow đậm.
+
+---
+
+## Accessibility & Trạng thái UI (theo `27_9_V3/10_FE_Architecture_UI_States.md`)
+
+### Quy tắc bắt buộc
+- **Label tiếng Việt sát input/field:** Không dùng placeholder thay label; unit đặt cạnh ô nhập (vd: `Diện tích (m²)`).
+- **Lỗi có text + icon, KHÔNG chỉ màu:** Sau submit lỗi → focus tự động trở về field đầu tiên có lỗi.
+- **Nút bị disable phải có lý do gần nút:** Không chỉ đổi màu xám. Vd: `[Tiến hành sửa nhanh ▸]` bị disable → hiển thị text `"Cần ảnh BEFORE trước khi sửa"` ngay bên dưới.
+- **Không toast cho mỗi chunk upload / mỗi retry:** Gộp thành 1 banner trạng thái upload duy nhất.
+- **Không loading xóa nội dung đã tải:** Skeleton chỉ dùng lần load đầu tiên; sau đó hiển thị stale data + badge "Đang cập nhật...".
+- **Empty state ≠ No-permission state ≠ Offline-error state:** Ba trạng thái phải có UI và message riêng biệt.
+
+### Offline Badge (bắt buộc xuyên màn hình tác nghiệp)
+```
+┌─────────────────────────────────────────────────────────────┐
+│  📶 Offline • Đã tải lúc 08:32 • Chạm để đồng bộ ngay      │
+└─────────────────────────────────────────────────────────────┘
+```
+- Màu nền: `#FEF3E2` (cam nhạt), chữ `#F59E0B`
+- Hiển thị xuyên suốt màn hình Crew/Drone khi `navigator.onLine = false`
+- Nhãn `"Đã tải lúc HH:mm"` phải luôn hiển thị được (không ẩn sau loading)
+- Trạng thái offline KHÔNG disable capture ảnh/form nhập liệu
+
+### Thông báo Success — Dùng từ cụ thể, không dùng từ chung
+| Thay vì | Dùng |
+|---|---|
+| "Đã lưu" (generic) | "Đã lưu trên máy" / "Đang chờ đồng bộ" |
+| "Đã gửi" (generic) | "Đã gửi lên máy chủ" |
+| "Hoàn thành" (generic) | "PM đã kiểm tra" / "Máy chủ đã xác minh tệp" / "Đã nghiệm thu" |
+| "Thất bại" sau timeout | "Chưa xác nhận được kết quả, đang kiểm tra" |

@@ -1,6 +1,23 @@
-import { Defect, FieldInspectionTask, GroundTruthMeasurement } from '../../types/domain';
+import { Defect, FieldInspectionTask, GroundTruthMeasurement, FastTrackPolicyVersion } from '../../types/domain';
 import { DefectStatus, Severity, SyncStatus, FieldInspectionTaskStatus } from '../../types/enums';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
+
+export const FAST_TRACK_POLICY: FastTrackPolicyVersion = {
+  id: 'FTP-2026-V1',
+  version_code: 'FTP-2026-V1',
+  max_area_m2: 1.0,
+  max_depth_cm: 5.0,
+  max_length_m: 2.0,
+  allowed_defect_codes: [
+    DEFECT_TYPE_CODES.POTH_DEEP,
+    DEFECT_TYPE_CODES.DEPR_POND,
+    DEFECT_TYPE_CODES.EDGE_BRK,
+    DEFECT_TYPE_CODES.SLAB_CRK,
+    DEFECT_TYPE_CODES.SHLD_EROS,
+  ],
+  effective_from: '2026-01-01T00:00:00Z',
+  effective_to: '2026-12-31T23:59:59Z',
+};
 
 const MOCK_DEFECTS: Defect[] = [
   {
@@ -60,4 +77,9 @@ export async function createFieldInspection(
       task_status: FieldInspectionTaskStatus.COMPLETED,
     },
   };
+}
+
+export async function getFastTrackPolicy(): Promise<{ data: FastTrackPolicyVersion }> {
+  await delay(200);
+  return { data: FAST_TRACK_POLICY };
 }

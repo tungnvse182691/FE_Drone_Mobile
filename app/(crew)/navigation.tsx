@@ -1,17 +1,28 @@
 import React, { useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
+import { defectTypeLabel } from '../../src/constants/defect-types';
+import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
 
 export default function CrewNavigationScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const task = getCrewTaskById(params.id);
+  const modeChip = TASK_MODE_CHIP[task.task_mode];
+
+  const targetLng = task.coordinates.longitude;
+  const targetLat = task.coordinates.latitude;
+  const vehicleLng = targetLng - 0.0035;
+  const vehicleLat = targetLat - 0.0008;
+
   const openGoogleMaps = () => {
-    Linking.openURL('https://www.google.com/maps/dir/?api=1&destination=10.9634,107.0125').catch(() => {});
+    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}`).catch(() => {});
   };
 
   const [sheetHeight, setSheetHeight] = useState(240);
@@ -87,30 +98,30 @@ export default function CrewNavigationScreen() {
       <View style={styles.map}>
         <RoadGuardMapLibre
           style={StyleSheet.absoluteFill}
-          center={[107.0110, 10.9628]}
+          center={[targetLng, targetLat]}
           zoom={16}
           controlsTopOffset={56}
           markers={[
             {
               id: 'vehicle',
               title: 'Xe sửa chữa (Bạn)',
-              subtitle: 'Cách vị trí lỗi 450 m',
-              coordinate: [107.0090, 10.9620],
+              subtitle: `Cách vị trí lỗi 450 m`,
+              coordinate: [vehicleLng, vehicleLat],
               type: 'vehicle',
             },
             {
-              id: 'defect-wo118',
-              title: 'Ổ gà sâu 7cm (#WO-118)',
-              subtitle: 'Km02+150 Tuyến ĐH.05',
-              coordinate: [107.0125, 10.9634],
+              id: `defect-${task.id}`,
+              title: `${defectTypeLabel(task.defect_type_code)} (${task.wo_code})`,
+              subtitle: `${task.chainage} • Tuyến ${task.route_code} • ${task.section_name}`,
+              coordinate: [targetLng, targetLat],
               type: 'defect',
-              severity: 'high',
+              severity: task.due_urgency === 'urgent' ? 'high' : 'medium',
             },
           ]}
           routeCoordinates={[
-            [107.0090, 10.9620],
-            [107.0105, 10.9626],
-            [107.0125, 10.9634],
+            [vehicleLng, vehicleLat],
+            [(vehicleLng + targetLng) / 2, (vehicleLat + targetLat) / 2],
+            [targetLng, targetLat],
           ]}
         />
 
@@ -161,7 +172,7 @@ export default function CrewNavigationScreen() {
               <View style={styles.collapsedLeft}>
                 <Ionicons name="navigate" size={16} color={colors.brandGold} />
                 <Text style={[typography.labelSm, styles.collapsedTitle]}>
-                  450 m &bull; Km02+150 Tuyến ĐH.05 (BTXM)
+                  450 m &bull; {task.chainage} Tuyến {task.route_code} (BTXM)
                 </Text>
               </View>
               <View style={styles.collapsedRight}>
@@ -176,8 +187,11 @@ export default function CrewNavigationScreen() {
                   450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
                 </Text>
                 <View style={styles.tagRow}>
+                  <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
                   <Chip variant="severity-high" label="Nghiêm trọng" />
-                  <Text style={[typography.titleMd, styles.roadTag]}>Km02+150 Tuyến ĐH.05 (Xã Bình Chánh)</Text>
+                  <Text style={[typography.titleMd, styles.roadTag]}>
+                    {task.chainage} Tuyến {task.route_code} ({task.locality})
+                  </Text>
                 </View>
               </View>
 
@@ -197,17 +211,30 @@ export default function CrewNavigationScreen() {
         <View style={styles.addressBar}>
           <View style={styles.addressLeft}>
             <Ionicons name="location" size={16} color={colors.error} />
-            <Text style={[typography.bodyMd, styles.addressText]}>Xã Bình Chánh, TP. Hồ Chí Minh</Text>
+            <Text style={[typography.bodyMd, styles.addressText]}>
+              {task.locality} • {task.defect_location}
+            </Text>
           </View>
-          <Text style={[typography.labelSm, styles.coordText]}>10.9634, 107.0125</Text>
+          <Text style={[typography.labelSm, styles.coordText]}>
+            {targetLat.toFixed(4)}, {targetLng.toFixed(4)}
+          </Text>
         </View>
 
         <View style={styles.actionRow}>
           <View style={styles.actionItem}>
-            <Button variant="secondary" title="Mở Google Maps" onPress={openGoogleMaps} />
+            <Button
+              variant="secondary"
+              title="Mở Google Maps"
+              icon={<Ionicons name="navigate-circle-outline" size={18} color={colors.neutral} />}
+              onPress={openGoogleMaps}
+            />
           </View>
           <View style={styles.actionItem}>
-            <Button variant="primary" title="✓ Đã đến nơi" onPress={() => router.push('/(crew)/progress')} />
+            <Button
+              variant="primary"
+              title="Đã đến nơi"
+              onPress={() => router.push({ pathname: '/(crew)/progress', params: { id: task.id } })}
+            />
           </View>
         </View>
       </Animated.View>

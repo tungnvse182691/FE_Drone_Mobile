@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardTypeOptions, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
 interface InputFieldProps {
@@ -9,21 +9,54 @@ interface InputFieldProps {
   error?: string;
   placeholder?: string;
   secureTextEntry?: boolean;
+  keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  multiline?: boolean;
+  numberOfLines?: number;
+  autoFocus?: boolean;
+  testID?: string;
+  unit?: string;
 }
 
-export function InputField({ label, value, onChangeText, error, placeholder, secureTextEntry }: InputFieldProps) {
+export function InputField({
+  label,
+  value,
+  onChangeText,
+  error,
+  placeholder,
+  secureTextEntry,
+  keyboardType,
+  autoCapitalize,
+  multiline,
+  numberOfLines,
+  autoFocus,
+  testID,
+  unit,
+}: InputFieldProps) {
   return (
     <View style={styles.container}>
       {label ? <Text style={[typography.labelLg, styles.label]}>{label}</Text> : null}
-      <TextInput
-        style={[styles.input, !!error && styles.inputError]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.secondary}
-        secureTextEntry={secureTextEntry}
-        autoCapitalize={secureTextEntry ? 'none' : 'none'}
-      />
+      <View style={[styles.inputRow, !!error && styles.inputRowError]}>
+        <TextInput
+          style={[
+            styles.input,
+            multiline ? styles.inputMultiline : null,
+          ]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.secondary}
+          secureTextEntry={secureTextEntry}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize ?? (secureTextEntry ? 'none' : 'none')}
+          multiline={multiline}
+          numberOfLines={numberOfLines ?? (multiline ? 4 : undefined)}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          autoFocus={autoFocus}
+          testID={testID}
+        />
+        {unit ? <Text style={[typography.labelSm, styles.unit]}>{unit}</Text> : null}
+      </View>
       {error ? <Text style={[typography.caption, styles.error]}>{error}</Text> : null}
     </View>
   );
@@ -37,18 +70,30 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     marginBottom: spacing.sm,
   },
-  input: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
+  },
+  inputRowError: {
+    borderColor: colors.error,
+  },
+  input: {
+    flex: 1,
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
     ...typography.bodyLg,
     color: colors.onSurface,
   },
-  inputError: {
-    borderColor: colors.error,
+  inputMultiline: {
+    minHeight: 96,
+  },
+  unit: {
+    paddingHorizontal: spacing.md,
+    color: colors.secondary,
   },
   error: {
     color: colors.error,

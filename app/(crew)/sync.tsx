@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -8,6 +9,9 @@ import { Button } from '../../src/components/Button';
 import { StatusBadge } from '../../src/components/StatusBadge';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Toast } from '../../src/components/Toast';
+import { defectTypeLabel } from '../../src/constants/defect-types';
+import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
+import { getCrewTaskById } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { SyncStatus } from '../../src/types/enums';
 
@@ -26,39 +30,46 @@ const SEGMENTS: { key: SyncSegment; label: string; count: number }[] = [
   { key: 'done', label: 'Đã đồng bộ', count: 12 },
 ];
 
-const QUEUE_ITEMS: QueueItem[] = [
-  {
-    name: 'Bằng chứng nghiệm thu #WO-118',
-    meta: 'Km02+150 Tuyến ĐH.05 • Đổ bù ổ gà tấm BTXM',
-    size: '4 ảnh • 14.2 MB',
-    status: SyncStatus.UPLOADING,
-    progress: 65,
-  },
-  {
-    name: 'Báo cáo sự cố phát sinh #WR-004',
-    meta: 'Nứt lún lề đường phát sinh thêm',
-    size: '1 video • 12.8 MB',
-    status: SyncStatus.QUEUED,
-  },
-  {
-    name: 'Cập nhật nhật ký thi công #WO-118',
-    meta: 'Lỗi kết nối máy chủ',
-    size: '1.5 MB',
-    status: SyncStatus.INVALID,
-  },
-];
-
 export default function CrewSyncScreen() {
+  const params = useLocalSearchParams<{ id?: string }>();
+  const task = getCrewTaskById(params.id);
   const [segment, setSegment] = useState<SyncSegment>('pending');
   const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+
+  const queueItems = useMemo<QueueItem[]>(() => {
+    const activeSession = getCrewFieldSession();
+    const session = activeSession?.task_id === task.id ? activeSession : null;
+    const evidenceCount = (session?.before_local_uri ? 1 : 0) + (session?.after_local_uri ? 1 : 0);
+    const submitted: QueueItem = {
+      name: `Hồ sơ nghiệm thu ${task.wo_code}`,
+      meta: `${task.chainage} Tuyến ${task.route_code} • ${defectTypeLabel(task.defect_type_code)}`,
+      size: evidenceCount > 0 ? `${evidenceCount} ảnh • đang chờ tải lên` : 'Dữ liệu hồ sơ',
+      status: SyncStatus.QUEUED,
+    };
+    return [
+      submitted,
+      {
+        name: 'Báo cáo sự cố phát sinh #WR-004',
+        meta: 'Nứt lún lề đường phát sinh thêm',
+        size: '1 video • 12.8 MB',
+        status: SyncStatus.QUEUED,
+      },
+      {
+        name: `Cập nhật nhật ký thi công ${task.wo_code}`,
+        meta: 'Lỗi kết nối máy chủ',
+        size: '1.5 MB',
+        status: SyncStatus.INVALID,
+      },
+    ];
+  }, [task.id, task.wo_code, task.chainage, task.route_code, task.defect_type_code]);
 
   const syncNow = () => {
     setSyncing(true);
     setTimeout(() => {
       setSyncing(false);
       setSegment('done');
-      setToast('Bắt đầu đồng bộ 3 mục…');
+      setToast(`Bắt đầu đồng bộ ${queueItems.length} mục…`);
       setTimeout(() => setToast('Đồng bộ dữ liệu thành công!'), 1500);
     }, 1200);
   };
@@ -132,7 +143,7 @@ export default function CrewSyncScreen() {
             <Text style={[typography.caption, styles.sectionHint]}>Tự động khi có mạng</Text>
           </View>
 
-          {QUEUE_ITEMS.map((item) => (
+          {queueItems.map((item) => (
             <Card key={item.name} style={styles.itemCard}>
               <View style={styles.itemTop}>
                 <View style={styles.itemContent}>

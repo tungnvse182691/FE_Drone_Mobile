@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
@@ -9,30 +9,31 @@ import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const PERFORMANCE_STATS = [
-  { value: '36', label: 'CÔNG VIỆC ĐÃ HOÀN THÀNH', highlight: false },
-  { value: '4.9 / 5.0 ⭐', label: 'ĐÁNH GIÁ NGHIỆM THU', highlight: true },
+  { value: '18', label: 'HOÀN THÀNH', color: colors.neutral },
+  { value: '03', label: 'ĐANG XỬ LÝ', color: colors.primary },
+  { value: '98%', label: 'ĐÚNG HẠN', color: colors.success },
 ];
 
 const SETTINGS_ROWS = [
   {
-    icon: 'id-card-outline' as const,
+    icon: 'badge' as const,
     label: 'Thông tin cá nhân',
     action: 'profile' as const,
   },
   {
-    icon: 'time-outline' as const,
+    icon: 'history' as const,
     label: 'Đổi mật khẩu',
     action: 'password' as const,
   },
   {
-    icon: 'sync-outline' as const,
+    icon: 'sync' as const,
     label: 'Cài đặt đồng bộ',
     subtitle: 'Tự động qua Wi-Fi • Lưu ngoại tuyến',
     action: 'sync' as const,
     route: '/(crew)/sync',
   },
   {
-    icon: 'help-circle-outline' as const,
+    icon: 'help-outline' as const,
     label: 'Trợ giúp & Hỗ trợ kỹ thuật',
     action: 'help' as const,
   },
@@ -77,10 +78,15 @@ export default function CrewProfileScreen() {
       <View style={styles.profileHeader}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={52} color={colors.secondary} />
+            <MaterialIcons name="person" size={52} color={colors.secondary} />
           </View>
-          <Pressable accessibilityRole="button" style={styles.cameraBtn}>
-            <Ionicons name="camera-outline" size={16} color={colors.surface} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Đổi ảnh đại diện"
+            style={styles.cameraBtn}
+            onPress={() => setToast('Tính năng cập nhật ảnh đại diện sẽ đồng bộ qua tài khoản SSO')}
+          >
+            <MaterialIcons name="photo-camera" size={16} color={colors.surface} />
           </Pressable>
         </View>
 
@@ -91,23 +97,26 @@ export default function CrewProfileScreen() {
         <Text style={[typography.caption, styles.unit]}>
           Đội sửa chữa số 2 — Phụ trách Bảo trì đường bê tông ĐH.05
         </Text>
-        <Text style={[typography.caption, styles.email]}>{user?.email ?? 'crew@hoanghai.vn'}</Text>
+        <Text style={[typography.caption, styles.email]}>{user?.phone_or_email ?? 'crew@hoanghai.vn'}</Text>
 
         <View style={styles.roleChip}>
-          <Ionicons name="build" size={14} color={colors.brandGold} />
+          <MaterialIcons name="build" size={14} color={colors.brandGold} />
           <Text style={[typography.labelSm, styles.roleText]}>Repair Crew</Text>
         </View>
       </View>
 
       <Card style={styles.statsCard}>
         <View style={styles.statsRow}>
-          {PERFORMANCE_STATS.map((stat) => (
-            <View key={stat.label} style={styles.statCol}>
-              <Text style={[typography.titleLg, stat.highlight ? styles.statValueGold : styles.statValue]}>
-                {stat.value}
-              </Text>
-              <Text style={[typography.labelSm, styles.statLabel]}>{stat.label}</Text>
-            </View>
+          {PERFORMANCE_STATS.map((stat, idx) => (
+            <React.Fragment key={stat.label}>
+              {idx > 0 && <View style={styles.statDivider} />}
+              <View style={styles.statCol}>
+                <Text style={[typography.headlineLg, { color: stat.color, fontWeight: '700' }]}>
+                  {stat.value}
+                </Text>
+                <Text style={[typography.labelSm, styles.statLabel]}>{stat.label}</Text>
+              </View>
+            </React.Fragment>
           ))}
         </View>
       </Card>
@@ -122,16 +131,16 @@ export default function CrewProfileScreen() {
             style={({ pressed }) => [styles.row, index < SETTINGS_ROWS.length && styles.rowBorder, pressed && styles.rowPressed]}
             onPress={() => handleRow(row)}
           >
-            <Ionicons name={row.icon} size={20} color={colors.secondary} />
+            <MaterialIcons name={row.icon} size={20} color={colors.secondary} />
             <View style={styles.rowText}>
               <Text style={[typography.bodyMd, styles.rowLabel]}>{row.label}</Text>
               {row.subtitle ? <Text style={[typography.caption, styles.rowSubtitle]}>{row.subtitle}</Text> : null}
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.secondary} />
+            <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
           </Pressable>
         ))}
         <View style={styles.row}>
-          <Ionicons name="moon-outline" size={20} color={colors.secondary} />
+          <MaterialIcons name="dark-mode" size={20} color={colors.secondary} />
           <Text style={[typography.bodyMd, styles.rowLabel, styles.rowText]}>Chế độ tối</Text>
           <Switch
             value={darkMode}
@@ -151,7 +160,7 @@ export default function CrewProfileScreen() {
         style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutPressed]}
         onPress={handleLogout}
       >
-        <Ionicons name="log-out-outline" size={18} color={colors.error} />
+        <MaterialIcons name="logout" size={18} color={colors.error} />
         <Text style={[typography.labelLg, styles.logoutText]}>Đăng xuất</Text>
       </Pressable>
 
@@ -235,17 +244,18 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
   },
   statCol: {
     flex: 1,
     alignItems: 'center',
-  },
-  statValue: {
-    color: colors.neutral,
-  },
-  statValueGold: {
-    color: colors.primary,
   },
   statLabel: {
     color: colors.secondary,

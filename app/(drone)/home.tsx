@@ -79,7 +79,7 @@ export default function DroneHomeScreen() {
 
   const handleCreateAdhocTask = () => {
     if (!newRoadName.trim()) {
-      showToast('⚠️ Vui lòng nhập tên đoạn tuyến khảo sát!');
+      showToast('Vui lòng nhập tên đoạn tuyến khảo sát!');
       return;
     }
 
@@ -150,7 +150,7 @@ export default function DroneHomeScreen() {
           </View>
           <View style={styles.telemetryTag}>
             <MaterialIcons name="battery-charging-full" size={15} color={colors.success} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Pin M350: 98% (4 cụm)</Text>
+            <Text style={[typography.caption, styles.telemetryTagText]}>Pin M350-HH-02: 98% (4 cụm)</Text>
           </View>
         </View>
       </Card>

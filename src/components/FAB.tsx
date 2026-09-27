@@ -1,10 +1,10 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
 import { colors, radius } from '../design-tokens';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
+type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
 interface FABProps {
   onPress: () => void;
@@ -19,7 +19,7 @@ export function FAB({ onPress, icon }: FABProps) {
       accessibilityRole="button"
       testID="fab"
     >
-      <Ionicons name={icon} size={24} color={colors.onPrimary} />
+      <MaterialIcons name={icon} size={26} color={colors.onPrimary} />
     </Pressable>
   );
 }

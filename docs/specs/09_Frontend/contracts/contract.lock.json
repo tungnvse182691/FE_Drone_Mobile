@@ -1,0 +1,7 @@
+{
+  "contractVersion": "0.1.1-draft-review1",
+  "sha256": "dbde8b756bbc1bf83dabfbfe395eb11e53b378e7338815b1f3ca019aa7f3f806",
+  "canonical": "05_Technical/openapi.yaml",
+  "snapshot": "09_Frontend/contracts/openapi.baseline.yaml",
+  "approval": "Technical proposal; hash alignment is not business approval."
+}

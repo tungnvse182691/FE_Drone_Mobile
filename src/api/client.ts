@@ -12,6 +12,14 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Tự động gán Idempotency-Key (UUID) cho mọi mutation có trạng thái (POST, PUT, PATCH, DELETE)
+  const method = config.method?.toUpperCase();
+  if (method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    if (!config.headers['Idempotency-Key']) {
+      const idempotencyKey = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      config.headers['Idempotency-Key'] = idempotencyKey;
+    }
+  }
   return config;
 });
 

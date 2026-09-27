@@ -29,16 +29,10 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
   };
 
   const handleAvatarPress = () => {
-    if (role === RoleCode.SUPERVISOR) {
-      router.push('/(sup)/profile');
-    } else if (role === RoleCode.DRONE_OPERATOR) {
+    if (role === RoleCode.DRONE_OPERATOR) {
       router.push('/(drone)/profile');
     } else if (role === RoleCode.REPAIR_CREW) {
       router.push('/(crew)/profile');
-    } else if (role === RoleCode.PROJECT_MANAGER) {
-      router.push('/(pm)/profile');
-    } else {
-      router.push('/(sup)/profile');
     }
   };
 

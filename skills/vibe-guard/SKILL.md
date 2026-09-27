@@ -64,3 +64,34 @@ So sánh: "làm đăng nhập cho ngon" (AI tự do bịa) vs 2 câu EARS trên 
 - Task nhỏ, hậu quả khôi phục được → vibe thẳng, khỏi ceremony.
 - Task ra production, đa file, sống lâu hơn cuộc hội thoại → đi đủ 6 bước.
 - Spec thay đổi giữa chừng → cập nhật chữ trước, rồi mới sửa code theo (không vá code ngược spec).
+
+---
+
+## 🏗️ RoadGuard Extension — Khi dùng Vibe-Guard trong dự án RoadGuard
+
+> *Áp dụng thêm các quy tắc sau khi làm việc trong repo `D:\Do_AN_Drone\FE_AppMobile`*
+
+### Nguồn sự thật bắt buộc đọc (B2 — Thu thập evidence)
+Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít nhất 1** file liên quan trong:
+- `D:\Do_AN_Drone\27_9_V3\09_Frontend\` — Nguồn sự thật FE-R3-v1 (nhóm trưởng gửi 27/09/2026)
+- `D:\Do_AN_Drone\27_9_V3\02_Requirements\` — Business Rules & Use Cases
+- `FE_AppMobile\skills\BOOTSTRAP_PROMPT.md` — Scaffold & routing chuẩn
+
+### Red Flags đặc thù RoadGuard — DỪNG NGAY khi thấy:
+| Dấu hiệu | Xử lý bắt buộc |
+|---|---|
+| Đề cập LiDAR hoặc nhựa đường asphalt | DỪNG — vi phạm cứng, đọc lại spec vật liệu |
+| Import `Ionicons` từ `@expo/vector-icons` | DỪNG — phải dùng `MaterialIcons` |
+| Hiển thị VNĐ / chi phí / dự toán trên Mobile UI | DỪNG — vi phạm UD-06 Zero Presentation Cost |
+| Màn hình PM hoặc Supervisor trong thư mục `app/` | DỪNG — Mobile chỉ có 3 role hiện trường |
+| Route thiếu group prefix: `/crew/tasks` (không ngoặc) | DỪNG — bắt buộc `/(crew)/tasks` |
+| Tuyên bố "PASS" mà không chạy `npx tsc --noEmit` | DỪNG — không review bằng trí nhớ |
+| Gán `success` cho HTTP 200 mà không validate schema | DỪNG — xem `04_Data_Contract_Type_Definitions.md` |
+| Dùng mã khuyết tật tự chế (không phải 5 mã BTXM) | DỪNG — đọc `src/constants/defect-types.ts` |
+
+### Checklist bổ sung cho RoadGuard (thêm vào B2)
+- [ ] Đã đọc file spec tương ứng trong `27_9_V3/09_Frontend/`?
+- [ ] Tên endpoint có trong `contracts/operation_catalog.md` thật?
+- [ ] Không render tiền tệ VNĐ trên bất kỳ màn Mobile nào?
+- [ ] Route có đủ group prefix `/(crew)/`, `/(drone)/`, `/(reporter)/`?
+- [ ] Icon dùng `MaterialIcons` (không phải `Ionicons`)?

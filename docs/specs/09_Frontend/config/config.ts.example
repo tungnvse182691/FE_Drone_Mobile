@@ -1,0 +1,26 @@
+// Template only; adapt to repository and test before production.
+export function parsePublicConfig(env: Record<string, string | undefined>, origin: string) {
+  const appEnv = env.VITE_APP_ENV;
+  if (!['development', 'staging', 'production'].includes(appEnv ?? '')) throw new Error('CLIENT_CONFIG_INVALID');
+  const raw = env.VITE_API_BASE_URL ?? '';
+  if (!raw || /[<>]/.test(raw) || raw.startsWith('//')) throw new Error('CLIENT_CONFIG_INVALID');
+  if (!raw.startsWith('/') && !/^https?:\/\//.test(raw)) throw new Error('CLIENT_CONFIG_INVALID');
+  const base = new URL(raw, origin);
+  if (base.username || base.password || base.hash || base.search) throw new Error('CLIENT_CONFIG_INVALID');
+  if (appEnv !== 'development' && base.protocol !== 'https:') throw new Error('CLIENT_CONFIG_INVALID');
+  const timeout = Number(env.VITE_API_TIMEOUT_MS);
+  if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 120000) throw new Error('CLIENT_CONFIG_INVALID');
+  const bool = (name: string) => {
+    if (!['true', 'false'].includes(env[name] ?? '')) throw new Error('CLIENT_CONFIG_INVALID');
+    return env[name] === 'true';
+  };
+  const mocks = bool('VITE_ENABLE_MOCKS');
+  if (appEnv === 'production' && mocks) throw new Error('CLIENT_CONFIG_INVALID');
+  const auth = env.VITE_AUTH_MODE;
+  if (!['bearer_memory', 'bff'].includes(auth ?? '')) throw new Error('CLIENT_CONFIG_INVALID');
+  const realtime = bool('VITE_REALTIME_ENABLED');
+  // If enabled, approved transport adapter must validate WSS origin/auth/protocol separately.
+  if (realtime && !env.VITE_REALTIME_URL) throw new Error('CLIENT_CONFIG_INVALID');
+  return { appEnv, apiBaseUrl: base.toString().replace(/\/$/, ''), timeoutMs: timeout, auth, mocks, realtime };
+}
+// BFF mode requires an approved backend flow. This parser does not implement BFF/auth/CORS.

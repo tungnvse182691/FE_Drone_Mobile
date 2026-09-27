@@ -1,0 +1,34 @@
+{
+  "version": "FE-R3-v1",
+  "date": "2026-09-27",
+  "sources": [
+    {
+      "filename": "RoadGuard_FRD_SRS(1).md",
+      "sha256": "8e7aa4c690046136226e1e161820cbebab0f9fff2897ec807e03b86a65519c21"
+    },
+    {
+      "filename": "RoadGuard_Business_Rules(1).md",
+      "sha256": "c87ff33f9f1a8cf651839827b62e0cfa23872768ac78068e15c46cecd65ab604"
+    },
+    {
+      "filename": "Data_Dictionary.md",
+      "sha256": "e36aed6b17d0988f5a8b85daa02166474d4c77225312de3b4708b0eb7e43318d"
+    },
+    {
+      "filename": "RoadGuard_05_Auth_Permission_Model.md",
+      "sha256": "db7682a826c97aef67747deb4e388e232d99684f29d216c7152fb185a87156c5"
+    },
+    {
+      "filename": "RoadGuard_08_Error_Handling_Convention.md",
+      "sha256": "56533faf31da4a5980fe06ebb4196b0a2e53cb69781eb66edb0d840bb4a172d2"
+    },
+    {
+      "filename": "RoadGuard_07_Tech_Stack_Convention.md",
+      "sha256": "bb088c10c3c06ceec08c36519cf5a1b68fffa4b88f76d1a4bcb4fe048025e21e"
+    },
+    {
+      "filename": "RoadGuard_OpenAPI_v1.yaml",
+      "sha256": "e417db34ebea5278c53c023520a6da5ece067b6422e188213d0efe980b79cce2"
+    }
+  ]
+}

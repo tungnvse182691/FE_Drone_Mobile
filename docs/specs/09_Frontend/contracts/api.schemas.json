@@ -1,0 +1,5286 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:roadguard:api:fe-r3-v1",
+  "title": "RoadGuard API definitions from proposed R3 baseline",
+  "$comment": "Select a DTO using a root $ref into $defs; this bundle root alone does not validate a DTO. Source SHA256 dbde8b756bbc1bf83dabfbfe395eb11e53b378e7338815b1f3ca019aa7f3f806",
+  "$defs": {
+    "ErrorDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ErrorDetail"
+          }
+        },
+        "traceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "details",
+        "traceId",
+        "retryable"
+      ],
+      "description": "Không chứa stacktrace, PII, secrets hoặc giá trị password/token."
+    },
+    "Ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACCEPTED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "version"
+      ]
+    },
+    "Point": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      },
+      "required": [
+        "longitude",
+        "latitude"
+      ],
+      "description": "WGS84; tên thuộc tính tránh đảo lat/lon; GeoJSON position array bên dưới là lon,lat."
+    },
+    "Position": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "point": {
+          "$ref": "#/$defs/Point"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "EXIF",
+            "MANUAL",
+            "SURVEY",
+            "DERIVED"
+          ]
+        },
+        "accuracyMeters": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "capturedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "point",
+        "source"
+      ]
+    },
+    "Actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "SUPERVISOR",
+            "PM",
+            "OPERATOR",
+            "CREW",
+            "REPORTER"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "role",
+        "version"
+      ]
+    },
+    "LoginRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "email",
+        "password"
+      ]
+    },
+    "TokenPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refreshToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tokenType": {
+          "type": "string",
+          "enum": [
+            "Bearer"
+          ]
+        },
+        "expiresIn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mustChangePassword": {
+          "type": "boolean"
+        },
+        "user": {
+          "$ref": "#/$defs/Actor"
+        }
+      },
+      "required": [
+        "accessToken",
+        "refreshToken",
+        "tokenType",
+        "expiresIn",
+        "mustChangePassword",
+        "user"
+      ]
+    },
+    "RefreshRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "refreshToken": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "refreshToken"
+      ]
+    },
+    "RegisterReporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Server chỉ cho gmail.com/googlemail.com theo CN11."
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reporterType": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "email",
+        "password",
+        "displayName",
+        "reporterType"
+      ],
+      "description": "reporterType phải thuộc danh mục ReporterType đã đối chiếu DD; không mở role input."
+    },
+    "RegistrationIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING_VERIFICATION"
+          ]
+        },
+        "resendAfterSeconds": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "intentId",
+        "status",
+        "resendAfterSeconds"
+      ],
+      "description": "Cùng shape cho địa chỉ tồn tại, không lộ account; intent opaque không cấp business access."
+    },
+    "VerifyOtp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "otp": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "intentId",
+        "otp"
+      ]
+    },
+    "ResendOtp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "intentId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "intentId"
+      ]
+    },
+    "ChangePassword": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "currentPassword": {
+          "type": "string",
+          "minLength": 1
+        },
+        "newPassword": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "currentPassword",
+        "newPassword"
+      ]
+    },
+    "ResetPassword": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "temporaryPassword": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "temporaryPassword",
+        "reason"
+      ],
+      "description": "Supervisor thực hiện; truyền TLS, không echo/log password. Buộc đổi ở lần login tiếp theo."
+    },
+    "ForgotPassword": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        }
+      },
+      "required": [
+        "email"
+      ],
+      "description": "Tạo yêu cầu khôi phục, không tự reset; luôn trả 202 trung tính."
+    },
+    "InvitationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "PM",
+            "OPERATOR",
+            "CREW",
+            "SUPERVISOR"
+          ]
+        },
+        "projectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "email",
+        "role",
+        "projectIds"
+      ]
+    },
+    "Invitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "ACCEPTED",
+            "EXPIRED",
+            "REVOKED"
+          ]
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "expiresAt",
+        "version"
+      ]
+    },
+    "AcceptInvitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "invitationToken": {
+          "type": "string",
+          "minLength": 1
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "invitationToken",
+        "displayName",
+        "password"
+      ]
+    },
+    "ProfileUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "displayName"
+      ]
+    },
+    "AccountUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "SUSPENDED"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "SUPERVISOR",
+            "PM",
+            "OPERATOR",
+            "CREW",
+            "REPORTER"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "status",
+        "role",
+        "reason"
+      ]
+    },
+    "MembershipRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "PM",
+            "OPERATOR",
+            "CREW"
+          ]
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "validFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "validTo": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "userId",
+        "role",
+        "active",
+        "validFrom",
+        "reason"
+      ]
+    },
+    "Membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "userId",
+        "role",
+        "active",
+        "version"
+      ]
+    },
+    "ProjectCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primaryPmId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "handoverDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "warrantyEndDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "handoverFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "code",
+        "name",
+        "primaryPmId",
+        "handoverDate",
+        "warrantyEndDate",
+        "handoverFileIds"
+      ],
+      "description": "Supervisor tạo; warrantyEndDate>=handoverDate; chỉ định đúng một PM chính."
+    },
+    "Project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primaryPmId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "handoverDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "warrantyEndDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "CLOSED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "code",
+        "name",
+        "primaryPmId",
+        "handoverDate",
+        "warrantyEndDate",
+        "status",
+        "version"
+      ]
+    },
+    "ProjectUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "primaryPmId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "warrantyEndDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "primaryPmId",
+        "warrantyEndDate",
+        "reason"
+      ]
+    },
+    "Reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    },
+    "WidthInterval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startMeters": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "roadWidthMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "startMeters",
+        "endMeters",
+        "roadWidthMeters"
+      ]
+    },
+    "GeoJsonLine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "LineString"
+          ]
+        },
+        "coordinates": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 2
+        }
+      }
+    },
+    "RouteDraftRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceFileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "trackId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceCrs": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metricCrs": {
+          "type": "string",
+          "minLength": 1
+        },
+        "centerline": {
+          "$ref": "#/$defs/GeoJsonLine"
+        },
+        "stationOriginMeters": {
+          "type": "number"
+        },
+        "widthIntervals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WidthInterval"
+          },
+          "minItems": 1
+        },
+        "surveyTotalWidthMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "sourceCrs",
+        "metricCrs",
+        "stationOriginMeters",
+        "widthIntervals",
+        "surveyTotalWidthMeters"
+      ],
+      "description": "Cần sourceFileId hoặc centerline; sourceFileId GPX nhiều track cần trackId; centerline luôn WGS84, sourceCrs mô tả bản gốc. Backend chuyển metricCrs đã kiểm chứng. Không lấy tổng corridor làm road width.",
+      "anyOf": [
+        {
+          "required": [
+            "sourceFileId"
+          ]
+        },
+        {
+          "required": [
+            "centerline"
+          ]
+        }
+      ]
+    },
+    "RouteVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "CONFIRMED"
+          ]
+        },
+        "centerline": {
+          "$ref": "#/$defs/GeoJsonLine"
+        },
+        "metricCrs": {
+          "type": "string",
+          "minLength": 1
+        },
+        "widthIntervals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WidthInterval"
+          }
+        },
+        "surveyTotalWidthMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sourceFileId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "status",
+        "centerline",
+        "metricCrs",
+        "widthIntervals",
+        "surveyTotalWidthMeters",
+        "sourceFileId",
+        "version"
+      ]
+    },
+    "SegmentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "targetLengthMeters": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "boundariesMeters": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "routeVersionId"
+      ],
+      "description": "Đúng một trong targetLengthMeters hoặc boundariesMeters; boundary tăng, phủ tuyến không hở/chồng.",
+      "oneOf": [
+        {
+          "required": [
+            "targetLengthMeters"
+          ],
+          "not": {
+            "required": [
+              "boundariesMeters"
+            ]
+          }
+        },
+        {
+          "required": [
+            "boundariesMeters"
+          ],
+          "not": {
+            "required": [
+              "targetLengthMeters"
+            ]
+          }
+        }
+      ]
+    },
+    "Segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "startMeters": {
+          "type": "number"
+        },
+        "endMeters": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "startMeters",
+        "endMeters"
+      ]
+    },
+    "SegmentSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "PUBLISHED"
+          ]
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Segment"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "routeVersionId",
+        "status",
+        "segments",
+        "version"
+      ]
+    },
+    "BranchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "startNodeId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endNodeId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connectionReason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "code",
+        "routeVersionId",
+        "connectionReason"
+      ]
+    },
+    "Branch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "code",
+        "routeVersionId",
+        "version"
+      ]
+    },
+    "SlabRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "laneCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startMeters": {
+          "type": "number"
+        },
+        "endMeters": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PROVISIONAL",
+            "CONFIRMED"
+          ]
+        },
+        "sourceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "routeVersionId",
+        "laneCode",
+        "startMeters",
+        "endMeters",
+        "status",
+        "sourceFileIds"
+      ],
+      "description": "Không hard-code 4m; xác nhận cần dữ liệu khe/hoàn công theo Q10."
+    },
+    "Slab": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "laneCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startMeters": {
+          "type": "number"
+        },
+        "endMeters": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PROVISIONAL",
+            "CONFIRMED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "routeVersionId",
+        "laneCode",
+        "startMeters",
+        "endMeters",
+        "status",
+        "version"
+      ]
+    },
+    "ReportPhoto": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "position": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "fileId"
+      ],
+      "description": "Thiếu EXIF không dùng GPS upload; có thể lưu thiếu vị trí chờ điều phối với nhãn thiếu."
+    },
+    "ReportCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "photos": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReportPhoto"
+          },
+          "minItems": 1
+        },
+        "suggestedProjectId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "description",
+        "photos"
+      ]
+    },
+    "IncidentReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "ownerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "caseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "receivedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "RECEIVED",
+            "IN_REVIEW",
+            "PUBLISHED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "caseId",
+        "receivedAt",
+        "status",
+        "version"
+      ],
+      "description": "Projection của Reporter không trả owner người khác hoặc internal case."
+    },
+    "PublicEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publishedFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "occurredAt",
+        "message",
+        "publishedFileIds"
+      ]
+    },
+    "PublicReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PublicEvent"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "status",
+        "events",
+        "version"
+      ]
+    },
+    "Case": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reportIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "reportIds",
+        "defectIds",
+        "status",
+        "version"
+      ],
+      "description": "Nội bộ; enum vòng đời cần khóa với DD. Không trả object này cho Reporter."
+    },
+    "LinkReports": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reportIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "primaryCaseId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "reportIds",
+        "primaryCaseId",
+        "reason"
+      ],
+      "description": "PM xác nhận, cùng scope; giữ ownership/source. Không merge tự động."
+    },
+    "TriageCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "verificationMethod": {
+          "type": "string",
+          "enum": [
+            "FIELD",
+            "DRONE",
+            "EXISTING_EVIDENCE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "projectId",
+        "verificationMethod",
+        "reason"
+      ]
+    },
+    "CaseConclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "conclusion": {
+          "type": "string",
+          "enum": [
+            "DEFECT_FOUND",
+            "NO_DEFECT",
+            "DUPLICATE",
+            "OUT_OF_SCOPE"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "conclusion",
+        "reason",
+        "evidenceFileIds",
+        "defectIds"
+      ],
+      "description": "Server kiểm bằng chứng; không suy no detections thành NO_DEFECT."
+    },
+    "Defect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "typeCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severityCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "urgency": {
+          "type": "string",
+          "enum": [
+            "NORMAL",
+            "SOON",
+            "EMERGENCY"
+          ]
+        },
+        "pmFastTrackBlocked": {
+          "type": "boolean"
+        },
+        "slabIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "position": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "typeCode",
+        "severityCode",
+        "urgency",
+        "pmFastTrackBlocked",
+        "slabIds",
+        "position",
+        "status",
+        "version"
+      ]
+    },
+    "DefectAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "severityCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "urgency": {
+          "type": "string",
+          "enum": [
+            "NORMAL",
+            "SOON",
+            "EMERGENCY"
+          ]
+        },
+        "pmFastTrackBlocked": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "severityCode",
+        "urgency",
+        "pmFastTrackBlocked",
+        "reason",
+        "evidenceFileIds"
+      ],
+      "description": "severityCode từ danh mục/enum hiện có; không tự đổi số enum DB."
+    },
+    "VerifyDefect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "VERIFIED",
+            "DISCARDED",
+            "NEEDS_MEASUREMENT"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "measurementIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "decision",
+        "reason",
+        "evidenceFileIds",
+        "measurementIds"
+      ]
+    },
+    "RecurrenceAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priorDefectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "assessment": {
+          "type": "string",
+          "enum": [
+            "PRIOR_REPAIR_UNACCEPTABLE",
+            "RECURRENCE",
+            "UNDETERMINED"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "priorDefectId",
+        "assessment",
+        "reason",
+        "evidenceFileIds"
+      ],
+      "description": "Chỉ ghi nhận đánh giá, không tự mở lại case đóng: Q07."
+    },
+    "OrderRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "defectIds",
+        "reason"
+      ]
+    },
+    "PolicyRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectTypeCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "measurementType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operator": {
+          "type": "string",
+          "enum": [
+            "LT",
+            "LTE",
+            "GT",
+            "GTE",
+            "EQ"
+          ]
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "repairMethodCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requiredEvidenceTypes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "BEFORE",
+              "AFTER",
+              "MEASUREMENT"
+            ]
+          },
+          "minItems": 1
+        },
+        "exclusions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "defectTypeCode",
+        "measurementType",
+        "unit",
+        "operator",
+        "threshold",
+        "repairMethodCode",
+        "requiredEvidenceTypes",
+        "exclusions"
+      ]
+    },
+    "PolicyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PolicyRule"
+          },
+          "minItems": 1
+        },
+        "preparationList": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "name",
+        "rules",
+        "preparationList"
+      ],
+      "description": "Đề xuất cấu trúc rule v1; không tự điền threshold. Q02/Q03 chốt trước AVAILABLE."
+    },
+    "PolicyVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PolicyRule"
+          }
+        },
+        "preparationList": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "AVAILABLE",
+            "SUPERSEDED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "name",
+        "rules",
+        "preparationList",
+        "status",
+        "version"
+      ]
+    },
+    "InspectionTaskCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "INSPECT_ONLY",
+            "MEASURE_ONLY",
+            "INSPECT_AND_REPAIR"
+          ]
+        },
+        "crewId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "policyVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "destination": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "defectIds",
+        "mode",
+        "crewId"
+      ],
+      "description": "INSPECT_AND_REPAIR phải có policyVersionId, một lỗi nhỏ được giao; server không suy từ số lỗi. Batch nhiều lỗi qua endpoint batch luôn MEASURE_ONLY."
+    },
+    "InspectionBatchCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "crewId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "plannedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "defectIds",
+        "crewId"
+      ]
+    },
+    "InspectionTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "INSPECT_ONLY",
+            "MEASURE_ONLY",
+            "INSPECT_AND_REPAIR"
+          ]
+        },
+        "crewId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "policyVersionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "defectIds",
+        "mode",
+        "crewId",
+        "policyVersionId",
+        "status",
+        "version"
+      ]
+    },
+    "InspectionBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "taskIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "MEASURE_ONLY"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "taskIds",
+        "mode",
+        "version"
+      ]
+    },
+    "Measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "measurementType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "instrument": {
+          "type": "string",
+          "minLength": 1
+        },
+        "measuredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "position": {
+          "$ref": "#/$defs/Position"
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "defectId",
+        "measurementType",
+        "value",
+        "unit",
+        "measuredAt",
+        "evidenceFileIds"
+      ]
+    },
+    "InspectionSubmit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "taskVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "policyVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "measurements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "minItems": 1
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "taskVersion",
+        "measurements",
+        "observedAt"
+      ]
+    },
+    "InspectionSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "taskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "SUBMITTED",
+            "NEEDS_REVIEW"
+          ]
+        },
+        "measurementIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "status",
+        "measurementIds",
+        "version"
+      ]
+    },
+    "EvaluationRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "policyVersionId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "sessionId",
+        "policyVersionId"
+      ]
+    },
+    "Evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "taskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "policyVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "result": {
+          "type": "string",
+          "enum": [
+            "ELIGIBLE",
+            "NOT_ELIGIBLE",
+            "INSUFFICIENT_DATA"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "policyVersionId",
+        "result",
+        "reasons",
+        "version"
+      ],
+      "description": "Eligibility khác authorization: task mode/PM block vẫn quyết định quyền sửa."
+    },
+    "RepairItemProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "methodDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "previousItemId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "defectId",
+        "methodDescription",
+        "evidenceFileIds"
+      ]
+    },
+    "PackageCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RepairItemProposal"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "RepairItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "defectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "repairTrack": {
+          "type": "string",
+          "enum": [
+            "FAST_TRACK",
+            "APPROVAL_TRACK",
+            "EMERGENCY"
+          ]
+        },
+        "approvalStatus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptanceStatus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "defectId",
+        "repairTrack",
+        "approvalStatus",
+        "acceptanceStatus",
+        "version"
+      ]
+    },
+    "RepairPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RepairItem"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "SUBMITTED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "items",
+        "status",
+        "version"
+      ]
+    },
+    "ItemDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "APPROVE",
+            "REQUEST_EVIDENCE",
+            "REQUEST_RECONSIDER",
+            "REJECT"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "description": "reason bắt buộc khi decision != APPROVE; REJECT không đóng Defect."
+    },
+    "RepairAssign": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "crewId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "crewId",
+        "reason"
+      ]
+    },
+    "Reassignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "crewId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "handoverAcknowledgementId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "crewId",
+        "reason"
+      ],
+      "description": "Q04: không coi offline đã nhận thu hồi; xung đột cần review, không last-write-wins."
+    },
+    "StartAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "originTaskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "repairItemId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "evaluationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "beforeFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "capturedTaskVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "policyVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "beforeFileIds",
+        "startedAt"
+      ],
+      "description": "APPROVAL_TRACK có repairItemId đã duyệt/giao; FAST_TRACK có originTaskId, evaluationId, capturedTaskVersion, policyVersionId. Không chờ PM duyệt số đo của task FT đủ điều kiện.",
+      "oneOf": [
+        {
+          "required": [
+            "repairItemId"
+          ],
+          "not": {
+            "required": [
+              "originTaskId"
+            ]
+          }
+        },
+        {
+          "required": [
+            "originTaskId",
+            "evaluationId",
+            "capturedTaskVersion",
+            "policyVersionId"
+          ],
+          "not": {
+            "required": [
+              "repairItemId"
+            ]
+          }
+        }
+      ]
+    },
+    "RepairAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "repairItemId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "IN_PROGRESS",
+            "SUBMITTED",
+            "NEEDS_EVIDENCE",
+            "REWORK_REQUIRED",
+            "PM_CHECKED",
+            "ACCEPTED"
+          ]
+        },
+        "beforeFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "afterFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "repairItemId",
+        "status",
+        "beforeFileIds",
+        "afterFileIds",
+        "version"
+      ]
+    },
+    "SubmitAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "afterFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "resultNotes": {
+          "type": "string",
+          "minLength": 1
+        },
+        "measurementIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "afterFileIds",
+        "completedAt",
+        "resultNotes"
+      ]
+    },
+    "ReviewAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "ACCEPT",
+            "REQUEST_EVIDENCE",
+            "REWORK_REQUIRED"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "description": "ACCEPT bởi PM đóng FT + outbox Supervisor; APPROVAL_TRACK chỉ PM_checked, phải Supervisor xác nhận tiếp. reason bắt buộc nếu không ACCEPT."
+    },
+    "PublishCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publicMessage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "afterFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "required": [
+        "publicMessage",
+        "afterFileIds"
+      ],
+      "description": "Chỉ toàn case Verified đủ điều kiện nền; partial publication Q08 chưa hỗ trợ."
+    },
+    "EmergencyCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "crewId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "temporaryScope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "defectIds",
+        "crewId",
+        "temporaryScope",
+        "reason"
+      ],
+      "description": "PM kích hoạt riêng; đóng nhiệm vụ tạm không resolve Defect; năng lực/giới hạn phải chốt."
+    },
+    "BandScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "routeVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "segmentSetId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "segmentIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "targetBand": {
+          "type": "string",
+          "enum": [
+            "SURFACE",
+            "LEFT_EDGE",
+            "RIGHT_EDGE"
+          ]
+        }
+      },
+      "required": [
+        "routeVersionId",
+        "segmentSetId",
+        "segmentIds",
+        "targetBand"
+      ],
+      "description": "Band labels là API đề xuất, map enum DD trước codegen."
+    },
+    "SurveyCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          },
+          "minItems": 1
+        },
+        "surveyType": {
+          "type": "string",
+          "enum": [
+            "BASELINE",
+            "PERIODIC",
+            "AD_HOC"
+          ]
+        },
+        "operatorId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "accessPoint": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "scope",
+        "surveyType",
+        "operatorId"
+      ]
+    },
+    "SurveyTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          }
+        },
+        "operatorId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "scope",
+        "operatorId",
+        "status",
+        "version"
+      ]
+    },
+    "SurveyReassign": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operatorId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "operatorId",
+        "reason"
+      ]
+    },
+    "SupplementRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          },
+          "minItems": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operatorId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "scope",
+        "reason",
+        "operatorId"
+      ]
+    },
+    "DatasetSubmit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "videoFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "telemetryFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deviceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "videoFileIds",
+        "telemetryFileIds",
+        "recordedAt",
+        "scope"
+      ]
+    },
+    "Dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "surveyTaskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "dataVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "integrityStatus": {
+          "type": "string",
+          "enum": [
+            "VERIFIED",
+            "PENDING",
+            "INVALID"
+          ]
+        },
+        "telemetryStatus": {
+          "type": "string",
+          "enum": [
+            "PRESENT",
+            "MISSING",
+            "UNUSABLE"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "surveyTaskId",
+        "dataVersionId",
+        "integrityStatus",
+        "telemetryStatus",
+        "version"
+      ]
+    },
+    "CoverageResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/BandScope"
+        },
+        "positionStatus": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNKNOWN"
+          ]
+        },
+        "qualityStatus": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "UNKNOWN"
+          ]
+        },
+        "coverageStatus": {
+          "type": "string",
+          "enum": [
+            "SUFFICIENT",
+            "INSUFFICIENT",
+            "UNKNOWN"
+          ]
+        },
+        "methodVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "scope",
+        "positionStatus",
+        "qualityStatus",
+        "coverageStatus",
+        "methodVersion",
+        "reasons"
+      ]
+    },
+    "BaselineConfirm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "datasetId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          },
+          "minItems": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "datasetId",
+        "scope",
+        "reason"
+      ]
+    },
+    "MissionExport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          },
+          "minItems": 1
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "KML",
+            "KMZ"
+          ]
+        },
+        "accessPoint": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "scope",
+        "format",
+        "accessPoint"
+      ],
+      "description": "Export chỉ sau compatibility spike Q14; không gửi lệnh drone."
+    },
+    "UploadCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "REPORT_PHOTO",
+            "BEFORE",
+            "AFTER",
+            "MEASUREMENT",
+            "SURVEY_VIDEO",
+            "TELEMETRY",
+            "ROUTE_SOURCE",
+            "DOCUMENT"
+          ]
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "targetId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fileName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "checksumSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "purpose",
+        "fileName",
+        "mediaType",
+        "sizeBytes",
+        "checksumSha256"
+      ],
+      "description": "Reporter chỉ REPORT_PHOTO của mình, có thể chưa project. Các purpose nội bộ phải có projectId/targetId phù hợp. Mức byte/MIME theo config NFR."
+    },
+    "UploadSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "UPLOADING",
+            "VERIFYING",
+            "VERIFIED",
+            "FAILED"
+          ]
+        },
+        "partSizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "fileId",
+        "status",
+        "partSizeBytes",
+        "expiresAt",
+        "version"
+      ]
+    },
+    "UploadPartsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "partNumbers": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "partNumbers"
+      ]
+    },
+    "UploadPartUrl": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "partNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "partNumber",
+        "url",
+        "expiresAt"
+      ]
+    },
+    "UploadPartUrls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UploadPartUrl"
+          }
+        }
+      },
+      "required": [
+        "parts"
+      ],
+      "description": "Chỉ PUT scope đúng part, không cho đọc object; không log URL."
+    },
+    "CompletedPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "partNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "etag": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "partNumber",
+        "etag"
+      ]
+    },
+    "UploadComplete": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompletedPart"
+          },
+          "minItems": 1
+        },
+        "checksumSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "parts",
+        "checksumSha256"
+      ]
+    },
+    "FileMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "VERIFIED",
+            "FAILED"
+          ]
+        },
+        "checksumSha256": {
+          "type": "string"
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "checksumSha256",
+        "mediaType",
+        "sizeBytes",
+        "version"
+      ]
+    },
+    "ProcessingCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "datasetId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "$ref": "#/$defs/BandScope"
+        },
+        "modelVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "preprocessingVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "configVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "MOCK",
+            "REAL"
+          ]
+        }
+      },
+      "required": [
+        "datasetId",
+        "scope",
+        "modelVersionId",
+        "preprocessingVersion",
+        "configVersion",
+        "mode"
+      ],
+      "description": "Manifest persisted before 202; only server resolves file references/rights."
+    },
+    "Job": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "QUEUED",
+            "RUNNING",
+            "SUCCEEDED",
+            "FAILED",
+            "REQUIRES_REVIEW"
+          ]
+        },
+        "resultId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "attemptNumber": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "jobType": {
+          "type": "string",
+          "enum": [
+            "AI_ANALYSIS",
+            "UPLOAD_VERIFY",
+            "EXPORT",
+            "MISSION_EXPORT",
+            "VALIDATION",
+            "TRAINING_EXPORT",
+            "RETENTION"
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "progressPercent": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "resultId",
+        "attemptNumber",
+        "version",
+        "jobType",
+        "error"
+      ]
+    },
+    "Detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "detectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frameFileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestampMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "typeCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "bbox": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[x,y,width,height] normalized; server also checks x+w<=1,y+h<=1."
+        },
+        "estimatedPosition": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "detectionId",
+        "frameFileId",
+        "timestampMs",
+        "typeCode",
+        "confidence",
+        "bbox"
+      ]
+    },
+    "AiResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jobAttemptId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "manifestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "modelVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "MOCK",
+            "REAL"
+          ]
+        },
+        "rawResultFileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checksumSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "detections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Detection"
+          }
+        }
+      },
+      "required": [
+        "jobAttemptId",
+        "manifestHash",
+        "modelVersionId",
+        "mode",
+        "rawResultFileId",
+        "checksumSha256",
+        "detections"
+      ],
+      "description": "Service identity tied to job/attempt; immutable raw in storage verified. Late attempt may be archived without replacing current."
+    },
+    "LabelReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "APPROVE",
+            "REJECT"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "decision",
+        "reason"
+      ],
+      "description": "PM duyệt nhãn; GAP-01: FR36 trace cần được bổ sung trước freeze."
+    },
+    "ValidationPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "groundTruthId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "derivedMeasurementId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "groundTruthId",
+        "derivedMeasurementId"
+      ]
+    },
+    "ValidationRunCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ValidationPair"
+          },
+          "minItems": 1
+        },
+        "modelVersionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "datasetSplitId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "measurementType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "pairs",
+        "modelVersionId",
+        "datasetSplitId",
+        "measurementType",
+        "unit"
+      ]
+    },
+    "ValidationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "usedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excludedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bias": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mae": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rmse": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exclusionReasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "id",
+        "usedCount",
+        "excludedCount",
+        "bias",
+        "mae",
+        "rmse",
+        "unit",
+        "exclusionReasons"
+      ]
+    },
+    "SyncMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "INSPECTION_SUBMIT"
+          ]
+        },
+        "taskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expectedVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "payload": {
+          "$ref": "#/$defs/InspectionSubmit"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "taskId",
+        "expectedVersion",
+        "capturedAt",
+        "payload"
+      ]
+    },
+    "SyncStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "REPAIR_START"
+          ]
+        },
+        "taskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expectedVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "payload": {
+          "$ref": "#/$defs/StartAttempt"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "taskId",
+        "expectedVersion",
+        "capturedAt",
+        "payload"
+      ]
+    },
+    "SyncAttemptSubmit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "REPAIR_SUBMIT"
+          ]
+        },
+        "attemptId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expectedVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "payload": {
+          "$ref": "#/$defs/SubmitAttempt"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "attemptId",
+        "expectedVersion",
+        "capturedAt",
+        "payload"
+      ]
+    },
+    "SyncOperation": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SyncMeasurement"
+        },
+        {
+          "$ref": "#/$defs/SyncStart"
+        },
+        {
+          "$ref": "#/$defs/SyncAttemptSubmit"
+        }
+      ],
+      "discriminator": {
+        "propertyName": "kind",
+        "mapping": {
+          "INSPECTION_SUBMIT": "#/$defs/SyncMeasurement",
+          "REPAIR_START": "#/$defs/SyncStart",
+          "REPAIR_SUBMIT": "#/$defs/SyncAttemptSubmit"
+        }
+      }
+    },
+    "SyncBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyncOperation"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "deviceId",
+        "operations"
+      ],
+      "description": "100 là giới hạn đề xuất contract; xử lý theo thứ tự, transaction từng operation. Đồng bộ file đã VERIFIED trước. Thực hiện phase submit sau khi đã map local→server ID từ start response."
+    },
+    "SyncOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "APPLIED",
+            "DUPLICATE",
+            "CONFLICT",
+            "REJECTED"
+          ]
+        },
+        "resourceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "description": "Opaque concurrency version; không parse thành số ở client."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "status",
+        "resourceId",
+        "version",
+        "error"
+      ]
+    },
+    "SyncResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyncOutcome"
+          }
+        }
+      },
+      "required": [
+        "results"
+      ]
+    },
+    "DashboardMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "missingReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "value",
+        "unit",
+        "missingReason"
+      ]
+    },
+    "Dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "metricDefinitionVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DashboardMetric"
+          }
+        },
+        "isPartial": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "asOf",
+        "metricDefinitionVersion",
+        "metrics",
+        "isPartial"
+      ]
+    },
+    "ExportRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "segmentIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "periodFrom": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "periodTo": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "PDF",
+            "ZIP"
+          ]
+        },
+        "includeOriginalFiles": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "projectId",
+        "format",
+        "includeOriginalFiles"
+      ]
+    },
+    "Event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actorId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "action": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resourceType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resourceId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id",
+        "occurredAt",
+        "actorId",
+        "action",
+        "resourceType",
+        "resourceId",
+        "message"
+      ]
+    },
+    "Notification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "resourceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "message",
+        "resourceId",
+        "read",
+        "occurredAt",
+        "version"
+      ]
+    },
+    "ModelCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactFileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "artifactSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "datasetSplitId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "licenseReference": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "artifactFileId",
+        "artifactSha256",
+        "datasetSplitId",
+        "licenseReference"
+      ]
+    },
+    "ModelVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactSha256": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "ACTIVE",
+            "RETIRED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "artifactSha256",
+        "status",
+        "version"
+      ]
+    },
+    "DeletionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "projectId",
+        "reason"
+      ]
+    },
+    "RetentionDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "APPROVE",
+            "REJECT"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "decision",
+        "reason"
+      ]
+    },
+    "RetentionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "APPROVED",
+            "REJECTED",
+            "EXECUTED",
+            "BLOCKED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "status",
+        "version"
+      ]
+    },
+    "LegalHoldRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "enabled",
+        "reason"
+      ]
+    },
+    "AccessPointUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "$ref": "#/$defs/Position"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "position",
+        "reason"
+      ],
+      "description": "Q12 PM xác nhận là đề xuất, không tự ban hành quyền trước quyết định."
+    },
+    "CrewCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "leadUserId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "name",
+        "leadUserId",
+        "memberNames"
+      ],
+      "description": "Thành viên không bắt buộc có account; lead phải có quyền."
+    },
+    "Crew": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "leadUserId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "memberNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "name",
+        "leadUserId",
+        "memberNames",
+        "version"
+      ]
+    },
+    "DeviceCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "firmware": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parserVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "model",
+        "firmware",
+        "parserVersion"
+      ]
+    },
+    "Device": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "firmware": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parserVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "model",
+        "firmware",
+        "parserVersion",
+        "version"
+      ]
+    },
+    "CatalogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "code",
+        "label",
+        "active",
+        "version"
+      ]
+    },
+    "CatalogEntryUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "label",
+        "active",
+        "reason"
+      ]
+    },
+    "ReminderConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "surveyLeadDays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warrantyLeadDays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "surveyLeadDays",
+        "warrantyLeadDays",
+        "version"
+      ]
+    },
+    "ReminderConfigUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "surveyLeadDays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warrantyLeadDays": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "surveyLeadDays",
+        "warrantyLeadDays",
+        "reason"
+      ]
+    },
+    "NotificationPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Notification"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "ProjectPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Project"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "CrewPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Crew"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "PublicReportPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PublicReport"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "CasePage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Case"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "DefectPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Defect"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "CoverageResultPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CoverageResult"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "EventPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Event"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "CatalogEntryPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogEntry"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "InspectionTaskPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InspectionTask"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "RepairItemPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RepairItem"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "SurveyTaskPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SurveyTask"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "EvidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fileId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capturedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checksumSha256": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "fileId",
+        "purpose",
+        "source",
+        "capturedAt",
+        "checksumSha256"
+      ]
+    },
+    "TaskSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshotId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "task": {
+          "$ref": "#/$defs/InspectionTask"
+        },
+        "policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PolicyVersion"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assignmentVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "pmFastTrackBlocked": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceReference"
+          }
+        },
+        "destination": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Position"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "snapshotId",
+        "capturedAt",
+        "task",
+        "policy",
+        "assignmentVersion",
+        "pmFastTrackBlocked",
+        "evidence",
+        "destination"
+      ],
+      "description": "Không có offline_expires_at; auth token expiry là riêng. Snapshot metadata không chứng minh file bytes đã tải bền vững. Kiểm download/checksum local trước ready."
+    },
+    "DefectCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "typeCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceReportId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "sourceDetectionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceJobId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "position": {
+          "$ref": "#/$defs/Position"
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "typeCode",
+        "evidenceFileIds"
+      ],
+      "description": "Ít nhất nguồn report hoặc cặp job/detection; PM giữ phát hiện sơ bộ, chưa tự VERIFIED.",
+      "anyOf": [
+        {
+          "required": [
+            "sourceReportId"
+          ]
+        },
+        {
+          "required": [
+            "sourceDetectionId",
+            "sourceJobId"
+          ]
+        }
+      ]
+    },
+    "SlabLinks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slabIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "slabIds",
+        "reason"
+      ]
+    },
+    "PlanCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          },
+          "minItems": 1
+        },
+        "plannedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "surveyType": {
+          "type": "string",
+          "enum": [
+            "BASELINE",
+            "PERIODIC",
+            "AD_HOC"
+          ]
+        }
+      },
+      "required": [
+        "scope",
+        "plannedAt",
+        "surveyType"
+      ]
+    },
+    "SurveyPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BandScope"
+          }
+        },
+        "plannedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PLANNED",
+            "POSTPONED",
+            "TASK_CREATED"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "scope",
+        "plannedAt",
+        "status",
+        "version"
+      ]
+    },
+    "TrainingExportRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "labelIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "datasetSplitId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "projectId",
+        "labelIds",
+        "datasetSplitId"
+      ],
+      "description": "Chỉ nhãn đã được PM duyệt, có quyền sử dụng."
+    },
+    "JobPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Job"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "asOf": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "asOf"
+      ]
+    },
+    "WorkOrder": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "projectId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        }
+      },
+      "required": [
+        "id",
+        "projectId",
+        "defectIds",
+        "version"
+      ]
+    },
+    "ProposalRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "methodDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "methodDescription",
+        "evidenceFileIds",
+        "reason"
+      ]
+    },
+    "ReworkCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "beforeFileIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "beforeFileIds",
+        "startedAt",
+        "reason"
+      ]
+    }
+  }
+}

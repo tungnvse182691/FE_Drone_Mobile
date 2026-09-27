@@ -1,7 +1,7 @@
 import React, { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -9,29 +9,35 @@ import { Chip } from '../../src/components/Chip';
 import { FAB } from '../../src/components/FAB';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-import { CREW_TASKS } from './tasks';
+import { CREW_TASKS, TASK_MODE_CHIP } from './tasks';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
+type IconName = ComponentProps<typeof MaterialIcons>['name'];
 
 interface CrewMetric {
   label: string;
   value: string;
   icon: IconName;
   valueColor: string;
+  iconColor: string;
+  iconBg: string;
 }
 
 const CREW_METRICS: CrewMetric[] = [
   {
     label: 'Việc đang làm',
     value: '4',
-    icon: 'build-outline',
+    icon: 'build',
     valueColor: colors.primary,
+    iconColor: '#6B5219',
+    iconBg: '#FEF9E7',
   },
   {
     label: 'Hoàn thành',
     value: '12',
-    icon: 'checkmark-circle-outline',
+    icon: 'check-circle',
     valueColor: colors.success,
+    iconColor: '#2F9E44',
+    iconBg: '#E9F7EC',
   },
 ];
 
@@ -56,8 +62,8 @@ export default function CrewHomeScreen() {
             <Card key={metric.label} style={styles.metricCard}>
               <View style={styles.metricHeader}>
                 <Text style={[typography.labelSm, styles.metricLabel]}>{metric.label}</Text>
-                <View style={styles.metricIcon}>
-                  <Ionicons name={metric.icon} size={16} color={colors.secondary} />
+                <View style={[styles.metricIcon, { backgroundColor: metric.iconBg }]}>
+                  <MaterialIcons name={metric.icon} size={16} color={metric.iconColor} />
                 </View>
               </View>
               <Text style={[typography.headlineLg, { color: metric.valueColor }]}>{metric.value}</Text>
@@ -72,31 +78,38 @@ export default function CrewHomeScreen() {
           </Pressable>
         </View>
 
-        {CREW_TASKS.map((task) => (
-          <Pressable key={task.code ?? task.title} onPress={() => router.push('/(crew)/wo-detail')} accessibilityRole="button">
-            <Card style={styles.taskCard}>
-              <View style={styles.taskInner}>
-                <View style={styles.taskContent}>
-                  <View style={styles.taskMetaRow}>
-                    <Chip variant={task.chip} label={task.chipLabel} />
-                    {task.code ? (
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.code}</Text>
-                    ) : null}
+        {CREW_TASKS.map((task) => {
+          const modeChip = TASK_MODE_CHIP[task.task_mode];
+          return (
+            <Pressable
+              key={task.id}
+              onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id } })}
+              accessibilityRole="button"
+            >
+              <Card style={styles.taskCard}>
+                <View style={styles.taskInner}>
+                  <View style={styles.taskContent}>
+                    <View style={styles.taskMetaRow}>
+                      <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
+                    </View>
+                    <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
+                    <View style={styles.taskDistRow}>
+                      <MaterialIcons name="near-me" size={14} color={colors.secondary} />
+                      <Text style={[typography.caption, styles.taskDist]}>
+                        {task.route_code} • {task.section_name} • {task.chainage}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
-                  <View style={styles.taskDistRow}>
-                    <Ionicons name="navigate-outline" size={14} color={colors.secondary} />
-                    <Text style={[typography.caption, styles.taskDist]}>{task.distance}</Text>
-                  </View>
+                  <MaterialIcons name="chevron-right" size={22} color={colors.secondary} />
                 </View>
-                <Ionicons name="chevron-forward" size={20} color={colors.secondary} />
-              </View>
-            </Card>
-          </Pressable>
-        ))}
+              </Card>
+            </Pressable>
+          );
+        })}
       </SafeAreaScreen>
 
-      <FAB icon="camera-outline" onPress={() => router.push('/(crew)/viewfinder')} />
+      <FAB icon="photo-camera" onPress={() => router.push('/(crew)/viewfinder')} />
     </View>
   );
 }

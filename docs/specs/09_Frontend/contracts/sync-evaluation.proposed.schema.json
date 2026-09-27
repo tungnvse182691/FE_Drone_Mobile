@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PROPOSED_NOT_ENABLED SyncFastTrackEvaluation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operationId",
+    "kind",
+    "taskId",
+    "expectedVersion",
+    "snapshotId",
+    "assignmentVersion",
+    "capturedAt",
+    "payload"
+  ],
+  "properties": {
+    "operationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "taskId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "snapshotId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "const": "FAST_TRACK_EVALUATE"
+    },
+    "expectedVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "assignmentVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sessionId",
+        "policyVersionId"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "policyVersionId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    }
+  },
+  "$comment": "Not in active SyncOperation union. See 05_Technical/06_Sync_Evaluation_Amendment_Proposal.md. No approval implied."
+}

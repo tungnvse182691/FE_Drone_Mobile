@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type { SQLiteBindValue } from 'expo-sqlite';
+import type { FastTrackPolicyVersion, RepairWorkOrder } from '../types/domain';
 
 const DB_NAME = 'roadguard.db';
 
@@ -20,11 +21,12 @@ CREATE TABLE IF NOT EXISTS outbox (
   kind            TEXT NOT NULL,
   data_b64        TEXT NOT NULL,
   checksum_sha256 TEXT NOT NULL,
-  status          TEXT NOT NULL DEFAULT 'QUEUED',
+  status          TEXT NOT NULL DEFAULT 'READY',
   attempt         INTEGER DEFAULT 0,
   max_attempts    INTEGER DEFAULT 5,
   last_error      TEXT,
-  created_at      TEXT NOT NULL
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS media_file (
   id                    TEXT PRIMARY KEY,
@@ -36,6 +38,7 @@ CREATE TABLE IF NOT EXISTS media_file (
   survey_data_version_id TEXT,
   defect_id             TEXT,
   repair_item_id        TEXT,
+  work_order_id         TEXT,
   captured_at           TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS survey_cache (
@@ -94,4 +97,171 @@ export async function markSynced(
   id: string,
 ): Promise<void> {
   await db.runAsync(`UPDATE ${tableName} SET status = 'SERVER_CONFIRMED' WHERE id = ?`, id);
+}
+
+// =========================================================================
+// FAST TRACK POLICY CACHE HELPERS (US-33, BR-05, BR-08)
+// =========================================================================
+
+export async function cachePolicy(
+  db: SQLite.SQLiteDatabase,
+  policy: FastTrackPolicyVersion,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO task_cache (id, kind, data, cached_at) VALUES (?, 'policy', ?, ?)`,
+    policy.id,
+    JSON.stringify(policy),
+    now,
+  );
+}
+
+export async function getCachedPolicy(
+  db: SQLite.SQLiteDatabase,
+): Promise<FastTrackPolicyVersion | null> {
+  const row = await db.getFirstAsync<{ data: string }>(
+    `SELECT data FROM task_cache WHERE kind = 'policy' ORDER BY cached_at DESC LIMIT 1`,
+  );
+  if (!row) return null;
+  try {
+    return JSON.parse(row.data) as FastTrackPolicyVersion;
+  } catch {
+    return null;
+  }
+}
+
+// =========================================================================
+// WORK ORDER CACHE HELPERS (CREW OFFLINE TASKS)
+// =========================================================================
+
+export async function cacheWorkOrders(
+  db: SQLite.SQLiteDatabase,
+  orders: RepairWorkOrder[],
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.withTransactionAsync(async () => {
+    for (const order of orders) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO task_cache (id, kind, data, cached_at) VALUES (?, 'work_order', ?, ?)`,
+        order.id,
+        JSON.stringify(order),
+        now,
+      );
+    }
+  });
+}
+
+export async function getCachedWorkOrders(
+  db: SQLite.SQLiteDatabase,
+): Promise<RepairWorkOrder[]> {
+  const rows = await db.getAllAsync<{ data: string }>(
+    `SELECT data FROM task_cache WHERE kind = 'work_order' ORDER BY cached_at DESC`,
+  );
+  return rows.map((r) => {
+    try {
+      return JSON.parse(r.data) as RepairWorkOrder;
+    } catch {
+      return null;
+    }
+  }).filter((item): item is RepairWorkOrder => item !== null);
+}
+
+// =========================================================================
+// LOCAL DRAFT HELPERS (BẢN NHÁP CỤC BỘ)
+// =========================================================================
+
+export async function saveDraft(
+  db: SQLite.SQLiteDatabase,
+  id: string,
+  kind: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+    id,
+    kind,
+    JSON.stringify(payload),
+    now,
+    now,
+  );
+}
+
+export async function getDraft<T = Record<string, unknown>>(
+  db: SQLite.SQLiteDatabase,
+  id: string,
+): Promise<T | null> {
+  const row = await db.getFirstAsync<{ payload: string }>(
+    `SELECT payload FROM local_draft WHERE id = ?`,
+    id,
+  );
+  if (!row) return null;
+  try {
+    return JSON.parse(row.payload) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function getDraftsByKind<T = Record<string, unknown>>(
+  db: SQLite.SQLiteDatabase,
+  kind: string,
+): Promise<Array<{ id: string; payload: T; created_at: string; updated_at: string }>> {
+  const rows = await db.getAllAsync<{ id: string; payload: string; created_at: string; updated_at: string }>(
+    `SELECT id, payload, created_at, updated_at FROM local_draft WHERE kind = ? ORDER BY updated_at DESC`,
+    kind,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    payload: JSON.parse(r.payload) as T,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  }));
+}
+
+export async function deleteDraft(
+  db: SQLite.SQLiteDatabase,
+  id: string,
+): Promise<void> {
+  await db.runAsync(`DELETE FROM local_draft WHERE id = ?`, id);
+}
+
+// =========================================================================
+// MEDIA FILE HELPERS (ẢNH PHẢN ÁNH & ẢNH AFTER FAST TRACK)
+// =========================================================================
+
+export async function saveMediaFile(
+  db: SQLite.SQLiteDatabase,
+  media: {
+    id: string;
+    uri_local: string;
+    kind: string; // 'reporter_photo' | 'after_photo' | 'before_photo' | 'video' | 'srt'
+    size_bytes: number;
+    checksum_sha256: string;
+    status?: string;
+    survey_data_version_id?: string;
+    defect_id?: string;
+    repair_item_id?: string;
+    work_order_id?: string;
+    captured_at?: string;
+  },
+): Promise<void> {
+  const now = media.captured_at ?? new Date().toISOString();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO media_file (
+      id, uri_local, kind, size_bytes, checksum_sha256, status,
+      survey_data_version_id, defect_id, repair_item_id, work_order_id, captured_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    media.id,
+    media.uri_local,
+    media.kind,
+    media.size_bytes,
+    media.checksum_sha256,
+    media.status ?? 'LOCAL',
+    media.survey_data_version_id ?? null,
+    media.defect_id ?? null,
+    media.repair_item_id ?? null,
+    media.work_order_id ?? null,
+    now,
+  );
 }

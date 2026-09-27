@@ -1,5 +1,5 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
+import React, { type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'text';
@@ -10,6 +10,8 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   title: string;
+  icon?: ReactNode;
+  style?: StyleProp<ViewStyle>;
 }
 
 const baseButtonStyle = {
@@ -21,7 +23,7 @@ const baseButtonStyle = {
   minHeight: 48,
 };
 
-export function Button({ variant, onPress, disabled, loading, title }: ButtonProps) {
+export function Button({ variant, onPress, disabled, loading, title, icon, style }: ButtonProps) {
   const isDisabled = disabled || loading;
 
   return (
@@ -36,22 +38,26 @@ export function Button({ variant, onPress, disabled, loading, title }: ButtonPro
         variant === 'secondary' && [styles.secondary, pressed && !isDisabled && styles.secondaryPressed],
         variant === 'text' && styles.text,
         isDisabled && styles.disabled,
+        style,
       ]}
     >
       {loading ? (
         <ActivityIndicator color={variant === 'primary' ? colors.onPrimary : colors.secondary} />
       ) : (
-        <Text
-          style={[
-            typography.labelLg,
-            variant === 'primary' && styles.primaryText,
-            variant === 'secondary' && styles.secondaryText,
-            variant === 'text' && styles.textLabel,
-            isDisabled && styles.disabledText,
-          ]}
-        >
-          {title}
-        </Text>
+        <View style={styles.content}>
+          {icon ? <View style={styles.icon}>{icon}</View> : null}
+          <Text
+            style={[
+              typography.labelLg,
+              variant === 'primary' && styles.primaryText,
+              variant === 'secondary' && styles.secondaryText,
+              variant === 'text' && styles.textLabel,
+              isDisabled && styles.disabledText,
+            ]}
+          >
+            {title}
+          </Text>
+        </View>
       )}
     </Pressable>
   );
@@ -59,6 +65,16 @@ export function Button({ variant, onPress, disabled, loading, title }: ButtonPro
 
 const styles = StyleSheet.create({
   base: baseButtonStyle,
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  icon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   primary: { backgroundColor: colors.primary },
   primaryPressed: { backgroundColor: colors.primaryDark },
   primaryText: { color: colors.onPrimary },

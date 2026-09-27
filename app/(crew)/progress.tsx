@@ -1,24 +1,38 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { Chip } from '../../src/components/Chip';
+import { defectTypeLabel } from '../../src/constants/defect-types';
+import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
+import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const CONSTRUCTION_STEPS = [
   'Đặt biển cảnh báo & chóp nón an toàn cách 50m.',
-  'Đục tẩy bê tông hư hỏng, vệ sinh lòng hố sâu 7cm.',
-  'Quét hồ dầu liên kết xi măng & đổ bê tông M300 đá 1x2.',
+  'Đục tẩy bê tông hư hỏng, vệ sinh lòng hố theo kích thước đã đo.',
+  'Quét hồ dầu liên kết & đổ bê tông M300 theo phương án thi công.',
   'Lu lèn phẳng mặt và thu dọn hiện trường.',
 ];
 
-const QUICK_TAGS = ['+ Đã đủ vật liệu', '+ Thời tiết mưa lớn', '+ Kẹt xe tuyến ngoài'];
+const QUICK_TAGS = ['+ Đã chặn giao thông', '+ Thời tiết mưa lớn', '+ Kẹt xe tuyến ngoài'];
 
 export default function CrewProgressScreen() {
-  const [checked, setChecked] = useState<boolean[]>([true, true, true, false]);
-  const [note, setNote] = useState('Đã hoàn tất đầm dùi và đổ 0.8 m³ bê tông xi măng M300, làm phẳng bề mặt tấm theo cốt cao độ chuẩn, che phủ bảo dưỡng ẩm.');
+  const params = useLocalSearchParams<{ id?: string }>();
+  const task = getCrewTaskById(params.id);
+  const activeSession = getCrewFieldSession();
+  const session = activeSession?.task_id === task.id ? activeSession : null;
+  const modeChip = TASK_MODE_CHIP[task.task_mode];
+  const depthText =
+    session?.measurement.depth_cm === null || session?.measurement.depth_cm === undefined
+      ? ''
+      : ` sâu ${session.measurement.depth_cm.toFixed(1)}cm`;
+
+  const [checked, setChecked] = useState<boolean[]>([false, false, false, false]);
+  const [note, setNote] = useState('');
 
   const doneCount = checked.filter(Boolean).length;
   const progress = Math.round((doneCount / CONSTRUCTION_STEPS.length) * 100);
@@ -38,9 +52,10 @@ export default function CrewProgressScreen() {
             </Pressable>
             <View>
               <Text style={[typography.titleMd, styles.topBarTitle]}>Cập nhật tiến độ</Text>
-              <Text style={[typography.caption, styles.topBarSub]}>Lệnh sửa chữa #WO-118</Text>
+              <Text style={[typography.caption, styles.topBarSub]}>Lệnh sửa chữa {task.wo_code}</Text>
             </View>
           </View>
+          <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
         </View>
       }
     >
@@ -48,15 +63,23 @@ export default function CrewProgressScreen() {
         <View style={styles.summaryRow}>
           <View style={styles.summaryLeft}>
             <View style={styles.woTag}>
-              <Text style={[typography.labelSm, styles.woTagText]}>#WO-118</Text>
+              <Text style={[typography.labelSm, styles.woTagText]}>{task.wo_code}</Text>
             </View>
-            <Text style={[typography.caption, styles.summaryRoad]}>Km02+150 Tuyến ĐH.05</Text>
+            <Text style={[typography.caption, styles.summaryRoad]}>
+              {task.chainage} Tuyến {task.route_code} • {task.section_name}
+            </Text>
           </View>
           <View style={styles.summaryIcon}>
             <Ionicons name="build" size={18} color={colors.brandGold} />
           </View>
         </View>
-        <Text style={[typography.titleMd, styles.summaryTitle]}>Đổ bù ổ gà vỡ tấm sâu 7cm — Xã Bình Chánh</Text>
+        <Text style={[typography.titleMd, styles.summaryTitle]}>
+          {defectTypeLabel(task.defect_type_code)}
+          {depthText} — {task.locality}
+        </Text>
+        <Text style={[typography.caption, styles.summaryMethod]}>
+          Phương án xử lý: {task.repair_method}
+        </Text>
       </Card>
 
       <Card style={styles.card}>
@@ -147,13 +170,21 @@ export default function CrewProgressScreen() {
         <View style={styles.footerRow}>
           <View style={styles.footerLeft}>
             <Ionicons name="locate-outline" size={14} color={colors.success} />
-            <Text style={[typography.caption, styles.footerCoord]}>10.9621° N, 106.9423° E (Sai số &lt;3m)</Text>
+            <Text style={[typography.caption, styles.footerCoord]}>
+              {task.coordinates.latitude.toFixed(4)}° B, {task.coordinates.longitude.toFixed(4)}° Đ (Sai số &lt;3m)
+            </Text>
           </View>
-          <Text style={[typography.caption, styles.footerTime]}>09:41 • 24/10/2024</Text>
+          <Text style={[typography.caption, styles.footerTime]}>
+            {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {new Date().toLocaleDateString('vi-VN')}
+          </Text>
         </View>
       </Card>
 
-      <Button variant="primary" title="Lưu cập nhật & Chụp bằng chứng" onPress={() => router.push('/(crew)/viewfinder')} />
+      <Button
+        variant="primary"
+        title="Lưu cập nhật & Chụp bằng chứng"
+        onPress={() => router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, mode: 'AFTER' } })}
+      />
       <Text style={[typography.caption, styles.nextHint]}>Hành động tiếp theo: Mở màn hình Chụp ảnh hiện trường nghiệm thu</Text>
     </SafeAreaScreen>
   );
@@ -218,6 +249,10 @@ const styles = StyleSheet.create({
   },
   summaryRoad: {
     color: colors.secondary,
+  },
+  summaryMethod: {
+    color: colors.secondary,
+    marginTop: spacing.xs,
   },
   summaryIcon: {
     width: 32,

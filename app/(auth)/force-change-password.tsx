@@ -37,9 +37,11 @@ export default function ForceChangePasswordScreen() {
     setError(null);
     try {
       await apiChangePassword(user.token, oldPassword, newPassword);
-      const updatedUser = { ...user, must_change_password: false };
-      login(updatedUser);
-      router.replace(ROLE_HOMES[updatedUser.role_code] as any);
+        const updatedUser = { ...user, must_change_password: false };
+        login(updatedUser);
+        const home = ROLE_HOMES[updatedUser.role_code];
+        router.replace(home ? (home as any) : ('/(auth)' as any));
+
 
     } catch {
       setError('Mật khẩu cũ không đúng');
@@ -56,7 +58,7 @@ export default function ForceChangePasswordScreen() {
       >
         <View style={styles.container}>
           <Image
-            source={require('../../assets/logo.png')}
+            source={require('../../assets/logo_hoanghai.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />

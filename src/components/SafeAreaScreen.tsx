@@ -14,7 +14,11 @@ export function SafeAreaScreen({ children, scroll, header }: SafeAreaScreenProps
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       {header}
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={[styles.content, styles.scrollContent]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {children}
         </ScrollView>
       ) : (
@@ -31,5 +35,8 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.screenMargin,
+  },
+  scrollContent: {
+    paddingBottom: 96,
   },
 });

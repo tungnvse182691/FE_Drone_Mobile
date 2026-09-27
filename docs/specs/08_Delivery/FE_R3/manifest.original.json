@@ -1,0 +1,152 @@
+{
+  "package": "RoadGuard_FE_Integration_R3_v1",
+  "version": "FE-R3-v1",
+  "date": "2026-09-27",
+  "files": [
+    {
+      "path": "09_Frontend/01_FE_Scope_Implementation_Guide.md",
+      "sizeBytes": 5086,
+      "sha256": "a01b2003cfcec5284aecfc30fd08e2bd5203e9b194ae8f114e33961242c24da9"
+    },
+    {
+      "path": "09_Frontend/02_Authentication_Flow.md",
+      "sizeBytes": 9723,
+      "sha256": "7d03c36bdbe1f6a080349b2a031acb198ea428b734893ba0181d80607417b263"
+    },
+    {
+      "path": "09_Frontend/03_Error_Response_UI_Convention.md",
+      "sizeBytes": 6826,
+      "sha256": "3ca4f71e127d0a39d5de0dd9d3647e611b4c7190ca59ac53cad40683cd7f3580"
+    },
+    {
+      "path": "09_Frontend/04_Data_Contract_Type_Definitions.md",
+      "sizeBytes": 7186,
+      "sha256": "b503632601b77f09c2903274edf60b8618b25cc34c60c18e4ed57b03fb192533"
+    },
+    {
+      "path": "09_Frontend/05_Pagination_Filtering_Sorting.md",
+      "sizeBytes": 4856,
+      "sha256": "157ace1a01f706a75828c562ccbd2d9a63337b004caed5ee7d859e3707c073c7"
+    },
+    {
+      "path": "09_Frontend/06_Realtime_Event_Spec.md",
+      "sizeBytes": 5513,
+      "sha256": "9cf82ae349ec0f7ba8920152486e2ee6f2c162b97b3c3e0a0caf5a5bc1c8f869"
+    },
+    {
+      "path": "09_Frontend/07_Environment_Base_URL_Config.md",
+      "sizeBytes": 5405,
+      "sha256": "76c3fb8481dc2375ddf05976c67adc966a435718e1b0b260e9be64bd78bced4d"
+    },
+    {
+      "path": "09_Frontend/08_Rate_Limit_Timeout_Retry.md",
+      "sizeBytes": 5875,
+      "sha256": "338b9dff1528512735a59970b11a8a2bd524b0238273648fdcd9c85c7775d734"
+    },
+    {
+      "path": "09_Frontend/09_Offline_App_Sync_Spec.md",
+      "sizeBytes": 25203,
+      "sha256": "767fd1aaf8abc2512787d32e05b3d4d29ed0e3d4ac91da38e8a2b00e9d342e03"
+    },
+    {
+      "path": "09_Frontend/10_FE_Architecture_UI_States.md",
+      "sizeBytes": 7248,
+      "sha256": "743064a8e3f0b68ddb541fc77114e4dc8709084b9f34d3c32b60580fd977c083"
+    },
+    {
+      "path": "09_Frontend/11_FE_Offline_Test_UAT.md",
+      "sizeBytes": 13799,
+      "sha256": "cfbf387048649f289fd58d7a86c44ceff660fa893d5d69738b0df7caf9181771"
+    },
+    {
+      "path": "09_Frontend/12_Decisions_Contract_Gaps.md",
+      "sizeBytes": 6787,
+      "sha256": "c4adf37898dd9bde6ebfbb6e9bd2ccd3e2c3190b30ebf069ad8db8f77e7ce6fe"
+    },
+    {
+      "path": "09_Frontend/13_Source_References.md",
+      "sizeBytes": 3294,
+      "sha256": "5ee49589c0e543e2a192090d5cb3e09d63f2eaecf980d1c9b308a8b4178475ea"
+    },
+    {
+      "path": "09_Frontend/config/config.ts.example",
+      "sizeBytes": 1823,
+      "sha256": "200d4d11ba7d084192e3c6e15d174f68ef112df772092c64dd98f0e5fb10f961"
+    },
+    {
+      "path": "09_Frontend/config/env.development.example",
+      "sizeBytes": 280,
+      "sha256": "59376997bfb112ccf553fdc7b7d34abcd1df4c427b574f8ca5f2e8d80a1e4f6f"
+    },
+    {
+      "path": "09_Frontend/config/env.production.example",
+      "sizeBytes": 314,
+      "sha256": "3acf6356acf73ae6e2b534265a8101634c6f3f0e04839567ace60a1695d5e3b7"
+    },
+    {
+      "path": "09_Frontend/config/env.staging.example",
+      "sizeBytes": 308,
+      "sha256": "e2012e51598f1aec064764e83d7b0ae6b183fd7886a3c44a72df982120710ef7"
+    },
+    {
+      "path": "09_Frontend/contracts/api.schemas.json",
+      "sizeBytes": 116860,
+      "sha256": "55d073da1830685b55d0ea2f73dbecfe225c6b0b087fd6fbb18d44fca98b6a09"
+    },
+    {
+      "path": "09_Frontend/contracts/api.types.ts",
+      "sizeBytes": 26438,
+      "sha256": "19f74386dfa0305c36ad632b2b57ff30c5a1d399e3767391f7d4d42577891acd"
+    },
+    {
+      "path": "09_Frontend/contracts/build_contracts.py",
+      "sizeBytes": 5216,
+      "sha256": "c883d4348e3dfa2fd09cbf136ca032b4678c99d400073181b6b080a0dbe53062"
+    },
+    {
+      "path": "09_Frontend/contracts/local.types.ts",
+      "sizeBytes": 2599,
+      "sha256": "9812a478ebf0c8457e79f717f0a53f46c64e6bdce8ea162c652505bdf66e0ffa"
+    },
+    {
+      "path": "09_Frontend/contracts/openapi.baseline.yaml",
+      "sizeBytes": 302422,
+      "sha256": "e417db34ebea5278c53c023520a6da5ece067b6422e188213d0efe980b79cce2"
+    },
+    {
+      "path": "09_Frontend/contracts/operation_catalog.md",
+      "sizeBytes": 16221,
+      "sha256": "46ca5a03a8277dd8a77b4b9fbf70283a32f801a1703de295ffffef7cfc9c01dc"
+    },
+    {
+      "path": "09_Frontend/contracts/realtime.proposed.schema.json",
+      "sizeBytes": 1483,
+      "sha256": "cdedda2645249157f5fb3fc155f5b9c929fb71efc232db538da12ff804255570"
+    },
+    {
+      "path": "09_Frontend/contracts/validate_package.py",
+      "sizeBytes": 5019,
+      "sha256": "7a1b6b0f927ed32c659bc36d3a74bf9feaf9ef9a954b04593efb57d22969442f"
+    },
+    {
+      "path": "09_Frontend/fixtures/api.examples.json",
+      "sizeBytes": 5049,
+      "sha256": "da4e2f68f243b7db88df7c7adb475ccc5cc421a183a7fa10e91b83c8615b561a"
+    },
+    {
+      "path": "RoadGuard_FE_Integration_Index.md",
+      "sizeBytes": 4551,
+      "sha256": "a9e9ce95797b7d9dade8c814ac6862d583b31100bdb41ca55eb9c6160a65dd51"
+    },
+    {
+      "path": "RoadGuard_FE_Package_Validation.md",
+      "sizeBytes": 2298,
+      "sha256": "950daa04a948035fd872cd005a094e774f95b4a3df8f15b23abbdb58eb58f68d"
+    },
+    {
+      "path": "source_manifest.json",
+      "sizeBytes": 1108,
+      "sha256": "2bfedcf98d55dbc4daa54dfe96cbc5d22fdca3ce43b1ed2608cccd59ce7dee96"
+    }
+  ]
+}

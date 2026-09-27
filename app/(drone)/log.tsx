@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -10,9 +10,12 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 interface SurveyLogItem {
   id: string;
   code: string;
+  flightCode: string;
+  surveyCode: string;
   timestamp: string;
   title: string;
   location: string;
+  droneDevice: string;
   specs: string;
   status: 'processing' | 'done';
   statusText: string;
@@ -20,66 +23,106 @@ interface SurveyLogItem {
   highlight?: boolean;
 }
 
+const ACTIVE_FLIGHT_LOG = {
+  flightCode: '#FL-2026-089',
+  surveyCode: '#REQ-KS-089',
+  roadTitle: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
+  location: 'Tân Kiên, Bình Chánh, TP.HCM',
+  droneId: 'M350-HH-02',
+  droneModel: 'DJI Matrice 350 RTK Hoàng Hải',
+  baseStation: 'D-RTK 2 Base Station (Cột mốc BM-01)',
+  takeoffTime: '08:35',
+  landingTime: '08:59',
+  duration: '24 phút',
+  weather: 'Nắng nhẹ, tầm nhìn > 10 km',
+  windSpeed: '3.2 m/s',
+  batteryModel: 'Pin thông minh TB65 kép',
+  batteryStart: '98%',
+  batteryEnd: '42%',
+  batteryConsumed: '56%',
+  batteryCycles: '28 lần',
+  orthophotoCount: '420 ảnh trực giao',
+  sha256Checksum: '7f8a3c...e4b1 - Khớp 100%',
+  surfaceModel: 'Tái dựng DSM bằng OpenDroneMap (ODM)',
+};
+
 const SURVEY_LOGS: SurveyLogItem[] = [
   {
     id: '1',
     code: '#HH-409',
-    timestamp: 'Hôm nay, 14:30',
+    flightCode: '#FL-2026-089',
+    surveyCode: '#REQ-KS-089',
+    timestamp: 'Hôm nay, 08:59',
     title: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     location: 'Bình Chánh, TP.HCM',
-    specs: 'Video 4K RGB · 184 MB · Flycam Matrice 350 RTK',
+    droneDevice: 'M350-HH-02 (Matrice 350 RTK)',
+    specs: '4K RGB · 420 ảnh · DSM OpenDroneMap · RTK cm',
     status: 'processing',
-    statusText: 'Đang nhận diện hư hỏng mặt đường',
+    statusText: 'Đang nhận diện khuyết tật bê tông nông thôn (ODM)',
     actionText: 'Xem tiến độ >',
     highlight: true,
   },
   {
     id: '2',
     code: '#HH-398',
+    flightCode: '#FL-2026-088',
+    surveyCode: '#REQ-KS-088',
     timestamp: 'Hôm qua, 09:15',
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     location: 'Bình Chánh, TP.HCM',
-    specs: 'Video 4K RGB · 210 MB · Flycam Mavic 3 Enterprise',
+    droneDevice: 'Mavic3E-HH-01 (Mavic 3 Enterprise)',
+    specs: '4K RGB · 380 ảnh · DSM OpenDroneMap · RTK cm',
     status: 'done',
-    statusText: 'Phát hiện 14 điểm nứt tấm & 3 ổ gà sâu',
+    statusText: 'Phát hiện 14 điểm nứt tấm & 3 ổ gà sâu bê tông',
     actionText: 'Xem kết quả >',
   },
   {
     id: '3',
     code: '#HH-382',
+    flightCode: '#FL-2026-087',
+    surveyCode: '#REQ-KS-087',
     timestamp: '22/10/2025',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     location: 'Bình Chánh, TP.HCM',
-    specs: 'Video 4K RGB · 320 MB · Flycam Matrice 350 RTK',
+    droneDevice: 'M350-HH-02 (Matrice 350 RTK)',
+    specs: '4K RGB · 510 ảnh · DSM OpenDroneMap · RTK cm',
     status: 'processing',
-    statusText: 'Đang trích xuất toạ độ GPS đoạn tuyến',
+    statusText: 'Đang trích xuất toạ độ WGS84 từng khung hình SRT',
     actionText: 'Xem tiến độ >',
   },
   {
     id: '4',
     code: '#HH-375',
+    flightCode: '#FL-2026-085',
+    surveyCode: '#REQ-KS-085',
     timestamp: '20/10/2025',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
     location: 'Bình Chánh, TP.HCM',
-    specs: 'Video 4K RGB · 165 MB · Flycam Mavic 3 Enterprise',
+    droneDevice: 'Mavic3E-HH-01 (Mavic 3 Enterprise)',
+    specs: '4K RGB · 290 ảnh · DSM OpenDroneMap · RTK cm',
     status: 'done',
-    statusText: 'Đã lập biên bản báo cáo kỹ thuật',
+    statusText: 'Đã lập biên bản báo cáo kỹ thuật TCVN 10380:2014',
     actionText: 'Xem kết quả >',
   },
   {
     id: '5',
     code: '#HH-361',
+    flightCode: '#FL-2026-084',
+    surveyCode: '#REQ-KS-088',
     timestamp: '18/10/2025',
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     location: 'Bình Chánh, TP.HCM',
-    specs: 'Video 4K RGB · 285 MB · Flycam Matrice 350 RTK',
+    droneDevice: 'M350-HH-02 (Matrice 350 RTK)',
+    specs: '4K RGB · 460 ảnh · DSM OpenDroneMap · RTK cm',
     status: 'done',
-    statusText: 'Đã cập nhật hệ cơ sở dữ liệu GIS',
+    statusText: 'Đã cập nhật hệ cơ sở dữ liệu GIS tuyến đường',
     actionText: 'Xem kết quả >',
   },
 ];
 
 export default function DroneLogScreen() {
+  const [expandFlightDetails, setExpandFlightDetails] = useState(true);
+
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
       {/* Top Segmented Tabs: Yêu cầu mới (3) | Nhật ký */}
@@ -98,14 +141,145 @@ export default function DroneLogScreen() {
         </Pressable>
 
         <Pressable style={[styles.tabItem, styles.tabItemActive]} accessibilityRole="button">
-          <Text style={styles.tabTitleActive}>Nhật ký</Text>
+          <Text style={styles.tabTitleActive}>Nhật ký chuyến bay</Text>
           <View style={styles.activeUnderline} />
         </Pressable>
       </View>
 
-      {/* Section Header: ĐÃ NỘP KHẢO SÁT (6) | Mới nhất */}
+      {/* Featured Card: GHI NHẬN NHẬT KÝ CHUYẾN BAY KHẢO SÁT */}
+      <Card style={styles.featuredFlightCard}>
+        <View style={styles.featuredHeader}>
+          <View style={styles.featuredHeaderLeft}>
+            <View style={styles.droneIconCircle}>
+              <MaterialIcons name="flight-takeoff" size={20} color={colors.primary} />
+            </View>
+            <View>
+              <View style={styles.codeRow}>
+                <Text style={[typography.titleMd, styles.flightCodeText]}>
+                  {ACTIVE_FLIGHT_LOG.flightCode}
+                </Text>
+                <View style={styles.verifiedTag}>
+                  <MaterialIcons name="verified" size={12} color={colors.success} />
+                  <Text style={styles.verifiedTagText}>ĐÃ XÁC THỰC</Text>
+                </View>
+              </View>
+              <Text style={[typography.caption, styles.surveyCodeSub]}>
+                Nhiệm vụ: {ACTIVE_FLIGHT_LOG.surveyCode} · {ACTIVE_FLIGHT_LOG.roadTitle}
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            style={styles.toggleExpandBtn}
+            onPress={() => setExpandFlightDetails(!expandFlightDetails)}
+            accessibilityRole="button"
+          >
+            <MaterialIcons
+              name={expandFlightDetails ? 'expand-less' : 'expand-more'}
+              size={22}
+              color={colors.secondary}
+            />
+          </Pressable>
+        </View>
+
+        {/* Thiết bị & Trạm mặt đất */}
+        <View style={styles.equipmentRow}>
+          <View style={styles.equipmentItem}>
+            <MaterialIcons name="toys" size={16} color={colors.primary} />
+            <Text style={[typography.caption, styles.equipmentText]}>
+              Drone: <Text style={styles.boldText}>{ACTIVE_FLIGHT_LOG.droneId}</Text> ({ACTIVE_FLIGHT_LOG.droneModel})
+            </Text>
+          </View>
+
+          <View style={styles.equipmentItem}>
+            <MaterialIcons name="cell-tower" size={16} color={colors.primary} />
+            <Text style={[typography.caption, styles.equipmentText]}>
+              Trạm mặt đất: <Text style={styles.boldText}>{ACTIVE_FLIGHT_LOG.baseStation}</Text>
+            </Text>
+          </View>
+        </View>
+
+        {expandFlightDetails && (
+          <>
+            {/* Grid 4 thông số chính: Giờ bay, Gió, Pin TB65, Ảnh trực giao */}
+            <View style={styles.statsGrid}>
+              {/* Stat 1: Thời gian bay */}
+              <View style={styles.statBox}>
+                <View style={styles.statLabelRow}>
+                  <MaterialIcons name="schedule" size={14} color={colors.secondary} />
+                  <Text style={[typography.caption, styles.statLabel]}>Thời gian bay</Text>
+                </View>
+                <Text style={[typography.titleMd, styles.statMainValue]}>
+                  {ACTIVE_FLIGHT_LOG.duration}
+                </Text>
+                <Text style={styles.statSubValue}>
+                  {ACTIVE_FLIGHT_LOG.takeoffTime} → {ACTIVE_FLIGHT_LOG.landingTime}
+                </Text>
+              </View>
+
+              {/* Stat 2: Khí tượng & Vận tốc gió */}
+              <View style={styles.statBox}>
+                <View style={styles.statLabelRow}>
+                  <MaterialIcons name="air" size={14} color={colors.secondary} />
+                  <Text style={[typography.caption, styles.statLabel]}>Vận tốc gió</Text>
+                </View>
+                <Text style={[typography.titleMd, styles.statMainValue]}>
+                  {ACTIVE_FLIGHT_LOG.windSpeed}
+                </Text>
+                <Text style={styles.statSubValue}>{ACTIVE_FLIGHT_LOG.weather}</Text>
+              </View>
+
+              {/* Stat 3: Tình trạng Pin TB65 */}
+              <View style={styles.statBox}>
+                <View style={styles.statLabelRow}>
+                  <MaterialIcons name="battery-charging-full" size={14} color={colors.secondary} />
+                  <Text style={[typography.caption, styles.statLabel]}>Pin TB65 kép</Text>
+                </View>
+                <Text style={[typography.titleMd, styles.statMainValue]}>
+                  {ACTIVE_FLIGHT_LOG.batteryStart} → {ACTIVE_FLIGHT_LOG.batteryEnd}
+                </Text>
+                <Text style={styles.statSubValue}>
+                  Chu kỳ nạp: {ACTIVE_FLIGHT_LOG.batteryCycles}
+                </Text>
+              </View>
+
+              {/* Stat 4: Dữ liệu ảnh trực giao & SHA-256 */}
+              <View style={styles.statBox}>
+                <View style={styles.statLabelRow}>
+                  <MaterialIcons name="collections" size={14} color={colors.secondary} />
+                  <Text style={[typography.caption, styles.statLabel]}>Ảnh trực giao</Text>
+                </View>
+                <Text style={[typography.titleMd, styles.statMainValue]}>
+                  {ACTIVE_FLIGHT_LOG.orthophotoCount}
+                </Text>
+                <Text style={styles.statSubValue}>Mã SHA-256 đã khớp</Text>
+              </View>
+            </View>
+
+            {/* Checksum SHA-256 & Mô hình DSM ODM */}
+            <View style={styles.flightChecksumBox}>
+              <View style={styles.checksumInfoRow}>
+                <MaterialIcons name="security" size={16} color={colors.success} />
+                <Text style={styles.flightChecksumText}>
+                  Kiểm tra toàn vẹn: <Text style={styles.boldText}>{ACTIVE_FLIGHT_LOG.sha256Checksum}</Text>
+                </Text>
+              </View>
+              <View style={styles.checksumInfoRow}>
+                <MaterialIcons name="layers" size={16} color={colors.primary} />
+                <Text style={styles.flightChecksumText}>
+                  Xử lý bề mặt: <Text style={styles.boldText}>{ACTIVE_FLIGHT_LOG.surfaceModel}</Text>
+                </Text>
+              </View>
+            </View>
+          </>
+        )}
+      </Card>
+
+      {/* Section Header: ĐÃ NỘP KHẢO SÁT (5) | Mới nhất */}
       <View style={styles.sectionHeader}>
-        <Text style={[typography.labelSm, styles.sectionTitle]}>ĐÃ NỘP KHẢO SÁT (6)</Text>
+        <Text style={[typography.labelSm, styles.sectionTitle]}>
+          LỊCH SỬ KHẢO SÁT TUYẾN ĐH.05 ({SURVEY_LOGS.length})
+        </Text>
         <View style={styles.sortContainer}>
           <MaterialIcons name="swap-vert" size={14} color={colors.secondary} />
           <Text style={[typography.caption, styles.sortText]}>Mới nhất</Text>
@@ -123,7 +297,7 @@ export default function DroneLogScreen() {
               onPress={() =>
                 router.push({
                   pathname: '/(drone)/request-detail',
-                  params: { code: log.code },
+                  params: { code: log.surveyCode ?? '#REQ-KS-089' },
                 })
               }
               accessibilityRole="button"
@@ -141,7 +315,7 @@ export default function DroneLogScreen() {
                   {isProcessing ? (
                     <View style={styles.processingPill}>
                       <View style={styles.blueDot} />
-                      <Text style={styles.processingPillText}>ĐANG XỬ LÝ</Text>
+                      <Text style={styles.processingPillText}>ĐANG XỬ LÝ ODM</Text>
                     </View>
                   ) : (
                     <View style={styles.donePill}>
@@ -153,12 +327,10 @@ export default function DroneLogScreen() {
 
                 {/* Content Row: Dark Video Thumbnail & Info */}
                 <View style={styles.cardContentRow}>
-                  {/* Dark video thumbnail with play circle */}
                   <View style={styles.videoThumbnailBox}>
                     <MaterialIcons name="play-arrow" size={20} color={colors.surface} />
                   </View>
 
-                  {/* Info details */}
                   <View style={styles.infoBox}>
                     <Text style={[typography.titleMd, styles.surveyTitle]} numberOfLines={1}>
                       {log.title}
@@ -170,7 +342,7 @@ export default function DroneLogScreen() {
                       </Text>
                     </View>
                     <Text style={[typography.caption, styles.specsText]} numberOfLines={1}>
-                      {log.specs}
+                      {log.droneDevice} · {log.specs}
                     </Text>
                   </View>
                 </View>
@@ -198,7 +370,7 @@ export default function DroneLogScreen() {
                       e.stopPropagation();
                       router.push({
                         pathname: isProcessing ? '/(drone)/sync' : '/(drone)/request-detail',
-                        params: { code: log.code },
+                        params: { code: log.surveyCode ?? '#REQ-KS-089' },
                       });
                     }}
                     accessibilityRole="button"
@@ -222,7 +394,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   tabItem: {
     flex: 1,
@@ -266,11 +438,140 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderRadius: radius.full,
   },
+  featuredFlightCard: {
+    marginBottom: spacing.sm,
+    backgroundColor: '#FCFCFB',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    gap: spacing.xs,
+  },
+  featuredHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: spacing.xs,
+  },
+  featuredHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  droneIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    backgroundColor: '#FEF9E7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  flightCodeText: {
+    color: colors.neutral,
+    fontWeight: '700',
+  },
+  verifiedTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#E9F7EC',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  verifiedTagText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: colors.success,
+  },
+  surveyCodeSub: {
+    color: colors.secondary,
+    marginTop: 2,
+  },
+  toggleExpandBtn: {
+    padding: 4,
+  },
+  equipmentRow: {
+    gap: 4,
+    paddingVertical: 2,
+  },
+  equipmentItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  equipmentText: {
+    color: colors.secondary,
+    flex: 1,
+  },
+  boldText: {
+    fontWeight: 'bold',
+    color: colors.neutral,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: 4,
+  },
+  statBox: {
+    width: '48.5%',
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xs,
+    gap: 2,
+  },
+  statLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statLabel: {
+    color: colors.secondary,
+    fontSize: 11,
+  },
+  statMainValue: {
+    color: colors.neutral,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  statSubValue: {
+    fontSize: 10,
+    color: colors.secondary,
+  },
+  flightChecksumBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xs,
+    gap: 4,
+    marginTop: 2,
+  },
+  checksumInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  flightChecksumText: {
+    fontSize: 11,
+    color: colors.secondary,
+    flex: 1,
+  },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
+    marginTop: spacing.xs,
   },
   sectionTitle: {
     color: colors.secondary,
@@ -362,8 +663,8 @@ const styles = StyleSheet.create({
     marginVertical: spacing.xs,
   },
   videoThumbnailBox: {
-    width: 64,
-    height: 64,
+    width: 60,
+    height: 60,
     borderRadius: radius.sm,
     backgroundColor: '#27272A',
     alignItems: 'center',

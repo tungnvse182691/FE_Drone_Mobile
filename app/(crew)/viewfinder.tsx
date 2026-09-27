@@ -1,11 +1,19 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraCapturedPicture } from 'expo-camera';
-import { ViewFinder } from '../../src/components/ViewFinder';
+import * as DocumentPicker from 'expo-document-picker';
+import { ViewFinder, type Coords } from '../../src/components/ViewFinder';
 import { Button } from '../../src/components/Button';
+import { defectTypeLabel } from '../../src/constants/defect-types';
+import {
+  getCrewFieldSession,
+  setAfterCapture,
+  setBeforeCapture,
+} from '../../src/api/mock/crew-inspection';
+import { getCrewTaskById } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 type ViewfinderMode = 'before' | 'after' | 'video';
@@ -30,32 +38,73 @@ function formatDateTime(date: Date): string {
 }
 
 export default function CrewViewfinderScreen() {
-  const [mode, setMode] = useState<ViewfinderMode>('after');
+  const params = useLocalSearchParams<{ id?: string; mode?: string }>();
+  const task = getCrewTaskById(params.id);
+  const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';
+
+  const [mode, setMode] = useState<ViewfinderMode>(initialMode);
   const [flashOn, setFlashOn] = useState(false);
-  const [afterTwoCaptured, setAfterTwoCaptured] = useState(false);
+  const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [afterUri, setAfterUri] = useState<string | null>(null);
+  const [coords, setCoords] = useState<Coords | null>(null);
 
-  const photoCount = 2 + (afterTwoCaptured ? 1 : 0);
+  const session = getCrewFieldSession();
+  const beforeReady = Boolean(session?.before_local_uri || session?.before_evidence_id);
+  const afterReady = Boolean(afterUri || session?.after_local_uri);
+  const photoCount = (beforeReady ? 1 : 0) + (afterReady ? 1 : 0);
+  const requiredPhotoCount = task.task_mode === 'MEASURE_ONLY' ? 1 : 2;
 
-  const handleCapture = (_photo: CameraCapturedPicture) => {
-    setAfterTwoCaptured(true);
+  const capturedAt = new Date();
+  const gpsText = coords
+    ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
+    : 'Đang lấy GPS…';
+
+  const watermarkLine = useMemo(
+    () =>
+      `${task.wo_code} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(capturedAt)}`,
+    [task.wo_code, task.defect_type_code, gpsText, capturedAt],
+  );
+
+  const handleCapture = (photo: CameraCapturedPicture) => {
+    const captureCoords = {
+      latitude: coords?.latitude ?? task.coordinates.latitude,
+      longitude: coords?.longitude ?? task.coordinates.longitude,
+    };
+    if (mode === 'before') {
+      setBeforeCapture(photo.uri, watermarkLine, capturedAt.toISOString(), captureCoords);
+      setMode('after');
+      return;
+    }
+    if (mode === 'after') {
+      setAfterCapture(photo.uri, watermarkLine, captureCoords);
+      setAfterUri(photo.uri);
+    }
   };
 
-  const modeLabel = mode === 'before' ? 'Trước' : mode === 'after' ? 'Sau' : 'Video';
+  const modeLabel = mode === 'before' ? 'BEFORE' : mode === 'after' ? 'AFTER' : 'VIDEO';
 
   const watermark = (
     <View style={styles.watermarkCard} pointerEvents="none">
       <View style={styles.watermarkRow}>
         <View style={styles.watermarkGps}>
           <Ionicons name="location" size={14} color={colors.warning} />
-          <Text style={[typography.labelSm, styles.watermarkGpsText]}>10.9634, 107.0125</Text>
+          <Text style={[typography.labelSm, styles.watermarkGpsText]}>{gpsText}</Text>
         </View>
-        <Text style={styles.rtkBadge}>RTK FIX</Text>
+        <Text style={styles.rtkBadge}>{coords ? 'GPS OK' : 'GPS…'}</Text>
+      </View>
+      <View style={styles.watermarkMeta}>
+        <Ionicons name="document-text-outline" size={13} color="#94A3B8" />
+        <Text style={[typography.caption, styles.watermarkMetaText]}>{task.wo_code}</Text>
+      </View>
+      <View style={styles.watermarkMeta}>
+        <Ionicons name="warning-outline" size={13} color="#94A3B8" />
+        <Text style={[typography.caption, styles.watermarkMetaText]}>
+          {defectTypeLabel(task.defect_type_code)}
+        </Text>
       </View>
       <View style={styles.watermarkMeta}>
         <Ionicons name="calendar-outline" size={13} color="#94A3B8" />
-        <Text style={[typography.caption, styles.watermarkMetaText]}>
-          {formatDateTime(new Date())} • #WO-118
-        </Text>
+        <Text style={[typography.caption, styles.watermarkMetaText]}>{formatDateTime(capturedAt)}</Text>
       </View>
     </View>
   );
@@ -64,49 +113,89 @@ export default function CrewViewfinderScreen() {
     <View style={styles.thumbsRow}>
       <View style={styles.thumb}>
         <Ionicons name="image-outline" size={18} color="#64748B" />
-        <View style={[styles.thumbCheck, styles.thumbCheckGreen]}>
-          <Ionicons name="checkmark" size={10} color={colors.surface} />
+        <View style={[styles.thumbCheck, beforeReady ? styles.thumbCheckGreen : styles.thumbCheckPending]}>
+          <Ionicons name={beforeReady ? 'checkmark' : 'add'} size={10} color={colors.surface} />
         </View>
-        <Text style={[typography.labelSm, styles.thumbLabelGreen]}>TRƯỚC</Text>
-      </View>
-
-      <View style={styles.thumb}>
-        <Ionicons name="image-outline" size={18} color="#64748B" />
-        <View style={[styles.thumbCheck, styles.thumbCheckGold]}>
-          <Ionicons name="checkmark" size={10} color={colors.onSurface} />
-        </View>
-        <Text style={[typography.labelSm, styles.thumbLabelGold]}>SAU #1</Text>
-      </View>
-
-      <View style={[styles.thumb, styles.thumbPending, afterTwoCaptured && styles.thumbFilled]}>
-        <Ionicons
-          name={afterTwoCaptured ? 'checkmark' : 'add'}
-          size={20}
-          color={afterTwoCaptured ? colors.onSurface : colors.warning}
-        />
-        <Text style={[typography.labelSm, styles.thumbLabelPending, afterTwoCaptured && styles.thumbLabelGold]}>
-          SAU #2
+        <Text style={[typography.labelSm, beforeReady ? styles.thumbLabelGreen : styles.thumbLabelPending]}>
+          TRƯỚC
         </Text>
       </View>
 
+      {task.task_mode !== 'MEASURE_ONLY' ? (
+        <View style={styles.thumb}>
+          <Ionicons name="image-outline" size={18} color="#64748B" />
+          <View style={[styles.thumbCheck, afterReady ? styles.thumbCheckGold : styles.thumbCheckPending]}>
+            <Ionicons name={afterReady ? 'checkmark' : 'add'} size={10} color={colors.surface} />
+          </View>
+          <Text style={[typography.labelSm, afterReady ? styles.thumbLabelGold : styles.thumbLabelPending]}>
+            SAU
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.readyBlock}>
-        <Text style={[typography.labelLg, styles.readyCount]}>{photoCount}/4 ảnh</Text>
-        <Text style={[typography.labelLg, styles.readyOk]}>Đủ điều kiện</Text>
+        <Text style={[typography.labelLg, styles.readyCount]}>
+          {photoCount}/{requiredPhotoCount} ảnh
+        </Text>
+        <Text
+          style={[
+            typography.labelLg,
+            photoCount >= requiredPhotoCount ? styles.readyOk : styles.readyWaiting,
+          ]}
+        >
+          {photoCount >= requiredPhotoCount ? 'Đủ điều kiện' : 'Còn thiếu ảnh'}
+        </Text>
       </View>
     </View>
   );
 
+  const handlePickGallery = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'image/jpeg', 'image/png'],
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        handleCapture({
+          uri: res.assets[0].uri,
+          width: 1920,
+          height: 1080,
+        } as CameraCapturedPicture);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const galleryButton = (
-    <Pressable accessibilityRole="button" style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Chọn ảnh từ thiết bị"
+      onPress={handlePickGallery}
+      style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
+    >
       <Ionicons name="images-outline" size={20} color={colors.surface} />
     </Pressable>
   );
 
   const switchButton = (
-    <Pressable accessibilityRole="button" style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Đổi camera trước/sau"
+      onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+      style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
+    >
       <Ionicons name="camera-reverse-outline" size={20} color={colors.surface} />
     </Pressable>
   );
+
+  const handleConfirm = () => {
+    if (mode === 'after' && afterReady) {
+      router.push({ pathname: '/(crew)/complete', params: { id: task.id } });
+      return;
+    }
+    router.back();
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -142,8 +231,13 @@ export default function CrewViewfinderScreen() {
           >
             <Ionicons name={flashOn ? 'flash' : 'flash-off'} size={19} color={colors.surface} />
           </Pressable>
-          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
-            <Ionicons name="settings-outline" size={19} color={colors.surface} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cài đặt camera"
+            onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+          >
+            <Ionicons name="camera-reverse" size={19} color={colors.surface} />
           </Pressable>
         </View>
       </View>
@@ -151,10 +245,12 @@ export default function CrewViewfinderScreen() {
       <View style={styles.viewport}>
         <ViewFinder
           onCapture={handleCapture}
+          onCoordsChange={setCoords}
           defectType={modeLabel}
           showGridGuide
           showReticle
           flashMode={flashOn ? 'on' : 'off'}
+          facing={facing}
           watermarkContent={watermark}
           hudItems={thumbs}
           leftControl={galleryButton}
@@ -165,18 +261,22 @@ export default function CrewViewfinderScreen() {
       <View style={styles.bottomSheet}>
         <View style={styles.sheetHeaderRow}>
           <View style={styles.sheetTitleRow}>
-            <View style={styles.sheetDot} />
-            <Text style={[typography.labelLg, styles.sheetTitle]}>Hồ sơ #WO-118</Text>
+            <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
+            <Text style={[typography.labelLg, styles.sheetTitle]}>{task.wo_code}</Text>
             <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
-            <Text style={[typography.labelLg, styles.sheetSub]}>Ổ gà Km 42+150</Text>
+            <Text style={[typography.labelLg, styles.sheetSub]}>
+              {defectTypeLabel(task.defect_type_code)} {task.chainage}
+            </Text>
           </View>
-          <Text style={[typography.caption, styles.sheetFiles]}>2 tệp đính kèm</Text>
+          <Text style={[typography.caption, styles.sheetFiles]}>
+            {session?.before_source ? `BEFORE: ${session.before_source}` : 'Chưa có BEFORE'}
+          </Text>
         </View>
 
-        <Button variant="primary" title="Xác nhận & Lưu" onPress={() => router.push('/(crew)/complete')} />
+        <Button variant="primary" title="Xác nhận & Lưu" onPress={handleConfirm} />
 
         <Text style={[typography.caption, styles.sheetHint]}>
-          Nhấn để chuyển sang bước <Text style={styles.sheetHintStrong}>Gửi hoàn thành cho PM</Text> xác nhận nghiệm thu.
+          Ảnh được đóng dấu vị trí WGS84, mã lệnh công tác, loại khuyết tật và thời gian thực tại hiện trường.
         </Text>
       </View>
     </SafeAreaView>
@@ -340,6 +440,9 @@ const styles = StyleSheet.create({
   thumbCheckGold: {
     backgroundColor: colors.primary,
   },
+  thumbCheckPending: {
+    backgroundColor: colors.secondary,
+  },
   thumbLabelGreen: {
     position: 'absolute',
     bottom: 4,
@@ -376,6 +479,9 @@ const styles = StyleSheet.create({
   readyOk: {
     color: colors.success,
   },
+  readyWaiting: {
+    color: colors.warning,
+  },
   sideControl: {
     width: 44,
     height: 44,
@@ -411,6 +517,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
     marginRight: 2,
   },
+  sheetDotGold: {
+    backgroundColor: colors.primary,
+  },
   sheetTitle: {
     color: colors.neutral,
   },
@@ -427,9 +536,5 @@ const styles = StyleSheet.create({
   sheetHint: {
     color: '#555F71',
     textAlign: 'center',
-  },
-  sheetHintStrong: {
-    color: colors.neutral,
-    fontFamily: 'Roboto-Medium',
   },
 });

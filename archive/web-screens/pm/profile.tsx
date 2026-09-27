@@ -84,7 +84,7 @@ export default function PmProfileScreen() {
         </View>
 
         <Text style={[typography.titleLg, styles.name]}>{user?.full_name ?? 'Nguyễn Thùy Lan'}</Text>
-        <Text style={[typography.caption, styles.email]}>{user?.email ?? 'lan.nguyen@hoanghai.vn'}</Text>
+        <Text style={[typography.caption, styles.email]}>{user?.phone_or_email ?? 'lan.nguyen@hoanghai.vn'}</Text>
 
         <View style={styles.roleChip}>
           <Ionicons name="construct-outline" size={15} color={colors.brandGold} />

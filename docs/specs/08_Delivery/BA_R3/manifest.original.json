@@ -1,0 +1,76 @@
+{
+  "package": "RoadGuard_BA_Tech_Supplement_R3_v1",
+  "date": "2026-09-26",
+  "files": [
+    {
+      "name": "RoadGuard_03_API_Specification.md",
+      "bytes": 29099,
+      "sha256": "d6a61faa963f0272fa3faed02a3b396e597985f7c29d55941290c75216a8d528"
+    },
+    {
+      "name": "RoadGuard_05_Auth_Permission_Model.md",
+      "bytes": 11346,
+      "sha256": "db7682a826c97aef67747deb4e388e232d99684f29d216c7152fb185a87156c5"
+    },
+    {
+      "name": "RoadGuard_06_Sequence_Diagrams.md",
+      "bytes": 10336,
+      "sha256": "099829f92d74455598814c2cb11d3e0a806308c0a433ee0cb1b92c482067dbd5"
+    },
+    {
+      "name": "RoadGuard_07_Tech_Stack_Convention.md",
+      "bytes": 9637,
+      "sha256": "bb088c10c3c06ceec08c36519cf5a1b68fffa4b88f76d1a4bcb4fe048025e21e"
+    },
+    {
+      "name": "RoadGuard_08_Error_Handling_Convention.md",
+      "bytes": 10285,
+      "sha256": "56533faf31da4a5980fe06ebb4196b0a2e53cb69781eb66edb0d840bb4a172d2"
+    },
+    {
+      "name": "RoadGuard_11_Report_Analytics_Requirements.md",
+      "bytes": 12463,
+      "sha256": "494b80aa68ab1f64d225224bf2302d48df57473ad66f2ffadd9076d24b8f146a"
+    },
+    {
+      "name": "RoadGuard_12_Wireframe_Mockup_Annotation.md",
+      "bytes": 16553,
+      "sha256": "5740f5f163c948c295daba0369ed23b2816e7cb3b297ff1adf0f26216b67c18d"
+    },
+    {
+      "name": "RoadGuard_13_Requirements_Traceability_Matrix.md",
+      "bytes": 29705,
+      "sha256": "717df0cd285afeacf65eb6f211b239a5675eebacafb615cfb3844407966caa44"
+    },
+    {
+      "name": "RoadGuard_14_Non_Functional_Requirements.md",
+      "bytes": 11948,
+      "sha256": "4f285778407dd4b849ea5f33d47bfa8a8cd47ea725328dfeaa73f26f35078d43"
+    },
+    {
+      "name": "RoadGuard_15_Test_Case_UAT_Scenarios.md",
+      "bytes": 152967,
+      "sha256": "1de7a91de9fccf1a4957abb47551a3f769ae247d3c107ada84316d90867e8967"
+    },
+    {
+      "name": "RoadGuard_16_Change_Request_Log.md",
+      "bytes": 10003,
+      "sha256": "57a7ca5636033d74e3e13f7d136afef5af28f561622c8d2368c2b42d0ddc1638"
+    },
+    {
+      "name": "RoadGuard_BA_Tech_Supplement_Index.md",
+      "bytes": 5617,
+      "sha256": "404c3549b780ada6556efb6b2ecb61cae0baf88b3a96058b062e40c81a88983f"
+    },
+    {
+      "name": "RoadGuard_OpenAPI_v1.yaml",
+      "bytes": 302422,
+      "sha256": "e417db34ebea5278c53c023520a6da5ece067b6422e188213d0efe980b79cce2"
+    },
+    {
+      "name": "RoadGuard_Package_Validation.md",
+      "bytes": 1755,
+      "sha256": "46a4c04d42b5c3bc0039835ce1dc6941b09a6e6f07a307fbf010a188aeefe053"
+    }
+  ]
+}

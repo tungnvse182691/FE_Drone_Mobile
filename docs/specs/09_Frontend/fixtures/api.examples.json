@@ -1,0 +1,182 @@
+{
+  "note": "Synthetic examples. expiresIn=900 is fixture-only, not chosen TTL policy. Validate each value against named $defs schema.",
+  "cases": [
+    {
+      "name": "login-request",
+      "schema": "LoginRequest",
+      "expectedValid": true,
+      "value": {
+        "email": "crew@example.invalid",
+        "password": "EXAMPLE_ONLY_NOT_A_REAL_PASSWORD"
+      }
+    },
+    {
+      "name": "token-pair",
+      "schema": "TokenPair",
+      "expectedValid": true,
+      "value": {
+        "accessToken": "EXAMPLE_NOT_A_REAL_TOKEN",
+        "refreshToken": "EXAMPLE_NOT_A_REAL_REFRESH",
+        "tokenType": "Bearer",
+        "expiresIn": 900,
+        "mustChangePassword": false,
+        "user": {
+          "id": "11111111-1111-4111-8111-111111111111",
+          "displayName": "Đội trưởng minh họa",
+          "role": "CREW",
+          "version": "opaque-v1"
+        }
+      }
+    },
+    {
+      "name": "field-error",
+      "schema": "Error",
+      "expectedValid": true,
+      "value": {
+        "code": "VALIDATION_FAILED",
+        "message": "Cần bổ sung ảnh đo.",
+        "details": [
+          {
+            "field": "measurements[0].evidenceFileIds",
+            "code": "REQUIRED",
+            "message": "Chọn ít nhất một ảnh."
+          }
+        ],
+        "traceId": "example-trace-001",
+        "retryable": false
+      }
+    },
+    {
+      "name": "empty-page",
+      "schema": "InspectionTaskPage",
+      "expectedValid": true,
+      "value": {
+        "items": [],
+        "nextCursor": null,
+        "asOf": "2026-09-26T18:00:00Z"
+      }
+    },
+    {
+      "name": "sync-success",
+      "schema": "SyncResult",
+      "expectedValid": true,
+      "value": {
+        "results": [
+          {
+            "operationId": "11111111-1111-4111-8111-111111111111",
+            "status": "APPLIED",
+            "resourceId": "22222222-2222-4222-8222-222222222222",
+            "version": "opaque-v2",
+            "error": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "sync-conflict",
+      "schema": "SyncResult",
+      "expectedValid": true,
+      "value": {
+        "results": [
+          {
+            "operationId": "11111111-1111-4111-8111-111111111111",
+            "status": "CONFLICT",
+            "resourceId": null,
+            "version": null,
+            "error": {
+              "code": "OFFLINE_SNAPSHOT_CONFLICT",
+              "message": "Cần bổ sung ảnh đo.",
+              "details": [
+                {
+                  "field": "measurements[0].evidenceFileIds",
+                  "code": "REQUIRED",
+                  "message": "Chọn ít nhất một ảnh."
+                }
+              ],
+              "traceId": "example-trace-001",
+              "retryable": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "approval-start",
+      "schema": "StartAttempt",
+      "expectedValid": true,
+      "value": {
+        "repairItemId": "11111111-1111-4111-8111-111111111111",
+        "beforeFileIds": [
+          "22222222-2222-4222-8222-222222222222"
+        ],
+        "startedAt": "2026-09-26T18:00:00Z"
+      }
+    },
+    {
+      "name": "fast-track-start",
+      "schema": "StartAttempt",
+      "expectedValid": true,
+      "value": {
+        "originTaskId": "11111111-1111-4111-8111-111111111111",
+        "evaluationId": "22222222-2222-4222-8222-222222222222",
+        "capturedTaskVersion": "opaque-v1",
+        "policyVersionId": "22222222-2222-4222-8222-222222222222",
+        "beforeFileIds": [
+          "22222222-2222-4222-8222-222222222222"
+        ],
+        "startedAt": "2026-09-26T18:00:00Z"
+      }
+    },
+    {
+      "name": "both-start-branches",
+      "schema": "StartAttempt",
+      "expectedValid": false,
+      "value": {
+        "repairItemId": "11111111-1111-4111-8111-111111111111",
+        "originTaskId": "22222222-2222-4222-8222-222222222222",
+        "evaluationId": "22222222-2222-4222-8222-222222222222",
+        "capturedTaskVersion": "opaque-v1",
+        "policyVersionId": "22222222-2222-4222-8222-222222222222",
+        "beforeFileIds": [
+          "22222222-2222-4222-8222-222222222222"
+        ],
+        "startedAt": "2026-09-26T18:00:00Z"
+      }
+    },
+    {
+      "name": "missing-error-trace",
+      "schema": "Error",
+      "expectedValid": false,
+      "value": {
+        "code": "VALIDATION_FAILED",
+        "message": "Cần bổ sung ảnh đo.",
+        "details": [
+          {
+            "field": "measurements[0].evidenceFileIds",
+            "code": "REQUIRED",
+            "message": "Chọn ít nhất một ảnh."
+          }
+        ],
+        "retryable": false
+      }
+    },
+    {
+      "name": "wrong-coordinates",
+      "schema": "Point",
+      "expectedValid": false,
+      "value": {
+        "longitude": 106.7,
+        "latitude": 190
+      }
+    },
+    {
+      "name": "nullable-not-omitted-page",
+      "schema": "InspectionTaskPage",
+      "expectedValid": false,
+      "value": {
+        "items": [],
+        "asOf": "2026-09-26T18:00:00Z"
+      }
+    }
+  ]
+}

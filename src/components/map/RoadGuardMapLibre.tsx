@@ -258,7 +258,7 @@ export function RoadGuardMapLibre({
           } else {
             container.className = 'custom-defect-container';
             container.innerHTML = 
-              '<div class="custom-defect-pin"><div class="custom-defect-icon">⚠️</div></div>' +
+              '<div class="custom-defect-pin"><div class="custom-defect-icon">!</div></div>' +
               '<div class="custom-defect-label">' + (m.id || 'Lỗi') + '</div>';
           }
 

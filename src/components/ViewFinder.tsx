@@ -16,9 +16,11 @@ interface ViewFinderProps {
   leftControl?: ReactNode;
   rightControl?: ReactNode;
   flashMode?: 'off' | 'on' | 'auto';
+  onCoordsChange?: (coords: Coords | null) => void;
+  facing?: 'back' | 'front';
 }
 
-interface Coords {
+export interface Coords {
   latitude: number;
   longitude: number;
 }
@@ -33,6 +35,8 @@ export function ViewFinder({
   leftControl,
   rightControl,
   flashMode = 'off',
+  onCoordsChange,
+  facing = 'back',
 }: ViewFinderProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [coords, setCoords] = useState<Coords | null>(null);
@@ -50,14 +54,16 @@ export function ViewFinder({
       }
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       if (mounted) {
-        setCoords({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+        const next = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+        setCoords(next);
+        onCoordsChange?.(next);
       }
     })();
 
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [onCoordsChange]);
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -95,7 +101,7 @@ export function ViewFinder({
       <CameraView
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
-        facing="back"
+        facing={facing}
         flash={flashMode}
         onCameraReady={() => setCameraReady(true)}
       />

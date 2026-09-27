@@ -1,29 +1,35 @@
-# RoadGuard Mobile — Bootstrap Prompt
+# RoadGuard Mobile — Bootstrap Prompt (Chuẩn R3 / 27_9_V3)
 
-> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình khởi tạo codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/`. Không cần đọc thêm tài liệu nào khác.
+> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình scaffold và phát triển codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/` theo chuẩn đặc tả R3 / 27_9_V2 mới nhất của Công ty TNHH Xây dựng Bê tông Hoàng Hải.
 
 ---
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục Chuẩn Hóa Canonical (26/09/2026) có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
+**Mọi quy định trong mục Chuẩn Hóa Canonical R3 (27/09/2026 / 27_9_V3) có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
 - **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, `@hoanghai.vn`, prefix `HH-`).
 - **Quy tắc Logo:** Splash/Loading = `assets/logo_hoanghai.png` (có tên công ty); Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png` (chỉ xe bồn, không chữ).
+- **Phân định Nền tảng:** Mobile app dành riêng cho **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`. Web Dashboard dành cho `PROJECT_MANAGER` và `SUPERVISOR` (màn hình PM/Supervisor cũ chuyển vào `archive/web-screens/`).
+- **Hợp đồng Kỹ thuật Frontend (09_Frontend):** Áp dụng nghiêm ngặt danh mục 133 operations (`operation_catalog.md`), types chuẩn (`contracts/api.types.ts`), local types (`contracts/local.types.ts`), và mã lỗi nghiệp vụ (`03_Error_Response_UI_Convention.md`).
+- **Nghiệp vụ Fast Track (US-33, BR-05/08/11..18/25):** 
+  - `TaskMode`: `INSPECT_AND_REPAIR` vs `MEASURE_ONLY`.
+  - Sửa nhanh tại chỗ khi: Task là `INSPECT_AND_REPAIR`, kích thước $\le$ `FastTrackPolicyVersion` (diện tích $\le 1.0\text{ m}^2$, độ sâu $\le 5\text{ cm}$, chiều dài $\le 2.0\text{ m}$), và có ảnh BEFORE hợp lệ.
+  - Crew gửi ảnh AFTER $\rightarrow$ PM trực tiếp kiểm tra và đóng lỗi. **Supervisor KHÔNG phê duyệt Fast Track.**
+- **Đợt gom nhiều lỗi (US-35, BR-09):** Bắt buộc `MEASURE_ONLY`; Crew chỉ đo và báo PM, không tự ý sửa tại chỗ.
+- **Tái sử dụng bằng chứng ảnh (BR-17, BR-18):** Ảnh chụp của Reporter hoặc ảnh Drone có thể làm ảnh BEFORE nếu khớp vị trí.
+- **Dẫn đường WGS84 (US-40, BR-38):** Mở Google Maps; Crew đến vị trí khuyết tật, Drone Pilot đến Điểm tiếp cận/tập kết (Access Point).
 - **UD-06:** Tầng UI Mobile (`app/`) **TUYỆT ĐỐI ZERO CHI PHÍ/TIỀN TỆ**, cấm định mức vật tư tiêu hao. Bắt buộc hiển thị bộ 3: Phương án xử lý + Kích thước hình học hư hại (m², cm, m) + Thời hạn.
 - **Vật liệu & Tuyến:** Bê tông xi măng TCVN 10380:2014, 4K RGB + DSM (OpenDroneMap), TUYỆT ĐỐI CẤM LiDAR, Tuyến ĐH.05 Bình Chánh là Pilot Primary Corridor.
 - **5 Mã Defect:** `src/constants/defect-types.ts` (`POTH_DEEP`, `DEPR_POND`, `EDGE_BRK`, `SLAB_CRK`, `SHLD_EROS`).
-- **Ma trận màn:** 40 màn mobile cốt lõi (4 vai trò) + 4 màn Reporter là Planned Delta đã frozen trên HTML wireframe.
 
 ---
 
 ## Context nhanh
 
-**RoadGuard** là hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**. App mobile phục vụ **4 vai trò cốt lõi**:
-- **Drone Operator** — tiếp nhận lệnh bay, upload video/ảnh từ thẻ nhớ SD, nhật ký chuyến bay, đồng bộ ngoại tuyến (7 màn)
-- **Repair Crew** — nhận công việc sửa chữa, dẫn đường GPS, chụp ảnh nghiệm thu, báo cáo lỗi phát sinh (10 màn)
-- **Project Manager** — tạo yêu cầu khảo sát, xác minh lỗi AI (bounding box + đa kỳ), gộp đợt sửa, trình phê duyệt, giao việc crew (14 màn)
-- **Supervisor** — phê duyệt hồ sơ, tổng quan rủi ro, xuất báo cáo PDF/ZIP, ký đóng đợt, quản trị dự án + nhân sự (7 màn)
-
-**40 màn hình mobile đã implement** + **4 màn Reporter (Planned Delta)**. Backend: ASP.NET Core / SQL Server (`geography(4326)`). GPS ưu tiên UTM zone 32648 (EPSG:32648).
+**RoadGuard** là hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**. App mobile phục vụ **3 vai trò hiện trường cốt lõi**:
+- **Repair Crew (`(crew)`)** — nhận lệnh công tác (`/inspection-tasks`), xem chế độ `INSPECT_AND_REPAIR` hoặc `MEASURE_ONLY`, tự đánh giá Fast Track theo policy, chụp ảnh nghiệm thu BEFORE/AFTER, dẫn đường Google Maps, báo lỗi mới, đồng bộ ngoại tuyến SQLite (10 màn).
+- **Drone Operator (`(drone)`)** — tiếp nhận lệnh bay khảo sát (`/survey-tasks`), dẫn đường tới Điểm tiếp cận cất/hạ cánh, upload video/ảnh 4K RGB từ thẻ nhớ SD (`/uploads`), nhật ký chuyến bay, đồng bộ ngoại tuyến (7 màn).
+- **Reporter (`(reporter)`)** — Người dân & Đại diện Ban QLDA: đăng nhập OTP Gmail 6 số (`/auth/reporter-registrations`), tạo phản ánh kèm GPS + 3 ảnh hiện trường (`/reports`), tra cứu tiến độ công khai qua mã tracking, đánh giá 1–5 sao nghiệm thu (4 màn).
+- **Tầng Auth (`(auth)`)** — Đăng nhập tài khoản nhân viên (`/auth/login`), đổi mật khẩu bắt buộc lần đầu, xác thực OTP cho Reporter (3 màn).
 
 ---
 
@@ -32,193 +38,97 @@
 ```text
 FE_AppMobile/
   app/
-    _layout.tsx                          # Root layout: SessionProvider + AuthGuard
+    _layout.tsx                          # Root layout: SessionProvider + AuthGuard (Stack luôn mount)
+    index.tsx                            # Entry point điều hướng ban đầu
     (auth)/
-      _layout.tsx                        # Stack auth, không có BottomNav
-      index.tsx                          # M-AUTH-01/02: Đăng nhập & Màn chào
-      force-change-password.tsx          # BÙ GAP CN10/US-01: bắt buộc đổi mật khẩu lần đầu
+      _layout.tsx                        # Stack auth không có BottomNav
+      index.tsx                          # M-AUTH-01/02: Đăng nhập nhân viên & Lựa chọn phản ánh dân sinh
+      force-change-password.tsx          # BÙ GAP CN10/US-01: Bắt buộc đổi mật khẩu lần đầu
+      otp-verify.tsx                     # M-AUTH-03: Xác thực OTP Gmail 6 số cho Reporter
     (drone)/
-      _layout.tsx                        # BottomNav 4 tab: Home / Requests / Sync / Profile
+      _layout.tsx                        # BottomNav 4 tab: Trang chủ / Yêu cầu / Đồng bộ / Cá nhân
       home.tsx                           # M-DRONE-01: Trang chủ Phi công
       requests.tsx                       # M-DRONE-02: Danh sách yêu cầu khảo sát
-      request-detail.tsx                 # M-DRONE-03: Chi tiết yêu cầu #REQ-xxx
+      request-detail.tsx                 # M-DRONE-03: Chi tiết yêu cầu #REQ-xxx + Tọa độ điểm tiếp cận
       upload.tsx                         # M-DRONE-04: Tải video/ảnh từ thẻ nhớ SD
       log.tsx                            # M-DRONE-05: Nhật ký chuyến bay
       sync.tsx                           # M-DRONE-06: Đồng bộ dữ liệu ngoại tuyến
-      profile.tsx                        # M-DRONE-07: Hồ sơ cá nhân
+      profile.tsx                        # M-DRONE-07: Hồ sơ cá nhân & Thông tin Drone
     (crew)/
-      _layout.tsx                        # BottomNav 4 tab: Home / Tasks / Sync / Profile
-      home.tsx                           # M-CREW-01: Trang chủ Đội sửa chữa
-      tasks.tsx                          # M-CREW-02: Công việc của tôi (FAB + nổi cách đáy 96px)
-      wo-detail.tsx                      # M-CREW-03: Chi tiết lệnh công tác #WO-xxx
-      navigation.tsx                     # M-CREW-04: Dẫn đường GPS
-      viewfinder.tsx                     # M-CREW-06: Chụp ảnh nghiệm thu + watermark
-      progress.tsx                       # M-CREW-07: Cập nhật tiến độ thi công
-      report-defect.tsx                  # M-CREW-08: Báo cáo lỗi phát sinh mới
-      complete.tsx                       # M-CREW-09: Hoàn tất công việc
-      sync.tsx                           # M-CREW-10: Đồng bộ ngoại tuyến
-      profile.tsx                        # M-CREW-11: Hồ sơ kỹ thuật viên
-    (pm)/
-      _layout.tsx                        # BottomNav 4 tab: Home / Surveys / Verify / Profile
-      home.tsx                           # M-PM-01: Trang chủ PM
-      surveys.tsx                        # M-PM-02: Quản lý khảo sát (FAB + nổi cách đáy 96px)
-      create-survey.tsx                  # M-PM-03: Tạo yêu cầu khảo sát mới
-      ai-inbox.tsx                       # M-PM-04: Hộp thư xác minh lỗi AI
-      verify-a.tsx                       # M-PM-05: Xác minh AI — Bounding Box
-      verify-b.tsx                       # M-PM-06/14: Xác minh AI — Đa kỳ & Baseline (GỘP)
-      field-task.tsx                     # M-PM-07/M-CREW-05: Khảo sát thực địa (GỘP)
-      batching.tsx                       # M-PM-08: Gộp đợt sửa chữa
-      submit-approval.tsx                # M-PM-09: Trình phê duyệt
-      resubmit.tsx                       # M-PM-10: Chỉnh sửa & gửi lại
-      submitted-tab.tsx                  # M-PM-11: Tab đã gửi duyệt
-      assign-crew.tsx                    # M-PM-12: Giao việc cho Repair Crew
-      wo-confirm.tsx                     # M-PM-13: Xác nhận nghiệm thu hoàn thành
-      profile.tsx                        # M-PM-15: Hồ sơ PM
-    (sup)/
-      _layout.tsx                        # BottomNav 4 tab: Home / Approve / Reports / Profile
-      home.tsx                           # M-SUP-01: Trang chủ Giám sát
-      approve.tsx                        # M-SUP-02: Thẩm định & phê duyệt
-      risk.tsx                           # M-SUP-03: Tổng quan rủi ro
-      reports.tsx                        # M-SUP-04: Báo cáo & thống kê
-      export-modal.tsx                   # M-SUP-05: Xuất PDF/ZIP
-      profile.tsx                        # M-SUP-06: Hồ sơ + quản trị (tích hợp M-SUP-07)
-      signoff.tsx                        # M-SUP-08: Ký đóng đợt sửa
+      _layout.tsx                        # BottomNav 4 tab: Trang chủ / Nhiệm vụ / Đồng bộ / Cá nhân
+      home.tsx                           # M-CREW-01: Trang chủ Đội sửa chữa (KPI, việc khẩn)
+      tasks.tsx                          # M-CREW-02: Công việc của tôi (Lọc theo TaskMode, FAB nổi)
+      wo-detail.tsx                      # M-CREW-03: Chi tiết lệnh công tác #WO-xxx (TaskMode, Fast Track check)
+      navigation.tsx                     # M-CREW-04: Dẫn đường Google Maps tới tọa độ WGS84
+      viewfinder.tsx                     # M-CREW-06: Chụp ảnh nghiệm thu BEFORE/AFTER + watermark GPS/thời gian
+      progress.tsx                       # M-CREW-07: Cập nhật tiến độ & kích thước đo đạc thực tế
+      report-defect.tsx                  # M-CREW-08: Báo cáo khuyết tật phát sinh mới ngoài phạm vi
+      complete.tsx                       # M-CREW-09: Hoàn tất công việc & Gửi hồ sơ nghiệm thu Fast Track
+      sync.tsx                           # M-CREW-10: Hàng đợi đồng bộ ngoại tuyến SQLite
+      profile.tsx                        # M-CREW-11: Hồ sơ kỹ thuật viên & Chính sách Fast Track áp dụng
+    (reporter)/
+      _layout.tsx                        # BottomNav 3 tab: Trang chủ / Phản ánh / Tra cứu
+      home.tsx                           # M-REP-01: Trang chủ Người dân & Đại diện Ban QLDA
+      report.tsx                         # M-REP-02: Tạo phản ánh hư hại + GPS thiết bị + tối đa 3 ảnh
+      track.tsx                          # M-REP-03: Tra cứu tiến độ xử lý theo mã tracking #REP-xxx
+      feedback.tsx                       # M-REP-04: Đánh giá chất lượng nghiệm thu (1–5 sao + nhận xét)
+
+  archive/                               # Kho lưu trữ màn hình quản lý (chuyển giao cho Web Dashboard)
+    web-screens/
+      pm/                                # 14 màn hình Project Manager cũ
+      sup/                               # 7 màn hình Supervisor cũ
 
   src/
     types/
-      domain.ts                          # User, SurveyDataVersion, Defect, RepairBatchVersion...
-      enums.ts                           # RoleCode, SyncStatus, Severity, RepairBatchStatus...
+      domain.ts                          # User, SurveyDataVersion, Defect, FastTrackPolicy, ReporterReport...
+      enums.ts                           # RoleCode, TaskMode, FastTrackEligibility, DefectStatus...
     design-tokens.ts                     # colors, typography, spacing, radius
+    constants/
+      defect-types.ts                    # 5 mã khuyết tật chuẩn hóa
+      routes.ts                          # Định nghĩa route chuẩn có group prefix
+      error-codes.ts                     # 10 mã lỗi nghiệp vụ từ 09_Frontend/03
     components/
       Button.tsx                         # primary(gold) / secondary(outline) / text
       Card.tsx
-      Chip.tsx                           # severity(high/med/low) + status(pending/approved/rejected)
+      Chip.tsx                           # severity + task mode + fast track status
       InputField.tsx
-      BottomNav.tsx                      # 4 tab, active = gold #C9A227, cao 64px
+      BottomNav.tsx                      # 3-4 tab theo role, active = gold #C9A227, cao 64px
       SafeAreaScreen.tsx                 # nền surfaceAlt, padding 16
-      FAB.tsx                            # absolute bottom-24 right-16 z-30  [RN StyleSheet: bottom:96, right:16, zIndex:30]
+      FAB.tsx                            # absolute bottom: 96, right: 16, zIndex: 30
       Toast.tsx
       StatusBadge.tsx                    # LOCAL / QUEUED / SERVER_CONFIRMED
-      ViewFinder.tsx                     # camera crew + watermark戳
+      ViewFinder.tsx                     # camera crew + watermark
       EmptyState.tsx
+      StarRating.tsx                     # Đánh giá 1–5 sao cho Reporter
+      TrackingTimeline.tsx               # Trục thời gian 5 bước cho Reporter
     api/
-      client.ts                          # Axios/Fetch wrapper + interceptor (401, must_change_password)
+      client.ts                          # Axios wrapper + auth interceptor + Idempotency-Key
       mock/
-        auth.ts                          # POST login, refresh, change-password
-        surveys.ts                       # GET list, GET detail, POST upload
-        defects.ts                       # GET list, POST field-inspection
-        repair-batches.ts                # POST submit, GET list
+        auth.ts                          # Đăng nhập nhân viên + gửi/xác thực OTP Reporter
+        tasks.ts                         # Danh sách task, chi tiết WO, cập nhật kích thước & Fast Track check
+        surveys.ts                       # Yêu cầu bay khảo sát & upload video/ảnh thẻ SD
+        defects.ts                       # Danh sách khuyết tật, chính sách Fast Track
+        reporter.ts                      # Tạo phản ánh, tra cứu timeline, gửi đánh giá sao
     store/
-      auth.ts                            # Zustand: user, role, token, login/logout
+      auth.ts                            # Zustand: user, role, token, login/logout, reporter session
       offline.ts                         # Zustand: upload queue count, pending items
     offline/
       database.ts                        # SQLite init + CRUD helpers
-      schema.sql                         # DDL các bảng local
-      upload-queue.ts                    # Queue worker: QUEUED → UPLOADING → SERVER_CONFIRMED
+      schema.sql                         # DDL các bảng local SQLite theo 09_Frontend/09
+      upload-queue.ts                    # Queue worker theo state machine 09_Frontend
       checksum.ts                        # SHA-256 helper
 ```
-
-### Quy tắc routing
-- Expo Router映射 trực tiếp: `screen-drone-home` → `app/(drone)/home.tsx`
-- `nav-role-drone` / `nav-role-crew` / `nav-role-pm` / `nav-role-sup` = BottomNav trong `_layout.tsx` mỗi nhóm role
-- **Gộp mã đã chốt:** `M-PM-06/14` → `verify-b.tsx`, `M-PM-07/M-CREW-05` → `field-task.tsx`, `M-SUP-07` tích hợp trong `profile.tsx` (không tạo màn riêng)
-
-
 
 ---
 
 ## 2. Triết lý Minimalism Thực dụng & Design Tokens
 
-### Triết lý cốt lõi (AI PHẢI HIỂU TRƯỚC KHI scaffold)
-
-> *"Cát Tường Field đi theo triết lý minimalism thực dụng: mỗi màn hình chỉ hiển thị đúng thông tin cần để ra quyết định hoặc thực hiện một hành động, không có yếu tố trang trí thừa. Cảm giác tổng thể là 'gọn, rõ, đáng tin cậy' — giống một công cụ chuyên nghiệp hơn là một app tiêu dùng nhiều màu sắc."*
-
-**Đây KHÔNG phải directional guideline — đây là REQUIREMENT.** AI scaffolding PHẢI tuân thủ:
-
-1. **Content minimalism:** Mỗi màn chỉ hiện đúng thông tin cần để hành động. Không tooltip giải thích dài dòng, không text decoration, không "nice-to-have" elements.
-2. **Gold restraint:** Vàng đồng `#C9A227` chỉ dùng ở nơi cần thu hút chú ý: 1 CTA chính/màn, tab đang active, số liệu KPI nổi bật trên dashboard. **KHÔNG** dùng cho nền lớn, text thường, icon trang trí.
-3. **Visual minimalism:** Không shadow đậm, không gradient, không decorative illustrations. Phân lớp thị giác = tương phản nền (surfaceAlt vs surface) + viền mảnh 1px.
-4. **Whitespace philosophy:** Giữ nhiều khoảng trắng. Không lấp đầy màn hình bằng chi tiết. Khoảng cách giữa các khối nội dung = 24px.
-5. **Shape consistency:** Không trộn góc bo và góc vuông trong cùng một màn hình. Tối đa 2 mức bo góc khác nhau trong cùng 1 view.
-6. **Font restraint:** Không trộn nhiều font trong cùng một màn — chỉ Roboto. Sansation CHỈ cho logo/headline.
-
-**Khi scaffold components:** Hỏi bản thân "yếu tố này có cần thiết để người dùng hành động không?" — nếu không, bỏ.
-
-### Design Tokens (`src/design-tokens.ts`)
-
-```ts
-export const colors = {
-  primary:      '#C9A227',  // VÀNG ĐỒNG — chỉ 1 CTA/màn
-  primaryDark:  '#6B5219',  // pressed
-  secondary:    '#2D3748',  // viền, icon phụ, text cấp 2
-  neutral:      '#1A1D20',  // text chính (tối đa tương phản ngoài trời)
-  surface:      '#FFFFFF',  // card, nút
-  surfaceAlt:   '#F8F9FA',  // nền màn hình
-  onPrimary:    '#FFFFFF',
-  onSurface:    '#1A1D20',
-  border:       '#E2E5E9',  // viền mảnh 1px thay shadow
-  success:      '#2F9E44',  // severity low / approved
-  warning:      '#F59E0B',  // severity medium / pending
-  error:        '#E5484D',  // severity high / rejected
-  info:         '#3B82F6',  // trạng thái đang xử lý
-};
-
-export const typography = {
-  // Sansation — CHỈ dùng cho logo/headline (tiếng Latin)
-  headlineLg: { fontFamily: 'Sansation', fontSize: 24, fontWeight: '500' as const, lineHeight: 31.2 },
-  // Roboto — toàn bộ còn lại
-  titleLg:    { fontFamily: 'Roboto', fontSize: 20, fontWeight: '500' as const, lineHeight: 26 },
-  titleMd:    { fontFamily: 'Roboto', fontSize: 16, fontWeight: '500' as const, lineHeight: 22.4 },
-  bodyLg:     { fontFamily: 'Roboto', fontSize: 16, fontWeight: '400' as const, lineHeight: 24 },
-  bodyMd:     { fontFamily: 'Roboto', fontSize: 14, fontWeight: '400' as const, lineHeight: 21 },
-  labelLg:    { fontFamily: 'Roboto', fontSize: 14, fontWeight: '500' as const, lineHeight: 16.8 },  // chữ nút
-  labelSm:    { fontFamily: 'Roboto', fontSize: 11, fontWeight: '500' as const, lineHeight: 13.2, letterSpacing: 0.02 },  // chip — IN HOA
-  caption:    { fontFamily: 'Roboto', fontSize: 12, fontWeight: '400' as const, lineHeight: 16.8 },
-};
-
-export const spacing = {
-  xs: 4, sm: 8, md: 16, lg: 24, xl: 32,
-  screenMargin: 16,
-  cardPadding: 16,
-}; // thang 8px
-
-export const radius = {
-  sm: 4, md: 8, lg: 12, xl: 20, full: 9999,
-};
-```
-
-### Core Components
-
-| Component | Props | Ghi chú |
-|-----------|-------|---------|
-| `Button` | `variant: 'primary' \| 'secondary' \| 'text'`, `onPress`, `disabled?`, `loading?` | Primary: nền gold, chữ trắng, md radius. **Tối đa 1 primary/màn** |
-| `Card` | `children`, `style?` | Nền white, radius lg (12px), padding 16 |
-| `Chip` | `variant: 'severity-high' \| 'severity-medium' \| 'severity-low' \| 'status-pending' \| 'approved' \| 'rejected'`, `label` | Label IN HOA, labelSm, radius full |
-| `InputField` | `label?`, `value`, `onChangeText`, `error?`, `placeholder?` | Nền surfaceAlt, viền border, radius md |
-| `BottomNav` | `tabs: { icon, label, route }[]`, `activeRoute` | 4 tab, cao 64px, active = gold, inactive = secondary |
-| `SafeAreaScreen` | `children`, `scroll?` | wraps SafeAreaView + ScrollView tùy chọn, nền surfaceAlt |
-| `FAB` | `onPress`, `icon` | Position absolute: bottom-24 (96px — trên nav 64px), right-16, z-30 |
-| `StatusBadge` | `status: 'LOCAL' \| 'QUEUED' \| 'SERVER_CONFIRMED'` | Hiển thị text + màu tương ứng |
-| `Toast` | `type: 'success' \| 'error' \| 'info'`, `message`, `duration?` | Tự dismiss, toast phía trên màn hình |
-| `EmptyState` | `icon`, `title`, `message`, `actionLabel?`, `onAction?` | Khi danh sách rỗng |
-| `ViewFinder` | `onCapture`, `defectType` | Camera crew + watermark戳 overlay |
-
-### Quy tắc UI — Minimalism Checklist (AI kiểm tra mỗi component)
-
-| # | Quy tắc | Nguồn |
-|---|---------|--------|
-| 1 | Mỗi màn **tối đa 1 nút primary gold filled** | DESIGN.md Components |
-| 2 | **Không gradient, không shadow đậm** — phân lớp bằng tương phản nền + viền mảnh 1px | DESIGN.md Elevation |
-| 3 | **Không trộn font** trong cùng màn — chỉ Roboto; Sansation chỉ logo/headline | DESIGN.md Typography |
-| 4 | **Không trộn corner radius và corner square** trong cùng view; tối đa 2 mức bo góc | DESIGN.md Shapes |
-| 5 | **Tương phản WCAG AA** (≥4.5:1) — người dùng ngoài trời nắng | DESIGN.md Do's |
-| 6 | **Gold chỉ cho CTA chính, tab active, KPI highlight** — không nền lớn, không text thường | DESIGN.md Colors |
-| 7 | **Giữ khoảng trắng** — không lấp đầy màn hình bằng chi tiết trang trí | DESIGN.md Layout |
-| 8 | **FAB** = `absolute bottom-24 right-16 z-30` (trên nav 64px + gap 32px) | HTML wireframe |
-| 9 | **Danh sách có FAB** = `h-full relative`, FAB `absolute`, content scroll bình thường | HTML wireframe |
-| 10 | **Mỗi Card** dùng tối đa 2 mức bo góc: `lg` cho card, `md` cho chip/nút bên trong | DESIGN.md Shapes |
-| 11 | **Input field** không có icon trang trí thừa — chỉ label + value + viền | DESIGN.md Components |
-| 12 | **Chip severity** dùng đúng 3 màu ngữ nghĩa (error/warning/success), **không dùng vàng đồng** | DESIGN.md Colors |
+### Triết lý cốt lõi
+- **Content minimalism:** Mỗi màn chỉ hiện đúng thông tin cần để hành động.
+- **Gold restraint:** Vàng đồng `#C9A227` chỉ dùng cho 1 CTA chính/màn, tab active, rating sao, KPI highlight.
+- **Visual minimalism:** Không shadow đậm, không gradient, viền mảnh 1px `#E2E5E9`.
+- **Whitespace philosophy:** Giữ khoảng cách 24px giữa các khối nội dung.
+- **Font restraint:** Roboto cho toàn bộ nội dung; Sansation CHỈ cho logo/headline.
 
 ---
 
@@ -230,8 +140,35 @@ export const radius = {
 export enum RoleCode {
   DRONE_OPERATOR = 'DRONE_OPERATOR',
   REPAIR_CREW    = 'REPAIR_CREW',
+  REPORTER       = 'REPORTER',
+  // Lưu trữ tương thích hệ thống:
   PROJECT_MANAGER = 'PROJECT_MANAGER',
   SUPERVISOR     = 'SUPERVISOR',
+}
+
+export enum TaskMode {
+  INSPECT_AND_REPAIR = 'INSPECT_AND_REPAIR',  // Đo và sửa nhanh nếu đủ điều kiện
+  MEASURE_ONLY       = 'MEASURE_ONLY',        // Chỉ đo đạc đợt gom lỗi, cấm tự sửa
+}
+
+export enum FastTrackEligibility {
+  ELIGIBLE         = 'ELIGIBLE',          // Đạt policy, được sửa ngay
+  EXCEEDED_POLICY  = 'EXCEEDED_POLICY',   // Vượt ngưỡng kích thước, chuyển PM
+  LOCKED_BY_PM     = 'LOCKED_BY_PM',      // PM khóa sửa nhanh
+}
+
+export enum LocalState {
+  DRAFT                 = 'DRAFT',
+  WAITING_DEPENDENCIES  = 'WAITING_DEPENDENCIES',
+  READY                 = 'READY',
+  IN_FLIGHT             = 'IN_FLIGHT',
+  UNKNOWN_OUTCOME       = 'UNKNOWN_OUTCOME',
+  AUTH_REQUIRED         = 'AUTH_REQUIRED',
+  PAUSED_RETRY          = 'PAUSED_RETRY',
+  CONFLICT              = 'CONFLICT',
+  REJECTED              = 'REJECTED',
+  BLOCKED_CONTRACT      = 'BLOCKED_CONTRACT',
+  ACKED                 = 'ACKED',
 }
 
 export enum SyncStatus {
@@ -248,10 +185,12 @@ export enum IntegrationStatus {
 }
 
 export enum DefectStatus {
-  OPEN     = 'OPEN',
-  VERIFIED = 'VERIFIED',
-  REJECTED = 'REJECTED',
-  RESOLVED = 'RESOLVED',
+  OPEN                  = 'OPEN',
+  VERIFIED              = 'VERIFIED',
+  IN_REPAIR_BATCH       = 'IN_REPAIR_BATCH',
+  REPAIRED_FAST_TRACK   = 'REPAIRED_FAST_TRACK',
+  COMPLETED             = 'COMPLETED',
+  REJECTED              = 'REJECTED',
 }
 
 export enum Severity {
@@ -261,363 +200,353 @@ export enum Severity {
   CRITICAL = 'CRITICAL',
 }
 
-export enum RepairBatchStatus {
-  DRAFT                  = 'DRAFT',
-  PENDING_APPROVAL       = 'PENDING_APPROVAL',
-  REVISION_REQUIRED      = 'REVISION_REQUIRED',
-  APPROVED               = 'APPROVED',
-  ASSIGNED               = 'ASSIGNED',
-  IN_PROGRESS            = 'IN_PROGRESS',
-  PENDING_INSPECTION     = 'PENDING_INSPECTION',
-  REVISION_REQUIRED_WORK = 'REVISION_REQUIRED_WORK',
-  COMPLETED              = 'COMPLETED',
-}
-
-export enum FieldInspectionTaskStatus {
-  NEW_ASSIGNED          = 'NEW_ASSIGNED',
-  ACCEPTED              = 'ACCEPTED',
-  REJECTED              = 'REJECTED',
-  IN_PROGRESS           = 'IN_PROGRESS',
-  SUPPLEMENT_REQUIRED   = 'SUPPLEMENT_REQUIRED',
-  SUBMITTED             = 'SUBMITTED',
-  COMPLETED             = 'COMPLETED',
-}
-
 export enum MeasurementType {
-  DEPRESSION_DEPTH       = 'DEPRESSION_DEPTH',
-  SLAB_FAULTING_HEIGHT   = 'SLAB_FAULTING_HEIGHT',
+  DIMENSIONS_3D           = 'DIMENSIONS_3D',            // Dài x Rộng x Sâu
+  DEPRESSION_DEPTH        = 'DEPRESSION_DEPTH',
+  SLAB_FAULTING_HEIGHT    = 'SLAB_FAULTING_HEIGHT',
   SHOULDER_EROSION_EXTENT = 'SHOULDER_EROSION_EXTENT',
+}
+
+export enum ReporterReportStatus {
+  SUBMITTED   = 'SUBMITTED',    // Đã gửi
+  RECEIVED    = 'RECEIVED',     // Đã tiếp nhận
+  INSPECTING  = 'INSPECTING',   // Đang khảo sát/đo đạc
+  REPAIRING   = 'REPAIRING',    // Đang sửa chữa
+  COMPLETED   = 'COMPLETED',    // Đã hoàn thành nghiệm thu
+  REJECTED    = 'REJECTED',     // Không hợp lệ
 }
 ```
 
-### Interfaces (`src/types/domain.ts`)
+### Domain Interfaces (`src/types/domain.ts`)
 
 ```ts
-import { RoleCode, SyncStatus, IntegrationStatus, DefectStatus, Severity, RepairBatchStatus, FieldInspectionTaskStatus, MeasurementType } from './enums';
+import { RoleCode, TaskMode, FastTrackEligibility, SyncStatus, IntegrationStatus, DefectStatus, Severity, MeasurementType, ReporterReportStatus } from './enums';
 
-// ── AUTH ──────────────────────────────────────────────
+// ── AUTH: TOKEN & ACTOR (tách biệt theo contract 04_Data_Contract_Type_Definitions.md) ─────
+// TokenPair: response từ POST /auth/login, /auth/refresh
+export interface TokenPair {
+  accessToken: string;          // Không lưu vào DB/Room/media folder
+  refreshToken: string;         // Mã hóa bằng platform key, KHÔNG raw
+  tokenType: 'Bearer';
+  expiresIn: number;            // Giây (không phải timestamp), tính từ lúc nhận
+  mustChangePassword: boolean;  // Kiểm trước khi mở chức năng nghiệp vụ
+}
+
+// Actor: response từ GET /me — KHÔNG có token/membership/capabilities
+export interface Actor {
+  id: string;                   // UUID opaque, không numeric
+  displayName: string;          // HH-RC-084 Nguyễn Văn A
+  role: RoleCode;               // Chỉ dùng để routing, KHÔNG suy quyền đối tượng từ role
+  version: string;              // Opaque concurrency version
+  // QUAN TRỌNG: UI không suy membership/project-scope từ Actor.role
+  // Quyền đối tượng cần assignment/task/project check ở server
+}
+
+// User (legacy local composite — dùng trong Zustand store nội bộ app)
 export interface User {
-  id: string;
-  role_code: RoleCode;
-  full_name: string;
-  employee_code: string;          // vd: PM-0428, CT-2089, CT-RC-084, NV-8842
-  must_change_password: boolean;  // CN10: true → buộc đổi mật khẩu trước khi dùng
-  project_ids: string[];          // CN03: scope dự án được phân công
-  token: string;
-  refresh_token: string;
+  actor: Actor;
+  employeeCode?: string;        // HH-RC-084, HH-2089, M350-HH-02 ...
+  phoneOrEmail: string;
+  mustChangePassword: boolean;
+  // Token KHÔNG lưu ở đây — lưu qua SecureStore (platform key encrypted)
 }
 
-// ── SURVEY / FLIGHT ───────────────────────────────────
-export interface SurveyDataVersion {
+// ── FAST TRACK POLICY ─────────────────────────────────
+export interface FastTrackPolicyVersion {
   id: string;
-  survey_id: string;
-  version_no: number;
-  status: SyncStatus;
-  integration_status: IntegrationStatus;   // SHA-256 checksum
-  checksum_sha256: string | null;
-  files: SurveyFile[];
-  server_confirmed_at: string | null;
+  version_code: string;           // FTP-2026-V1
+  max_area_m2: number;            // vd: 1.0 m2
+  max_depth_cm: number;           // vd: 5.0 cm
+  max_length_m: number;           // vd: 2.0 m
+  allowed_defect_codes: string[]; // ['POTH_DEEP', 'EDGE_BRK', ...]
+  effective_from: string;
+  effective_to?: string;
 }
 
-export interface SurveyFile {
-  video_id: string;
-  srt_id: string | null;
-  size_bytes: number;
+// ── CREW WORK ORDER & TASK ────────────────────────────
+export interface RepairWorkOrder {
+  id: string;                     // WO-2026-084
+  title: string;
+  task_mode: TaskMode;            // INSPECT_AND_REPAIR hoặc MEASURE_ONLY
+  assigned_crew_id: string;
+  route_code: string;             // ĐH.05
+  section_name: string;           // Phân đoạn Cầu Bà Lát (Km01+850)
+  target_defect_id: string;
+  defect_type_code: string;
+  due_at: string;
+  instructions: string;
+  target_coordinates: [number, number]; // [lat, lng] WGS84
+  fast_track_eligible?: FastTrackEligibility;
+  status: string;
+  created_at: string;
+}
+
+export interface DefectPhysicalMeasurement {
+  work_order_id: string;
+  defect_id: string;
+  length_m: number;
+  width_m: number;
+  depth_cm: number;
+  area_m2: number;                // length * width
+  measured_at: string;
+  measured_by: string;
+  instrument_name: string;        // Thước dây thép / Thước kẹp cơ
+  notes?: string;
+}
+
+export interface RepairEvidence {
+  id: string;
+  work_order_id: string;
+  defect_id: string;
+  kind: 'BEFORE' | 'AFTER';
+  file_uri: string;
+  captured_at: string;
+  gps_coordinates: [number, number];
+  is_reused_from_source?: 'REPORTER' | 'DRONE'; // BR-17
+  synced: SyncStatus;
+}
+
+// ── DRONE SURVEY ──────────────────────────────────────
+export interface DroneFlightRequest {
+  id: string;                     // REQ-2026-042
+  title: string;
+  route_code: string;             // ĐH.05
+  section_name: string;
+  access_point_name: string;      // Điểm tiếp cận cất/hạ cánh
+  access_point_coordinates: [number, number]; // [lat, lng] WGS84 dẫn đường
+  target_resolution: string;      // 4K RGB + DSM (OpenDroneMap)
+  assigned_pilot_id: string;
+  status: string;
+  created_at: string;
 }
 
 export interface FlightLog {
   id: string;
-  survey_id: string;
+  request_id: string;
   pilot_id: string;
   drone_serial: string;
   departure_time: string;
-  landing_time: string | null;
+  landing_time?: string;
+  battery_cycles?: number;
   weather_conditions: string;
-  gps_log_path: string | null;
   status: SyncStatus;
 }
 
-// ── FILE / MEDIA ──────────────────────────────────────
-export interface FileRecord {
-  id: string;
-  uri_local: string;
-  checksum_sha256: string;
-  status: SyncStatus;
-  size_bytes: number;
+// ── REPORTER ──────────────────────────────────────────
+export interface ReporterReport {
+  id: string;                     // REP-2026-0091
+  tracking_code: string;          // TRK-882910
+  reporter_email: string;
+  reporter_phone?: string;
+  route_hint?: string;
+  description: string;
+  photo_uris: string[];           // Tối đa 3 ảnh
+  coordinates: [number, number];  // GPS WGS84
+  status: ReporterReportStatus;
+  submitted_at: string;
+  rating?: number;                // 1–5 sao
+  feedback_notes?: string;
 }
 
-// ── DEFECT ────────────────────────────────────────────
-export interface Defect {
-  id: string;
-  project_id: string;
-  road_section_version_id: string;
-  defect_type_code: string;
-  cause_category_code?: string;
-  severity: Severity;
-  status: DefectStatus;
-  geometry: GeoJSON.Geometry;     // WGS84, geog(4326) trên SQL Server
-  reported_at: string;
-  ai_detection_id?: string;
-  notes?: string;
-}
-
-// ── FIELD INSPECTION (UD-05 — BẮT BUỘC trước khi Repair) ──
-export interface FieldInspectionTask {
-  id: string;
-  defect_id: string;
-  assigned_to: string;
-  status: FieldInspectionTaskStatus;
-  required_measurement_type: MeasurementType;
-  due_at: string;
-  instructions?: string;
-}
-
-export interface GroundTruthMeasurement {
-  id: string;
-  session_id: string;
-  task_id: string;
-  defect_id: string;
-  measurement_type: MeasurementType;
-  value: number;                        // mm (khuyến nghị)
-  unit: string;
-  instrument_name: string;              // vd: "Thước kẹp cơ học Mitutoyo"
-  measurement_method: string;
-  measured_by: string;                  // user id
-  measured_at: string;
-  location: { type: 'Point'; coordinates: [number, number] };  // geog(4326)
-  evidence_file_id?: string;
-  notes?: string;
-}
-
-// ── REPAIR BATCH (UD-06 — TẦNG UI MOBILE ZERO CHI PHÍ / BACKEND SNAPSHOT ONLY) ──
-export interface RepairItem {
-  id: string;
-  defect_id: string;
-  estimated_cost?: number;        // Backend internal snapshot — CẤM RENDER TRÊN UI MOBILE
-  actual_cost?: number;           // Backend internal snapshot — CẤM RENDER TRÊN UI MOBILE
-  status: string;
-  description?: string;
-}
-
-export interface RepairBatchVersion {
-  id: string;
-  batch_id: string;
-  version_no: number;
-  status: RepairBatchStatus;
-  estimated_total_cost?: number;  // Backend internal snapshot — CẤM RENDER TRÊN UI MOBILE
-  items: RepairItem[];
-  submitted_at?: string;
-  approved_at?: string;
-  rejected_reason?: string;
-}
-
-// ── REPAIR EVIDENCE ───────────────────────────────────
-export interface RepairEvidence {
-  id: string;
-  repair_item_id: string;
-  kind: 'BEFORE' | 'AFTER';
-  file_id: string;
-  captured_at: string;
-  synced: SyncStatus;
+export interface TrackingTimelineEvent {
+  step: ReporterReportStatus;
+  label: string;
+  description: string;
+  occurred_at?: string;
+  completed: boolean;
 }
 ```
 
 ---
 
-## 4. SQLite Schema + Mock API
+## 4. Chuẩn Hóa Endpoint API (Từ operation_catalog.md) & Mã Lỗi Nghiệp Vụ
 
-### SQLite Schema (`src/offline/schema.sql`)
+### Endpoints chính yếu phục vụ Mobile:
+- **Xác thực:**
+  - `POST /api/v1/auth/login` (Body: `{ email, password }` $\rightarrow$ 200 `TokenPair`)
+  - `POST /api/v1/auth/refresh` (Body: `{ refreshToken }` $\rightarrow$ 200 `TokenPair`)
+  - `POST /api/v1/auth/logout` (Header: `Idempotency-Key` $\rightarrow$ 204)
+  - `POST /api/v1/auth/change-password` (Header: `Idempotency-Key` $\rightarrow$ 204)
+  - `GET /api/v1/me` $\rightarrow$ 200 `Actor`
+- **Người dân phản ánh:**
+  - `POST /api/v1/auth/reporter-registrations` (Header: `Idempotency-Key` $\rightarrow$ 202 `RegistrationIntent`)
+  - `POST /api/v1/auth/reporter-registrations/verify` (Header: `Idempotency-Key`, Body: `{ intentId, otp }` $\rightarrow$ 200 `TokenPair`)
+  - `POST /api/v1/reports` (Header: `Idempotency-Key`, Body: `ReportCreate` $\rightarrow$ 201 `IncidentReport`)
+  - `GET /api/v1/reports` (Header: Bearer $\rightarrow$ 200 `PublicReportPage`)
+  - `GET /api/v1/reports/{reportId}` $\rightarrow$ 200 `PublicReport`
+- **Đội sửa chữa (Crew):**
+  - `GET /api/v1/me/inspection-tasks` $\rightarrow$ 200 `InspectionTaskPage`
+  - `GET /api/v1/inspection-tasks/{taskId}` $\rightarrow$ 200 `InspectionTask`
+  - `GET /api/v1/inspection-tasks/{taskId}/snapshot` $\rightarrow$ 200 `TaskSnapshot` (Gói snapshot ngoại tuyến)
+  - `POST /api/v1/inspection-tasks/{taskId}/accept` (Header: `Idempotency-Key`, `If-Match` $\rightarrow$ 200)
+  - `POST /api/v1/inspection-tasks/{taskId}/sessions` (Nộp số đo hiện trường)
+  - `POST /api/v1/inspection-tasks/{taskId}/evaluations` (Đánh giá Fast Track)
+  - `GET /api/v1/me/repair-items` $\rightarrow$ 200 `RepairItemPage`
+  - `POST /api/v1/repair-attempts` (StartAttempt Fast Track hoặc Approval Track)
+  - `POST /api/v1/repair-attempts/{attemptId}/submit` (Nộp ảnh AFTER nghiệm thu)
+- **Phi công Drone:**
+  - `GET /api/v1/me/survey-tasks` $\rightarrow$ 200 `SurveyTaskPage`
+  - `GET /api/v1/survey-tasks/{taskId}` $\rightarrow$ 200 `SurveyTask` (chứa `access_point`)
+  - `POST /api/v1/survey-tasks/{taskId}/accept` (Header: `Idempotency-Key`, `If-Match` $\rightarrow$ 200)
+  - `PUT /api/v1/survey-tasks/{taskId}/access-point` (Cập nhật điểm tiếp cận cất/hạ cánh)
+  - `POST /api/v1/survey-tasks/{taskId}/datasets` (Nộp bộ dữ liệu video 4K RGB + SRT)
+- **Upload & Sync:**
+  - `POST /api/v1/uploads` $\rightarrow$ 201 `UploadSession`
+  - `POST /api/v1/uploads/{uploadId}/part-urls` $\rightarrow$ 200 `UploadPartUrls`
+  - `POST /api/v1/uploads/{uploadId}/complete` $\rightarrow$ 202 `UploadSession`
+  - `POST /api/v1/sync/batches` $\rightarrow$ 200 `SyncResult` (Body: `SyncBatch`)
+
+### Bảng Mã Lỗi Nghiệp Vụ Chuẩn R3 (03_Error_Response_UI_Convention.md):
+Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển thị thông báo nghiệp vụ tương ứng:
+- `TASK_MODE_NOT_REPAIRABLE`: "Nhiệm vụ này chỉ cho phép kiểm tra/đo; lưu kết quả đo và báo PM."
+- `POLICY_NOT_CONFIGURED`: "Chưa cấu hình chính sách Fast Track; giữ nháp, liên hệ PM."
+- `FAST_TRACK_NOT_ELIGIBLE`: "Không đủ điều kiện sửa nhanh; kích thước vượt ngưỡng policy."
+- `PM_REPAIR_BLOCKED`: "PM đã khóa quyền tự sửa cho công việc này."
+- `BEFORE_MISSING`: "Bổ sung bằng chứng ảnh hiện trạng TRƯỚC khi sửa."
+- `EVIDENCE_PENDING`: "Ảnh chưa được máy chủ xác minh toàn vẹn."
+- `FILE_INTEGRITY_FAILED`: "Tệp kiểm tra SHA-256 không khớp."
+- `OFFLINE_SNAPSHOT_CONFLICT`: "Nhiệm vụ hoặc chính sách đã thay đổi trên server; giữ bằng chứng, chờ PM giải quyết."
+- `IDEMPOTENCY_KEY_REUSED`: "Mã thao tác đã được sử dụng trước đó."
+- `OPERATION_IN_PROGRESS`: "Đang đối chiếu thao tác trước đó, vui lòng chờ."
+
+---
+
+## 5. SQLite Schema (`src/offline/schema.sql`)
 
 ```sql
--- ======================================================
--- RoadGuard Offline-first Schema (SQLite)
--- US-02, US-06, US-13: lưu bản nháp, queue upload,SHA-256
--- ======================================================
+-- ═══════════════════════════════════════════════════════════════
+-- SQLite Schema: RoadGuard FE_AppMobile — Offline-First Architecture
+-- Theo: 27_9_V3/09_Frontend/09_Offline_App_Sync_Spec.md
+-- Full 10-store spec: đọc file trên; đây là 7 store cốt lõi cho scaffold
+-- ═══════════════════════════════════════════════════════════════
 
--- BẢN NHÁP: mọi thao tác hiện trường ghi local trước
-CREATE TABLE IF NOT EXISTS local_draft (
-  id            TEXT PRIMARY KEY,
-  kind          TEXT NOT NULL,          -- 'flight_log' | 'measurement' | 'evidence' | 'defect_report'
-  payload       TEXT NOT NULL,          -- JSON blob
-  created_at    TEXT NOT NULL,          -- ISO 8601
-  updated_at    TEXT NOT NULL
-);
-
--- UPLOAD QUEUE: QUEUED → UPLOADING → SERVER_CONFIRMED / INVALID
-CREATE TABLE IF NOT EXISTS outbox (
+-- [1] ACCOUNT PARTITION — Phân vùng theo account+env (invariant: không đọc chéo account)
+CREATE TABLE IF NOT EXISTS account_partition (
   id              TEXT PRIMARY KEY,
-  kind            TEXT NOT NULL,        -- 'survey_upload' | 'defect_report' | 'measurement' | 'repair_evidence'
-  data_b64        TEXT NOT NULL,        -- base64 encoded payload
-  checksum_sha256 TEXT NOT NULL,        -- xác thực toàn vẹn
-  status          TEXT NOT NULL DEFAULT 'QUEUED',
-  attempt         INTEGER DEFAULT 0,
-  max_attempts    INTEGER DEFAULT 5,
-  last_error      TEXT,
-  created_at      TEXT NOT NULL
+  environment     TEXT NOT NULL,        -- 'dev' | 'staging' | 'production'
+  api_origin      TEXT NOT NULL,        -- Base URL API đã cấu hình
+  actor_id        TEXT NOT NULL,        -- UUID của actor đang đăng nhập
+  schema_version  INTEGER NOT NULL      -- Để detect migration khi update app
 );
 
--- FILE MEDIA: video, SRT, ảnh
-CREATE TABLE IF NOT EXISTS media_file (
-  id                    TEXT PRIMARY KEY,
-  uri_local             TEXT NOT NULL,
-  kind                  TEXT NOT NULL,      -- 'video' | 'srt' | 'photo'
-  size_bytes            INTEGER NOT NULL,
-  checksum_sha256       TEXT NOT NULL,
-  status                TEXT NOT NULL DEFAULT 'LOCAL',   -- LOCAL/QUEUED/UPLOADING/SERVER_CONFIRMED
-  survey_data_version_id TEXT,
-  defect_id             TEXT,
-  repair_item_id        TEXT,
-  captured_at           TEXT NOT NULL
+-- [2] TASK PACK — Gói snapshot để tác nghiệp offline
+CREATE TABLE IF NOT EXISTS task_pack (
+  local_pack_id       TEXT PRIMARY KEY,
+  server_task_id      TEXT NOT NULL,
+  assignment_version  TEXT NOT NULL,    -- Opaque ETag từ server
+  policy_snapshot     TEXT NOT NULL,    -- JSON FastTrackPolicyVersion
+  evidence_refs       TEXT,             -- JSON array của file references
+  destination_coords  TEXT,             -- JSON [lat, lng] WGS84
+  downloaded_at       TEXT NOT NULL,
+  is_ready            INTEGER NOT NULL DEFAULT 0  -- 1 = đủ files để offline
 );
 
--- CACHE READ-ONLY: dữ liệu server đã xác nhận, chỉ đọc
-CREATE TABLE IF NOT EXISTS survey_cache (
-  id              TEXT PRIMARY KEY,
-  data            TEXT NOT NULL,          -- JSON SurveyDataVersion
-  cached_at       TEXT NOT NULL
+-- [3] MEDIA ASSET — File ảnh/video với provenance bất biến (immutable)
+CREATE TABLE IF NOT EXISTS media_asset (
+  local_media_id      TEXT PRIMARY KEY,
+  relative_path       TEXT NOT NULL,    -- Path tương đối trong app sandbox
+  sha256              TEXT NOT NULL,    -- Checksum bất biến sau khi ghi xong
+  size_bytes          INTEGER NOT NULL,
+  purpose             TEXT NOT NULL,    -- 'BEFORE' | 'AFTER' | 'DRONE_4K' | 'REPORTER'
+  source              TEXT,             -- 'CAMERA' | 'GALLERY' | 'SD_CARD'
+  captured_at         TEXT NOT NULL,   -- RFC3339 UTC
+  task_id             TEXT,
+  attempt_id          TEXT,
+  is_reused_from      TEXT,            -- 'REPORTER' | 'DRONE' | NULL (BR-17)
+  status              TEXT NOT NULL DEFAULT 'LOCAL_SAVING'
+  -- Status lifecycle: LOCAL_SAVING → LOCAL_READY → UPLOADING → VERIFIED
 );
 
-CREATE TABLE IF NOT EXISTS defect_cache (
-  id              TEXT PRIMARY KEY,
-  data            TEXT NOT NULL,          -- JSON Defect
-  cached_at       TEXT NOT NULL
+-- [4] OUTBOX INTENT — Ý định chưa đủ ID để serialize thành WireCommand
+CREATE TABLE IF NOT EXISTS outbox_intent (
+  local_intent_id     TEXT PRIMARY KEY,
+  actor_id            TEXT NOT NULL,
+  kind                TEXT NOT NULL,    -- 'START_REPAIR' | 'SUBMIT_REPAIR' | 'SUBMIT_SURVEY' | 'REPORTER_REPORT'
+  dependencies        TEXT,             -- JSON array local IDs chưa resolve
+  base_snapshot_hash  TEXT,            -- Hash của snapshot dùng để tạo intent
+  state               TEXT NOT NULL DEFAULT 'DRAFT',
+  created_at          TEXT NOT NULL,
+  updated_at          TEXT NOT NULL
+  -- State: DRAFT → WAITING_DEPENDENCIES → READY → (→ WireCommand)
 );
 
-CREATE TABLE IF NOT EXISTS task_cache (
-  id              TEXT PRIMARY KEY,
-  kind            TEXT NOT NULL,          -- 'flight_log' | 'field_inspection_task' | 'repair_item'
-  data            TEXT NOT NULL,          -- JSON
-  cached_at       TEXT NOT NULL
+-- [5] WIRE COMMAND — Command đã serialize xong, sẵn sàng gửi (payload BẤT BIẾN sau lần gửi đầu)
+CREATE TABLE IF NOT EXISTS wire_command (
+  operation_id        TEXT PRIMARY KEY, -- UUID idempotency key — KHÔNG đổi sau khi gửi
+  endpoint_kind       TEXT NOT NULL,    -- operationId từ operation_catalog.md
+  serialized_payload  TEXT NOT NULL,    -- JSON base64 — BẤT BIẾN
+  payload_hash        TEXT NOT NULL,    -- SHA256 để detect tampering
+  serializer_version  TEXT NOT NULL,
+  state               TEXT NOT NULL DEFAULT 'READY',
+  attempt_count       INTEGER DEFAULT 0,
+  max_attempts        INTEGER DEFAULT 5,
+  last_error          TEXT,
+  next_retry_at       TEXT,
+  created_at          TEXT NOT NULL
+  -- State: READY → IN_FLIGHT → ACKED | CONFLICT | REJECTED | UNKNOWN_OUTCOME | PAUSED_RETRY
+  -- QUAN TRỌNG: UNKNOWN_OUTCOME phải giữ nguyên key — không regenerate để retry
 );
-```
 
-### 5–7 Mock API Endpoints quan trọng
+-- [6] UPLOAD LEDGER — Theo dõi multipart upload từng part (Resume sau mất kết nối)
+CREATE TABLE IF NOT EXISTS upload_ledger (
+  local_media_id      TEXT NOT NULL,
+  upload_session_id   TEXT,             -- ID từ POST /uploads
+  part_number         INTEGER NOT NULL,
+  part_size_bytes     INTEGER NOT NULL,
+  part_etag           TEXT,             -- Ghi sau PUT part thành công
+  state               TEXT NOT NULL DEFAULT 'PENDING',
+  next_retry_at       TEXT,
+  PRIMARY KEY (local_media_id, part_number)
+  -- State: PENDING → UPLOADING → ACKED | FAILED
+  -- Complete chỉ khi tất cả part ACKED — KHÔNG unblock business trước khi VERIFIED
+);
 
-```ts
-// src/api/mock/ — ĐÉO CẦN SERVER THẬT, dùng JSON fixture
+-- [7] SERVER CACHE — Cache DTO từ server (đọc, không ghi local edits đè)
+CREATE TABLE IF NOT EXISTS server_cache (
+  resource_type   TEXT NOT NULL,       -- 'inspection_task' | 'survey_task' | 'fast_track_policy' | 'reporter_report'
+  resource_id     TEXT NOT NULL,
+  dto_json        TEXT NOT NULL,
+  etag            TEXT,                -- Dùng cho If-Match mutation
+  fetched_at      TEXT NOT NULL,
+  scope_actor_id  TEXT NOT NULL,       -- Phân vùng theo actor để tránh lộ data
+  PRIMARY KEY (resource_type, resource_id, scope_actor_id)
+);
 
-// 1. AUTH
-POST /api/auth/login
-  Body:    { email: string, password: string }
-  Response: { user: User, token: string, refresh_token: string }
-  Note:    Nếu user.must_change_password === true → redirect màn force-change-password
-
-POST /api/auth/refresh
-  Body:    { refresh_token: string }
-  Response: { token: string }
-
-POST /api/auth/change-password
-  Body:    { old_password: string, new_password: string }
-  Response: { ok: true }
-  Note:    CN10: bắt buộc trước khi dùng app
-
-// 2. SURVEYS (Drone + PM)
-GET  /api/surveys?status=PENDING&period=2024-Q3
-  Response: { items: SurveyDataVersion[], total: number }
-  Note:    M-DRONE-02, M-PM-02
-
-GET  /api/surveys/:id
-  Response: SurveyDataVersion + files[]
-  Note:    M-DRONE-03, M-DRONE-04
-
-POST /api/surveys/:id/upload
-  Body:    FormData { file: File, checksum_sha256: string }
-  Response: { status: SyncStatus, server_confirmed_at: string }
-  Note:    KS09, CN06-09
-
-// 3. DEFECTS
-GET  /api/defects?project_id=&status=OPEN
-  Response: { items: Defect[], total: number }
-  Note:    M-PM-04, M-SUP-02
-
-POST /api/defects/:id/field-inspection
-  Body:    { measurement: GroundTruthMeasurement }
-  Response: { task_status: FieldInspectionTaskStatus }
-  Note:    UD-05 bắt buộc, M-PM-07/M-CREW-05
-
-// 4. REPAIR BATCHES
-POST /api/repair-batches/submit
-  Body:    { batch: RepairBatchVersion }
-  Response: { batch_id: string, status: 'PENDING_APPROVAL' }
-  Note:    M-PM-09, UD-06 estimated_total_cost tự tính
-
-GET  /api/repair-batches?project_id=
-  Response: { items: RepairBatchVersion[] }
-  Note:    M-SUP-02, M-SUP-08
+-- HƯỚNG DẪN: Xem full 10-store spec (thêm IdMap, ConflictRecord, SyncRun) tại:
+-- D:\Do_AN_Drone\27_9_V3\09_Frontend\09_Offline_App_Sync_Spec.md §2
 ```
 
 ---
 
-## Dependencies cần cài
+## 6. Quy tắc CRITICAL cho AI Scaffolding & Code
 
-```bash
-npx create-expo-app FE_AppMobile --template blank-typescript
-cd FE_AppMobile
-
-# Routing
-npx expo install expo-router expo-linking expo-constants expo-status-bar
-
-# State & Data
-npm install zustand @tanstack/react-query
-
-# Offline
-npx expo install expo-sqlite
-
-# Camera & Location
-npx expo install expo-camera expo-location expo-media-library
-
-# File system
-npx expo install expo-file-system expo-document-picker
-
-# UI helpers
-npx expo install react-native-safe-area-context react-native-gesture-handler
-npx expo install @expo/vector-icons
-npm install axios
-
-# Fonts
-npx expo install @expo-google-assets/roboto
-# Sansation: tải .ttf thủ công vào assets/fonts/ (không có trên Expo Google Fonts)
-```
-
-### `app.json` thêm
-
-```json
-{
-  "expo": {
-    "scheme": "roadguard",
-    "plugins": ["expo-router", "expo-camera", "expo-location"],
-    "android": {
-      "package": "com.hoanghai.roadguard",
-      "adaptiveIcon": { "foregroundImage": "./assets/android-icon-foreground.png", "backgroundColor": "#FFFFFF" }
-    }
-  }
-}
-```
+1. **Chỉ phục vụ 3 vai trò mobile:** `(crew)`, `(drone)`, `(reporter)`. Tuyệt đối không để màn hình PM hay Supervisor làm rác luồng routing mobile.
+2. **Quy tắc Full Group Prefix:** Tất cả lệnh chuyển trang `router.push()`, `router.replace()` và mảng `tabs` của `BottomNav` **bắt buộc có tên group kèm ngoặc tròn**: `/(crew)/tasks`, `/(drone)/requests`, `/(reporter)/home`.
+3. **AuthGuard an toàn ReactFabric:** Giữ `<Stack screenOptions={{ headerShown: false }} />` luôn mount ổn định; mọi điều hướng xác thực phải đặt trong `useEffect`. CẤM dùng conditionally `<Redirect />` bọc ngoài `<Stack />`.
+4. **Fast Track Logic:**
+   - Nếu `task_mode === 'MEASURE_ONLY'`, nút "Tiến hành sửa nhanh" bị vô hiệu hóa hoặc ẩn (BR-09).
+   - Nếu `task_mode === 'INSPECT_AND_REPAIR'`, tính diện tích `length * width`. Nếu `area <= max_area && depth <= max_depth && length <= max_length` $\rightarrow$ Hiển thị chip `[Đạt Policy Sửa Nhanh]` và cho phép chụp ảnh AFTER để hoàn tất (BR-08, BR-25).
+5. **UD-06 Zero Cost:** TUYỆT ĐỐI ZERO TIỀN TỆ / KINH PHÍ trên toàn bộ màn hình Mobile.
+6. **Vật liệu & Tuyến đường:** Bê tông TCVN 10380:2014, Tuyến ĐH.05 Bình Chánh. CẤM LiDAR và nhựa đường asphalt.
+7. **5 Mã Defect:** Dùng đúng 5 mã trong `src/constants/defect-types.ts`.
 
 ---
 
-## Gap-filling đã chốt (AI PHẢI BỒI)
+## 7. Environment Config (từ `27_9_V3/09_Frontend/07_Environment_Base_URL_Config.md`)
 
-| Gap | Mô tả | Vị trí |
-|-----|-------|--------|
-| `force-change-password` | US-01/CN10: `must_change_password === true` → chặn mọi màn, buộc đổi password. HTML không có màn này. | `app/(auth)/force-change-password.tsx` |
-| Admin stack | US-17/18/19: tạo tài khoản, phân quyền, quy tắc phân mức lỗi, danh mục TCVN. Tích hợp trong `(sup)/profile.tsx` (M-SUP-07) | Không tạo màn mới — dùng tabs/sections trong profile |
-| `SUPPLEMENT_REQUIRED` | Trạng thái FieldInspectionTask khi cần đo bổ sung. HTML chỉ viết "Yêu cầu bổ sung". | Thêm enum值 `SUPPLEMENT_REQUIRED` vào `FieldInspectionTaskStatus` |
-| Measurement fields | `instrument_name`, `measurement_method`, `measured_at`, `location` (geog(4326)), `evidence_file_id` — Data Dictionary yêu cầu nhưng HTML hiển thị không đầy đủ | Thêm vào `GroundTruthMeasurement` interface |
-| `road_section_version_id` | Mỗi Survey/Defect phải gắn đoạn đường phiên bản (Domain Model) | Thêm field vào Survey + Defect |
+### Expo env variables (`.env.development`, `.env.staging`, `.env.production`):
+```env
+EXPO_PUBLIC_API_BASE_URL=https://<staging-host>/api/v1   # KHÔNG dùng placeholder trong release
+EXPO_PUBLIC_APP_ENV=development                           # 'development' | 'staging' | 'production'
+EXPO_PUBLIC_CONTRACT_VERSION=FE-R3-v1                    # Hash lock với openapi.baseline.yaml
+EXPO_PUBLIC_ENABLE_MOCKS=false                            # KHÔNG bật mock trong production
+EXPO_PUBLIC_REALTIME_ENABLED=false                        # Polling MVP trước; socket chỉ khi contract approved
+```
 
----
-
-## Quy tắc CRITICAL cho AI scaffolding
-
-1. **KHÔNG dùng Redux Toolkit** — dùng Zustand (nhẹ, đủ).
-2. **KHÔNG dùng React Navigation thuần** — dùng Expo Router (file-based, map trực tiếp mã màn).
-3. **Mỗi `_layout.tsx` role** phải render BottomNav 4 tab với đúng routes.
-4. **AuthGuard an toàn ReactFabric:** Giữ `<Stack screenOptions={{ headerShown: false }} />` luôn mount ổn định. Redirection phải đặt trong `useEffect` + `router.replace(...)` tới `(auth)` hoặc `(auth)/force-change-password`. CẤM dùng `<Redirect />` conditionally bọc ngoài `<Stack />` trong `RootLayout`.
-5. **UD-06 Zero Presentation Cost:** Tầng giao diện mobile `app/` TUYỆT ĐỐI KHÔNG CÓ INPUT HOẶC TEXT TIỀN NÔNG (VNĐ / dự toán). Bắt buộc thay bằng bộ 3: Phương án xử lý kỹ thuật + Kích thước hình học hư hại (m², cm, m) + Thời hạn hoàn thành.
-6. **Vật liệu & Khảo sát:** Bê tông xi măng TCVN 10380:2014, 4K RGB + DSM (OpenDroneMap), TUYỆT ĐỐI CẤM LiDAR, Tuyến ĐH.05 Bình Chánh là Pilot Primary Corridor.
-7. **5 Mã Defect chuẩn:** Single source of truth tại `src/constants/defect-types.ts` (`POTH_DEEP`, `DEPR_POND`, `EDGE_BRK`, `SLAB_CRK`, `SHLD_EROS`).
-8. **`geometry`** trong Defect dùng GeoJSON standard (tương thích `geography(4326)` SQL Server).
-9. **Upload queue** trạng thái: LOCAL → QUEUED → UPLOADING → SERVER_CONFIRMED. CHECKSUM SHA-256 trước khi gửi.
-10. **FAB** trong `tasks.tsx` và `surveys.tsx`: `position: absolute, bottom: 96, right: 16, zIndex: 30`.
-11. **Logo:** Splash/Loading = `assets/logo_hoanghai.png`; Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png`.
+### Quy tắc bắt buộc:
+- **Cấm `<production-host>` placeholder** trong production build (CI gate reject)
+- **Namespace local store:** `environmentId + API_origin + actorId + localSchemaVersion`
+- **Không sync queue staging sang production** khi đổi env — logout và tạo partition mới
+- **Badge môi trường:** Hiển thị `[STAGING]` / `[DEV]` rõ ràng; production không có mock switch
+- **Realtime/Socket:** Mặc định **Polling MVP**; TUYỆT ĐỐI không scaffold WebSocket trừ khi contract đã được duyệt (FE-GAP-11)
+- **Token:** KHÔNG lưu `accessToken`/`refreshToken` trong `AsyncStorage` plain text — dùng `expo-secure-store` (Android Keystore)
