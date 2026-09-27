@@ -171,6 +171,10 @@ Giao diện tuân thủ triết lý **minimalism thực dụng**: mỗi màn hì
 - **Màn Splash / Loading:** Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
 - **Màn hình nội bộ, AppHeader, Form Đăng nhập, App Icon:** Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
 
+### Quy định Thư viện Icon (Icon Specification)
+- **Thư viện Icon bắt buộc:** 100% `@expo/vector-icons/MaterialIcons` (chuẩn Google Material Symbols design).
+- **NGHIÊM CẤM:** Tuyệt đối KHÔNG sử dụng `Ionicons` hoặc bất kỳ thư viện icon nào khác trong các màn hình và components của app. Mọi icon trong hệ thống phải đồng bộ 100% MaterialIcons.
+
 ### Quy tắc Phi tài chính UD-06 (Zero Cost)
 - **TUYỆT ĐỐI ZERO CHI PHÍ** trên toàn bộ màn hình Mobile. Cấm hiển thị VNĐ, dự toán, kinh phí, đơn giá, định mức xi măng/cát đá.
 - Mọi thông tin thi công chỉ hiển thị: **Phương án kỹ thuật** + **Kích thước hư hại hình học** (m², cm, m) + **Thời hạn xử lý**.
