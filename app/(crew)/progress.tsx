@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -48,7 +48,7 @@ export default function CrewProgressScreen() {
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
             <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-              <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+              <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
             </Pressable>
             <View>
               <Text style={[typography.titleMd, styles.topBarTitle]}>Cập nhật tiến độ</Text>
@@ -70,7 +70,7 @@ export default function CrewProgressScreen() {
             </Text>
           </View>
           <View style={styles.summaryIcon}>
-            <Ionicons name="build" size={18} color={colors.brandGold} />
+            <MaterialIcons name="build" size={18} color={colors.brandGold} />
           </View>
         </View>
         <Text style={[typography.titleMd, styles.summaryTitle]}>
@@ -96,8 +96,8 @@ export default function CrewProgressScreen() {
             const isChecked = checked[index];
             return (
               <Pressable key={step} onPress={() => toggleStep(index)} accessibilityRole="checkbox" accessibilityState={{ checked: isChecked }} style={({ pressed }) => [styles.stepRow, pressed && styles.pressed]}>
-                <Ionicons
-                  name={isChecked ? 'checkmark-circle' : 'ellipse-outline'}
+                <MaterialIcons
+                  name={isChecked ? 'check-circle' : 'radio-button-unchecked'}
                   size={22}
                   color={isChecked ? colors.success : colors.secondary}
                 />
@@ -122,20 +122,20 @@ export default function CrewProgressScreen() {
         </View>
         <View style={styles.segmentRow}>
           <View style={styles.segment}>
-            <Ionicons name="time-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="access-time" size={18} color={colors.secondary} />
             <Text style={[typography.caption, styles.segmentText]}>Đang thực hiện</Text>
           </View>
           <View style={styles.segment}>
-            <Ionicons name="warning-outline" size={18} color={colors.secondary} />
+            <MaterialIcons name="warning" size={18} color={colors.secondary} />
             <Text style={[typography.caption, styles.segmentText]}>Bị chặn</Text>
           </View>
           <View style={styles.segmentActive}>
-            <Ionicons name="checkmark" size={18} color={colors.onPrimary} />
+            <MaterialIcons name="check" size={18} color={colors.onPrimary} />
             <Text style={[typography.caption, styles.segmentActiveText]}>Hoàn thành</Text>
           </View>
         </View>
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+          <MaterialIcons name="info-outline" size={16} color={colors.warning} />
           <Text style={[typography.caption, styles.infoBoxText]}>
             Khi chọn "Hoàn thành", hệ thống sẽ tự động chuyển sang bước Chụp bằng chứng trước/sau để kỹ sư nghiệm thu.
           </Text>
@@ -169,7 +169,7 @@ export default function CrewProgressScreen() {
         </View>
         <View style={styles.footerRow}>
           <View style={styles.footerLeft}>
-            <Ionicons name="locate-outline" size={14} color={colors.success} />
+            <MaterialIcons name="my-location" size={14} color={colors.success} />
             <Text style={[typography.caption, styles.footerCoord]}>
               {task.coordinates.latitude.toFixed(4)}° B, {task.coordinates.longitude.toFixed(4)}° Đ (Sai số &lt;3m)
             </Text>

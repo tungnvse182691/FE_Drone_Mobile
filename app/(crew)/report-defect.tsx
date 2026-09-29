@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -45,7 +45,7 @@ export default function CrewReportDefectScreen() {
         <View style={styles.topBar}>
           <View style={styles.topBarLeft}>
             <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-              <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+              <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
             </Pressable>
             <Text style={[typography.titleMd, styles.topBarTitle]}>Báo lỗi phát sinh mới</Text>
           </View>
@@ -57,7 +57,7 @@ export default function CrewReportDefectScreen() {
     >
       <Card style={styles.banner}>
         <View style={styles.bannerRow}>
-          <Ionicons name="warning-outline" size={16} color={colors.warning} />
+          <MaterialIcons name="warning" size={16} color={colors.warning} />
           <Text style={[typography.bodyMd, styles.bannerText]}>
             Lỗi này sẽ được gửi về PM xác minh, không gộp vào {task.wo_code}
           </Text>
@@ -67,7 +67,7 @@ export default function CrewReportDefectScreen() {
       <View style={styles.fieldGroup}>
         <Text style={[typography.labelLg, styles.fieldLabel]}>Tọa độ GPS phát hiện tự động</Text>
         <View style={styles.gpsField}>
-          <Ionicons name="location-outline" size={16} color={colors.secondary} />
+          <MaterialIcons name="location-on" size={16} color={colors.secondary} />
           <Text style={[typography.bodyMd, styles.gpsText]}>{gpsText}</Text>
         </View>
       </View>
@@ -125,7 +125,7 @@ export default function CrewReportDefectScreen() {
           accessibilityRole="button"
           accessibilityLabel="Chụp ảnh hiện trường có Watermark"
         >
-          <Ionicons name="camera-outline" size={32} color={colors.primary} />
+          <MaterialIcons name="photo-camera" size={32} color={colors.primary} />
           <Text style={[typography.labelSm, styles.photoText]}>Chạm để chụp ảnh có Watermark</Text>
           <Text style={[typography.caption, styles.photoHint]}>Gắn nhãn vị trí hiện tại</Text>
         </Pressable>

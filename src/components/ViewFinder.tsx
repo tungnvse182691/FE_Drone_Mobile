@@ -2,7 +2,7 @@ import React, { ReactNode, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
@@ -72,7 +72,7 @@ export function ViewFinder({
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Ionicons name="camera-outline" size={48} color={colors.secondary} />
+        <MaterialIcons name="photo-camera" size={48} color={colors.secondary} />
         <Text style={[typography.bodyMd, styles.permissionText]}>
           Cần quyền truy cập camera để chụp ảnh nghiệm thu
         </Text>
@@ -117,7 +117,7 @@ export function ViewFinder({
 
         {showReticle && (
           <View style={styles.reticle} pointerEvents="none">
-            <Ionicons name="image-outline" size={48} color="rgba(129, 140, 248, 0.8)" />
+            <MaterialIcons name="image" size={48} color="rgba(129, 140, 248, 0.8)" />
           </View>
         )}
 
@@ -142,7 +142,7 @@ export function ViewFinder({
 
         {watermarkContent ?? (
           <View style={styles.gpsWatermark} pointerEvents="none">
-            <Ionicons name="location" size={14} color={colors.onPrimary} />
+            <MaterialIcons name="location-on" size={14} color={colors.onPrimary} />
             <Text style={[typography.caption, styles.watermarkText]}>
               {coords
                 ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
@@ -161,7 +161,7 @@ export function ViewFinder({
             accessibilityRole="button"
             testID="capture-button"
           >
-            <Ionicons name="camera" size={24} color={colors.onPrimary} />
+            <MaterialIcons name="photo-camera" size={24} color={colors.onPrimary} />
           </Pressable>
           <View style={styles.bottomSideRight}>{rightControl ?? null}</View>
         </View>

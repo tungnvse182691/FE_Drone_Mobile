@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
@@ -111,7 +111,8 @@ export default function CrewNavigationScreen() {
             },
             {
               id: `defect-${task.id}`,
-              title: `${defectTypeLabel(task.defect_type_code)} (${task.wo_code})`,
+              title: defectTypeLabel(task.defect_type_code),
+              label: defectTypeLabel(task.defect_type_code),
               subtitle: `${task.chainage} • Tuyến ${task.route_code} • ${task.section_name}`,
               coordinate: [targetLng, targetLat],
               type: 'defect',
@@ -128,7 +129,7 @@ export default function CrewNavigationScreen() {
         {/* Top Header Bar */}
         <View style={styles.topHeader}>
           <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
-            <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+            <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </Pressable>
 
           <View style={styles.gpsBadge}>
@@ -170,14 +171,14 @@ export default function CrewNavigationScreen() {
           {isCollapsed ? (
             <View style={styles.collapsedSummaryRow}>
               <View style={styles.collapsedLeft}>
-                <Ionicons name="navigate" size={16} color={colors.brandGold} />
+                <MaterialIcons name="navigation" size={16} color={colors.brandGold} />
                 <Text style={[typography.labelSm, styles.collapsedTitle]}>
                   450 m &bull; {task.chainage} Tuyến {task.route_code} (BTXM)
                 </Text>
               </View>
               <View style={styles.collapsedRight}>
                 <Text style={[typography.caption, styles.collapsedHint]}>Chạm để mở</Text>
-                <Ionicons name="chevron-up" size={16} color={colors.secondary} />
+                <MaterialIcons name="keyboard-arrow-up" size={16} color={colors.secondary} />
               </View>
             </View>
           ) : (
@@ -186,21 +187,18 @@ export default function CrewNavigationScreen() {
                 <Text style={[typography.titleLg, styles.distanceValue]}>
                   450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
                 </Text>
+                <Text style={[typography.titleMd, styles.roadTag]} numberOfLines={1}>
+                  {task.chainage} Tuyến {task.route_code} ({task.locality})
+                </Text>
                 <View style={styles.tagRow}>
                   <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
                   <Chip variant="severity-high" label="Nghiêm trọng" />
-                  <Text style={[typography.titleMd, styles.roadTag]}>
-                    {task.chainage} Tuyến {task.route_code} ({task.locality})
-                  </Text>
                 </View>
               </View>
 
               <View style={styles.headerRightControls}>
-                <View style={styles.navCircle}>
-                  <Ionicons name="navigate" size={20} color={colors.brandGold} />
-                </View>
                 <View style={styles.togglePill}>
-                  <Ionicons name="chevron-down" size={18} color={colors.neutral} />
+                  <MaterialIcons name="keyboard-arrow-down" size={18} color={colors.neutral} />
                 </View>
               </View>
             </View>
@@ -210,7 +208,7 @@ export default function CrewNavigationScreen() {
         {/* Collapsible Content: Address Bar & Actions */}
         <View style={styles.addressBar}>
           <View style={styles.addressLeft}>
-            <Ionicons name="location" size={16} color={colors.error} />
+            <MaterialIcons name="place" size={16} color={colors.error} />
             <Text style={[typography.bodyMd, styles.addressText]}>
               {task.locality} • {task.defect_location}
             </Text>
@@ -225,7 +223,7 @@ export default function CrewNavigationScreen() {
             <Button
               variant="secondary"
               title="Mở Google Maps"
-              icon={<Ionicons name="navigate-circle-outline" size={18} color={colors.neutral} />}
+              icon={<MaterialIcons name="directions" size={18} color={colors.neutral} />}
               onPress={openGoogleMaps}
             />
           </View>
@@ -233,10 +231,13 @@ export default function CrewNavigationScreen() {
             <Button
               variant="primary"
               title="Đã đến nơi"
-              onPress={() => router.push({ pathname: '/(crew)/progress', params: { id: task.id } })}
+              onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id } })}
             />
           </View>
         </View>
+        <Text style={[typography.caption, styles.arrivalHint]}>
+          Đã đến nơi — Tiến hành đo đạc & chụp ảnh hiện trạng
+        </Text>
       </Animated.View>
     </SafeAreaView>
   );
@@ -379,14 +380,15 @@ const styles = StyleSheet.create({
   distanceHint: {
     color: colors.secondary,
   },
+  roadTag: {
+    color: colors.neutral,
+    marginTop: 4,
+  },
   tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  roadTag: {
-    color: colors.neutral,
+    marginTop: 6,
   },
   headerRightControls: {
     flexDirection: 'row',
@@ -444,5 +446,10 @@ const styles = StyleSheet.create({
   },
   actionItem: {
     flex: 1,
+  },
+  arrivalHint: {
+    color: colors.secondary,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

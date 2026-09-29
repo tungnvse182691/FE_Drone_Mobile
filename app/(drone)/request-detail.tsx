@@ -243,33 +243,44 @@ export default function DroneRequestDetailScreen() {
     }
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(drone)/home');
+    }
+  };
+
   return (
-    <SafeAreaScreen scroll>
-      {/* Top Bar with Back Button */}
-      <View style={styles.topBar}>
-        <Pressable
-          style={styles.circleIconButton}
-          onPress={() => router.push('/(drone)/requests')}
-          accessibilityRole="button"
-        >
-          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
-        </Pressable>
+    <SafeAreaScreen
+      scroll
+      header={
+        <View style={styles.topBar}>
+          <Pressable
+            style={styles.circleIconButton}
+            onPress={handleBack}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại"
+          >
+            <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
+          </Pressable>
 
-        <View style={styles.topBarCenter}>
-          <Text style={[typography.titleMd, styles.topBarCode]}>{current.code}</Text>
-          <Text style={[typography.caption, styles.topBarSub]}>Chi tiết nhiệm vụ bay</Text>
+          <View style={styles.topBarCenter}>
+            <Text style={[typography.titleMd, styles.topBarCode]}>{current.code}</Text>
+            <Text style={[typography.caption, styles.topBarSub]}>Chi tiết nhiệm vụ bay</Text>
+          </View>
+
+          <Pressable
+            style={styles.circleIconButton}
+            onPress={handleShareTask}
+            accessibilityRole="button"
+            accessibilityLabel="Chia sẻ nhiệm vụ bay"
+          >
+            <MaterialIcons name="share" size={18} color={colors.secondary} />
+          </Pressable>
         </View>
-
-        <Pressable
-          style={styles.circleIconButton}
-          onPress={handleShareTask}
-          accessibilityRole="button"
-          accessibilityLabel="Chia sẻ nhiệm vụ bay"
-        >
-          <MaterialIcons name="share" size={18} color={colors.secondary} />
-        </Pressable>
-      </View>
-
+      }
+    >
       {/* Task Switcher Chips */}
       <View style={styles.selectorBar}>
         <Text style={[typography.labelSm, styles.selectorTitle]}>CHỌN YÊU CẦU BAY KHÁC:</Text>
@@ -557,7 +568,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
   },
   circleIconButton: {
     width: 36,

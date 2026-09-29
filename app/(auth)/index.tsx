@@ -7,6 +7,8 @@ import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { login as apiLogin } from '../../src/api/mock/auth';
 import { useAuthStore } from '../../src/store/auth';
+import { useReporterStore } from '../../src/store/reporter';
+import { RoleCode } from '../../src/types/enums';
 import { useRouter } from 'expo-router';
 import { REPORTER_HOME, ROLE_HOMES } from '../../src/constants/routes';
 
@@ -25,6 +27,9 @@ export default function LoginScreen() {
       const response = await apiLogin(phoneOrEmail, password);
       const loggedUser = response.data.user;
       login(loggedUser);
+      if (loggedUser.role_code === RoleCode.REPORTER) {
+        useReporterStore.getState().markVerified(loggedUser.phone_or_email);
+      }
       if (loggedUser.must_change_password) {
         router.replace('/(auth)/force-change-password');
         return;
@@ -91,8 +96,8 @@ export default function LoginScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Chọn tài khoản Đội Sửa Chữa"
                 >
-                  <MaterialIcons name="build" size={14} color={colors.brandGold} />
-                  <Text style={styles.quickTestChipText}>Đội Sửa Chữa (1)</Text>
+                  <MaterialIcons name="build" size={13} color={colors.brandGold} />
+                  <Text style={styles.quickTestChipText}>Đội Sửa Chữa</Text>
                 </Pressable>
 
                 <Pressable
@@ -105,8 +110,22 @@ export default function LoginScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Chọn tài khoản Phi Công Drone"
                 >
-                  <MaterialIcons name="flight-takeoff" size={14} color={colors.brandGold} />
-                  <Text style={styles.quickTestChipText}>Phi Công Drone (1)</Text>
+                  <MaterialIcons name="flight-takeoff" size={13} color={colors.brandGold} />
+                  <Text style={styles.quickTestChipText}>Phi Công Drone</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                  onPress={() => {
+                    setPhoneOrEmail('dan.nguyen@gmail.com');
+                    setPassword('1');
+                    setError(null);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Chọn tài khoản Người Dân"
+                >
+                  <MaterialIcons name="person" size={13} color={colors.brandGold} />
+                  <Text style={styles.quickTestChipText}>Người Dân</Text>
                 </Pressable>
               </View>
             </View>
@@ -213,16 +232,16 @@ const styles = StyleSheet.create({
   },
   quickTestRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   quickTestChip: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
     paddingVertical: 8,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 4,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
     borderWidth: 1,

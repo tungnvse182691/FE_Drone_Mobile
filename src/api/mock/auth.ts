@@ -55,6 +55,20 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
     },
     password: '1',
   },
+  'nguoidan.binhchanh@gmail.com': {
+    user: {
+      id: 'U-REP-002',
+      role_code: RoleCode.REPORTER,
+      full_name: 'Nguyễn Văn Dân (Bình Chánh)',
+      phone_or_email: 'nguoidan.binhchanh@gmail.com',
+      is_reporter: true,
+      employee_code: 'REP-002',
+      must_change_password: false,
+      token: 'mock-token-reporter-002',
+      refresh_token: 'mock-refresh-reporter-002',
+    },
+    password: '1',
+  },
   'pm@hoanghai.vn': {
     user: {
       id: 'U002',

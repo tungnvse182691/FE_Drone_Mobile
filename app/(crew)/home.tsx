@@ -43,10 +43,11 @@ const CREW_METRICS: CrewMetric[] = [
 
 export default function CrewHomeScreen() {
   const user = useAuthStore((state) => state.user);
+  const displayName = user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Nguyễn Văn Tuấn';
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Đội Sửa Chữa" />}>
-        <Text style={[typography.titleLg, styles.greeting]}>Chào, {user?.full_name ?? 'Nguyễn Văn Tuấn'}</Text>
+        <Text style={[typography.titleLg, styles.greeting]}>Chào, {displayName}</Text>
         <Text style={[typography.caption, styles.greetingMeta]}>Kỹ thuật viên • Đội 01 • Mã NV: {user?.employee_code ?? 'HH-RC-084'}</Text>
 
         <Card style={styles.teamCard}>
@@ -91,7 +92,6 @@ export default function CrewHomeScreen() {
                   <View style={styles.taskContent}>
                     <View style={styles.taskMetaRow}>
                       <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
                     </View>
                     <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
                     <View style={styles.taskDistRow}>

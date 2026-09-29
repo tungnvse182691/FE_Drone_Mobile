@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -100,7 +100,7 @@ export const CREW_TASKS: CrewTask[] = [
     description:
       'Xói lở vai đường lan rộng sau mưa lớn, đất bị cuốn trôi xuống dưới taluy âm.',
     repair_method:
-      'Đo chiều dài, chiều rộng và độ sâu phần xói lở. Nếu vượt ngưỡng Fast Track thì gửi số đo về PM để lập phương án.',
+      'Đo chiều dài, chiều rộng và độ sâu phần xói lở. Nếu vượt ngưỡng quy định sửa nhanh thì gửi số đo về PM để lập phương án.',
     safety_note:
       'Mang đầy đủ thiết bị bảo hộ, kiểm tra độ ổn định của bờ taluy trước khi vào hiện trường.',
     batch_size: 1,
@@ -237,7 +237,7 @@ export default function CrewTasksScreen() {
 
         {list.length === 0 ? (
           <EmptyState
-            icon="checkmark-circle-outline"
+            icon="check-circle"
             title="Không có công việc trong bộ lọc này"
             message="Chuyển sang bộ lọc khác để xem danh sách công việc."
           />
@@ -260,10 +260,9 @@ export default function CrewTasksScreen() {
                       ) : (
                         <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
                       )}
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
                     </View>
                     <View style={styles.taskDistRow}>
-                      <Ionicons name="navigate-outline" size={14} color={colors.secondary} />
+                      <MaterialIcons name="navigation" size={14} color={colors.secondary} />
                       <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
                     </View>
                   </View>
@@ -271,7 +270,7 @@ export default function CrewTasksScreen() {
                   <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
 
                   <View style={styles.taskRouteRow}>
-                    <Ionicons name="git-branch-outline" size={13} color={colors.secondary} />
+                    <MaterialIcons name="alt-route" size={13} color={colors.secondary} />
                     <Text style={[typography.caption, styles.taskRoute]}>
                       Tuyến {task.route_code} • {task.section_name} • {task.chainage}
                     </Text>
@@ -289,8 +288,8 @@ export default function CrewTasksScreen() {
                   </View>
 
                   <View style={styles.taskFooter}>
-                    <Ionicons
-                      name={task.due_urgency === 'urgent' ? 'alarm-outline' : 'time-outline'}
+                    <MaterialIcons
+                      name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
                       size={13}
                       color={task.due_urgency === 'urgent' ? colors.error : colors.secondary}
                     />
@@ -302,7 +301,7 @@ export default function CrewTasksScreen() {
                     >
                       {task.due_label}
                     </Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.secondary} style={styles.taskChevron} />
+                    <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} />
                   </View>
                 </Card>
               </Pressable>

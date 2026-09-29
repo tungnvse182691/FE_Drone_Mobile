@@ -15,14 +15,16 @@ import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-ca
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DEFECT_TYPE_OPTIONS, DefectTypeCode } from '../../src/constants/defect-types';
-import { registerReporterEmail, ReportCreate } from '../../src/api/mock/reporter';
+import { registerReporterEmail, submitReport, ReportCreate } from '../../src/api/mock/reporter';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { useReporterStore } from '../../src/store/reporter';
-import { AUTH_OTP_VERIFY } from '../../src/constants/routes';
+import { useAuthStore } from '../../src/store/auth';
+import { AUTH_OTP_VERIFY, REPORTER_TRACK } from '../../src/constants/routes';
 
 const MAX_PHOTOS = 3;
 const MIN_DESCRIPTION = 10;
@@ -53,16 +55,20 @@ export default function ReporterReportScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const user = useAuthStore((state) => state.user);
   const emailPrefill = useReporterStore((state) => state.email);
   const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
   const setEmailPrefill = useReporterStore((state) => state.setEmail);
   const setPendingReport = useReporterStore((state) => state.setPendingReport);
+  const addTrackingCode = useReporterStore((state) => state.addTrackingCode);
+  const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
 
   useEffect(() => {
-    if (emailPrefill) {
-      setEmail(emailPrefill);
+    const initialEmail = user?.phone_or_email || verifiedEmail || emailPrefill;
+    if (initialEmail) {
+      setEmail(initialEmail);
     }
-  }, [emailPrefill]);
+  }, [user?.phone_or_email, verifiedEmail, emailPrefill]);
 
   const requestLocation = async () => {
     setGpsLoading(true);
@@ -110,6 +116,20 @@ export default function ReporterReportScreen() {
     }
   };
 
+  const handlePickImage = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'image/jpeg', 'image/png'],
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets.length > 0) {
+        setPhotos((current) => [...current, res.assets[0].uri].slice(0, MAX_PHOTOS));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const validate = () => {
     const next: Record<string, string> = {};
     if (!defectType) {
@@ -118,8 +138,12 @@ export default function ReporterReportScreen() {
     if (description.trim().length < MIN_DESCRIPTION) {
       next.description = `Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự để đội nghiệp vụ xác định vị trí.`;
     }
-    if (!email.includes('@')) {
-      next.email = 'Email không hợp lệ — mã OTP sẽ được gửi tới địa chỉ này.';
+    const trimmedEmail = email.trim().toLowerCase();
+    const gmailRegex = /^[a-z0-9][a-z0-9._%+-]*@(gmail\.com|googlemail\.com)$/;
+    if (!trimmedEmail) {
+      next.email = 'Vui lòng nhập địa chỉ email nhận mã xác thực.';
+    } else if (!gmailRegex.test(trimmedEmail)) {
+      next.email = 'Vui lòng sử dụng địa chỉ Gmail hợp lệ (@gmail.com hoặc @googlemail.com) để nhận mã OTP.';
     }
     if (!routeHint.trim()) {
       next.routeHint = 'Vui lòng nhập vị trí hoặc mốc giao thông gần nhất.';
@@ -153,8 +177,9 @@ export default function ReporterReportScreen() {
       return;
     }
 
+    const trimmedEmail = email.trim().toLowerCase();
     const payload: ReportCreate = {
-      reporter_email: email.trim().toLowerCase(),
+      reporter_email: trimmedEmail,
       route_hint: routeHint.trim(),
       description: description.trim(),
       photo_uris: photos,
@@ -162,12 +187,33 @@ export default function ReporterReportScreen() {
       defect_type: defectType,
     };
 
+    const isAlreadyVerified =
+      (!!verifiedEmail && verifiedEmail.toLowerCase() === trimmedEmail) ||
+      (!!user?.phone_or_email && user.phone_or_email.toLowerCase() === trimmedEmail);
+
     setSubmitting(true);
     try {
       await saveDraft(payload);
+      if (isAlreadyVerified) {
+        const { report } = await submitReport(
+          payload,
+          `submit:${trimmedEmail}:${Date.now()}`,
+        );
+        addTrackingCode(report.tracking_code);
+        clearPendingReport();
+        router.push({
+          pathname: REPORTER_TRACK,
+          params: { code: report.tracking_code },
+        });
+        return;
+      }
+
       setEmailPrefill(payload.reporter_email);
       setPendingReport(payload);
-      const intent = await registerReporterEmail(payload.reporter_email, `register:${payload.reporter_email}:${Date.now()}`);
+      const intent = await registerReporterEmail(
+        payload.reporter_email,
+        `register:${payload.reporter_email}:${Date.now()}`,
+      );
       router.push({
         pathname: AUTH_OTP_VERIFY,
         params: { intentId: intent.intentId, email: intent.email },
@@ -299,11 +345,23 @@ export default function ReporterReportScreen() {
                 <Text style={[typography.caption, styles.photoAddText]}>Chụp ảnh</Text>
               </Pressable>
             ) : null}
+            {photos.length < MAX_PHOTOS ? (
+              <Pressable
+                onPress={handlePickImage}
+                style={({ pressed }) => [styles.photoAdd, pressed && styles.photoAddPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn ảnh từ thư viện"
+                testID="pick-photo"
+              >
+                <MaterialIcons name="photo-library" size={24} color={colors.primary} />
+                <Text style={[typography.caption, styles.photoAddText]}>Thư viện</Text>
+              </Pressable>
+            ) : null}
           </View>
           {!permission?.granted ? (
             <View style={styles.permissionRow}>
               <Text style={[typography.caption, styles.gpsText]}>
-                Cần cấp quyện camera để chụp ảnh hiện trường.
+                Cần cấp quyền camera để chụp ảnh hiện trường.
               </Text>
               <Button variant="secondary" title="Cấp quyền" onPress={requestPermission} />
             </View>
@@ -329,14 +387,19 @@ export default function ReporterReportScreen() {
               setEmail(text);
               setErrors((current) => ({ ...current, email: '' }));
             }}
-            placeholder="email@hoanghai.vn"
+            placeholder="nhap.email@gmail.com"
             keyboardType="email-address"
             autoCapitalize="none"
             error={errors.email}
             testID="reporter-email"
           />
 
-          {verifiedEmail && verifiedEmail === email.trim().toLowerCase() ? (
+          <Text style={[typography.caption, styles.emailHelpText]}>
+            Mã OTP 6 số sẽ được gửi qua Gmail (@gmail.com hoặc @googlemail.com) để xác thực phản ánh của bạn.
+          </Text>
+
+          {((verifiedEmail && verifiedEmail === email.trim().toLowerCase()) ||
+            (user?.phone_or_email && user.phone_or_email.toLowerCase() === email.trim().toLowerCase())) ? (
             <View style={styles.verifiedRow}>
               <MaterialIcons name="verified" size={16} color={colors.success} />
               <Text style={[typography.caption, styles.verifiedText]}>
@@ -361,7 +424,10 @@ export default function ReporterReportScreen() {
               disabled={submitting}
             />
             <Text style={[typography.caption, styles.submitHint]}>
-              Hệ thống sẽ gửi mã xác thực 6 số tới email để xác nhận phản ánh.
+              {(verifiedEmail && verifiedEmail === email.trim().toLowerCase()) ||
+              (user?.phone_or_email && user.phone_or_email.toLowerCase() === email.trim().toLowerCase())
+                ? 'Phản ánh sẽ được gửi trực tiếp đến Ban Quản lý dự án để tiếp nhận và khảo sát.'
+                : 'Hệ thống sẽ gửi mã xác thực 6 số tới email để xác nhận phản ánh.'}
             </Text>
           </View>
         </ScrollView>
@@ -459,6 +525,7 @@ const styles = StyleSheet.create({
   verifiedText: { color: colors.success },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
   error: { color: colors.error, flex: 1 },
+  emailHelpText: { color: colors.secondary, marginTop: -spacing.xs, marginBottom: spacing.md },
   submitWrapper: { gap: spacing.sm, marginTop: spacing.sm },
   submitHint: { color: colors.secondary, textAlign: 'center' },
   cameraModal: { flex: 1, backgroundColor: colors.neutral },

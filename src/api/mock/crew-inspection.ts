@@ -28,7 +28,7 @@ export type EvidenceReuseSource = 'REPORTER' | 'DRONE' | 'CREW';
 export const EVIDENCE_REUSE_LABELS: Record<EvidenceReuseSource, string> = {
   REPORTER: 'Ảnh tái sử dụng từ Phản ánh',
   DRONE: 'Ảnh tái sử dụng từ Drone',
-  CREW: 'Ảnh BEFORE chụp tại hiện trường',
+  CREW: 'Ảnh hiện trạng chụp tại hiện trường',
 };
 
 export const EVIDENCE_REUSE_SOURCE_TAGS: Record<EvidenceReuseSource, string> = {
@@ -197,7 +197,7 @@ export function setBeforeCapture(
   const candidate: BeforeEvidenceCandidate = {
     id: `CREW-BEFORE-${Date.now()}`,
     source: 'CREW',
-    source_label: 'Ảnh BEFORE chụp tại hiện trường',
+    source_label: 'Ảnh hiện trạng chụp tại hiện trường',
     defect_type_code: activeSession.defect_type_code,
     captured_at: capturedAt,
     coordinates: coords,

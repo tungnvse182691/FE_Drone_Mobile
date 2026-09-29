@@ -1,16 +1,15 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
 import { colors, typography } from '../design-tokens';
 
-type IonIconName = ComponentProps<typeof Ionicons>['name'];
 type MatIconName = ComponentProps<typeof MaterialIcons>['name'];
 
 export interface NavTab {
-  icon: IonIconName | MatIconName | string;
-  iconFamily?: 'ionicons' | 'material';
+  icon: MatIconName | string;
+  iconFamily?: 'material';
   label: string;
   route: string;
   activePrefixes?: string[];
@@ -47,11 +46,7 @@ export function BottomNav({ tabs, activeRoute }: BottomNavProps) {
             accessibilityState={{ selected: isActive }}
             onPress={() => router.push(tab.route)}
           >
-            {tab.iconFamily === 'material' ? (
-              <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
-            ) : (
-              <Ionicons name={tab.icon as any} size={22} color={iconColor} />
-            )}
+            <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
             <Text style={[typography.labelSm, { color: iconColor }]}>
               {tab.label.toUpperCase()}
             </Text>

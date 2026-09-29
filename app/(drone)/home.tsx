@@ -84,23 +84,24 @@ export default function DroneHomeScreen() {
     }
 
     const newTaskCode = `#REQ-KS-${Math.floor(100 + Math.random() * 900)}`;
+    const proposalCode = `KS-${Math.floor(700 + Math.random() * 100)}`;
     const newTask: DroneTask = {
       code: newTaskCode,
-      displayCode: `Mã: KS-${Math.floor(700 + Math.random() * 100)}`,
+      displayCode: `Mã đề xuất: ${proposalCode}`,
       title: newRoadName.trim(),
       subtitle: `${newReason} • ${selectedAltitude}`,
       priority: 'urgent',
       chipVariant: 'severity-high',
-      chipLabel: 'KHẨN CẤP',
-      iconName: 'warning',
-      iconBg: '#FDECEC',
-      iconColor: colors.error,
+      chipLabel: 'CHỜ PM DUYỆT',
+      iconName: 'campaign',
+      iconBg: '#FEF9E7',
+      iconColor: colors.primaryDark,
     };
 
     setTasks([newTask, ...tasks]);
     setNewRoadName('');
     setModalVisible(false);
-    showToast(`Đã tạo nhiệm vụ bay ngoài kế hoạch ${newTask.displayCode} thành công!`);
+    showToast(`Đã gửi đề xuất khảo sát khẩn cấp cho PM phê duyệt (Mã đề xuất: ${proposalCode})`);
   };
 
   return (
@@ -117,7 +118,7 @@ export default function DroneHomeScreen() {
       <View style={styles.greetingHeader}>
         <View style={styles.greetingTextGroup}>
           <Text style={[typography.headlineLg, styles.greetingName]}>
-            Chào, {user?.full_name ? user.full_name.split(' ').pop() : 'Minh'}
+            Chào, {user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Nguyễn Văn An'}
           </Text>
           <Text style={[typography.caption, styles.greetingMeta]}>
             Kỹ thuật viên Drone • Đội Khảo sát Số 2
@@ -261,17 +262,17 @@ export default function DroneHomeScreen() {
         ))}
       </View>
 
-      {/* Button: Tạo nhiệm vụ bay ngoài kế hoạch (Figma Image 1) */}
+      {/* Button: Gửi đề xuất khảo sát khẩn cấp cho PM (Ad-hoc) */}
       <Pressable
         style={styles.createTaskBtn}
         onPress={() => setModalVisible(true)}
         accessibilityRole="button"
       >
-        <MaterialIcons name="add-circle-outline" size={20} color={colors.surface} />
-        <Text style={styles.createTaskBtnText}>Tạo nhiệm vụ bay ngoài kế hoạch</Text>
+        <MaterialIcons name="campaign" size={20} color={colors.surface} />
+        <Text style={styles.createTaskBtnText}>Gửi đề xuất khảo sát khẩn cấp cho PM (Ad-hoc)</Text>
       </Pressable>
 
-      {/* Modal: Tạo nhiệm vụ bay ngoài kế hoạch */}
+      {/* Modal: Đề xuất khảo sát khẩn cấp cho PM */}
       <Modal
         visible={modalVisible}
         transparent
@@ -283,10 +284,10 @@ export default function DroneHomeScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={[typography.titleMd, styles.modalTitle]}>
-                  Tạo nhiệm vụ bay ngoài kế hoạch
+                  Đề xuất khảo sát khẩn cấp cho PM
                 </Text>
                 <Text style={[typography.caption, styles.modalSub]}>
-                  Khảo sát sự cố khẩn cấp hoặc phát sinh hiện trường
+                  Gửi yêu cầu khảo sát phát sinh tại hiện trường để PM phê duyệt và giao nhiệm vụ
                 </Text>
               </View>
               <Pressable
@@ -407,7 +408,7 @@ export default function DroneHomeScreen() {
               <View style={styles.submitBtnWrap}>
                 <Button
                   variant="primary"
-                  title="Xác nhận tạo nhiệm vụ"
+                  title="Gửi đề xuất cho PM"
                   onPress={handleCreateAdhocTask}
                 />
               </View>

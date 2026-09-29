@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
 export interface DatePickerFieldProps {
@@ -72,7 +72,7 @@ export function DatePickerField({
       <View style={styles.container}>
         {label ? <Text style={[typography.labelLg, styles.label]}>{label}</Text> : null}
         <View style={[styles.box, !!error && styles.boxError]}>
-          <Ionicons name="calendar-outline" size={18} color={colors.secondary} style={styles.icon} />
+          <MaterialIcons name="calendar-today" size={18} color={colors.secondary} style={styles.icon} />
           {React.createElement('input', {
             type: 'date',
             value: isoVal,
@@ -139,7 +139,7 @@ export function DatePickerField({
         ]}
         accessibilityRole="button"
       >
-        <Ionicons name="calendar-outline" size={18} color={colors.secondary} style={styles.icon} />
+        <MaterialIcons name="calendar-today" size={18} color={colors.secondary} style={styles.icon} />
         <Text
           style={[
             typography.bodyLg,
@@ -150,7 +150,7 @@ export function DatePickerField({
         >
           {value || placeholder}
         </Text>
-        <Ionicons name="chevron-down" size={16} color={colors.secondary} />
+        <MaterialIcons name="keyboard-arrow-down" size={16} color={colors.secondary} />
       </Pressable>
 
       {error ? <Text style={[typography.caption, styles.error]}>{error}</Text> : null}

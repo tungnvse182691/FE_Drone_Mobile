@@ -22,4 +22,5 @@ export const REPORTER_HOME = '/(reporter)/home';
 export const REPORTER_REPORT = '/(reporter)/report';
 export const REPORTER_TRACK = '/(reporter)/track';
 export const REPORTER_FEEDBACK = '/(reporter)/feedback';
+export const REPORTER_PROFILE = '/(reporter)/profile';
 export const AUTH_OTP_VERIFY = '/(auth)/otp-verify';

@@ -39,9 +39,17 @@ const APP_FONTS = {
 };
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts(APP_FONTS);
+  const [fontsLoaded, fontError] = useFonts(APP_FONTS);
+  const [fontTimeout, setFontTimeout] = useState(false);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFontTimeout(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!fontsLoaded && !fontError && !fontTimeout) {
     return (
       <View style={styles.loading}>
         <Image
@@ -122,20 +130,6 @@ function AuthGuard({ children }: { children: ReactNode }) {
       router.replace(ROLE_HOMES[user.role_code] as any);
     }
   }, [user, segments, isWebOnlyRole, inPublicGroup]);
-
-  // Ngăn chặn flicker: nếu chưa đăng nhập và chưa ở màn (auth) hoặc cổng public, hiển thị splash sạch của Hoàng Hải thay vì render lén màn nội bộ
-  if (!user && !inAuthGroup && !inPublicGroup) {
-    return (
-      <View style={styles.loading}>
-        <Image
-          source={require('../assets/logo_hoanghai.png')}
-          style={styles.loadingLogo}
-          resizeMode="contain"
-        />
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.guardRoot}>

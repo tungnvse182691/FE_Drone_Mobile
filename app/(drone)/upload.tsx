@@ -196,32 +196,39 @@ export default function DroneUploadScreen() {
     }, 600);
   };
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(drone)/home');
+    }
+  };
+
   return (
-    <SafeAreaScreen scroll>
-      {/* Top Bar with Back Button */}
-      <View style={styles.topBar}>
-        <Pressable
-          style={styles.circleIconButton}
-          onPress={() =>
-            router.push({
-              pathname: '/(drone)/request-detail',
-              params: { code: config.code },
-            })
-          }
-          accessibilityRole="button"
-        >
-          <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
-        </Pressable>
+    <SafeAreaScreen
+      scroll
+      header={
+        <View style={styles.topBar}>
+          <Pressable
+            style={styles.circleIconButton}
+            onPress={handleBack}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại"
+          >
+            <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
+          </Pressable>
 
-        <View style={styles.topBarCenter}>
-          <Text style={[typography.titleMd, styles.topBarTitle]}>Nộp dữ liệu khảo sát 4K RGB</Text>
-          <Text style={[typography.caption, styles.topBarSub]}>{config.code}</Text>
-        </View>
+          <View style={styles.topBarCenter}>
+            <Text style={[typography.titleMd, styles.topBarTitle]}>Nộp dữ liệu khảo sát 4K RGB</Text>
+            <Text style={[typography.caption, styles.topBarSub]}>{config.code}</Text>
+          </View>
 
-        <View style={styles.codeRightWrap}>
-          <MaterialIcons name="sd-storage" size={20} color={colors.primary} />
+          <View style={styles.codeRightWrap}>
+            <MaterialIcons name="sd-storage" size={20} color={colors.primary} />
+          </View>
         </View>
-      </View>
+      }
+    >
 
       {/* Task Switcher Chips */}
       <View style={styles.selectorBar}>
@@ -561,8 +568,8 @@ export default function DroneUploadScreen() {
       <Card style={styles.networkCard}>
         <View style={styles.networkTitleGroup}>
           <MaterialIcons name="wifi" size={18} color={colors.primary} />
-          <Text style={[typography.bodyMd, styles.networkTitle]}>
-            Đồng bộ ngoại tuyến:
+          <Text style={[typography.labelSm, styles.networkTitle]}>
+            CHẾ ĐỘ ĐỒNG BỘ NGOẠI TUYẾN
           </Text>
         </View>
 
@@ -570,6 +577,8 @@ export default function DroneUploadScreen() {
           <Pressable
             style={[styles.toggleBtn, onlineMode && styles.toggleBtnActive]}
             onPress={() => setOnlineMode(true)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: onlineMode }}
           >
             <View style={[styles.networkDot, { backgroundColor: colors.success }]} />
             <Text style={[styles.toggleText, onlineMode && styles.toggleTextActive]}>
@@ -580,9 +589,11 @@ export default function DroneUploadScreen() {
           <Pressable
             style={[styles.toggleBtn, !onlineMode && styles.toggleBtnActive]}
             onPress={() => setOnlineMode(false)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: !onlineMode }}
           >
             <View style={[styles.networkDot, { backgroundColor: colors.warning }]} />
-            <Text style={[typography.caption, !onlineMode && styles.toggleTextActive]}>
+            <Text style={[styles.toggleText, !onlineMode && styles.toggleTextActive]}>
               SQLite Outbox
             </Text>
           </Pressable>
@@ -626,7 +637,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   circleIconButton: {
     width: 36,
@@ -995,9 +1010,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   networkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.sm,
     marginBottom: spacing.md,
   },
   networkTitleGroup: {
@@ -1007,38 +1020,48 @@ const styles = StyleSheet.create({
   },
   networkTitle: {
     color: colors.neutral,
+    fontWeight: '600',
   },
   networkToggleRow: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.sm,
-    padding: 2,
+    borderRadius: radius.md,
+    padding: 3,
     borderWidth: 1,
     borderColor: colors.border,
+    gap: 4,
   },
   toggleBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
     paddingHorizontal: 8,
-    paddingVertical: 4,
     borderRadius: radius.sm,
   },
   toggleBtnActive: {
     backgroundColor: colors.surface,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   networkDot: {
-    width: 6,
-    height: 6,
+    width: 7,
+    height: 7,
     borderRadius: radius.full,
   },
   toggleText: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '500',
     color: colors.secondary,
   },
   toggleTextActive: {
     color: colors.neutral,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   actionSection: {
     marginBottom: spacing.xl,

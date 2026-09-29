@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, Text, Pressable, Platform, StyleProp, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../design-tokens';
 
 export interface MapMarker {
   id: string;
   title: string;
   subtitle?: string;
+  label?: string;
   coordinate: [number, number]; // [lng, lat]
   type?: 'defect' | 'vehicle' | 'survey';
   severity?: 'high' | 'medium' | 'low';
@@ -259,7 +260,7 @@ export function RoadGuardMapLibre({
             container.className = 'custom-defect-container';
             container.innerHTML = 
               '<div class="custom-defect-pin"><div class="custom-defect-icon">!</div></div>' +
-              '<div class="custom-defect-label">' + (m.id || 'Lỗi') + '</div>';
+              '<div class="custom-defect-label">' + (m.label || m.title || 'Vị trí lỗi') + '</div>';
           }
 
           var popupContent = '<div style="padding:4px;">' +
@@ -349,7 +350,7 @@ export function RoadGuardMapLibre({
   const renderOfflineFallback = () => (
     <View style={styles.offlineContainer}>
       <View style={[styles.offlineBanner, { top: controlsTopOffset, right: interactive ? 52 : spacing.sm }]}>
-        <Ionicons name="cloud-offline" size={14} color={colors.warning} />
+        <MaterialIcons name="cloud-off" size={14} color={colors.warning} />
         <Text style={[typography.labelSm, styles.offlineBannerText]}>{offlineBannerText}</Text>
       </View>
 
@@ -371,7 +372,7 @@ export function RoadGuardMapLibre({
 
         {/* Destination / Defect Pin */}
         <View style={styles.schematicDefect}>
-          <Ionicons name="warning" size={16} color={colors.surface} />
+          <MaterialIcons name="warning" size={16} color={colors.surface} />
           <View style={styles.defectPulse} />
           <Text style={[typography.caption, styles.defectLabel]}>Cầu Bà Lát · Km01+850</Text>
         </View>
@@ -407,8 +408,8 @@ export function RoadGuardMapLibre({
               onPress={() => setLayerType(prev => (prev === 'streets' ? 'satellite' : 'streets'))}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
-              <Ionicons
-                name={layerType === 'satellite' ? 'map' : 'earth'}
+              <MaterialIcons
+                name={layerType === 'satellite' ? 'map' : 'public'}
                 size={18}
                 color={layerType === 'satellite' ? colors.primary : colors.neutral}
               />
@@ -422,8 +423,8 @@ export function RoadGuardMapLibre({
               onPress={() => setLoadError(prev => !prev)}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
-              <Ionicons
-                name={loadError ? 'wifi' : 'cloud-offline-outline'}
+              <MaterialIcons
+                name={loadError ? 'wifi' : 'cloud-off'}
                 size={18}
                 color={loadError ? colors.warning : colors.neutral}
               />
@@ -438,7 +439,7 @@ export function RoadGuardMapLibre({
               onPress={() => webViewRef.current?.injectJavaScript('window.recenter && window.recenter(); true;')}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="locate" size={18} color={colors.primary} />
+              <MaterialIcons name="my-location" size={18} color={colors.primary} />
             </Pressable>
 
             <View style={styles.divider} />
@@ -449,7 +450,7 @@ export function RoadGuardMapLibre({
               onPress={() => webViewRef.current?.injectJavaScript('window.resetNorth && window.resetNorth(); true;')}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="compass-outline" size={18} color={colors.neutral} />
+              <MaterialIcons name="explore" size={18} color={colors.neutral} />
             </Pressable>
           </View>
 
@@ -461,7 +462,7 @@ export function RoadGuardMapLibre({
               onPress={() => webViewRef.current?.injectJavaScript('window.zoomIn && window.zoomIn(); true;')}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="add" size={20} color={colors.neutral} />
+              <MaterialIcons name="add" size={20} color={colors.neutral} />
             </Pressable>
 
             <View style={styles.divider} />
@@ -472,7 +473,7 @@ export function RoadGuardMapLibre({
               onPress={() => webViewRef.current?.injectJavaScript('window.zoomOut && window.zoomOut(); true;')}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="remove" size={20} color={colors.neutral} />
+              <MaterialIcons name="remove" size={20} color={colors.neutral} />
             </Pressable>
           </View>
         </View>
@@ -480,7 +481,7 @@ export function RoadGuardMapLibre({
 
       {/* Brand Badge */}
       <View style={styles.brandBadge}>
-        <Ionicons name="navigate" size={12} color={colors.primary} />
+        <MaterialIcons name="navigation" size={12} color={colors.primary} />
         <Text style={[typography.labelSm, styles.brandBadgeText]}>MapLibre &bull; Ho&agrave;ng Hải GIS</Text>
       </View>
     </View>

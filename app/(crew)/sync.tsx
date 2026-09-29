@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -90,11 +90,11 @@ export default function CrewSyncScreen() {
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng Bộ" />}>
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
-          <Ionicons name="sync" size={22} color={colors.primary} />
+          <MaterialIcons name="sync" size={22} color={colors.primary} />
           <Text style={[typography.titleLg, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
         </View>
         <Pressable accessibilityRole="button" style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
-          <Ionicons name="refresh" size={20} color={colors.secondary} />
+          <MaterialIcons name="refresh" size={20} color={colors.secondary} />
         </Pressable>
       </View>
 
@@ -124,7 +124,7 @@ export default function CrewSyncScreen() {
             <Text style={[typography.labelLg, styles.statusText]}>3 mục đang chờ đồng bộ • 28.5 MB</Text>
           </View>
           <View style={styles.networkRow}>
-            <Ionicons name="wifi" size={15} color={colors.success} />
+            <MaterialIcons name="wifi" size={15} color={colors.success} />
             <Text style={[typography.labelSm, styles.networkText]}>4G/Wi-Fi kết nối</Text>
           </View>
         </View>
@@ -154,7 +154,7 @@ export default function CrewSyncScreen() {
                   <StatusBadge status={item.status} />
                   {item.status === SyncStatus.INVALID ? (
                     <Pressable accessibilityRole="button" style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]} onPress={retry}>
-                      <Ionicons name="refresh" size={16} color={colors.secondary} />
+                      <MaterialIcons name="refresh" size={16} color={colors.secondary} />
                     </Pressable>
                   ) : null}
                 </View>
@@ -174,7 +174,7 @@ export default function CrewSyncScreen() {
           <Card style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <Ionicons name="shield-checkmark-outline" size={22} color={colors.secondary} />
+                <MaterialIcons name="verified-user" size={22} color={colors.secondary} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={[typography.labelLg, styles.infoTitle]}>Bảo toàn dữ liệu ngoại tuyến</Text>
@@ -189,7 +189,7 @@ export default function CrewSyncScreen() {
           <Card style={styles.cacheCard}>
             <View style={styles.cacheRow}>
               <View style={styles.cacheIcon}>
-                <Ionicons name="albums-outline" size={20} color={colors.secondary} />
+                <MaterialIcons name="storage" size={20} color={colors.secondary} />
               </View>
               <View style={styles.cacheContent}>
                 <Text style={[typography.labelLg, styles.cacheTitle]}>Bộ nhớ đệm hiện trường</Text>
@@ -203,7 +203,7 @@ export default function CrewSyncScreen() {
         </>
       ) : (
         <EmptyState
-          icon="sync-outline"
+          icon="sync"
           title="Đã đồng bộ xong"
           message="Toàn bộ dữ liệu hiện trường đã được đồng bộ lên máy chủ."
         />

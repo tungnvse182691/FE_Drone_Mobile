@@ -9,7 +9,7 @@ const DRONE_TABS = [
     iconFamily: 'material' as const,
     label: 'Khảo sát',
     route: '/(drone)/requests',
-    activePrefixes: ['/(drone)/request', '/(drone)/log'],
+    activePrefixes: ['/(drone)/requests', '/(drone)/request-detail', '/(drone)/request', '/(drone)/log'],
   },
   {
     icon: 'sync',
@@ -21,16 +21,19 @@ const DRONE_TABS = [
   { icon: 'person', iconFamily: 'material' as const, label: 'Hồ sơ', route: '/(drone)/profile' },
 ];
 
-
 export default function DroneLayout() {
   const pathname = usePathname();
+  const normalizedPath = pathname === '/' ? '' : pathname;
+  const activeRoute = normalizedPath.startsWith('/(drone)')
+    ? normalizedPath
+    : `/(drone)${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
 
   return (
     <View style={styles.container}>
       <View style={styles.stackArea}>
         <Stack screenOptions={{ headerShown: false }} />
       </View>
-      <BottomNav tabs={DRONE_TABS} activeRoute={pathname} />
+      <BottomNav tabs={DRONE_TABS} activeRoute={activeRoute} />
     </View>
   );
 }

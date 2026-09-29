@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../design-tokens';
 import { useAuthStore } from '../store/auth';
 import { RoleCode } from '../types/enums';
@@ -55,7 +55,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
             accessibilityLabel="Quay lại"
             hitSlop={8}
           >
-            <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+            <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </Pressable>
         ) : null}
         <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
@@ -72,7 +72,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
           accessibilityRole="button"
           accessibilityLabel="Thông báo"
         >
-          <Ionicons name="notifications-outline" size={20} color={colors.secondary} />
+          <MaterialIcons name="notifications-none" size={20} color={colors.secondary} />
           <View style={styles.dot} />
         </Pressable>
         <Pressable
@@ -81,7 +81,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
           accessibilityRole="button"
           accessibilityLabel="Trang cá nhân"
         >
-          <Ionicons name="person" size={18} color={colors.primaryDark} />
+          <MaterialIcons name="person" size={18} color={colors.primaryDark} />
         </Pressable>
       </View>
     </View>

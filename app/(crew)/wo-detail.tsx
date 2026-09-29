@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -162,7 +162,7 @@ export default function CrewWoDetailScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
             >
-              <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+              <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
             </Pressable>
             <Text style={[typography.titleMd, styles.topBarTitle]}>Chi tiết lệnh công tác</Text>
           </View>
@@ -173,10 +173,12 @@ export default function CrewWoDetailScreen() {
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="construct-outline" size={16} color={colors.brandGold} />
+            <MaterialIcons name="build" size={16} color={colors.brandGold} />
             <Text style={[typography.titleMd, styles.cardTitleText]}>Thông tin kỹ thuật</Text>
           </View>
-          <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
+          <Text style={[typography.labelSm, styles.taskCode]}>
+            Lệnh số {task.wo_code.replace('#WO-', '')}
+          </Text>
         </View>
 
         <Text style={[typography.titleMd, styles.defectTitle]}>
@@ -186,27 +188,26 @@ export default function CrewWoDetailScreen() {
 
         <View style={styles.infoList}>
           <View style={styles.infoRow}>
-            <Ionicons name="alert-circle-outline" size={15} color={colors.brandGold} />
+            <MaterialIcons name="info-outline" size={15} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoText]}>
-              Loại lỗi: <Text style={styles.strong}>{defectTypeLabel(task.defect_type_code)}</Text>{' '}
-              (<Text style={styles.strong}>{task.defect_type_code}</Text>)
+              Loại lỗi: <Text style={styles.strong}>{defectTypeLabel(task.defect_type_code)}</Text>
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="git-branch-outline" size={15} color={colors.brandGold} />
+            <MaterialIcons name="alt-route" size={15} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoText]}>
               Tuyến đường: <Text style={styles.strong}>{task.route_code}</Text> • Phân đoạn{' '}
               <Text style={styles.strong}>{task.section_name}</Text> • Lý trình {task.chainage}
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={15} color={colors.brandGold} />
+            <MaterialIcons name="location-on" size={15} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoText]}>
               Vị trí khuyết tật: <Text style={styles.strong}>{task.defect_location}</Text>
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="navigate-outline" size={15} color={colors.brandGold} />
+            <MaterialIcons name="navigation" size={15} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoText]}>
               Tọa độ WGS84:{' '}
               <Text style={styles.strong}>
@@ -215,8 +216,8 @@ export default function CrewWoDetailScreen() {
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons
-              name={task.due_urgency === 'urgent' ? 'alarm-outline' : 'time-outline'}
+            <MaterialIcons
+              name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
               size={15}
               color={task.due_urgency === 'urgent' ? colors.error : colors.brandGold}
             />
@@ -239,7 +240,7 @@ export default function CrewWoDetailScreen() {
         <Button
           variant="secondary"
           title="Dẫn đường Google Maps"
-          icon={<Ionicons name="navigate-circle-outline" size={18} color={colors.neutral} />}
+          icon={<MaterialIcons name="directions" size={18} color={colors.neutral} />}
           onPress={openGoogleMaps}
           style={styles.mapsButton}
         />
@@ -248,26 +249,26 @@ export default function CrewWoDetailScreen() {
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="camera-outline" size={16} color={colors.brandGold} />
-            <Text style={[typography.titleMd, styles.cardTitleText]}>Bằng chứng trước (BEFORE)</Text>
+            <MaterialIcons name="photo-camera" size={16} color={colors.brandGold} />
+            <Text style={[typography.titleMd, styles.cardTitleText]}>Ảnh hiện trạng</Text>
           </View>
-          <Text style={[typography.labelSm, styles.taskCode]}>BR-17 / BR-18</Text>
+          <Text style={[typography.labelSm, styles.taskCode]}>Ảnh đối chứng</Text>
         </View>
 
         {beforeSelected && session?.before_source ? (
           <View style={styles.selectedBefore}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+            <MaterialIcons name="check-circle" size={18} color={colors.success} />
             <Text style={[typography.bodyMd, styles.selectedBeforeText]}>
-              Đã chọn BEFORE: {EVIDENCE_REUSE_SOURCE_TAGS[session.before_source]}
+              Đã chọn: {EVIDENCE_REUSE_SOURCE_TAGS[session.before_source]}
             </Text>
           </View>
         ) : null}
 
         {candidates.length === 0 ? (
           <View style={styles.noCandidate}>
-            <Ionicons name="information-circle-outline" size={16} color={colors.secondary} />
+            <MaterialIcons name="info-outline" size={16} color={colors.secondary} />
             <Text style={[typography.caption, styles.noCandidateText]}>
-              Chưa có ảnh nào từ Phản ánh hoặc Drone khớp mã lỗi này. Hãy chụp ảnh BEFORE tại hiện trường.
+              Chưa có ảnh nào từ Phản ánh hoặc Drone khớp vị trí này. Hãy chụp ảnh hiện trạng mới tại hiện trường.
             </Text>
           </View>
         ) : (
@@ -283,7 +284,7 @@ export default function CrewWoDetailScreen() {
                   />
                 ) : (
                   <View style={[styles.candidateThumb, styles.candidateThumbEmpty]}>
-                    <Ionicons name="image-outline" size={20} color={colors.secondary} />
+                    <MaterialIcons name="image" size={20} color={colors.secondary} />
                   </View>
                 )}
                 <View style={styles.candidateInfo}>
@@ -298,7 +299,7 @@ export default function CrewWoDetailScreen() {
                 </View>
                 <Button
                   variant={isSelected ? 'primary' : 'secondary'}
-                  title={isSelected ? 'Đang dùng' : 'Dùng làm BEFORE'}
+                  title={isSelected ? 'Đang sử dụng' : 'Dùng ảnh này'}
                   onPress={() => handleUseBefore(candidate)}
                 />
               </View>
@@ -308,8 +309,8 @@ export default function CrewWoDetailScreen() {
 
         <Button
           variant="secondary"
-          title="Chụp ảnh BEFORE mới tại hiện trường"
-          icon={<Ionicons name="camera" size={18} color={colors.neutral} />}
+          title="Chụp ảnh hiện trạng mới tại hiện trường"
+          icon={<MaterialIcons name="photo-camera" size={18} color={colors.neutral} />}
           onPress={handleCaptureBefore}
           style={styles.captureButton}
         />
@@ -321,12 +322,12 @@ export default function CrewWoDetailScreen() {
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
-            <Ionicons name="resize-outline" size={16} color={colors.brandGold} />
+            <MaterialIcons name="aspect-ratio" size={16} color={colors.brandGold} />
             <Text style={[typography.titleMd, styles.cardTitleText]}>
-              Kích thước hư hại & Fast Track Policy
+              Kích thước hư hại
             </Text>
           </View>
-          <Text style={[typography.labelSm, styles.taskCode]}>{FAST_TRACK_POLICY.version_code}</Text>
+          <Text style={[typography.labelSm, styles.taskCode]}>TCVN 10380</Text>
         </View>
 
         <View style={styles.measureGrid}>
@@ -382,7 +383,7 @@ export default function CrewWoDetailScreen() {
             }}
             style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
           >
-            <Ionicons name="flash-outline" size={13} color={colors.primary} />
+            <MaterialIcons name="flash-on" size={13} color={colors.primary} />
             <Text style={[typography.caption, styles.presetText]}>Điền mẫu Đạt: 1.2m × 0.6m × 3cm</Text>
           </Pressable>
           <Pressable
@@ -395,7 +396,7 @@ export default function CrewWoDetailScreen() {
             }}
             style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
           >
-            <Ionicons name="alert-circle-outline" size={13} color={colors.secondary} />
+            <MaterialIcons name="warning" size={13} color={colors.secondary} />
             <Text style={[typography.caption, styles.presetText]}>Điền mẫu Vượt: 2.5m × 1.2m × 8cm</Text>
           </Pressable>
         </View>
@@ -408,38 +409,38 @@ export default function CrewWoDetailScreen() {
         </View>
 
         <Text style={[typography.caption, styles.policyText]}>
-          Ngưỡng policy: diện tích ≤ {FAST_TRACK_POLICY.max_area_m2.toFixed(1)} m² • độ sâu ≤{' '}
+          Ngưỡng quy chuẩn: diện tích ≤ {FAST_TRACK_POLICY.max_area_m2.toFixed(1)} m² • độ sâu ≤{' '}
           {FAST_TRACK_POLICY.max_depth_cm.toFixed(1)} cm • chiều dài ≤{' '}
           {FAST_TRACK_POLICY.max_length_m.toFixed(1)} m
         </Text>
 
         {task.task_mode === 'MEASURE_ONLY' ? (
           <View style={styles.noticeWarn}>
-            <Ionicons name="lock-closed-outline" size={16} color={colors.warning} />
+            <MaterialIcons name="lock" size={16} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
               {BUSINESS_ERROR_MESSAGES.TASK_MODE_NOT_REPAIRABLE}
             </Text>
           </View>
         ) : evaluation.code === 'ELIGIBLE' ? (
           <View style={styles.noticePass}>
-            <Chip variant="policy-pass" label="Đạt Policy Sửa Nhanh - Được phép sửa ngay" uppercase={false} />
+            <Chip variant="policy-pass" label="Đủ điều kiện sửa nhanh — Được phép sửa ngay" uppercase={false} />
           </View>
         ) : evaluation.code === 'NOT_ELIGIBLE' ? (
           <View style={styles.noticeWarn}>
-            <Ionicons name="warning-outline" size={16} color={colors.warning} />
+            <MaterialIcons name="warning" size={16} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
               {BUSINESS_ERROR_MESSAGES.FAST_TRACK_NOT_ELIGIBLE}
             </Text>
           </View>
         ) : (
           <Text style={[typography.caption, styles.hintText]}>
-            Nhập đủ 3 kích thước để hệ thống đối chiếu policy Fast Track.
+            Nhập đủ 3 kích thước để hệ thống đối chiếu điều kiện sửa nhanh.
           </Text>
         )}
 
         {primaryBlockedReason ? (
           <View style={styles.noticeWarn}>
-            <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
+            <MaterialIcons name="error-outline" size={16} color={colors.error} />
             <Text style={[typography.caption, styles.noticeErrorText]}>{primaryBlockedReason}</Text>
           </View>
         ) : null}
@@ -514,12 +515,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    flex: 1,
+    minWidth: 0,
   },
   cardTitleText: {
     color: colors.neutral,
+    flexShrink: 1,
   },
   taskCode: {
     color: colors.secondary,
+    flexShrink: 0,
   },
   defectTitle: {
     color: colors.neutral,

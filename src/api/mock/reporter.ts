@@ -39,7 +39,7 @@ function seedReports(): void {
     {
       id: 'RPT-SEED-882910',
       tracking_code: '#HH-882910',
-      reporter_email: 'nguoidan.binhchanh@hoanghai.vn',
+      reporter_email: 'nguoidan.binhchanh@gmail.com',
       route_hint: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850), làn xe buýt hướng Vĩnh Lộc B',
       description:
         'Ổ gà sâu vỡ tấm bê tông trên làn xe buýt, đo được khoảng 1 tấm bê tông bị vỡ. Nguy cơ rất cao, xe máy đi qua có thể sụp lún.',
@@ -52,7 +52,7 @@ function seedReports(): void {
     {
       id: 'RPT-SEED-104928',
       tracking_code: '#HH-104928',
-      reporter_email: 'nguoidan.binhchanh@hoanghai.vn',
+      reporter_email: 'nguoidan.binhchanh@gmail.com',
       route_hint: 'Tuyến ĐH.05 - Vĩnh Lộc B, đoạn trước cầu Bà Lát về hướng Tân Kiên',
       description:
         'Nứt tấm bê tông lan rộng khoảng 1,5m, nước đọng lại sau mưa. Vị trí nằm sát mép tảm, xe tải trọng đi qua rất dễ vỡ thêm.',
@@ -61,6 +61,32 @@ function seedReports(): void {
       defect_type: DEFECT_TYPE_CODES.SLAB_CRK,
       status: ReporterReportStatus.INSPECTING,
       submitted_at: '2026-09-25T07:40:00.000Z',
+    },
+    {
+      id: 'RPT-SEED-772910',
+      tracking_code: '#HH-772910',
+      reporter_email: 'dan.nguyen@gmail.com',
+      route_hint: 'Tuyến ĐH.05 - Km02+100 gần ngã ba liên ấp',
+      description:
+        'Mặt đường bê tông bị bong tróc bề mặt lớn, tạo hố lõm sâu khoảng 6cm, gây nguy hiểm cho người đi xe gắn máy.',
+      photo_uris: [],
+      coordinates: [106.7012, 10.7845],
+      defect_type: DEFECT_TYPE_CODES.POTH_DEEP,
+      status: ReporterReportStatus.COMPLETED,
+      submitted_at: '2026-09-20T03:30:00.000Z',
+    },
+    {
+      id: 'RPT-SEED-664928',
+      tracking_code: '#HH-664928',
+      reporter_email: 'dan.nguyen@gmail.com',
+      route_hint: 'Tuyến ĐH.05 - Cầu Bà Lát hướng về chợ Vĩnh Lộc',
+      description:
+        'Lún sụt khe co giãn giữa hai tấm đan, xe cộ qua lại bị dằn xóc mạnh.',
+      photo_uris: [],
+      coordinates: [106.7035, 10.786],
+      defect_type: DEFECT_TYPE_CODES.SLAB_CRK,
+      status: ReporterReportStatus.INSPECTING,
+      submitted_at: '2026-09-26T08:15:00.000Z',
     },
   ];
 

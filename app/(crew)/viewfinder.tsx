@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import { ViewFinder, type Coords } from '../../src/components/ViewFinder';
@@ -61,7 +61,7 @@ export default function CrewViewfinderScreen() {
 
   const watermarkLine = useMemo(
     () =>
-      `${task.wo_code} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(capturedAt)}`,
+      `Lệnh ${task.wo_code.replace('#WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(capturedAt)}`,
     [task.wo_code, task.defect_type_code, gpsText, capturedAt],
   );
 
@@ -81,29 +81,29 @@ export default function CrewViewfinderScreen() {
     }
   };
 
-  const modeLabel = mode === 'before' ? 'BEFORE' : mode === 'after' ? 'AFTER' : 'VIDEO';
-
   const watermark = (
     <View style={styles.watermarkCard} pointerEvents="none">
       <View style={styles.watermarkRow}>
         <View style={styles.watermarkGps}>
-          <Ionicons name="location" size={14} color={colors.warning} />
+          <MaterialIcons name="location-on" size={14} color={colors.warning} />
           <Text style={[typography.labelSm, styles.watermarkGpsText]}>{gpsText}</Text>
         </View>
         <Text style={styles.rtkBadge}>{coords ? 'GPS OK' : 'GPS…'}</Text>
       </View>
       <View style={styles.watermarkMeta}>
-        <Ionicons name="document-text-outline" size={13} color="#94A3B8" />
-        <Text style={[typography.caption, styles.watermarkMetaText]}>{task.wo_code}</Text>
+        <MaterialIcons name="description" size={13} color="#94A3B8" />
+        <Text style={[typography.caption, styles.watermarkMetaText]}>
+          Lệnh số {task.wo_code.replace('#WO-', '')}
+        </Text>
       </View>
       <View style={styles.watermarkMeta}>
-        <Ionicons name="warning-outline" size={13} color="#94A3B8" />
+        <MaterialIcons name="warning" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>
           {defectTypeLabel(task.defect_type_code)}
         </Text>
       </View>
       <View style={styles.watermarkMeta}>
-        <Ionicons name="calendar-outline" size={13} color="#94A3B8" />
+        <MaterialIcons name="calendar-today" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>{formatDateTime(capturedAt)}</Text>
       </View>
     </View>
@@ -112,9 +112,9 @@ export default function CrewViewfinderScreen() {
   const thumbs = (
     <View style={styles.thumbsRow}>
       <View style={styles.thumb}>
-        <Ionicons name="image-outline" size={18} color="#64748B" />
+        <MaterialIcons name="image" size={18} color="#64748B" />
         <View style={[styles.thumbCheck, beforeReady ? styles.thumbCheckGreen : styles.thumbCheckPending]}>
-          <Ionicons name={beforeReady ? 'checkmark' : 'add'} size={10} color={colors.surface} />
+          <MaterialIcons name={beforeReady ? 'check' : 'add'} size={10} color={colors.surface} />
         </View>
         <Text style={[typography.labelSm, beforeReady ? styles.thumbLabelGreen : styles.thumbLabelPending]}>
           TRƯỚC
@@ -123,9 +123,9 @@ export default function CrewViewfinderScreen() {
 
       {task.task_mode !== 'MEASURE_ONLY' ? (
         <View style={styles.thumb}>
-          <Ionicons name="image-outline" size={18} color="#64748B" />
+          <MaterialIcons name="image" size={18} color="#64748B" />
           <View style={[styles.thumbCheck, afterReady ? styles.thumbCheckGold : styles.thumbCheckPending]}>
-            <Ionicons name={afterReady ? 'checkmark' : 'add'} size={10} color={colors.surface} />
+            <MaterialIcons name={afterReady ? 'check' : 'add'} size={10} color={colors.surface} />
           </View>
           <Text style={[typography.labelSm, afterReady ? styles.thumbLabelGold : styles.thumbLabelPending]}>
             SAU
@@ -174,7 +174,7 @@ export default function CrewViewfinderScreen() {
       onPress={handlePickGallery}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
-      <Ionicons name="images-outline" size={20} color={colors.surface} />
+      <MaterialIcons name="photo-library" size={20} color={colors.surface} />
     </Pressable>
   );
 
@@ -185,7 +185,7 @@ export default function CrewViewfinderScreen() {
       onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
-      <Ionicons name="camera-reverse-outline" size={20} color={colors.surface} />
+      <MaterialIcons name="flip-camera-android" size={20} color={colors.surface} />
     </Pressable>
   );
 
@@ -201,7 +201,7 @@ export default function CrewViewfinderScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
-          <Ionicons name="close" size={20} color={colors.surface} />
+          <MaterialIcons name="close" size={20} color={colors.surface} />
         </Pressable>
 
         <View style={styles.modePills}>
@@ -229,7 +229,7 @@ export default function CrewViewfinderScreen() {
             accessibilityState={{ selected: flashOn }}
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           >
-            <Ionicons name={flashOn ? 'flash' : 'flash-off'} size={19} color={colors.surface} />
+            <MaterialIcons name={flashOn ? 'flash-on' : 'flash-off'} size={19} color={colors.surface} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -237,7 +237,7 @@ export default function CrewViewfinderScreen() {
             onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           >
-            <Ionicons name="camera-reverse" size={19} color={colors.surface} />
+            <MaterialIcons name="flip-camera-android" size={19} color={colors.surface} />
           </Pressable>
         </View>
       </View>
@@ -246,7 +246,7 @@ export default function CrewViewfinderScreen() {
         <ViewFinder
           onCapture={handleCapture}
           onCoordsChange={setCoords}
-          defectType={modeLabel}
+          defectType={defectTypeLabel(task.defect_type_code)}
           showGridGuide
           showReticle
           flashMode={flashOn ? 'on' : 'off'}
@@ -262,14 +262,16 @@ export default function CrewViewfinderScreen() {
         <View style={styles.sheetHeaderRow}>
           <View style={styles.sheetTitleRow}>
             <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
-            <Text style={[typography.labelLg, styles.sheetTitle]}>{task.wo_code}</Text>
+            <Text style={[typography.labelLg, styles.sheetTitle]}>
+              Lệnh số {task.wo_code.replace('#WO-', '')}
+            </Text>
             <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
             <Text style={[typography.labelLg, styles.sheetSub]}>
               {defectTypeLabel(task.defect_type_code)} {task.chainage}
             </Text>
           </View>
           <Text style={[typography.caption, styles.sheetFiles]}>
-            {session?.before_source ? `BEFORE: ${session.before_source}` : 'Chưa có BEFORE'}
+            {session?.before_source ? 'Đã có ảnh hiện trạng' : 'Chưa có ảnh hiện trạng'}
           </Text>
         </View>
 

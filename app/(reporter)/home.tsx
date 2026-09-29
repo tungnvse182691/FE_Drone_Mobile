@@ -8,26 +8,37 @@ import { ReporterStatusBadge } from '../../src/components/ReporterStatusBadge';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { listMyReports } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
-import { REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
+import { useAuthStore } from '../../src/store/auth';
+import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 import { ReporterReport } from '../../src/types/domain';
 
 export default function ReporterHomeScreen() {
   const router = useRouter();
+  const user = useAuthStore((state) => state.user);
   const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
+  const markVerified = useReporterStore((state) => state.markVerified);
   const [reports, setReports] = useState<ReporterReport[]>([]);
 
+  const activeEmail = user?.phone_or_email || verifiedEmail;
+
+  useEffect(() => {
+    if (user?.phone_or_email && !verifiedEmail) {
+      markVerified(user.phone_or_email);
+    }
+  }, [user?.phone_or_email, verifiedEmail, markVerified]);
+
   const loadReports = useCallback(async () => {
-    if (!verifiedEmail) {
+    if (!activeEmail) {
       setReports([]);
       return;
     }
     try {
-      const { items } = await listMyReports(verifiedEmail);
+      const { items } = await listMyReports(activeEmail);
       setReports(items);
     } catch {
       setReports([]);
     }
-  }, [verifiedEmail]);
+  }, [activeEmail]);
 
   useEffect(() => {
     loadReports();
@@ -47,6 +58,14 @@ export default function ReporterHomeScreen() {
             <Text style={[typography.titleMd, styles.headerTitle]}>BÊ TÔNG HOÀNG HẢI</Text>
             <Text style={[typography.caption, styles.headerSubtitle]}>Cổng phản ánh dân sinh</Text>
           </View>
+          <Pressable
+            onPress={() => router.push(REPORTER_PROFILE)}
+            style={({ pressed }) => [styles.profileBtn, pressed && styles.profileBtnPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Hồ sơ tài khoản"
+          >
+            <MaterialIcons name="account-circle" size={28} color={colors.primaryDark} />
+          </Pressable>
         </View>
       }
     >
@@ -81,7 +100,7 @@ export default function ReporterHomeScreen() {
 
       <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây của bạn</Text>
 
-      {!verifiedEmail ? (
+      {!activeEmail ? (
         <Card style={styles.hintCard}>
           <View style={styles.hintRow}>
             <MaterialIcons name="mail-outline" size={20} color={colors.secondary} />
@@ -95,7 +114,7 @@ export default function ReporterHomeScreen() {
           <View style={styles.hintRow}>
             <MaterialIcons name="inbox" size={20} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.hintText]}>
-              Bạn chưa có phản ánh nào với email {verifiedEmail}.
+              Bạn chưa có phản ánh nào với email {activeEmail}.
             </Text>
           </View>
         </Card>
@@ -198,6 +217,16 @@ const styles = StyleSheet.create({
   },
   headerTextBlock: {
     flex: 1,
+  },
+  profileBtn: {
+    padding: spacing.xs,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileBtnPressed: {
+    opacity: 0.7,
+    backgroundColor: colors.surfaceAlt,
   },
   headerTitle: {
     color: colors.brandGold,

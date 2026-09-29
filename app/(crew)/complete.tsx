@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
@@ -64,7 +64,7 @@ export default function CrewCompleteScreen() {
           done: true,
         },
         {
-          label: 'Ảnh trước (BEFORE)',
+          label: 'Ảnh hiện trạng trước sửa',
           detail: session?.before_source
             ? `${EVIDENCE_REUSE_SOURCE_TAGS[session.before_source]} • có đóng dấu GPS`
             : BUSINESS_ERROR_MESSAGES.BEFORE_MISSING,
@@ -80,7 +80,7 @@ export default function CrewCompleteScreen() {
       ];
       if (requiresAfterPhoto) {
         items.push({
-          label: 'Ảnh sau (AFTER)',
+          label: 'Ảnh nghiệm thu sau sửa',
           detail: afterUri
             ? 'Đã chụp tại hiện trường, có đóng dấu GPS'
             : 'Chưa có ảnh nghiệm thu sau sửa',
@@ -172,9 +172,11 @@ export default function CrewCompleteScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
             >
-              <Ionicons name="arrow-back" size={20} color={colors.neutral} />
+              <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
             </Pressable>
-            <Text style={[typography.titleMd, styles.topBarTitle]}>Hoàn tất công việc {task.wo_code}</Text>
+            <Text style={[typography.titleMd, styles.topBarTitle]}>
+              Hoàn tất công việc • Lệnh số {task.wo_code.replace('#WO-', '')}
+            </Text>
           </View>
           <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
         </View>
@@ -183,8 +185,10 @@ export default function CrewCompleteScreen() {
       <Card style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
           <View>
-            <Text style={[typography.labelSm, styles.summaryLabel]}>MÃ CÔNG VIỆC</Text>
-            <Text style={[typography.titleLg, styles.summaryCode]}>{task.wo_code}</Text>
+            <Text style={[typography.labelSm, styles.summaryLabel]}>LỆNH THI CÔNG</Text>
+            <Text style={[typography.titleLg, styles.summaryCode]}>
+              Lệnh số {task.wo_code.replace('#WO-', '')}
+            </Text>
           </View>
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
@@ -233,8 +237,8 @@ export default function CrewCompleteScreen() {
         {checklist.map((item) => (
           <View key={item.label} style={styles.checkItem}>
             <View style={[styles.checkIcon, !item.done && styles.checkIconPending]}>
-              <Ionicons
-                name={item.done ? 'checkmark' : 'alert'}
+              <MaterialIcons
+                name={item.done ? 'check' : 'warning'}
                 size={16}
                 color={item.done ? colors.success : colors.warning}
               />
@@ -252,12 +256,12 @@ export default function CrewCompleteScreen() {
 
       <View style={styles.imagePair}>
         <View style={styles.imageCol}>
-          <Text style={[typography.labelSm, styles.imageLabel]}>ẢNH TRƯỚC (BEFORE)</Text>
+          <Text style={[typography.labelSm, styles.imageLabel]}>ẢNH HIỆN TRẠNG TRƯỚC SỬA</Text>
           {beforeUri ? (
             <Image source={{ uri: beforeUri }} style={styles.image} resizeMode="cover" />
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Ionicons name="image-outline" size={28} color={colors.secondary} />
+              <MaterialIcons name="image" size={28} color={colors.secondary} />
               <Text style={[typography.caption, styles.imagePlaceholderText]}>
                 {session?.before_source ? EVIDENCE_REUSE_SOURCE_TAGS[session.before_source] : BUSINESS_ERROR_MESSAGES.BEFORE_MISSING}
               </Text>
@@ -265,12 +269,12 @@ export default function CrewCompleteScreen() {
           )}
         </View>
         <View style={styles.imageCol}>
-          <Text style={[typography.labelSm, styles.imageLabel]}>ẢNH SAU (AFTER)</Text>
+          <Text style={[typography.labelSm, styles.imageLabel]}>ẢNH NGHIỆM THU SAU SỬA</Text>
           {afterUri ? (
             <Image source={{ uri: afterUri }} style={styles.image} resizeMode="cover" />
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Ionicons name="image-outline" size={28} color={colors.secondary} />
+              <MaterialIcons name="image" size={28} color={colors.secondary} />
               <Text style={[typography.caption, styles.imagePlaceholderText]}>Chưa chụp ảnh nghiệm thu</Text>
             </View>
           )}
@@ -301,7 +305,7 @@ export default function CrewCompleteScreen() {
         </View>
         {task.task_mode === 'MEASURE_ONLY' ? (
           <View style={styles.noticeWarn}>
-            <Ionicons name="lock-closed-outline" size={15} color={colors.warning} />
+            <MaterialIcons name="lock" size={15} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
               {BUSINESS_ERROR_MESSAGES.TASK_MODE_NOT_REPAIRABLE}
             </Text>
@@ -312,8 +316,8 @@ export default function CrewCompleteScreen() {
       <Card style={styles.readyCard}>
         <View style={styles.readyRow}>
           <View style={[styles.readyIcon, !allDone && styles.readyIconPending]}>
-            <Ionicons
-              name={allDone ? 'checkmark-circle' : 'alert-circle'}
+            <MaterialIcons
+              name={allDone ? 'check-circle' : 'warning'}
               size={20}
               color={allDone ? colors.success : colors.warning}
             />
@@ -325,7 +329,7 @@ export default function CrewCompleteScreen() {
                 : 'Còn hạng mục chưa đủ — hoàn thiện hồ sơ trước khi gửi cho PM.'}
             </Text>
             <Text style={[typography.caption, styles.br25Text]}>
-              BR-25: Fast Track do PM trực tiếp đánh giá và đóng lỗi, không qua phê duyệt của Giám sát.
+              Nghiệm thu trực tiếp: Chỉ huy trưởng (PM) đánh giá và đóng hồ sơ tại chỗ theo quy trình sửa nhanh.
             </Text>
           </View>
         </View>
