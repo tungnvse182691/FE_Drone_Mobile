@@ -1,12 +1,12 @@
-# RoadGuard Mobile — Bootstrap Prompt (Chuẩn R3 / 27_9_V3)
+# RoadGuard Mobile — Bootstrap Prompt (Chuẩn Canonical 29_9 / OpenAPI 0.2.0)
 
-> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình scaffold và phát triển codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/` theo chuẩn đặc tả R3 / 27_9_V2 mới nhất của Công ty TNHH Xây dựng Bê tông Hoàng Hải.
+> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình scaffold và phát triển codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/` theo chuẩn đặc tả Canonical 29_9 (OpenAPI 0.2.0-draft-alignment) mới nhất của Công ty TNHH Xây dựng Bê tông Hoàng Hải.
 
 ---
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục Chuẩn Hóa Canonical R3 (27/09/2026 / 27_9_V3) có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
-- **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, `@hoanghai.vn`, prefix `HH-`).
+**Mọi quy định trong mục Chuẩn Hóa Canonical 29_9 (28/09/2026 - 29/09/2026 / 29_9) có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
+- **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, email nội bộ `@hoanghai.vn`, prefix `HH-`).
 - **Quy tắc Logo:** Splash/Loading = `assets/logo_hoanghai.png` (có tên công ty); Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png` (chỉ xe bồn, không chữ).
 - **Phân định Nền tảng:** Mobile app dành riêng cho **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`. Web Dashboard dành cho `PROJECT_MANAGER` và `SUPERVISOR` (màn hình PM/Supervisor cũ chuyển vào `archive/web-screens/`).
 - **Hợp đồng Kỹ thuật Frontend (09_Frontend):** Áp dụng nghiêm ngặt danh mục 133 operations (`operation_catalog.md`), types chuẩn (`contracts/api.types.ts`), local types (`contracts/local.types.ts`), và mã lỗi nghiệp vụ (`03_Error_Response_UI_Convention.md`).
@@ -20,6 +20,7 @@
 - **UD-06:** Tầng UI Mobile (`app/`) **TUYỆT ĐỐI ZERO CHI PHÍ/TIỀN TỆ**, cấm định mức vật tư tiêu hao. Bắt buộc hiển thị bộ 3: Phương án xử lý + Kích thước hình học hư hại (m², cm, m) + Thời hạn.
 - **Vật liệu & Tuyến:** Bê tông xi măng TCVN 10380:2014, 4K RGB + DSM (OpenDroneMap), TUYỆT ĐỐI CẤM LiDAR, Tuyến ĐH.05 Bình Chánh là Pilot Primary Corridor.
 - **5 Mã Defect:** `src/constants/defect-types.ts` (`POTH_DEEP`, `DEPR_POND`, `EDGE_BRK`, `SLAB_CRK`, `SHLD_EROS`).
+- **Reporter Authentication (D25):** Xác thực bằng Email hợp lệ (RFC 5322), không giới hạn nhà cung cấp email; bỏ hoàn toàn giới hạn Gmail-only.
 
 ---
 
@@ -28,7 +29,7 @@
 **RoadGuard** là hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**. App mobile phục vụ **3 vai trò hiện trường cốt lõi**:
 - **Repair Crew (`(crew)`)** — nhận lệnh công tác (`/inspection-tasks`), xem chế độ `INSPECT_AND_REPAIR` hoặc `MEASURE_ONLY`, tự đánh giá Fast Track theo policy, chụp ảnh nghiệm thu BEFORE/AFTER, dẫn đường Google Maps, báo lỗi mới, đồng bộ ngoại tuyến SQLite (10 màn).
 - **Drone Operator (`(drone)`)** — tiếp nhận lệnh bay khảo sát (`/survey-tasks`), dẫn đường tới Điểm tiếp cận cất/hạ cánh, upload video/ảnh 4K RGB từ thẻ nhớ SD (`/uploads`), nhật ký chuyến bay, đồng bộ ngoại tuyến (7 màn).
-- **Reporter (`(reporter)`)** — Người dân & Đại diện Ban QLDA: đăng nhập OTP Gmail 6 số (`/auth/reporter-registrations`), tạo phản ánh kèm GPS + 3 ảnh hiện trường (`/reports`), tra cứu tiến độ công khai qua mã tracking, đánh giá 1–5 sao nghiệm thu (4 màn).
+- **Reporter (`(reporter)`)** — Người dân & Đại diện Ban QLDA: đăng ký/xác thực OTP Email 6 số (`/auth/reporter-registrations`), tạo phản ánh kèm GPS + 3 ảnh hiện trường (`/reports`), tra cứu tiến độ công khai qua mã tracking, đánh giá 1–5 sao nghiệm thu (4 màn chính + profile tiện ích).
 - **Tầng Auth (`(auth)`)** — Đăng nhập tài khoản nhân viên (`/auth/login`), đổi mật khẩu bắt buộc lần đầu, xác thực OTP cho Reporter (3 màn).
 
 ---
@@ -44,7 +45,7 @@ FE_AppMobile/
       _layout.tsx                        # Stack auth không có BottomNav
       index.tsx                          # M-AUTH-01/02: Đăng nhập nhân viên & Lựa chọn phản ánh dân sinh
       force-change-password.tsx          # BÙ GAP CN10/US-01: Bắt buộc đổi mật khẩu lần đầu
-      otp-verify.tsx                     # M-AUTH-03: Xác thực OTP Gmail 6 số cho Reporter
+      otp-verify.tsx                     # M-AUTH-03: Xác thực OTP Email 6 số cho Reporter
     (drone)/
       _layout.tsx                        # BottomNav 4 tab: Trang chủ / Yêu cầu / Đồng bộ / Cá nhân
       home.tsx                           # M-DRONE-01: Trang chủ Phi công
@@ -275,7 +276,7 @@ export interface RepairWorkOrder {
   defect_type_code: string;
   due_at: string;
   instructions: string;
-  target_coordinates: [number, number]; // [lat, lng] WGS84
+  target_coordinates: [number, number]; // [lon, lat] WGS84 GeoJSON
   fast_track_eligible?: FastTrackEligibility;
   status: string;
   created_at: string;
@@ -301,7 +302,7 @@ export interface RepairEvidence {
   kind: 'BEFORE' | 'AFTER';
   file_uri: string;
   captured_at: string;
-  gps_coordinates: [number, number];
+  gps_coordinates: [number, number]; // [lon, lat]
   is_reused_from_source?: 'REPORTER' | 'DRONE'; // BR-17
   synced: SyncStatus;
 }
@@ -313,7 +314,7 @@ export interface DroneFlightRequest {
   route_code: string;             // ĐH.05
   section_name: string;
   access_point_name: string;      // Điểm tiếp cận cất/hạ cánh
-  access_point_coordinates: [number, number]; // [lat, lng] WGS84 dẫn đường
+  access_point_coordinates: [number, number]; // [lon, lat] WGS84 dẫn đường
   target_resolution: string;      // 4K RGB + DSM (OpenDroneMap)
   assigned_pilot_id: string;
   status: string;
@@ -416,7 +417,7 @@ Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển 
 ```sql
 -- ═══════════════════════════════════════════════════════════════
 -- SQLite Schema: RoadGuard FE_AppMobile — Offline-First Architecture
--- Theo: 27_9_V3/09_Frontend/09_Offline_App_Sync_Spec.md
+-- Theo: 29_9/09_Frontend/09_Offline_App_Sync_Spec.md
 -- Full 10-store spec: đọc file trên; đây là 7 store cốt lõi cho scaffold
 -- ═══════════════════════════════════════════════════════════════
 
@@ -436,7 +437,7 @@ CREATE TABLE IF NOT EXISTS task_pack (
   assignment_version  TEXT NOT NULL,    -- Opaque ETag từ server
   policy_snapshot     TEXT NOT NULL,    -- JSON FastTrackPolicyVersion
   evidence_refs       TEXT,             -- JSON array của file references
-  destination_coords  TEXT,             -- JSON [lat, lng] WGS84
+  destination_coords  TEXT,             -- JSON [lon, lat] WGS84
   downloaded_at       TEXT NOT NULL,
   is_ready            INTEGER NOT NULL DEFAULT 0  -- 1 = đủ files để offline
 );
@@ -513,7 +514,7 @@ CREATE TABLE IF NOT EXISTS server_cache (
 );
 
 -- HƯỚNG DẪN: Xem full 10-store spec (thêm IdMap, ConflictRecord, SyncRun) tại:
--- D:\Do_AN_Drone\27_9_V3\09_Frontend\09_Offline_App_Sync_Spec.md §2
+-- D:\Do_AN_Drone\29_9\09_Frontend\09_Offline_App_Sync_Spec.md §2 (hoặc docs/specs/09_Frontend/09_Offline_App_Sync_Spec.md)
 ```
 
 ---
@@ -532,7 +533,7 @@ CREATE TABLE IF NOT EXISTS server_cache (
 
 ---
 
-## 7. Environment Config (từ `27_9_V3/09_Frontend/07_Environment_Base_URL_Config.md`)
+## 7. Environment Config (từ `29_9/09_Frontend/07_Environment_Base_URL_Config.md`)
 
 ### Expo env variables (`.env.development`, `.env.staging`, `.env.production`):
 ```env

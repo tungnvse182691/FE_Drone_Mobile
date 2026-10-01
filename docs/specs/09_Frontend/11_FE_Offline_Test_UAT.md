@@ -93,3 +93,7 @@ Exit criteria đề xuất: không lỗi mất dữ liệu/trái quyền/duplica
 ## REVIEW-01 — Acceptance readiness
 
 TC-FE-04 chỉ dùng401 TOKEN_EXPIRED; thêm kiểm CREDENTIAL_INVALID/TOKEN_INVALID/TOKEN_MISSING/REFRESH_TOKEN_EXPIRED/SESSION_REVOKED không kích hoạt generic refresh. TC-FE-28/44 và UAT-FE-03/05 BLOCKED_BY_DECISION Q04/Q17; test hiện có vẫn NOT_RUN. Q02/Q03 cùng gap evaluator là gate trước khi nhận UAT-FE-01 end-to-end. Không đồng nhất “đã soạn test” với “có thể nghiệm thu”.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

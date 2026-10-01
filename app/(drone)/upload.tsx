@@ -1,4 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import * as SQLite from 'expo-sqlite';
+import { initDatabase, openDatabase } from '../../src/offline/database';
+import { enqueuePayload, getReceipts, recoverInFlight } from '../../src/offline/upload-queue';
+import { getDeviceId } from '../../src/constants/device';
+import { stableUuid } from '../../src/utils/uuid';
+import { LocalState } from '../../src/types/enums';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -33,8 +39,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     defaultVideoSize: '184.2 MB',
     defaultSrtName: 'DJI_0488_SURVEY_DH05.SRT',
     defaultSrtSize: '420 KB',
-    videoSha256: '7f8a3c4b92d189aef41b...e4b1 (Toàn vẹn 100%)',
-    srtSha256: '9b2c3d4e5f6a1109bc42...77c2 (Khớp RTK)',
+    videoSha256: '7f8a3c4b92d189aef41b...e4b1 (demo — chưa đối chiếu)',
+    srtSha256: '9b2c3d4e5f6a1109bc42...77c2 (demo — chưa đối chiếu)',
     gpsCoord: '10.7412° B, 106.5524° Đ (Sai số RTK ±1.2cm)',
     gpsAddress: 'Tân Kiên, Huyện Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -46,8 +52,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     defaultVideoSize: '195.4 MB',
     defaultSrtName: 'DJI_0490_SURVEY_DH05.SRT',
     defaultSrtSize: '380 KB',
-    videoSha256: '8e1b2c3d4f5a6b7c8d9e...33f2 (Toàn vẹn 100%)',
-    srtSha256: '1a2b3c4d5e6f7a8b9c0d...55a1 (Khớp RTK)',
+    videoSha256: '8e1b2c3d4f5a6b7c8d9e...33f2 (demo — chưa đối chiếu)',
+    srtSha256: '1a2b3c4d5e6f7a8b9c0d...55a1 (demo — chưa đối chiếu)',
     gpsCoord: '10.7333° B, 106.6833° Đ (Sai số RTK ±1.1cm)',
     gpsAddress: 'Vĩnh Lộc B, Huyện Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -59,8 +65,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     defaultVideoSize: '210.0 MB',
     defaultSrtName: 'DJI_0488_SURVEY_DH05.SRT',
     defaultSrtSize: '512 KB',
-    videoSha256: '4a5b6c7d8e9f1234abcd...12a4 (Toàn vẹn 100%)',
-    srtSha256: '5b6c7d8e9f0a1b2c3d4e...66b2 (Khớp RTK)',
+    videoSha256: '4a5b6c7d8e9f1234abcd...12a4 (demo — chưa đối chiếu)',
+    srtSha256: '5b6c7d8e9f0a1b2c3d4e...66b2 (demo — chưa đối chiếu)',
     gpsCoord: '10.7833° B, 106.7333° Đ (Sai số RTK ±0.9cm)',
     gpsAddress: 'Cầu Bà Lát, Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -72,8 +78,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     defaultVideoSize: '240.5 MB',
     defaultSrtName: 'DJI_0487_SURVEY_DH05.SRT',
     defaultSrtSize: '620 KB',
-    videoSha256: '1e2f3a4b5c6d7e8f9a0b...99b0 (Toàn vẹn 100%)',
-    srtSha256: '2f3a4b5c6d7e8f9a0b1c...88c3 (Khớp RTK)',
+    videoSha256: '1e2f3a4b5c6d7e8f9a0b...99b0 (demo — chưa đối chiếu)',
+    srtSha256: '2f3a4b5c6d7e8f9a0b1c...88c3 (demo — chưa đối chiếu)',
     gpsCoord: '10.7700° B, 106.7050° Đ (Sai số RTK ±1.4cm)',
     gpsAddress: 'Ngã ba Tân Kiên, Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -85,8 +91,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     defaultVideoSize: '165.8 MB',
     defaultSrtName: 'DJI_0485_SURVEY_DH05.SRT',
     defaultSrtSize: '310 KB',
-    videoSha256: '3c4d5e6f7a8b9c0d1e2f...44d9 (Toàn vẹn 100%)',
-    srtSha256: '4d5e6f7a8b9c0d1e2f3a...33e4 (Khớp RTK)',
+    videoSha256: '3c4d5e6f7a8b9c0d1e2f...44d9 (demo — chưa đối chiếu)',
+    srtSha256: '4d5e6f7a8b9c0d1e2f3a...33e4 (demo — chưa đối chiếu)',
     gpsCoord: '10.7400° B, 106.6900° Đ (Sai số RTK ±1.0cm)',
     gpsAddress: 'Vĩnh Lộc B Km02+180, Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -113,6 +119,39 @@ export default function DroneUploadScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [note, setNote] = useState('');
   const [onlineMode, setOnlineMode] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
+  const [outboxId, setOutboxId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const database = openDatabase();
+    void initDatabase(database)
+      .then(() => {
+        if (!cancelled) {
+          setDb(database);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNote('Không mở được kho dữ liệu cục bộ.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const reloadQueue = useCallback(async () => {
+    if (!db) {
+      return;
+    }
+    try {
+      await recoverInFlight(db);
+    } catch {
+      setNote('Không chuẩn hoá được các mục đang gửi dở.');
+    }
+  }, [db]);
 
   useEffect(() => {
     if (params.code && UPLOAD_CONFIGS[params.code]) {
@@ -161,9 +200,9 @@ export default function DroneUploadScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         setSrtName(file.name);
-        const sizeKb = file.size ? `${(file.size / 1024).toFixed(0)} KB` : '420 KB';
-        setSrtSize(sizeKb);
-        setSrtSha('4d9e2a...c310 - Khớp phụ đề RTK');
+        // Không bịa dung lượng/checksum khi tệp không cung cấp — hiển thị "—" cho tới khi có.
+        setSrtSize(file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : '—');
+        setSrtSha('Chưa đối chiếu — cần SHA-256 cục bộ');
         setUploadStep('LOCAL');
       }
     } catch (err) {
@@ -171,29 +210,84 @@ export default function DroneUploadScreen() {
     }
   };
 
-  // Xử lý nộp bộ dữ liệu 4K RGB theo quy trình 4 bước
-  const handleStartSubmitDataset = () => {
-    // Bước 1: Lưu vào hàng đợi SQLite Outbox
-    setUploadStep('QUEUED');
+  /**
+   * Nộp bộ dữ liệu 4K RGB.
+   *
+   * Contract `submitDataset` (openapi.baseline.yaml#/paths/~1survey-tasks~1{taskId}~1datasets)
+   * yêu cầu path `taskId` (server ID, KHÔNG phải mã yêu cầu hiện trường), header `If-Match`
+   * (ETag) và body `DatasetSubmit` = { videoFileIds[], telemetryFileIds[], recordedAt, scope[] }.
+   * `fileId` chỉ có sau khi chạy xong luồng `POST /uploads` → part-urls → complete.
+   *
+   * Màn này đang chạy bằng dữ liệu mock, chưa có taskId/ETag/fileId thật, nên KHÔNG được bịa
+   * request lên server. Intent được ghi bền vững vào outbox ở trạng thái BLOCKED_CONTRACT
+   * cho tới khi có đủ dữ liệu hợp lệ — không giả ACK, không giả tiến độ.
+   */
+  const handleStartSubmitDataset = async () => {
+    if (!db) {
+      setNote('Chưa mở được kho dữ liệu cục bộ, chưa thể xếp hàng nộp bộ dữ liệu.');
+      return;
+    }
 
-    // Bước 2: Bắt đầu UPLOADING với thanh tiến trình %
-    setTimeout(() => {
-      setUploadStep('UPLOADING');
-      setUploadProgress(25);
+    setSubmitting(true);
+    setUploadProgress(0);
+    setNote('Đang lưu bộ dữ liệu vào hàng đợi ngoại tuyến…');
 
-      setTimeout(() => {
-        setUploadProgress(65);
+    try {
+      setUploadStep('QUEUED');
 
-        setTimeout(() => {
-          setUploadProgress(100);
+      const blockedReason =
+        'Thiếu taskId/ETag/fileId từ máy chủ — chưa thể gọi submitDataset theo contract.';
 
-          // Bước 3: Máy chủ ODM xác nhận toàn vẹn (SERVER_CONFIRMED / VERIFIED)
-          setTimeout(() => {
-            setUploadStep('SERVER_CONFIRMED');
-          }, 400);
-        }, 500);
-      }, 500);
-    }, 600);
+      const enqueuedId = await enqueuePayload(
+        db,
+        'submit_dataset',
+        {
+          // Intent nội tuyến. KHÔNG gửi lên API cho tới khi đủ taskId + expectedVersion + fileIds + scope.
+          surveyTaskCode: selectedCode,
+          videoName: videoName,
+          srtName: srtName,
+          recordedAt: new Date().toISOString(),
+          capturedAt: new Date().toISOString(),
+          deviceId: getDeviceId(),
+          videoFileIds: [],
+          telemetryFileIds: [],
+          scope: [],
+          blockedReason,
+        },
+        {
+          // Chỉ có mã yêu cầu hiện trường, chưa phải taskId server cùng ETag.
+          taskId: null,
+          expectedVersion: null,
+          idempotencyKey: stableUuid(`submit-dataset:${selectedCode}:${videoName}:${srtName}`),
+          initialStatus: LocalState.BLOCKED_CONTRACT,
+        },
+      );
+      setOutboxId(enqueuedId);
+
+      await reloadQueue();
+
+      const receipts = await getReceipts(db, enqueuedId);
+      const acked = receipts.some((r) => r.localState === LocalState.ACKED);
+
+      if (acked) {
+        setUploadStep('SERVER_CONFIRMED');
+        setNote('Máy chủ đã xác nhận toàn vẹn bộ dữ liệu.');
+      } else {
+        setUploadStep('QUEUED');
+        setNote(
+          'Đã lưu cục bộ và chờ trong hàng đợi. Cần nạp tệp qua phiên tải lên và có ETag nhiệm vụ trước khi nộp lên máy chủ.',
+        );
+      }
+    } catch (error) {
+      setUploadStep('QUEUED');
+      setNote(
+        error instanceof Error
+          ? `Lỗi khi nộp: ${error.message}`
+          : 'Lỗi khi nộp bộ dữ liệu, đã giữ trong hàng đợi.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleBack = () => {
@@ -623,7 +717,8 @@ export default function DroneUploadScreen() {
                 ? 'Đang chuẩn bị outbox...'
                 : `Nộp bộ dữ liệu 4K RGB (${config.code})`
             }
-            loading={uploadStep === 'QUEUED' || uploadStep === 'UPLOADING'}
+            loading={submitting}
+            disabled={submitting}
             onPress={handleStartSubmitDataset}
           />
         )}

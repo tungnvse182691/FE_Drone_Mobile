@@ -36,7 +36,7 @@ Gói bổ sung đặt vào `RoadGuard_Docs/09_Frontend/`. Giữ nguyên thư m�
 
 ## Điểm cần chú ý trước khi code
 
-Baseline dùng email/password/OTP và bearer API; OAuth/BFF chưa chốt. Polling là MVP, không có WebSocket server contract hiện hành. List dùng cursor, không có page/total/filter/sort mở rộng. Android là app tác nghiệp offline; web/PWA full offline cần xác nhận scope.
+D25/36A/37 chọn email/password/OTP, web secure cookie/server session và Android access/refresh; runtime hiện tại vẫn cần compatibility audit. Chưa có SSO. Polling là MVP; list dùng cursor. D24 giới hạn full offline cho Android, web nghiệp vụ cần mạng.
 
 58 test cases FE +8 UAT journeys được soạn, tất cả NOT_RUN. 16 FE-GAP ghi rõ các thiếu hụt; đặc biệt offline evaluation/snapshot, upload resume, client device identity, dedup retention và xử lý conflict Q04/Q17 phải chốt trước nghiệm thu toàn bộ offline.
 

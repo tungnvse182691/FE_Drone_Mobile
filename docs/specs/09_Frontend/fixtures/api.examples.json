@@ -101,6 +101,68 @@
       }
     },
     {
+      "name": "sync-fast-track-evaluate-proposed",
+      "schema": "SyncFastTrackEvaluate",
+      "expectedValid": true,
+      "value": {
+        "operationId": "11111111-1111-4111-8111-111111111111",
+        "kind": "FAST_TRACK_EVALUATE",
+        "taskId": "22222222-2222-4222-8222-222222222222",
+        "expectedVersion": "opaque-task-v1",
+        "capturedAt": "2026-09-26T18:00:00Z",
+        "measurementSessionId": "33333333-3333-4333-8333-333333333333",
+        "localEvaluationId": "44444444-4444-4444-8444-444444444444",
+        "payload": {
+          "sessionId": "33333333-3333-4333-8333-333333333333",
+          "policyVersionId": "55555555-5555-4555-8555-555555555555"
+        }
+      }
+    },
+    {
+      "name": "sync-fast-track-evaluate-missing-snapshot-identity",
+      "schema": "SyncFastTrackEvaluate",
+      "expectedValid": false,
+      "value": {
+        "operationId": "11111111-1111-4111-8111-111111111111",
+        "kind": "FAST_TRACK_EVALUATE",
+        "taskId": "22222222-2222-4222-8222-222222222222",
+        "expectedVersion": "opaque-task-v1",
+        "capturedAt": "2026-09-26T18:00:00Z",
+        "payload": {
+          "sessionId": "33333333-3333-4333-8333-333333333333",
+          "policyVersionId": "55555555-5555-4555-8555-555555555555"
+        }
+      }
+    },
+    {
+      "name": "partial-publication-request-proposed",
+      "schema": "PublishCase",
+      "expectedValid": true,
+      "value": {
+        "publicMessage": "Đã hoàn tất defect được xác minh.",
+        "afterFileIds": [
+          "66666666-6666-4666-8666-666666666666"
+        ],
+        "defectIds": [
+          "77777777-7777-4777-8777-777777777777"
+        ],
+        "reportIds": [
+          "88888888-8888-4888-8888-888888888888"
+        ]
+      }
+    },
+    {
+      "name": "partial-publication-missing-defect-selector",
+      "schema": "PublishCase",
+      "expectedValid": false,
+      "value": {
+        "publicMessage": "Đã hoàn tất defect được xác minh.",
+        "afterFileIds": [
+          "66666666-6666-4666-8666-666666666666"
+        ]
+      }
+    },
+    {
       "name": "approval-start",
       "schema": "StartAttempt",
       "expectedValid": true,

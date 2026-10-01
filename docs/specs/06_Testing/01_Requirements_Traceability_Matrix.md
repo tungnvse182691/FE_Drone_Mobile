@@ -142,8 +142,8 @@ Giữ các mã chức năng nguồn, không đổi thành UC-001 giả. Liên k�
 | CN08 | Kiểm tra trạng thái đồng bộ an toàn | FR-22/TC-F22 |
 | CN09 | Dọn bản sao cục bộ đã đồng bộ an toàn | FR-22/TC-F22 |
 | CN10 | Yêu cầu / đặt lại mật khẩu | FR-01/TC-F01 |
-| CN11 | Reporter tự đăng ký bằng Gmail | FR-03/TC-F03 |
-| CN12 | Xác minh email bằng OTP Gmail | FR-03/TC-F03 |
+| CN11 | Reporter tự đăng ký bằng email và xác minh OTP một lần | FR-03/TC-F03 |
+| CN12 | Xác minh email bằng OTP | FR-03/TC-F03 |
 | DA01 | Khởi tạo và quản lý dự án | FR-04/TC-F04 |
 | DA02 | Nhập/chỉnh tuyến và bề rộng | FR-05/TC-F05, FR-06/TC-F06 |
 | DA03 | Phân công nhân sự và quyền theo dự án | FR-04/TC-F04 |
@@ -278,3 +278,7 @@ Giữ các mã chức năng nguồn, không đổi thành UC-001 giả. Liên k�
 Khi có CR được chấp thuận: cập nhật BREQ/FR/BR/US/UC/DD cần thiết → sửa hàng RTM → thêm/sửa test → ghi version baseline, build và evidence chạy lại. Không xóa test lịch sử, dùng superseded_by. Trước release QA đối chiếu ID mới không mồ côi, gap được xử lý hoặc loại khỏi scope có quyết định, và từng AC áp dụng có kết quả thực tế.
 
 **Độ phủ thiết kế hiện tại:** 37/37 FR có test mức FR; 41/41 story có kiểm kê AC; 175 mục AC có test thiết kế. Đây không phải 100% nghiệm thu: GAP-01–05, các Q và ngưỡng NFR chưa chốt vẫn tồn tại. Số test passed hiện chưa xác định vì chưa chạy hệ thống.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

@@ -686,10 +686,10 @@ Bảng này ghi delta để người viết UseCase không phải suy từ toàn
 | MD03 | Vùng mở rộng chỉ mô tả chung 1–2 m | Ví dụ tổng 12 m cho hai đoạn 8/10 m; không phải 12 m mỗi bên | Chốt |
 | MD04 | Tuyến coi như một đường đơn | Phải bao quát nhiều nhánh; mô hình mạng là thiết kế đề xuất | Nhu cầu chốt, mô hình đề xuất |
 | MD05 | Chỉ segment quản lý vị trí | Bổ sung quản lý theo tấm, giữ từng lỗi riêng và nhóm công việc | Chốt hướng nghiệp vụ |
-| MD06 | Cùng GPS 1–2 m gộp thành một lỗi | Đề xuất gợi ý trùng, kiểm tra tấm/loại/thời điểm trước quyết định | Cần xác nhận quy tắc gộp |
+| MD06 | Cùng GPS 1–2 m gộp thành một lỗi | AI gợi ý trong cùng dự án theo scope/vị trí/sai số/lịch sử/ảnh; PM quyết định gộp/tách | Chốt nghiệp vụ D12/33A; schema/model còn review |
 | MD07 | Reporter bắt buộc field-first | PM chọn trực tiếp hoặc drone cho một/nhiều phản ánh | Chốt |
 | MD08 | Đạt policy thì mọi chuyến đo đều được sửa ngay | Đợt gom chỉ đo; một lỗi nhỏ có nhiệm vụ đo-và-sửa mới sửa ngay | Chốt mới nhất |
-| MD09 | Policy chủ yếu do Supervisor quản lý | PM lập policy hiển thị trên app Crew | Chốt; khung ban hành còn mở |
+| MD09 | Policy chủ yếu do Supervisor quản lý | Supervisor ban hành khung công ty; PM cấu hình/kích hoạt dự án trong khung; vượt khung cần phê duyệt | Chốt D03; hồ sơ/ngưỡng Q03 còn mở |
 | MD10 | Server phải đánh giá trước Fast Track | Cho Crew đo/đối chiếu và sửa ngoại tuyến, không giới hạn thời gian mất mạng | Chốt |
 | MD11 | Nhãn ban đầu nghiêm trọng nhưng đo nhỏ có thể sửa | Nếu chính PM xác định nghiêm trọng thì Crew chỉ đo/báo, chờ PM | Chốt |
 | MD12 | Lỗi nhỏ mới phát hiện trong vùng có thể tự sửa | Lỗi mới ngoài nhiệm vụ chỉ ghi nhận | Chốt |
@@ -699,35 +699,35 @@ Bảng này ghi delta để người viết UseCase không phải suy từ toàn
 | MD16 | Supervisor duyệt/đóng mọi lỗi | Fast Track theo PM kiểm/đóng và báo Supervisor; hồ sơ hỗn hợp Supervisor đóng tổng | Chốt theo chuỗi quyết định |
 | MD17 | REJECT phương án tương đương loại hư hỏng | Kết thúc đề xuất, giữ lỗi chưa xử lý | Chốt |
 | MD18 | Sửa thất bại tạo hồ sơ mới hoặc kéo lùi cả đợt | Sửa tiếp phần chưa đạt, giữ lịch sử/phần đạt | Chốt hướng, trạng thái chi tiết đề xuất |
-| MD19 | Cùng vị trí sau đóng tự là lỗi cũ | PM phân biệt chưa đạt và tái phát | Chốt; quyền mở lại còn mở |
-| MD20 | SRT trong vùng được hiểu là toàn bộ khảo sát đạt | Đề xuất tách đạt vị trí với chất lượng/coverage | Chưa chốt tiêu chí kỹ thuật |
+| MD19 | Cùng vị trí sau đóng tự là lỗi cũ | PM phân biệt prior failure với recurrence; quyền reopen theo actor đóng hồ sơ | Chốt D09; wire contract còn thiết kế |
+| MD20 | SRT trong vùng được hiểu là toàn bộ khảo sát đạt | Tách aircraft position, quality và coverage; thiếu căn cứ là UNKNOWN | Chốt D15; threshold/calibration còn mở |
 | MD21 | Chỉ đường ở sprint sau | Chỉ đường từ nhiệm vụ thuộc Sprint 1 | Chốt |
 | MD22 | Thu track drone cùng Sprint 1 | GPX ngoài app Sprint 1; nguồn track drone Sprint 2 | Chốt |
 
-## 21. Điểm còn mở và cách xử lý đề xuất
+## 21. Crosswalk quyết định và gate còn lại
 
-Những mục đã được trả lời như quyền ngoại tuyến, PM lập policy, ba mức khẩn cấp, Crew không vượt quyết định nghiêm trọng và vùng tổng 12 m không được hỏi lại như chưa chốt.
+Nguồn hiện hành là [decision register](../../../../planning/V2/V2-3_DECISION_REGISTER.md). Bảng giữ ID Q để truy lịch sử, nhưng không dùng nhãn OPEN cũ để phủ nhận D01-D28 hoặc 32-44. `ĐÃ CHỐT NGHIỆP VỤ` vẫn có thể còn wire/schema/test gate.
 
 | ID | Điểm cần hoàn thiện | Đề xuất / giới hạn hiện tại | Ảnh hưởng |
 |---|---|---|---|
-| Q01 | Lỗi nhỏ trong đợt gom được giao sửa sau sẽ theo nhánh nào? | Có thể dùng Fast Track sau khi PM giao rõ, nhưng không sửa trong chuyến đo; cần xác nhận cách phân nhánh | UseCase, duyệt/giao việc |
-| Q02 | Phạm vi quyền PM lập/phát hành policy so với policy công ty | PM lập đã chốt; không tự thêm gate Supervisor, cần xác định quyền cấu hình/ban hành | Policy và phân quyền |
+| Q01 | Lỗi nhỏ trong đợt gom được giao sửa sau sẽ theo nhánh nào? | **ĐÃ CHỐT D02:** task batch giữ MEASURE_ONLY; PM tạo task sửa riêng, có thể Fast Track nếu đủ policy; không hồi tố mode | Còn contract liên kết measurement/task và tests |
+| Q02 | Phạm vi quyền PM lập/phát hành policy so với policy công ty | **ĐÃ CHỐT D03:** Supervisor ban hành khung; PM kích hoạt trong khung; vượt khung cần phê duyệt; không duyệt từng ca | Còn framework/version/exception contract |
 | Q03 | Ngưỡng, loại lỗi, phương pháp, dụng cụ/vật tư, hạn mức | Công ty/PM cung cấp; không hard-code từ bảng tiêu chuẩn chưa kiểm | Fast Track thực tế |
-| Q04 | Đổi/thu hồi/chuyển đội khi ngoại tuyến vô thời hạn | Snapshot, xác nhận nhận lệnh và bàn giao; chấp nhận không thu hồi tức thời khi mất mạng | Tránh sửa trùng/vượt quyền do bản cũ |
-| Q05 | Thiếu ảnh/số đo một lỗi có làm hỏng toàn đợt đo? | Đề xuất giữ phần đạt, chỉ đo lại phần thiếu; chưa tự đổi câu “không chấp nhận đợt” | Đo, chi phí |
-| Q06 | Đã sửa nhưng bằng chứng trước bị mất/không hợp lệ | Giữ ngoại lệ, không giả ảnh hoặc đo lại nguyên trạng; chưa chốt người xử lý | Nghiệm thu |
-| Q07 | Quyền mở lại hồ sơ Supervisor đã đóng | PM đề nghị, Supervisor xác nhận là đề xuất | Vòng đời hồ sơ |
-| Q08 | Công bố kết quả theo lỗi hay chờ cả hồ sơ | Đề xuất theo phần liên quan, vẫn bảo vệ ownership | Reporter |
-| Q09 | Quy tắc gộp vị trí 1–2 m | Chỉ gợi ý ứng viên; PM xác nhận, dựa thêm ảnh/tấm/thời điểm | Tránh mất lỗi hoặc nghiệm thu nhầm |
-| Q10 | Tấm thật, dải tấm và dữ liệu hoàn công | Cần tuyến mẫu, vị trí khe và số dải; sinh lưới phải ghi dự kiến | Bản đồ tấm |
-| Q11 | SRT/camera/coverage và mức đạt | Cần mẫu thật, tách chất lượng/vị trí; chưa có ngưỡng | Khảo sát/AI |
-| Q12 | Người đặt điểm tập kết/tiếp cận | Đề xuất PM xác nhận, Operator/Crew đề nghị chỉnh | Chỉ đường Sprint 1 |
-| Q13 | CRS nguồn, người cấu hình/khóa SRID và sai số chấp nhận | Chốt theo dữ liệu đo/tuyến dự án, không chỉ tên tỉnh | Tính mét, bản đồ |
-| Q14 | Drone, Dronelink, nguồn track và định dạng export/import | Thử thiết bị/tệp thật; không suy từ hỗ trợ KML thành hỗ trợ mọi video/SRT | Tích hợp |
-| Q15 | Ghi GPS điện thoại trong app | Chưa đưa vào scope nếu chưa chốt | Mobile |
-| Q16 | Điều phối dự án chưa có baseline/ngoài bảo hành | Vẫn nhận phản ánh, phân loại trách nhiệm; chưa tự cho phép/khóa toàn bộ sửa | Tiếp nhận |
-| Q17 | Cứu dữ liệu khi tài khoản bị ngừng | Bàn giao có kiểm soát; không tự chuyển ownership hoặc bỏ bảo mật | Offline/bằng chứng |
-| Q18 | Phân kỳ mạng nhánh, tấm, policy/sửa và nguồn nhiệm vụ tối thiểu Sprint 1 | Cần bổ sung Sprint spec sau UseCase; không tự kéo toàn bộ vào Sprint 1 | Kế hoạch P1/P2/FE |
+| Q04 | Đổi/thu hồi/chuyển đội khi ngoại tuyến vô thời hạn | **ĐÃ CHỐT D05:** xác nhận đội cũ dừng/bàn giao trước khi đội mới start cùng scope; late evidence vào conflict | Còn acknowledgement/conflict schema và race tests |
+| Q05 | Thiếu ảnh/số đo một lỗi có làm hỏng toàn đợt đo? | **ĐÃ CHỐT D07:** giữ phần đạt, đo lại phần thiếu; PM mở rộng khi lỗi dụng cụ/phương pháp ảnh hưởng rộng | Còn validity/impact contract và tests |
+| Q06 | Đã sửa nhưng BEFORE bị mất/không hợp lệ | **ĐÃ CHỐT D08:** PM lập incident, Supervisor quyết định; chưa đủ căn cứ không nghiệm thu | Còn incident/state contract |
+| Q07 | Quyền mở lại hồ sơ | **ĐÃ CHỐT D09:** PM tự mở case Fast Track do PM đóng; Supervisor xác nhận nếu case do Supervisor đóng | Còn reopen API/version/audit |
+| Q08 | Công bố theo defect hay chờ case | **ĐÃ CHỐT D10:** được công bố từng defect đạt cho đúng Reporter, không lộ nguồn khác | Còn Report-Defect selector/projection |
+| Q09 | Quy tắc gợi ý trùng | **ĐÃ CHỐT D12/33A:** cùng project; scope/vị trí/sai số/lịch sử/ảnh; PM quyết định | Còn candidate snapshot/model evaluation |
+| Q10 | Slab thật/dự kiến | **ĐÃ CHỐT D14:** cho provisional slab; report không bắt buộc slab; không mặc định 4 m | Còn schema/verification |
+| Q11 | SRT/camera/coverage | **ĐÃ CHỐT D15:** tách position/quality/coverage; thiếu căn cứ UNKNOWN | Ngưỡng/calibration và field evidence còn mở |
+| Q12 | Người đặt điểm tập kết/tiếp cận | **ĐÃ CHỐT D16:** PM đặt/nhập; Crew/Operator đề nghị chỉnh; tách centerline | Còn provenance/permission contract |
+| Q13 | CRS nguồn và sai số | **ĐÃ CHỐT một phần D17:** pilot/location và nguồn dự kiến đã biết | CRS bytes/phép chuyển/sai số cần dữ liệu thật |
+| Q14 | Drone/video/SRT/export | **ĐÃ CHỐT một phần D17:** Mini 2 SE và có mẫu theo xác nhận | Chưa kiểm bytes/capability/calibration |
+| Q15 | Ghi GPS điện thoại trong app | **ĐÃ CHỐT D18:** để giai đoạn sau; Sprint hiện tại nhập GPX/ordered points | Mobile recorder deferred |
+| Q16 | Dự án chưa baseline/ngoài bảo hành | **ĐÃ CHỐT D19:** vẫn nhận/triage; không tự dùng quyền hợp đồng cũ | Còn responsibility/temporary-safety contract |
+| Q17 | Cứu dữ liệu khi tài khoản bị ngừng | **ĐÃ CHỐT D06/42A:** Supervisor cho phép; PM đúng dự án nhận; giữ actor/source | Còn rescue grant/receipt/key/device tests |
+| Q18 | Phân kỳ sản phẩm | **ĐÃ CHỐT D23/D24/D26/44:** Web/Android scope và nhóm Sprint không phải estimate | External contact/ETA và integration plan |
 
 Các lựa chọn triển khai như loại hàng đợi, framework Web hoặc lưu polygon/tính lại không cần chủ dự án tự thiết kế nếu không đổi hành vi. P1/P2 đề xuất có căn cứ và ghi rõ quyết định kỹ thuật. Những điểm làm thay đổi quyền, nghiệm thu hoặc phạm vi phải được chốt nghiệp vụ.
 
@@ -809,3 +809,7 @@ Các liên kết dưới đây hỗ trợ giải thích kỹ thuật, không t�
 Đây là mô tả dự án trước UseCase, không phải bản vẽ thiết kế đường, tiêu chuẩn thi công, hợp đồng API, DDL hay bằng chứng triển khai. Các ví dụ 4 m/tấm, segment 1 km, mặt đường 8/10 m và vùng 12 m phải được đọc đúng phạm vi ví dụ. Các đề xuất còn mở được tập trung tại §21, không được Codex tự coi là quyết định đã duyệt.
 
 **Lịch sử tài liệu:** R1 ngày 26/09/2026 — tổng hợp lần đầu toàn bộ hướng dự án và quyết định đến thời điểm nêu ở đầu; tạo một file mô tả riêng, chưa thay đổi các tài liệu nguồn.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

@@ -74,3 +74,7 @@ PDF/ZIP theo US-16; CSV tổng hợp là tùy chọn mới, chưa tự đưa và
 | RPT-AC-09 | Mẫu số 0; thiếu ground truth; hai model khác nhau | N/A đúng chỗ, nêu N/loại; không tính tỷ lệ hoặc sai số giả |
 
 Trace kiểm thử: TC-F34/35, TC-A của US-15/16/29 và UAT-09/10 trong phần 15. Refresh/load định lượng theo NFR-06, không mặc định đạt chỉ vì đã ghi tần suất.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

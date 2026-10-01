@@ -1,22 +1,22 @@
 ---
 name: roadguard
-description: "Skill chuyên cho DỰ ÁN RoadGuard (hệ thống bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải). Bắt buộc dùng BẤT CỨ KHI NÀO làm việc trong repo RoadGuard — scaffold FE_AppMobile (Expo Router + TypeScript), sửa bug, thêm tính năng, review code, viết backend C#/ASP.NET Core, hay thay đổi bất cứ file nào thuộc dự án này. Skill này độc lập hoàn toàn: nhúng sẵn kỷ luật chống AI 'ngáo' + toàn bộ đặc tả dự án chuẩn hóa Canonical R3 / 27_9_V3 (Hoàng Hải, TCVN 10380:2014, Phi tài chính UD-06, stack Expo Router + Fabric, 3 vai trò mobile hiện trường: CREW, DRONE, REPORTER, Fast Track sửa nhanh, hợp đồng API 133 operations từ 09_Frontend, 5 mã khuyết tật chuẩn, 100% MaterialIcons - CẤM Ionicons). Phối hợp chặt chẽ với skill 'code-review' để tự kiểm chứng 0 lỗi compiler."
+description: "Skill chuyên cho DỰ ÁN RoadGuard (hệ thống bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải). Bắt buộc dùng BẤT CỨ KHI NÀO làm việc trong repo RoadGuard — scaffold FE_AppMobile (Expo Router + TypeScript), sửa bug, thêm tính năng, review code, viết backend C#/ASP.NET Core, hay thay đổi bất cứ file nào thuộc dự án này. Skill này độc lập hoàn toàn: nhúng sẵn kỷ luật chống AI 'ngáo' + toàn bộ đặc tả dự án chuẩn hóa Canonical 29_9 (Hoàng Hải, TCVN 10380:2014, Phi tài chính UD-06, stack Expo Router + Fabric, 3 vai trò mobile hiện trường: CREW, DRONE, REPORTER, Fast Track sửa nhanh, hợp đồng API 133 operations từ 09_Frontend, 5 mã khuyết tật chuẩn, 100% MaterialIcons - CẤM Ionicons). Phối hợp chặt chẽ với skill 'code-review' để tự kiểm chứng 0 lỗi compiler."
 ---
 
-# RoadGuard Skill: Kỷ Luật Chống AI Ngáo + Đặc Tả Dự Án Hoàng Hải (Chuẩn R3 / 27_9_V3)
+# RoadGuard Skill: Kỷ Luật Chống AI Ngáo + Đặc Tả Dự Án Hoàng Hải (Chuẩn Canonical 29_9 / OpenAPI 0.2.0)
 
 Skill này **độc lập hoàn toàn** — thay thế mọi skill generic cho dự án RoadGuard. Nó bao gồm:
 - **PHẦN A:** Kỷ luật chống bịa & quy trình 6 bước bắt buộc.
-- **PHẦN B:** Nguồn-sự-thật & đặc tả kỹ thuật chuẩn hóa Canonical R3 của RoadGuard.
+- **PHẦN B:** Nguồn-sự-thật & đặc tả kỹ thuật chuẩn hóa Canonical 29_9 của RoadGuard.
 
 ---
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục "Chuẩn Hóa Canonical R3 (27/09/2026 / 27_9_V3)" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (thư mục cũ `14-9/`, `22_9/` và các file spec v1/v2 cũ):**
+**Mọi quy định trong mục "Chuẩn Hóa Canonical 29_9 (28/09/2026 - 29/09/2026 / 29_9)" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (thư mục cũ `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
 
 1. **Thương hiệu & Định danh:**
    - Đối tác thực tế: **Công ty TNHH Xây dựng Bê tông Hoàng Hải** (gọi tắt: Bê tông Hoàng Hải).
-   - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email: `@hoanghai.vn`.
+   - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email nội bộ: `@hoanghai.vn`.
    - Tiền tố nhân sự / thiết bị / chuyến bay: chuyển sang `HH-` (`HH-RC-084`, `HH-2089`, `M350-HH-02`, `#HH-409...`).
 2. **Quy tắc phân tách Logo:**
    - *Màn Splash / Loading:* Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
@@ -25,7 +25,7 @@ Skill này **độc lập hoàn toàn** — thay thế mọi skill generic cho d
    - **Mobile App (`FE_AppMobile`):** Phục vụ độc quyền **3 vai trò hiện trường**:
      1. `REPAIR_CREW` (`(crew)`): Kỹ thuật viên / Đội sửa chữa hiện trường.
      2. `DRONE_OPERATOR` (`(drone)`): Phi công điều khiển drone khảo sát & thu thập dữ liệu 4K RGB.
-     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA / Chủ đầu tư (đăng nhập/xác thực OTP Gmail, gửi phản ánh + GPS + tối đa 3 ảnh, tra cứu tiến độ công khai qua mã tracking, đánh giá 1-5 sao).
+     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA / Chủ đầu tư (đăng ký/xác thực OTP qua Email RFC 5322 hợp lệ theo D25, gửi phản ánh + GPS + tối đa 3 ảnh, tra cứu tiến độ công khai qua mã tracking, đánh giá 1-5 sao).
    - **Web Dashboard:** Phục vụ 2 vai trò quản lý: `PROJECT_MANAGER` (PM) và `SUPERVISOR` (Giám sát viên). Các màn hình PM và Supervisor cũ trên mobile được chuyển lưu trữ tại `archive/web-screens/` nhằm tập trung tài nguyên mobile cho 3 vai trò hiện trường.
 4. **Cơ chế Nghiệp vụ Fast Track & Task Mode (US-33, BR-05, BR-08, BR-11..18, BR-25):**
    - **Chế độ công việc (`TaskMode`):**
@@ -99,15 +99,15 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 
 ---
 
-## PHẦN B — Nguồn-sự-thật & đặc tả kỹ thuật RoadGuard R3 (27_9_V3)
+## PHẦN B — Nguồn-sự-thật & đặc tả kỹ thuật RoadGuard Canonical 29_9
 
 ### B0. Nguồn-sự-thật (đọc theo thứ tự ưu tiên)
 | Ưu tiên | File | Vai trò |
 |---|---|---|
 | **0** | **Điều khoản Override Tối cao** ở đầu SKILL.md | **LUẬN ĐIỂM TỐI CAO** — Đè bẹp mọi mâu thuẫn lịch sử |
-| 1 | `D:\Do_AN_Drone\27_9_V3\09_Frontend\` (tất cả 13 file: `01_FE_Scope_Implementation_Guide.md` đến `13_Source_References.md`, `contracts/operation_catalog.md`, `contracts/api.types.ts`, `contracts/local.types.ts`) | **Nguồn sự thật FE-R3-v1 (27/09/2026)** — Hợp đồng kỹ thuật FE/Mobile chính thức của nhóm trưởng |
-| 2 | `D:\Do_AN_Drone\27_9_V3\02_Requirements\` (`01_FRD_SRS.md`, `02_Business_Rules.md`, `04_Use_Cases.md`, `05_User_Stories_Acceptance_Criteria.md`) | Logic Use Case / Business Rules / FR chuẩn R3 |
-| 3 | `D:\Do_AN_Drone\27_9_V3\04_UI_UX\01_Wireframe_Annotations.md` | 12 Wireframes WF-01..WF-12 & button logic |
+| 1 | `D:\Do_AN_Drone\29_9\09_Frontend\` (hoặc `docs/specs/09_Frontend/`: `contracts/operation_catalog.md`, `contracts/api.types.ts`, `contracts/local.types.ts`, `03_Error_Response_UI_Convention.md`, `09_Offline_App_Sync_Spec.md`, `openapi.baseline.yaml`) | **Nguồn sự thật Canonical 29_9 (OpenAPI 0.2.0-draft-alignment)** — Hợp đồng kỹ thuật FE/Mobile chính thức |
+| 2 | `D:\Do_AN_Drone\29_9\02_Requirements\` (`01_FRD_SRS.md`, `02_Business_Rules.md`, `04_Use_Cases.md`, `05_User_Stories_Acceptance_Criteria.md`) | Logic Use Case / Business Rules / FR chuẩn R3/V2 |
+| 3 | `D:\Do_AN_Drone\29_9\04_UI_UX\01_Wireframe_Annotations.md` | 12 Wireframes WF-01..WF-12 & button logic |
 | 4 | `FE_AppMobile/skills/BOOTSTRAP_PROMPT.md` | Đặc tả scaffold mobile & routing (cần đọc cùng nguồn 1) |
 | 5 | `FE_AppMobile/skills/DESIGN.md` | Design system & minimalism tokens |
 | 6 | `RoadGuard_Wireframes/Wireframe_Specification.md` + `index.html` | Bố cục wireframe tham khảo (thấp nhất) |
@@ -117,7 +117,7 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 - App mobile phục vụ **3 vai trò hiện trường**:
   - `DRONE_OPERATOR` (`(drone)`): 7 màn hình
   - `REPAIR_CREW` (`(crew)`): 10 màn hình
-  - `REPORTER` (`(reporter)`): 4 màn hình (M-REP-01..04)
+  - `REPORTER` (`(reporter)`): 4 màn hình (M-REP-01..04) + profile tiện ích
 - Tầng Auth: 3 màn hình (`app/(auth)/index.tsx`, `force-change-password.tsx`, `otp-verify.tsx`).
 - Màn hình PM & Supervisor cũ: Di chuyển vào `archive/web-screens/` cho Web Dashboard, tách biệt khỏi app mobile.
 
@@ -142,7 +142,7 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 3. **Khai báo route tập trung tại `src/constants/routes.ts`:**
    - Mọi mapping như `ROLE_HOMES` đặt tại `src/constants/routes.ts`.
 
-### B4. Offline-first & Queue (Theo 09_Frontend/09_Offline_App_Sync_Spec.md)
+### B4. Offline-first & Queue (Theo 29_9/09_Frontend/09_Offline_App_Sync_Spec.md)
 - **LocalState:** `DRAFT` $\rightarrow$ `WAITING_DEPENDENCIES` $\rightarrow$ `READY` $\rightarrow$ `IN_FLIGHT` $\rightarrow$ `ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`, `BLOCKED_CONTRACT`, `AUTH_REQUIRED`).
 - **Store SQLite phân vùng:** `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
 - **Media Asset Lifecycle:** Ghi file tạm $\rightarrow$ đóng file $\rightarrow$ tính SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media. Trạng thái: `LOCAL_SAVING` $\rightarrow$ `LOCAL_READY` $\rightarrow$ `UPLOADING` $\rightarrow$ `VERIFIED`.
@@ -173,7 +173,7 @@ Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển 
 
 ---
 
-### B7. 10 Invariants Bất Phá (từ `27_9_V3/09_Frontend/01_FE_Scope_Implementation_Guide.md`)
+### B7. 10 Invariants Bất Phá (từ `29_9/09_Frontend/01_FE_Scope_Implementation_Guide.md`)
 
 Các bất biến sau KHÔNG ĐƯỢC phá trong bất kỳ tình huống nào:
 
@@ -182,7 +182,7 @@ Các bất biến sau KHÔNG ĐƯỢC phá trong bất kỳ tình huống nào:
 3. **Mỗi ý định có `operationId`/`idempotency-key` ổn định** — Timeout hay cancel không chứng minh server rollback.
 4. **Không gửi local temp ID hoặc unknown enum** — Không bypass type checking bằng cách gửi giá trị chưa map.
 5. **BEFORE đúng nguồn phải được gắn trước sửa** — Không đổi AFTER thành BEFORE; ảnh tái dùng giữ nguyên provenance.
-6. **Không silent overwrite khi policy/assignment/version đổi** — Q04/Q17 vẫn còn mở, không tự giải quyết.
+6. **Không silent overwrite khi policy/assignment/version đổi** — Q04/Q17 đã có giải pháp D05/D06/42A, không tự giải quyết cục bộ.
 7. **Fast Track đủ điều kiện KHÔNG chờ PM duyệt từng số đo** — PM kiểm/đóng SAU khi Crew gửi AFTER, Supervisor nhận báo.
 8. **Notification/realtime/cache không là nguồn cấp quyền hay ACK** — Phải verify qua server state.
 9. **Offline store partition theo account+môi trường** — Logout không xóa bằng chứng chưa sync; không lộ data account khác.
@@ -195,7 +195,7 @@ Các bất biến sau KHÔNG ĐƯỢC phá trong bất kỳ tình huống nào:
 #### Mẫu giao task cho AI coding agent (từ `01_FE_Scope_Implementation_Guide.md §6`):
 
 ```text
-Nguồn: FE-R3-v1 và D:\Do_AN_Drone\27_9_V3\09_Frontend\contracts\openapi.baseline.yaml.
+Nguồn: Canonical 29_9 và D:\Do_AN_Drone\29_9\09_Frontend\contracts\openapi.baseline.yaml.
 Feature: [tên màn hình / tính năng], actor/scope: [CREW|DRONE|REPORTER|PM|SUP],
 operationId: [từ operation_catalog.md], FR: [FR-xx].
 Đọc repo instructions/README/package/build files trước khi sửa.

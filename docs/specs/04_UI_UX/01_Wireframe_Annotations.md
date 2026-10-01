@@ -33,7 +33,7 @@ Các giới hạn byte, số ảnh, độ dài text, precision phép đo và tu�
 
 | Annotation | Field/mức bắt buộc | Validation và hành vi | Lỗi/phản hồi | Mapping |
 | --- | --- | --- | --- | --- |
-| WF-01.F01 | Email đăng ký * | CN11: gmail.com/googlemail.com; trim; chuẩn hóa không làm sai địa chỉ | Sai định dạng: dưới field; không tạo quyền; thông báo đăng ký không lộ tài khoản tồn tại | User email |
+| WF-01.F01 | Email đăng ký * | CN11: email hợp lệ, không giới hạn nhà cung cấp; trim; chuẩn hóa không làm sai địa chỉ | Sai định dạng: dưới field; không tạo quyền; thông báo đăng ký không lộ tài khoản tồn tại | User email |
 | WF-01.F02 | Tên/ReporterType/mật khẩu *; OTP C | OTP bắt buộc xác minh; hạn/thử lại/cooldown do security config; role REPORTER R | Sai/hết hạn giữ màn hình xác minh; không cấp token; không log OTP/mật khẩu | Registration intent; OTP hash |
 | WF-02.F01 | PM chính *; thông tin bàn giao/bảo hành * theo bước | Một PM chính; ngày hợp lệ, ngày kết thúc không trước bắt đầu; không suy thời hạn pháp lý | Chặn lưu chính thức; giữ nháp; chỉ Supervisor đổi PM và giữ lịch sử | Project; BR-01 |
 | WF-02.F02 | GPX hoặc tọa độ C; track C; CRS * | Ít nhất nguồn tuyến; nhiều track phải chọn; không đổi waypoint-only thành tuyến; CRS thiếu chặn tính mét | Nêu track/dòng lỗi; bản gốc giữ nguyên; không tự sửa nhãn SRID | RoadSectionVersion/source; DR-04 |
@@ -86,3 +86,7 @@ Không dùng màu đơn độc để truyền đạt trạng thái. Label tiến
 ## 12.6 Kiểm chứng thiết kế
 
 PO/UX walkthrough WF-05→06→08 cho Fast Track; WF-05→07→08 cho gom đợt; WF-09 cho thiếu telemetry; WF-03→04→08 cho Reporter; WF-11 qua restart/offline. QA kiểm TC-F01–37, các TC-A tương ứng và UAT-01–12. Mọi field mới không tìm thấy DD ghi đề xuất schema trong CR, không tự mở rộng backend scope. Chi tiết hiển thị/bố cục là đề xuất; quy tắc nguồn vẫn là chuẩn.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

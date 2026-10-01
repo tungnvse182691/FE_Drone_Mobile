@@ -1,3 +1,5 @@
+import { utf8ToBytes } from '../utils/base64';
+
 const K = [
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -16,10 +18,7 @@ function rotr(n: number, x: number): number {
 }
 
 function sha256Hex(msg: string): string {
-  const bytes = new Uint8Array(msg.length);
-  for (let i = 0; i < msg.length; i++) {
-    bytes[i] = msg.charCodeAt(i) & 0xff;
-  }
+  const bytes = utf8ToBytes(msg);
 
   const bitLen = bytes.length * 8;
   const padded = new Uint8Array(bytes.length + 1);
@@ -28,7 +27,7 @@ function sha256Hex(msg: string): string {
 
   const rem = (padded.length + 8) % 64;
   const extra = rem === 0 ? 0 : 64 - rem;
-  let blockCount = (padded.length + 8 + extra) / 64;
+  const blockCount = (padded.length + 8 + extra) / 64;
   let buffer = new Uint8Array(padded.length + extra + 8);
   buffer.set(padded);
   const dv = new DataView(buffer.buffer);

@@ -6,6 +6,10 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { initDatabase, openDatabase } from '../../src/offline/database';
+import { enqueuePayload } from '../../src/offline/upload-queue';
+import { stableUuid } from '../../src/utils/uuid';
+import { LocalState } from '../../src/types/enums';
 
 interface RequestDetailData {
   code: string;
@@ -190,6 +194,7 @@ export default function DroneRequestDetailScreen() {
   const [selectedCode, setSelectedCode] = useState<string>(initialCode);
   const [isAccepted, setIsAccepted] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectReason, setRejectReason] = useState(
     'Thời tiết mưa giông giật cấp 6, không đảm bảo an toàn bay theo quy chuẩn.'
@@ -212,25 +217,61 @@ export default function DroneRequestDetailScreen() {
     });
   };
 
-  const handleAcceptTask = () => {
+  /**
+ * Nhận nhiệm vụ khảo sát.
+ *
+ * Contract `acceptSurveyTask` (openapi.baseline.yaml#/paths/~1survey-tasks~1{taskId}~1accept):
+ * POST `/survey-tasks/{taskId}/accept`, header `Idempotency-Key` + `If-Match` (ETag), 200 → SurveyTask.
+ *
+ * Màn này chỉ có mã yêu cầu hiện trường (mock), KHÔNG có taskId server và ETag, nên không thể
+ * gọi đúng contract. Intent được ghi bền vững vào outbox ở BLOCKED_CONTRACT; tuyệt đối không
+ * dùng setTimeout để chuyển UI sang "đã tiếp nhận" như thể máy chủ đã trả lời.
+ */
+  const handleAcceptTask = async () => {
     setAccepting(true);
-    // Giả lập POST /api/v1/survey-tasks/{taskId}/accept (Header: Idempotency-Key, If-Match)
-    setTimeout(() => {
-      setAccepting(false);
+    try {
+      await recordAcceptIntent(selectedCode, 'accept_survey_task');
       setIsAccepted(true);
-      router.push({
-        pathname: '/(drone)/upload',
-        params: { code: current.code },
-      });
-    }, 600);
+    } catch {
+      setAcceptError('Không lưu được ý định nhận nhiệm vụ cục bộ.');
+    } finally {
+      setAccepting(false);
+    }
   };
 
-  const handleSendRejection = () => {
-    setRejectionSent(true);
-    setTimeout(() => {
+/**
+ * Từ chối nhiệm vụ. Contract `declineSurveyTask` cũng cần taskId + If-Match.
+ * Cùng lý do: ghi intent cục bộ, không giả vờ đã gửi.
+ */
+  const handleSendRejection = async () => {
+    try {
+      await recordAcceptIntent(selectedCode, 'decline_survey_task', { reason: rejectReason });
       setRejectModalVisible(false);
-      router.push('/(drone)/requests');
-    }, 800);
+      setRejectionSent(true);
+    } catch {
+      setRejectModalVisible(false);
+    }
+  };
+
+  /** Ghi intent vào `offline_outbox`; chưa đủ taskId/ETag nên giữ BLOCKED_CONTRACT. */
+  const recordAcceptIntent = async (
+    code: string,
+    kind: 'accept_survey_task' | 'decline_survey_task',
+    extra: Record<string, unknown> = {},
+  ): Promise<void> => {
+    const database = openDatabase();
+    await initDatabase(database);
+    await enqueuePayload(
+      database,
+      kind,
+      { surveyTaskCode: code, capturedAt: new Date().toISOString(), ...extra },
+      {
+        taskId: null,
+        expectedVersion: null,
+        idempotencyKey: stableUuid(`${kind}:${code}`),
+        initialStatus: LocalState.BLOCKED_CONTRACT,
+      },
+    );
   };
 
   const handleShareTask = async () => {
@@ -486,9 +527,21 @@ export default function DroneRequestDetailScreen() {
 
       {/* Actions */}
       <View style={styles.actionContainer}>
+        {isAccepted && (
+          <Text style={[typography.caption, styles.pendingSyncNote]}>
+            Ý định đã lưu cục bộ, chờ máy chủ xác nhận (cần taskId + ETag nhiệm vụ).
+          </Text>
+        )}
+        {acceptError && (
+          <Text style={[typography.caption, styles.pendingSyncNote]}>{acceptError}</Text>
+        )}
         <Button
           variant="primary"
-          title={isAccepted ? `Tiếp tục nạp dữ liệu (${current.code})` : `Chấp nhận nhiệm vụ & Bắt đầu bay (${current.code})`}
+          title={
+            isAccepted
+              ? `Tiếp tục nạp dữ liệu (${current.code})`
+              : `Chấp nhận nhiệm vụ & Bắt đầu bay (${current.code})`
+          }
           loading={accepting}
           onPress={handleAcceptTask}
         />
@@ -1012,6 +1065,10 @@ const styles = StyleSheet.create({
   actionContainer: {
     gap: spacing.sm,
     marginBottom: spacing.xl,
+  },
+  pendingSyncNote: {
+    color: colors.secondary,
+    textAlign: 'center',
   },
   rejectButton: {
     flexDirection: 'row',

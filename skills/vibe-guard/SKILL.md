@@ -73,8 +73,8 @@ So sánh: "làm đăng nhập cho ngon" (AI tự do bịa) vs 2 câu EARS trên 
 
 ### Nguồn sự thật bắt buộc đọc (B2 — Thu thập evidence)
 Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít nhất 1** file liên quan trong:
-- `D:\Do_AN_Drone\27_9_V3\09_Frontend\` — Nguồn sự thật FE-R3-v1 (nhóm trưởng gửi 27/09/2026)
-- `D:\Do_AN_Drone\27_9_V3\02_Requirements\` — Business Rules & Use Cases
+- `D:\Do_AN_Drone\29_9\09_Frontend\` (hoặc `docs/specs/09_Frontend/`) — Nguồn sự thật Canonical 29_9 (OpenAPI 0.2.0-draft-alignment)
+- `D:\Do_AN_Drone\29_9\02_Requirements\` (hoặc `docs/specs/02_Requirements/`) — Business Rules & Use Cases
 - `FE_AppMobile\skills\BOOTSTRAP_PROMPT.md` — Scaffold & routing chuẩn
 
 ### Red Flags đặc thù RoadGuard — DỪNG NGAY khi thấy:
@@ -90,7 +90,7 @@ Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít n
 | Dùng mã khuyết tật tự chế (không phải 5 mã BTXM) | DỪNG — đọc `src/constants/defect-types.ts` |
 
 ### Checklist bổ sung cho RoadGuard (thêm vào B2)
-- [ ] Đã đọc file spec tương ứng trong `27_9_V3/09_Frontend/`?
+- [ ] Đã đọc file spec tương ứng trong `29_9/09_Frontend/` (hoặc `docs/specs/09_Frontend/`)?
 - [ ] Tên endpoint có trong `contracts/operation_catalog.md` thật?
 - [ ] Không render tiền tệ VNĐ trên bất kỳ màn Mobile nào?
 - [ ] Route có đủ group prefix `/(crew)/`, `/(drone)/`, `/(reporter)/`?

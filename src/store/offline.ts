@@ -1,15 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
+import type { PendingItem } from '../types/domain';
 
-export interface PendingItem {
-  id: string;
-  entity_id: string;
-  action_type: string;
-  table_name: string;
-  json_payload: string;
-  created_at: string;
-}
+export type { PendingItem };
 
 interface OfflineState {
   queueCount: number;

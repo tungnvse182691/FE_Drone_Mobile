@@ -3,11 +3,11 @@
 > Nguồn-sự-thật cho mọi AI làm việc trong repo này. Đọc hết file này TRƯỚC khi viết code.
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục "Chuẩn Hóa Canonical R3 (26/09/2026 - 27/09/2026 / 27_9_V2)" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (thư mục cũ `14-9/`, `22_9/` và các file spec v1/v2 cũ):**
+**Mọi quy định trong mục "Chuẩn Hóa Canonical 29_9 (28/09/2026 - 29/09/2026 / OpenAPI 0.2.0-draft-alignment)" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (thư mục cũ `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
 
 1. **Thương hiệu & Định danh:**
    - Đối tác thực tế: **Công ty TNHH Xây dựng Bê tông Hoàng Hải** (gọi tắt: Bê tông Hoàng Hải). Toàn bộ định danh cũ Cát Tường / `com.cattuong` / `@cattuong.vn` / prefix `CT-` bị bãi bỏ.
-   - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email: `@hoanghai.vn`, prefix `HH-` (`HH-RC-084`, `HH-2089`, `#HH-409...`, `M350-HH-02`).
+   - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email nhân viên nội bộ: `@hoanghai.vn`, prefix `HH-` (`HH-RC-084`, `HH-2089`, `#HH-409...`, `M350-HH-02`).
 2. **Quy tắc phân tách Logo:**
    - *Màn Splash / Loading:* Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
    - *Màn hình nội bộ, AppHeader, App Icon:* Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
@@ -15,7 +15,7 @@
    - **Mobile App (`FE_AppMobile`):** Phục vụ độc quyền **3 vai trò hiện trường**:
      1. `REPAIR_CREW` (`(crew)`): Kỹ thuật viên / Đội sửa chữa hiện trường (10 màn hình).
      2. `DRONE_OPERATOR` (`(drone)`): Phi công điều khiển drone khảo sát (7 màn hình).
-     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA (4 màn hình: M-REP-01..04).
+     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA (4 màn hình chính M-REP-01..04 + profile tiện ích; đăng ký và xác thực OTP qua Email RFC 5322 hợp lệ, không giới hạn nhà cung cấp email theo Quyết định D25).
    - **Web Dashboard:** Phục vụ 2 vai trò quản lý: `PROJECT_MANAGER` (PM) và `SUPERVISOR` (Giám sát viên). Các màn hình PM và Supervisor cũ trên mobile được chuyển lưu trữ tại `archive/web-screens/` nhằm tập trung cho 3 vai trò hiện trường.
 4. **Cơ chế Nghiệp vụ Fast Track & Task Mode (US-33, BR-05, BR-08, BR-11..18, BR-25):**
    - **Chế độ công việc (`TaskMode`):**
@@ -56,16 +56,16 @@
 ---
 
 ## Skill bắt buộc
-- **Skill dự án:** `roadguard` (tại `FE_AppMobile/skills/roadguard/SKILL.md`) — **độc lập hoàn toàn**, chứa kỷ luật chống AI "ngáo" + toàn bộ đặc tả RoadGuard R3 V3 (Hoàng Hải).
+- **Skill dự án:** `roadguard` (tại `FE_AppMobile/skills/roadguard/SKILL.md`) — **độc lập hoàn toàn**, chứa kỷ luật chống AI "ngáo" + toàn bộ đặc tả RoadGuard Canonical 29_9 (Hoàng Hải).
 - **Skill thẩm định mã nguồn (Review):** `code-review` (tại `FE_AppMobile/skills/code-review/SKILL.md`) — Quality Gate & cơ chế "Tự vả tự sửa", tự động kiểm chứng `npx tsc --noEmit` 0 lỗi, quét 100% MaterialIcons (cấm Ionicons), quét UD-06 và xuất nhật ký worklog.
 - Skill generic `vibe-guard` (nếu có sẵn) đã được bao gồm trong `roadguard`.
 
 ## Nguồn-sự-thật (đọc theo thứ tự ưu tiên)
 1. **Điều khoản Override Tối cao** ở đầu file này và trong `skills/roadguard/SKILL.md` (Ưu tiên số 0 — luôn thắng).
-2. `docs/specs/09_Frontend/` (`contracts/api.types.ts`, `contracts/local.types.ts`, `contracts/operation_catalog.md`, `03_Error_Response_UI_Convention.md`, `09_Offline_App_Sync_Spec.md`) — Hợp đồng kỹ thuật Frontend & Mobile chính thức từ 27_9_V3.
+2. `docs/specs/09_Frontend/` (`contracts/api.types.ts`, `contracts/local.types.ts`, `contracts/operation_catalog.md`, `03_Error_Response_UI_Convention.md`, `09_Offline_App_Sync_Spec.md`, `openapi.baseline.yaml`) — Hợp đồng kỹ thuật Frontend & Mobile chính thức từ 29_9 (OpenAPI 0.2.0-draft-alignment).
 3. `skills/BOOTSTRAP_PROMPT.md` — đặc tả scaffold mobile (routing, types, schema SQLite, mock API).
 4. `skills/DESIGN.md` — design system (tokens, components, minimalism checklist).
-5. Tài liệu nghiệp vụ R3 trong `docs/specs/` (`01_FRD_SRS.md`, `02_Business_Rules.md`, `03_To_Be_Process.md`, `04_Use_Cases.md`, `05_User_Stories_Acceptance_Criteria.md`, `01_Data_Dictionary.md`, `01_Wireframe_Annotations.md`, `openapi.yaml`).
+5. Tài liệu nghiệp vụ trong `docs/specs/` (`01_FRD_SRS.md`, `02_Business_Rules.md`, `03_To_Be_Process.md`, `04_Use_Cases.md`, `05_User_Stories_Acceptance_Criteria.md`, `01_Data_Dictionary.md`, `01_Wireframe_Annotations.md`, `05_Technical/openapi.yaml`, `03_Data/02_ERD_V2.md`, `03_Data/03_Domain_Model_V2.md`).
 
 ## Stack được chốt (KHÔNG đổi mà không hỏi)
 - **Expo Router** (file-based) + TypeScript — KHÔNG dùng React Navigation thuần
@@ -101,6 +101,6 @@
 - **Offline queue (09_Frontend/09):** `LocalState`: `DRAFT → WAITING_DEPENDENCIES → READY → IN_FLIGHT → ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`). SHA-256 checksum trước khi gửi; retry có backoff.
 - `src/offline/schema.sql`: `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
 - **Media Asset Lifecycle:** ghi temp file $\rightarrow$ close $\rightarrow$ SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media.
-- `Defect.geometry` = GeoJSON chuẩn (tương thích `geography(4326)`).
+- `Defect.geometry` = GeoJSON chuẩn (tương thích `geography(4326)`); tọa độ wire luôn là `[lon, lat]` (kinh độ trước, vĩ độ sau).
 - **Mã lỗi UI chuẩn (09_Frontend/03):** `TASK_MODE_NOT_REPAIRABLE`, `FAST_TRACK_NOT_ELIGIBLE`, `BEFORE_MISSING`, `POLICY_NOT_CONFIGURED`, `OFFLINE_SNAPSHOT_CONFLICT`, v.v.
 - Design tokens trong `src/design-tokens.ts`; vàng đồng `#C9A227` chỉ cho 1 CTA/màn + tab active + KPI.

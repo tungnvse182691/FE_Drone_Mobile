@@ -1,6 +1,6 @@
 # User Story và Acceptance Criteria - RoadGuard / CÁT TƯỜNG
 
-> Thiết kế mục tiêu đồng bộ 22/09/2026; các phần Reporter, IncidentCase, segment, coverage và AI ngoài là đề xuất chưa triển khai. Phạm vi bàn giao BE — 18/09/2026: đợt hiện tại phát triển backend ASP.NET Core; Android/Web thuộc FE, AI thật và thu thập số đo thực địa là tích hợp bên ngoài ở giai đoạn sau. Backend vẫn triển khai đầy đủ workflow bắt buộc, adapter AI giả lập xác định và chức năng Research Validation nhập/ghép/tính sai số/xuất báo cáo bằng dữ liệu kiểm thử hoặc dữ liệu ngoài đã có. Nghiệm thu phần mềm BE không tuyên bố độ chính xác AI hay kết quả thực nghiệm từ dữ liệu giả. Các yêu cầu sản phẩm/nghiên cứu đầy đủ bên dưới vẫn được giữ để truy vết. Xem [ADR 003](../08_Delivery/04_Missing_Referenced_Documents.md#missing-01).
+> Thiết kế mục tiêu đồng bộ 22/09/2026; các phần Reporter, IncidentCase, segment, coverage và AI ngoài là đề xuất chưa triển khai. Phạm vi bàn giao BE — 18/09/2026: đợt hiện tại phát triển backend ASP.NET Core; Android/Web thuộc FE, AI thật và thu thập số đo thực địa là tích hợp bên ngoài ở giai đoạn sau. Backend vẫn triển khai đầy đủ workflow bắt buộc, adapter AI giả lập xác định và chức năng Research Validation nhập/ghép/tính sai số/xuất báo cáo bằng dữ liệu kiểm thử hoặc dữ liệu ngoài đã có. Nghiệm thu phần mềm BE không tuyên bố độ chính xác AI hay kết quả thực nghiệm từ dữ liệu giả. Các yêu cầu sản phẩm/nghiên cứu đầy đủ bên dưới vẫn được giữ để truy vết. Xem [ADR 003](../../../adr/003-backend-delivery-and-ai-boundary.md).
 
 > **[THÊM UC-D29 — R3 ngày 26/09/2026]** Sửa trực tiếp story/AC cũ. Giữ mã cũ; phần **BỎ** là điều kiện ngừng áp dụng; **THAY THẾ** chỉ rõ dùng AC nào thay; **THÊM** là story/AC mới. US-21–26 trước chỉ có ở trace được bổ sung thân; US-28–32 giữ mã và ý nghĩa Sprint 1, không dùng lại cho nghiệp vụ khác. US-33–41 là mã mới. AC ký hiệu US-xx-AC-nn thuộc bản R3, không nhận là test đã chạy.
 >
@@ -89,7 +89,7 @@ Phạm vi là **MVP hiện tại** của hệ thống RoadGuard, gồm Android A
 | US-24 | R3 thêm | Tuyến và bộ segment có phiên bản | Xem trace tại thân US-24 |
 | US-25 | R3 thêm | Phạm vi khảo sát và coverage từng band | Xem trace tại thân US-25 |
 | US-26 | R3 thêm | AI ngoài qua job bền vững và validation | Xem trace tại thân US-26 |
-| US-27 | Kế thừa / sửa tại chỗ | Reporter tự đăng ký và xác minh Gmail OTP | Xem trace tại thân US-27 |
+| US-27 | Kế thừa / sửa tại chỗ | Reporter tự đăng ký và xác minh email bằng OTP | Xem trace tại thân US-27 |
 | US-28 | R3 thêm | Mời nhân sự nội bộ | Xem trace tại thân US-28 |
 | US-29 | R3 thêm | Timeline hoạt động dự án | Xem trace tại thân US-29 |
 | US-30 | R3 thêm | Nhập GPX và chỉnh tuyến nháp | Xem trace tại thân US-30 |
@@ -154,15 +154,15 @@ Là một người dùng nội bộ (Supervisor, PM, Drone Operator hoặc Repai
 
 **Mã truy vết:** `CN01-CN04`, `CN10`, `QT02`, `QT09`.
 
-### US-27 - Reporter tự đăng ký và xác minh Gmail OTP
+### US-27 - Reporter tự đăng ký và xác minh email bằng OTP
 
 **User Story**  
-Là người dân hoặc đại diện chủ đầu tư chưa có tài khoản, tôi muốn tự đăng ký bằng Gmail và xác minh mã OTP để có tài khoản Reporter gửi phản ánh mà không cần Admin tạo hộ.
+Là người dân hoặc đại diện chủ đầu tư chưa có tài khoản, tôi muốn tự đăng ký bằng email và xác minh mã OTP để có tài khoản Reporter gửi phản ánh mà không cần Admin tạo hộ.
 
 **Acceptance Criteria**
 
 1. **Tạo đăng ký pending**
-   - **When** người dùng gửi Gmail hợp lệ (`gmail.com` hoặc `googlemail.com`), display name, `ReporterType`, mật khẩu, confirm password và idempotency key
+   - **When** người dùng gửi email hợp lệ, display name, `ReporterType`, mật khẩu, confirm password và idempotency key
    - **Then** hệ thống tạo hoặc tiếp tục một registration intent với `User.status = PENDING`, `role_code = REPORTER`, `email_confirmed = false`; không cấp access/refresh token.
 2. **Gửi OTP**
    - Hệ thống tạo OTP bằng nguồn ngẫu nhiên bảo mật, chỉ lưu hash/HMAC, hạn dùng ngắn, số lần thử tối đa và cooldown resend; adapter Gmail trả provider correlation ID nhưng không lưu code plaintext.
@@ -195,7 +195,7 @@ Là người dân hoặc đại diện chủ đầu tư chưa có tài khoản, 
 - **US-02-AC-02:** **Given** Fast Track có quyền theo nhiệm vụ/policy; **When** mất mạng lâu; **Then** không tự hết quyền vì thời gian; token server hết hạn không xóa nháp và khi sync có thể cần xác thực lại.
 - **US-02-AC-03:** **Given** báo cáo đã gửi/xếp hàng; **When** có mạng và app được phép chạy; **Then** tự tiếp tục, retry không tạo bản ghi trùng; nháp chưa gửi không tự nộp.
 - **US-02-AC-04:** **Given** thiếu tệp hoặc checksum sai; **When** server kiểm toàn vẹn; **Then** không đánh dấu an toàn/đủ nghiệm thu, không cho dọn tệp chưa an toàn.
-- **US-02-AC-05:** **Given** PM đã đổi nhiệm vụ nhưng máy chưa nhận; **When** sync bản cũ; **Then** [ĐỀ XUẤT Q04] giữ snapshot/bằng chứng, báo xung đột cho PM, không last-write-wins.
+- **US-02-AC-05:** **Given** PM đã đổi nhiệm vụ nhưng máy chưa nhận; **When** sync bản cũ; **Then** theo D05 giữ snapshot/bằng chứng, đưa vào conflict cho PM, không last-write-wins hoặc tự nghiệm thu.
 
 **Truy vết:** CN05–CN09; BR-15/16/19/20; FR-22.
 
@@ -410,7 +410,7 @@ Là PM, tôi muốn duyệt loại và vùng nhãn đã hiệu chỉnh trước 
 - **US-12-AC-01:** **Given** item APPROVAL_TRACK chưa APPROVED; **When** giao thi công; **Then** bị chặn; item đã duyệt có thể giao không chờ item khác.
 - **US-12-AC-02:** **Given** Fast Track hoặc chỉ-đo được giao; **When** Crew mở; **Then** thấy loại quyền rõ, không dùng số lỗi để tự quyết được sửa.
 - **US-12-AC-03:** **Given** PM đổi đội/thứ tự; **When** lưu; **Then** giữ lịch sử, báo bên liên quan; [ĐỀ XUẤT] hiển thị bản đã nhận.
-- **US-12-AC-04:** **Given** đội cũ ngoại tuyến; **When** định giao cùng phạm vi; **Then** [ĐỀ XUẤT Q04] cần xác nhận dừng/bàn giao, không tự coi lệnh thu hồi đã nhận.
+- **US-12-AC-04:** **Given** đội cũ ngoại tuyến; **When** định giao cùng phạm vi; **Then** D05 yêu cầu xác nhận dừng/bàn giao trước khi đội mới start, không tự coi lệnh thu hồi đã nhận.
 
 **Truy vết:** SC10–SC11; BR-03/23/24; FR-20.
 
@@ -803,7 +803,7 @@ Là PM, tôi muốn lập yêu cầu xóa hồ sơ đã hết hạn; là Supervi
 **Acceptance Criteria R3**
 
 - **US-35-AC-01:** **Given** 10 lỗi có 5 lỗi nhỏ trong đợt gom chỉ-đo; **When** Crew xác nhận năm lỗi đạt policy; **Then** chỉ đo/chụp/báo, không sửa ngay.
-- **US-35-AC-02:** **Given** PM có số đo/ảnh; **When** lập và giao sửa; **Then** hành động riêng sau đo, thứ tự do PM, nhánh theo quyết định; Fast Track sau gom Q01 còn mở.
+- **US-35-AC-02:** **Given** PM có số đo/ảnh đạt; **When** lập và giao sửa; **Then** tạo task sửa riêng sau đo; có thể Fast Track nếu đủ policy/quyền; task MEASURE_ONLY không bị đổi hồi tố.
 - **US-35-AC-03:** **Given** có thêm report giữa tuần; **When** refresh dữ liệu; **Then** [ĐỀ XUẤT] không tự đổi loại nhiệm vụ đã giao; không tự buộc chờ đủ bảy ngày.
 
 **Truy vết:** TN07/TN01/SC14; BR-09/10; FR-16.
@@ -936,7 +936,7 @@ Một User Story chỉ được xem là hoàn thành khi:
 | `KS15`, `KS16` | US-25 | Target bands and coverage separate from AI/job status. |
 | `AI15`-`AI17` | US-26 | External async jobs, immutable manifest, retry/dedup and context overlap. |
 | `CN01`, `CN02`, `CN03`, `CN04`, `CN10` | US-01 | Đăng nhập, hồ sơ, phạm vi, thông báo, đặt lại mật khẩu. |
-| `CN11`, `CN12` | US-27 | Reporter tự đăng ký Gmail, gửi/resend và xác minh OTP trước khi kích hoạt. |
+| `CN11`, `CN12` | US-27 | Reporter tự đăng ký bằng email, gửi/resend và xác minh OTP trước khi kích hoạt. |
 | `CN05`, `CN06`, `CN07`, `CN08`, `CN09` | US-02 | Ngoại tuyến, nháp, đồng bộ, kiểm tra toàn vẹn, dọn bản sao. |
 | `DA01`, `DA02`, `DA03`, `DA04`, `DA05`, `DA12` | US-03 | Dự án, tuyến/đoạn, bàn giao, bảo hành, nhân sự, đóng dự án. |
 | `DA06`, `DA07`, `DA08`, `DA09`, `DA10`, `DA11` | US-04 | Kế hoạch, nhắc việc, yêu cầu, hoãn, baseline, theo dõi tình trạng. |
@@ -987,3 +987,7 @@ Một User Story chỉ được xem là hoàn thành khi:
 | Lỗi gõ “từিসে chối”, “Supervisor từ chức” | Sửa biên tập | “từ chối”; không đổi nghiệp vụ |
 
 Các story US-01/05/06/07/09/10/15/16/17/18/19/27 giữ phần không bị thay đổi; ghi chú chung R3 áp dụng phạm vi quyền/offline. Nguồn User Story cũ và Research RS01–RS06 không bị xóa. Chưa chạy acceptance test; không đánh dấu bất kỳ story mới là Done. Công bố từng phần, gộp 1–2 m, mở lại case Supervisor, Q01 và tiêu chí SRT còn chờ chốt, không tự coi Then đề xuất là yêu cầu đã duyệt.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

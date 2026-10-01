@@ -30,7 +30,7 @@ Permission UI là hướng dẫn, BE là enforcement. Role không đủ để qu
 3. Mỗi ý định có operation ID/key ổn định; timeout/cancel không chứng minh rollback.
 4. Không gửi local temp ID hoặc unknown enum để bypass type checking.
 5. BEFORE đúng nguồn được gắn trước sửa; không đổi AFTER thành BEFORE; ảnh tái dùng giữ provenance.
-6. Không silent overwrite khi policy/assignment/version đổi; Q04/Q17 còn mở.
+6. Không silent overwrite khi policy/assignment/version đổi; áp dụng D05/D06/42A và giữ contract/runtime gate cho conflict/rescue.
 7. Fast Track đủ điều kiện không chờ PM duyệt từng số đo; PM kiểm/đóng và báo Supervisor.
 8. Notification/realtime/cache không là nguồn cấp quyền hay ACK.
 9. Offline store partition account/môi trường; logout không xóa bằng chứng chưa sync.
@@ -57,3 +57,7 @@ Bàn giao diff, migration/recovery, dependencies và phần còn blocked.
 ## 7. Gắn vào bộ tài liệu đã sắp xếp
 
 Trong `RoadGuard_Docs/README.md`, thêm liên kết đến `09_Frontend/01_FE_Scope_Implementation_Guide.md` và các mục02–13. Không cần đổi tên các file đã bàn giao trước. Nếu bạn chưa chạy lệnh sắp xếp cũ, vẫn dùng được gói này độc lập vì mọi link nội bộ là relative và contracts có snapshot nguồn. Manifest của gói FE là manifest riêng, không sửa manifest gói BA cũ.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

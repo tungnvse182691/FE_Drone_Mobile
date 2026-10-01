@@ -1,5 +1,12 @@
 # RoadGuard — Rà soát không đồng bộ và rủi ro REVIEW-01
 
+## V2(3) overlay — 2026-09-28
+
+- Canonical OpenAPI and FE snapshot were reviewed together; generated types, schemas and operation catalog were regenerated.
+- AI callback is service-identity only; PM triggers analysis and verified artifacts gate duplicate matching.
+- Partial publication, route/segment versioning, handover/conflict, offline evaluation, curing and traffic release remain explicit contract gates.
+- Structural checks are documentation evidence only; no runtime/API/SQL/provider/device result is inferred.
+
 **Ngày:** 27/09/2026. **Kết quả:** đã sửa các thiếu hụt tài liệu/tooling có đủ căn cứ; quyết định nghiệp vụ và provider/device tests vẫn mở. **Contract đề xuất:**0.1.1-draft-review1. Không xác nhận triển khai/release.
 
 ## 1. Kết luận từng phát hiện

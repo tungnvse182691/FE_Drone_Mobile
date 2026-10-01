@@ -6,8 +6,8 @@
 
 | Tệp | Vai trò |
 |---|---|
-| `contracts/openapi.baseline.yaml` | Snapshot OpenAPI R3 cập nhật REVIEW-01: 133 operations, 153 schemas; auth401 delta ghi trong báo cáo review |
-| `contracts/api.schemas.json` | JSON Schema 2020-12 bundle từ toàn bộ 153 schemas, `$defs`; `$ref` nội bộ đã đổi đường dẫn |
+| `contracts/openapi.baseline.yaml` | Snapshot OpenAPI alignment: 133 operations, 154 schemas; runtime `NOT_ENABLED` |
+| `contracts/api.schemas.json` | JSON Schema 2020-12 bundle từ toàn bộ 154 schemas, `$defs`; `$ref` nội bộ đã đổi đường dẫn |
 | `contracts/api.types.ts` | Structural TypeScript types từ schema, không phải HTTP SDK hoặc runtime validator |
 | `contracts/local.types.ts` | Local queue/media/partition types đề xuất; không gửi nguyên object này vào API |
 | `contracts/realtime.proposed.schema.json` | Event hint đề xuất, chưa có server transport |
@@ -62,3 +62,7 @@ BE/FE dùng cùng hash OpenAPI trong release manifest. Thay required field, enum
 ## 6. Generation và kiểm tra
 
 Types/schema trong gói được sinh bằng script kèm `contracts/build_contracts.py` từ baseline, không phải codegen SDK tiêu chuẩn. Script dừng khi gặp JSON Schema construct chưa hỗ trợ TS; constraint runtime được giữ trong JSON. Chạy script từ thư mục contracts bằng Python có PyYAML. Chọn generator production sau khi đối chiếu repository; pin version, không tải `latest` trong CI. Typecheck với TypeScript của repo và validator 2020-12 là gate tích hợp, không tự coi đã pass chỉ vì file được sinh.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

@@ -2,7 +2,7 @@
 
 **Phiên bản:** TECH-R3-2026-09-26-v1 • **Trạng thái:** thiết kế đề xuất dựa trên bộ RoadGuard R3. Chưa có repository, ERD hiện hành, OpenAPI thực tế hoặc môi trường chạy để đối chiếu. Không khẳng định endpoint/code/transaction dưới đây đã được triển khai.
 
-**Ưu tiên nguồn:** quyết định CHỐT/KẾ THỪA trong bộ tài liệu R3 giữ nguyên; chi tiết kỹ thuật mới cần P1/P2/FE/AI review. Q01–Q18 giữ mở theo Mô tả dự án §21. Không tự sửa enum số, chuyển DB, nâng framework hoặc đổi trạng thái Done từ các bản thiết kế này.
+**Ưu tiên nguồn:** [decision register](../../../../planning/V2/V2-3_DECISION_REGISTER.md) áp dụng D01-D28/32-44; business approval không tự phê duyệt error wire schema hoặc runtime. Không tự sửa enum số, chuyển DB, nâng framework hoặc đổi trạng thái Done.
 
 ## 8.1 Một format cho API, worker và client
 
@@ -47,7 +47,7 @@ Không dùng `details` chứa cả exception/request body. Mỗi detail có code
 | Code | HTTP/Sync outcome | Rule/ý nghĩa | Phục hồi |
 |---|---|---|---|
 | TASK_MODE_NOT_REPAIRABLE | 422 / REJECTED | MEASURE_ONLY/INSPECT_ONLY không được sửa | Gửi đo; PM giao sửa riêng |
-| POLICY_NOT_CONFIGURED | 422 / REJECTED | Thiếu policy/ngưỡng hoặc activation Q02/03 chưa chốt | PM/công ty hoàn thiện, không tự default |
+| POLICY_NOT_CONFIGURED | 422 / REJECTED | Thiếu framework/profile/ngưỡng hoặc Q03 technical basis; D03 authority đã chốt | PM/công ty hoàn thiện, không tự default |
 | FAST_TRACK_NOT_ELIGIBLE | 422 / REJECTED | Đo không đạt hoặc chưa đủ bằng chứng | Báo PM; không tự tăng severity |
 | PM_REPAIR_BLOCKED | 422 / REJECTED | PM đã kết luận nghiêm trọng/chặn | Crew chỉ đo/báo |
 | OUTSIDE_ASSIGNED_SCOPE | 403 hoặc404 / REJECTED | Lỗi/task ngoài assignment | Ghi nhận riêng chuyển PM |
@@ -105,3 +105,7 @@ Giữ envelope Error và field `code`; không thêm `subCode` hoặc đổi sang
 | Legacy | AUTH_REQUIRED | Fallback login; không suy là token hết hạn để auto refresh |
 
 `retryable:false` ở auth nghĩa không generic retry request cũ; TOKEN_EXPIRED có nhánh phục hồi auth riêng. Khi xác định session revoked thì không ưu tiên code expired chỉ vì JWT cũng hết hạn. Unknown401 không loop refresh. 403 không refresh. Thêm WWW-Authenticate cho bearer protected API; login/refresh không giả đang yêu cầu access bearer. Refresh timeout sau rotation vẫn unknown outcome; sub-codes không tự giải quyết vấn đề này.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

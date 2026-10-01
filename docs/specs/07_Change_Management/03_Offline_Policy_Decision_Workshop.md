@@ -1,35 +1,32 @@
-# RoadGuard — Quyết định trước freeze offline/policy
+# RoadGuard - Offline/policy decision crosswalk
 
-**Ngày:** 27/09/2026. **Trạng thái tất cả Q dưới đây:** OPEN / chưa có người dùng phê duyệt. Đây là agenda và decision template, không phải biên bản workshop đã diễn ra.
+**Original agenda:** 27/09/2026. **Current crosswalk:** 28/09/2026.  
+Nguồn hiện hành: [V2 decision register](../../../../planning/V2/V2-3_DECISION_REGISTER.md). Agenda cũ không phải bằng chứng phê duyệt, nhưng D03-D06 và 42A sau đó đã chốt business authority. Tài liệu này giữ gate thiết kế/kiểm thử còn lại, không hỏi lại quyết định đã có.
 
-| ID | Cần quyết định cụ thể | Người cần tham gia (vai trò đề xuất) | Deliverable bắt buộc | Gate |
+| ID | Business decision | businessStatus | Contract/verification gate còn lại | Affected scope |
 |---|---|---|---|---|
-| Q02 | PM được activate trong policy công ty đến đâu? Ai sửa phạm vi/ban hành phiên bản? Quy tắc supersede task cũ? | PO/công ty, BA, PM, BE/Security | Permission matrix + state transitions + audit; không tự thêm Supervisor duyệt mọi lần sửa | FR-15/18 activation |
-| Q03 | Loại lỗi/ngưỡng/đơn vị/precision, AND-OR nhiều rule, exclusions, biện pháp/dụng cụ/vật tư/hạn mức | PO/chuyên môn, PM, BA, BE/FE | Rule schema máy đọc, policy version và test vectors hợp lệ/biên/thiếu | FR-15/18 evaluation |
-| Q04 | Đổi/thu hồi/chuyển đội khi máy đang offline: nhận lệnh lúc nào, chống sửa trùng, tiếp nhận việc đã làm và ai giải quyết? | PO, BA, PM, Crew, BE/FE | Ma trận từng case + state machine/endpoint conflict + actor/quyền/audit + AC | FR-22 conflict và FR-18 offline E2E |
-| Q17 | Tài khoản suspend còn evidence: ai tiếp nhận, xác minh người/thiết bị, mã hóa/chuyển giao, liên kết hồ sơ và bảo toàn actor gốc? | PO, Supervisor, Security, BA, BE/FE | Quy trình rescue có quyền, retention/chain of custody, endpoints, AC; không đổi ownership âm thầm | FR-22 rescue E2E |
+| Q02 | Supervisor ban hành framework công ty; PM cấu hình/kích hoạt trong giới hạn; vượt giới hạn cần phê duyệt; không duyệt từng Fast Track. | `APPROVED` (D03) | Framework/profile/version/exception schema, permission matrix, audit và tests. | FR-15/18; P1-043..045 |
+| Q03 | Fast Track giới hạn ở đường đã bàn giao đang bảo hành/bảo trì và method phù hợp; không có production threshold nếu thiếu hồ sơ. | `APPROVED_SCOPE` + `OPEN_TECHNICAL` (D04) | Hồ sơ method/material, unit/precision/AND-OR/exclusion/stop/release values và test vectors. | Policy/evaluator |
+| Q04 | Đội mới chỉ start cùng scope sau xác nhận đội cũ dừng/bàn giao; PM có thể ghi căn cứ ngoài app; late work vào conflict. | `APPROVED` (D05) | Acknowledgement identity/scope/source, atomic reassign/start, conflict intake/resolve API và race tests. | FR-22; P1-057; P2-029 |
+| Q17 | Supervisor cho phép handover dữ liệu; PM đúng project nhận; giữ original actor/source. Export cứu dữ liệu mã hóa chỉ khi còn truy cập thiết bị. | `APPROVED` (D06/42A) | Rescue grant/receipt, device/key proof, retention/chain of custody, endpoint/security/AC. | FR-22 rescue E2E |
 
-## Case phải bàn trong workshop
+## Required scenario design
 
-Q04: đội cũ chưa làm / đang làm / đã làm nhưng chưa sync; đội mới đã nhận / chưa nhận; policy đổi nhưng quyền cũ vẫn đủ / PM đã block; case đã đóng. Mỗi case cần quyết định ai xem evidence, ai có quyền chấp nhận/liên kết/tạo remediation, và trạng thái công việc tiếp theo. App không thu hồi tức thời trên máy mất mạng; không đưa TTL tác nghiệp trái quyết định cũ vào giải pháp.
+Q04 contract phải phân biệt đội cũ chưa làm/đang làm/đã làm chưa sync; đội mới đã nhận/chưa nhận; policy đổi; PM block; case đã đóng. Client offline không bị thu hồi tức thì, nhưng snapshot không cho hai đội cùng bắt đầu một scope và late evidence không tự nghiệm thu.
 
-Q17: user tự logout / token hết hạn / account bị suspend / thiết bị mất khóa / mất máy. Các trường hợp không giống nhau. Không thể dựa vào login của PM để upload như Crew; cần giữ actor/time/source và audit transfer. Quy trình export cứu dữ liệu phải có bảo vệ, không zip ảnh công khai như fallback tự động.
+Q17 contract phải phân biệt logout, token expiry, suspension, lost device và lost key. Không dùng PM login để giả Crew upload. Rescue chỉ nhận evidence trong scope được phép, giữ actor/time/source, không cấp quyền làm công việc mới.
 
-## Mẫu quyết định cho từng Q
+Q03 dùng schema typed, whitelist operator và unit conversion. Missing task value trả `INSUFFICIENT_DATA`; invalid profile trả `INVALID_CONFIGURATION`. TEST template không cấp quyền sửa production.
 
-- Decision ID và version; trạng thái OPEN / APPROVED / REJECTED / SUPERSEDED.
-- Quyết định, phạm vi áp dụng và ngoại lệ; phần nào giữ nguyên nghiệp vụ cũ.
-- Owner, người có thẩm quyền phê duyệt, ngày, bằng chứng phê duyệt.
-- FR/BR/UC/AC/API/schema/state machine/permission/test cần cập nhật.
-- Migration/compatibility cho task pack và app đang offline.
-- Gate mở lại khi nào; test nào cần chạy, ai xác nhận.
+## Completion gate
 
-Chỉ sau quyết định approved, contract cập nhật và tests pass mới ghi nghiệm thu end-to-end. Core durability/queue/dedup không phụ thuộc các lựa chọn này vẫn có thể phát triển và kiểm riêng. Không ghi cả FR-22 PASS chỉ từ một happy path online.
+Business decision rows above không còn OPEN. End-to-end feature chỉ được `VERIFIED` sau contract review, implementation comparison và required tests. Core queue/durability/dedup độc lập có thể kiểm riêng; một happy path online không chứng minh FR-22.
 
-## Ưu tiên backlog đã rà lại
+## Backlog corrections
 
-| Mục | Kết luận |
+| Item | Current decision |
 |---|---|
-| Retention matrix | Có thể mở rộng sau, nhưng thời hạn giữ/xóa evidence, legal hold và dedup ledger cần chốt trước release các chức năng liên quan. Không xếp toàn bộ retention vào backlog xanh nếu app đã dọn/xóa hoặc retry muộn |
-| Route track drone | Đã có GAP-02; tạo FR riêng khi Q14/Q15/Q18 và phạm vi Sprint2 chốt. Không tự thêm vào Sprint1 |
-| US-10 duyệt nhãn | GAP-01/CR-017 đã có. Chốt bổ sung trace vào FR-36 hay FR riêng; không tự tạo FR-38 khi PO chưa chọn cách quản lý scope |
+| Retention | 41A đã chọn policy dự án; thiếu warranty end giữ `WAITING_RETENTION_BASIS`; worker/hold/reference/race/restore vẫn cần thiết kế và test. |
+| Route/mobile | D17/D18: GPX/ordered points hiện tại; phone GPS recorder later; real bytes/CRS/parser verification còn gate. |
+| US-10 labels | 34A: PM review trong project, chỉ approved labels được export; map vào FR-36 và test permission/schema. |
+| Web/Android/AI | D23/D24/44: external teams; BE owner chịu contract/adapter/fixtures/integration, contact/ETA chưa cung cấp. |

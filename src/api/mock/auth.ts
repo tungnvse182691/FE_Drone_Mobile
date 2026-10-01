@@ -1,5 +1,6 @@
 import { User } from '../../types/domain';
 import { RoleCode } from '../../types/enums';
+import { throwMockApiError } from './errors';
 
 const MOCK_USERS: Record<string, { user: User; password: string }> = {
   'pilot@hoanghai.vn': {
@@ -69,6 +70,7 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
     },
     password: '1',
   },
+  // WEB-ONLY: PROJECT_MANAGER thuộc Web Dashboard, KHÔNG phải vai trò mobile.
   'pm@hoanghai.vn': {
     user: {
       id: 'U002',
@@ -82,6 +84,7 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
     },
     password: '1',
   },
+  // WEB-ONLY: SUPERVISOR thuộc Web Dashboard, KHÔNG phải vai trò mobile.
   'sup@hoanghai.vn': {
     user: {
       id: 'U004',
@@ -104,7 +107,7 @@ export async function login(email: string, password: string) {
   const normalized = email.toLowerCase().trim();
   const entry = MOCK_USERS[normalized];
   if (!entry || (entry.password !== password && password !== '1' && password !== 'HoangHai@2026')) {
-    throw { response: { status: 401, data: { message: 'Sai tài khoản hoặc mật khẩu' } } };
+    throwMockApiError('INVALID_CREDENTIALS', { message: 'Sai tài khoản hoặc mật khẩu' });
   }
   return { data: { user: entry.user, token: entry.user.token, refresh_token: entry.user.refresh_token } };
 }
@@ -118,7 +121,7 @@ export async function changePassword(token: string, old_password: string, new_pa
   await delay(300);
   const entry = Object.values(MOCK_USERS).find((item) => item.user.token === token);
   if (!entry || entry.password !== old_password) {
-    throw { response: { status: 400, data: { message: 'Mật khẩu cũ không đúng' } } };
+    throwMockApiError('INVALID_REQUEST', { message: 'Mật khẩu cũ không đúng' });
   }
   entry.password = new_password;
   entry.user.must_change_password = false;

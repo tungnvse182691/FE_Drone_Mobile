@@ -1,10 +1,10 @@
 # RoadGuard — Đề xuất bổ sung sync evaluation (REVIEW-01)
 
-**Ngày:** 27/09/2026. **Trạng thái:** PROPOSED / NOT_ENABLED. Không phải quyết định Q02/Q03/Q04/Q17 hoặc xác nhận BE đã hỗ trợ.
+**Ngày:** 28/09/2026. **Trạng thái:** PROPOSED_CONTRACT / NOT_ENABLED. D24 đã duyệt luồng nghiệp vụ; schema, ordering, replay, compatibility và runtime support vẫn là gate. Không phải xác nhận BE đã hỗ trợ.
 
 ## 1. Kết luận kiểm tra
 
-Union SyncOperation hiện chỉ có INSPECTION_SUBMIT, REPAIR_START, REPAIR_SUBMIT. Fast Track có thể gọi endpoint evaluateFastTrack online sau khi sync InspectionSession nhưng chưa có command evaluation trong batch. Thêm tên kind một mình không đủ cho offline end-to-end: còn thiếu liên kết snapshot/assignment, semantics phiên bản, provenance, tiếp nhận thực tế đã thi công và cách xử lý khi quyền đổi.
+Union SyncOperation hiện chỉ có INSPECTION_SUBMIT, REPAIR_START, REPAIR_SUBMIT. V2(3) yêu cầu draft đầy đủ INSPECTION_SUBMIT -> FAST_TRACK_EVALUATE -> REPAIR_START -> REPAIR_SUBMIT với local/server IDs, snapshot/policy version, dependency và receipt. Thêm tên kind một mình không đủ cho offline end-to-end: còn thiếu liên kết snapshot/assignment, semantics phiên bản, provenance, tiếp nhận thực tế đã thi công và cách xử lý khi quyền đổi.
 
 APPROVAL_TRACK không cần evaluation Fast Track. Rủi ro của nhánh này là top-level taskId trong SyncStart chưa rõ inspection task hay repair assignment, chưa có repair snapshot đầy đủ và quy trình đổi đội offline. Không sửa bằng cách yêu cầu Approval Track chạy evaluation.
 

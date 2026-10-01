@@ -12,3 +12,15 @@ Windows CMD có thể chạy `ci\check-docs.cmd`. Check hash chỉ dùng Python 
 Update contract: sửa canonical → review diff/compatibility → cập nhật snapshot và lock/hash/version trong cùng change được review → regenerate types/schema/catalog → chạy checks → provider/consumer tests. Lock không phải chữ ký phê duyệt; thay cả YAML và lock không thể tự chứng minh business approval. Git review/branch protection phải enforce theo repo thật. Dùng `.gitattributes` của repo để giữ YAML LF, tránh CRLF làm đổi byte hash ngoài ý định.
 
 Script validate cấu trúc không thay full OpenAPI validator, TypeScript compiler, provider/device/UAT tests hoặc gate Q02/Q03/Q04/Q17. Không vì contract hash PASS mà gán readiness nghiệp vụ PASS.
+# Documentation and alignment guards
+
+Run from the repository root:
+
+```text
+python docs/diagram/V2/ci/check_alignment.py
+python docs/diagram/V2/ci/test_contract_guard.py
+python docs/diagram/V2/09_Frontend/contracts/check_contracts.py
+python docs/diagram/V2/09_Frontend/contracts/validate_package.py
+```
+
+`check_alignment.py` validates the 133 operation/task mapping, owner totals, task metadata/source checkpoints, decision register/lifecycle presence and canonical OpenAPI hash. It does not build the backend, access SQL Server, run an API, verify Mermaid rendering or prove business approval/runtime support.

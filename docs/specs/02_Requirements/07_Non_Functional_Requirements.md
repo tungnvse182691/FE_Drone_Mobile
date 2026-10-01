@@ -72,3 +72,7 @@ Nguồn chính thức tra cứu 26/09/2026:
 Mỗi TC-N/TC-NX dùng phương pháp và expected tại hàng tương ứng: (1) chuẩn bị môi trường/workload đã chốt; (2) thực hiện tình huống, lưu mốc; (3) đo/đối chiếu expected; (4) ghi actual, số liệu thô và evidence. Chưa có ngưỡng/môi trường → NOT_RUN và CONDITIONAL, không ghi PASS.
 
 Gate đề xuất: không còn lỗi mất dữ liệu hoặc truy cập trái quyền; restore đã chứng minh; phần định lượng áp dụng đã chốt và đạt; ma trận thiết bị đủ kết quả; privacy/license có owner duyệt. PO có thể loại module khỏi scope có ghi nhận; không dùng waiver để biến lỗi phân quyền thành đạt. Quy trình phê duyệt release cần đội dự án xác nhận.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

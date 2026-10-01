@@ -56,10 +56,116 @@ CREATE TABLE IF NOT EXISTS task_cache (
   kind            TEXT NOT NULL,
   data            TEXT NOT NULL,
   cached_at       TEXT NOT NULL
-);`;
+);
+CREATE TABLE IF NOT EXISTS sync_partitions (
+  partition_id     TEXT PRIMARY KEY,
+  account_id       TEXT NOT NULL,
+  role_code        TEXT NOT NULL,
+  lease_owner      TEXT,
+  lease_expires_at TEXT,
+  last_sync_at     TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS offline_pending (
+  id           TEXT PRIMARY KEY,
+  partition_id TEXT NOT NULL,
+  kind         TEXT NOT NULL,
+  payload      TEXT NOT NULL,
+  local_state  TEXT NOT NULL DEFAULT 'DRAFT',
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_offline_pending_partition
+  ON offline_pending (partition_id, local_state, created_at ASC);
+CREATE TABLE IF NOT EXISTS offline_outbox (
+  id              TEXT PRIMARY KEY,
+  partition_id    TEXT NOT NULL,
+  kind            TEXT NOT NULL,
+  payload_b64     TEXT NOT NULL,
+  checksum_sha256 TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  task_id         TEXT,
+  expected_version TEXT,
+  local_state     TEXT NOT NULL DEFAULT 'READY',
+  attempt         INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TEXT,
+  last_error      TEXT,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_offline_outbox_dispatch
+  ON offline_outbox (partition_id, local_state, next_attempt_at ASC, created_at ASC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_outbox_idempotency
+  ON offline_outbox (idempotency_key);
+CREATE TABLE IF NOT EXISTS media_assets (
+  id              TEXT PRIMARY KEY,
+  partition_id    TEXT NOT NULL,
+  uri_local       TEXT NOT NULL,
+  kind            TEXT NOT NULL,
+  size_bytes      INTEGER NOT NULL,
+  bytes_uploaded  INTEGER NOT NULL DEFAULT 0,
+  checksum_sha256 TEXT NOT NULL,
+  media_state     TEXT NOT NULL DEFAULT 'LOCAL_SAVING',
+  session_id      TEXT,
+  captured_at     TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_media_assets_state
+  ON media_assets (partition_id, media_state);
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  key             TEXT PRIMARY KEY,
+  operation_id    TEXT NOT NULL,
+  request_hash    TEXT NOT NULL,
+  response_status INTEGER,
+  created_at      TEXT NOT NULL,
+  updated_at      TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wire_command (
+  operation_id     TEXT PRIMARY KEY,
+  partition_id     TEXT NOT NULL,
+  envelope_key     TEXT NOT NULL,
+  kind             TEXT NOT NULL,
+  task_id          TEXT,
+  expected_version TEXT,
+  request_json     TEXT NOT NULL,
+  local_state      TEXT NOT NULL DEFAULT 'READY',
+  resource_id      TEXT,
+  resource_version TEXT,
+  error_code       TEXT,
+  error_message    TEXT,
+  trace_id         TEXT,
+  acked_at         TEXT,
+  created_at       TEXT NOT NULL,
+  updated_at       TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wire_command_partition
+  ON wire_command (partition_id, local_state, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_wire_command_envelope
+  ON wire_command (envelope_key);`;
+
+/**
+ * Migrations idempotent cho các cột bổ sung sau.
+ * `CREATE TABLE IF NOT EXISTS` KHÔNG thêm cột vào bảng đã tồn tại trên thiết bị,
+ * nên phải ALTER riêng. Dùng PRAGMA table_info để bỏ qua nếu cột đã có.
+ */
+const COLUMN_MIGRATIONS: Array<{ table: string; column: string; definition: string }> = [
+  { table: 'offline_outbox', column: 'task_id', definition: 'TEXT' },
+  { table: 'offline_outbox', column: 'expected_version', definition: 'TEXT' },
+];
 
 export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(DDL);
+  for (const migration of COLUMN_MIGRATIONS) {
+    const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${migration.table})`);
+    const exists = columns.some((column) => column.name === migration.column);
+    if (!exists) {
+      await db.execAsync(
+        `ALTER TABLE ${migration.table} ADD COLUMN ${migration.column} ${migration.definition}`,
+      );
+    }
+  }
 }
 
 export async function insertBatch(

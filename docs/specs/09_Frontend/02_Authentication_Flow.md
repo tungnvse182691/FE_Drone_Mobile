@@ -4,7 +4,7 @@
 
 ## 1. Phạm vi và hợp đồng hiện có
 
-Nguồn: TECH-R3 Auth §5.4, OpenAPI `login`, `refreshTokens`, `getMe`, `logout`; FR-01/03. Kế thừa bearer token. OAuth/SSO chưa có endpoint hoặc provider đã chọn. Đăng ký email Gmail + OTP không đồng nghĩa đăng nhập Google OAuth.
+Nguồn: TECH-R3 Auth §5.4, OpenAPI `login`, `refreshTokens`, `getMe`, `logout`; FR-01/03. Kế thừa bearer token. OAuth/SSO chưa có endpoint hoặc provider đã chọn. Đăng ký email + OTP không đồng nghĩa đăng nhập OAuth.
 
 | Thao tác | Request, tính từ `/api/v1` | Response thành công |
 |---|---|---|
@@ -102,3 +102,7 @@ Phần conditional, chưa bật UI “Đăng nhập Google”. Cần chọn IdP,
 ## 7. Điều kiện nghiệm thu
 
 10 request cùng hết hạn chỉ tạo một refresh; logout trong khi refresh không resurrect session; refresh fail không mất hàng đợi; sai account không đọc dữ liệu cũ; mustChangePassword chặn nghiệp vụ; unknown auth error dùng fallback an toàn; offline restart vẫn mở nhiệm vụ đã tải theo local unlock. Xem TC-FE-01–10 và 25–28.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

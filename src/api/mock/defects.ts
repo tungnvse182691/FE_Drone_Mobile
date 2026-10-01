@@ -1,23 +1,13 @@
 import { Defect, FieldInspectionTask, GroundTruthMeasurement, FastTrackPolicyVersion } from '../../types/domain';
 import { DefectStatus, Severity, SyncStatus, FieldInspectionTaskStatus } from '../../types/enums';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
+import { FAST_TRACK_POLICY as CANONICAL_FAST_TRACK_POLICY } from './crew-inspection';
 
-export const FAST_TRACK_POLICY: FastTrackPolicyVersion = {
-  id: 'FTP-2026-V1',
-  version_code: 'FTP-2026-V1',
-  max_area_m2: 1.0,
-  max_depth_cm: 5.0,
-  max_length_m: 2.0,
-  allowed_defect_codes: [
-    DEFECT_TYPE_CODES.POTH_DEEP,
-    DEFECT_TYPE_CODES.DEPR_POND,
-    DEFECT_TYPE_CODES.EDGE_BRK,
-    DEFECT_TYPE_CODES.SLAB_CRK,
-    DEFECT_TYPE_CODES.SHLD_EROS,
-  ],
-  effective_from: '2026-01-01T00:00:00Z',
-  effective_to: '2026-12-31T23:59:59Z',
-};
+/**
+ * Nguồn chuẩn duy nhất của chính sách Fast Track là `crew-inspection.ts`.
+ * Ở đây chỉ tái xuất để giữ tên cũ, tránh hai bản `FastTrackPolicyVersion` lệch nhau.
+ */
+export const FAST_TRACK_POLICY: FastTrackPolicyVersion = CANONICAL_FAST_TRACK_POLICY;
 
 const MOCK_DEFECTS: Defect[] = [
   {
@@ -50,6 +40,28 @@ const MOCK_DEFECTS: Defect[] = [
     status: DefectStatus.VERIFIED,
     geometry: { type: 'Point', coordinates: [106.7050, 10.7875] },
     reported_at: '2024-09-14T09:00:00Z',
+  },
+  {
+    id: 'DEF-004',
+    project_id: 'P001',
+    road_section_version_id: 'RSV-002',
+    defect_type_code: DEFECT_TYPE_CODES.EDGE_BRK,
+    severity: Severity.HIGH,
+    status: DefectStatus.OPEN,
+    geometry: { type: 'Point', coordinates: [106.7005, 10.7834] },
+    reported_at: '2024-09-15T08:40:00Z',
+    notes: 'Vỡ mép tấm bê tông lan sang bề mặt lái xe, Tuyến ĐH.05 - Cầu Bà Lát',
+  },
+  {
+    id: 'DEF-005',
+    project_id: 'P001',
+    road_section_version_id: 'RSV-003',
+    defect_type_code: DEFECT_TYPE_CODES.SHLD_EROS,
+    severity: Severity.MEDIUM,
+    status: DefectStatus.OPEN,
+    geometry: { type: 'Point', coordinates: [106.6980, 10.7890] },
+    reported_at: '2024-09-16T10:20:00Z',
+    notes: 'Xói lở vai đường, Tuyến ĐH.05 - Vĩnh Lộc B',
   },
 ];
 

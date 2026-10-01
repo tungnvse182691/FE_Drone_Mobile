@@ -11,6 +11,7 @@ import { defectTypeLabel } from '../../src/constants/defect-types';
 import { BUSINESS_ERROR_MESSAGES } from '../../src/constants/error-codes';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { enqueue } from '../../src/offline/upload-queue';
+import { stableUuid } from '../../src/utils/uuid';
 import {
   EVIDENCE_REUSE_SOURCE_TAGS,
   getCrewFieldSession,
@@ -114,9 +115,12 @@ export default function CrewCompleteScreen() {
     }
     setSubmitting(true);
     const submitted = markSessionSubmitted();
+    const attemptId = session?.attempt_id ?? stableUuid(`attempt:${task.id}`);
+    // `kind` phải là kind canonical của SyncOperation (SyncAttemptSubmit) — outbox lưu
+    // đúng giá trị này để màn sync dựng được SyncBatch hợp lệ.
     const payload = {
-      kind: 'repair_attempt_submit',
-      attempt_id: session?.attempt_id ?? null,
+      kind: 'REPAIR_SUBMIT',
+      attempt_id: attemptId,
       task_id: task.id,
       work_order_code: task.wo_code,
       task_mode: task.task_mode,
@@ -144,9 +148,12 @@ export default function CrewCompleteScreen() {
       const db = openDatabase();
       await initDatabase(db);
       const now = new Date().toISOString();
-      await enqueue(db, 'repair_attempt_submit', JSON.stringify(payload));
+      await enqueue(db, 'REPAIR_SUBMIT', JSON.stringify(payload), {
+        taskId: task.id,
+        idempotencyKey: stableUuid(`REPAIR_SUBMIT:${attemptId}`),
+      });
       await upsertOffline(db, 'local_draft', `repair-attempt-${Date.now()}`, {
-        kind: 'repair_attempt_submit',
+        kind: 'REPAIR_SUBMIT',
         payload: JSON.stringify(payload),
         created_at: now,
         updated_at: now,

@@ -16,8 +16,9 @@ export default function ForceChangePasswordScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const login = useAuthStore((state) => state.login);
+const user = useAuthStore((state) => state.user);
+const token = useAuthStore((state) => state.token);
+const login = useAuthStore((state) => state.login);
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
 
@@ -36,8 +37,17 @@ export default function ForceChangePasswordScreen() {
     setLoading(true);
     setError(null);
     try {
-      await apiChangePassword(user.token, oldPassword, newPassword);
-        const updatedUser = { ...user, must_change_password: false };
+      if (!token) {
+        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+        logout();
+        return;
+      }
+      await apiChangePassword(token, oldPassword, newPassword);
+        const updatedUser = {
+          ...user,
+          token,
+          must_change_password: false,
+        };
         login(updatedUser);
         const home = ROLE_HOMES[updatedUser.role_code];
         router.replace(home ? (home as any) : ('/(auth)' as any));

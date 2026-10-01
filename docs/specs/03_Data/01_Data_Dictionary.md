@@ -7,15 +7,14 @@
 >
 > Tài liệu đồng bộ: [Mô tả dự án](../01_Overview/01_Project_Overview.md), [FRD/SRS](../02_Requirements/01_FRD_SRS.md), [UseCase](../02_Requirements/04_Use_Cases.md), [User Stories + AC](../02_Requirements/05_User_Stories_Acceptance_Criteria.md), [Business Rules](../02_Requirements/02_Business_Rules.md), [To-Be Process](../02_Requirements/03_To_Be_Process.md), [log thay đổi](../07_Change_Management/02_Use_Case_Change_Log.md).
 
-> **Nguồn trước R3 (giữ để truy vết):** Thiết kế đích đồng bộ ngày 22/09/2026 theo [Incident/Segment](../08_Delivery/04_Missing_Referenced_Documents.md#missing-07) và [AI/Edge](../08_Delivery/04_Missing_Referenced_Documents.md#missing-05). Các bảng/cột mới và thay đổi nullable dưới đây là thiết kế đề xuất, không phải xác nhận code hoặc migration đã có. Mốc bàn giao backend/mock AI ngày 18/09/2026 tại [ADR 003](../08_Delivery/04_Missing_Referenced_Documents.md#missing-01) là lịch sử; thiết kế đích bổ sung adapter AI ngoài qua hợp đồng có phiên bản. Research Validation vẫn bắt buộc trong phạm vi nghiên cứu; mock không chứng minh độ chính xác thực nghiệm.
+> **Nguồn trước R3 (giữ để truy vết):** Thiết kế đích đồng bộ ngày 22/09/2026 theo [Incident/Segment](../../RoadGuard_Incident_Segment_Design_v1.md) và [AI/Edge](../../RoadGuard_AI_Segment_Edge_Design_v1.md). Đây là proposal lịch sử, không phải xác nhận code hoặc migration đã có. Mốc bàn giao backend/mock AI ngày 18/09/2026 tại [ADR 003](../../../adr/003-backend-delivery-and-ai-boundary.md) là lịch sử; thiết kế đích bổ sung adapter AI ngoài qua hợp đồng có phiên bản. Research Validation vẫn bắt buộc trong phạm vi nghiên cứu; mock không chứng minh độ chính xác thực nghiệm.
 
 Tài liệu này là từ điển dữ liệu mức logic cho RoadGuard. Nó được lập từ:
 
-- [Domain Model](../08_Delivery/04_Missing_Referenced_Documents.md#missing-06);
-- [Domain Model entity list](../08_Delivery/04_Missing_Referenced_Documents.md#missing-06);
-- [Use Case](../08_Delivery/04_Missing_Referenced_Documents.md#missing-02);
-- [User Stories](../08_Delivery/04_Missing_Referenced_Documents.md#missing-08);
-- [Incident/segment workflow](../08_Delivery/04_Missing_Referenced_Documents.md#missing-07);
+- [Domain Model v1](../../RoadGuard_Domain_Model_v1.md) (nguồn lịch sử);
+- [Use Case source](../../Dac_ta_UseCase_v2.md) (đã được [Use Case V2 canonical](../02_Requirements/04_Use_Cases.md) thay thế cho bảo trì hiện hành);
+- [User Stories source](../../User_Stories_Acceptance_Criteria_v2.md) (đã được [Stories/AC V2 canonical](../02_Requirements/05_User_Stories_Acceptance_Criteria.md) thay thế cho bảo trì hiện hành);
+- [Incident/segment workflow](../../RoadGuard_Incident_Segment_Design_v1.md) (proposal lịch sử);
 - đề cương nghiên cứu `RoadGuard_Contractor_Warranty_Inspection_phuonglhk.md`.
 
 ## 1. Phạm vi và cách đọc
@@ -148,7 +147,7 @@ Trong Data Dictionary, trường `GEOMETRY(...)` là kiểu logic; DDL SQL Serve
 |---|---|---:|---|---|---|
 | `id` | UUID | Không | PK | SRC | Định danh challenge/registration intent. |
 | `user_id` | UUID | Không | FK `User.id` | SRC | Chỉ trỏ tới User có `role_code = REPORTER` và `status = PENDING` khi tạo. |
-| `email` | VARCHAR(254) | Không |  | SRC | Gmail đã canonicalize; chỉ `gmail.com` hoặc `googlemail.com`. Snapshot dùng để chống đổi email giữa các lần gửi. |
+| `email` | VARCHAR(254) | Không |  | SRC | Email đã canonicalize; không giới hạn nhà cung cấp. Snapshot dùng để chống đổi email giữa các lần gửi. |
 | `purpose` | ENUM | Không |  | SRC | `REPORTER_EMAIL_VERIFICATION`; không dùng challenge này cho reset password. |
 | `code_hash` | TEXT | Không |  | SRC | Hash/HMAC của OTP; không lưu OTP plaintext. |
 | `expires_at` | TIMESTAMPTZ | Không |  | SRC | Hạn dùng ngắn, mục tiêu 10 phút và cấu hình được. |
@@ -1386,7 +1385,7 @@ Xác nhận capture dùng idempotency key + payload hash và cùng transaction t
 | FieldInspectionAssignment.crew_id | UUID; có legacy | FK Crew | THÊM, giữ assigned_to_user_id cho người nhận/đội trưởng. |
 | RepairAssignment.crew_id | UUID; có legacy | FK Crew | THÊM, giữ crew_lead_user_id và snapshot người thực hiện. |
 | RepairItem.repair_track | ENUM; không cho item mới | FAST_TRACK / APPROVAL_TRACK / EMERGENCY | Nhánh quyền/nghiệm thu; không suy từ urgency hoặc số lượng item. |
-| RepairItem.origin_task_id | UUID; có | FK FieldInspectionTask | FAST_TRACK bắt buộc task INSPECT_AND_REPAIR hoặc quyền sửa sau đo đã được chốt riêng. Q01 chưa chốt thì không tự coi item batch là Fast Track. |
+| RepairItem.origin_task_id | UUID; có | FK FieldInspectionTask | FAST_TRACK bắt buộc task INSPECT_AND_REPAIR hoặc task sửa mới sau đo theo D02. Không đổi hồi tố task batch MEASURE_ONLY thành Fast Track. |
 | RepairItem.fast_track_evaluation_id | UUID; có | FK FastTrackEvaluation | Bắt buộc Fast Track có kết quả ELIGIBLE, cùng lỗi/phạm vi. |
 | RepairItem.previous_item_id | UUID; có | FK RepairItem | Phiên bản phương án thay thế; cấm vòng, không xóa kết quả item cũ. |
 | RepairAssignmentItem.assignment_id / repair_item_id | UUID; không | FK RepairAssignment/RepairItem; UQ cặp | Chỉ giao từng phần đủ quyền; không giao cả batch bằng một flag. |
@@ -1532,13 +1531,17 @@ Xác nhận capture dùng idempotency key + payload hash và cùng transaction t
 
 Dùng cùng mã Q của tài liệu mô tả, không tạo một bộ quyết định khác:
 
-- Q01: lỗi nhỏ sau đo theo đợt được giao FAST_TRACK hay APPROVAL_TRACK? Dữ liệu hỗ trợ nhánh, chưa tự cấp quyền.
-- Q02–Q03: PM ban hành policy trong phạm vi nào, điều kiện/ngưỡng/vật tư/ảnh hợp lệ cụ thể?
-- Q04/Q17: đổi/hủy nhiệm vụ hoặc khóa tài khoản khi đang offline; tiếp nhận dữ liệu cũ và điều phối xung đột thế nào?
-- Q05–Q06: đo thiếu ảnh phải đo lại toàn đợt hay phần lỗi; xử lý trường hợp đã sửa nhưng mất BEFORE thế nào?
-- Q07–Q08: ai mở lại case Supervisor đã đóng; có công bố từng lỗi đã xong trước khi toàn case đạt không? Giữ gate công bố cũ đến khi chốt Q08.
+- D02: batch luôn MEASURE_ONLY; PM tạo task sửa riêng sau đo, có thể FAST_TRACK nếu đủ policy/quyền; không hồi tố mode.
+- D03/D04: Supervisor ban hành framework; PM kích hoạt trong giới hạn; Q03 technical dossier/threshold/material/measurement vẫn cần trước production.
+- D05/D06/42A: handover/conflict/rescue authority đã chốt; acknowledgement/intake/security/key/device wire và tests còn cần.
+- D07/D08: giữ phần đo đạt, đo lại phần thiếu/ảnh hưởng; BEFORE mất sau thi công vào incident, Supervisor quyết định, không tự nghiệm thu.
+- D09/D10: reopen theo actor đóng; partial publication theo defect đạt cho Reporter liên quan, cần wire projection/selector.
 - Q09–Q10: bán kính gợi ý trùng và xác nhận PM; tấm từ hồ sơ hoàn công/đo thật hay lưới ước lượng?
 - Q11–Q14: tiêu chí SRT/coverage, người đặt đích, CRS/accuracy dự án, định dạng drone/telemetry thực tế.
-- Q15–Q18: ghi GPS điện thoại, lỗi ngoài bảo hành/trước baseline, phạm vi Sprint và thứ tự triển khai.
+- D18/D19/D23/D24/D26: phone GPS deferred; ngoài bảo hành vẫn triage; Web/Android scope và Sprint grouping đã chốt, external delivery/integration còn lập kế hoạch.
 
 Không có giá trị tùy tiện để lấp TBD. Các chức năng không phụ thuộc TBD có thể tiếp tục triển khai sau review; gate quyền và nghiệm thu phụ thuộc quyết định chưa chốt phải được giữ rõ trong contract.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

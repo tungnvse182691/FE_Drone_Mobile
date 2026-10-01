@@ -1,0 +1,244 @@
+openapi: 3.1.0
+info:
+  title: RoadGuard AI service integration API
+  version: ai-contract-0.1.0
+  description: >-
+    Proposed service-to-service contract. BE remains the business authority;
+    AI returns proposals and immutable processing receipts.
+  x-contract-status: PROPOSED_DELTA
+  x-business-decision-source: planning/V2/V2-3_DECISION_REGISTER.md (D12-D13, 33A)
+  x-runtime-status: NOT_ENABLED
+servers:
+  - url: https://ai.example.invalid
+    description: Placeholder; provided by deployment configuration.
+security:
+  - serviceBearer: []
+paths:
+  /v1/video-analysis/jobs:
+    post:
+      operationId: dispatchVideoAnalysis
+      summary: Dispatch an immutable video-analysis manifest
+      tags: [video-analysis]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VideoAnalysisRequest' }
+      responses:
+        '202':
+          description: Accepted for asynchronous processing.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptedJob' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /v1/video-analysis/jobs/{jobAttemptId}:
+    get:
+      operationId: getVideoAnalysisJob
+      summary: Read video-analysis state
+      tags: [video-analysis]
+      parameters:
+        - $ref: '#/components/parameters/JobAttemptId'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Current state and optional completion receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/video-analysis/jobs/{jobAttemptId}/cancel:
+    post:
+      operationId: cancelVideoAnalysis
+      summary: Request cancellation of a video-analysis attempt
+      tags: [video-analysis]
+      parameters:
+        - $ref: '#/components/parameters/JobAttemptId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelRequest' }
+      responses:
+        '202':
+          description: Cancellation requested; worker stop is not immediate.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/duplicate-matching/jobs:
+    post:
+      operationId: dispatchDuplicateMatching
+      summary: Dispatch matching for an immutable candidate snapshot
+      tags: [duplicate-matching]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+        - $ref: '#/components/parameters/ContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DuplicateMatchingRequest' }
+      responses:
+        '202':
+          description: Accepted for asynchronous matching.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AcceptedJob' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/InvalidRequest' }
+  /v1/duplicate-matching/jobs/{jobAttemptId}:
+    get:
+      operationId: getDuplicateMatchingJob
+      summary: Read duplicate-matching state
+      tags: [duplicate-matching]
+      parameters:
+        - $ref: '#/components/parameters/JobAttemptId'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Current state and optional completion receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JobStatus' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/completion-events/{eventId}/ack:
+    post:
+      operationId: acknowledgeCompletionEvent
+      summary: Acknowledge a durable BE receipt
+      tags: [delivery]
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '204': { description: Acknowledged; replay is a no-op. }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    serviceBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: service-token
+      description: Short-lived service credential; never a PM/user token.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+    ContractVersion:
+      name: X-Contract-Version
+      in: header
+      required: true
+      schema: { type: string, const: ai-contract-0.1.0 }
+    JobAttemptId:
+      name: jobAttemptId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    FileRef:
+      type: object
+      additionalProperties: false
+      required: [fileId, sha256, purpose, verified]
+      properties:
+        fileId: { type: string, format: uuid }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        purpose: { type: string, enum: [VIDEO, TELEMETRY, SRT, MODEL_ARTIFACT] }
+        verified: { type: boolean, const: true }
+        byteLength: { type: integer, minimum: 1 }
+    ManifestRef:
+      type: object
+      additionalProperties: false
+      required: [manifestId, manifestHash, projectId, files, routeVersionId, segmentSetVersionId]
+      properties:
+        manifestId: { type: string, format: uuid }
+        manifestHash: { type: string, pattern: '^[a-f0-9]{64}$' }
+        projectId: { type: string, format: uuid }
+        routeVersionId: { type: string, format: uuid }
+        segmentSetVersionId: { type: string, format: uuid }
+        files: { type: array, minItems: 1, items: { $ref: '#/components/schemas/FileRef' } }
+    VideoAnalysisRequest:
+      type: object
+      additionalProperties: false
+      required: [jobAttemptId, manifest, modelVersion, requestedCapabilities]
+      properties:
+        jobAttemptId: { type: string, format: uuid }
+        manifest: { $ref: '#/components/schemas/ManifestRef' }
+        modelVersion: { type: string, minLength: 1, maxLength: 128 }
+        requestedCapabilities:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [VIDEO_DETECTION, TELEMETRY_PAIRING, POSITION_ESTIMATE] }
+        callbackUrl:
+          type: string
+          format: uri
+          description: BE internal callback only; AI must not invent or broaden it.
+    CandidateSnapshotRef:
+      type: object
+      additionalProperties: false
+      required: [snapshotId, snapshotHash, projectId, sourceAttemptIds]
+      properties:
+        snapshotId: { type: string, format: uuid }
+        snapshotHash: { type: string, pattern: '^[a-f0-9]{64}$' }
+        projectId: { type: string, format: uuid }
+        sourceAttemptIds: { type: array, minItems: 1, items: { type: string, format: uuid } }
+    DuplicateMatchingRequest:
+      type: object
+      additionalProperties: false
+      required: [jobAttemptId, candidateSnapshot, modelVersion]
+      properties:
+        jobAttemptId: { type: string, format: uuid }
+        candidateSnapshot: { $ref: '#/components/schemas/CandidateSnapshotRef' }
+        modelVersion: { type: string, minLength: 1, maxLength: 128 }
+        maxCandidates: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    AcceptedJob:
+      type: object
+      additionalProperties: false
+      required: [jobAttemptId, state, acceptedAt]
+      properties:
+        jobAttemptId: { type: string, format: uuid }
+        state: { type: string, enum: [ACCEPTED, QUEUED] }
+        acceptedAt: { type: string, format: date-time }
+    JobStatus:
+      type: object
+      additionalProperties: false
+      required: [jobAttemptId, state, attempt, contractVersion]
+      properties:
+        jobAttemptId: { type: string, format: uuid }
+        state: { type: string, enum: [ACCEPTED, RUNNING, SUCCEEDED, FAILED, CANCEL_REQUESTED, CANCELLED] }
+        attempt: { type: integer, minimum: 1 }
+        contractVersion: { type: string, const: ai-contract-0.1.0 }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        resultEventId: { type: [string, 'null'], format: uuid }
+        errorCode: { type: [string, 'null'], enum: [null, INVALID_MANIFEST, UNSUPPORTED_CAPABILITY, MODEL_UNAVAILABLE, INPUT_UNREADABLE, WORKER_FAILED, CANCELLED] }
+        updatedAt: { type: string, format: date-time }
+    CancelRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+  responses:
+    Conflict:
+      description: Same idempotency key or attempt has a different immutable payload/state.
+    InvalidRequest:
+      description: Manifest, checksum, scope or capability is invalid.
+    NotFound:
+      description: Job attempt or event is not visible to this service identity.

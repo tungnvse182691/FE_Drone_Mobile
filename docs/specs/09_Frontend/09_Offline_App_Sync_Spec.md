@@ -4,7 +4,7 @@
 
 ## 1. Phạm vi, điều đã chốt và nhãn thiết kế
 
-Đây là đặc tả triển khai chi tiết cho FR-22, liên quan FR-01/17/18/21/26/27, Data Dictionary §9.5. **Đã chốt trong nghiệp vụ:** tác nghiệp offline không tự hết hạn; Crew chỉ sửa khi nhiệm vụ/policy cho phép; không chờ PM duyệt từng số đo của Fast Track đủ điều kiện; không tự đóng hồ sơ; không mất/trùng dữ liệu khi sync; xung đột không last-write-wins. Token API vẫn có hạn. Q04/Q17 về xử lý xung đột/bàn giao dữ liệu chưa được quyết định.
+Đây là đặc tả triển khai chi tiết cho FR-22, liên quan FR-01/17/18/21/26/27, Data Dictionary §9.5. Tác nghiệp offline không tự hết hạn; token vẫn có hạn. D05/D06/42A đã chốt authority cho handover/conflict/rescue và bảo toàn actor/source; acknowledgement/intake/rescue wire schema, security và E2E tests chưa hoàn tất.
 
 **Đề xuất trong tài liệu này:** cấu trúc local DB, state machine, worker, budget, cơ chế unlock, giao diện Sync Center và recovery. **Contract gap:** baseline chưa đủ cho mọi nhánh offline end-to-end; xem §10–12 và tài liệu12. Không gọi tính năng đã sẵn sàng chỉ vì có màn hình capture offline.
 
@@ -167,7 +167,7 @@ Sửa lại tạo attempt mới, giữ lịch sử BEFORE/AFTER cũ. Endpoint st
 
 Operator nhận survey task online → tải scope, corridor/route/device/parser và destination cần thiết → quay/nhập video+telemetry cục bộ → giữ checksum/time/source và manifest theo task. Không kết luận coverage đủ chỉ vì SRT có tọa độ trong vùng; FE hiển thị UNKNOWN khi chưa phân tích.
 
-`/sync/batches` cho role OPERATOR nhưng union chỉ có INSPECTION_SUBMIT/REPAIR_START/REPAIR_SUBMIT; **không có command survey hợp lệ để tự chế gửi**. Đề xuất local outbox kiểu online-command: upload video/telemetry VERIFIED → POST `/survey-tasks/{taskId}/datasets` với DatasetSubmit, key+If-Match theo operation → ACK datasetId → job server khi được tạo. Đây là orchestration FE, không thêm kind SURVEY_SUBMIT vào YAML gốc. Thiếu pack/recovery/permissions vẫn cần gate.
+`/sync/batches` cho role OPERATOR; union hiện có INSPECTION_SUBMIT/REPAIR_START/REPAIR_SUBMIT và `FAST_TRACK_EVALUATE` ở mức proposed draft. **Không có command survey hợp lệ để tự chế gửi**. Đề xuất local outbox kiểu online-command: upload video/telemetry VERIFIED → POST `/survey-tasks/{taskId}/datasets` với DatasetSubmit, key+If-Match theo operation → ACK datasetId → job server khi được tạo. Đây là orchestration FE, không thêm kind SURVEY_SUBMIT vào YAML gốc. `FAST_TRACK_EVALUATE` chỉ được replay sau khi task/policy snapshot, assignment và permission hiện hành được kiểm; runtime vẫn `NOT_ENABLED`. Thiếu pack/recovery/permissions vẫn cần gate.
 
 Video không sao vào RAM toàn bộ để hash/upload; stream/chunk. Pause mạng metered/battery thấp theo user preference đề xuất, luôn cho user biết upload chưa xong. Không xóa video sau đổi tab. Tệp gốc trên SD/removable storage phải được copy private hoặc có quyền truy cập bền vững đã kiểm; URI tạm của picker không đủ.
 
@@ -203,3 +203,7 @@ Metrics đề xuất: queue oldest age, counts by state, sync latency, dedup cou
 ## REVIEW-01 — bổ sung
 
 Xem [đề xuất sync evaluation](../05_Technical/06_Sync_Evaluation_Amendment_Proposal.md). Approval Track không cần evaluation Fast Track; thiếu hụt của nhánh đó là task/assignment identity và snapshot/intake. Q04/Q17 vẫn là gate nghiệm thu conflict/rescue end-to-end, không chỉ ghi chú triển khai.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

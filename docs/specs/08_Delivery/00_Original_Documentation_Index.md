@@ -18,6 +18,8 @@ Ngày bàn giao: 26/09/2026. Trạng thái: **bản đặc tả để review và
 
 ## 2. Các quyết định phải giữ khi triển khai
 
+Model V2 hiện hành và code mapping: [ERD logic V2](../03_Data/02_ERD_V2.md), [Domain Model V2](../03_Data/03_Domain_Model_V2.md), [Data Model-Code Map](../03_Data/04_Data_Model_Code_Map.md), [State Machines](../05_Technical/07_State_Machines_V2.md). Các file này phân biệt `CURRENT_VERIFIED`, `TARGET_DOCUMENTED` và `PROPOSED_DELTA`; không sinh migration.
+
 - PM giao một lỗi nhỏ theo nhiệm vụ đo-và-sửa: Crew được Fast Track nếu đo đạt policy và đủ bằng chứng. Số lượng lỗi hoặc severity thấp tự nó không cấp quyền sửa.
 - Đợt gom nhiều lỗi chỉ đo và báo PM; PM giao sửa sau. Không biến năm lỗi nhỏ trong đợt mười lỗi thành quyền sửa ngay.
 - PM lập policy. Crew không tự hạ kết luận nghiêm trọng của PM; lỗi ngoài phạm vi giao chỉ ghi nhận.
@@ -58,6 +60,6 @@ Không sửa trạng thái Done trong hai plan cũ chỉ từ tài liệu. Domai
 
 **THÊM**: nội dung mới. **THAY THẾ**: quy tắc cũ ngừng áp dụng, dùng nội dung mới tại chỗ. **BỎ**: bỏ quy tắc, không xóa lịch sử dữ liệu. **CHỐT**: quyết định người dùng. **KẾ THỪA**: quy tắc nền giữ lại. **ĐỀ XUẤT/TBD**: chưa được coi là đã duyệt.
 
-Các liên kết giữa tám tài liệu R3 đã được sửa theo thư mục trong gói. Tham chiếu lịch sử như ADR 003, Incident/Segment Design, AI/Edge Design, tên file v1/v2, Domain Model và ERD không nằm trong ZIP này; giữ chúng để truy nguồn, không coi chúng đã được đọc/cập nhật ở bước bàn giao.
+Các liên kết giữa tám tài liệu R3 đã được sửa theo thư mục trong gói. Ở snapshot bàn giao, ADR 003, Incident/Segment Design, AI/Edge Design, tên file v1/v2, Domain Model và ERD không nằm trong ZIP. Checkout hiện tại đã đối chiếu các source này trong [`DOC-V2-RECON`](../../../../planning/V2/Governance/DOC-V2-RECON.md): ADR 003 là current accepted reference; các thiết kế ngày 22/09 là historical target/proposal; use-case và stories source cũ đã được bản V2 canonical thay thế cho bảo trì hiện hành. Kết quả mới không sửa lại sự thật lịch sử của snapshot ZIP.
 
 Kiểm tra bàn giao: đủ nhóm ID FR/BR/US/DR/DD-C; không thiếu hoặc trùng tiêu đề FR/BR/US; đóng đủ hàng rào code; kiểm liên kết giữa các tài liệu trong gói. Chưa chạy phần mềm, kiểm thử API/DB, render Mermaid, bay drone hoặc đo độ chính xác AI. Nghiên cứu công nghệ được giữ trong FRD cùng nguồn và giới hạn, không phải quyết định ép đổi stack.

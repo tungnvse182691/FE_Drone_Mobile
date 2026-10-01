@@ -89,7 +89,7 @@ flowchart TD
 
 **Quy tắc ưu tiên:** 10 lỗi trong đợt có 5 lỗi nhỏ thì cả đợt chỉ đo, không tự sửa 5 lỗi. Policy ELIGIBLE không ghi đè nhiệm vụ MEASURE_ONLY. “Một tuần” là ví dụ PM gom công việc để tiết kiệm, không buộc chờ đủ tuần hoặc hệ thống tự chọn nhánh. Báo cáo mới xuất hiện không tự hủy quyền nhiệm vụ đã giao.
 
-**Q01:** lỗi nhỏ sau khi đợt đo hoàn tất sẽ được PM giao nhánh nào chưa chốt; bước H không tự chọn Fast Track. Cấp urgency cao không tự kích hoạt quyền khẩn cấp. Crew gặp lỗi ngoài nhiệm vụ chỉ ghi nhận.
+**D02:** sau khi batch đo hoàn tất, PM tạo/giao task sửa riêng; task mới có thể Fast Track nếu nằm trong policy và đủ quyền/bằng chứng. Không đổi hồi tố MEASURE_ONLY và bước H không tự chọn track. Cấp urgency cao không tự kích hoạt quyền khẩn cấp; lỗi ngoài nhiệm vụ chỉ ghi nhận.
 
 ## 5. PF-04 — Fast Track tại hiện trường, gồm offline
 
@@ -115,7 +115,7 @@ flowchart TD
 
 Ảnh BEFORE Fast Track được lấy từ người dân/drone nếu phù hợp; không tạo nguồn giả. Ảnh đo và số liệu vẫn cần theo nhiệm vụ/policy; reuse BEFORE không miễn đo. Ảnh sau sửa không được đổi nhãn BEFORE. Nếu đã sửa ngoài app nhưng thiếu BEFORE không thể phục hồi, giữ ngoại lệ chưa đạt, cách xử lý Q06 cần chốt — không bịa ảnh để đóng hồ sơ.
 
-Không giới hạn thời gian làm offline. Quyền tác nghiệp theo snapshot nhiệm vụ/policy là đề xuất cần thống nhất với Q04; không phải access token vĩnh viễn. PM nghiêm trọng đã biết thì Crew không được tự hạ mức rồi sửa. Ngoài policy → PM quyết định mức/hàng chờ, không tự coi ngoài policy là nghiêm trọng hơn.
+Không giới hạn thời gian làm offline. Snapshot nhiệm vụ/policy cho phép thực hiện offline nhưng không phải access token vĩnh viễn. D05 yêu cầu acknowledgement trước khi đội mới start cùng scope; khi sync vẫn kiểm quyền hiện tại và đưa late evidence vào conflict. PM nghiêm trọng đã biết thì Crew không được tự hạ mức rồi sửa.
 
 ## 6. PF-05 — Đo theo đợt, lập phương án và giao sửa
 
@@ -140,7 +140,7 @@ flowchart TD
  H --> L["Crew: sửa theo phân công, dùng ảnh đo làm BEFORE"]
 ```
 
-Sơ đồ bước F áp dụng **APPROVAL_TRACK**. Những item nhỏ sau đợt đo vẫn chờ Q01 chốt track; không dùng sơ đồ này để tự phủ quyết khả năng PM được giao Fast Track sau đo. Phần được duyệt được giao riêng, không chờ toàn batch. REJECT khác REQUEST_RECONSIDER và khác NO_DEFECT. Giữ lịch sử version/item trước khi trình lại. Số liệu/ảnh thiếu có làm vô hiệu toàn đợt hay riêng lỗi là Q05; mặc định không tuyên bố đợt hoàn tất khi còn phần chưa hợp lệ.
+Sơ đồ bước F áp dụng **APPROVAL_TRACK**. Theo D02, item nhỏ sau đợt đo có thể đi Fast Track bằng task sửa mới nếu đủ policy; không hồi tố task đo. Phần được duyệt được giao riêng, không chờ toàn batch. Theo D07, giữ phần đo đạt và đo lại phần thiếu; PM mở rộng scope đo lại nếu sai dụng cụ/phương pháp ảnh hưởng rộng. REJECT khác REQUEST_RECONSIDER và NO_DEFECT; giữ lịch sử version/item.
 
 Gợi ý severity/urgency không tự thay sequence của PM. Chuẩn bị vật tư theo policy không mở thêm module kho/BOM/chi phí chi tiết.
 
@@ -217,7 +217,7 @@ flowchart TD
  F -->|Hợp lệ và đủ tệp| J["Ghi transaction, xác nhận đồng bộ"]
 ```
 
-Đây là thiết kế sync đề xuất; Q04/Q17 phải chốt cách nhận dữ liệu khi assignment/policy/account thay đổi trong lúc offline. Không yêu cầu Crew chờ server trước mỗi lần sửa đã được giao; cũng không dùng offline để tự tạo quyền ngoài nhiệm vụ. Không retry vô hạn lỗi nghiệp vụ theo kiểu tạo bản ghi mới. Client time và server receive time tách biệt. Hạn nhiệm vụ không phải hạn xóa dữ liệu chưa sync.
+Đây là thiết kế sync draft. D05/D06/42A đã chốt business rules cho handover/rescue và bảo toàn actor; contract intake/conflict/receipt/security vẫn phải hoàn thiện. Không yêu cầu Crew chờ server trước mỗi lần sửa đã được giao; cũng không dùng offline để tự tạo quyền ngoài nhiệm vụ. Không retry vô hạn lỗi nghiệp vụ theo kiểu tạo bản ghi mới. Client time và server receive time tách biệt. Hạn nhiệm vụ không phải hạn xóa dữ liệu chưa sync.
 
 ## 10. Các luồng hỗ trợ không cần sơ đồ riêng
 
@@ -259,3 +259,7 @@ flowchart TD
 | GIỮ quyền PM chọn thứ tự | Gợi ý không tự xếp lại; PM chọn từng lỗi và Crew. |
 
 Đối chiếu chi tiết theo [UseCase](04_Use_Cases.md), [User Stories + AC](05_User_Stories_Acceptance_Criteria.md), [Data Dictionary](../03_Data/01_Data_Dictionary.md) và [log P1/P2](../07_Change_Management/02_Use_Case_Change_Log.md). Sơ đồ hỗ trợ review nghiệp vụ; không là bằng chứng hệ thống đã triển khai hoặc thử nghiệm thực địa.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

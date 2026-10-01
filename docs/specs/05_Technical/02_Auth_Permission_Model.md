@@ -2,7 +2,7 @@
 
 **Phiên bản:** TECH-R3-2026-09-26-v1 • **Trạng thái:** thiết kế đề xuất dựa trên bộ RoadGuard R3. Chưa có repository, ERD hiện hành, OpenAPI thực tế hoặc môi trường chạy để đối chiếu. Không khẳng định endpoint/code/transaction dưới đây đã được triển khai.
 
-**Ưu tiên nguồn:** quyết định CHỐT/KẾ THỪA trong bộ tài liệu R3 giữ nguyên; chi tiết kỹ thuật mới cần P1/P2/FE/AI review. Q01–Q18 giữ mở theo Mô tả dự án §21. Không tự sửa enum số, chuyển DB, nâng framework hoặc đổi trạng thái Done từ các bản thiết kế này.
+**Ưu tiên nguồn:** [decision register](../../../../planning/V2/V2-3_DECISION_REGISTER.md) áp dụng D01-D28/32-44; chỉ gate kỹ thuật được register giữ lại còn mở. Không tự sửa enum số, chuyển DB, nâng framework hoặc đổi runtime/Done từ thiết kế.
 
 ## 5.1 Nguyên tắc bắt buộc
 
@@ -65,13 +65,13 @@ Access JWT ngắn hạn, refresh token rotate và lưu hash; TTL cụ thể SECU
 
 Web chọn cơ chế lưu refresh sau rà kiến trúc hiện hành. Nếu BFF/cookie HttpOnly/Secure, cần CSRF cho mutation và cập nhật OpenAPI security tương ứng; bản YAML hiện mô tả **bearer API cho client/native**, không đồng thời tuyên bố cookie flow đã có. Không lưu refresh/token nhạy cảm trong localStorage như quyết định mặc định. Android lưu secret qua cơ chế bảo vệ nền tảng; SQLite/Room cho dữ liệu nghiệp vụ không thay kho khóa.
 
-Login hết hạn/role đổi/reset/suspend: revoke theo CN01/QT02. Token hết hạn không xóa offline queue. Client đăng nhập lại trước gửi server; nếu tài khoản ngừng, Q17 quy định bàn giao cứu dữ liệu, chưa có endpoint bypass hoặc tự chuyển ownership. Không cấp token vô hạn để “hỗ trợ offline”.
+Login hết hạn/role đổi/reset/suspend: revoke theo CN01/QT02. Token hết hạn không xóa offline queue. Client đăng nhập lại trước gửi server; nếu tài khoản ngừng, D06/42A yêu cầu Supervisor cho phép handover và PM đúng project nhận, giữ actor/source; rescue endpoint chưa được coi là implemented. Không cấp token vô hạn.
 
 Reporter registration tạo PENDING; không business token trước OTP hợp lệ. OTP hash, expiry, max attempts, resend cooldown; phản hồi không tiết lộ email tồn tại. Invitation token một lần gắn email/role/scope do Supervisor quyết định, không cho accept payload đổi role. Supervisor reset buộc đổi lần login kế; không bao giờ hiển thị mật khẩu cũ.
 
 ## 5.5 Offline, tệp và integration trust boundary
 
-Offline snapshot là bằng chứng quyền/điều kiện đã nhận tại thời điểm tải, không là token API. Crew có thể thực hiện nhiệm vụ đủ điều kiện khi offline không có timer tự hết quyền nghiệp vụ. Server không nhận biết lập tức thao tác chưa gửi và không thu hồi tức thì trên máy mất mạng. Khi sync gặp khác version/assignment/policy, giữ bằng chứng và đánh conflict; Q04 quyết định người xử lý. Không tự downgrade policy hoặc sửa trạng thái PM.
+Offline snapshot là bằng chứng quyền/điều kiện đã nhận tại thời điểm tải, không là token API. Crew có thể thực hiện nhiệm vụ đủ điều kiện khi offline không có timer tự hết quyền nghiệp vụ. D05 yêu cầu acknowledgement trước khi đội mới start cùng scope; khi sync khác version/assignment/policy, giữ bằng chứng và conflict cho PM, không tự downgrade policy hoặc nghiệm thu.
 
 Upload dùng signed **PUT** giới hạn object/part/purpose/time; cấp lại URL phải kiểm quyền. Read dùng gateway authorization mỗi request để đáp ứng FR-01 khi quyền đổi. Nếu repo dùng signed GET, phải phân tích cửa sổ truy cập sau revocation và điều chỉnh thiết kế có quyết định; không hứa revoke ngay một URL đã ký độc lập.
 
@@ -82,3 +82,7 @@ AI service dùng audience/credential riêng, không role người dùng. Token/c
 Default deny; chỉ lấy projection đã allowlist. Query lấy object theo scope ngay trong DB thay vì tải rộng rồi lọc UI. Đối tượng không thuộc scope trả404 để không lộ sự tồn tại; hành động sai role nhưng object được biết hợp lệ có thể403 theo convention. Audit deny có trace và reason code, không log dữ liệu của object trái quyền.
 
 Test bắt buộc: PM-A đọc/đổi projectB; CrewA gửi task CrewB; ReporterR1 đọc ảnh R2 trong case gộp; sửa role/ownerId trong JSON; URL tệp cũ sau revoke; export snapshot sau mất quyền; callback AI dùng user token/sai attempt; replay idempotency sau revoke; suspended account sync còn data local. Trace TC-F01/22/25/35, TC-N01, UAT-05/11.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. Reporter email/password plus one-time email OTP is approved by D25. Web secure cookie/server session and Android access/refresh transport are `APPROVED_DESIGN` under 36A; TTL/OTP values in 37 are `APPROVED_PILOT_CONFIG`. These decisions require compatibility, CSRF/CORS/session implementation and tests and are not claims that runtime already changed. Offline handover/rescue authority follows D05/D06/42A; wire lifecycle and security verification remain open.

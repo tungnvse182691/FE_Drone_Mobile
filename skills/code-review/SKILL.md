@@ -6,7 +6,7 @@ description: "Kỹ năng thẩm định + tự sửa mã nguồn (Code Review & 
 # RoadGuard Code Review & Auto-Fix Skill
 ### Quality Gate — Cơ chế Tự Vả Tự Sửa (Self-Healing Loop)
 
-> *Bộ tài liệu chuẩn nguồn sự thật: `D:\Do_AN_Drone\27_9_V3\` — Phiên bản FE-R3-v1, ngày 27/09/2026*
+> *Bộ tài liệu chuẩn nguồn sự thật: `D:\Do_AN_Drone\29_9\` (hoặc `docs/specs/`) — Phiên bản Canonical 29_9 (OpenAPI 0.2.0-draft-alignment), ngày 29/09/2026*
 
 AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ sự cẩu thả nào. Đây không phải bước tùy chọn — đây là **cổng nghiệm thu bắt buộc**.
 
@@ -20,7 +20,7 @@ AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ 
 | P2 | **Self-Healing Loop (Auto-Fix)** | Khi phát hiện lỗi, AI **KHÔNG ĐƯỢC** dừng lại báo cáo suông. Phải **TỰ ĐỘNG SỬA FILE NGAY LẬP TỨC**, sau đó kiểm chứng lại. Tối đa **5 vòng lặp**. Nếu sau 5 vòng vẫn fail → ghi nhận `ESCALATE_TO_HUMAN`. |
 | P3 | **Mandatory Worklog** | Mỗi session review xong, AI **BẮT BUỘC TẠO 1 FILE .MD MỚI** trong `docs/worklogs/` ghi đầy đủ kết quả. |
 | P4 | **No Silent Pass** | TUYỆT ĐỐI CẤM tuyên bố "PASS" mà không chạy lệnh compiler thực tế. |
-| P5 | **Specification Inference** | Trước khi fix lỗi phức tạp (không phải lint), AI phải trình bày rõ *"Hành vi mong muốn theo 27_9_V3 là gì"* rồi mới áp dụng fix. |
+| P5 | **Specification Inference** | Trước khi fix lỗi phức tạp (không phải lint), AI phải trình bày rõ *"Hành vi mong muốn theo Canonical 29_9 là gì"* rồi mới áp dụng fix. |
 
 ---
 
@@ -37,7 +37,7 @@ AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ 
 │  CÓ LỖI? ──→ BƯỚC 4: AUTO-FIX (Tự Sửa File)                │
 │       ↑              ↓                                       │
 │       └── Vòng lặp (tối đa 5 lần) ──→ BƯỚC 2               │
-│  0 LỖI? ──→ BƯỚC 5: Kiểm tra 27_9_V3 Alignment             │
+│  0 LỖI? ──→ BƯỚC 5: Kiểm tra Canonical 29_9 Alignment       │
 │              ↓                                               │
 │              BƯỚC 6: Xuất Worklog Nghiệm Thu                 │
 └──────────────────────────────────────────────────────────────┘
@@ -192,7 +192,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "'CRACK'
 | Hạng mục | Đúng | Sai — Tự sửa ngay |
 |---|---|---|
 | Tên công ty | `Công ty TNHH Xây dựng Bê tông Hoàng Hải` | Tên viết tắt không chính thức |
-| Email domain | `@hoanghai.vn` | `@gmail.com`, `@roadguard.vn` |
+| Email domain nội bộ | `@hoanghai.vn` | `@gmail.com`, `@roadguard.vn` (Lưu ý: Reporter người dân dùng email RFC 5322 hợp lệ theo D25) |
 | Prefix nhân sự | `HH-` | `RG-`, `NV-` |
 | Tiêu chuẩn đường | `TCVN 10380:2014` (Bê tông xi măng) | Nhựa đường, asphalt |
 | Công nghệ khảo sát | `4K RGB + DSM (OpenDroneMap)` | LiDAR (Red Flag) |
@@ -202,7 +202,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "'CRACK'
 
 ---
 
-#### 🟡 INVARIANT-07: Bộ lọc Data Contract (theo `27_9_V3/09_Frontend/04_Data_Contract_Type_Definitions.md`)
+#### 🟡 INVARIANT-07: Bộ lọc Data Contract (theo `29_9/09_Frontend/04_Data_Contract_Type_Definitions.md`)
 
 **Các vi phạm phổ biến cần quét:**
 
@@ -223,7 +223,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 
 ---
 
-#### 🟡 INVARIANT-08: Bộ lọc Error Handling (theo `27_9_V3/09_Frontend/03_Error_Response_UI_Convention.md`)
+#### 🟡 INVARIANT-08: Bộ lọc Error Handling (theo `29_9/09_Frontend/03_Error_Response_UI_Convention.md`)
 
 **Các vi phạm cần phát hiện và Auto-Fix:**
 
@@ -260,7 +260,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 │                                                              │
 │  WHILE errors_exist AND attempt <= max_attempts:             │
 │    1. [DIAGNOSE] Ghi nhận: File nào, dòng nào, lỗi gì      │
-│    2. [INTENT] Nêu rõ "Theo 27_9_V3, hành vi đúng là..."  │
+│    2. [INTENT] Nêu rõ "Theo Canonical 29_9, hành vi đúng là..."  │
 │    3. [FIX] Dùng replace_file_content/write_to_file sửa     │
 │    4. [VERIFY] Chạy lại npx tsc --noEmit + quét lại         │
 │    5. Ghi vào Self-Healing Log: attempt #N, lỗi X, fix Y    │
@@ -282,7 +282,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 
 ---
 
-### BƯỚC 5 — Kiểm tra 27_9_V3 Alignment (Specification Check)
+### BƯỚC 5 — Kiểm tra Canonical 29_9 Alignment (Specification Check)
 
 Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp vụ từ bộ tài liệu chuẩn:
 
@@ -324,7 +324,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 # Báo Cáo Nghiệm Thu & Thẩm Định Mã Nguồn — Code Review Worklog
 
 - **Thời gian:** [YYYY-MM-DD HH:mm] (UTC+7)
-- **Người thẩm định:** Antigravity Auto-Reviewer (theo ủy quyền QA Lead — RoadGuard FE-R3-v1)
+- **Người thẩm định:** Antigravity Auto-Reviewer (theo ủy quyền QA Lead — RoadGuard Canonical 29_9)
 - **Feature / Màn hình:** [Mô tả ngắn, ví dụ: M-CREW-03 Submit Repair Form]
 - **Vòng Auto-Fix đã chạy:** [Số lần / Tối đa 5]
 
@@ -356,7 +356,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 | I-04 | Platform Scope (3 roles Mobile) | ✅ PASS / ❌ FAIL → đã tự sửa |
 | I-05 | Defect Types (5 mã BTXM) | ✅ PASS / ❌ FAIL → đã tự sửa |
 | I-06 | Branding & Tech Standards | ✅ PASS / ❌ FAIL → đã tự sửa |
-| I-07 | Data Contract (27_9_V3) | ✅ PASS / ❌ FAIL → đã tự sửa |
+| I-07 | Data Contract (Canonical 29_9) | ✅ PASS / ❌ FAIL → đã tự sửa |
 | I-08 | Error Handling Convention | ✅ PASS / ❌ FAIL → đã tự sửa |
 
 ---
@@ -365,7 +365,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 ### Attempt #1 / 5
 - **Lỗi phát hiện:** [File, dòng, mô tả lỗi]
-- **Hành vi đúng theo 27_9_V3:** [Giải thích]
+- **Hành vi đúng theo Canonical 29_9:** [Giải thích]
 - **Fix đã áp dụng:** [Mô tả cụ thể]
 - **Kết quả verify:** [PASS / FAIL]
 
@@ -373,7 +373,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 ---
 
-## 5. 27_9_V3 Alignment Check
+## 5. Canonical 29_9 Alignment Check
 
 - [ ] State Machine đủ (skeleton/empty/error/offline/stale)
 - [ ] 10 Invariants nghiệp vụ cốt lõi đều đúng
@@ -405,7 +405,7 @@ Trigger phrases: `"review code"`, `"check lại"`, `"tự vả tự sửa"`, `"a
 2. Chạy `npx tsc --noEmit`
 3. Quét 8 bộ lọc invariant
 4. Nếu có lỗi → **TỰ SỬA NGAY** (không hỏi Sếp trước)
-5. Kiểm tra 27_9_V3 alignment
+5. Kiểm tra Canonical 29_9 alignment
 6. Tạo worklog `.md` trong `docs/worklogs/`
 7. Báo cáo ngắn gọn kết quả cho Sếp (không paste toàn bộ worklog)
 
@@ -415,7 +415,7 @@ Trigger phrases: `"review code"`, `"check lại"`, `"tự vả tự sửa"`, `"a
 
 ```
 D:\Do_AN_Drone\
-├── 27_9_V3\                          ← Nguồn sự thật (CANONICAL)
+├── 29_9\                              ← Nguồn sự thật (CANONICAL)
 │   └── 09_Frontend\
 │       ├── 01_FE_Scope_Implementation_Guide.md
 │       ├── 02_Authentication_Flow.md

@@ -41,7 +41,7 @@ Mỗi FR có đầu vào/đầu ra, quy tắc và tiêu chí kiểm chứng; l�
 
 **Ưu tiên:** M. **Căn cứ:** KẾ THỪA. **Trace:** US-27; BR-02, BR-29.
 
-- **Đầu vào/tiền điều kiện:** Gmail, thông tin Reporter, mật khẩu và OTP.
+- **Đầu vào/tiền điều kiện:** Email hợp lệ, thông tin Reporter, mật khẩu và OTP.
 - **Hành vi/đầu ra bắt buộc:** Reporter đã xác minh; không có ProjectMember.
 - **Kiểm chứng:** Given OTP sai/hết hạn hoặc client chọn PM; When xác minh/đăng ký; Then không cấp quyền nội bộ và không cho gửi phản ánh chưa xác minh.
 
@@ -139,15 +139,15 @@ Mỗi FR có đầu vào/đầu ra, quy tắc và tiêu chí kiểm chứng; l�
 
 - **Đầu vào/tiền điều kiện:** PM, phiên bản, điều kiện, loại lỗi, biện pháp.
 - **Hành vi/đầu ra bắt buộc:** Policy hiển thị Crew và bản áp dụng nhiệm vụ.
-- **Kiểm chứng:** Given Crew xem ngoại tuyến; When mở nhiệm vụ đã tải; Then thấy đúng policy đã nhận. Không đủ cấu hình bắt buộc không tự kết luận đủ điều kiện. Quyền phát hành chi tiết Q02.
+- **Kiểm chứng:** Given Crew xem ngoại tuyến; When mở nhiệm vụ đã tải; Then thấy đúng policy đã nhận. Không đủ cấu hình bắt buộc không tự kết luận đủ điều kiện. D03: Supervisor ban hành khung, PM kích hoạt trong khung; vượt khung cần phê duyệt.
 
-**Readiness / acceptance gate: CONDITIONAL.** Q02 quyết định quyền activate/publish; Q03 quyết định nội dung/ngưỡng/hạn mức. PM lập policy đã chốt; production activation/evaluation chưa được freeze trước khi quyết định và contract được duyệt.
+**Readiness / acceptance gate: CONDITIONAL.** Q02 business authority đã chốt bởi D03. Q03 technical basis/ngưỡng/hạn mức và framework/version/exception contract vẫn chưa freeze; production activation/evaluation fail closed khi thiếu hồ sơ.
 
 ### FR-16 — Gom đợt đo
 
-**Ưu tiên:** M. **Căn cứ:** CHỐT đối với BR-09; ĐỀ XUẤT/CONDITIONAL đối với phần BR-10. **Trace:** US-35; BR-09 (confirmed), BR-10 (proposed).
+**Ưu tiên:** M. **Căn cứ:** CHỐT D02/32A. **Trace:** US-35; BR-09/10.
 
-**Gate:** nghiệm thu core gom đợt chỉ-đo theo BR-09; không coi chu kỳ khoảng một tuần hoặc mọi hành vi trace BR-10 đã approved. Tách acceptance BR-10 để PO chốt, không tự gán thời gian cứng hoặc đổi quyền task.
+**Gate:** batch luôn chỉ đo; reminder hằng tuần chỉ nhắc PM rà soát, không tự tạo/giao task hoặc cấp quyền. Cần contract/config/test cho reminder và link task sửa sau đo; không hỏi lại quyết định 32A.
 
 - **Đầu vào/tiền điều kiện:** PM chọn lỗi lớn/nhỏ, đội, nhiệm vụ chỉ-đo.
 - **Hành vi/đầu ra bắt buộc:** Đợt đo, kết quả từng lỗi; kế hoạch sửa sau.
@@ -203,7 +203,7 @@ Mỗi FR có đầu vào/đầu ra, quy tắc và tiêu chí kiểm chứng; l�
 - **Hành vi/đầu ra bắt buộc:** Sync idempotent, toàn vẹn hoặc hàng xung đột.
 - **Kiểm chứng:** Given app bị dừng/mất mạng khi upload; When được chạy lại có mạng; Then tiếp tục không tạo bản ghi trùng. Mất mạng không tự hết quyền Fast Track.
 
-**Readiness / acceptance gate: CONDITIONAL.** Q04/Q17 là blocker đối với conflict/bàn giao end-to-end: đổi/thu hồi/chuyển đội khi offline; tài khoản khóa còn evidence. Core local durability/dedup có thể kiểm riêng; không ghi FR-22 toàn bộ PASS hoặc freeze offline release khi hai quyết định này chưa approved và các tests tương ứng chưa pass.
+**Readiness / acceptance gate: CONDITIONAL.** D05/D06/42A đã chốt business authority cho handover/conflict/rescue. End-to-end vẫn chờ acknowledgement/intake/rescue wire schema, security, atomic race and device/key tests. Core durability/dedup có thể kiểm riêng; không ghi FR-22 toàn bộ PASS trước các gate kỹ thuật.
 
 ### FR-23 — Kiểm tra và đóng
 
@@ -311,10 +311,10 @@ Mỗi FR có đầu vào/đầu ra, quy tắc và tiêu chí kiểm chứng; l�
 
 ### FR-36 — Quản trị cấu hình/mô hình
 
-**Ưu tiên:** M. **Căn cứ:** KẾ THỪA. **Trace:** US-17, US-18; BR-02, BR-39, BR-42, BR-45.
+**Ưu tiên:** M. **Căn cứ:** KẾ THỪA + 34A. **Trace:** US-10, US-17, US-18; BR-02, BR-39, BR-42, BR-45.
 
 - **Đầu vào/tiền điều kiện:** Admin, rule/model versions, tài khoản.
-- **Hành vi/đầu ra bắt buộc:** Cấu hình phát hành có audit.
+- **Hành vi/đầu ra bắt buộc:** Cấu hình phát hành có audit; PM duyệt/từ chối nhãn trong project và chỉ nhãn đã duyệt được export cho training; AI không tự duyệt.
 - **Kiểm chứng:** Given đổi model/rule; When xem kết quả cũ; Then giữ phiên bản đã dùng; không tái tính ngược âm thầm.
 
 ### FR-37 — Emergency tạm
@@ -342,7 +342,7 @@ Mỗi FR có đầu vào/đầu ra, quy tắc và tiêu chí kiểm chứng; l�
 
 State machine logic (tên chưa khóa enum): hồ sơ tiếp nhận → điều phối → kiểm chứng/xử lý → chờ kiểm tra → xác nhận → đóng. Chưa đạt quay xử lý phần tương ứng. Task, eligibility, approval, physical completion, sync và acceptance cần trường/trạng thái riêng; không dùng một status cho mọi việc.
 
-Defect VERIFIED là xác minh trước sửa của nhánh thông thường; không đồng nghĩa Case Verified sau nghiệm thu. Fast Track được cấp quyền có điều kiện trước PM nghiệm thu; không ép gate PM VERIFIED cũ lên mọi lần sửa. Q01 và Q07 giữ mở đúng phạm vi.
+Defect VERIFIED là xác minh trước sửa của nhánh thông thường; không đồng nghĩa Case Verified sau nghiệm thu. Fast Track được cấp quyền có điều kiện trước PM nghiệm thu; không ép gate PM VERIFIED cũ lên mọi lần sửa. D02 quy định task sửa riêng sau batch; D09 quy định reopen authority. Wire/version/audit contract vẫn là gate.
 
 ## 5. Yêu cầu phi chức năng
 
@@ -501,6 +501,10 @@ Nguồn chính thức đã tra cứu ngày 26/09/2026. Liên kết không thay v
 
 FR-* ở §3 trỏ tới US-* và BR-*. To-Be dùng PF-*; User Stories gắn FR tương ứng. Mỗi test khi triển khai cần chỉ ra ID AC/FR, dữ liệu, role, expected/actual và bằng chứng; không coi tài liệu là kết quả test.
 
-Giữ Q01–Q18 của mô tả dự án làm sổ quyết định nghiệp vụ. PERF-TBD, MAP-TBD, OPS-TBD, AI-TBD và ma trận thiết bị là thông số SRS còn mở. Không ban hành SRS “đã nghiệm thu đầy đủ” trước khi chốt các phần áp dụng. Có thể triển khai phần đã rõ theo task độc lập; không tự giải quyết điểm quyền/đóng hồ sơ còn mở bằng code.
+Giữ ID Q01–Q18 để truy vết qua decision register; D01-D28/32-44 supersede nhãn OPEN lịch sử đúng nội dung. PERF-TBD, MAP-TBD, OPS-TBD, AI-TBD, method thresholds, real-file calibration và wire contracts được register giữ mở. Không ban hành SRS “đã nghiệm thu đầy đủ” trước verification tương ứng.
 
 P1 sở hữu API/service/DTO; P2 schema/mapping/migration/repository; FE local queue/map/UX; AI model/adapter/validation phối hợp BE. Giữ trạng thái Done cũ, tạo delta sau đối chiếu checkout. Lần này chỉ sửa tài liệu, không cài thư viện, đổi stack, chạy model hoặc nâng cấp code.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

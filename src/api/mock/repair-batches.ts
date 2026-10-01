@@ -1,16 +1,35 @@
 import { RepairBatchVersion } from '../../types/domain';
 import { RepairBatchStatus } from '../../types/enums';
 
+// UD-06: lớp trình bày tuyệt đối ZERO CHI PHÍ.
+// Batch chỉ mang bộ 3 thông số kỹ thuật thi công: phương án xử lý + kích thước hình học + thời hạn.
 const MOCK_BATCHES: RepairBatchVersion[] = [
   {
     id: 'RBV-001',
     batch_id: 'RB-001',
     version_no: 1,
     status: RepairBatchStatus.APPROVED,
-    estimated_total_cost: 25000000,
     items: [
-      { id: 'RI-001', defect_id: 'DEF-001', estimated_cost: 15000000, status: 'PENDING' },
-      { id: 'RI-002', defect_id: 'DEF-002', estimated_cost: 10000000, status: 'PENDING' },
+      {
+        id: 'RI-001',
+        defect_id: 'DEF-001',
+        technical_solution: 'Phân bổ BTXM C12,5 tránh vỡ hẹn tấm',
+        damage_area_m2: 0.84,
+        damage_depth_cm: 4,
+        damage_length_m: 1.6,
+        completion_deadline: '2024-09-20',
+        status: 'PENDING',
+      },
+      {
+        id: 'RI-002',
+        defect_id: 'DEF-002',
+        technical_solution: 'Xử lý lún võng, lu lèn lớp móng',
+        damage_area_m2: 1.1,
+        damage_depth_cm: 5,
+        damage_length_m: 2.0,
+        completion_deadline: '2024-09-22',
+        status: 'PENDING',
+      },
     ],
     submitted_at: '2024-09-13T11:00:00Z',
     approved_at: '2024-09-14T08:00:00Z',
@@ -20,9 +39,17 @@ const MOCK_BATCHES: RepairBatchVersion[] = [
     batch_id: 'RB-002',
     version_no: 1,
     status: RepairBatchStatus.PENDING_APPROVAL,
-    estimated_total_cost: 8000000,
     items: [
-      { id: 'RI-003', defect_id: 'DEF-003', estimated_cost: 8000000, status: 'PENDING' },
+      {
+        id: 'RI-003',
+        defect_id: 'DEF-003',
+        technical_solution: 'Vỡ mép tấm: cắt bổ cạnh, hàn lại khớp',
+        damage_area_m2: 0.62,
+        damage_depth_cm: 3,
+        damage_length_m: 1.2,
+        completion_deadline: '2024-09-25',
+        status: 'PENDING',
+      },
     ],
     submitted_at: '2024-09-15T14:30:00Z',
   },
@@ -38,11 +65,11 @@ export async function listRepairBatches(params: { project_id?: string } = {}) {
 
 export async function submitRepairBatch(batch: RepairBatchVersion) {
   await delay(500);
-  const totalCost = batch.items.reduce((sum, item) => sum + item.estimated_cost, 0);
   return {
     data: {
       batch_id: `RB-${Date.now().toString(36).slice(-4).toUpperCase()}`,
       status: 'PENDING_APPROVAL' as const,
+      item_count: batch.items.length,
     },
   };
 }

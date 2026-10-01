@@ -304,7 +304,7 @@ Các đợt dưới đây bổ sung/thay thế đúng phần được nêu; gi�
 |---|---|---|---|---|
 | UC-D19 | Ticket/notification/Defect dễ bị đồng nhất; gần GPS có thể bị gộp | Giữ nguồn report và ảnh riêng, đề xuất IncidentCase làm ticket; 5 người cùng lỗi không tạo 5 việc; gợi ý 1–2 m chưa tự gộp | Intake/triage/ownership/dedup | Quan hệ report-case-defect, audit merge/tách |
 | UC-D20 | Severity chưa tách urgency và thứ tự PM | Hai chiều phân cấp; PM quyết định chính thức; gợi ý không tự sắp hay giao Crew | DTO/grade/priority/plan | Field/PM decision history/sequence |
-| UC-D21 | Đợt gom đo có thể được hiểu sửa ngay phần nhỏ | Đợt nhiều lỗi MEASURE_ONLY; đo rồi PM chọn phương án/giao sửa; Q01 track sau đo còn mở | Task-mode gate, batch review | Batch-task relation, snapshots |
+| UC-D21 | Đợt gom đo có thể được hiểu sửa ngay phần nhỏ | D02: đợt nhiều lỗi MEASURE_ONLY; PM giao task sửa riêng sau đo, có thể Fast Track nếu đủ policy; không hồi tố mode | Task-mode gate, batch review | Batch-task relation, snapshots |
 | UC-D22 | Policy do Supervisor hoặc Crew có thể tự hạ mức PM | PM lập policy; lỗi PM nghiêm trọng chặn Crew tự sửa; lỗi ngoài nhiệm vụ chỉ ghi nhận; chuẩn bị vật tư/dụng cụ | Policy/evaluation/authorization | Version policy, PM block, preparation data |
 | UC-D23 | Offline chưa chốt hoặc gate server trước sửa | Không giới hạn thời gian tác nghiệp offline; giữ nhiệm vụ/policy tải; conflict/revocation Q04 | Sync idempotency/conflict/API | Operation log/checksum/snapshot |
 | UC-D24 | Ảnh BEFORE buộc chụp mới hoặc thiếu ảnh đo có thể ghi lý do | Fast Track tái dùng citizen/drone BEFORE; ngoài Fast Track đo cần ảnh/số liệu, thiếu phải đo lại; không AFTER giả BEFORE | Evidence gate/validation | Source/attempt/file references |
@@ -344,3 +344,7 @@ Các đợt dưới đây bổ sung/thay thế đúng phần được nêu; gi�
 - Đóng gói tám tài liệu R3 và mục lục vào ZIP, giữ cấu trúc thư mục để liên kết nội bộ hoạt động sau giải nén. Hai plan P1/P2, Domain Model, ERD, Design v2 và Sprint spec không được sửa trong đợt bàn giao này.
 - Kiểm tra tự động: đủ 37 tiêu đề FR, 48 BR và 41 US, không thiếu hoặc trùng ID trong từng nhóm; đủ DR-01–16 và DD-C01–20 trong Data Dictionary; hàng rào code đóng đủ. Các kiểm tra này là kiểm tra tài liệu, không chứng minh tính năng đã chạy hoặc mọi yêu cầu đã được nghiệm thu.
 - Chưa kiểm chứng lại toàn bộ nguồn công nghệ bên ngoài trong bước bàn giao; phần nghiên cứu và ngày tra cứu được giữ từ FRD R3. Chưa thay code, migration, trạng thái Done hoặc quyết định nghiệp vụ.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

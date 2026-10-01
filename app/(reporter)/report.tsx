@@ -28,6 +28,16 @@ import { AUTH_OTP_VERIFY, REPORTER_TRACK } from '../../src/constants/routes';
 
 const MAX_PHOTOS = 3;
 const MIN_DESCRIPTION = 10;
+const SUBMIT_FALLBACK_ERROR = 'Không thể gửi phản ánh. Vui lòng thử lại sau.';
+
+/** Mã lỗi từ `submitReport`/`registerReporterEmail` → thông báo tiếng Việt cho người dân. */
+const errorMessages: Record<string, string> = {
+  TOO_MANY_PHOTOS: 'Bạn chỉ được tải lên tối đa 3 hình ảnh hiện trường.',
+  COORDINATES_INVALID: 'Tọa độ vị trí không hợp lệ. Vui lòng bật GPS và thử lại.',
+  DEFECT_TYPE_INVALID: 'Loại khuyết tật không thuộc danh mục quy chuẩn.',
+  DESCRIPTION_REQUIRED: 'Vui lòng nhập mô tả hiện trạng hư hại.',
+  EMAIL_INVALID: 'Địa chỉ email không hợp lệ. Vui lòng kiểm tra lại.',
+};
 
 interface Coords {
   latitude: number;
@@ -139,11 +149,11 @@ export default function ReporterReportScreen() {
       next.description = `Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự để đội nghiệp vụ xác định vị trí.`;
     }
     const trimmedEmail = email.trim().toLowerCase();
-    const gmailRegex = /^[a-z0-9][a-z0-9._%+-]*@(gmail\.com|googlemail\.com)$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!trimmedEmail) {
       next.email = 'Vui lòng nhập địa chỉ email nhận mã xác thực.';
-    } else if (!gmailRegex.test(trimmedEmail)) {
-      next.email = 'Vui lòng sử dụng địa chỉ Gmail hợp lệ (@gmail.com hoặc @googlemail.com) để nhận mã OTP.';
+    } else if (!emailRegex.test(trimmedEmail)) {
+      next.email = 'Vui lòng nhập địa chỉ email hợp lệ (ví dụ: ten@hoanghai.vn hoặc ten@gmail.com).';
     }
     if (!routeHint.trim()) {
       next.routeHint = 'Vui lòng nhập vị trí hoặc mốc giao thông gần nhất.';
@@ -219,7 +229,8 @@ export default function ReporterReportScreen() {
         params: { intentId: intent.intentId, email: intent.email },
       });
     } catch (err) {
-      setSubmitError((err as Error).message ?? 'Không thể gửi phản ánh. Vui lòng thử lại.');
+      const code = (err as Error).message;
+      setSubmitError(errorMessages[code] ?? SUBMIT_FALLBACK_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -387,7 +398,7 @@ export default function ReporterReportScreen() {
               setEmail(text);
               setErrors((current) => ({ ...current, email: '' }));
             }}
-            placeholder="nhap.email@gmail.com"
+            placeholder="vd: ten.email@hoanghai.vn"
             keyboardType="email-address"
             autoCapitalize="none"
             error={errors.email}
@@ -395,7 +406,7 @@ export default function ReporterReportScreen() {
           />
 
           <Text style={[typography.caption, styles.emailHelpText]}>
-            Mã OTP 6 số sẽ được gửi qua Gmail (@gmail.com hoặc @googlemail.com) để xác thực phản ánh của bạn.
+            Mã OTP 6 số sẽ được gửi qua email để xác thực phản ánh của bạn.
           </Text>
 
           {((verifiedEmail && verifiedEmail === email.trim().toLowerCase()) ||

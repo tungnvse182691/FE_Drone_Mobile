@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "PROPOSED_NOT_ENABLED SyncFastTrackEvaluation",
+  "title": "PROPOSED_DELTA_NOT_ENABLED SyncFastTrackEvaluation",
+  "$comment": "D02/D07 business authority is approved; this wire schema mirrors the FAST_TRACK_EVALUATE member of the canonical SyncOperation draft. It remains a proposed delta until ordering, fixtures and runtime compatibility are verified; runtime is NOT_ENABLED.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -8,8 +9,8 @@
     "kind",
     "taskId",
     "expectedVersion",
-    "snapshotId",
-    "assignmentVersion",
+    "measurementSessionId",
+    "localEvaluationId",
     "capturedAt",
     "payload"
   ],
@@ -22,7 +23,11 @@
       "type": "string",
       "format": "uuid"
     },
-    "snapshotId": {
+    "measurementSessionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "localEvaluationId": {
       "type": "string",
       "format": "uuid"
     },
@@ -30,10 +35,6 @@
       "const": "FAST_TRACK_EVALUATE"
     },
     "expectedVersion": {
-      "type": "string",
-      "minLength": 1
-    },
-    "assignmentVersion": {
       "type": "string",
       "minLength": 1
     },
@@ -60,5 +61,5 @@
       }
     }
   },
-  "$comment": "Not in active SyncOperation union. See 05_Technical/06_Sync_Evaluation_Amendment_Proposal.md. No approval implied."
+  "$comment": "Canonical union membership is drafted in 05_Technical/openapi.yaml; this standalone schema is a review aid only and does not enable backend runtime."
 }

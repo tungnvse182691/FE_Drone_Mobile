@@ -53,6 +53,10 @@ Role không đủ để cấp quyền một hành động. Backend còn phải k
 
 ## 3. Cấu trúc và mục lục
 
+### AI service handoff
+
+Contract riêng cho AI engineer nằm tại [AI_Integration](AI_Integration/README.md). Đây là service-to-service proposal, không phải public BE API và không thay thế `receiveAiResult` trong canonical BE OpenAPI.
+
 | Thư mục | Nội dung | Người dùng chính |
 |---|---|---|
 | `01_Overview` | Bối cảnh và mô tả dự án | Tất cả |
@@ -64,6 +68,7 @@ Role không đủ để cấp quyền một hành động. Backend còn phải k
 | `07_Change_Management` | Đề nghị thay đổi và lịch sử use case | BA, PO, BE, FE |
 | `08_Delivery` | Chỉ mục/kiểm tra cũ, manifest và báo cáo sắp xếp | Người bàn giao/review |
 | `09_Frontend` | FE integration, offline, types, config, fixtures và tests | FE, mobile, BE tích hợp |
+| `AI_Integration` | FastAPI dispatch/poll/cancel/matching, callback receipt, schemas và fixtures | AI engineer, P2 adapter, BE integration |
 
 ### 01–04. Tổng quan, yêu cầu, dữ liệu và giao diện
 
@@ -163,12 +168,12 @@ Trong gói hiện tại, `05_Technical/openapi.yaml` là bản trung tâm để 
 
 | Chủ đề | Baseline hiện tại / giới hạn |
 |---|---|
-| Auth | Email/password + OTP Reporter, bearer API đề xuất; OAuth/SSO và BFF web production chưa chốt |
+| Auth | D25/36A/37: email/password + Reporter OTP; web secure cookie/server session; Android access/refresh; runtime compatibility chưa xác minh |
 | Pagination | Cursor + limit, không mặc nhiên có page/total/filter/sort mở rộng |
 | Realtime | Polling MVP; WebSocket/SSE chưa có contract server hiện hành |
-| API | 133 operations, 153 schemas ở bản đề xuất; chưa xác nhận BE đang chạy |
+| API | 133 operations, 154 schemas ở bản đề xuất; runtime `NOT_ENABLED`, chưa xác nhận BE đang chạy |
 | Offline | App capture/sync đã có đặc tả; Fast Track evaluation/snapshot intake, upload reconciliation, device identity và dedup retention còn gaps |
-| Conflict | Q04/Q17 về thay nhiệm vụ/quyền và cứu dữ liệu chưa chốt quy trình end-to-end |
+| Conflict | D05/D06/42A đã chốt authority; acknowledgement/intake/rescue wire lifecycle và E2E tests chưa hoàn tất |
 | URL/quota | Chưa có hostname dev/staging/prod, quota và giới hạn file được xác nhận |
 | Kiểm thử | Có 58 test FE và8 UAT FE, cộng bộ test nghiệp vụ; chưa chạy trên hệ thống thật |
 
@@ -211,7 +216,9 @@ Lệnh check chỉ kiểm hash; lệnh build **ghi lại** types/schema/catalog 
 
 Nếu sửa nội dung rồi chạy lại generation, hash trong manifest gói bàn giao không còn đại diện cho bản đã sửa. Tạo manifest mới khi phát hành gói mới, không sửa hash lịch sử để giả rằng bản cũ chưa từng thay đổi.
 
-Một số nguồn cũ trỏ đến thiết kế/ADR/ERD không nằm trong bộ được cung cấp. Xem [danh sách tham chiếu thiếu](08_Delivery/04_Missing_Referenced_Documents.md); các mục này không được giả định là đã có nội dung hoặc đã được phê duyệt.
+Một số nguồn cũ từng trỏ đến thiết kế/ADR/ERD không nằm trong bộ ZIP được cung cấp. Checkout hiện tại đã [đối chiếu tám tham chiếu](08_Delivery/04_Missing_Referenced_Documents.md): file có mặt vẫn phải được phân loại current, historical hoặc superseded; sự hiện diện không tự chứng minh phê duyệt hay runtime.
+
+V2 model artifacts: [logical ERD](03_Data/02_ERD_V2.md), [domain model](03_Data/03_Domain_Model_V2.md), [current-to-target code map](03_Data/04_Data_Model_Code_Map.md), [state machines](05_Technical/07_State_Machines_V2.md) and [component/layer boundary](05_Technical/08_Component_Layer_V2.md). These are target/current mapping documents, not migrations or deployed-schema evidence.
 
 ## 10. Quy tắc bảo trì bộ tài liệu
 

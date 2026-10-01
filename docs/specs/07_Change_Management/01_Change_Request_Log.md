@@ -22,7 +22,7 @@ Draft → Submitted → Impact assessed → Approved/Rejected/Deferred → Imple
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | CR-001 | HIST | UC-D19 | Report/notification/lỗi dễ bị đồng nhất | Giữ nguồn report, case liên kết, không gộp tự động GPS | Tránh mất nguồn, sửa trùng, lộ ownership | FR-11/12/25/34; PA01–03; Data Dictionary §9.3 | P1/P2/FE; vừa |
 | CR-002 | HIST | UC-D20 | Severity lẫn urgency, gợi ý tự đổi ưu tiên | Hai trục; PM quyết định và giữ thứ tự | Đúng quyền điều phối | FR-14; US-34; SC14 | P1/P2/FE; vừa |
-| CR-003 | HIST | UC-D21 | Lỗi nhỏ trong đợt gom có thể sửa ngay | Batch chỉ đo; sửa do PM giao sau, Q01 mở | Tối ưu chuyến đo không cấp thêm quyền | FR-16/17/20; US-35; TN07 | P1/P2/FE; cao |
+| CR-003 | SUPERSEDED_BY_D02 | UC-D21 | Lỗi nhỏ trong đợt gom có thể sửa ngay | Batch chỉ đo; PM giao task sửa riêng sau đo, có thể Fast Track nếu đủ policy; không hồi tố mode | Tối ưu chuyến đo không cấp thêm quyền | FR-16/17/20; US-35; TN07 | P1/P2/FE; cao |
 | CR-004 | HIST | UC-D22 | Policy/nhánh quyền chưa rõ | PM lập policy; PM block; ngoài nhiệm vụ chỉ ghi nhận | Fast Track có điều kiện thực | FR-15/18; US-33; Q02/03 | P1/P2/Android; cao |
 | CR-005 | HIST | UC-D23 | Offline bị hiểu là phải chờ server hoặc tự hết hạn | Tác nghiệp snapshot không timeout nghiệp vụ; sync conflict | Không mất khả năng hiện trường/dữ liệu | FR-22; US-02; Q04/17 | P1/P2/Android; cao |
 | CR-006 | HIST | UC-D24 | BEFORE phải chụp mới, đo thiếu ảnh có thể chấp nhận | Tái dùng ảnh nguồn phù hợp; đo thiếu dữ liệu không hợp lệ | Bằng chứng đủ và trung thực | FR-17/21; US-13/20; Q05/06 | P1/P2/Android; vừa |
@@ -74,3 +74,7 @@ Checklist impact: quyền thay đổi? dữ liệu cũ thế nào? thiết bị 
 ## REVIEW-01 — 27/09/2026, rà soát đồng bộ tài liệu
 
 CR-REV-01 technical draft: auth401 codes + login/refresh responses; regeneration schema/types; owner BE/FE review. CR-REV-02 tooling: enforce hash equality/lock trước validate và codegen, CI command được cung cấp chưa tích hợp repository thật. CR-REV-03 clarification: FR-16 tách BR-09/BR-10, FR-15/18/22 và RTM/UAT gắn acceptance gates. CR-REV-04 proposal: evaluation sync amendment chưa active, không tự quyết định Q. Không có phê duyệt nghiệp vụ hoặc estimate/deadline mới được cung cấp.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

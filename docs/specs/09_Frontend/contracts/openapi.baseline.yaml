@@ -1,9 +1,11 @@
 openapi: 3.1.1
 info:
   title: RoadGuard — Proposed API Contract R3
-  version: 0.1.1-draft-review1
-  description: Thiết kế đề xuất dựa trên tài liệu R3; chưa đối chiếu repo. Không coi CONDITIONAL/Q là đã duyệt. Xem Auth/Sequence/Error
-    trước codegen. API wire enums không được dùng thay số enum database.
+  version: 0.2.0-draft-alignment
+  description: Thiết kế canonical sau alignment 28/09/2026. Business decisions đã chốt được phản ánh với trạng thái riêng; wire contract vẫn draft/proposed và chưa triển khai runtime. Xem decision register, Auth/Sequence/Error trước codegen. API wire enums không thay số enum database.
+x-contract-status: PROPOSED_DELTA
+x-business-decision-source: planning/V2/V2-3_DECISION_REGISTER.md
+x-runtime-status: NOT_ENABLED
 servers:
 - url: /api/v1
   description: Relative base URL; chưa có môi trường triển khai.
@@ -234,7 +236,7 @@ paths:
   /auth/reporter-registrations:
     post:
       operationId: registerReporter
-      summary: Đăng ký Reporter Gmail
+      summary: Đăng ký Reporter bằng email
       tags:
       - auth
       x-roles: *id001
@@ -242,7 +244,7 @@ paths:
       x-fr:
       - FR-03
       x-readiness: PROPOSED_CONTRACT
-      description: Đăng ký Reporter Gmail
+      description: Đăng ký Reporter bằng email và xác minh OTP một lần.
       responses:
         '202':
           description: Đã nhận bền vững; chưa hoàn tất xử lý.
@@ -2228,7 +2230,7 @@ paths:
       x-fr:
       - FR-25
       x-readiness: PROPOSED_CONTRACT
-      description: Không có endpoint công bố từng phần trước Q08; Reporter chỉ nhận projection.
+      description: 'D10: PM có thể công bố từng defect đã đạt cho đúng Reporter liên quan dù case tổng còn mở. Selector/projection là draft; không lộ nguồn Reporter khác và chưa tuyên bố runtime enabled.'
       responses:
         '200':
           description: Thành công; trạng thái nghiệp vụ ở payload.
@@ -2909,8 +2911,10 @@ paths:
       x-fr:
       - FR-15
       x-readiness: CONDITIONAL
-      description: 'Vai trò PM activate là đề xuất; fail closed POLICY_NOT_CONFIGURED trước khi Q02/Q03 chốt; không tự thêm
-        Supervisor gate. Điều kiện chưa chốt: Q02/Q03.'
+      description: 'Supervisor ban hành khung công ty; PM activate trong giới hạn khung và project profile. Fail closed POLICY_NOT_CONFIGURED khi thiếu hồ sơ/ngưỡng kỹ thuật; không thêm duyệt từng sửa Fast Track. D03 đã chốt quyền, D04/E vẫn yêu cầu căn cứ method.'
+      x-open-decisions:
+      - D03
+      - D04
       responses:
         '200':
           description: Thành công; trạng thái nghiệp vụ ở payload.
@@ -5318,8 +5322,10 @@ paths:
       x-fr:
       - FR-29
       x-readiness: PROPOSED_CONTRACT
-      description: Không public network mặc định; service token audience/attempt binding; dedup callback; raw+schema+checksum
-        kiểm trước publish result.
+      description: 'Không public network mặc định; service identity audience/attempt binding; dedup callback; raw+schema+checksum kiểm trước ingest. Callback không phải FE endpoint và không cấp quyền ghi nghiệp vụ trực tiếp. PM trigger pipeline; artifact VERIFIED mới cho phép bước matching.'
+      x-open-decisions:
+      - D12
+      - D13
       responses:
         '200':
           description: Thành công; trạng thái nghiệp vụ ở payload.
@@ -7547,7 +7553,7 @@ components:
         email:
           type: string
           format: email
-          description: Server chỉ cho gmail.com/googlemail.com theo CN11.
+          description: Email hợp lệ; không giới hạn nhà cung cấp email.
         password: *id012
         displayName: *id012
         reporterType: *id012
@@ -8817,10 +8823,21 @@ components:
         afterFileIds:
           type: array
           items: *id004
+        defectIds:
+          type: array
+          items: *id004
+          minItems: 1
+          description: D10 selector các defect đã đạt để công bố một phần; Report-Defect authorization được kiểm ở runtime.
+        reportIds:
+          type: array
+          items: *id004
+          minItems: 1
+          description: Reporter projection targets; không được chứa nguồn của Reporter khác.
       required:
       - publicMessage
       - afterFileIds
-      description: Chỉ toàn case Verified đủ điều kiện nền; partial publication Q08 chưa hỗ trợ.
+      - defectIds
+      description: D10 partial publication draft; requires Report-Defect mapping/public projection and remains PROPOSED_DELTA until implementation/tests.
     EmergencyCreate:
       type: object
       additionalProperties: false
@@ -9286,7 +9303,7 @@ components:
             maximum: 1
           minItems: 4
           maxItems: 4
-          description: '[x,y,width,height] normalized; server also checks x+w<=1,y+h<=1.'
+          description: '[x,y,width,height] normalized; server also checks x+w<=1,y+h<=1. Happy-path fixture dùng [0.1,0.2,0.3,0.4]; [1,1,1,1] chỉ là negative geometry.'
         estimatedPosition:
           $ref: '#/components/schemas/Position'
       required:
@@ -9341,7 +9358,7 @@ components:
       required:
       - decision
       - reason
-      description: 'PM duyệt nhãn; GAP-01: FR36 trace cần được bổ sung trước freeze.'
+      description: '34A: PM duyệt/từ chối nhãn trong project; chỉ APPROVE mới được export training; AI không tự duyệt. Wire/runtime permission still requires verification.'
     ValidationPair:
       type: object
       additionalProperties: false
@@ -9465,17 +9482,44 @@ components:
       - expectedVersion
       - capturedAt
       - payload
+    SyncFastTrackEvaluate:
+      type: object
+      additionalProperties: false
+      properties:
+        operationId: *id004
+        kind:
+          type: string
+          const: FAST_TRACK_EVALUATE
+        taskId: *id004
+        expectedVersion: *id013
+        capturedAt: *id011
+        measurementSessionId: *id004
+        localEvaluationId: *id004
+        payload:
+          $ref: '#/components/schemas/EvaluationRequest'
+      required:
+      - operationId
+      - kind
+      - taskId
+      - expectedVersion
+      - capturedAt
+      - measurementSessionId
+      - localEvaluationId
+      - payload
+      description: D02/D07 offline evaluation after measurement. This is a proposed contract extension; server replay must recheck task/policy snapshot and current authority before APPLIED.
     SyncOperation:
       oneOf:
       - $ref: '#/components/schemas/SyncMeasurement'
       - $ref: '#/components/schemas/SyncStart'
       - $ref: '#/components/schemas/SyncAttemptSubmit'
+      - $ref: '#/components/schemas/SyncFastTrackEvaluate'
       discriminator:
         propertyName: kind
         mapping:
           INSPECTION_SUBMIT: '#/components/schemas/SyncMeasurement'
           REPAIR_START: '#/components/schemas/SyncStart'
           REPAIR_SUBMIT: '#/components/schemas/SyncAttemptSubmit'
+          FAST_TRACK_EVALUATE: '#/components/schemas/SyncFastTrackEvaluate'
     SyncBatch:
       type: object
       additionalProperties: false
@@ -9490,7 +9534,7 @@ components:
       required:
       - deviceId
       - operations
-      description: 100 là giới hạn đề xuất contract; xử lý theo thứ tự, transaction từng operation. Đồng bộ file đã VERIFIED
+      description: Proposed contract extension for D02/D07. Process in dependency order with per-operation receipts; ACK only after durability. Legacy clients with three kinds remain compatible until schema/runtime rollout is approved.
         trước. Thực hiện phase submit sau khi đã map local→server ID từ start response.
     SyncOutcome:
       type: object

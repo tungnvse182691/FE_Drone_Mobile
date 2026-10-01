@@ -28,7 +28,7 @@ for name in ['Error401','LoginError401','RefreshError401']:
   assert ex['value']['code']==code and ex['value']['retryable'] is False
   assert (r['x-client-actions'][code]=='SINGLE_FLIGHT_REFRESH_ONCE')==(code=='TOKEN_EXPIRED')
 results.append({'test':'auth_response_mapping_and_refresh_allowlist','result':'PASS'})
-assert len(a['components']['schemas']['SyncOperation']['oneOf'])==3
-assert all('FAST_TRACK_EVALUATE' not in str(x) for x in a['components']['schemas']['SyncOperation']['oneOf'])
-results.append({'test':'unapproved_sync_kind_not_enabled','result':'PASS'})
+assert len(a['components']['schemas']['SyncOperation']['oneOf'])==4
+assert 'FAST_TRACK_EVALUATE' in str(a['components']['schemas']['SyncOperation'])
+results.append({'test':'fast_track_evaluate_contract_is_explicitly_drafted','result':'PASS','runtime_enabled':False})
 print(json.dumps(results,indent=2))

@@ -2,7 +2,7 @@
 
 **Phiên bản:** TECH-R3-2026-09-26-v1 • **Trạng thái:** thiết kế đề xuất dựa trên bộ RoadGuard R3. Chưa có repository, ERD hiện hành, OpenAPI thực tế hoặc môi trường chạy để đối chiếu. Không khẳng định endpoint/code/transaction dưới đây đã được triển khai.
 
-**Ưu tiên nguồn:** quyết định CHỐT/KẾ THỪA trong bộ tài liệu R3 giữ nguyên; chi tiết kỹ thuật mới cần P1/P2/FE/AI review. Q01–Q18 giữ mở theo Mô tả dự án §21. Không tự sửa enum số, chuyển DB, nâng framework hoặc đổi trạng thái Done từ các bản thiết kế này.
+**Ưu tiên nguồn:** [decision register V2](../../../../planning/V2/V2-3_DECISION_REGISTER.md) áp dụng D01-D28 và 32-44; nhãn OPEN lịch sử chỉ còn hiệu lực cho gate được register giữ lại. Chi tiết wire/state mới vẫn cần review; không tự sửa enum số, chuyển DB, nâng framework hoặc đổi runtime/Done từ thiết kế này.
 
 ## 6.1 Ranh giới transaction
 
@@ -211,3 +211,7 @@ sequenceDiagram
 | Xóa tệp approved nhưng hold xuất hiện | Chặn trước effect; không coi approve là execute | Recheck hold trong serialization/lock quyết định delete, fail BLOCKED; object version/backup theo retention |
 
 Để tránh race hold-vs-delete, job và API hold phải dùng cùng khóa/transaction trạng thái deletion gate; chỉ authorization cấp deletion lease khi không hold. Chính sách khả năng phục hồi object sau effect cần Ops/P2 chốt; không hứa rollback physical delete bằng SQL rollback. Không có sequence thanh toán vì thanh toán không thuộc scope RoadGuard.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

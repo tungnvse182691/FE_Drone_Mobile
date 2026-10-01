@@ -86,11 +86,11 @@ Trong đợt gom nhiều lỗi, Crew đo/chụp rồi báo PM, không tự sửa
 
 ### BR-10 — Một tuần không tự cấp quyền
 
-**Trạng thái:** ĐỀ XUẤT. **Truy vết:** US-35.
+**Trạng thái:** CHỐT 32A. **Truy vết:** US-35; D02/32A.
 
-Khoảng một tuần hỗ trợ PM gom việc; số report mới không tự đổi loại nhiệm vụ đang giao.
+PM tự gom đợt đo; hệ thống nhắc PM rà soát hằng tuần. Reminder không tự tạo/giao task, không tự cấp quyền sửa và không đổi mode nhiệm vụ đang giao.
 
-**Điều kiện kiểm chứng:** Việc đã giao đo-và-sửa không bị client tự đổi chỉ vì thêm report.
+**Điều kiện kiểm chứng:** Reminder xuất hiện đúng cấu hình nhưng không tạo batch/task; việc đã giao không bị client tự đổi chỉ vì thêm report.
 
 ### BR-11 — Người lập policy
 
@@ -416,8 +416,12 @@ PM lập/giao việc không xóa gate phê duyệt APPROVAL_TRACK. Crew tự đ�
 
 ## 5. Điểm chờ quyết định
 
-Dùng cùng danh sách Q01–Q18 tại RoadGuard_Mo_Ta_Chi_Tiet_Du_An.md §21. Các điểm trực tiếp ảnh hưởng luật: nhánh của lỗi nhỏ sửa sau đợt gom (Q01), quyền phát hành policy (Q02), nội dung/hạn mức (Q03), xung đột offline (Q04), đo lại cả đợt hay phần thiếu (Q05), mất BEFORE (Q06), mở lại hồ sơ Supervisor (Q07), công bố từng phần (Q08), bán kính gộp (Q09), dữ liệu tấm (Q10), tiêu chí SRT/coverage (Q11). Không hỏi lại việc sửa ngoại tuyến vô thời hạn đã được chốt.
+Dùng crosswalk tại Mô tả dự án §21 và [decision register](../../../../planning/V2/V2-3_DECISION_REGISTER.md). Q01/Q02/Q04-Q12 đã có quyết định nghiệp vụ D02-D10/D12/D14-D16; không hỏi lại. Q03 còn hồ sơ/ngưỡng method; Q11/Q13/Q14 còn calibration/bytes/CRS và kiểm chứng thực địa. Wire schema/test chưa xong vẫn là gate riêng, không biến ngược thành business OPEN.
 
 ## 6. Quản lý thay đổi
 
 Thay BR phải ghi nguồn quyết định, phiên bản trước/sau, đối tượng bị ảnh hưởng và hiệu lực. Không đánh giá lại lịch sử bằng policy mới rồi ghi đè kết luận cũ. RoadGuard_UseCase_Change_Log.md là log bàn giao P1/P2; tài liệu này là sổ luật hiện hành trong thiết kế mục tiêu, không thay worklog backend.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

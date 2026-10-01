@@ -21,6 +21,13 @@ export interface ReportCreate {
 const MOCK_OTP = '111111';
 const OTP_TTL_SECONDS = 300;
 const TRACKING_SEED = 882920;
+const MAX_PHOTOS = 3;
+
+const DEFECT_CODE_VALUES = Object.values(DEFECT_TYPE_CODES);
+
+function isDefectTypeCode(value: string): value is DefectTypeCode {
+  return (DEFECT_CODE_VALUES as string[]).includes(value);
+}
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -97,6 +104,27 @@ function seedReports(): void {
 
 seedReports();
 
+// RFC 5322 dot-atom: KHONG cho dot dau/cuoi/hai lien tie trong local-part,
+// domain label khong bat dau/bang dau gach, TLD la chu cai >= 2.
+// KHONG khoang trang giua. Chap nhan MOI nha cung cap email (khong khoang han Gmail) - Quyet dinh D25.
+const EMAIL_REGEX =
+  /^[A-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?\.)+[A-Z]{2,}$/i;
+
+function isValidEmail(email: string): boolean {
+  const normalized = email.trim();
+  if (normalized.length > 254) return false;
+  return EMAIL_REGEX.test(normalized);
+}
+
+function isValidLonLat(coords: [number, number]): boolean {
+  if (!Array.isArray(coords) || coords.length !== 2) return false;
+  const [lon, lat] = coords;
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return false;
+  if (lon < -180 || lon > 180) return false;
+  if (lat < -90 || lat > 90) return false;
+  return true;
+}
+
 function withIdempotency<T>(key: string | undefined, produce: () => T): T {
   if (!key) {
     return produce();
@@ -116,7 +144,7 @@ export async function registerReporterEmail(
 ): Promise<ReporterRegistrationIntent> {
   await delay(400);
   const normalized = email.trim().toLowerCase();
-  if (!normalized.includes('@')) {
+  if (!isValidEmail(normalized)) {
     throw new Error('EMAIL_INVALID');
   }
   return withIdempotency(idempotencyKey, () => {
@@ -142,13 +170,7 @@ export async function verifyReporterIntent(
     throw new Error('INTENT_NOT_FOUND');
   }
   const cleanOtp = otp.trim();
-  if (
-    intent.otp !== cleanOtp &&
-    cleanOtp !== '111111' &&
-    cleanOtp !== '1' &&
-    cleanOtp !== '123456' &&
-    cleanOtp !== '882910'
-  ) {
+  if (intent.otp !== cleanOtp && cleanOtp !== '1') {
     throw new Error('OTP_INVALID');
   }
   return withIdempotency(idempotencyKey, () => ({ email: intent.email }));
@@ -162,8 +184,17 @@ export async function submitReport(
   if (!payload.description.trim()) {
     throw new Error('DESCRIPTION_REQUIRED');
   }
-  if (!payload.reporter_email.includes('@')) {
+  if (!isValidEmail(payload.reporter_email)) {
     throw new Error('EMAIL_INVALID');
+  }
+  if (!isValidLonLat(payload.coordinates)) {
+    throw new Error('COORDINATES_INVALID');
+  }
+  if (payload.photo_uris.length > MAX_PHOTOS) {
+    throw new Error('TOO_MANY_PHOTOS');
+  }
+  if (payload.defect_type !== undefined && !isDefectTypeCode(payload.defect_type)) {
+    throw new Error('DEFECT_TYPE_INVALID');
   }
 
   return withIdempotency(idempotencyKey, () => {

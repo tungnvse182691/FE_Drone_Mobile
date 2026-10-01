@@ -163,7 +163,7 @@ Hoàng Hải Field (RoadGuard) là app di động dành cho đội ngũ hiện t
 App phục vụ **3 nhóm người dùng hiện trường**:
 1. **Repair Crew (Kỹ thuật viên sửa chữa):** Tiếp nhận công việc, xem chế độ `INSPECT_AND_REPAIR` / `MEASURE_ONLY`, tự đánh giá `FastTrackPolicyVersion` để sửa nhanh tại chỗ, chụp ảnh BEFORE/AFTER và đồng bộ ngoại tuyến SQLite.
 2. **Drone Operator (Phi công):** Nhận lệnh bay, dẫn đường GPS đến Điểm tiếp cận / Điểm tập kết (Access Point), tải dữ liệu ảnh/video 4K RGB từ thẻ nhớ SD.
-3. **Reporter (Người dân & Đại diện Ban QLDA):** Đăng nhập xác thực OTP Gmail, gửi phản ánh kèm GPS + 3 ảnh, tra cứu tiến độ công khai qua mã tracking, đánh giá chất lượng nghiệm thu 1–5 sao.
+3. **Reporter (Người dân & Đại diện Ban QLDA):** Đăng ký/xác thực OTP Email (RFC 5322, theo D25), gửi phản ánh kèm GPS + 3 ảnh, tra cứu tiến độ công khai qua mã tracking, đánh giá chất lượng nghiệm thu 1–5 sao.
 
 Giao diện tuân thủ triết lý **minimalism thực dụng**: mỗi màn hình chỉ hiển thị đúng thông tin cần để ra quyết định hoặc thực hiện một hành động, không có chi tiết trang trí thừa. Vàng đồng thương hiệu `#C9A227` chỉ xuất hiện ở đúng nơi cần thu hút chú ý (hành động chính, tab active, KPI).
 
@@ -238,7 +238,7 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 
 ---
 
-## Accessibility & Trạng thái UI (theo `27_9_V3/10_FE_Architecture_UI_States.md`)
+## Accessibility & Trạng thái UI (theo `29_9/09_Frontend/10_FE_Architecture_UI_States.md`)
 
 ### Quy tắc bắt buộc
 - **Label tiếng Việt sát input/field:** Không dùng placeholder thay label; unit đặt cạnh ô nhập (vd: `Diện tích (m²)`).

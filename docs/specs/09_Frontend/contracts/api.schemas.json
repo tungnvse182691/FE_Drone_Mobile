@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:roadguard:api:fe-r3-v1",
   "title": "RoadGuard API definitions from proposed R3 baseline",
-  "$comment": "Select a DTO using a root $ref into $defs; this bundle root alone does not validate a DTO. Source SHA256 dbde8b756bbc1bf83dabfbfe395eb11e53b378e7338815b1f3ca019aa7f3f806",
+  "$comment": "Select a DTO using a root $ref into $defs; this bundle root alone does not validate a DTO. Source SHA256 dd991f20c9a27a564bf37c06bba63776424b770f3abfa54ec2bef9d1a1e678bd",
   "$defs": {
     "ErrorDetail": {
       "type": "object",
@@ -262,7 +262,7 @@
         "email": {
           "type": "string",
           "format": "email",
-          "description": "Server chỉ cho gmail.com/googlemail.com theo CN11."
+          "description": "Email hợp lệ; không giới hạn nhà cung cấp email."
         },
         "password": {
           "type": "string",
@@ -2615,13 +2615,32 @@
             "type": "string",
             "format": "uuid"
           }
+        },
+        "defectIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "description": "D10 selector các defect đã đạt để công bố một phần; Report-Defect authorization được kiểm ở runtime."
+        },
+        "reportIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "minItems": 1,
+          "description": "Reporter projection targets; không được chứa nguồn của Reporter khác."
         }
       },
       "required": [
         "publicMessage",
-        "afterFileIds"
+        "afterFileIds",
+        "defectIds"
       ],
-      "description": "Chỉ toàn case Verified đủ điều kiện nền; partial publication Q08 chưa hỗ trợ."
+      "description": "D10 partial publication draft; requires Report-Defect mapping/public projection and remains PROPOSED_DELTA until implementation/tests."
     },
     "EmergencyCreate": {
       "type": "object",
@@ -3407,7 +3426,7 @@
           },
           "minItems": 4,
           "maxItems": 4,
-          "description": "[x,y,width,height] normalized; server also checks x+w<=1,y+h<=1."
+          "description": "[x,y,width,height] normalized; server also checks x+w<=1,y+h<=1. Happy-path fixture dùng [0.1,0.2,0.3,0.4]; [1,1,1,1] chỉ là negative geometry."
         },
         "estimatedPosition": {
           "$ref": "#/$defs/Position"
@@ -3491,7 +3510,7 @@
         "decision",
         "reason"
       ],
-      "description": "PM duyệt nhãn; GAP-01: FR36 trace cần được bổ sung trước freeze."
+      "description": "34A: PM duyệt/từ chối nhãn trong project; chỉ APPROVE mới được export training; AI không tự duyệt. Wire/runtime permission still requires verification."
     },
     "ValidationPair": {
       "type": "object",
@@ -3736,6 +3755,55 @@
         "payload"
       ]
     },
+    "SyncFastTrackEvaluate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "kind": {
+          "type": "string",
+          "const": "FAST_TRACK_EVALUATE"
+        },
+        "taskId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expectedVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque concurrency version; không parse thành số ở client."
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "measurementSessionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "localEvaluationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "payload": {
+          "$ref": "#/$defs/EvaluationRequest"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "taskId",
+        "expectedVersion",
+        "capturedAt",
+        "measurementSessionId",
+        "localEvaluationId",
+        "payload"
+      ],
+      "description": "D02/D07 offline evaluation after measurement. This is a proposed contract extension; server replay must recheck task/policy snapshot and current authority before APPLIED."
+    },
     "SyncOperation": {
       "oneOf": [
         {
@@ -3746,6 +3814,9 @@
         },
         {
           "$ref": "#/$defs/SyncAttemptSubmit"
+        },
+        {
+          "$ref": "#/$defs/SyncFastTrackEvaluate"
         }
       ],
       "discriminator": {
@@ -3753,7 +3824,8 @@
         "mapping": {
           "INSPECTION_SUBMIT": "#/$defs/SyncMeasurement",
           "REPAIR_START": "#/$defs/SyncStart",
-          "REPAIR_SUBMIT": "#/$defs/SyncAttemptSubmit"
+          "REPAIR_SUBMIT": "#/$defs/SyncAttemptSubmit",
+          "FAST_TRACK_EVALUATE": "#/$defs/SyncFastTrackEvaluate"
         }
       }
     },
@@ -3778,7 +3850,7 @@
         "deviceId",
         "operations"
       ],
-      "description": "100 là giới hạn đề xuất contract; xử lý theo thứ tự, transaction từng operation. Đồng bộ file đã VERIFIED trước. Thực hiện phase submit sau khi đã map local→server ID từ start response."
+      "description": "Proposed contract extension for D02/D07. Process in dependency order with per-operation receipts; ACK only after durability. Legacy clients with three kinds remain compatible until schema/runtime rollout is approved. trước. Thực hiện phase submit sau khi đã map local→server ID từ start response."
     },
     "SyncOutcome": {
       "type": "object",

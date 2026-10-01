@@ -63,7 +63,7 @@ Tiền điều kiện chung: FX-01, build kiểm thử, scope đúng, đối tư
 
 **Trace:** FR-03; US-27; CN11 CN12. **Ưu tiên:** P1. **Phụ thuộc:** phạm vi module đã được giao.
 
-**Dữ liệu/tiền điều kiện:** Gmail, thông tin Reporter, mật khẩu và OTP. OTP sai/hết hạn hoặc client chọn PM.
+**Dữ liệu/tiền điều kiện:** Email hợp lệ, thông tin Reporter, mật khẩu và OTP. OTP sai/hết hạn hoặc client chọn PM.
 
 1. Mở đúng màn hình/chức năng với vai trò được phép; ghi ID và version ban đầu.
 2. Xác minh/đăng ký.
@@ -819,7 +819,7 @@ Với AC có Given/When/Then, thiết lập Given, thực hiện When, kiểm t�
 **Oracle từ nguồn:**
 
 **Tạo đăng ký pending**
-   - **When** người dùng gửi Gmail hợp lệ (`gmail.com` hoặc `googlemail.com`), display name, `ReporterType`, mật khẩu, confirm password và idempotency key
+   - **When** người dùng gửi email hợp lệ, display name, `ReporterType`, mật khẩu, confirm password và idempotency key
    - **Then** hệ thống tạo hoặc tiếp tục một registration intent với `User.status = PENDING`, `role_code = REPORTER`, `email_confirmed = false`; không cấp access/refresh token.
 
 **Thực hiện:** (1) ghi fixture/role/version theo điều kiện trên; (2) thao tác chức năng hoặc nhánh When; (3) kiểm từng kết quả và biến thể được nêu, đọc lại dữ liệu/lịch sử theo quyền; (4) ghi Actual, evidence và defect ID nếu lệch. Chưa có actual.
@@ -929,7 +929,7 @@ Với AC có Given/When/Then, thiết lập Given, thực hiện When, kiểm t�
 
 **Oracle từ nguồn:**
 
-**Given** PM đã đổi nhiệm vụ nhưng máy chưa nhận; **When** sync bản cũ; **Then** [ĐỀ XUẤT Q04] giữ snapshot/bằng chứng, báo xung đột cho PM, không last-write-wins.
+**Given** PM đã đổi nhiệm vụ nhưng máy chưa nhận; **When** sync bản cũ; **Then** theo D05 giữ snapshot/bằng chứng, báo conflict cho PM, không last-write-wins hoặc tự nghiệm thu.
 
 **Thực hiện:** (1) ghi fixture/role/version theo điều kiện trên; (2) thao tác chức năng hoặc nhánh When; (3) kiểm từng kết quả và biến thể được nêu, đọc lại dữ liệu/lịch sử theo quyền; (4) ghi Actual, evidence và defect ID nếu lệch. Chưa có actual.
 
@@ -1443,7 +1443,7 @@ Supervisor (Admin) chỉ xuất tập đã duyệt, kèm phiên bản và quyề
 
 **Oracle từ nguồn:**
 
-**Given** đội cũ ngoại tuyến; **When** định giao cùng phạm vi; **Then** [ĐỀ XUẤT Q04] cần xác nhận dừng/bàn giao, không tự coi lệnh thu hồi đã nhận.
+**Given** đội cũ ngoại tuyến; **When** định giao cùng phạm vi; **Then** theo D05 cần xác nhận dừng/bàn giao trước khi đội mới start, không tự coi lệnh thu hồi đã nhận.
 
 **Thực hiện:** (1) ghi fixture/role/version theo điều kiện trên; (2) thao tác chức năng hoặc nhánh When; (3) kiểm từng kết quả và biến thể được nêu, đọc lại dữ liệu/lịch sử theo quyền; (4) ghi Actual, evidence và defect ID nếu lệch. Chưa có actual.
 
@@ -2402,7 +2402,7 @@ Sau khi dự án đóng, Supervisor/PM vẫn tra cứu được hồ sơ trong p
 
 **Oracle từ nguồn:**
 
-**Given** PM có số đo/ảnh; **When** lập và giao sửa; **Then** hành động riêng sau đo, thứ tự do PM, nhánh theo quyết định; Fast Track sau gom Q01 còn mở.
+**Given** PM có số đo/ảnh đạt; **When** lập và giao sửa; **Then** tạo task sửa riêng sau đo; có thể Fast Track nếu đủ policy/quyền; không đổi hồi tố batch MEASURE_ONLY.
 
 **Thực hiện:** (1) ghi fixture/role/version theo điều kiện trên; (2) thao tác chức năng hoặc nhánh When; (3) kiểm từng kết quả và biến thể được nêu, đọc lại dữ liệu/lịch sử theo quyền; (4) ghi Actual, evidence và defect ID nếu lệch. Chưa có actual.
 
@@ -2620,4 +2620,8 @@ Tỷ lệ pass = Pass / test áp dụng đã duyệt, báo riêng Blocked/Not ru
 
 ## REVIEW-01 — Gate cho nghiệm thu
 
-TC-F16/US-35: nghiệm thu core theo BR-09; phần BR-10 đề xuất chưa là gate bắt buộc đã phê duyệt. TC-F15/18: Q02/Q03 chưa chốt thì chưa nghiệm thu activate/evaluate policy production. TC-F22 và các UAT conflict/bàn giao: BLOCKED_BY_DECISION Q04/Q17; không đổi NOT_RUN thành PASS chỉ vì giữ được local queue. Chỉ nghiệm thu toàn luồng sau quyết định có owner/approval và provider/device tests pass. Các test core không phụ thuộc quyết định vẫn có thể chạy, ghi phạm vi rõ.
+TC-F16/US-35: nghiệm thu core theo BR-09; BR-10 là nhắc rà soát hằng tuần và PM tự gom, không auto tạo/giao/quyền sửa. TC-F15/18: D03 đã chốt boundary Supervisor/PM nhưng activate/evaluate vẫn fail closed khi thiếu hồ sơ/ngưỡng method. TC-F22 và các UAT conflict/bàn giao: D05/D06 đã chốt quy tắc, còn test conflict/rescue và provider/device evidence là NOT_RUN; không đổi NOT_RUN thành PASS chỉ vì giữ được local queue. Chỉ nghiệm thu toàn luồng sau quyết định có owner/approval và provider/device tests pass. Các test core không phụ thuộc quyết định vẫn có thể chạy, ghi phạm vi rõ.
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.

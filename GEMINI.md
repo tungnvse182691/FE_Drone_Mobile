@@ -26,7 +26,7 @@
 - **Platform Scope (3 Field Roles ONLY)**:
   1. `REPAIR_CREW` (`(crew)`): Tiếp nhận việc, đo kích thước 3D, tự sửa nhanh Fast Track tại chỗ, chụp ảnh BEFORE/AFTER, dẫn đường WGS84.
   2. `DRONE_OPERATOR` (`(drone)`): Khảo sát bay, dẫn đường tới Điểm tiếp cận (Access Point), upload video 4K RGB từ thẻ nhớ SD.
-  3. `REPORTER` (`(reporter)`): Người dân & Ban QLDA phản ánh: xác thực OTP Gmail 6 số, gửi GPS + 3 ảnh, tra cứu tiến độ 5 bước, đánh giá 1–5 sao.
+  3. `REPORTER` (`(reporter)`): Người dân & Ban QLDA phản ánh: xác thực OTP qua Email (RFC 5322, không giới hạn domain theo D25) 6 số, gửi GPS + 3 ảnh, tra cứu tiến độ 5 bước, đánh giá 1–5 sao.
   *(Lưu ý: Màn hình PM và Supervisor thuộc Web Dashboard, được chuyển lưu trữ tại `archive/web-screens/`)*.
 - **Technical Standards**:
   - Tiêu chuẩn đường: **TCVN 10380:2014** (Đường bê tông nông thôn / BTXM).

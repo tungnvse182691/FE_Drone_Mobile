@@ -71,3 +71,7 @@ UI success dùng từ cụ thể: “Đã lưu trên máy”, “Đã gửi”, 
 ## 6. Điều kiện retry và logging
 
 `retryable:true` không tự cho phép replay mutation bất kỳ. Cần thêm safe method hoặc key/dedup đã chốt, payload bất biến, quyền hợp lệ và budget. Log gồm HTTP status, code, operation kind, traceId, attempt, latency; redact body PII/credentials/URL. Error catalog được version cùng contract; unknown code có fallback nhưng telemetry báo drift. Chi tiết timeout/rate-limit xem [mục08](08_Rate_Limit_Timeout_Retry.md).
+
+## V2(3) amendment — 2026-09-28
+
+This document follows `planning/V2/V2-3_DECISION_REGISTER.md`. D01-D28 are approved business decisions; `APPROVED_PILOT_CONFIG` and `APPROVED_TARGET` are not empirical verification. The document must distinguish `contractStatus`, `implementationStatus`, and `verificationStatus`. Reporter email/password plus one-time email OTP is the approved authentication flow; web cookie transport, pilot limits, retention and performance values remain configuration/target registers. Fast Track uses measurement-only intake followed by a separately authorized PM repair task; policy framework, reopen, partial publication, handover/conflict, BEFORE incident, curing and traffic release remain explicit contracts. Offline evaluation and AI two-stage processing are proposed until schema, fixtures and runtime/provider evidence pass.
