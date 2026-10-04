@@ -285,21 +285,28 @@ export default function CrewSyncScreen() {
       </View>
 
       <Card style={styles.statusCard}>
-        <View style={styles.statusTop}>
-          <View style={styles.statusInfo}>
-            <View style={[styles.statusDot, counts.pending === 0 && styles.statusDotClear]} />
-            <Text style={[typography.labelLg, styles.statusText]}>
+        <View style={styles.statusHero}>
+          <View style={styles.heroIcon}>
+            <MaterialIcons
+              name={counts.pending === 0 ? 'check-circle' : 'sync'}
+              size={28}
+              color={counts.pending === 0 ? colors.success : colors.brandGold}
+            />
+          </View>
+          <View style={styles.heroBody}>
+            <Text style={[typography.titleMd, styles.statusText]}>
               {counts.pending} mục đang chờ đồng bộ
             </Text>
-          </View>
-          <View style={styles.networkRow}>
-            <MaterialIcons name="wifi" size={15} color={colors.success} />
-            <Text style={[typography.labelSm, styles.networkText]}>4G/Wi-Fi kết nối</Text>
+            <View style={styles.networkRow}>
+              <MaterialIcons name="wifi" size={14} color={colors.success} />
+              <Text style={[typography.caption, styles.networkText]}>4G/Wi-Fi kết nối</Text>
+            </View>
           </View>
         </View>
         <Text style={[typography.bodyMd, styles.statusDesc]}>
           Chỉ qua Wi-Fi / 4G khả dụng. Các tác vụ trường hiện trường sẽ được ưu tiên theo thứ tự thực hiện.
         </Text>
+        <View style={styles.heroDivider} />
         <View style={styles.syncBtnWrap}>
           <Button
             variant="primary"
@@ -356,7 +363,7 @@ export default function CrewSyncScreen() {
           <Card style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <MaterialIcons name="verified-user" size={22} color={colors.brandGold} />
+                <MaterialIcons name="verified-user" size={24} color={colors.brandGold} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={[typography.labelLg, styles.infoTitle]}>Bảo toàn dữ liệu ngoại tuyến</Text>
@@ -371,7 +378,7 @@ export default function CrewSyncScreen() {
           <Card style={styles.cacheCard}>
             <View style={styles.cacheRow}>
               <View style={styles.cacheIcon}>
-                <MaterialIcons name="storage" size={22} color={colors.brandGold} />
+                <MaterialIcons name="storage" size={24} color={colors.brandGold} />
               </View>
               <View style={styles.cacheContent}>
                 <Text style={[typography.labelLg, styles.cacheTitle]}>Bộ nhớ đệm hiện trường</Text>
@@ -448,24 +455,25 @@ const styles = StyleSheet.create({
   statusCard: {
     marginBottom: spacing.lg,
   },
-  statusTop: {
+  statusHero: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: spacing.md,
   },
-  statusInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
+  heroIcon: {
+    width: 56,
+    height: 56,
     borderRadius: radius.full,
-    backgroundColor: colors.warning,
+    backgroundColor: '#FEF9E7',
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  statusDotClear: {
-    backgroundColor: colors.success,
+  heroBody: {
+    flex: 1,
+    gap: spacing.xs,
   },
   statusText: {
     color: colors.neutral,
@@ -481,6 +489,11 @@ const styles = StyleSheet.create({
   statusDesc: {
     color: colors.secondary,
     marginTop: spacing.sm,
+  },
+  heroDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginTop: spacing.md,
   },
   syncBtnWrap: {
     marginTop: spacing.md,

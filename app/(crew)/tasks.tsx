@@ -250,6 +250,8 @@ export default function CrewTasksScreen() {
           <View style={styles.taskList}>
             {list.map((task) => {
             const modeChip = TASK_MODE_CHIP[task.task_mode];
+            const railColor =
+              task.task_mode === 'MEASURE_ONLY' ? colors.secondary : colors.success;
             return (
               <Pressable
                 key={task.id}
@@ -259,6 +261,7 @@ export default function CrewTasksScreen() {
                 accessibilityRole="button"
               >
                 <Card style={styles.taskCard}>
+                  <View style={[styles.rail, { backgroundColor: railColor }]} />
                   <View style={styles.taskHeader}>
                     <View style={styles.taskMetaRow}>
                       {task.completedAt ? (
@@ -267,8 +270,8 @@ export default function CrewTasksScreen() {
                         <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
                       )}
                     </View>
-                    <View style={styles.taskDistRow}>
-                      <MaterialIcons name="near-me" size={14} color={colors.secondary} />
+                    <View style={styles.taskDistPill}>
+                      <MaterialIcons name="near-me" size={14} color={colors.brandGold} />
                       <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
                     </View>
                   </View>
@@ -282,32 +285,32 @@ export default function CrewTasksScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.taskDefectRow}>
-                    <Text style={[typography.caption, styles.taskDefect]}>
-                      {defectTypeLabel(task.defect_type_code)}
-                    </Text>
+                  <Text style={[typography.caption, styles.taskDefect]}>
+                    {defectTypeLabel(task.defect_type_code)}
                     {task.batch_size > 1 ? (
-                      <Text style={[typography.caption, styles.taskBatch]}>
-                        Đợt gom {task.batch_size} vị trí
-                      </Text>
+                      <Text style={styles.taskBatch}> • Đợt gom {task.batch_size} vị trí</Text>
                     ) : null}
-                  </View>
+                  </Text>
 
                   <View style={styles.taskFooter}>
-                    <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
-                    <MaterialIcons
-                      name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
-                      size={13}
-                      color={task.due_urgency === 'urgent' ? colors.error : colors.secondary}
-                    />
-                    <Text
-                      style={[
-                        typography.caption,
-                        task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
-                      ]}
-                    >
-                      {task.due_label}
-                    </Text>
+                    <View style={styles.woChip}>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
+                    </View>
+                    <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
+                      <MaterialIcons
+                        name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
+                        size={13}
+                        color={task.due_urgency === 'urgent' ? colors.error : colors.secondary}
+                      />
+                      <Text
+                        style={[
+                          typography.caption,
+                          task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
+                        ]}
+                      >
+                        {task.due_label}
+                      </Text>
+                    </View>
                     <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} />
                   </View>
                 </Card>
@@ -349,20 +352,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   segmentActive: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: colors.primary,
   },
   segmentLabel: {
     color: colors.secondary,
   },
   segmentLabelActive: {
-    color: colors.neutral,
+    color: colors.onPrimary,
   },
   countBadge: {
     minWidth: 20,
@@ -373,7 +369,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countBadgeActive: {
-    backgroundColor: '#FEF9E7',
+    backgroundColor: colors.surface,
   },
   countText: {
     color: colors.secondary,
@@ -408,6 +404,16 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  rail: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
   },
   taskList: {
     paddingBottom: 96,
@@ -424,10 +430,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexShrink: 1,
   },
-  taskDistRow: {
+  taskDistPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexShrink: 0,
   },
   taskDist: {
     color: colors.secondary,
@@ -449,14 +462,9 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.secondary,
   },
-  taskDefectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
   taskDefect: {
-    color: colors.neutral,
+    color: colors.secondary,
+    marginTop: spacing.xs,
   },
   taskBatch: {
     color: colors.warning,
@@ -464,18 +472,37 @@ const styles = StyleSheet.create({
   taskFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  taskDue: {
+  woChip: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: radius.full,
+    backgroundColor: '#FEF9E7',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  duePill: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+  },
+  duePillUrgent: {
+    backgroundColor: '#FDECEC',
+  },
+  taskDue: {
     color: colors.secondary,
   },
   taskDueUrgent: {
-    flex: 1,
     color: colors.error,
   },
   taskChevron: {
