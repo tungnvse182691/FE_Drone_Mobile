@@ -119,8 +119,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   logo: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
   },
   brand: {
     fontFamily: 'Sansation',
