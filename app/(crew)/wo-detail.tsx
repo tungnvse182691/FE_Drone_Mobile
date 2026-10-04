@@ -417,7 +417,7 @@ export default function CrewWoDetailScreen() {
         <View style={styles.quickPresetRow}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Điền mẫu Đạt 1.2m nhân 0.6m nhân 3cm"
+            accessibilityLabel="Điền mẫu đạt policy"
             onPress={() => {
               setLengthText('1.2');
               setWidthText('0.6');
@@ -426,15 +426,13 @@ export default function CrewWoDetailScreen() {
             }}
             style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
           >
-            <MaterialIcons name="flash-on" size={18} color={colors.success} />
-            <Text style={[typography.labelLg, styles.presetTitle]}>Điền mẫu Đạt</Text>
-            <Text style={[typography.caption, styles.presetText]} numberOfLines={1}>
-              1.2m × 0.6m × 3cm
+            <Text style={[typography.caption, styles.presetText]}>
+              Mẫu đạt policy: 1.2m × 0.6m × 3cm
             </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Điền mẫu Vượt 2.5m nhân 1.2m nhân 8cm"
+            accessibilityLabel="Điền mẫu vượt policy"
             onPress={() => {
               setLengthText('2.5');
               setWidthText('1.2');
@@ -443,10 +441,8 @@ export default function CrewWoDetailScreen() {
             }}
             style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
           >
-            <MaterialIcons name="warning" size={18} color={colors.warning} />
-            <Text style={[typography.labelLg, styles.presetTitle]}>Điền mẫu Vượt</Text>
-            <Text style={[typography.caption, styles.presetText]} numberOfLines={1}>
-              2.5m × 1.2m × 8cm
+            <Text style={[typography.caption, styles.presetText]}>
+              Mẫu vượt policy: 2.5m × 1.2m × 8cm
             </Text>
           </Pressable>
         </View>
@@ -476,14 +472,17 @@ export default function CrewWoDetailScreen() {
           </View>
         ) : evaluation.code === 'ELIGIBLE' ? (
           <View style={styles.noticePass}>
-            <Chip variant="policy-pass" label="Đủ điều kiện sửa nhanh — Được phép sửa ngay" uppercase={false} />
+            <Chip variant="policy-pass" label="[Đạt Policy Sửa Nhanh]" uppercase={false} />
           </View>
         ) : evaluation.code === 'NOT_ELIGIBLE' ? (
-          <View style={styles.noticeWarn}>
-            <MaterialIcons name="warning" size={16} color={colors.warning} />
-            <Text style={[typography.caption, styles.noticeWarnText]}>
-              {BUSINESS_ERROR_MESSAGES.FAST_TRACK_NOT_ELIGIBLE}
-            </Text>
+          <View style={styles.noticeFail}>
+            <Chip variant="policy-fail" label="[Vượt Policy - Chuyển PM]" uppercase={false} />
+            <View style={styles.policyGuideRow}>
+              <MaterialIcons name="info-outline" size={14} color={colors.secondary} />
+              <Text style={[typography.caption, styles.policyGuideText]}>
+                Kích thước vượt ngưỡng sửa nhanh; lưu số đo và gửi báo cáo về PM.
+              </Text>
+            </View>
           </View>
         ) : (
           <Text style={[typography.caption, styles.hintText]}>
@@ -730,34 +729,21 @@ const styles = StyleSheet.create({
   },
   quickPresetRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
   presetChip: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    minHeight: 56,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radius.lg,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  presetTitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.neutral,
-    textAlign: 'center',
-  },
   presetText: {
-    fontSize: 11,
-    lineHeight: 15,
     color: colors.secondary,
-    textAlign: 'center',
   },
   areaBox: {
     flexDirection: 'row',
@@ -783,6 +769,20 @@ const styles = StyleSheet.create({
   noticePass: {
     marginTop: spacing.md,
     alignItems: 'flex-start',
+  },
+  noticeFail: {
+    marginTop: spacing.md,
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  policyGuideRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  policyGuideText: {
+    flex: 1,
+    color: colors.secondary,
   },
   noticeWarn: {
     flexDirection: 'row',
