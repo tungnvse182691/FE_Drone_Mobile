@@ -159,6 +159,12 @@ export default function DroneRequestsScreen() {
       <View style={styles.listContainer}>
         {filteredRequests.map((item) => {
           const isOngoing = item.isCurrentTask;
+          const railColor =
+            item.tab === 'pending'
+              ? colors.warning
+              : item.tab === 'ongoing'
+                ? colors.info
+                : colors.success;
           return (
             <Pressable
               key={item.id}
@@ -171,6 +177,7 @@ export default function DroneRequestsScreen() {
               accessibilityRole="button"
             >
               <Card style={[styles.requestCard, isOngoing && styles.requestCardHighlight]}>
+                <View style={[styles.rail, { backgroundColor: railColor }]} />
                 {isOngoing && (
                   <View style={styles.floatingTaskBadge}>
                     <Text style={styles.floatingBadgeText}>NHIỆM VỤ HIỆN TẠI</Text>
@@ -266,7 +273,10 @@ const styles = StyleSheet.create({
   },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
+    alignItems: 'center',
+    height: 44,
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,
     padding: 4,
     marginBottom: spacing.md,
@@ -275,21 +285,20 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 10,
+    height: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.sm,
   },
   tabButtonActive: {
-    backgroundColor: colors.surfaceAlt,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary,
   },
   tabText: {
     ...typography.labelSm,
     color: colors.secondary,
   },
   tabTextActive: {
-    color: colors.primaryDark,
+    color: colors.onPrimary,
     fontWeight: '700',
   },
   sectionHeader: {
@@ -320,6 +329,16 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  rail: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
   },
   requestCardHighlight: {
     borderColor: colors.primary,

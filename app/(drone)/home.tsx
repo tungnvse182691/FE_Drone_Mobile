@@ -222,29 +222,7 @@ export default function DroneHomeScreen() {
 
               <View style={styles.taskContentBox}>
                 <View style={styles.taskBadgeRow}>
-                  <View
-                    style={[
-                      styles.figmaBadge,
-                      {
-                        backgroundColor:
-                          task.chipVariant === 'severity-high' ? '#FDECEC' : '#FEF3E2',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.figmaBadgeText,
-                        {
-                          color:
-                            task.chipVariant === 'severity-high'
-                              ? colors.error
-                              : colors.warning,
-                        },
-                      ]}
-                    >
-                      {task.chipLabel}
-                    </Text>
-                  </View>
+                  <Chip variant={task.chipVariant} label={task.chipLabel} />
                   <Text style={[typography.caption, styles.taskCodeText]}>
                     {task.displayCode}
                   </Text>
@@ -500,6 +478,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   telemetryTagText: {
     color: colors.neutral,
@@ -516,6 +500,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    minHeight: 48,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -564,23 +549,12 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 2,
   },
-  figmaBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  figmaBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
   taskCodeText: {
     color: colors.secondary,
     fontSize: 12,
   },
   taskTitleText: {
     color: colors.neutral,
-    fontWeight: 'bold',
-    fontSize: 15,
   },
   taskSubtitleText: {
     color: colors.secondary,
@@ -595,11 +569,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: radius.md,
     marginBottom: spacing.xl,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
   },
   createTaskBtnText: {
     color: colors.surface,
@@ -674,6 +643,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   choiceChip: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.full,

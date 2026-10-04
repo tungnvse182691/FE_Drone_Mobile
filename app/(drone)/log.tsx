@@ -303,6 +303,12 @@ export default function DroneLogScreen() {
               accessibilityRole="button"
             >
               <Card style={[styles.logCard, log.highlight && styles.logCardHighlight]}>
+                <View
+                  style={[
+                    styles.rail,
+                    { backgroundColor: isProcessing ? colors.info : colors.success },
+                  ]}
+                />
                 {/* Top Row: Code Badge + Timestamp & Status Tag */}
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.badgeTimestampGroup}>
@@ -440,8 +446,7 @@ const styles = StyleSheet.create({
   },
   featuredFlightCard: {
     marginBottom: spacing.sm,
-    backgroundColor: '#FCFCFB',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.primary,
     gap: spacing.xs,
   },
@@ -495,7 +500,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   toggleExpandBtn: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   equipmentRow: {
     gap: 4,
@@ -526,7 +535,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.xs,
+    padding: spacing.sm,
     gap: 2,
   },
   statLabelRow: {
@@ -540,11 +549,10 @@ const styles = StyleSheet.create({
   },
   statMainValue: {
     color: colors.neutral,
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontSize: 16,
   },
   statSubValue: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.secondary,
   },
   flightChecksumBox: {
@@ -592,6 +600,17 @@ const styles = StyleSheet.create({
   logCard: {
     marginBottom: spacing.xs,
     padding: spacing.sm,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  rail: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
   },
   logCardHighlight: {
     borderColor: colors.primary,
@@ -676,8 +695,6 @@ const styles = StyleSheet.create({
   },
   surveyTitle: {
     color: colors.neutral,
-    fontWeight: '700',
-    fontSize: 14,
   },
   locRow: {
     flexDirection: 'row',
