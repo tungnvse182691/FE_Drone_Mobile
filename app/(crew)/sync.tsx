@@ -287,7 +287,7 @@ export default function CrewSyncScreen() {
       <Card style={styles.statusCard}>
         <View style={styles.statusTop}>
           <View style={styles.statusInfo}>
-            <View style={styles.statusDot} />
+            <View style={[styles.statusDot, counts.pending === 0 && styles.statusDotClear]} />
             <Text style={[typography.labelLg, styles.statusText]}>
               {counts.pending} mục đang chờ đồng bộ
             </Text>
@@ -301,7 +301,20 @@ export default function CrewSyncScreen() {
           Chỉ qua Wi-Fi / 4G khả dụng. Các tác vụ trường hiện trường sẽ được ưu tiên theo thứ tự thực hiện.
         </Text>
         <View style={styles.syncBtnWrap}>
-          <Button variant="primary" title="Đồng bộ ngay" loading={syncing} onPress={syncNow} />
+          <Button
+            variant="primary"
+            title="Đồng bộ ngay"
+            loading={syncing}
+            disabled={counts.pending === 0}
+            onPress={syncNow}
+            disabledStyle={styles.syncDisabled}
+            disabledTextStyle={styles.syncDisabledText}
+          />
+          {counts.pending === 0 ? (
+            <Text style={[typography.caption, styles.syncAllDone]}>
+              Dữ liệu hiện trường đã đồng bộ hoàn toàn với máy chủ.
+            </Text>
+          ) : null}
         </View>
       </Card>
 
@@ -343,7 +356,7 @@ export default function CrewSyncScreen() {
           <Card style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
-                <MaterialIcons name="verified-user" size={22} color={colors.secondary} />
+                <MaterialIcons name="verified-user" size={22} color={colors.brandGold} />
               </View>
               <View style={styles.infoContent}>
                 <Text style={[typography.labelLg, styles.infoTitle]}>Bảo toàn dữ liệu ngoại tuyến</Text>
@@ -358,7 +371,7 @@ export default function CrewSyncScreen() {
           <Card style={styles.cacheCard}>
             <View style={styles.cacheRow}>
               <View style={styles.cacheIcon}>
-                <MaterialIcons name="storage" size={20} color={colors.secondary} />
+                <MaterialIcons name="storage" size={22} color={colors.brandGold} />
               </View>
               <View style={styles.cacheContent}>
                 <Text style={[typography.labelLg, styles.cacheTitle]}>Bộ nhớ đệm hiện trường</Text>
@@ -451,6 +464,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.warning,
   },
+  statusDotClear: {
+    backgroundColor: colors.success,
+  },
   statusText: {
     color: colors.neutral,
   },
@@ -468,6 +484,18 @@ const styles = StyleSheet.create({
   },
   syncBtnWrap: {
     marginTop: spacing.md,
+  },
+  syncDisabled: {
+    backgroundColor: colors.border,
+    opacity: 1,
+  },
+  syncDisabledText: {
+    color: '#A0AEC0',
+  },
+  syncAllDone: {
+    color: colors.secondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -547,10 +575,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   infoIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: '#FEF9E7',
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -579,10 +609,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cacheIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: '#FEF9E7',
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

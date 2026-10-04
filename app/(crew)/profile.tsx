@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
+import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -42,7 +43,6 @@ const SETTINGS_ROWS = [
 export default function CrewProfileScreen() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const [darkMode, setDarkMode] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const handleLogout = () => {
@@ -74,7 +74,7 @@ export default function CrewProfileScreen() {
   };
 
   return (
-    <SafeAreaScreen scroll>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ Sơ" />}>
       <View style={styles.profileHeader}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
@@ -101,7 +101,7 @@ export default function CrewProfileScreen() {
 
         <View style={styles.roleChip}>
           <MaterialIcons name="build" size={14} color={colors.brandGold} />
-          <Text style={[typography.labelSm, styles.roleText]}>Repair Crew</Text>
+          <Text style={[typography.labelSm, styles.roleText]}>Thợ đường - Repair Crew</Text>
         </View>
       </View>
 
@@ -140,18 +140,11 @@ export default function CrewProfileScreen() {
           </Pressable>
         ))}
         <View style={styles.row}>
-          <MaterialIcons name="dark-mode" size={20} color={colors.secondary} />
-          <Text style={[typography.bodyMd, styles.rowLabel, styles.rowText]}>Chế độ tối</Text>
-          <Switch
-            value={darkMode}
-            onValueChange={(value) => {
-              setDarkMode(value);
-              setToast(value ? 'Đã bật chế độ tối' : 'Đã tắt chế độ tối');
-            }}
-            accessibilityLabel="Chế độ tối"
-            trackColor={{ true: colors.primary }}
-            thumbColor={colors.surface}
-          />
+          <MaterialIcons name="light-mode" size={20} color={colors.brandGold} />
+          <View style={styles.rowText}>
+            <Text style={[typography.bodyMd, styles.rowLabel]}>Giao diện: Tương phản cao ngoài trời</Text>
+            <Text style={[typography.caption, styles.rowSubtitle]}>Cố định Light Mode</Text>
+          </View>
         </View>
       </Card>
 
@@ -245,7 +238,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'space-evenly',
   },
   statDivider: {
     width: 1,
@@ -300,11 +293,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    minHeight: 48,
     paddingVertical: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: '#FFFAFA',
     borderWidth: 1,
-    borderColor: '#F3C1C3',
+    borderColor: colors.error,
   },
   logoutPressed: {
     backgroundColor: '#F8EFEF',
@@ -316,6 +310,6 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     textAlign: 'center',
     marginTop: spacing.md,
-    marginBottom: spacing.lg,
+    marginBottom: 96,
   },
 });

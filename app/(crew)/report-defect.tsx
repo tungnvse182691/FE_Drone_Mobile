@@ -169,8 +169,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   backBtn: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -234,6 +234,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   chip: {
+    minHeight: 48,
+    justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: spacing.md,
     borderRadius: radius.lg,
@@ -257,6 +259,8 @@ const styles = StyleSheet.create({
   },
   severityChip: {
     flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
     paddingVertical: 10,
     borderWidth: 2,
     borderRadius: radius.lg,

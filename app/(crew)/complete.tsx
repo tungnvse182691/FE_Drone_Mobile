@@ -354,6 +354,14 @@ export default function CrewCompleteScreen() {
           loading={submitting}
           onPress={handleSubmit}
         />
+        {!allDone ? (
+          <View style={styles.blockedBox}>
+            <MaterialIcons name="info-outline" size={14} color={colors.error} />
+            <Text style={[typography.caption, styles.blockedText]}>
+              Còn thiếu: {checklist.filter((item) => !item.done).map((item) => item.label).join('; ')}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {toast ? <Toast type="success" message={toast} /> : null}
@@ -380,8 +388,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backBtn: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -622,5 +630,15 @@ const styles = StyleSheet.create({
   },
   ctaWrap: {
     paddingBottom: spacing.xl,
+  },
+  blockedBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  blockedText: {
+    flex: 1,
+    color: colors.error,
   },
 });

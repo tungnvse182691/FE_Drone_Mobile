@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'text';
@@ -12,6 +12,8 @@ interface ButtonProps {
   title: string;
   icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
+  disabledStyle?: StyleProp<ViewStyle>;
+  disabledTextStyle?: StyleProp<TextStyle>;
 }
 
 const baseButtonStyle = {
@@ -23,7 +25,7 @@ const baseButtonStyle = {
   minHeight: 48,
 };
 
-export function Button({ variant, onPress, disabled, loading, title, icon, style }: ButtonProps) {
+export function Button({ variant, onPress, disabled, loading, title, icon, style, disabledStyle, disabledTextStyle }: ButtonProps) {
   const isDisabled = disabled || loading;
 
   return (
@@ -38,6 +40,7 @@ export function Button({ variant, onPress, disabled, loading, title, icon, style
         variant === 'secondary' && [styles.secondary, pressed && !isDisabled && styles.secondaryPressed],
         variant === 'text' && styles.text,
         isDisabled && styles.disabled,
+        isDisabled && disabledStyle,
         style,
       ]}
     >
@@ -53,6 +56,7 @@ export function Button({ variant, onPress, disabled, loading, title, icon, style
               variant === 'secondary' && styles.secondaryText,
               variant === 'text' && styles.textLabel,
               isDisabled && styles.disabledText,
+              isDisabled && disabledTextStyle,
             ]}
           >
             {title}

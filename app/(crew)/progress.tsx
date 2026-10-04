@@ -207,8 +207,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   backButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,6 +306,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderRadius: radius.md,
     paddingVertical: spacing.xs,
+    minHeight: 48,
   },
   stepLabel: {
     flex: 1,

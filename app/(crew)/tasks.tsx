@@ -201,9 +201,14 @@ export default function CrewTasksScreen() {
                 accessibilityState={{ selected: active }}
                 onPress={() => setSegment(s.key)}
               >
-                <Text style={[typography.labelSm, active ? styles.segmentLabelActive : styles.segmentLabel]}>
-                  {s.label} ({s.count})
+                <Text style={[typography.labelLg, active ? styles.segmentLabelActive : styles.segmentLabel]}>
+                  {s.label}
                 </Text>
+                <View style={[styles.countBadge, active && styles.countBadgeActive]}>
+                  <Text style={[typography.labelSm, active ? styles.countTextActive : styles.countText]}>
+                    {s.count}
+                  </Text>
+                </View>
               </Pressable>
             );
           })}
@@ -223,7 +228,7 @@ export default function CrewTasksScreen() {
                 >
                   <Text
                     style={[
-                      typography.caption,
+                      typography.labelLg,
                       active ? styles.modeFilterLabelActive : styles.modeFilterLabel,
                     ]}
                   >
@@ -242,7 +247,8 @@ export default function CrewTasksScreen() {
             message="Chuyển sang bộ lọc khác để xem danh sách công việc."
           />
         ) : (
-          list.map((task) => {
+          <View style={styles.taskList}>
+            {list.map((task) => {
             const modeChip = TASK_MODE_CHIP[task.task_mode];
             return (
               <Pressable
@@ -262,7 +268,7 @@ export default function CrewTasksScreen() {
                       )}
                     </View>
                     <View style={styles.taskDistRow}>
-                      <MaterialIcons name="navigation" size={14} color={colors.secondary} />
+                      <MaterialIcons name="near-me" size={14} color={colors.secondary} />
                       <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
                     </View>
                   </View>
@@ -270,7 +276,7 @@ export default function CrewTasksScreen() {
                   <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
 
                   <View style={styles.taskRouteRow}>
-                    <MaterialIcons name="alt-route" size={13} color={colors.secondary} />
+                    <MaterialIcons name="alt-route" size={14} color={colors.secondary} />
                     <Text style={[typography.caption, styles.taskRoute]}>
                       Tuyến {task.route_code} • {task.section_name} • {task.chainage}
                     </Text>
@@ -288,6 +294,7 @@ export default function CrewTasksScreen() {
                   </View>
 
                   <View style={styles.taskFooter}>
+                    <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
                     <MaterialIcons
                       name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
                       size={13}
@@ -306,7 +313,8 @@ export default function CrewTasksScreen() {
                 </Card>
               </Pressable>
             );
-          })
+            })}
+          </View>
         )}
       </SafeAreaScreen>
 
@@ -321,25 +329,57 @@ const styles = StyleSheet.create({
   },
   segments: {
     flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
     gap: spacing.xs,
+    padding: 4,
     marginBottom: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   segment: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
+    height: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radius.sm,
   },
   segmentActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
   segmentLabel: {
     color: colors.secondary,
   },
   segmentLabelActive: {
-    color: colors.onPrimary,
+    color: colors.neutral,
+  },
+  countBadge: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.border,
+    alignItems: 'center',
+  },
+  countBadgeActive: {
+    backgroundColor: '#FEF9E7',
+  },
+  countText: {
+    color: colors.secondary,
+  },
+  countTextActive: {
+    color: colors.brandGold,
   },
   modeFilters: {
     flexDirection: 'row',
@@ -348,8 +388,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   modeFilter: {
-    paddingVertical: 6,
-    paddingHorizontal: spacing.sm,
+    height: 36,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,
@@ -357,17 +398,19 @@ const styles = StyleSheet.create({
   },
   modeFilterActive: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(201,162,39,0.12)',
+    backgroundColor: '#FEF9E7',
   },
   modeFilterLabel: {
     color: colors.secondary,
   },
   modeFilterLabelActive: {
-    color: colors.primaryDark,
-    fontFamily: 'Roboto-Medium',
+    color: colors.brandGold,
   },
   taskCard: {
     marginBottom: spacing.sm,
+  },
+  taskList: {
+    paddingBottom: 96,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -394,7 +437,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   taskCode: {
-    color: colors.secondary,
+    color: colors.brandGold,
   },
   taskRouteRow: {
     flexDirection: 'row',
