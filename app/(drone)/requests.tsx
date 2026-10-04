@@ -329,7 +329,11 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: colors.border,
-    overflow: 'hidden',
+  },
+  requestCardHighlight: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+    marginTop: spacing.sm,
   },
   rail: {
     position: 'absolute',
@@ -339,11 +343,6 @@ const styles = StyleSheet.create({
     width: 4,
     borderTopLeftRadius: radius.lg,
     borderBottomLeftRadius: radius.lg,
-  },
-  requestCardHighlight: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-    marginTop: spacing.xs,
   },
   floatingTaskBadge: {
     position: 'absolute',
