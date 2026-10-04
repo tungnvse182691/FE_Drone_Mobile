@@ -27,7 +27,7 @@ const CREW_METRICS: CrewMetric[] = [
     label: 'Việc đang làm',
     value: '4',
     icon: 'build',
-    valueColor: colors.primary,
+    valueColor: colors.primaryDark,
     iconColor: '#6B5219',
     iconBg: '#FEF9E7',
   },
@@ -44,34 +44,56 @@ const CREW_METRICS: CrewMetric[] = [
 export default function CrewHomeScreen() {
   const user = useAuthStore((state) => state.user);
   const displayName = user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Nguyễn Văn Tuấn';
+  const employeeCode = user?.employee_code ?? 'HH-RC-084';
+
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Đội Sửa Chữa" />}>
-        <Text style={[typography.titleLg, styles.greeting]}>Chào, {displayName}</Text>
-        <Text style={[typography.caption, styles.greetingMeta]}>Kỹ thuật viên • Đội 01 • Mã NV: {user?.employee_code ?? 'HH-RC-084'}</Text>
+        {/* Header greeting & mã NV nổi bật rõ ràng ngoài nắng */}
+        <View style={styles.greetingSection}>
+          <Text style={[typography.titleLg, styles.greeting]}>Chào, {displayName}</Text>
+          <View style={styles.metaRow}>
+            <MaterialIcons name="badge" size={15} color={colors.secondary} />
+            <Text style={[typography.caption, styles.greetingMeta]}>
+              Kỹ thuật viên • Đội 01 • Mã NV:{' '}
+              <Text style={styles.empCode}>{employeeCode}</Text>
+            </Text>
+          </View>
+        </View>
 
+        {/* teamCard ĐỘI 01 có viền trái vàng 4px */}
         <Card style={styles.teamCard}>
-          <Text style={[typography.labelSm, styles.teamName]}>ĐỘI 01</Text>
-          <Text style={[typography.bodyMd, styles.teamRow]}>Đội trưởng: Trần Văn Vượng</Text>
+          <View style={styles.teamHeaderRow}>
+            <MaterialIcons name="groups" size={18} color={colors.brandGold} />
+            <Text style={[typography.labelSm, styles.teamName]}>ĐỘI 01</Text>
+          </View>
           <Text style={[typography.bodyMd, styles.teamRow]}>
-            Kỹ thuật viên: {user?.full_name ?? 'Le Van Crew'} • {user?.employee_code ?? 'NV003'}
+            Đội trưởng: <Text style={styles.strongText}>Trần Văn Vượng</Text>
+          </Text>
+          <Text style={[typography.bodyMd, styles.teamRow]}>
+            Kỹ thuật viên: <Text style={styles.strongText}>{user?.full_name ?? 'Lê Văn Tuấn'}</Text> • Mã NV:{' '}
+            <Text style={styles.strongText}>{employeeCode}</Text>
           </Text>
         </Card>
 
+        {/* metricRow 2 card Việc đang làm 4 / Hoàn thành 12 có số 24px + icon nền #FEF9E7 / #E9F7EC */}
         <View style={styles.metricRow}>
           {CREW_METRICS.map((metric) => (
             <Card key={metric.label} style={styles.metricCard}>
               <View style={styles.metricHeader}>
-                <Text style={[typography.labelSm, styles.metricLabel]}>{metric.label}</Text>
+                <Text style={[typography.caption, styles.metricLabel]}>{metric.label}</Text>
                 <View style={[styles.metricIcon, { backgroundColor: metric.iconBg }]}>
                   <MaterialIcons name={metric.icon} size={16} color={metric.iconColor} />
                 </View>
               </View>
-              <Text style={[typography.headlineLg, { color: metric.valueColor }]}>{metric.value}</Text>
+              <Text style={[typography.headlineLg, styles.metricValue, { color: metric.valueColor }]}>
+                {metric.value}
+              </Text>
             </Card>
           ))}
         </View>
 
+        {/* Danh sách công việc */}
         <View style={styles.sectionHeader}>
           <Text style={[typography.titleMd, styles.sectionTitle]}>Danh sách việc</Text>
           <Pressable onPress={() => router.push('/(crew)/tasks')} accessibilityRole="button">
@@ -92,6 +114,7 @@ export default function CrewHomeScreen() {
                   <View style={styles.taskContent}>
                     <View style={styles.taskMetaRow}>
                       <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
                     </View>
                     <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
                     <View style={styles.taskDistRow}>
@@ -101,7 +124,7 @@ export default function CrewHomeScreen() {
                       </Text>
                     </View>
                   </View>
-                  <MaterialIcons name="chevron-right" size={22} color={colors.secondary} />
+                  <MaterialIcons name="chevron-right" size={24} color={colors.secondary} />
                 </View>
               </Card>
             </Pressable>
@@ -109,6 +132,7 @@ export default function CrewHomeScreen() {
         })}
       </SafeAreaScreen>
 
+      {/* FAB photo-camera ở bottom 96 tránh đè bottom nav */}
       <FAB icon="photo-camera" onPress={() => router.push('/(crew)/viewfinder')} />
     </View>
   );
@@ -117,24 +141,53 @@ export default function CrewHomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: colors.surfaceAlt,
+  },
+  greetingSection: {
+    marginBottom: spacing.md,
   },
   greeting: {
     color: colors.neutral,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
   greetingMeta: {
     color: colors.secondary,
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
+  },
+  empCode: {
+    color: colors.neutral,
+    fontFamily: 'Roboto-Medium',
   },
   teamCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.cardPadding,
     marginBottom: spacing.md,
   },
+  teamHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
   teamName: {
-    color: colors.primaryDark,
+    color: colors.brandGold,
   },
   teamRow: {
+    color: colors.secondary,
+    marginTop: 2,
+  },
+  strongText: {
     color: colors.neutral,
-    marginTop: spacing.xs,
+    fontFamily: 'Roboto-Medium',
   },
   metricRow: {
     flexDirection: 'row',
@@ -143,11 +196,17 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.cardPadding,
   },
   metricHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: spacing.xs,
   },
   metricLabel: {
     color: colors.secondary,
@@ -159,7 +218,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
+  },
+  metricValue: {
+    marginTop: 2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -171,10 +232,15 @@ const styles = StyleSheet.create({
     color: colors.neutral,
   },
   seeAll: {
-    color: colors.primary,
+    color: colors.brandGold,
   },
   taskCard: {
     marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.cardPadding,
   },
   taskInner: {
     flexDirection: 'row',
@@ -187,7 +253,7 @@ const styles = StyleSheet.create({
   taskMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
   },
   taskCode: {
     color: colors.secondary,

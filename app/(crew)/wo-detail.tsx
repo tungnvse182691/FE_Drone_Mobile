@@ -148,8 +148,12 @@ export default function CrewWoDetailScreen() {
         ? 'Tiến hành sửa nhanh tại chỗ'
         : 'Gửi kết quả đo cho PM';
 
-  const primaryDisabled = !measureReady;
-  const primaryBlockedReason = !beforeSelected ? BUSINESS_ERROR_MESSAGES.BEFORE_MISSING : null;
+  const primaryDisabled = !measureReady || !beforeSelected;
+  const primaryBlockedReason = !measureReady
+    ? 'Cần nhập đủ 3 kích thước để tiếp tục'
+    : !beforeSelected
+      ? BUSINESS_ERROR_MESSAGES.BEFORE_MISSING
+      : null;
 
   return (
     <SafeAreaScreen
@@ -160,7 +164,9 @@ export default function CrewWoDetailScreen() {
             <Pressable
               onPress={() => router.back()}
               accessibilityRole="button"
+              accessibilityLabel="Quay lại"
               style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+              hitSlop={8}
             >
               <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
             </Pressable>
@@ -170,6 +176,7 @@ export default function CrewWoDetailScreen() {
         </View>
       }
     >
+      {/* CARD 1: Thông tin kỹ thuật (gom 2 nhóm: Vị trí + Thời hạn) */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
@@ -184,59 +191,73 @@ export default function CrewWoDetailScreen() {
         <Text style={[typography.titleMd, styles.defectTitle]}>
           {defectTypeLabel(task.defect_type_code)} — {task.chainage} Tuyến {task.route_code}
         </Text>
-        <Text style={[typography.caption, styles.defectLocation]}>{task.locality}</Text>
 
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="info-outline" size={15} color={colors.brandGold} />
-            <Text style={[typography.bodyMd, styles.infoText]}>
-              Loại lỗi: <Text style={styles.strong}>{defectTypeLabel(task.defect_type_code)}</Text>
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="alt-route" size={15} color={colors.brandGold} />
-            <Text style={[typography.bodyMd, styles.infoText]}>
-              Tuyến đường: <Text style={styles.strong}>{task.route_code}</Text> • Phân đoạn{' '}
-              <Text style={styles.strong}>{task.section_name}</Text> • Lý trình {task.chainage}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="location-on" size={15} color={colors.brandGold} />
-            <Text style={[typography.bodyMd, styles.infoText]}>
-              Vị trí khuyết tật: <Text style={styles.strong}>{task.defect_location}</Text>
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons name="navigation" size={15} color={colors.brandGold} />
-            <Text style={[typography.bodyMd, styles.infoText]}>
-              Tọa độ WGS84:{' '}
-              <Text style={styles.strong}>
-                {task.coordinates.latitude.toFixed(6)}° B, {task.coordinates.longitude.toFixed(6)}° Đ
+        {/* Nhóm 1: Vị trí hiện trường */}
+        <View style={styles.groupSection}>
+          <Text style={[typography.labelSm, styles.groupHeaderTitle]}>VỊ TRÍ HIỆN TRƯỜNG</Text>
+          <View style={styles.infoList}>
+            <View style={styles.infoRow}>
+              <MaterialIcons name="alt-route" size={16} color={colors.brandGold} />
+              <Text style={[typography.bodyMd, styles.infoText]}>
+                Tuyến đường: <Text style={styles.strong}>{task.route_code}</Text> • Phân đoạn{' '}
+                <Text style={styles.strong}>{task.section_name}</Text> • Lý trình{' '}
+                <Text style={styles.strong}>{task.chainage}</Text>
               </Text>
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <MaterialIcons
-              name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
-              size={15}
-              color={task.due_urgency === 'urgent' ? colors.error : colors.brandGold}
-            />
-            <Text style={[typography.bodyMd, styles.infoText]}>
-              Thời hạn hoàn thành:{' '}
-              <Text
-                style={[
-                  styles.strong,
-                  task.due_urgency === 'urgent' ? styles.dueUrgent : null,
-                ]}
-              >
-                {task.due_label}
+            </View>
+            <View style={styles.infoRow}>
+              <MaterialIcons name="location-on" size={16} color={colors.brandGold} />
+              <Text style={[typography.bodyMd, styles.infoText]}>
+                Vị trí: <Text style={styles.strong}>{task.defect_location}</Text> ({task.locality})
               </Text>
-            </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <MaterialIcons name="navigation" size={16} color={colors.brandGold} />
+              <View style={styles.coordWrap}>
+                <Text style={[typography.bodyMd, styles.infoText]}>Tọa độ WGS84: </Text>
+                <Text
+                  selectable={true}
+                  style={[typography.bodyMd, styles.strong, styles.coordValue]}
+                >
+                  {task.coordinates.latitude.toFixed(6)}° B, {task.coordinates.longitude.toFixed(6)}° Đ
+                </Text>
+              </View>
+            </View>
           </View>
         </View>
 
-        <Text style={[typography.bodyMd, styles.descriptionText]}>{task.description}</Text>
+        {/* Nhóm 2: Thời hạn & Yêu cầu */}
+        <View style={styles.groupSection}>
+          <Text style={[typography.labelSm, styles.groupHeaderTitle]}>THỜI HẠN & MÔ TẢ</Text>
+          <View style={styles.infoList}>
+            <View style={styles.infoRow}>
+              <MaterialIcons name="info-outline" size={16} color={colors.brandGold} />
+              <Text style={[typography.bodyMd, styles.infoText]}>
+                Loại lỗi: <Text style={styles.strong}>{defectTypeLabel(task.defect_type_code)}</Text>
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <MaterialIcons
+                name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
+                size={16}
+                color={task.due_urgency === 'urgent' ? colors.error : colors.brandGold}
+              />
+              <Text style={[typography.bodyMd, styles.infoText]}>
+                Thời hạn:{' '}
+                <Text
+                  style={[
+                    styles.strong,
+                    task.due_urgency === 'urgent' ? styles.dueUrgent : null,
+                  ]}
+                >
+                  {task.due_label}
+                </Text>
+              </Text>
+            </View>
+          </View>
+          <Text style={[typography.bodyMd, styles.descriptionText]}>{task.description}</Text>
+        </View>
 
+        {/* Nút Google Maps secondary */}
         <Button
           variant="secondary"
           title="Dẫn đường Google Maps"
@@ -246,13 +267,14 @@ export default function CrewWoDetailScreen() {
         />
       </Card>
 
+      {/* CARD 2: Ảnh hiện trạng đối chứng */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
             <MaterialIcons name="photo-camera" size={16} color={colors.brandGold} />
             <Text style={[typography.titleMd, styles.cardTitleText]}>Ảnh hiện trạng</Text>
           </View>
-          <Text style={[typography.labelSm, styles.taskCode]}>Ảnh đối chứng</Text>
+          <Text style={[typography.labelSm, styles.taskCode]}>Đối chứng BEFORE</Text>
         </View>
 
         {beforeSelected && session?.before_source ? (
@@ -284,17 +306,23 @@ export default function CrewWoDetailScreen() {
                   />
                 ) : (
                   <View style={[styles.candidateThumb, styles.candidateThumbEmpty]}>
-                    <MaterialIcons name="image" size={20} color={colors.secondary} />
+                    <MaterialIcons name="image" size={24} color={colors.secondary} />
                   </View>
                 )}
                 <View style={styles.candidateInfo}>
-                  <Text style={[typography.labelSm, styles.candidateSourceTag]}>
-                    [{EVIDENCE_REUSE_SOURCE_TAGS[candidate.source]}]
-                  </Text>
-                  <Text style={[typography.caption, styles.candidateMeta]}>{candidate.source_label}</Text>
+                  <View style={styles.badgeSourceRow}>
+                    <Text style={[typography.labelSm, styles.candidateSourceTag]}>
+                      [{EVIDENCE_REUSE_SOURCE_TAGS[candidate.source]}]
+                    </Text>
+                    <Text style={[typography.caption, styles.candidateLabelText]}>
+                      {candidate.source_label}
+                    </Text>
+                  </View>
                   <Text style={[typography.caption, styles.candidateMeta]}>
-                    Chụp {formatCapturedAt(candidate.captured_at)} • {candidate.coordinates.latitude.toFixed(5)}° B,{' '}
-                    {candidate.coordinates.longitude.toFixed(5)}° Đ
+                    Chụp {formatCapturedAt(candidate.captured_at)}
+                  </Text>
+                  <Text style={[typography.caption, styles.candidateMeta]}>
+                    {candidate.coordinates.latitude.toFixed(5)}° B, {candidate.coordinates.longitude.toFixed(5)}° Đ
                   </Text>
                 </View>
                 <Button
@@ -319,6 +347,7 @@ export default function CrewWoDetailScreen() {
         </Text>
       </Card>
 
+      {/* CARD 3: Kích thước hư hại */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleRow}>
@@ -330,6 +359,7 @@ export default function CrewWoDetailScreen() {
           <Text style={[typography.labelSm, styles.taskCode]}>TCVN 10380</Text>
         </View>
 
+        {/* 3 ô nhập dài/rộng/sâu cao tối thiểu 48px dễ bấm */}
         <View style={styles.measureGrid}>
           <View style={styles.measureCol}>
             <InputField
@@ -372,6 +402,7 @@ export default function CrewWoDetailScreen() {
           </View>
         </View>
 
+        {/* Preset chips */}
         <View style={styles.quickPresetRow}>
           <Pressable
             accessibilityRole="button"
@@ -401,6 +432,7 @@ export default function CrewWoDetailScreen() {
           </Pressable>
         </View>
 
+        {/* Box diện tích L x W */}
         <View style={styles.areaBox}>
           <Text style={[typography.caption, styles.areaLabel]}>Diện tích tự động tính (L × W)</Text>
           <Text style={[typography.titleLg, styles.areaValue]}>
@@ -408,12 +440,14 @@ export default function CrewWoDetailScreen() {
           </Text>
         </View>
 
+        {/* Text ngưỡng quy chuẩn */}
         <Text style={[typography.caption, styles.policyText]}>
           Ngưỡng quy chuẩn: diện tích ≤ {FAST_TRACK_POLICY.max_area_m2.toFixed(1)} m² • độ sâu ≤{' '}
           {FAST_TRACK_POLICY.max_depth_cm.toFixed(1)} cm • chiều dài ≤{' '}
           {FAST_TRACK_POLICY.max_length_m.toFixed(1)} m
         </Text>
 
+        {/* Phản hồi trạng thái Policy */}
         {task.task_mode === 'MEASURE_ONLY' ? (
           <View style={styles.noticeWarn}>
             <MaterialIcons name="lock" size={16} color={colors.warning} />
@@ -437,38 +471,37 @@ export default function CrewWoDetailScreen() {
             Nhập đủ 3 kích thước để hệ thống đối chiếu điều kiện sửa nhanh.
           </Text>
         )}
-
-        {primaryBlockedReason ? (
-          <View style={styles.noticeWarn}>
-            <MaterialIcons name="error-outline" size={16} color={colors.error} />
-            <Text style={[typography.caption, styles.noticeErrorText]}>{primaryBlockedReason}</Text>
-          </View>
-        ) : null}
       </Card>
 
-      <View style={styles.ctaRow}>
-        <View style={styles.ctaSecondary}>
-          <Button
-            variant="secondary"
-            title="Chỉ đường"
-            onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: task.id } })}
-          />
+      {/* CTA cuối: Chỉ đường (flex 1) + Tiến hành sửa nhanh (flex 2) + lý do disable */}
+      <View style={styles.ctaContainer}>
+        <View style={styles.ctaRow}>
+          <View style={styles.ctaSecondary}>
+            <Button
+              variant="secondary"
+              title="Chỉ đường"
+              onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: task.id } })}
+            />
+          </View>
+          <View style={styles.ctaPrimary}>
+            <Button
+              variant="primary"
+              title={primaryLabel}
+              onPress={handlePrimaryAction}
+              disabled={primaryDisabled}
+            />
+          </View>
         </View>
-        <View style={styles.ctaPrimary}>
-          <Button
-            variant="primary"
-            title={primaryLabel}
-            onPress={handlePrimaryAction}
-            disabled={primaryDisabled || Boolean(primaryBlockedReason)}
-          />
-        </View>
-      </View>
 
-      {task.task_mode === 'MEASURE_ONLY' ? (
-        <Text style={[typography.caption, styles.hintText]}>
-          Nút chuyển sang sửa chữa bị khóa theo chế độ Chỉ đo đợt.
-        </Text>
-      ) : null}
+        {primaryDisabled ? (
+          <View style={styles.disabledReasonBox}>
+            <MaterialIcons name="info-outline" size={14} color={colors.error} />
+            <Text style={[typography.caption, styles.disabledReasonText]}>
+              {primaryBlockedReason}
+            </Text>
+          </View>
+        ) : null}
+      </View>
     </SafeAreaScreen>
   );
 }
@@ -490,11 +523,14 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   backButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   pressed: {
     backgroundColor: colors.surfaceAlt,
@@ -504,6 +540,11 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.cardPadding,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -530,13 +571,18 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     marginTop: spacing.sm,
   },
-  defectLocation: {
+  groupSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  groupHeaderTitle: {
     color: colors.secondary,
-    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
   },
   infoList: {
-    marginTop: spacing.sm,
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   infoRow: {
     flexDirection: 'row',
@@ -547,6 +593,16 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.neutral,
   },
+  coordWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  coordValue: {
+    color: colors.neutral,
+    textDecorationLine: 'underline',
+  },
   strong: {
     fontFamily: 'Roboto-Medium',
   },
@@ -555,7 +611,7 @@ const styles = StyleSheet.create({
   },
   descriptionText: {
     color: colors.secondary,
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
   },
   mapsButton: {
     marginTop: spacing.md,
@@ -596,8 +652,16 @@ const styles = StyleSheet.create({
   candidateInfo: {
     gap: 2,
   },
+  badgeSourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   candidateSourceTag: {
     color: colors.brandGold,
+  },
+  candidateLabelText: {
+    color: colors.neutral,
   },
   candidateMeta: {
     color: colors.secondary,
@@ -625,7 +689,7 @@ const styles = StyleSheet.create({
   measureGrid: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   measureCol: {
     flex: 1,
@@ -661,6 +725,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
+    marginTop: spacing.xs,
   },
   areaLabel: {
     color: colors.secondary,
@@ -691,19 +756,29 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.brandGold,
   },
-  noticeErrorText: {
-    flex: 1,
-    color: colors.error,
+  ctaContainer: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.lg,
   },
   ctaRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    paddingTop: spacing.xs,
   },
   ctaSecondary: {
     flex: 1,
   },
   ctaPrimary: {
     flex: 2,
+  },
+  disabledReasonBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: spacing.xs,
+  },
+  disabledReasonText: {
+    color: colors.error,
+    textAlign: 'center',
   },
 });

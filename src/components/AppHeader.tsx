@@ -58,7 +58,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
             <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </Pressable>
         ) : null}
-        <Image source={require('../../assets/logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image source={require('../../assets/logo_hoanghai_icon.png')} style={styles.logo} resizeMode="contain" />
         <View>
           <Text style={[typography.titleMd, styles.brand]}>HOÀNG HẢI</Text>
           <Text style={[typography.caption, styles.subtitle]}>{subtitle}</Text>
@@ -119,8 +119,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   logo: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
   },
   brand: {
     fontFamily: 'Sansation',
