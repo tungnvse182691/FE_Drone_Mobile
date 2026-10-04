@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -9,7 +19,6 @@ import { login as apiLogin } from '../../src/api/mock/auth';
 import { useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
 import { RoleCode } from '../../src/types/enums';
-import { useRouter } from 'expo-router';
 import { REPORTER_HOME, ROLE_HOMES } from '../../src/constants/routes';
 
 export default function LoginScreen() {
@@ -19,6 +28,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
   const router = useRouter();
+
+  const isSubmitDisabled = !phoneOrEmail.trim() || !password.trim();
 
   const handleLogin = async () => {
     setLoading(true);
@@ -45,112 +56,144 @@ export default function LoginScreen() {
     }
   };
 
+  const fillQuickTest = (account: string, pass: string) => {
+    setPhoneOrEmail(account);
+    setPassword(pass);
+    setError(null);
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.container}>
-          <Image source={require('../../assets/logo_hoanghai.png')} style={styles.logoImage} resizeMode="contain" />
-          <Text style={[typography.headlineLg, styles.logo]}>HOÀNG HẢI</Text>
-          <Text style={[typography.caption, styles.subtitle]}>
-            Hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ
-          </Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header logo căn giữa trên nền surfaceAlt */}
+          <View style={styles.header}>
+            <View style={styles.logoCircle}>
+              <Image
+                source={require('../../assets/logo_hoanghai_icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={[typography.headlineLg, styles.brandTitle]}>HOÀNG HẢI</Text>
+            <Text style={[typography.caption, styles.subtitle]}>
+              Hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ
+            </Text>
+          </View>
 
-          <View style={styles.form}>
+          {/* Card trắng chứa form đăng nhập */}
+          <View style={styles.loginCard}>
             <InputField
               label="Email hoặc Số điện thoại"
               value={phoneOrEmail}
-              onChangeText={setPhoneOrEmail}
+              onChangeText={(text) => {
+                setPhoneOrEmail(text);
+                if (error) setError(null);
+              }}
               placeholder="Nhập email @hoanghai.vn hoặc SĐT..."
             />
             <InputField
               label="Mật khẩu"
               value={password}
-              onChangeText={setPassword}
-              placeholder="Mật khẩu"
+              onChangeText={(text) => {
+                setPassword(text);
+                if (error) setError(null);
+              }}
+              placeholder="Nhập mật khẩu"
               secureTextEntry
             />
-            {error ? <Text style={[typography.caption, styles.error]}>{error}</Text> : null}
+
+            {error ? (
+              <View style={styles.errorBox}>
+                <MaterialIcons name="error-outline" size={16} color={colors.error} />
+                <Text style={[typography.caption, styles.errorText]}>{error}</Text>
+              </View>
+            ) : null}
+
             <Button
               variant="primary"
               title="Đăng nhập"
               onPress={handleLogin}
               loading={loading}
-              disabled={!phoneOrEmail || !password}
+              disabled={isSubmitDisabled}
+              style={styles.submitButton}
             />
 
-            <View style={styles.quickTestSection}>
-              <Text style={[typography.caption, styles.quickTestLabel]}>
-                Tài khoản kiểm thử nhanh (Mật khẩu: 1):
+            {isSubmitDisabled ? (
+              <Text style={[typography.caption, styles.disabledReason]}>
+                Vui lòng nhập tài khoản và mật khẩu để tiếp tục
               </Text>
-              <View style={styles.quickTestRow}>
-                <Pressable
-                  style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                  onPress={() => {
-                    setPhoneOrEmail('crew@hoanghai.vn');
-                    setPassword('1');
-                    setError(null);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Chọn tài khoản Đội Sửa Chữa"
-                >
-                  <MaterialIcons name="build" size={13} color={colors.brandGold} />
-                  <Text style={styles.quickTestChipText}>Đội Sửa Chữa</Text>
-                </Pressable>
+            ) : null}
+          </View>
 
-                <Pressable
-                  style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                  onPress={() => {
-                    setPhoneOrEmail('drone@hoanghai.vn');
-                    setPassword('1');
-                    setError(null);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Chọn tài khoản Phi Công Drone"
-                >
-                  <MaterialIcons name="flight-takeoff" size={13} color={colors.brandGold} />
-                  <Text style={styles.quickTestChipText}>Phi Công Drone</Text>
-                </Pressable>
+          {/* Block Tài khoản kiểm thử nhanh */}
+          <View style={styles.quickTestSection}>
+            <Text style={[typography.caption, styles.quickTestLabel]}>
+              Tài khoản kiểm thử nhanh (Mật khẩu: 1)
+            </Text>
+            <View style={styles.quickTestRow}>
+              <Pressable
+                style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                onPress={() => fillQuickTest('crew@hoanghai.vn', '1')}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn tài khoản Đội Sửa Chữa"
+              >
+                <MaterialIcons name="build" size={16} color={colors.brandGold} />
+                <Text style={[typography.caption, styles.quickTestChipText]}>Đội Sửa Chữa</Text>
+              </Pressable>
 
-                <Pressable
-                  style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                  onPress={() => {
-                    setPhoneOrEmail('dan.nguyen@gmail.com');
-                    setPassword('1');
-                    setError(null);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Chọn tài khoản Người Dân"
-                >
-                  <MaterialIcons name="person" size={13} color={colors.brandGold} />
-                  <Text style={styles.quickTestChipText}>Người Dân</Text>
-                </Pressable>
-              </View>
+              <Pressable
+                style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                onPress={() => fillQuickTest('drone@hoanghai.vn', '1')}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn tài khoản Phi Công Drone"
+              >
+                <MaterialIcons name="flight-takeoff" size={16} color={colors.brandGold} />
+                <Text style={[typography.caption, styles.quickTestChipText]}>Phi Công</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                onPress={() => fillQuickTest('dan.nguyen@gmail.com', '1')}
+                accessibilityRole="button"
+                accessibilityLabel="Chọn tài khoản Người Dân"
+              >
+                <MaterialIcons name="person" size={16} color={colors.brandGold} />
+                <Text style={[typography.caption, styles.quickTestChipText]}>Người Dân</Text>
+              </Pressable>
             </View>
           </View>
 
-          <View style={styles.reporterEntry}>
+          {/* reporterCard riêng ở cuối */}
+          <View style={styles.reporterSection}>
             <Text style={[typography.caption, styles.reporterDividerText]}>
               Bạn là người dân muốn phản ánh hư hại đường bộ?
             </Text>
             <Pressable
               onPress={() => router.push(REPORTER_HOME)}
               style={({ pressed }) => [styles.reporterCard, pressed && styles.reporterCardPressed]}
-              accessibilityRole="link"
+              accessibilityRole="button"
               accessibilityLabel="Mở cổng phản ánh dân sinh"
             >
               <MaterialIcons name="campaign" size={24} color={colors.brandGold} />
               <View style={styles.reporterCardText}>
-                <Text style={[typography.titleMd, styles.reporterCardTitle]}>Cổng phản ánh dân sinh</Text>
+                <Text style={[typography.titleMd, styles.reporterCardTitle]}>
+                  Cổng phản ánh dân sinh
+                </Text>
                 <Text style={[typography.caption, styles.reporterCardSubtitle]}>
                   Không cần tài khoản · Xác thực OTP qua email
                 </Text>
               </View>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -164,35 +207,102 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  container: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.screenMargin,
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.lg,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  logoCircle: {
+    width: 112,
+    height: 112,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
   },
   logoImage: {
-    width: 90,
-    height: 90,
-    alignSelf: 'center',
+    width: 96,
+    height: 96,
   },
-  logo: {
+  brandTitle: {
     color: colors.brandGold,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   subtitle: {
     color: colors.secondary,
     textAlign: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.xl,
+    marginTop: spacing.xs,
   },
-  form: {
+  loginCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.cardPadding,
+    marginBottom: spacing.md,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  errorText: {
+    color: colors.error,
+    flex: 1,
+  },
+  submitButton: {
+    width: '100%',
+  },
+  disabledReason: {
+    color: colors.secondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  quickTestSection: {
+    marginBottom: spacing.lg,
+    gap: spacing.xs,
+  },
+  quickTestLabel: {
+    color: colors.secondary,
+    textAlign: 'center',
+  },
+  quickTestRow: {
+    flexDirection: 'row',
     gap: spacing.sm,
   },
-  error: {
-    color: colors.error,
+  quickTestChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  reporterEntry: {
-    marginTop: spacing.xl,
+  quickTestChipPressed: {
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.brandGold,
+  },
+  quickTestChipText: {
+    color: colors.neutral,
+    fontWeight: '500',
+  },
+  reporterSection: {
     gap: spacing.sm,
   },
   reporterDividerText: {
@@ -221,39 +331,5 @@ const styles = StyleSheet.create({
   },
   reporterCardSubtitle: {
     color: colors.secondary,
-  },
-  quickTestSection: {
-    marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  quickTestLabel: {
-    color: colors.secondary,
-    textAlign: 'center',
-  },
-  quickTestRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  quickTestChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickTestChipPressed: {
-    backgroundColor: colors.surfaceAlt,
-    borderColor: colors.primary,
-  },
-  quickTestChipText: {
-    ...typography.caption,
-    color: colors.neutral,
-    fontWeight: '600',
   },
 });
