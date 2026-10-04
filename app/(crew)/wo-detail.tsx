@@ -310,20 +310,29 @@ export default function CrewWoDetailScreen() {
                   </View>
                 )}
                 <View style={styles.candidateInfo}>
-                  <View style={styles.badgeSourceRow}>
-                    <Text style={[typography.labelSm, styles.candidateSourceTag]}>
+                  <View style={styles.sourceTagBadge}>
+                    <MaterialIcons name="photo-library" size={12} color={colors.brandGold} />
+                    <Text
+                      style={[typography.labelSm, styles.candidateSourceTag]}
+                      numberOfLines={1}
+                    >
                       [{EVIDENCE_REUSE_SOURCE_TAGS[candidate.source]}]
                     </Text>
-                    <Text style={[typography.caption, styles.candidateLabelText]}>
-                      {candidate.source_label}
+                  </View>
+
+                  <Text style={[typography.bodyMd, styles.candidateLabelText]}>
+                    {candidate.source_label}
+                  </Text>
+
+                  <View style={styles.candidateMetaRow}>
+                    <Text style={[typography.caption, styles.candidateMeta]} numberOfLines={1}>
+                      Chụp {formatCapturedAt(candidate.captured_at)}
+                    </Text>
+                    <Text style={[typography.caption, styles.candidateMeta]} numberOfLines={1}>
+                      {candidate.coordinates.latitude.toFixed(5)}° B,{' '}
+                      {candidate.coordinates.longitude.toFixed(5)}° Đ
                     </Text>
                   </View>
-                  <Text style={[typography.caption, styles.candidateMeta]}>
-                    Chụp {formatCapturedAt(candidate.captured_at)}
-                  </Text>
-                  <Text style={[typography.caption, styles.candidateMeta]}>
-                    {candidate.coordinates.latitude.toFixed(5)}° B, {candidate.coordinates.longitude.toFixed(5)}° Đ
-                  </Text>
                 </View>
                 <Button
                   variant={isSelected ? 'primary' : 'secondary'}
@@ -372,6 +381,7 @@ export default function CrewWoDetailScreen() {
               placeholder="0.0"
               keyboardType="decimal-pad"
               unit="m"
+              minHeight={48}
             />
           </View>
           <View style={styles.measureCol}>
@@ -385,6 +395,7 @@ export default function CrewWoDetailScreen() {
               placeholder="0.0"
               keyboardType="decimal-pad"
               unit="m"
+              minHeight={48}
             />
           </View>
           <View style={styles.measureCol}>
@@ -398,14 +409,15 @@ export default function CrewWoDetailScreen() {
               placeholder="0.0"
               keyboardType="decimal-pad"
               unit="cm"
+              minHeight={48}
             />
           </View>
         </View>
 
-        {/* Preset chips */}
         <View style={styles.quickPresetRow}>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Điền mẫu Đạt 1.2m nhân 0.6m nhân 3cm"
             onPress={() => {
               setLengthText('1.2');
               setWidthText('0.6');
@@ -414,11 +426,15 @@ export default function CrewWoDetailScreen() {
             }}
             style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
           >
-            <MaterialIcons name="flash-on" size={13} color={colors.primary} />
-            <Text style={[typography.caption, styles.presetText]}>Điền mẫu Đạt: 1.2m × 0.6m × 3cm</Text>
+            <MaterialIcons name="flash-on" size={18} color={colors.success} />
+            <Text style={[typography.labelLg, styles.presetTitle]}>Điền mẫu Đạt</Text>
+            <Text style={[typography.caption, styles.presetText]} numberOfLines={1}>
+              1.2m × 0.6m × 3cm
+            </Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Điền mẫu Vượt 2.5m nhân 1.2m nhân 8cm"
             onPress={() => {
               setLengthText('2.5');
               setWidthText('1.2');
@@ -427,8 +443,11 @@ export default function CrewWoDetailScreen() {
             }}
             style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
           >
-            <MaterialIcons name="warning" size={13} color={colors.secondary} />
-            <Text style={[typography.caption, styles.presetText]}>Điền mẫu Vượt: 2.5m × 1.2m × 8cm</Text>
+            <MaterialIcons name="warning" size={18} color={colors.warning} />
+            <Text style={[typography.labelLg, styles.presetTitle]}>Điền mẫu Vượt</Text>
+            <Text style={[typography.caption, styles.presetText]} numberOfLines={1}>
+              2.5m × 1.2m × 8cm
+            </Text>
           </Pressable>
         </View>
 
@@ -650,21 +669,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   candidateInfo: {
-    gap: 2,
-  },
-  badgeSourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.xs,
   },
+  sourceTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    maxWidth: '100%',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: radius.full,
+    backgroundColor: '#FEF9E7',
+  },
   candidateSourceTag: {
+    flexShrink: 1,
     color: colors.brandGold,
   },
   candidateLabelText: {
     color: colors.neutral,
+    flexShrink: 1,
+  },
+  candidateMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
   candidateMeta: {
     color: colors.secondary,
+    flexShrink: 1,
   },
   noCandidate: {
     flexDirection: 'row',
@@ -693,28 +726,38 @@ const styles = StyleSheet.create({
   },
   measureCol: {
     flex: 1,
+    minWidth: 0,
   },
   quickPresetRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
   presetChip: {
-    flexDirection: 'row',
+    flex: 1,
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: radius.full,
+    justifyContent: 'center',
+    gap: 2,
+    minHeight: 56,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.lg,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
   },
+  presetTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.neutral,
+    textAlign: 'center',
+  },
   presetText: {
     fontSize: 11,
-    color: colors.neutral,
+    lineHeight: 15,
+    color: colors.secondary,
+    textAlign: 'center',
   },
   areaBox: {
     flexDirection: 'row',
@@ -756,9 +799,10 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.brandGold,
   },
+  /* paddingBottom 48: nhô CTA + dòng lý do disable khỏi gesture bar Android & BottomNav */
   ctaContainer: {
     paddingTop: spacing.xs,
-    paddingBottom: spacing.lg,
+    paddingBottom: 48,
   },
   ctaRow: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ interface InputFieldProps {
   autoFocus?: boolean;
   testID?: string;
   unit?: string;
+  minHeight?: number;
 }
 
 export function InputField({
@@ -32,11 +33,18 @@ export function InputField({
   autoFocus,
   testID,
   unit,
+  minHeight,
 }: InputFieldProps) {
   return (
     <View style={styles.container}>
       {label ? <Text style={[typography.labelLg, styles.label]}>{label}</Text> : null}
-      <View style={[styles.inputRow, !!error && styles.inputRowError]}>
+      <View
+        style={[
+          styles.inputRow,
+          !!error && styles.inputRowError,
+          minHeight ? { minHeight } : null,
+        ]}
+      >
         <TextInput
           style={[
             styles.input,

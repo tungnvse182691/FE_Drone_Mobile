@@ -42,9 +42,15 @@ const CREW_METRICS: CrewMetric[] = [
   },
 ];
 
+/** Bỏ phần vai trò trong ngoặc, ví dụ "Nguyễn Văn Tuấn (Kỹ thuật viên)" -> "Nguyễn Văn Tuấn" */
+function normalizeName(raw: string | undefined, fallback: string): string {
+  const cleaned = (raw ?? '').replace(/\s*\([^)]*\)/g, '').trim();
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
 export default function CrewHomeScreen() {
   const user = useAuthStore((state) => state.user);
-  const displayName = user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Nguyễn Văn Tuấn';
+  const displayName = normalizeName(user?.full_name, 'Lê Văn Tuấn');
   const employeeCode = user?.employee_code ?? 'HH-RC-084';
 
   return (
@@ -83,7 +89,9 @@ export default function CrewHomeScreen() {
                 <MaterialIcons name="person" size={15} color={colors.secondary} />
                 <Text style={[typography.caption, styles.memberRoleLabel]}>Đội trưởng:</Text>
               </View>
-              <Text style={[typography.bodyMd, styles.memberNameText]}>Trần Văn Vượng</Text>
+              <Text style={[typography.bodyMd, styles.memberNameText]} numberOfLines={1}>
+                Trần Văn Vượng
+              </Text>
             </View>
 
             <View style={styles.teamMemberRow}>
@@ -91,8 +99,8 @@ export default function CrewHomeScreen() {
                 <MaterialIcons name="build" size={15} color={colors.secondary} />
                 <Text style={[typography.caption, styles.memberRoleLabel]}>Kỹ thuật viên:</Text>
               </View>
-              <Text style={[typography.bodyMd, styles.memberNameText]}>
-                {user?.full_name ?? 'Lê Văn Tuấn'} • {employeeCode}
+              <Text style={[typography.bodyMd, styles.memberNameText]} numberOfLines={2}>
+                {displayName} • {employeeCode}
               </Text>
             </View>
           </View>
@@ -329,18 +337,22 @@ const styles = StyleSheet.create({
   },
   teamMemberRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
   },
   memberRoleCol: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 0,
   },
   memberRoleLabel: {
     color: colors.secondary,
   },
   memberNameText: {
+    flex: 1,
+    flexShrink: 1,
+    textAlign: 'right',
     color: colors.neutral,
     fontFamily: 'Roboto-Medium',
   },
@@ -409,10 +421,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  /* Task List & Card */
+  /* Task List & Card — paddingBottom 120: chừa chỗ cho FAB (bottom 96 + cao 56 = đỉnh ở 152) */
   taskList: {
     gap: spacing.sm,
-    paddingBottom: 40,
+    paddingBottom: 120,
   },
   taskCardTouch: {
     minHeight: 48,
