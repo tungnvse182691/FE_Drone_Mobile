@@ -192,7 +192,11 @@ export default function CrewNavigationScreen() {
                 </Text>
                 <View style={styles.tagRow}>
                   <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
-                  <Chip variant="severity-high" label="Nghiêm trọng" />
+                  {task.due_urgency === 'urgent' ? (
+                    <Chip variant="severity-high" label="NGHIÊM TRỌNG" />
+                  ) : (
+                    <Chip variant="severity-medium" label="TRUNG BÌNH" />
+                  )}
                 </View>
               </View>
 

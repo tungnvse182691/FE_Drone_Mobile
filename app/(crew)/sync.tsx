@@ -56,6 +56,13 @@ const SEGMENT_LABELS: Record<SyncSegment, string> = {
   done: 'Đã đồng bộ',
 };
 
+const OUTBOX_KIND_LABELS: Record<string, string> = {
+  DEFECT_REPORT: 'Báo lỗi phát sinh',
+  INSPECTION_SUBMIT: 'Nộp kết quả đo',
+  REPAIR_START: 'Bắt đầu sửa chữa',
+  REPAIR_SUBMIT: 'Nộp kết quả sửa chữa',
+};
+
 const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
   [LocalState.DRAFT]: SyncStatus.QUEUED,
   [LocalState.WAITING_DEPENDENCIES]: SyncStatus.QUEUED,
@@ -205,7 +212,7 @@ export default function CrewSyncScreen() {
     if (outboxRows.length > 0) {
       return outboxRows.map((row) => ({
         id: row.id,
-        name: row.kind,
+        name: OUTBOX_KIND_LABELS[row.kind] ?? row.kind,
         meta: row.last_error ? `Lỗi: ${row.last_error}` : `SHA-256 ${row.checksum_sha256.slice(0, 12)}…`,
         size: `Lần thử ${row.attempt}/${row.max_attempts}`,
         status: LOCAL_STATE_TO_SYNC_STATUS[row.status] ?? SyncStatus.QUEUED,

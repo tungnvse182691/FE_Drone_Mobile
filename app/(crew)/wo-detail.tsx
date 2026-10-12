@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -306,7 +306,10 @@ export default function CrewWoDetailScreen() {
                   />
                 ) : (
                   <View style={[styles.candidateThumb, styles.candidateThumbEmpty]}>
-                    <MaterialIcons name="image" size={24} color={colors.secondary} />
+                    <MaterialIcons name="image" size={28} color={colors.secondary} />
+                    <Text style={[typography.caption, styles.candidateEmptyText]}>
+                      Chưa có ảnh xem trước
+                    </Text>
                   </View>
                 )}
                 <View style={styles.candidateInfo}>
@@ -561,8 +564,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.cardPadding,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   cardHeader: {
     flexDirection: 'row',
@@ -619,7 +633,6 @@ const styles = StyleSheet.create({
   },
   coordValue: {
     color: colors.neutral,
-    textDecorationLine: 'underline',
   },
   strong: {
     fontFamily: 'Roboto-Medium',
@@ -666,6 +679,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    gap: 6,
+  },
+  candidateEmptyText: {
+    color: colors.secondary,
   },
   candidateInfo: {
     gap: spacing.xs,

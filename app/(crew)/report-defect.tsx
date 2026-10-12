@@ -7,8 +7,10 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES } from '../../src/constants/defect-types';
+import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES, defectTypeLabel } from '../../src/constants/defect-types';
 import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
+import { initDatabase, openDatabase } from '../../src/offline/database';
+import { enqueuePayload } from '../../src/offline/upload-queue';
 import { getCrewTaskById } from './tasks';
 
 const DEFECT_TYPES = DEFECT_TYPE_OPTIONS;
@@ -33,8 +35,36 @@ export default function CrewReportDefectScreen() {
     return `${task.chainage} Tuyến ${task.route_code} • ${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
   }, [task.id, task.chainage, task.route_code, task.coordinates]);
 
-  const handleSubmit = () => {
-    setToast('Đã gửi báo cáo lỗi phát sinh cho Quản lý dự án');
+  const handleSubmit = async () => {
+    const session = getCrewFieldSession();
+    const coords = session?.task_id === task.id ? session.coordinates ?? task.coordinates : task.coordinates;
+    try {
+      const db = openDatabase();
+      await initDatabase(db);
+      await enqueuePayload(
+        db,
+        'DEFECT_REPORT',
+        {
+          kind: 'DEFECT_REPORT',
+          taskId: task.id,
+          work_order_code: task.wo_code,
+          defect_type_code: defectType,
+          defect_type_label: defectTypeLabel(defectType),
+          severity,
+          notes: notes.trim(),
+          chainage: task.chainage,
+          route_code: task.route_code,
+          section_name: task.section_name,
+          coordinates: coords,
+          capturedAt: new Date().toISOString(),
+        },
+        { taskId: task.id },
+      );
+      setToast('Đã lưu báo cáo vào hàng đợi đồng bộ');
+    } catch {
+      setToast('Không lưu được báo cáo, vui lòng thử lại');
+      return;
+    }
     setTimeout(() => router.back(), 1500);
   };
 
@@ -139,6 +169,7 @@ export default function CrewReportDefectScreen() {
           onChangeText={setNotes}
           multiline
           numberOfLines={3}
+          placeholder="Mô tả hiện trạng hư hỏng, ví dụ: nứt dọc mép tấm khoảng 2m..."
           placeholderTextColor={colors.secondary}
         />
       </View>
@@ -169,9 +200,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
