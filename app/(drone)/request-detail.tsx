@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -10,6 +10,12 @@ import { initDatabase, openDatabase } from '../../src/offline/database';
 import { enqueuePayload } from '../../src/offline/upload-queue';
 import { stableUuid } from '../../src/utils/uuid';
 import { LocalState } from '../../src/types/enums';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 
 interface RequestDetailData {
   code: string;
@@ -527,6 +533,14 @@ export default function DroneRequestDetailScreen() {
 
       {/* Actions */}
       <View style={styles.actionContainer}>
+        {rejectionSent && (
+          <View style={styles.successBanner}>
+            <MaterialIcons name="check-circle" size={16} color={colors.success} />
+            <Text style={styles.successBannerText}>
+              Đã lưu lý do từ chối (chờ đồng bộ lên máy chủ).
+            </Text>
+          </View>
+        )}
         {isAccepted && (
           <Text style={[typography.caption, styles.pendingSyncNote]}>
             Ý định đã lưu cục bộ, chờ máy chủ xác nhận (cần taskId + ETag nhiệm vụ).
@@ -592,7 +606,9 @@ export default function DroneRequestDetailScreen() {
             {rejectionSent && (
               <View style={styles.successBanner}>
                 <MaterialIcons name="check-circle" size={16} color={colors.success} />
-                <Text style={styles.successBannerText}>Đã gửi lý do từ chối về PM!</Text>
+                <Text style={styles.successBannerText}>
+                  Đã lưu lý do từ chối (chờ đồng bộ lên máy chủ).
+                </Text>
               </View>
             )}
 
@@ -670,7 +686,7 @@ const styles = StyleSheet.create({
   },
   taskChipActive: {
     borderColor: colors.primary,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#FEF3E2',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -793,15 +809,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   wgs84Badge: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: colors.border,
   },
   wgs84BadgeText: {
-    color: colors.info,
+    color: colors.secondary,
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -872,6 +888,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     padding: 0,
     overflow: 'hidden',
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   mapHeader: {
     flexDirection: 'row',
@@ -995,6 +1013,8 @@ const styles = StyleSheet.create({
   },
   instructionCard: {
     marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   instructionHeader: {
     flexDirection: 'row',
