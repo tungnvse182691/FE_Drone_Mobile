@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -21,7 +21,8 @@ export default function DroneProfileScreen() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
 
-  const [darkMode, setDarkMode] = useState(false);
+  const [infoVisible, setInfoVisible] = useState(false);
+  const [cacheSize, setCacheSize] = useState('142 MB');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -116,7 +117,8 @@ export default function DroneProfileScreen() {
       <Card style={styles.menuCard}>
         <Pressable
           style={styles.menuItem}
-          onPress={() => showToast('Mở thông tin chi tiết phi công')}
+          onPress={() => setInfoVisible(true)}
+          accessibilityRole="button"
         >
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="person" size={18} color={colors.secondary} />
@@ -130,6 +132,7 @@ export default function DroneProfileScreen() {
         <Pressable
           style={styles.menuItem}
           onPress={() => router.push('/(auth)/force-change-password')}
+          accessibilityRole="button"
         >
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="lock" size={18} color={colors.secondary} />
@@ -143,6 +146,7 @@ export default function DroneProfileScreen() {
         <Pressable
           style={styles.menuItem}
           onPress={() => router.push('/(drone)/sync')}
+          accessibilityRole="button"
         >
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="sync" size={18} color={colors.secondary} />
@@ -153,30 +157,31 @@ export default function DroneProfileScreen() {
 
         <View style={styles.menuDivider} />
 
-        <View style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <MaterialIcons name="dark-mode" size={18} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Chế độ tối (Dark Mode)</Text>
-          </View>
-          <Switch
-            value={darkMode}
-            onValueChange={setDarkMode}
-            thumbColor={darkMode ? colors.primary : colors.surface}
-            trackColor={{ false: colors.border, true: '#FEF3E2' }}
-          />
-        </View>
-
-        <View style={styles.menuDivider} />
-
         <Pressable
           style={styles.menuItem}
-          onPress={() => showToast('Đã dọn dẹp 142 MB bộ nhớ cache ứng dụng')}
+          onPress={() =>
+            Alert.alert(
+              'Dọn dẹp cache',
+              `Xóa toàn bộ dữ liệu tạm (${cacheSize})? Dữ liệu đã đồng bộ không bị ảnh hưởng.`,
+              [
+                { text: 'Hủy', style: 'cancel' },
+                {
+                  text: 'Đồng ý',
+                  onPress: () => {
+                    setCacheSize('0 MB');
+                    showToast('Đã dọn dẹp bộ nhớ cache máy');
+                  },
+                },
+              ],
+            )
+          }
+          accessibilityRole="button"
         >
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="delete" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Dọn dẹp cache máy</Text>
           </View>
-          <Text style={[typography.caption, styles.menuSubText]}>142 MB</Text>
+          <Text style={[typography.caption, styles.menuSubText]}>{cacheSize}</Text>
         </Pressable>
       </Card>
 
@@ -191,6 +196,71 @@ export default function DroneProfileScreen() {
           Hoàng Hải Field v2.4.1 (Build 2026.09) • Thiết kế chuẩn hiện trường
         </Text>
       </View>
+
+      {/* Pilot Information Modal */}
+      <Modal
+        visible={infoVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setInfoVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.infoModalCard}>
+            <View style={styles.infoModalHeader}>
+              <Text style={[typography.titleMd, styles.infoModalTitle]}>Thông tin phi công</Text>
+              <Pressable
+                style={styles.infoModalCloseBtn}
+                onPress={() => setInfoVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng"
+              >
+                <MaterialIcons name="close" size={20} color={colors.secondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.infoModalBody}>
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Họ và tên</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>
+                  {normalizeName(user?.full_name ?? 'Nguyễn Văn An')}
+                </Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Mã nhân viên</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>
+                  {user?.employee_code ?? 'HH-2089'}
+                </Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Đội phụ trách</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>Đội Khảo sát Số 1</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Vai trò</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>DRONE OPERATOR</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Thiết bị phân bổ</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>
+                  Flycam DJI Matrice 350 RTK — M350-HH-02
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={styles.infoModalFooterBtn}
+              onPress={() => setInfoVisible(false)}
+              accessibilityRole="button"
+            >
+              <Text style={[typography.labelLg, styles.infoModalFooterText]}>Đóng</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaScreen>
   );
 }
@@ -372,5 +442,62 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.secondary,
     marginTop: 4,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  infoModalCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  infoModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    paddingBottom: spacing.sm,
+  },
+  infoModalTitle: {
+    color: colors.neutral,
+    fontWeight: '700',
+  },
+  infoModalCloseBtn: {
+    padding: 4,
+  },
+  infoModalBody: {
+    gap: spacing.sm,
+  },
+  infoRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceAlt,
+    paddingBottom: spacing.xs,
+  },
+  infoLabel: {
+    color: colors.secondary,
+    marginBottom: 2,
+  },
+  infoValue: {
+    color: colors.neutral,
+    fontWeight: '500',
+  },
+  infoModalFooterBtn: {
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+  },
+  infoModalFooterText: {
+    color: colors.neutral,
+    fontWeight: '700',
   },
 });
