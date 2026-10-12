@@ -421,10 +421,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  /* Task List & Card — paddingBottom 120: chừa chỗ cho FAB (bottom 96 + cao 56 = đỉnh ở 152) */
+  /* Task List & Card — paddingBottom 180: chừa chỗ thoáng cho FAB tránh che nội dung (Hạn 12:00...) khi cuộn hết list */
   taskList: {
     gap: spacing.sm,
-    paddingBottom: 120,
+    paddingBottom: 180,
   },
   taskCardTouch: {
     minHeight: 48,

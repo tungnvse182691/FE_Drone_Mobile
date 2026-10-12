@@ -26,6 +26,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
   const login = useAuthStore((state) => state.login);
   const router = useRouter();
 
@@ -64,6 +65,10 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {/* Nền trang trí 2 mảng tròn vàng gold rất nhạt, pointerEvents none */}
+      <View style={styles.decorCircleTop} pointerEvents="none" />
+      <View style={styles.decorCircleBottom} pointerEvents="none" />
+
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -82,14 +87,17 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={[typography.headlineLg, styles.brandTitle]}>HOÀNG HẢI</Text>
+            <Text style={styles.brandTitle}>HOÀNG HẢI</Text>
+            <View style={styles.brandDivider} />
             <Text style={[typography.caption, styles.subtitle]}>
               Hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ
             </Text>
           </View>
 
-          {/* Card trắng chứa form đăng nhập */}
+          {/* Card trắng chứa form đăng nhập - bo 20, bóng nhẹ, tiêu đề Đăng nhập tác nghiệp */}
           <View style={styles.loginCard}>
+            <Text style={[typography.titleMd, styles.cardTitle]}>Đăng nhập tác nghiệp</Text>
+
             <InputField
               label="Email hoặc Số điện thoại"
               value={phoneOrEmail}
@@ -133,45 +141,68 @@ export default function LoginScreen() {
             ) : null}
           </View>
 
-          {/* Block Tài khoản kiểm thử nhanh */}
-          <View style={styles.quickTestSection}>
-            <Text style={[typography.caption, styles.quickTestLabel]}>
-              Tài khoản kiểm thử nhanh (Mật khẩu: 1)
-            </Text>
-            <View style={styles.quickTestRow}>
-              <Pressable
-                style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                onPress={() => fillQuickTest('crew@hoanghai.vn', '1')}
-                accessibilityRole="button"
-                accessibilityLabel="Chọn tài khoản Đội Sửa Chữa"
-              >
-                <MaterialIcons name="build" size={16} color={colors.brandGold} />
-                <Text style={[typography.caption, styles.quickTestChipText]}>Đội Sửa Chữa</Text>
-              </Pressable>
+          {/* Block Tài khoản kiểm thử nhanh -> Thu gọn mặc định */}
+          <View style={styles.demoSection}>
+            <Pressable
+              style={styles.demoToggle}
+              onPress={() => setShowDemo((prev) => !prev)}
+              accessibilityRole="button"
+              accessibilityLabel="Chế độ demo — tài khoản kiểm thử nhanh"
+            >
+              <View style={styles.demoToggleLeft}>
+                <MaterialIcons name="bug-report" size={14} color={colors.secondary} />
+                <Text style={[typography.caption, styles.demoToggleText]}>
+                  Chế độ demo — tài khoản kiểm thử nhanh
+                </Text>
+              </View>
+              <MaterialIcons
+                name={showDemo ? 'expand-less' : 'expand-more'}
+                size={16}
+                color={colors.secondary}
+              />
+            </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                onPress={() => fillQuickTest('drone@hoanghai.vn', '1')}
-                accessibilityRole="button"
-                accessibilityLabel="Chọn tài khoản Phi Công Drone"
-              >
-                <MaterialIcons name="flight-takeoff" size={16} color={colors.brandGold} />
-                <Text style={[typography.caption, styles.quickTestChipText]}>Phi Công</Text>
-              </Pressable>
+            {showDemo ? (
+              <View style={styles.demoBox}>
+                <Text style={[typography.caption, styles.demoHint]}>
+                  Mật khẩu tất cả: 1
+                </Text>
+                <View style={styles.quickTestRow}>
+                  <Pressable
+                    style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                    onPress={() => fillQuickTest('crew@hoanghai.vn', '1')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chọn tài khoản Đội Sửa Chữa"
+                  >
+                    <MaterialIcons name="build" size={16} color={colors.brandGold} />
+                    <Text style={[typography.caption, styles.quickTestChipText]}>Đội Sửa Chữa</Text>
+                  </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                onPress={() => fillQuickTest('dan.nguyen@gmail.com', '1')}
-                accessibilityRole="button"
-                accessibilityLabel="Chọn tài khoản Người Dân"
-              >
-                <MaterialIcons name="person" size={16} color={colors.brandGold} />
-                <Text style={[typography.caption, styles.quickTestChipText]}>Người Dân</Text>
-              </Pressable>
-            </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                    onPress={() => fillQuickTest('drone@hoanghai.vn', '1')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chọn tài khoản Phi Công Drone"
+                  >
+                    <MaterialIcons name="flight-takeoff" size={16} color={colors.brandGold} />
+                    <Text style={[typography.caption, styles.quickTestChipText]}>Phi Công</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
+                    onPress={() => fillQuickTest('dan.nguyen@gmail.com', '1')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Chọn tài khoản Người Dân"
+                  >
+                    <MaterialIcons name="person" size={16} color={colors.brandGold} />
+                    <Text style={[typography.caption, styles.quickTestChipText]}>Người Dân</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
           </View>
 
-          {/* reporterCard riêng ở cuối */}
+          {/* Cổng phản ánh dân sinh: viền vàng trái 4px + icon trong vòng tròn + chevron-right */}
           <View style={styles.reporterSection}>
             <Text style={[typography.caption, styles.reporterDividerText]}>
               Bạn là người dân muốn phản ánh hư hại đường bộ?
@@ -182,7 +213,9 @@ export default function LoginScreen() {
               accessibilityRole="button"
               accessibilityLabel="Mở cổng phản ánh dân sinh"
             >
-              <MaterialIcons name="campaign" size={24} color={colors.brandGold} />
+              <View style={styles.reporterIconCircle}>
+                <MaterialIcons name="campaign" size={24} color={colors.brandGold} />
+              </View>
               <View style={styles.reporterCardText}>
                 <Text style={[typography.titleMd, styles.reporterCardTitle]}>
                   Cổng phản ánh dân sinh
@@ -191,6 +224,7 @@ export default function LoginScreen() {
                   Không cần tài khoản · Xác thực OTP qua email
                 </Text>
               </View>
+              <MaterialIcons name="chevron-right" size={22} color={colors.brandGold} />
             </Pressable>
           </View>
         </ScrollView>
@@ -203,6 +237,26 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  decorCircleTop: {
+    position: 'absolute',
+    top: -90,
+    right: -70,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(201,162,39,0.08)',
+  },
+  decorCircleBottom: {
+    position: 'absolute',
+    bottom: -110,
+    left: -80,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: 'rgba(201,162,39,0.06)',
   },
   flex: {
     flex: 1,
@@ -210,45 +264,78 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.screenMargin,
-    paddingVertical: spacing.lg,
+    paddingHorizontal: 20,
+    paddingVertical: spacing.xl,
   },
   header: {
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
   logoCircle: {
-    width: 112,
-    height: 112,
+    width: 120,
+    height: 120,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   logoImage: {
-    width: 96,
-    height: 96,
+    width: 104,
+    height: 104,
   },
   brandTitle: {
+    fontFamily: 'Sansation',
+    fontSize: 27,
+    fontWeight: '500',
+    letterSpacing: 3,
     color: colors.brandGold,
     textAlign: 'center',
     marginTop: spacing.xs,
   },
+  brandDivider: {
+    width: 44,
+    height: 3,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary,
+    marginVertical: spacing.sm,
+  },
   subtitle: {
     color: colors.secondary,
     textAlign: 'center',
-    marginTop: spacing.xs,
+    paddingHorizontal: 24,
   },
   loginCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.cardPadding,
+    borderRadius: radius.xl,
+    padding: 20,
     marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
+  },
+  cardTitle: {
+    color: colors.neutral,
+    marginBottom: spacing.sm,
   },
   errorBox: {
     flexDirection: 'row',
@@ -261,6 +348,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   submitButton: {
+    minHeight: 54,
+    borderRadius: radius.lg,
+    marginTop: spacing.xs,
     width: '100%',
   },
   disabledReason: {
@@ -268,11 +358,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
   },
-  quickTestSection: {
+  demoSection: {
     marginBottom: spacing.lg,
-    gap: spacing.xs,
   },
-  quickTestLabel: {
+  demoToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  demoToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  demoToggleText: {
+    color: colors.secondary,
+  },
+  demoBox: {
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: 16,
+    backgroundColor: colors.surface,
+    gap: spacing.sm,
+  },
+  demoHint: {
     color: colors.secondary,
     textAlign: 'center',
   },
@@ -290,12 +404,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
   },
   quickTestChipPressed: {
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
     borderColor: colors.brandGold,
   },
   quickTestChipText: {
@@ -317,17 +431,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
     padding: spacing.cardPadding,
   },
   reporterCardPressed: {
     backgroundColor: colors.surfaceAlt,
+  },
+  reporterIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(201,162,39,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   reporterCardText: {
     flex: 1,
     gap: 2,
   },
   reporterCardTitle: {
-    color: colors.brandGold,
+    color: colors.neutral,
   },
   reporterCardSubtitle: {
     color: colors.secondary,
