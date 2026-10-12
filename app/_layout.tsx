@@ -119,7 +119,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
       return;
     }
 
-    if (inAuthGroup) {
+    if (inAuthGroup && !inForceChange) {
       router.replace(ROLE_HOMES[user.role_code] as any);
       return;
     }
