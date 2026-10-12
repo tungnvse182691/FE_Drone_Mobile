@@ -1,5 +1,7 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
+  Animated,
   GestureResponderEvent,
   Pressable,
   PressableProps,
@@ -8,12 +10,6 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 
 const AnimatedComponent = Animated.createAnimatedComponent(Pressable);
 
@@ -34,23 +30,39 @@ export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
     },
     ref,
   ) => {
-    const scale = useSharedValue(1);
-    const opacity = useSharedValue(1);
-    const shouldReduceMotion = useReducedMotion();
+    const scale = useRef(new Animated.Value(1)).current;
+    const opacity = useRef(new Animated.Value(1)).current;
+    const [reducedMotion, setReducedMotion] = useState(false);
 
-    const animatedStyle = useAnimatedStyle(() => ({
-      transform: [{ scale: scale.value }],
-      opacity: opacity.value,
-    }));
+    useEffect(() => {
+      AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
+      const subscription = AccessibilityInfo.addEventListener(
+        'reduceMotionChanged',
+        setReducedMotion,
+      );
+      return () => {
+        subscription?.remove();
+      };
+    }, []);
 
     const handlePressIn = (event: GestureResponderEvent) => {
       if (!disabled) {
-        if (shouldReduceMotion) {
-          scale.value = 1;
-          opacity.value = 1;
+        if (reducedMotion) {
+          scale.setValue(1);
+          opacity.setValue(1);
         } else {
-          scale.value = withTiming(pressedScale, { duration: 150 });
-          opacity.value = withTiming(0.95, { duration: 150 });
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: pressedScale,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 0.95,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       }
       onPressIn?.(event);
@@ -58,15 +70,30 @@ export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
 
     const handlePressOut = (event: GestureResponderEvent) => {
       if (!disabled) {
-        if (shouldReduceMotion) {
-          scale.value = 1;
-          opacity.value = 1;
+        if (reducedMotion) {
+          scale.setValue(1);
+          opacity.setValue(1);
         } else {
-          scale.value = withTiming(1, { duration: 150 });
-          opacity.value = withTiming(1, { duration: 150 });
+          Animated.parallel([
+            Animated.timing(scale, {
+              toValue: 1,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+            Animated.timing(opacity, {
+              toValue: 1,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       }
       onPressOut?.(event);
+    };
+
+    const animatedStyle = {
+      transform: [{ scale }],
+      opacity,
     };
 
     return (
