@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -8,6 +8,12 @@ import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 
 interface DroneTask {
   code: string;
@@ -32,8 +38,8 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     chipVariant: 'severity-high',
     chipLabel: 'KHẨN CẤP',
     iconName: 'warning',
-    iconBg: '#FDECEC',
-    iconColor: colors.error,
+    iconBg: colors.surfaceAlt,
+    iconColor: colors.secondary,
   },
   {
     code: '#REQ-KS-090',
@@ -44,8 +50,8 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     chipVariant: 'severity-medium',
     chipLabel: 'CHỜ KHẢO SÁT',
     iconName: 'explore',
-    iconBg: '#FEF3E2',
-    iconColor: colors.warning,
+    iconBg: colors.surfaceAlt,
+    iconColor: colors.secondary,
   },
   {
     code: '#REQ-KS-088',
@@ -53,17 +59,19 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     subtitle: 'Ảnh trực quan 3D tiến độ thi công hạ tầng',
     priority: 'pending',
-    chipVariant: 'severity-low',
+    chipVariant: 'severity-medium',
     chipLabel: 'CHỜ KHẢO SÁT',
     iconName: 'alt-route',
-    iconBg: '#FEF3E2',
-    iconColor: colors.warning,
+    iconBg: colors.surfaceAlt,
+    iconColor: colors.secondary,
   },
 ];
 
 export default function DroneHomeScreen() {
   const user = useAuthStore((state) => state.user);
   const tasks = INITIAL_DRONE_TASKS;
+  const urgentCount = tasks.filter((t) => t.priority === 'urgent').length;
+  const pendingCount = tasks.length - urgentCount;
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
@@ -93,6 +101,9 @@ export default function DroneHomeScreen() {
           <View style={styles.metricContent}>
             <Text style={[typography.headlineLg, styles.metricNumber]}>{tasks.length}</Text>
             <Text style={[typography.caption, styles.metricDesc]}>yêu cầu khảo sát hôm nay</Text>
+            <Text style={[typography.caption, styles.metricSub]}>
+              {urgentCount} khẩn cấp • {pendingCount} chờ khảo sát
+            </Text>
           </View>
         </View>
 
@@ -153,7 +164,14 @@ export default function DroneHomeScreen() {
       {/* Section Tasks */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.titleMd, styles.sectionTitle]}>Việc cần làm</Text>
-        <Text style={[typography.caption, styles.seeAll]}>Ưu tiên theo tuyến</Text>
+        <Pressable
+          onPress={() => router.push('/(drone)/requests')}
+          accessibilityRole="button"
+          style={styles.seeAllPress}
+        >
+          <Text style={[typography.caption, styles.seeAll]}>Xem tất cả</Text>
+          <MaterialIcons name="chevron-right" size={16} color={colors.primaryDark} />
+        </Pressable>
       </View>
 
       {/* Tasks List Matching Figma Image 1 */}
@@ -170,6 +188,13 @@ export default function DroneHomeScreen() {
             accessibilityRole="button"
           >
             <Card style={styles.taskCardItem}>
+              <View
+                style={[
+                  styles.rail,
+                  { backgroundColor: task.priority === 'urgent' ? colors.error : colors.warning },
+                ]}
+              />
+
               <View style={[styles.taskIconBox, { backgroundColor: task.iconBg }]}>
                 <MaterialIcons name={task.iconName} size={20} color={task.iconColor} />
               </View>
@@ -256,10 +281,15 @@ const styles = StyleSheet.create({
   },
   metricNumber: {
     color: colors.primary,
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '700',
   },
   metricDesc: {
+    color: colors.secondary,
+    marginTop: 2,
+  },
+  metricSub: {
     color: colors.secondary,
     marginTop: 2,
   },
@@ -308,6 +338,7 @@ const styles = StyleSheet.create({
   },
   quickButtonText: {
     color: colors.primaryDark,
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -318,8 +349,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.neutral,
   },
+  seeAllPress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   seeAll: {
-    color: colors.secondary,
+    color: colors.primaryDark,
+    fontWeight: '600',
   },
   taskList: {
     gap: spacing.sm,
@@ -328,8 +364,20 @@ const styles = StyleSheet.create({
   taskCardItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.sm,
+    padding: spacing.md,
     gap: spacing.sm,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    ...softShadow,
+  },
+  rail: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    borderTopLeftRadius: radius.xl,
+    borderBottomLeftRadius: radius.xl,
   },
   taskIconBox: {
     width: 44,
