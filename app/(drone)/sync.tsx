@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -7,6 +7,12 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 import { initDatabase, openDatabase } from '../../src/offline/database';
 import {
   decodeOutboxPayload,
@@ -396,7 +402,7 @@ export default function DroneSyncScreen() {
                     <MaterialIcons name="videocam" size={20} color={colors.primary} />
                   )}
                   {item.type === 'photo' && (
-                    <MaterialIcons name="photo-library" size={20} color={colors.info} />
+                    <MaterialIcons name="photo-library" size={20} color={colors.secondary} />
                   )}
                   {item.type === 'form' && (
                     <MaterialIcons name="description" size={20} color={colors.secondary} />
@@ -505,19 +511,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   toggleBtnActive: {
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.primary,
   },
   toggleBtnText: {
     fontSize: 11,
     color: colors.secondary,
   },
   toggleBtnTextActive: {
-    color: colors.neutral,
+    color: colors.onPrimary,
     fontWeight: 'bold',
   },
   summaryCard: {
     marginBottom: spacing.md,
     gap: spacing.sm,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   summaryInfo: {
     flexDirection: 'row',
@@ -563,6 +571,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: spacing.sm,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   itemMain: {
     flexDirection: 'row',
@@ -604,13 +614,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.full,
   },
   uploadingText: {
-    color: colors.info,
+    color: colors.secondary,
     fontSize: 10,
     fontWeight: 'bold',
   },
