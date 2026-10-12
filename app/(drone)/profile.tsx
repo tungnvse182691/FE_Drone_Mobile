@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
+
+function normalizeName(name: string): string {
+  return name.replace(/\s*\([^)]*\)/g, '').trim();
+}
 
 export default function DroneProfileScreen() {
   const user = useAuthStore((state) => state.user);
@@ -44,7 +54,7 @@ export default function DroneProfileScreen() {
         </View>
 
         <Text style={[typography.titleLg, styles.userName]}>
-          {user?.full_name ?? 'Nguyễn Văn An'}
+          {normalizeName(user?.full_name ?? 'Nguyễn Văn An')}
         </Text>
 
         <Text style={[typography.caption, styles.userSub]}>
@@ -52,7 +62,7 @@ export default function DroneProfileScreen() {
         </Text>
 
         <View style={styles.roleChip}>
-          <MaterialIcons name="flight-takeoff" size={14} color={colors.brandGold} />
+          <MaterialIcons name="flight-takeoff" size={14} color={colors.primaryDark} />
           <Text style={styles.roleChipText}>DRONE OPERATOR</Text>
         </View>
       </View>
@@ -205,8 +215,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   avatarCircle: {
-    width: 84,
-    height: 84,
+    width: 88,
+    height: 88,
     borderRadius: radius.full,
     backgroundColor: '#FEF3E2',
     borderWidth: 2,
@@ -241,7 +251,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FEF3E2',
     borderWidth: 1,
     borderColor: colors.primary,
     paddingHorizontal: 10,
@@ -250,7 +260,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   roleChipText: {
-    color: colors.brandGold,
+    color: colors.primaryDark,
     fontSize: 10,
     fontWeight: 'bold',
     letterSpacing: 0.5,
@@ -261,6 +271,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     marginBottom: spacing.sm,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   statItem: {
     alignItems: 'center',
