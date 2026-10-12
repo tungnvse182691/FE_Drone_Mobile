@@ -126,7 +126,13 @@ function AuthGuard({ children }: { children: ReactNode }) {
 
     // Bảo vệ phân quyền vai trò: chống nhảy chéo sang màn role khác khi F5 trên Web
     const expectedGroup = ROLE_GROUPS[user.role_code];
-    if (expectedGroup && segments[0] && segments[0].startsWith('(') && segments[0] !== expectedGroup) {
+    if (
+      expectedGroup &&
+      segments[0] &&
+      segments[0].startsWith('(') &&
+      segments[0] !== expectedGroup &&
+      !inForceChange
+    ) {
       router.replace(ROLE_HOMES[user.role_code] as any);
     }
   }, [user, segments, isWebOnlyRole, inPublicGroup]);
