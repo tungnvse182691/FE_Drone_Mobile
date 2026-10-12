@@ -11,8 +11,6 @@ import {
   ViewStyle,
 } from 'react-native';
 
-const AnimatedComponent = Animated.createAnimatedComponent(Pressable);
-
 export interface AnimatedPressableProps extends Omit<PressableProps, 'style'> {
   pressedScale?: number;
   style?: StyleProp<ViewStyle> | ((state: PressableStateCallbackType) => StyleProp<ViewStyle>);
@@ -26,6 +24,7 @@ export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
       onPressIn,
       onPressOut,
       disabled,
+      children,
       ...restProps
     },
     ref,
@@ -91,23 +90,19 @@ export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
       onPressOut?.(event);
     };
 
-    const animatedStyle = {
-      transform: [{ scale }],
-      opacity,
-    };
-
     return (
-      <AnimatedComponent
-        ref={ref}
-        disabled={disabled}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={(state: PressableStateCallbackType) => {
-          const resolvedStyle = typeof style === 'function' ? style(state) : style;
-          return [resolvedStyle, animatedStyle];
-        }}
-        {...restProps}
-      />
+      <Animated.View style={{ transform: [{ scale }], opacity }}>
+        <Pressable
+          ref={ref}
+          disabled={disabled}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={style}
+          {...restProps}
+        >
+          {children}
+        </Pressable>
+      </Animated.View>
     );
   },
 );
