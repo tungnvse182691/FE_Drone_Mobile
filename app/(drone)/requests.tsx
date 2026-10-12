@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -7,6 +7,12 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 
 type TabKey = 'pending' | 'ongoing' | 'completed';
 
@@ -85,6 +91,8 @@ const REQUESTS_DATA: SurveyRequest[] = [
 export default function DroneRequestsScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('pending');
 
+  const pendingCount = REQUESTS_DATA.filter((r) => r.tab === 'pending').length;
+
   const filteredRequests = REQUESTS_DATA.filter((item) => {
     if (activeTab === 'pending') return item.tab === 'pending';
     if (activeTab === 'ongoing') return item.tab === 'ongoing';
@@ -93,13 +101,13 @@ export default function DroneRequestsScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
-      {/* Top Segmented Tabs: Yêu cầu mới (3) | Nhật ký */}
+      {/* Top Segmented Tabs: Yêu cầu mới ({pendingCount}) | Nhật ký */}
       <View style={styles.topTabContainer}>
         <Pressable style={[styles.topTabItem, styles.topTabItemActive]} accessibilityRole="button">
           <View style={styles.topTabTitleRow}>
             <Text style={styles.topTabTitleActive}>Yêu cầu mới</Text>
             <View style={styles.countBadgeActive}>
-              <Text style={styles.countBadgeTextActive}>3</Text>
+              <Text style={styles.countBadgeTextActive}>{pendingCount}</Text>
             </View>
           </View>
           <View style={styles.activeUnderline} />
@@ -159,11 +167,14 @@ export default function DroneRequestsScreen() {
       <View style={styles.listContainer}>
         {filteredRequests.map((item) => {
           const isOngoing = item.isCurrentTask;
+          const isUrgent = item.statusLabel === 'KHẨN CẤP';
           const railColor =
             item.tab === 'pending'
-              ? colors.warning
+              ? isUrgent
+                ? colors.error
+                : colors.warning
               : item.tab === 'ongoing'
-                ? colors.info
+                ? colors.border
                 : colors.success;
           return (
             <Pressable
@@ -190,7 +201,12 @@ export default function DroneRequestsScreen() {
                     <Text style={[typography.caption, styles.timeText]}>• {item.timeAgo}</Text>
                   </View>
 
-                  {item.status === 'new' && <Chip variant="status-pending" label={item.statusLabel} />}
+                  {item.status === 'new' && (
+                    <Chip
+                      variant={isUrgent ? 'severity-high' : 'status-pending'}
+                      label={item.statusLabel}
+                    />
+                  )}
                   {item.status === 'ongoing' && (
                     <Chip variant="severity-medium" label={item.statusLabel} />
                   )}
@@ -317,7 +333,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   filterChipText: {
-    color: colors.primary,
+    color: colors.primaryDark,
     fontWeight: '600',
   },
   listContainer: {
@@ -329,6 +345,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   requestCardHighlight: {
     borderColor: colors.primary,
@@ -341,8 +359,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    borderTopLeftRadius: radius.lg,
-    borderBottomLeftRadius: radius.lg,
+    borderTopLeftRadius: radius.xl,
+    borderBottomLeftRadius: radius.xl,
   },
   floatingTaskBadge: {
     position: 'absolute',
@@ -411,6 +429,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   detailLink: {
-    color: colors.primary,
+    color: colors.primaryDark,
+    fontWeight: '700',
   },
 });
