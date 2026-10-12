@@ -321,7 +321,7 @@ export default function CrewTasksScreen() {
         )}
       </SafeAreaScreen>
 
-      <FAB icon="add" onPress={() => router.push('/(crew)/viewfinder')} />
+      <FAB icon="add" onPress={() => router.push('/(crew)/report-defect')} />
     </View>
   );
 }

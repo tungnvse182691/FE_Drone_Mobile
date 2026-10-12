@@ -25,6 +25,7 @@ export default function CrewReportDefectScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const task = getCrewTaskById(params.id);
   const [defectType, setDefectType] = useState<string>(DEFECT_TYPE_CODES.POTH_DEEP);
+  const [customType, setCustomType] = useState('');
   const [severity, setSeverity] = useState<string>('Khẩn cấp');
   const [notes, setNotes] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -38,9 +39,13 @@ export default function CrewReportDefectScreen() {
   const handleSubmit = async () => {
     const session = getCrewFieldSession();
     const coords = session?.task_id === task.id ? session.coordinates ?? task.coordinates : task.coordinates;
+    const customLabel = customType.trim();
+
     try {
       const db = openDatabase();
       await initDatabase(db);
+      // defect_type_code luôn giữ nguyên 1 trong 5 mã canonical (AGENTS.md cấm tạo mã mới).
+      // Chữ nhập tay người dùng chỉ lưu ở defect_type_custom, không tạo mã mới.
       await enqueuePayload(
         db,
         'DEFECT_REPORT',
@@ -49,7 +54,8 @@ export default function CrewReportDefectScreen() {
           taskId: task.id,
           work_order_code: task.wo_code,
           defect_type_code: defectType,
-          defect_type_label: defectTypeLabel(defectType),
+          defect_type_label: customLabel || defectTypeLabel(defectType),
+          defect_type_custom: customLabel || null,
           severity,
           notes: notes.trim(),
           chainage: task.chainage,
@@ -120,6 +126,14 @@ export default function CrewReportDefectScreen() {
             );
           })}
         </View>
+        <TextInput
+          style={styles.customTypeInput}
+          value={customType}
+          onChangeText={setCustomType}
+          placeholder="Nhập tay loại lỗi khác (nếu không thuộc 5 loại trên)..."
+          placeholderTextColor={colors.secondary}
+          accessibilityLabel="Nhập tay loại lỗi khác"
+        />
       </View>
 
       <View style={styles.fieldGroup}>
@@ -328,6 +342,17 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  customTypeInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    ...typography.bodyMd,
+    color: colors.onSurface,
+    marginTop: spacing.sm,
   },
   ctaWrap: {
     paddingTop: spacing.sm,
