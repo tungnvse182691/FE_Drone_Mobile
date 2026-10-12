@@ -26,6 +26,12 @@ import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { AUTH_OTP_VERIFY, REPORTER_TRACK } from '../../src/constants/routes';
 
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
+
 const MAX_PHOTOS = 3;
 const MIN_DESCRIPTION = 10;
 const SUBMIT_FALLBACK_ERROR = 'Không thể gửi phản ánh. Vui lòng thử lại sau.';
@@ -499,7 +505,14 @@ const styles = StyleSheet.create({
   chipPressed: { opacity: 0.85 },
   chipText: { color: colors.secondary },
   chipTextSelected: { color: colors.onPrimary },
-  gpsCard: { gap: spacing.xs, marginBottom: spacing.lg },
+  gpsCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.cardPadding,
+    borderRadius: radius.xl,
+    ...softShadow,
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
+  },
   gpsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   gpsText: { color: colors.secondary, flex: 1 },
   gpsRetry: { flexDirection: 'row', alignItems: 'center', gap: 2 },

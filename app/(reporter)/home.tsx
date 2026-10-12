@@ -1,16 +1,23 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../../src/components/Card';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { ReporterStatusBadge } from '../../src/components/ReporterStatusBadge';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { listMyReports } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 import { ReporterReport } from '../../src/types/domain';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 
 export default function ReporterHomeScreen() {
   const router = useRouter();
@@ -121,7 +128,7 @@ export default function ReporterHomeScreen() {
       ) : (
         <View style={styles.reportList}>
           {reports.map((report) => (
-            <Pressable
+            <AnimatedPressable
               key={report.tracking_code}
               onPress={() =>
                 router.push({ pathname: REPORTER_TRACK, params: { code: report.tracking_code } })
@@ -147,7 +154,7 @@ export default function ReporterHomeScreen() {
                   </Text>
                 </View>
               </Card>
-            </Pressable>
+            </AnimatedPressable>
           ))}
         </View>
       )}
@@ -165,7 +172,7 @@ interface ActionCardProps {
 
 function ActionCard({ icon, title, description, onPress, testID }: ActionCardProps) {
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       testID={testID}
       accessibilityRole="button"
@@ -182,7 +189,7 @@ function ActionCard({ icon, title, description, onPress, testID }: ActionCardPro
         </View>
         <MaterialIcons name="chevron-right" size={22} color={colors.secondary} />
       </Card>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -267,6 +274,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   actionIcon: {
     width: 48,
@@ -307,6 +316,8 @@ const styles = StyleSheet.create({
   },
   reportCard: {
     gap: spacing.xs,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   reportHeader: {
     flexDirection: 'row',

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
@@ -13,6 +14,17 @@ import { listMyReports } from '../../src/api/mock/reporter';
 import { REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 import { ReporterReport } from '../../src/types/domain';
 import { ReporterReportStatus } from '../../src/types/enums';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
+
+function normalizeName(fullName?: string | null): string {
+  if (!fullName) return 'Người dân';
+  return fullName.replace(/\s*\([^)]*\)/g, '').trim() || 'Người dân';
+}
 
 export default function ReporterProfileScreen() {
   const router = useRouter();
@@ -68,7 +80,8 @@ export default function ReporterProfileScreen() {
     );
   };
 
-  const displayName = user?.full_name || (isVerified ? 'Người dân phản ánh' : 'Khách vãng lai');
+  const displayName =
+    normalizeName(user?.full_name) || (isVerified ? 'Người dân phản ánh' : 'Khách vãng lai');
 
   return (
     <SafeAreaScreen scroll>
@@ -115,7 +128,7 @@ export default function ReporterProfileScreen() {
       <Text style={[typography.titleMd, styles.sectionTitle]}>Thao tác nhanh</Text>
 
       <Card style={styles.menuCard}>
-        <Pressable
+        <AnimatedPressable
           style={styles.menuItem}
           onPress={() => router.push(REPORTER_REPORT)}
           accessibilityRole="button"
@@ -128,11 +141,11 @@ export default function ReporterProfileScreen() {
             <Text style={[typography.caption, styles.menuSub]}>Chụp ảnh và ghi nhận vị trí hư hại</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </Pressable>
+        </AnimatedPressable>
 
         <View style={styles.divider} />
 
-        <Pressable
+        <AnimatedPressable
           style={styles.menuItem}
           onPress={() => router.push(REPORTER_TRACK)}
           accessibilityRole="button"
@@ -145,13 +158,13 @@ export default function ReporterProfileScreen() {
             <Text style={[typography.caption, styles.menuSub]}>Theo dõi trạng thái các phản ánh đã gửi</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </Pressable>
+        </AnimatedPressable>
       </Card>
 
       <Text style={[typography.titleMd, styles.sectionTitle]}>Hỗ trợ & Thông tin dự án</Text>
 
       <Card style={styles.menuCard}>
-        <Pressable
+        <AnimatedPressable
           style={styles.menuItem}
           onPress={() =>
             Alert.alert(
@@ -169,11 +182,11 @@ export default function ReporterProfileScreen() {
             <Text style={[typography.caption, styles.menuSub]}>Quy mô tuyến đường và phạm vi bảo hành</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </Pressable>
+        </AnimatedPressable>
 
         <View style={styles.divider} />
 
-        <Pressable
+        <AnimatedPressable
           style={styles.menuItem}
           onPress={() =>
             Alert.alert(
@@ -191,11 +204,11 @@ export default function ReporterProfileScreen() {
             <Text style={[typography.caption, styles.menuSub]}>Hotline: 1900 8866 (miễn phí)</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </Pressable>
+        </AnimatedPressable>
 
         <View style={styles.divider} />
 
-        <Pressable
+        <AnimatedPressable
           style={styles.menuItem}
           onPress={() =>
             Alert.alert(
@@ -213,7 +226,7 @@ export default function ReporterProfileScreen() {
             <Text style={[typography.caption, styles.menuSub]}>Bảo vệ dữ liệu cá nhân theo quy chuẩn</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </Pressable>
+        </AnimatedPressable>
       </Card>
 
       <View style={styles.logoutWrapper}>
@@ -315,6 +328,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: spacing.md,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   statValue: {
     color: colors.neutral,
@@ -340,6 +355,8 @@ const styles = StyleSheet.create({
     padding: 0,
     marginBottom: spacing.md,
     overflow: 'hidden',
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   menuItem: {
     flexDirection: 'row',

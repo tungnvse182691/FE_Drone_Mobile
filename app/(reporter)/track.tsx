@@ -16,6 +16,12 @@ import { REPORTER_FEEDBACK, REPORTER_REPORT } from '../../src/constants/routes';
 import { ReporterReport } from '../../src/types/domain';
 import { ReporterReportStatus } from '../../src/types/enums';
 
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
+
 export default function ReporterTrackScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string }>();
@@ -264,7 +270,11 @@ const styles = StyleSheet.create({
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   error: { color: colors.error, flex: 1 },
   reportBlock: { gap: spacing.md, marginTop: spacing.lg },
-  summaryCard: { gap: spacing.sm },
+  summaryCard: {
+    gap: spacing.sm,
+    borderRadius: radius.xl,
+    ...softShadow,
+  },
   summaryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,7 +288,11 @@ const styles = StyleSheet.create({
   description: { color: colors.onSurface, marginTop: spacing.xs },
   photoScroll: { marginTop: spacing.sm },
   photo: { width: 96, height: 96, borderRadius: radius.md, marginRight: spacing.sm, backgroundColor: colors.surfaceAlt },
-  timelineCard: { gap: spacing.md },
+  timelineCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    ...softShadow,
+  },
   timelineTitle: { color: colors.onSurface },
   noticeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   noticeText: { color: colors.secondary, flex: 1 },
