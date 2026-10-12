@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth';
@@ -7,12 +7,25 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Toast } from '../../src/components/Toast';
+import { CREW_COMPLETED_TASKS, CREW_TASKS } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const PERFORMANCE_STATS = [
-  { value: '18', label: 'HOÀN THÀNH', color: colors.neutral },
-  { value: '03', label: 'ĐANG XỬ LÝ', color: colors.primary },
-  { value: '98%', label: 'ĐÚNG HẠN', color: colors.success },
+  {
+    value: CREW_COMPLETED_TASKS.length.toString().padStart(2, '0'),
+    label: 'HOÀN THÀNH',
+    color: colors.neutral,
+  },
+  {
+    value: CREW_TASKS.length.toString().padStart(2, '0'),
+    label: 'ĐANG XỬ LÝ',
+    color: colors.primary,
+  },
+  {
+    value: (CREW_COMPLETED_TASKS.length + CREW_TASKS.length).toString().padStart(2, '0'),
+    label: 'TỔNG NHIỆM VỤ',
+    color: colors.success,
+  },
 ];
 
 const SETTINGS_ROWS = [
@@ -40,8 +53,15 @@ const SETTINGS_ROWS = [
   },
 ];
 
+/** Bỏ phần vai trò trong ngoặc, ví dụ "Nguyễn Văn Tuấn (Kỹ thuật viên)" -> "Nguyễn Văn Tuấn" */
+function normalizeName(raw: string | undefined, fallback: string): string {
+  const cleaned = (raw ?? '').replace(/\s*\([^)]*\)/g, '').trim();
+  return cleaned.length > 0 ? cleaned : fallback;
+}
+
 export default function CrewProfileScreen() {
   const user = useAuthStore((state) => state.user);
+  const displayName = normalizeName(user?.full_name, 'Lê Văn Tuấn');
   const logout = useAuthStore((state) => state.logout);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -61,7 +81,7 @@ export default function CrewProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${user?.full_name ?? 'Nguyễn Văn Tuấn'}\nMã nhân viên: ${user?.employee_code ?? 'HH-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Tuyến ĐH.05\nTrạng thái hoạt động: Đang hoạt động`,
+          `Họ tên: ${displayName}\nMã nhân viên: ${user?.employee_code ?? 'HH-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Tuyến ĐH.05\nTrạng thái hoạt động: Đang hoạt động`,
         );
         return;
       case 'help':
@@ -90,7 +110,7 @@ export default function CrewProfileScreen() {
           </Pressable>
         </View>
 
-        <Text style={[typography.titleLg, styles.name]}>{user?.full_name ?? 'Nguyễn Văn Tuấn'}</Text>
+        <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
           Mã NV: {user?.employee_code ?? 'HH-RC-084'} • Đội sửa chữa số 2
         </Text>
@@ -233,7 +253,19 @@ const styles = StyleSheet.create({
     color: colors.brandGold,
   },
   statsCard: {
+    borderRadius: radius.xl,
     marginBottom: spacing.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   statsRow: {
     flexDirection: 'row',
@@ -261,7 +293,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   settingsCard: {
+    borderRadius: radius.xl,
     marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   row: {
     flexDirection: 'row',
@@ -269,7 +313,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    minHeight: 52,
+    minHeight: 56,
   },
   rowBorder: {
     borderBottomWidth: 1,
@@ -295,7 +339,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 48,
     paddingVertical: spacing.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     backgroundColor: '#FFFAFA',
     borderWidth: 1,
     borderColor: colors.error,

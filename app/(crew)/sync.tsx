@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
 import * as SQLite from 'expo-sqlite';
@@ -81,7 +81,14 @@ export default function CrewSyncScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    const database = openDatabase();
+    let database: SQLite.SQLiteDatabase;
+    try {
+      database = openDatabase();
+    } catch {
+      setToast('Không mở được cơ sở dữ liệu cục bộ để đọc hàng đợi.');
+      return;
+    }
+
     void initDatabase(database)
       .then(() => {
         if (!cancelled) {
@@ -276,7 +283,7 @@ export default function CrewSyncScreen() {
               accessibilityState={{ selected: active }}
               onPress={() => setSegment(key)}
             >
-              <Text style={[typography.labelSm, active ? styles.segmentLabelActive : styles.segmentLabel]}>
+              <Text style={[typography.labelLg, active ? styles.segmentLabelActive : styles.segmentLabel]}>
                 {SEGMENT_LABELS[key]} ({counts[key]})
               </Text>
             </Pressable>
@@ -390,11 +397,17 @@ export default function CrewSyncScreen() {
             </Pressable>
           </Card>
         </>
-      ) : (
+      ) : counts.done > 0 ? (
         <EmptyState
           icon="sync"
           title="Đã đồng bộ xong"
           message="Toàn bộ dữ liệu hiện trường đã được đồng bộ lên máy chủ."
+        />
+      ) : (
+        <EmptyState
+          icon="cloud-off"
+          title="Chưa có dữ liệu"
+          message="Chưa có mục nào được đồng bộ lên máy chủ."
         />
       )}
 
@@ -430,30 +443,57 @@ const styles = StyleSheet.create({
   },
   segments: {
     flexDirection: 'row',
+    height: 50,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 4,
     gap: spacing.xs,
     marginBottom: spacing.lg,
-    backgroundColor: colors.border,
-    borderRadius: radius.lg,
-    padding: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   segment: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
+    height: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.lg,
   },
   segmentActive: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.primary,
   },
   segmentLabel: {
     color: colors.secondary,
   },
   segmentLabelActive: {
-    color: colors.neutral,
+    color: colors.onPrimary,
   },
   statusCard: {
+    borderRadius: radius.xl,
     marginBottom: spacing.lg,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   statusHero: {
     flexDirection: 'row',
@@ -523,7 +563,19 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   itemCard: {
+    borderRadius: radius.xl,
     marginBottom: spacing.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   itemTop: {
     flexDirection: 'row',
@@ -580,7 +632,19 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
   },
   infoCard: {
+    borderRadius: radius.xl,
     marginTop: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   infoRow: {
     flexDirection: 'row',
@@ -609,11 +673,23 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   cacheCard: {
+    borderRadius: radius.xl,
     marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   cacheRow: {
     flexDirection: 'row',
