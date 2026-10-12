@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -54,29 +54,26 @@ export default function CrewViewfinderScreen() {
   const photoCount = (beforeReady ? 1 : 0) + (afterReady ? 1 : 0);
   const requiredPhotoCount = task.task_mode === 'MEASURE_ONLY' ? 1 : 2;
 
-  const capturedAt = new Date();
+  const previewDate = new Date();
   const gpsText = coords
     ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
     : 'Đang lấy GPS…';
-
-  const watermarkLine = useMemo(
-    () =>
-      `Lệnh ${task.wo_code.replace('#WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(capturedAt)}`,
-    [task.wo_code, task.defect_type_code, gpsText, capturedAt],
-  );
 
   const handleCapture = (photo: CameraCapturedPicture) => {
     const captureCoords = {
       latitude: coords?.latitude ?? task.coordinates.latitude,
       longitude: coords?.longitude ?? task.coordinates.longitude,
     };
+    const now = new Date();
+    const line = `Lệnh ${task.wo_code.replace('#WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(now)}`;
+
     if (mode === 'before') {
-      setBeforeCapture(photo.uri, watermarkLine, capturedAt.toISOString(), captureCoords);
+      setBeforeCapture(photo.uri, line, now.toISOString(), captureCoords);
       setMode('after');
       return;
     }
     if (mode === 'after') {
-      setAfterCapture(photo.uri, watermarkLine, captureCoords);
+      setAfterCapture(photo.uri, line, captureCoords);
       setAfterUri(photo.uri);
     }
   };
@@ -104,7 +101,7 @@ export default function CrewViewfinderScreen() {
       </View>
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="calendar-today" size={13} color="#94A3B8" />
-        <Text style={[typography.caption, styles.watermarkMetaText]}>{formatDateTime(capturedAt)}</Text>
+        <Text style={[typography.caption, styles.watermarkMetaText]}>{formatDateTime(previewDate)}</Text>
       </View>
     </View>
   );
@@ -233,7 +230,7 @@ export default function CrewViewfinderScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Cài đặt camera"
+            accessibilityLabel="Đổi camera trước/sau"
             onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           >

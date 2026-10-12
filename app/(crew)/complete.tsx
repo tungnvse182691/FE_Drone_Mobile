@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -388,14 +388,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressed: {
-    backgroundColor: colors.surfaceAlt,
+    opacity: 0.8,
   },
   topBarTitle: {
     color: colors.neutral,
@@ -403,6 +406,18 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -459,6 +474,18 @@ const styles = StyleSheet.create({
   },
   checklistCard: {
     marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   checklistHeader: {
     flexDirection: 'row',
@@ -549,6 +576,18 @@ const styles = StyleSheet.create({
   },
   statsCard: {
     marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   statsTitle: {
     color: colors.secondary,
@@ -593,6 +632,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#EBFBEE',
     borderWidth: 1,
     borderColor: '#B2F2BB',
+    borderRadius: radius.xl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   readyRow: {
     flexDirection: 'row',

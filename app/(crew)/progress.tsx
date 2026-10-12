@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { ComponentProps, useState } from 'react';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -10,6 +10,18 @@ import { defectTypeLabel } from '../../src/constants/defect-types';
 import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
 import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+
+type WorkStatus = 'doing' | 'blocked' | 'done';
+
+const WORK_STATUSES: {
+  key: WorkStatus;
+  label: string;
+  icon: ComponentProps<typeof MaterialIcons>['name'];
+}[] = [
+  { key: 'doing', label: 'Đang thực hiện', icon: 'access-time' },
+  { key: 'blocked', label: 'Bị chặn', icon: 'warning' },
+  { key: 'done', label: 'Hoàn thành', icon: 'check' },
+];
 
 const CONSTRUCTION_STEPS = [
   'Đặt biển cảnh báo & chóp nón an toàn cách 50m.',
@@ -32,6 +44,7 @@ export default function CrewProgressScreen() {
       : ` sâu ${session.measurement.depth_cm.toFixed(1)}cm`;
 
   const [checked, setChecked] = useState<boolean[]>([false, false, false, false]);
+  const [workStatus, setWorkStatus] = useState<WorkStatus>('done');
   const [note, setNote] = useState('');
 
   const doneCount = checked.filter(Boolean).length;
@@ -121,18 +134,36 @@ export default function CrewProgressScreen() {
           </View>
         </View>
         <View style={styles.segmentRow}>
-          <View style={styles.segment}>
-            <MaterialIcons name="access-time" size={18} color={colors.secondary} />
-            <Text style={[typography.caption, styles.segmentText]}>Đang thực hiện</Text>
-          </View>
-          <View style={styles.segment}>
-            <MaterialIcons name="warning" size={18} color={colors.secondary} />
-            <Text style={[typography.caption, styles.segmentText]}>Bị chặn</Text>
-          </View>
-          <View style={styles.segmentActive}>
-            <MaterialIcons name="check" size={18} color={colors.onPrimary} />
-            <Text style={[typography.caption, styles.segmentActiveText]}>Hoàn thành</Text>
-          </View>
+          {WORK_STATUSES.map((item) => {
+            const active = item.key === workStatus;
+            return (
+              <Pressable
+                key={item.key}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                onPress={() => setWorkStatus(item.key)}
+                style={({ pressed }) => [
+                  styles.segment,
+                  active && styles.segmentActive,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <MaterialIcons
+                  name={item.icon}
+                  size={18}
+                  color={active ? colors.onPrimary : colors.secondary}
+                />
+                <Text
+                  style={[
+                    typography.caption,
+                    active ? styles.segmentActiveText : styles.segmentText,
+                  ]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
         <View style={styles.infoBox}>
           <MaterialIcons name="info-outline" size={16} color={colors.warning} />
@@ -207,14 +238,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pressed: {
-    backgroundColor: colors.surfaceAlt,
+    opacity: 0.8,
   },
   topBarTitle: {
     color: colors.neutral,
@@ -225,6 +259,18 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   summaryRow: {
     flexDirection: 'row',

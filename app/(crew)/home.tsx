@@ -1,14 +1,13 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
-import { FAB } from '../../src/components/FAB';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-import { CREW_TASKS } from './tasks';
+import { CREW_TASKS, CREW_COMPLETED_TASKS } from './tasks';
 import { TaskMode } from '../../src/types/enums';
 
 interface CrewMetric {
@@ -24,7 +23,7 @@ interface CrewMetric {
 const CREW_METRICS: CrewMetric[] = [
   {
     label: 'Việc đang làm',
-    value: '4',
+    value: String(CREW_TASKS.length),
     icon: 'build',
     valueColor: colors.primaryDark,
     iconColor: '#6B5219',
@@ -33,12 +32,12 @@ const CREW_METRICS: CrewMetric[] = [
   },
   {
     label: 'Hoàn thành',
-    value: '12',
+    value: String(CREW_COMPLETED_TASKS.length),
     icon: 'check-circle',
     valueColor: colors.success,
     iconColor: '#2F9E44',
     iconBg: '#E9F7EC',
-    subLabel: 'Trong tháng',
+    subLabel: 'Đã nghiệm thu',
   },
 ];
 
@@ -140,6 +139,17 @@ export default function CrewHomeScreen() {
           </Pressable>
         </View>
 
+        {/* Nút inline Chụp ảnh hiện trường */}
+        <Pressable
+          style={({ pressed }) => [styles.captureBtn, pressed && styles.captureBtnPressed]}
+          onPress={() => router.push('/(crew)/viewfinder')}
+          accessibilityRole="button"
+          accessibilityLabel="Chụp ảnh hiện trường"
+        >
+          <MaterialIcons name="photo-camera" size={20} color={colors.onPrimary} />
+          <Text style={[typography.labelLg, styles.captureBtnText]}>Chụp ảnh hiện trường</Text>
+        </Pressable>
+
         {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, footer #WO-xx, chevron phải */}
         <View style={styles.taskList}>
           {CREW_TASKS.map((task) => {
@@ -234,9 +244,6 @@ export default function CrewHomeScreen() {
           })}
         </View>
       </SafeAreaScreen>
-
-      {/* FAB chụp ảnh hiện trường dời bottom 96 tránh đè bottom nav */}
-      <FAB icon="photo-camera" onPress={() => router.push('/(crew)/viewfinder')} />
     </View>
   );
 }
@@ -290,9 +297,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.cardPadding,
     marginBottom: spacing.md,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   teamHeaderRow: {
     flexDirection: 'row',
@@ -368,8 +386,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.cardPadding,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   metricTopRow: {
     flexDirection: 'row',
@@ -421,10 +450,29 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  /* Task List & Card — paddingBottom 180: chừa chỗ thoáng cho FAB tránh che nội dung (Hạn 12:00...) khi cuộn hết list */
+  /* Capture Button */
+  captureBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primary,
+    minHeight: 52,
+    borderRadius: radius.lg,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  captureBtnPressed: {
+    backgroundColor: colors.primaryDark,
+  },
+  captureBtnText: {
+    color: colors.onPrimary,
+  },
+
+  /* Task List & Card */
   taskList: {
     gap: spacing.sm,
-    paddingBottom: 180,
+    paddingBottom: spacing.xl,
   },
   taskCardTouch: {
     minHeight: 48,
@@ -436,8 +484,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.cardPadding,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   taskCardHeader: {
     flexDirection: 'row',

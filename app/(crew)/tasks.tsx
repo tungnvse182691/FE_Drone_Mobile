@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -321,7 +321,7 @@ export default function CrewTasksScreen() {
         )}
       </SafeAreaScreen>
 
-      <FAB icon="add" onPress={() => router.push('/(crew)/report-defect')} />
+      <FAB icon="add" onPress={() => router.push('/(crew)/viewfinder')} />
     </View>
   );
 }
@@ -333,12 +333,12 @@ const styles = StyleSheet.create({
   segments: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 50,
     gap: spacing.xs,
     padding: 4,
     marginBottom: spacing.md,
     backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
   },
   segmentActive: {
     backgroundColor: colors.primary,
@@ -369,13 +369,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countBadgeActive: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   countText: {
     color: colors.secondary,
   },
   countTextActive: {
-    color: colors.brandGold,
+    color: colors.onPrimary,
   },
   modeFilters: {
     flexDirection: 'row',
@@ -403,8 +403,20 @@ const styles = StyleSheet.create({
     color: colors.brandGold,
   },
   taskCard: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
     overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1A1D20',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   rail: {
     position: 'absolute',
@@ -412,11 +424,11 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    borderTopLeftRadius: radius.lg,
-    borderBottomLeftRadius: radius.lg,
+    borderTopLeftRadius: radius.xl,
+    borderBottomLeftRadius: radius.xl,
   },
   taskList: {
-    paddingBottom: 96,
+    paddingBottom: 140,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -446,6 +458,8 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   taskTitle: {
+    fontSize: 17,
+    fontWeight: '700',
     color: colors.neutral,
     marginTop: spacing.sm,
   },
