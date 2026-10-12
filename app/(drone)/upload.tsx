@@ -5,7 +5,7 @@ import { enqueuePayload, getReceipts, recoverInFlight } from '../../src/offline/
 import { getDeviceId } from '../../src/constants/device';
 import { stableUuid } from '../../src/utils/uuid';
 import { LocalState } from '../../src/types/enums';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -13,6 +13,12 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 
 type UploadStep = 'LOCAL' | 'QUEUED' | 'UPLOADING' | 'SERVER_CONFIRMED';
 
@@ -118,6 +124,8 @@ export default function DroneUploadScreen() {
   const [uploadStep, setUploadStep] = useState<UploadStep>('LOCAL');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [note, setNote] = useState('');
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
   const [onlineMode, setOnlineMode] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
@@ -125,7 +133,13 @@ export default function DroneUploadScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    const database = openDatabase();
+    let database: SQLite.SQLiteDatabase | null = null;
+    try {
+      database = openDatabase();
+    } catch {
+      setDbError('Không mở được kho dữ liệu cục bộ.');
+      return;
+    }
     void initDatabase(database)
       .then(() => {
         if (!cancelled) {
@@ -134,7 +148,7 @@ export default function DroneUploadScreen() {
       })
       .catch(() => {
         if (!cancelled) {
-          setNote('Không mở được kho dữ liệu cục bộ.');
+          setDbError('Không mở được kho dữ liệu cục bộ.');
         }
       });
     return () => {
@@ -149,7 +163,7 @@ export default function DroneUploadScreen() {
     try {
       await recoverInFlight(db);
     } catch {
-      setNote('Không chuẩn hoá được các mục đang gửi dở.');
+      setDbError('Không chuẩn hoá được các mục đang gửi dở.');
     }
   }, [db]);
 
@@ -224,13 +238,14 @@ export default function DroneUploadScreen() {
    */
   const handleStartSubmitDataset = async () => {
     if (!db) {
-      setNote('Chưa mở được kho dữ liệu cục bộ, chưa thể xếp hàng nộp bộ dữ liệu.');
+      setDbError('Chưa mở được kho dữ liệu cục bộ, chưa thể xếp hàng nộp bộ dữ liệu.');
       return;
     }
 
     setSubmitting(true);
     setUploadProgress(0);
-    setNote('Đang lưu bộ dữ liệu vào hàng đợi ngoại tuyến…');
+    setStatusMsg('Đang lưu bộ dữ liệu vào hàng đợi ngoại tuyến…');
+    setDbError(null);
 
     try {
       setUploadStep('QUEUED');
@@ -253,6 +268,7 @@ export default function DroneUploadScreen() {
           telemetryFileIds: [],
           scope: [],
           blockedReason,
+          note,
         },
         {
           // Chỉ có mã yêu cầu hiện trường, chưa phải taskId server cùng ETag.
@@ -271,16 +287,16 @@ export default function DroneUploadScreen() {
 
       if (acked) {
         setUploadStep('SERVER_CONFIRMED');
-        setNote('Máy chủ đã xác nhận toàn vẹn bộ dữ liệu.');
+        setStatusMsg('Máy chủ đã xác nhận toàn vẹn bộ dữ liệu.');
       } else {
         setUploadStep('QUEUED');
-        setNote(
+        setStatusMsg(
           'Đã lưu cục bộ và chờ trong hàng đợi. Cần nạp tệp qua phiên tải lên và có ETag nhiệm vụ trước khi nộp lên máy chủ.',
         );
       }
     } catch (error) {
       setUploadStep('QUEUED');
-      setNote(
+      setDbError(
         error instanceof Error
           ? `Lỗi khi nộp: ${error.message}`
           : 'Lỗi khi nộp bộ dữ liệu, đã giữ trong hàng đợi.',
@@ -722,6 +738,8 @@ export default function DroneUploadScreen() {
             onPress={handleStartSubmitDataset}
           />
         )}
+        {dbError && <Text style={[typography.caption, styles.statusError]}>{dbError}</Text>}
+        {statusMsg && <Text style={[typography.caption, styles.statusMsg]}>{statusMsg}</Text>}
       </View>
     </SafeAreaScreen>
   );
@@ -988,10 +1006,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   fileIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    backgroundColor: '#FEF9E7',
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: '#FEF3E2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1040,6 +1058,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
     marginBottom: spacing.sm,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   gpsIconBox: {
     width: 36,
@@ -1107,6 +1127,8 @@ const styles = StyleSheet.create({
   networkCard: {
     gap: spacing.sm,
     marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   networkTitleGroup: {
     flexDirection: 'row',
@@ -1159,6 +1181,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actionSection: {
+    gap: spacing.xs,
     marginBottom: spacing.xl,
+  },
+  statusMsg: {
+    color: colors.primaryDark,
+    textAlign: 'center',
+  },
+  statusError: {
+    color: colors.error,
+    textAlign: 'center',
   },
 });
