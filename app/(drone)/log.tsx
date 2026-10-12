@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+
+const softShadow = Platform.select({
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  android: { elevation: 3 },
+  default: {},
+});
 
 interface SurveyLogItem {
   id: string;
@@ -306,7 +312,7 @@ export default function DroneLogScreen() {
                 <View
                   style={[
                     styles.rail,
-                    { backgroundColor: isProcessing ? colors.info : colors.success },
+                    { backgroundColor: isProcessing ? colors.border : colors.success },
                   ]}
                 />
                 {/* Top Row: Code Badge + Timestamp & Status Tag */}
@@ -446,8 +452,10 @@ const styles = StyleSheet.create({
   },
   featuredFlightCard: {
     marginBottom: spacing.sm,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.primary,
+    borderRadius: radius.xl,
+    ...softShadow,
     gap: spacing.xs,
   },
   featuredHeader: {
@@ -465,10 +473,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   droneIconCircle: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: radius.full,
-    backgroundColor: '#FEF9E7',
+    backgroundColor: '#FEF3E2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -556,7 +564,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   flightChecksumBox: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -602,6 +610,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     position: 'relative',
     overflow: 'hidden',
+    borderRadius: radius.xl,
+    ...softShadow,
   },
   rail: {
     position: 'absolute',
@@ -609,8 +619,8 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    borderTopLeftRadius: radius.lg,
-    borderBottomLeftRadius: radius.lg,
+    borderTopLeftRadius: radius.xl,
+    borderBottomLeftRadius: radius.xl,
   },
   logCardHighlight: {
     borderColor: colors.primary,
@@ -645,7 +655,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: radius.full,
@@ -654,10 +664,10 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: radius.full,
-    backgroundColor: colors.info,
+    backgroundColor: colors.secondary,
   },
   processingPillText: {
-    color: colors.info,
+    color: colors.secondary,
     fontSize: 10,
     fontWeight: 'bold',
   },
