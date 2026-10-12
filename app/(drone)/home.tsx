@@ -1,11 +1,12 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 
@@ -123,7 +124,7 @@ export default function DroneHomeScreen() {
 
       {/* Quick Access Actions */}
       <View style={styles.quickAccessRow}>
-        <Pressable
+        <AnimatedPressable
           style={styles.quickButton}
           onPress={() =>
             router.push({
@@ -135,9 +136,9 @@ export default function DroneHomeScreen() {
         >
           <MaterialIcons name="sd-card" size={18} color={colors.primaryDark} />
           <Text style={[typography.labelSm, styles.quickButtonText]}>Nạp thẻ SD</Text>
-        </Pressable>
+        </AnimatedPressable>
 
-        <Pressable
+        <AnimatedPressable
           style={styles.quickButton}
           onPress={() =>
             router.push({
@@ -149,35 +150,35 @@ export default function DroneHomeScreen() {
         >
           <MaterialIcons name="history" size={18} color={colors.primaryDark} />
           <Text style={[typography.labelSm, styles.quickButtonText]}>Nhật ký bay</Text>
-        </Pressable>
+        </AnimatedPressable>
 
-        <Pressable
+        <AnimatedPressable
           style={styles.quickButton}
           onPress={() => router.push('/(drone)/sync')}
           accessibilityRole="button"
         >
           <MaterialIcons name="sync" size={18} color={colors.primaryDark} />
           <Text style={[typography.labelSm, styles.quickButtonText]}>Đồng bộ</Text>
-        </Pressable>
+        </AnimatedPressable>
       </View>
 
       {/* Section Tasks */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.titleMd, styles.sectionTitle]}>Việc cần làm</Text>
-        <Pressable
+        <AnimatedPressable
           onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
           style={styles.seeAllPress}
         >
           <Text style={[typography.caption, styles.seeAll]}>Xem tất cả</Text>
           <MaterialIcons name="chevron-right" size={16} color={colors.primaryDark} />
-        </Pressable>
+        </AnimatedPressable>
       </View>
 
       {/* Tasks List Matching Figma Image 1 */}
       <View style={styles.taskList}>
         {tasks.map((task) => (
-          <Pressable
+          <AnimatedPressable
             key={task.code}
             onPress={() =>
               router.push({
@@ -215,7 +216,7 @@ export default function DroneHomeScreen() {
 
               <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
             </Card>
-          </Pressable>
+          </AnimatedPressable>
         ))}
       </View>
     </SafeAreaScreen>
