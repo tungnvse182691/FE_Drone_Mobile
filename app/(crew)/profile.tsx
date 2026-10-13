@@ -121,7 +121,7 @@ export default function CrewProfileScreen() {
 
         <View style={styles.roleChip}>
           <MaterialIcons name="build" size={14} color={colors.brandGold} />
-          <Text style={[typography.labelSm, styles.roleText]}>Thợ đường - Repair Crew</Text>
+          <Text style={[typography.labelSm, styles.roleText]}>Thợ đường</Text>
         </View>
       </View>
 
@@ -178,7 +178,7 @@ export default function CrewProfileScreen() {
       </Pressable>
 
       <Text style={[typography.caption, styles.footer]}>
-        Hoàng Hải Field v2.4.1 (Build 142) • Repair Crew Edition
+        Hoàng Hải Field v2.4.1 (Build 142) • Đội sửa chữa
       </Text>
 
       {toast ? <Toast type="info" message={toast} /> : null}
