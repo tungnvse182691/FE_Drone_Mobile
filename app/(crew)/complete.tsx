@@ -182,7 +182,7 @@ export default function CrewCompleteScreen() {
               <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
             </Pressable>
             <Text style={[typography.titleMd, styles.topBarTitle]}>
-              Hoàn tất công việc • Lệnh số {task.wo_code.replace('#WO-', '')}
+              Hoàn tất công việc • Lệnh số {task.wo_code.replace('#HH-WO-', '')}
             </Text>
           </View>
           <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
@@ -194,7 +194,7 @@ export default function CrewCompleteScreen() {
           <View>
             <Text style={[typography.labelSm, styles.summaryLabel]}>LỆNH THI CÔNG</Text>
             <Text style={[typography.titleLg, styles.summaryCode]}>
-              Lệnh số {task.wo_code.replace('#WO-', '')}
+              Lệnh số {task.wo_code.replace('#HH-WO-', '')}
             </Text>
           </View>
           <View style={styles.statusPill}>

@@ -47,8 +47,8 @@ interface RequestDetailData {
 }
 
 const REQUEST_DETAILS: Record<string, RequestDetailData> = {
-  '#REQ-KS-089': {
-    code: '#REQ-KS-089',
+  '#HH-KS-089': {
+    code: '#HH-KS-089',
     roadTitle: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     location: 'Km03+000 - Km03+300, Tân Kiên, Bình Chánh, TP.HCM',
     statusText: 'MỚI TIẾP NHẬN',
@@ -76,8 +76,8 @@ const REQUEST_DETAILS: Record<string, RequestDetailData> = {
       lng: 106.5524,
     },
   },
-  '#REQ-KS-090': {
-    code: '#REQ-KS-090',
+  '#HH-KS-090': {
+    code: '#HH-KS-090',
     roadTitle: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     location: 'Km01+200 - Km02+500, Vĩnh Lộc B, Bình Chánh, TP.HCM',
     statusText: 'MỚI TIẾP NHẬN',
@@ -105,8 +105,8 @@ const REQUEST_DETAILS: Record<string, RequestDetailData> = {
       lng: 106.6833,
     },
   },
-  '#REQ-KS-088': {
-    code: '#REQ-KS-088',
+  '#HH-KS-088': {
+    code: '#HH-KS-088',
     roadTitle: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     location: 'Km01+600 - Km02+100, Cầu Bà Lát, Bình Chánh, TP.HCM',
     statusText: 'MỚI TIẾP NHẬN',
@@ -134,8 +134,8 @@ const REQUEST_DETAILS: Record<string, RequestDetailData> = {
       lng: 106.7333,
     },
   },
-  '#REQ-KS-087': {
-    code: '#REQ-KS-087',
+  '#HH-KS-087': {
+    code: '#HH-KS-087',
     roadTitle: 'Tuyến ĐH.05 - Ngã ba Tân Kiên (Km03+100)',
     location: 'Km02+900 - Km03+200, Tân Kiên, Bình Chánh, TP.HCM',
     statusText: 'ĐANG THỰC HIỆN',
@@ -163,8 +163,8 @@ const REQUEST_DETAILS: Record<string, RequestDetailData> = {
       lng: 106.7050,
     },
   },
-  '#REQ-KS-085': {
-    code: '#REQ-KS-085',
+  '#HH-KS-085': {
+    code: '#HH-KS-085',
     roadTitle: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
     location: 'Km02+000 - Km02+400, Vĩnh Lộc B, Bình Chánh, TP.HCM',
     statusText: 'ĐÃ HOÀN THÀNH BAY',
@@ -196,7 +196,7 @@ const REQUEST_DETAILS: Record<string, RequestDetailData> = {
 
 export default function DroneRequestDetailScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
-  const initialCode = params.code && REQUEST_DETAILS[params.code] ? params.code : '#REQ-KS-089';
+  const initialCode = params.code && REQUEST_DETAILS[params.code] ? params.code : '#HH-KS-089';
   const [selectedCode, setSelectedCode] = useState<string>(initialCode);
   const [isAccepted, setIsAccepted] = useState(false);
   const [accepting, setAccepting] = useState(false);
@@ -213,7 +213,7 @@ export default function DroneRequestDetailScreen() {
     }
   }, [params.code]);
 
-  const current = REQUEST_DETAILS[selectedCode] ?? REQUEST_DETAILS['#REQ-KS-089'];
+  const current = REQUEST_DETAILS[selectedCode] ?? REQUEST_DETAILS['#HH-KS-089'];
 
   const handleOpenGoogleMaps = () => {
     // US-40, BR-38: Dẫn đường WGS84 tới Điểm tiếp cận cất/hạ cánh (Access Point)

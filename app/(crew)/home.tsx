@@ -150,7 +150,7 @@ export default function CrewHomeScreen() {
           <Text style={[typography.labelLg, styles.captureBtnText]}>Chụp ảnh hiện trường</Text>
         </Pressable>
 
-        {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, footer #WO-xx, chevron phải */}
+        {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, footer #HH-WO-xx, chevron phải */}
         <View style={styles.taskList}>
           {CREW_TASKS.map((task) => {
             const isRepair = task.task_mode === TaskMode.INSPECT_AND_REPAIR;

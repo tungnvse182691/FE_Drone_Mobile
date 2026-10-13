@@ -31,7 +31,7 @@ interface SurveyLogItem {
 
 const ACTIVE_FLIGHT_LOG = {
   flightCode: '#FL-2026-089',
-  surveyCode: '#REQ-KS-089',
+  surveyCode: '#HH-KS-089',
   roadTitle: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
   location: 'Tân Kiên, Bình Chánh, TP.HCM',
   droneId: 'M350-HH-02',
@@ -57,7 +57,7 @@ const SURVEY_LOGS: SurveyLogItem[] = [
     id: '1',
     code: '#HH-409',
     flightCode: '#FL-2026-089',
-    surveyCode: '#REQ-KS-089',
+    surveyCode: '#HH-KS-089',
     timestamp: 'Hôm nay, 08:59',
     title: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     location: 'Bình Chánh, TP.HCM',
@@ -72,7 +72,7 @@ const SURVEY_LOGS: SurveyLogItem[] = [
     id: '2',
     code: '#HH-398',
     flightCode: '#FL-2026-088',
-    surveyCode: '#REQ-KS-088',
+    surveyCode: '#HH-KS-088',
     timestamp: 'Hôm qua, 09:15',
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     location: 'Bình Chánh, TP.HCM',
@@ -86,7 +86,7 @@ const SURVEY_LOGS: SurveyLogItem[] = [
     id: '3',
     code: '#HH-382',
     flightCode: '#FL-2026-087',
-    surveyCode: '#REQ-KS-087',
+    surveyCode: '#HH-KS-087',
     timestamp: '22/10/2025',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     location: 'Bình Chánh, TP.HCM',
@@ -100,7 +100,7 @@ const SURVEY_LOGS: SurveyLogItem[] = [
     id: '4',
     code: '#HH-375',
     flightCode: '#FL-2026-085',
-    surveyCode: '#REQ-KS-085',
+    surveyCode: '#HH-KS-085',
     timestamp: '20/10/2025',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
     location: 'Bình Chánh, TP.HCM',
@@ -114,7 +114,7 @@ const SURVEY_LOGS: SurveyLogItem[] = [
     id: '5',
     code: '#HH-361',
     flightCode: '#FL-2026-084',
-    surveyCode: '#REQ-KS-088',
+    surveyCode: '#HH-KS-088',
     timestamp: '18/10/2025',
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     location: 'Bình Chánh, TP.HCM',
@@ -303,7 +303,7 @@ export default function DroneLogScreen() {
               onPress={() =>
                 router.push({
                   pathname: '/(drone)/request-detail',
-                  params: { code: log.surveyCode ?? '#REQ-KS-089' },
+                  params: { code: log.surveyCode ?? '#HH-KS-089' },
                 })
               }
               accessibilityRole="button"
@@ -382,7 +382,7 @@ export default function DroneLogScreen() {
                       e.stopPropagation();
                       router.push({
                         pathname: isProcessing ? '/(drone)/sync' : '/(drone)/request-detail',
-                        params: { code: log.surveyCode ?? '#REQ-KS-089' },
+                        params: { code: log.surveyCode ?? '#HH-KS-089' },
                       });
                     }}
                     accessibilityRole="button"

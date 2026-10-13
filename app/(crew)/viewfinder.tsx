@@ -65,7 +65,7 @@ export default function CrewViewfinderScreen() {
       longitude: coords?.longitude ?? task.coordinates.longitude,
     };
     const now = new Date();
-    const line = `Lệnh ${task.wo_code.replace('#WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(now)}`;
+    const line = `Lệnh ${task.wo_code.replace('#HH-WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(now)}`;
 
     if (mode === 'before') {
       setBeforeCapture(photo.uri, line, now.toISOString(), captureCoords);
@@ -90,7 +90,7 @@ export default function CrewViewfinderScreen() {
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="description" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>
-          Lệnh số {task.wo_code.replace('#WO-', '')}
+          Lệnh số {task.wo_code.replace('#HH-WO-', '')}
         </Text>
       </View>
       <View style={styles.watermarkMeta}>
@@ -260,7 +260,7 @@ export default function CrewViewfinderScreen() {
           <View style={styles.sheetTitleRow}>
             <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
             <Text style={[typography.labelLg, styles.sheetTitle]}>
-              Lệnh số {task.wo_code.replace('#WO-', '')}
+              Lệnh số {task.wo_code.replace('#HH-WO-', '')}
             </Text>
             <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
             <Text style={[typography.labelLg, styles.sheetSub]}>

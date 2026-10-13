@@ -39,7 +39,7 @@ export interface CrewTask {
 export const CREW_TASKS: CrewTask[] = [
   {
     id: 'task-wo-01',
-    wo_code: '#WO-01',
+    wo_code: '#HH-WO-01',
     title: 'Đổ bù ổ gà sâu vỡ tấm bê tông Km02+150',
     task_mode: TaskMode.INSPECT_AND_REPAIR,
     defect_type_code: DEFECT_TYPE_CODES.POTH_DEEP,
@@ -62,7 +62,7 @@ export const CREW_TASKS: CrewTask[] = [
   },
   {
     id: 'task-wo-02',
-    wo_code: '#WO-02',
+    wo_code: '#HH-WO-02',
     title: 'Khảo sát đợt gom nứt tấm bê tông Km01+850',
     task_mode: TaskMode.MEASURE_ONLY,
     defect_type_code: DEFECT_TYPE_CODES.SLAB_CRK,
@@ -85,7 +85,7 @@ export const CREW_TASKS: CrewTask[] = [
   },
   {
     id: 'task-wo-03',
-    wo_code: '#WO-03',
+    wo_code: '#HH-WO-03',
     title: 'Kiểm tra xói lở vai đường Km03+100',
     task_mode: TaskMode.INSPECT_AND_REPAIR,
     defect_type_code: DEFECT_TYPE_CODES.SHLD_EROS,
@@ -111,7 +111,7 @@ export const CREW_TASKS: CrewTask[] = [
 export const CREW_COMPLETED_TASKS: CrewTask[] = [
   {
     id: 'task-wo-04',
-    wo_code: '#WO-04',
+    wo_code: '#HH-WO-04',
     title: 'Xử lý lún võng đọng nước mặt bê tông Km02+900',
     task_mode: TaskMode.INSPECT_AND_REPAIR,
     defect_type_code: DEFECT_TYPE_CODES.DEPR_POND,
@@ -132,7 +132,7 @@ export const CREW_COMPLETED_TASKS: CrewTask[] = [
   },
   {
     id: 'task-wo-05',
-    wo_code: '#WO-05',
+    wo_code: '#HH-WO-05',
     title: 'Gia cố khe co giãn tiếp giáp tấm bê tông Km00+400',
     task_mode: TaskMode.INSPECT_AND_REPAIR,
     defect_type_code: DEFECT_TYPE_CODES.EDGE_BRK,

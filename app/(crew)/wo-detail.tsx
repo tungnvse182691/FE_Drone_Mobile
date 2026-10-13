@@ -184,7 +184,7 @@ export default function CrewWoDetailScreen() {
             <Text style={[typography.titleMd, styles.cardTitleText]}>Thông tin kỹ thuật</Text>
           </View>
           <Text style={[typography.labelSm, styles.taskCode]}>
-            Lệnh số {task.wo_code.replace('#WO-', '')}
+            Lệnh số {task.wo_code.replace('#HH-WO-', '')}
           </Text>
         </View>
 
@@ -274,7 +274,7 @@ export default function CrewWoDetailScreen() {
             <MaterialIcons name="photo-camera" size={16} color={colors.brandGold} />
             <Text style={[typography.titleMd, styles.cardTitleText]}>Ảnh hiện trạng</Text>
           </View>
-          <Text style={[typography.labelSm, styles.taskCode]}>Đối chứng BEFORE</Text>
+          <Text style={[typography.labelSm, styles.taskCode]}>Đối chứng trước sửa</Text>
         </View>
 
         {beforeSelected && session?.before_source ? (

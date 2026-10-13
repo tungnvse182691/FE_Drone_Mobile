@@ -32,7 +32,7 @@ interface SurveyRequest {
 const REQUESTS_DATA: SurveyRequest[] = [
   {
     id: '1',
-    code: '#REQ-KS-089',
+    code: '#HH-KS-089',
     timeAgo: '30 phút trước',
     title: 'Tuyến ĐH.05 - Tân Kiên Km03+100',
     location: 'Tân Kiên, Bình Chánh, TP.HCM',
@@ -43,7 +43,7 @@ const REQUESTS_DATA: SurveyRequest[] = [
   },
   {
     id: '2',
-    code: '#REQ-KS-090',
+    code: '#HH-KS-090',
     timeAgo: 'Hôm nay, 08:15',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     location: 'Vĩnh Lộc B, Bình Chánh, TP.HCM',
@@ -54,7 +54,7 @@ const REQUESTS_DATA: SurveyRequest[] = [
   },
   {
     id: '3',
-    code: '#REQ-KS-087',
+    code: '#HH-KS-087',
     timeAgo: 'Hôm nay, 07:30',
     title: 'Tuyến ĐH.05 - Ngã ba Tân Kiên',
     location: 'Tân Kiên, Bình Chánh, TP.HCM',
@@ -66,7 +66,7 @@ const REQUESTS_DATA: SurveyRequest[] = [
   },
   {
     id: '4',
-    code: '#REQ-KS-088',
+    code: '#HH-KS-088',
     timeAgo: 'Hôm qua, 15:40',
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     location: 'Cầu Bà Lát, Bình Chánh, TP.HCM',
@@ -77,7 +77,7 @@ const REQUESTS_DATA: SurveyRequest[] = [
   },
   {
     id: '5',
-    code: '#REQ-KS-085',
+    code: '#HH-KS-085',
     timeAgo: '20/10/2023',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
     location: 'Vĩnh Lộc B, Bình Chánh, TP.HCM',

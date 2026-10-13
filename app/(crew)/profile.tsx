@@ -163,7 +163,7 @@ export default function CrewProfileScreen() {
           <MaterialIcons name="light-mode" size={20} color={colors.brandGold} />
           <View style={styles.rowText}>
             <Text style={[typography.bodyMd, styles.rowLabel]}>Giao diện: Tương phản cao ngoài trời</Text>
-            <Text style={[typography.caption, styles.rowSubtitle]}>Cố định Light Mode</Text>
+            <Text style={[typography.caption, styles.rowSubtitle]}>Cố định chế độ sáng</Text>
           </View>
         </View>
       </Card>

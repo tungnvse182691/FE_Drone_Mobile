@@ -37,8 +37,8 @@ interface UploadConfig {
 }
 
 const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
-  '#REQ-KS-089': {
-    code: '#REQ-KS-089',
+  '#HH-KS-089': {
+    code: '#HH-KS-089',
     road: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
     defaultVideoName: 'DJI_0488_SURVEY_DH05.MP4',
@@ -50,8 +50,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     gpsCoord: '10.7412° B, 106.5524° Đ (Sai số RTK ±1.2cm)',
     gpsAddress: 'Tân Kiên, Huyện Bình Chánh, TP. Hồ Chí Minh',
   },
-  '#REQ-KS-090': {
-    code: '#REQ-KS-090',
+  '#HH-KS-090': {
+    code: '#HH-KS-090',
     road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
     defaultVideoName: 'DJI_0490_SURVEY_DH05.MP4',
@@ -63,8 +63,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     gpsCoord: '10.7333° B, 106.6833° Đ (Sai số RTK ±1.1cm)',
     gpsAddress: 'Vĩnh Lộc B, Huyện Bình Chánh, TP. Hồ Chí Minh',
   },
-  '#REQ-KS-088': {
-    code: '#REQ-KS-088',
+  '#HH-KS-088': {
+    code: '#HH-KS-088',
     road: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
     defaultVideoName: 'DJI_0488_SURVEY_DH05.MP4',
@@ -76,8 +76,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     gpsCoord: '10.7833° B, 106.7333° Đ (Sai số RTK ±0.9cm)',
     gpsAddress: 'Cầu Bà Lát, Bình Chánh, TP. Hồ Chí Minh',
   },
-  '#REQ-KS-087': {
-    code: '#REQ-KS-087',
+  '#HH-KS-087': {
+    code: '#HH-KS-087',
     road: 'Tuyến ĐH.05 - Ngã ba Tân Kiên (Km03+100)',
     droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
     defaultVideoName: 'DJI_0487_SURVEY_DH05.MP4',
@@ -89,8 +89,8 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     gpsCoord: '10.7700° B, 106.7050° Đ (Sai số RTK ±1.4cm)',
     gpsAddress: 'Ngã ba Tân Kiên, Bình Chánh, TP. Hồ Chí Minh',
   },
-  '#REQ-KS-085': {
-    code: '#REQ-KS-085',
+  '#HH-KS-085': {
+    code: '#HH-KS-085',
     road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
     droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
     defaultVideoName: 'DJI_0485_SURVEY_DH05.MP4',
@@ -106,10 +106,10 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
 
 export default function DroneUploadScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
-  const initialCode = params.code && UPLOAD_CONFIGS[params.code] ? params.code : '#REQ-KS-089';
+  const initialCode = params.code && UPLOAD_CONFIGS[params.code] ? params.code : '#HH-KS-089';
   const [selectedCode, setSelectedCode] = useState<string>(initialCode);
 
-  const config = UPLOAD_CONFIGS[selectedCode] ?? UPLOAD_CONFIGS['#REQ-KS-089'];
+  const config = UPLOAD_CONFIGS[selectedCode] ?? UPLOAD_CONFIGS['#HH-KS-089'];
 
   // File state (Video & SRT)
   const [videoName, setVideoName] = useState(config.defaultVideoName);

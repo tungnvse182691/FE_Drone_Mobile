@@ -31,8 +31,8 @@ interface DroneTask {
 
 export const INITIAL_DRONE_TASKS: DroneTask[] = [
   {
-    code: '#REQ-KS-089',
-    displayCode: 'Mã: KS-741',
+    code: '#HH-KS-089',
+    displayCode: 'Mã: HH-KS-089',
     title: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     subtitle: 'Xói lở vai đường mép taluy âm • Cần ảnh 4K RGB & DSM (ODM)',
     priority: 'urgent',
@@ -43,8 +43,8 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     iconColor: colors.secondary,
   },
   {
-    code: '#REQ-KS-090',
-    displayCode: 'Mã: KS-104',
+    code: '#HH-KS-090',
+    displayCode: 'Mã: HH-KS-090',
     title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     subtitle: 'Kiểm tra ổ gà sâu & nứt tấm bê tông • 2.4 km',
     priority: 'pending',
@@ -55,8 +55,8 @@ export const INITIAL_DRONE_TASKS: DroneTask[] = [
     iconColor: colors.secondary,
   },
   {
-    code: '#REQ-KS-088',
-    displayCode: 'Mã: KS-VD3',
+    code: '#HH-KS-088',
+    displayCode: 'Mã: HH-KS-088',
     title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     subtitle: 'Ảnh trực quan 3D tiến độ thi công hạ tầng',
     priority: 'pending',
@@ -129,7 +129,7 @@ export default function DroneHomeScreen() {
           onPress={() =>
             router.push({
               pathname: '/(drone)/upload',
-              params: { code: '#REQ-KS-089' },
+              params: { code: '#HH-KS-089' },
             })
           }
           accessibilityRole="button"
@@ -143,7 +143,7 @@ export default function DroneHomeScreen() {
           onPress={() =>
             router.push({
               pathname: '/(drone)/log',
-              params: { code: '#REQ-KS-089' },
+              params: { code: '#HH-KS-089' },
             })
           }
           accessibilityRole="button"
