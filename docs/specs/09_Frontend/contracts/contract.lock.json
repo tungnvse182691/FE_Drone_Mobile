@@ -1,8 +1,0 @@
-{
-  "contractVersion": "0.2.0-draft-alignment",
-  "sha256": "dd991f20c9a27a564bf37c06bba63776424b770f3abfa54ec2bef9d1a1e678bd",
-  "canonical": "05_Technical/openapi.yaml",
-  "snapshot": "09_Frontend/contracts/openapi.baseline.yaml",
-  "approval": "Proposed design delta; business decisions are in the decision register, contract/runtime remain unenabled.",
-  "review": "V2 ALIGN 2026-09-28"
-}
