@@ -14,6 +14,7 @@ import {
   normalizePhotoMediaType,
   sha256HexOfBytes,
 } from '../../src/api/uploads';
+import { hasUsableCoordinate, isZeroCoordinate } from '../../src/types/position';
 import {
   UPLOAD_STATE_LABELS,
   useUploadsStore,
@@ -34,6 +35,8 @@ const MAX_PHOTOS = 3;
 interface Coordinates {
   latitude: number;
   longitude: number;
+  /** Bán kính sai số GPS (mét, 68%); `null` khi thiết bị không cung cấp. */
+  accuracyMeters: number | null;
 }
 
 function formatBytes(size: number): string {
@@ -79,9 +82,19 @@ export default function ReporterCaptureScreen() {
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (isZeroCoordinate(position.coords.latitude, position.coords.longitude)) {
+        // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ.
+        setCoordinates(null);
+        setLocationStatus('Không có tọa độ (ảnh sẽ ghi nguồn UNKNOWN)');
+        return;
+      }
       setCoordinates({
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
+        accuracyMeters:
+          typeof position.coords.accuracy === 'number' && Number.isFinite(position.coords.accuracy)
+            ? position.coords.accuracy
+            : null,
       });
       setLocationStatus(
         `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`,
@@ -118,15 +131,17 @@ export default function ReporterCaptureScreen() {
         return;
       }
       const checksumSha256 = await sha256HexOfBytes(bytes);
+      const usable = hasUsableCoordinate(coordinates?.latitude, coordinates?.longitude);
       await enqueuePhoto({
         uriLocal: asset.uri,
         fileName,
         mediaType,
         sizeBytes: bytes.byteLength,
         checksumSha256,
-        locationSource: locationSourceFor(Boolean(coordinates)),
-        latitude: coordinates?.latitude ?? null,
-        longitude: coordinates?.longitude ?? null,
+        locationSource: locationSourceFor(usable),
+        latitude: usable ? coordinates?.latitude ?? null : null,
+        longitude: usable ? coordinates?.longitude ?? null : null,
+        accuracyMeters: usable ? coordinates?.accuracyMeters ?? null : null,
         partitionId,
       });
       await advanceAll();

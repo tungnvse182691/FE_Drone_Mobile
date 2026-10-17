@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as Crypto from 'expo-crypto';
 import { apiClient } from './client';
 import { parseProblemDetails } from './problemDetails';
+import type { ReportLocationSource } from '../types/position';
 
 /**
  * Hợp đồng upload ảnh private của Reporter (API-208 / API-211 / API-212 / API-213 / API-214).
@@ -133,13 +134,16 @@ export function isTerminalFileStatus(status: EvidenceFileStatusView): boolean {
   return status === 'VERIFIED' || status === 'FAILED';
 }
 
-/** Nguồn tọa độ của ảnh — enum trong 03_Private-Photo-Upload.md. */
-export type LocationSource = 'UNKNOWN' | 'CAPTURE' | 'EXIF' | 'MANUAL';
+/**
+ * Nguồn tọa độ của ảnh — enum trong 03_Private-Photo-Upload.md.
+ * Canonical sống tại `src/types/position.ts` (`ReportLocationSource`); giữ tên cũ cho tương thích.
+ */
+export type LocationSource = ReportLocationSource;
 
-export function locationSourceFor(hasCoordinates: boolean): LocationSource {
-  // Không có GPS thì ghi UNKNOWN — TUYỆT ĐỐI không bịa tọa độ.
-  return hasCoordinates ? 'CAPTURE' : 'UNKNOWN';
-}
+export {
+  buildReportEvidenceLocation,
+  locationSourceFor,
+} from '../types/position';
 
 // =============================================================================
 // HELPERS THUẦN

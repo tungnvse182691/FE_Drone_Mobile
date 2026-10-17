@@ -1,4 +1,4 @@
-import type { FastTrackPolicyVersion } from '../../types/domain';
+﻿import type { FastTrackPolicyVersion } from '../../types/domain';
 import type { DefectTypeCode } from '../../constants/defect-types';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
 import { TaskMode } from '../../types/enums';
@@ -43,7 +43,7 @@ export interface BeforeEvidenceCandidate {
   source_label: string;
   defect_type_code: DefectTypeCode;
   captured_at: string;
-  coordinates: { latitude: number; longitude: number };
+  coordinates: FieldCoordinates;
   local_uri: string | null;
 }
 
@@ -54,6 +54,17 @@ export interface CrewFieldMeasurement {
 }
 
 export type FastTrackEvaluationCode = 'PENDING' | 'ELIGIBLE' | 'NOT_ELIGIBLE';
+
+/**
+ * Toạ độ WGS84 dùng trong phiên hiện trường.
+ * `accuracyMeters` = bán kính sai số GPS (mét, 68%); `null`/thiếu = thiết bị không báo.
+ * (Khớp trường `accuracyMeters` của `PositionDto`.)
+ */
+export interface FieldCoordinates {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number | null;
+}
 
 export interface CrewFieldSession {
   task_id: string;
@@ -69,7 +80,7 @@ export interface CrewFieldSession {
   before_watermark: string | null;
   after_local_uri: string | null;
   after_watermark: string | null;
-  coordinates: { latitude: number; longitude: number } | null;
+  coordinates: FieldCoordinates | null;
   evaluation_code: FastTrackEvaluationCode;
   attempt_id: string | null;
   submitted_at: string | null;
@@ -134,14 +145,15 @@ export function startCrewFieldSession(input: {
   work_order_code: string;
   task_mode: TaskMode;
   defect_type_code: DefectTypeCode;
-  coordinates?: { latitude: number; longitude: number } | null;
+  coordinates?: FieldCoordinates | null;
 }): CrewFieldSession {
   activeSession = {
     task_id: input.task_id,
     work_order_code: input.work_order_code,
     task_mode: input.task_mode,
     defect_type_code: input.defect_type_code,
-    policy_id: FAST_TRACK_POLICY_ID,
+    // Policy revision do máy chủ cấp qua API-146; chưa đối chiếu thì để null.
+    policy_id: null,
     measurement: { length_m: null, width_m: null, depth_cm: null },
     area_m2: null,
     before_evidence_id: null,
@@ -168,11 +180,19 @@ export function updateCrewMeasurement(patch: Partial<CrewFieldMeasurement>) {
   }
   activeSession.measurement = { ...activeSession.measurement, ...patch };
   activeSession.area_m2 = computeArea(activeSession.measurement);
-  activeSession.evaluation_code = evaluateFastTrack(
-    activeSession.task_mode,
-    activeSession.measurement,
-    activeSession.defect_type_code,
-  ).code;
+  // Máy chủ là nguồn sự thật về eligibility (API-146) — app KHÔNG tự đánh giá.
+  // Mọi thay đổi kích thước đều đưa về PENDING cho tới khi đối chiếu lại với máy chủ.
+  activeSession.evaluation_code = 'PENDING';
+  activeSession.policy_id = null;
+}
+
+/** Ghi lại kết quả eligibility do máy chủ trả về (API-146) vào phiên hiện trường. */
+export function applyEligibility(code: FastTrackEvaluationCode, policyRevisionId?: string | null) {
+  if (!activeSession) {
+    return;
+  }
+  activeSession.evaluation_code = code;
+  activeSession.policy_id = policyRevisionId ?? null;
 }
 
 export function selectBeforeEvidence(candidate: BeforeEvidenceCandidate) {
@@ -189,7 +209,7 @@ export function setBeforeCapture(
   photoUri: string,
   watermark: string,
   capturedAt: string,
-  coords: { latitude: number; longitude: number },
+  coords: FieldCoordinates,
 ) {
   if (!activeSession) {
     return;
@@ -212,7 +232,7 @@ export function setBeforeCapture(
 export function setAfterCapture(
   photoUri: string,
   watermark: string,
-  coords?: { latitude: number; longitude: number } | null,
+  coords?: FieldCoordinates | null,
 ) {
   if (!activeSession) {
     return;
@@ -259,7 +279,11 @@ export interface FastTrackEvaluation {
   code: FastTrackEvaluationCode;
 }
 
-export function evaluateFastTrack(
+/**
+ * Bộ luật Fast Track phía MÁY CHỦ (mock). App KHÔNG gọi hàm này trực tiếp —
+ * chỉ `fetchRepairEligibility` (tương đương API-146) dùng, mô phỏng server là authority.
+ */
+function evaluateFastTrack(
   taskMode: TaskMode,
   measurement: CrewFieldMeasurement,
   defectTypeCode: DefectTypeCode,
@@ -298,6 +322,86 @@ export function evaluateFastTrack(
   };
 }
 
-export function buildWatermark(capturedAt: string, coords: { latitude: number; longitude: number }) {
+export interface RepairEligibilityInput {
+  task_id: string;
+  task_mode: TaskMode;
+  defect_type_code: DefectTypeCode;
+  measurement: CrewFieldMeasurement;
+}
+
+export interface RepairEligibility {
+  eligible: boolean;
+  policyRevisionId: string | null;
+  policyContentHash: string | null;
+  /** Lý do không đạt (tiếng Việt) — hiển thị thẳng cho Crew; rỗng khi đạt. */
+  missingReasons: string[];
+  rules: FastTrackEvaluation;
+}
+
+export const ELIGIBILITY_FAIL_CLOSED_MESSAGE =
+  'Không đối chiếu được điều kiện sửa nhanh với máy chủ. Tạm thời chuyển kết quả đo cho PM.';
+
+function buildEligibilityReasons(
+  taskMode: TaskMode,
+  measurement: CrewFieldMeasurement,
+  evaluation: FastTrackEvaluation,
+): string[] {
+  if (taskMode !== TaskMode.INSPECT_AND_REPAIR) {
+    return ['Nhiệm vụ không ở chế độ đo-kiểm-và-sửa.'];
+  }
+  if (!evaluation.hasAllDimensions) {
+    return ['Chưa nhập đủ 3 kích thước: chiều dài, chiều rộng, độ sâu.'];
+  }
+  const reasons: string[] = [];
+  if (!evaluation.passesDefectCode) {
+    reasons.push('Loại khuyết tật không thuộc danh mục áp dụng sửa nhanh.');
+  }
+  if (!evaluation.passesArea) {
+    reasons.push(
+      `Diện tích vượt ngưỡng sửa nhanh (policy hiện hành: tối đa ${FAST_TRACK_POLICY.max_area_m2.toFixed(1)} m²).`,
+    );
+  }
+  if (!evaluation.passesLength) {
+    reasons.push(
+      `Chiều dài vượt ngưỡng sửa nhanh (policy hiện hành: tối đa ${FAST_TRACK_POLICY.max_length_m.toFixed(1)} m).`,
+    );
+  }
+  if (!evaluation.passesDepth) {
+    reasons.push(
+      `Độ sâu vượt ngưỡng sửa nhanh (policy hiện hành: tối đa ${FAST_TRACK_POLICY.max_depth_cm.toFixed(1)} cm).`,
+    );
+  }
+  return reasons;
+}
+
+/**
+ * Mock API-146 — điều kiện Sửa Nhanh do máy chủ đánh giá theo policy revision hiện hành.
+ * KHÔNG hardcode ngưỡng ở client; lỗi/abort ở tầng gọi phải fail closed (coi như không đủ điều kiện).
+ */
+export async function fetchRepairEligibility(
+  input: RepairEligibilityInput,
+  signal?: AbortSignal,
+): Promise<RepairEligibility> {
+  await new Promise((resolve) => setTimeout(resolve, 450));
+  if (signal?.aborted) {
+    throw new Error('ELIGIBILITY_ABORTED');
+  }
+  const evaluation = evaluateFastTrack(
+    input.task_mode,
+    input.measurement,
+    input.defect_type_code,
+  );
+  const missingReasons = buildEligibilityReasons(input.task_mode, input.measurement, evaluation);
+  const resolved = evaluation.code !== 'PENDING';
+  return {
+    eligible: evaluation.code === 'ELIGIBLE',
+    policyRevisionId: resolved ? FAST_TRACK_POLICY_ID : null,
+    policyContentHash: resolved ? `sha256:${FAST_TRACK_POLICY_ID}` : null,
+    missingReasons,
+    rules: evaluation,
+  };
+}
+
+export function buildWatermark(capturedAt: string, coords: FieldCoordinates) {
   return `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)} • ${capturedAt}`;
 }

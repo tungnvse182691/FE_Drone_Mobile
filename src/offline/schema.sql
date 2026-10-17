@@ -5,20 +5,21 @@
 -- ======================================================
 
 -- BẢN NHÁP: mọi thao tác hiện trường ghi local trước
--- Hỗ trợ: 'reporter_submission' (ảnh + GPS người dân), 'fast_track_completion' (ảnh AFTER crew)
+-- kind: Crew dùng bộ 6 `OfflineOperationKind` canonical (xem src/offline/operation-kind.ts);
+--       Reporter dùng khoá riêng của luồng phản ánh (ngoài phạm vi bộ 6).
 CREATE TABLE IF NOT EXISTS local_draft (
   id            TEXT PRIMARY KEY,
-  kind          TEXT NOT NULL,          -- 'flight_log' | 'measurement' | 'evidence' | 'defect_report' | 'reporter_submission' | 'fast_track_completion'
+  kind          TEXT NOT NULL,          -- 'FIELD_ACCEPT' | 'FIELD_START' | 'FIELD_SUBMISSION' | 'REPAIR_ASSESSMENT' | 'REPAIR_EXECUTION_START' | 'REPAIR_EXECUTION_FINISH' (Crew)
   payload       TEXT NOT NULL,          -- JSON blob
   created_at    TEXT NOT NULL,          -- ISO 8601
   updated_at    TEXT NOT NULL
 );
 
--- UPLOAD QUEUE / OUTBOX INTENT:
+-- UPLOAD QUEUE / OUTBOX INTENT (legacy — xem bảng `offline_outbox` mới):
 -- State machine: DRAFT → WAITING_DEPENDENCIES → READY → IN_FLIGHT → ACKED (hoặc CONFLICT, REJECTED, PAUSED_RETRY, INVALID)
 CREATE TABLE IF NOT EXISTS outbox (
   id              TEXT PRIMARY KEY,
-  kind            TEXT NOT NULL,        -- 'survey_upload' | 'defect_report' | 'measurement' | 'repair_evidence' | 'reporter_report' | 'fast_track_completion'
+  kind            TEXT NOT NULL,        -- OfflineOperationKind canonical (Crew) — xem src/offline/operation-kind.ts
   data_b64        TEXT NOT NULL,        -- base64 encoded payload
   checksum_sha256 TEXT NOT NULL,        -- xác thực toàn vẹn SHA-256
   status          TEXT NOT NULL DEFAULT 'READY', -- DRAFT | WAITING_DEPENDENCIES | READY | IN_FLIGHT | ACKED | QUEUED | UPLOADING | SERVER_CONFIRMED | INVALID
@@ -60,7 +61,7 @@ CREATE TABLE IF NOT EXISTS defect_cache (
 -- TASK & POLICY CACHE: hỗ trợ 'policy' (FastTrackPolicyVersion) và 'work_order' (RepairWorkOrder)
 CREATE TABLE IF NOT EXISTS task_cache (
   id              TEXT PRIMARY KEY,
-  kind            TEXT NOT NULL,          -- 'policy' | 'work_order' | 'flight_log' | 'field_inspection_task' | 'repair_item'
+  kind            TEXT NOT NULL,          -- 'policy' | 'work_order'
   data            TEXT NOT NULL,          -- JSON serialized object
   cached_at       TEXT NOT NULL
 );
@@ -88,7 +89,7 @@ CREATE TABLE IF NOT EXISTS sync_partitions (
 CREATE TABLE IF NOT EXISTS offline_pending (
   id           TEXT PRIMARY KEY,
   partition_id TEXT NOT NULL,
-  kind         TEXT NOT NULL,       -- 'flight_log' | 'measurement' | 'evidence' | 'defect_report' | 'reporter_report' | 'fast_track_completion'
+  kind         TEXT NOT NULL,       -- OfflineOperationKind canonical (Crew) — xem src/offline/operation-kind.ts
   payload      TEXT NOT NULL,       -- JSON blob
   local_state  TEXT NOT NULL DEFAULT 'DRAFT',
   created_at   TEXT NOT NULL,
@@ -102,7 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_offline_pending_partition
 CREATE TABLE IF NOT EXISTS offline_outbox (
   id              TEXT PRIMARY KEY,
   partition_id    TEXT NOT NULL,
-  kind            TEXT NOT NULL,
+  kind            TEXT NOT NULL,        -- OfflineOperationKind canonical (Crew) — xem src/offline/operation-kind.ts
   payload_b64     TEXT NOT NULL,
   checksum_sha256 TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
@@ -156,7 +157,7 @@ CREATE TABLE IF NOT EXISTS wire_command (
   operation_id     TEXT PRIMARY KEY,
   partition_id     TEXT NOT NULL,
   envelope_key     TEXT NOT NULL,
-  kind             TEXT NOT NULL,
+  kind             TEXT NOT NULL,     -- KIND WIRE của SyncOperation (xem RUNTIME_SYNC_OPERATION_KINDS, src/types/domain.ts)
   task_id          TEXT,
   expected_version TEXT,
   request_json     TEXT NOT NULL,

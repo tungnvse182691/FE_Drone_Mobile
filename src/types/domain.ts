@@ -1,6 +1,7 @@
 /// <reference types="geojson" />
 import { RoleCode, SyncStatus, IntegrationStatus, DefectStatus, Severity, RepairBatchStatus, FieldInspectionTaskStatus, MeasurementType, TaskMode, FastTrackEligibility, ReporterReportStatus, LocalState } from './enums';
 import type { DefectTypeCode } from '../constants/defect-types';
+import { isOfflineOperationKind, type OfflineOperationKind } from '../offline/operation-kind';
 
 export interface User {
   id: string;
@@ -330,6 +331,65 @@ export function isCanonicalSyncOperationKind(kind: string): boolean {
 /** `true` nếu `kind` được phép đẩy lên máy chủ. Dùng chốt ở cả màn CREW và DRONE. */
 export function isDispatchableSyncOperationKind(kind: string): boolean {
   return RUNTIME_SYNC_OPERATION_KINDS.has(kind);
+}
+
+// ---------------------------------------------------------------------------
+// OFFLINE OPERATION KIND ⇄ WIRE KIND (Phần 5.3)
+//
+// Cột `kind` trong `local_draft` / `outbox` / `offline_pending` / `offline_outbox`
+// lưu bộ 6 `OfflineOperationKind` canonical (`src/offline/operation-kind.ts`).
+// `kind` wire gửi lên `POST /sync/batches` là tập khác (`SyncOperation`).
+// Hai hàm dưới đây là cầu nối duy nhất giữa hai từ vựng.
+// ---------------------------------------------------------------------------
+
+/** Khoá `kind` CŨ đã từng được ghi trước Phần 5.3. Chỉ dùng để migrate on-read. */
+export const LEGACY_OFFLINE_OPERATION_KIND_ALIASES: Record<string, OfflineOperationKind> = {
+  DEFECT_REPORT: 'FIELD_SUBMISSION',
+  REPAIR_SUBMIT: 'REPAIR_EXECUTION_FINISH',
+  FIELD_VERIFICATION: 'FIELD_SUBMISSION',
+  // Khoá viết thường từ `schema.sql` v1.
+  defect_report: 'FIELD_SUBMISSION',
+  reporter_report: 'FIELD_SUBMISSION',
+  reporter_submission: 'FIELD_SUBMISSION',
+  measurement: 'FIELD_SUBMISSION',
+  evidence: 'FIELD_SUBMISSION',
+  flight_log: 'FIELD_START',
+  survey_upload: 'FIELD_SUBMISSION',
+  repair_evidence: 'REPAIR_EXECUTION_FINISH',
+  fast_track_completion: 'REPAIR_EXECUTION_FINISH',
+};
+
+/**
+ * Chuẩn hoá khoá `kind` thô (canonical mới, alias cũ, hoặc rác) về `OfflineOperationKind`.
+ * Trả `null` nếu không nhận diện được → tầng gọi phải FAIL CLOSED (không dispatch).
+ */
+export function normalizeOfflineOperationKind(rawKind: unknown): OfflineOperationKind | null {
+  if (typeof rawKind !== 'string' || rawKind.length === 0) {
+    return null;
+  }
+  if (isOfflineOperationKind(rawKind)) {
+    return rawKind;
+  }
+  return LEGACY_OFFLINE_OPERATION_KIND_ALIASES[rawKind] ?? null;
+}
+
+/**
+ * Ánh xạ `OfflineOperationKind` (local) → `kind` wire của `POST /sync/batches`.
+ *
+ * Chỉ 3 kind có wire tương ứng ở runtime hiện tại (xem `RUNTIME_SYNC_OPERATION_KINDS`);
+ * `FIELD_ACCEPT` / `FIELD_START` / `REPAIR_ASSESSMENT` chưa có wire → trả `null` (fail closed).
+ */
+export function toSyncWireKind(kind: OfflineOperationKind): SyncOperation['kind'] | null {
+  switch (kind) {
+    case 'FIELD_SUBMISSION':
+      return 'INSPECTION_SUBMIT';
+    case 'REPAIR_EXECUTION_START':
+      return 'REPAIR_START';
+    case 'REPAIR_EXECUTION_FINISH':
+      return 'REPAIR_SUBMIT';
+    default:
+      return null;
+  }
 }
 
 /** Trạng thái server trả về cho từng operation trong `SyncResult`. */

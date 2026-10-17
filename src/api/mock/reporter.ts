@@ -1,6 +1,7 @@
 import { ReporterReport, TrackingTimelineEvent } from '../../types/domain';
 import { ReporterReportStatus } from '../../types/enums';
 import { DEFECT_TYPE_CODES, DefectTypeCode } from '../../constants/defect-types';
+import type { ReportEvidenceLocationDto, ReportLocationSource } from '../../types/position';
 import { throwMockApiError } from './errors';
 import {
   MAX_PHOTO_BYTES,
@@ -37,6 +38,10 @@ export interface ReportCreate {
   photo_uris: string[];
   coordinates: [number, number];
   defect_type?: DefectTypeCode;
+  /** Nguồn tọa độ ảnh — khớp `ReportEvidenceInputDto.locationSource`. */
+  location_source?: ReportLocationSource;
+  /** Khối vị trí kèm sai số GPS — khớp `ReportEvidenceLocationDto`. */
+  location?: ReportEvidenceLocationDto | null;
 }
 
 const MOCK_OTP = '111111';

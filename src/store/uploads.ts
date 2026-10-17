@@ -21,6 +21,7 @@ import type {
   UploadPartUrlResponseDto,
   UploadTransport,
 } from '../api/uploads';
+import { hasUsableCoordinate } from '../types/position';
 import { createMockUploadTransport } from '../api/mock/reporter';
 
 /**
@@ -82,6 +83,8 @@ export interface UploadQueueItem {
   locationSource: LocationSource;
   latitude: number | null;
   longitude: number | null;
+  /** Bán kính sai số GPS (mét, 68%); `null` khi thiết bị không cung cấp. */
+  accuracyMeters: number | null;
   capturedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -97,6 +100,7 @@ export interface EnqueuePhotoInput {
   locationSource?: LocationSource;
   latitude?: number | null;
   longitude?: number | null;
+  accuracyMeters?: number | null;
   partitionId?: string;
 }
 
@@ -140,6 +144,7 @@ CREATE TABLE IF NOT EXISTS upload_ledger (
   location_source   TEXT NOT NULL DEFAULT 'UNKNOWN',
   latitude          REAL,
   longitude         REAL,
+  accuracy_meters   REAL,
   captured_at       TEXT NOT NULL,
   created_at        TEXT NOT NULL,
   updated_at        TEXT NOT NULL
@@ -169,6 +174,7 @@ interface UploadLedgerRow {
   location_source: string;
   latitude: number | null;
   longitude: number | null;
+  accuracy_meters: number | null;
   captured_at: string;
   created_at: string;
   updated_at: string;
@@ -176,10 +182,22 @@ interface UploadLedgerRow {
 
 let database: SQLiteDatabase | null = null;
 
+/**
+ * Bổ sung cột thêm sau cho ledger đã tạo từ bản cũ (Phần 2): ledger cũ thiếu `accuracy_meters`.
+ * `CREATE TABLE IF NOT EXISTS` không tự thêm cột nên phải migrate thủ công, idempotent.
+ */
+async function migrateLedger(db: SQLiteDatabase): Promise<void> {
+  const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(upload_ledger)');
+  if (!columns.some((column) => column.name === 'accuracy_meters')) {
+    await db.execAsync('ALTER TABLE upload_ledger ADD COLUMN accuracy_meters REAL');
+  }
+}
+
 async function ledger(): Promise<SQLiteDatabase> {
   if (!database) {
     const opened = openDatabase();
     await opened.execAsync(UPLOAD_LEDGER_DDL);
+    await migrateLedger(opened);
     database = opened;
   }
   return database;
@@ -221,6 +239,7 @@ function mapRow(row: UploadLedgerRow): UploadQueueItem {
     locationSource: row.location_source as LocationSource,
     latitude: row.latitude,
     longitude: row.longitude,
+    accuracyMeters: row.accuracy_meters,
     capturedAt: row.captured_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -234,8 +253,8 @@ async function persistItem(item: UploadQueueItem): Promise<void> {
       id, partition_id, uri_local, file_name, media_type, size_bytes, checksum_sha256,
       media_state, upload_id, file_id, session_version, part_size_bytes, part_etags,
       server_status, verified_version, attempt, last_error_code, last_error_message,
-      location_source, latitude, longitude, captured_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      location_source, latitude, longitude, accuracy_meters, captured_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.id,
     item.partitionId,
     item.uriLocal,
@@ -257,6 +276,7 @@ async function persistItem(item: UploadQueueItem): Promise<void> {
     item.locationSource,
     item.latitude,
     item.longitude,
+    item.accuracyMeters,
     item.capturedAt,
     item.createdAt,
     item.updatedAt,
@@ -457,6 +477,12 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
 
   async enqueuePhoto(input) {
     const now = new Date().toISOString();
+    // Toạ độ rác (0,0) hoặc không hợp lệ → bỏ hẳn, ép nguồn UNKNOWN (KHÔNG bịa GPS).
+    const usable = hasUsableCoordinate(input.latitude, input.longitude);
+    const accuracy =
+      usable && typeof input.accuracyMeters === 'number' && Number.isFinite(input.accuracyMeters)
+        ? input.accuracyMeters
+        : null;
     const item: UploadQueueItem = {
       id: uuidv4(),
       partitionId: input.partitionId ?? get().partitionId,
@@ -476,9 +502,10 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       attempt: 0,
       lastErrorCode: null,
       lastErrorMessage: null,
-      locationSource: input.locationSource ?? 'UNKNOWN',
-      latitude: input.latitude ?? null,
-      longitude: input.longitude ?? null,
+      locationSource: usable ? input.locationSource ?? 'UNKNOWN' : 'UNKNOWN',
+      latitude: usable ? input.latitude ?? null : null,
+      longitude: usable ? input.longitude ?? null : null,
+      accuracyMeters: accuracy,
       capturedAt: input.capturedAt ?? now,
       createdAt: now,
       updatedAt: now,

@@ -120,10 +120,10 @@ export default function CrewCompleteScreen() {
     setSubmitting(true);
     const submitted = markSessionSubmitted();
     const attemptId = session?.attempt_id ?? stableUuid(`attempt:${task.id}`);
-    // `kind` phải là kind canonical của SyncOperation (SyncAttemptSubmit) — outbox lưu
-    // đúng giá trị này để màn sync dựng được SyncBatch hợp lệ.
+    // `kind` là OfflineOperationKind canonical (Phần 5.3): REPAIR_EXECUTION_FINISH.
+    // Màn sync ánh xạ canonical → kind wire `REPAIR_SUBMIT` khi dựng SyncBatch.
     const payload = {
-      kind: 'REPAIR_SUBMIT',
+      kind: 'REPAIR_EXECUTION_FINISH',
       attempt_id: attemptId,
       task_id: task.id,
       work_order_code: task.wo_code,
@@ -174,12 +174,12 @@ export default function CrewCompleteScreen() {
         if_match: itemVersion ? itemIfMatch(itemVersion) : null,
       };
       const now = new Date().toISOString();
-      await enqueue(db, 'REPAIR_SUBMIT', JSON.stringify(outbound), {
+      await enqueue(db, 'REPAIR_EXECUTION_FINISH', JSON.stringify(outbound), {
         taskId: task.id,
-        idempotencyKey: stableUuid(`REPAIR_SUBMIT:${attemptId}`),
+        idempotencyKey: stableUuid(`REPAIR_EXECUTION_FINISH:${attemptId}`),
       });
       await upsertOffline(db, 'local_draft', `repair-attempt-${Date.now()}`, {
-        kind: 'REPAIR_SUBMIT',
+        kind: 'REPAIR_EXECUTION_FINISH',
         payload: JSON.stringify(outbound),
         created_at: now,
         updated_at: now,
