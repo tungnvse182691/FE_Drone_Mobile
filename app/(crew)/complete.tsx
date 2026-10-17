@@ -18,6 +18,11 @@ import {
   type CrewFieldSession,
 } from '../../src/api/mock/crew-inspection';
 import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import {
+  itemIfMatch,
+  repairCommandErrorMessage,
+  withFreshItemVersion,
+} from '../../src/hooks/useRepairBootstrap';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 function formatMeasurement(value: number | null, unit: string): string {
@@ -146,14 +151,36 @@ export default function CrewCompleteScreen() {
     try {
       const db = openDatabase();
       await initDatabase(db);
+      // C-04: đọc lại API-080 NGAY trước khi đóng gói lệnh để lấy `itemVersion` mới nhất.
+      // Nhiệm vụ MEASURE_ONLY hoặc hạng mục chưa sẵn sàng → không có repairContext, ghi null
+      // (lệnh đo đạc không cần If-Match); luồng sửa nhanh thì bắt buộc phải có.
+      const isFastTrackRepair = session?.evaluation_code === 'ELIGIBLE';
+      let itemVersion: string | null = null;
+      try {
+        const repairContext = await withFreshItemVersion(task.id, (command) =>
+          Promise.resolve(command.repairContext),
+        );
+        itemVersion = repairContext.itemVersion;
+      } catch (error) {
+        if (isFastTrackRepair) {
+          setToast(repairCommandErrorMessage(error));
+          setSubmitting(false);
+          return;
+        }
+      }
+      const outbound = {
+        ...payload,
+        item_version: itemVersion,
+        if_match: itemVersion ? itemIfMatch(itemVersion) : null,
+      };
       const now = new Date().toISOString();
-      await enqueue(db, 'REPAIR_SUBMIT', JSON.stringify(payload), {
+      await enqueue(db, 'REPAIR_SUBMIT', JSON.stringify(outbound), {
         taskId: task.id,
         idempotencyKey: stableUuid(`REPAIR_SUBMIT:${attemptId}`),
       });
       await upsertOffline(db, 'local_draft', `repair-attempt-${Date.now()}`, {
         kind: 'REPAIR_SUBMIT',
-        payload: JSON.stringify(payload),
+        payload: JSON.stringify(outbound),
         created_at: now,
         updated_at: now,
       });

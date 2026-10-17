@@ -7,7 +7,14 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { InputField } from '../../src/components/InputField';
+import { Toast } from '../../src/components/Toast';
 import { defectTypeLabel } from '../../src/constants/defect-types';
+import { CREW_REPAIR_CORRECTION } from '../../src/constants/routes';
+import {
+  isRepairVersionConflict,
+  repairCommandErrorMessage,
+  withFreshItemVersion,
+} from '../../src/hooks/useRepairBootstrap';
 import {
   FAST_TRACK_POLICY,
   evaluateFastTrack,
@@ -53,6 +60,8 @@ export default function CrewWoDetailScreen() {
   const [lengthText, setLengthText] = useState(() => (initialMeasurement.length_m !== null ? String(initialMeasurement.length_m) : ''));
   const [widthText, setWidthText] = useState(() => (initialMeasurement.width_m !== null ? String(initialMeasurement.width_m) : ''));
   const [depthText, setDepthText] = useState(() => (initialMeasurement.depth_cm !== null ? String(initialMeasurement.depth_cm) : ''));
+  const [anchorLoading, setAnchorLoading] = useState(false);
+  const [anchorError, setAnchorError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -116,7 +125,7 @@ export default function CrewWoDetailScreen() {
   const beforeSelected = Boolean(session?.before_evidence_id);
   const measureReady = evaluation.hasAllDimensions;
 
-  const handlePrimaryAction = () => {
+  const handlePrimaryAction = async () => {
     if (!evaluation.hasAllDimensions) {
       return;
     }
@@ -131,6 +140,21 @@ export default function CrewWoDetailScreen() {
     if (evaluation.code === 'ELIGIBLE') {
       if (!beforeSelected) {
         return;
+      }
+      // C-04: đọc lại API-080 ngay trước khi vào luồng sửa để chắc chắn có hạng mục sửa chữa
+      // (itemVersion) còn hiệu lực. Không có anchor → chặn tại chỗ, không tự chế mã phiên bản.
+      setAnchorLoading(true);
+      try {
+        await withFreshItemVersion(task.id, (command) => Promise.resolve(command.headers));
+      } catch (error) {
+        setAnchorError(
+          isRepairVersionConflict(error)
+            ? 'Hạng mục sửa chữa vừa thay đổi trên máy chủ. Vui lòng tải lại rồi thử lại.'
+            : repairCommandErrorMessage(error),
+        );
+        return;
+      } finally {
+        setAnchorLoading(false);
       }
       markAttemptStarted();
       router.push({ pathname: '/(crew)/progress', params: { id: task.id } });
@@ -509,9 +533,22 @@ export default function CrewWoDetailScreen() {
               title={primaryLabel}
               onPress={handlePrimaryAction}
               disabled={primaryDisabled}
+              loading={anchorLoading}
             />
           </View>
         </View>
+
+        {/* C-08: đính chính một lượt sửa đã gửi (chỉ nhiệm vụ đo-kiểm-và-sửa). */}
+        {task.task_mode === 'INSPECT_AND_REPAIR' ? (
+          <Button
+            variant="text"
+            title="Đính chính lượt sửa đã gửi"
+            onPress={() =>
+              router.push({ pathname: CREW_REPAIR_CORRECTION, params: { id: task.id } })
+            }
+            style={styles.correctionButton}
+          />
+        ) : null}
 
         {primaryDisabled ? (
           <View style={styles.disabledReasonBox}>
@@ -522,6 +559,8 @@ export default function CrewWoDetailScreen() {
           </View>
         ) : null}
       </View>
+
+      {anchorError ? <Toast type="error" message={anchorError} /> : null}
     </SafeAreaScreen>
   );
 }
@@ -829,6 +868,9 @@ const styles = StyleSheet.create({
   },
   ctaSecondary: {
     flex: 1,
+  },
+  correctionButton: {
+    marginTop: spacing.xs,
   },
   ctaPrimary: {
     flex: 2,

@@ -8,6 +8,7 @@ import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { CREW_TASKS, CREW_COMPLETED_TASKS } from './tasks';
+import { CREW_RECEIVING } from '../../src/constants/routes';
 import { TaskMode } from '../../src/types/enums';
 
 interface CrewMetric {
@@ -149,6 +150,21 @@ export default function CrewHomeScreen() {
           <MaterialIcons name="photo-camera" size={20} color={colors.onPrimary} />
           <Text style={[typography.labelLg, styles.captureBtnText]}>Chụp ảnh hiện trường</Text>
         </Pressable>
+
+        {/* Nút inline Nhận việc (ACK) — C-11 */}
+        <Pressable
+          style={({ pressed }) => [styles.receivingBtn, pressed && styles.captureBtnPressed]}
+          onPress={() => router.push(CREW_RECEIVING)}
+          accessibilityRole="button"
+          accessibilityLabel="Nhận việc cần xác nhận"
+        >
+          <MaterialIcons name="inbox" size={20} color={colors.brandGold} />
+          <Text style={[typography.labelLg, styles.receivingBtnText]}>
+            Nhận việc cần xác nhận
+          </Text>
+          <MaterialIcons name="chevron-right" size={18} color={colors.brandGold} />
+        </Pressable>
+
 
         {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, footer #HH-WO-xx, chevron phải */}
         <View style={styles.taskList}>
@@ -467,6 +483,26 @@ const styles = StyleSheet.create({
   },
   captureBtnText: {
     color: colors.onPrimary,
+  },
+
+  /* Receiving (ACK) Button — C-11 */
+  receivingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
+    minHeight: 52,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.md,
+  },
+  receivingBtnText: {
+    color: colors.brandGold,
+    flex: 1,
+    textAlign: 'center',
   },
 
   /* Task List & Card */
