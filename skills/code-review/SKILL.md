@@ -6,7 +6,7 @@ description: "Kỹ năng thẩm định + tự sửa mã nguồn (Code Review & 
 # RoadGuard Code Review & Auto-Fix Skill
 ### Quality Gate — Cơ chế Tự Vả Tự Sửa (Self-Healing Loop)
 
-> *Bộ tài liệu chuẩn nguồn sự thật: `D:\Do_AN_Drone\29_9\` (hoặc `docs/specs/`) — Phiên bản Canonical 29_9 (OpenAPI 0.2.0-draft-alignment), ngày 29/09/2026*
+> *Bộ tài liệu chuẩn nguồn sự thật: `FE_AppMobile/docs/specs/` — Phiên bản Canonical 17_10 (xem `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`)*
 
 AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ sự cẩu thả nào. Đây không phải bước tùy chọn — đây là **cổng nghiệm thu bắt buộc**.
 
@@ -20,7 +20,7 @@ AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ 
 | P2 | **Self-Healing Loop (Auto-Fix)** | Khi phát hiện lỗi, AI **KHÔNG ĐƯỢC** dừng lại báo cáo suông. Phải **TỰ ĐỘNG SỬA FILE NGAY LẬP TỨC**, sau đó kiểm chứng lại. Tối đa **5 vòng lặp**. Nếu sau 5 vòng vẫn fail → ghi nhận `ESCALATE_TO_HUMAN`. |
 | P3 | **Mandatory Worklog** | Mỗi session review xong, AI **BẮT BUỘC TẠO 1 FILE .MD MỚI** trong `docs/worklogs/` ghi đầy đủ kết quả. |
 | P4 | **No Silent Pass** | TUYỆT ĐỐI CẤM tuyên bố "PASS" mà không chạy lệnh compiler thực tế. |
-| P5 | **Specification Inference** | Trước khi fix lỗi phức tạp (không phải lint), AI phải trình bày rõ *"Hành vi mong muốn theo Canonical 29_9 là gì"* rồi mới áp dụng fix. |
+| P5 | **Specification Inference** | Trước khi fix lỗi phức tạp (không phải lint), AI phải trình bày rõ *"Hành vi mong muốn theo Canonical 17_10 là gì"* rồi mới áp dụng fix. |
 
 ---
 
@@ -37,7 +37,7 @@ AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ 
 │  CÓ LỖI? ──→ BƯỚC 4: AUTO-FIX (Tự Sửa File)                │
 │       ↑              ↓                                       │
 │       └── Vòng lặp (tối đa 5 lần) ──→ BƯỚC 2               │
-│  0 LỖI? ──→ BƯỚC 5: Kiểm tra Canonical 29_9 Alignment       │
+│  0 LỖI? ──→ BƯỚC 5: Kiểm tra Canonical 17_10 Alignment      │
 │              ↓                                               │
 │              BƯỚC 6: Xuất Worklog Nghiệm Thu                 │
 └──────────────────────────────────────────────────────────────┘
@@ -192,8 +192,8 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "'CRACK'
 | Hạng mục | Đúng | Sai — Tự sửa ngay |
 |---|---|---|
 | Tên công ty | `Công ty TNHH Xây dựng Bê tông Hoàng Hải` | Tên viết tắt không chính thức |
-| Email domain nội bộ | `@hoanghai.vn` | `@gmail.com`, `@roadguard.vn` (Lưu ý: Reporter người dân dùng email RFC 5322 hợp lệ theo D25) |
-| Prefix nhân sự | `HH-` | `RG-`, `NV-` |
+| Email domain nội bộ | `@hoanghai.vn` | `@gmail.com`, `@roadguard.vn` (Lưu ý: Reporter đăng ký **email + password + OTP**, không giới hạn nhà cung cấp — xem `docs/specs/06_Mobile-Expo/Reporter/02_Authentication-OTP-and-Session.md`) |
+| Prefix nhân sự | Không tự chế prefix — đọc mã định danh theo DTO/enum trong `docs/specs/04_API-Contracts/` | `HH-`, `RG-`, `NV-` (17_10 KHÔNG định nghĩa prefix) |
 | Tiêu chuẩn đường | `TCVN 10380:2014` (Bê tông xi măng) | Nhựa đường, asphalt |
 | Công nghệ khảo sát | `4K RGB + DSM (OpenDroneMap)` | LiDAR (Red Flag) |
 | Logo Splash | `assets/logo_hoanghai.png` (có chữ) | Dùng nhầm icon-only |
@@ -202,7 +202,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "'CRACK'
 
 ---
 
-#### 🟡 INVARIANT-07: Bộ lọc Data Contract (theo `29_9/09_Frontend/04_Data_Contract_Type_Definitions.md`)
+#### 🟡 INVARIANT-07: Bộ lọc Data Contract (theo `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md` + `02_Full-API-Catalog.md`)
 
 **Các vi phạm phổ biến cần quét:**
 
@@ -223,7 +223,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 
 ---
 
-#### 🟡 INVARIANT-08: Bộ lọc Error Handling (theo `29_9/09_Frontend/03_Error_Response_UI_Convention.md`)
+#### 🟡 INVARIANT-08: Bộ lọc Error Handling (theo `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` + `05_Idempotency-Concurrency-and-Errors.md`)
 
 **Các vi phạm cần phát hiện và Auto-Fix:**
 
@@ -236,15 +236,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 | `innerHTML` để render error message | Thay bằng `text` render |
 | Double-submit không khóa | Thêm `disabled` state trong khi loading |
 
-**Bảng mã lỗi nghiệp vụ cần có UI riêng:**
-| Code | UI hiển thị |
-|---|---|
-| `TASK_MODE_NOT_REPAIRABLE` | "Nhiệm vụ này chỉ cho phép kiểm tra/đo; lưu kết quả và báo PM" |
-| `FAST_TRACK_NOT_ELIGIBLE` | "Không đủ điều kiện sửa nhanh", hiển thị reasons |
-| `PM_REPAIR_BLOCKED` | "PM đã chặn sửa nhanh" |
-| `BEFORE_MISSING` | "Bổ sung bằng chứng trước sửa" |
-| `EVIDENCE_PENDING` | "Ảnh chưa được máy chủ xác minh" |
-| `FILE_INTEGRITY_FAILED` | "Tệp kiểm tra không khớp; giữ bản gốc và tải lại" |
+**Mã lỗi:** 17_10 **KHÔNG có bảng mã nghiệp vụ dùng chung**. Mỗi operation khai báo mục **"Error contract (declared, not execution)"** riêng (HTTP status + `code`) trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; body `application/problem+json` (`ProblemDetails`). UI đọc `code` rồi map sang message; `code` lạ → fallback tiếng Việt trung tính, KHÔNG hardcode bảng mã.
 
 ---
 
@@ -260,7 +252,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 │                                                              │
 │  WHILE errors_exist AND attempt <= max_attempts:             │
 │    1. [DIAGNOSE] Ghi nhận: File nào, dòng nào, lỗi gì      │
-│    2. [INTENT] Nêu rõ "Theo Canonical 29_9, hành vi đúng là..."  │
+│    2. [INTENT] Nêu rõ "Theo Canonical 17_10, hành vi đúng là..." │
 │    3. [FIX] Dùng replace_file_content/write_to_file sửa     │
 │    4. [VERIFY] Chạy lại npx tsc --noEmit + quét lại         │
 │    5. Ghi vào Self-Healing Log: attempt #N, lỗi X, fix Y    │
@@ -282,31 +274,31 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 
 ---
 
-### BƯỚC 5 — Kiểm tra Canonical 29_9 Alignment (Specification Check)
+### BƯỚC 5 — Kiểm tra Canonical 17_10 Alignment (Specification Check)
 
 Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp vụ từ bộ tài liệu chuẩn:
 
-#### 5.1 Trạng thái State Machine (từ `10_FE_Architecture_UI_States.md`)
+#### 5.1 Trạng thái State Machine (theo cột "States/States, privacy and status" trong `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md` và `docs/specs/06_Mobile-Expo/07_Mobile-Integration-Acceptance.md`)
 - [ ] Màn Task List có đủ state: skeleton/empty/error/cached-stale/load-more?
 - [ ] Nút bị disable có kèm lý do gần nút (không chỉ màu xám)?
 - [ ] Offline badge hiển thị xuyên màn hình tác nghiệp?
 - [ ] Nhãn "Đã tải lúc…" luôn đọc được khi có cache?
 
-#### 5.2 Invariants Nghiệp Vụ Cốt Lõi (từ `01_FE_Scope_Implementation_Guide.md`)
+#### 5.2 Invariants Nghiệp Vụ Cốt Lõi (theo `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`, `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` và `docs/specs/06_Mobile-Expo/07_Mobile-Integration-Acceptance.md`)
 ```
 ✅ Saved ≠ Sent ≠ Verified ≠ Done   ← Bốn trạng thái KHÔNG thay thế nhau
 ✅ Mobile: chỉ 3 role hiện trường (Crew/Drone/Reporter)
 ✅ Web: PM + Supervisor — ONLINE ONLY
 ✅ Fast Track: Crew làm → PM kiểm/đóng → Supervisor nhận báo
 ✅ MEASURE_ONLY: chỉ đo, KHÔNG sửa (UD-06 mode block)
-✅ WF-07: 4 trạng thái phê duyệt: APPROVE/REQUEST_EVIDENCE/REQUEST_RECONSIDER/REJECT
+✅ Crew KHÔNG được thực thi final/approval — thẩm quyền thuộc PM/Supervisor (theo acceptance 17_10)
 ✅ BEFORE bắt buộc trước khi Start Repair (không đổi AFTER thành BEFORE)
 ✅ AI bbox: KHÔNG suy depth/severity cuối cùng từ bounding box
 ✅ LiDAR: CẤM tuyệt đối (chỉ 4K RGB + DSM OpenDroneMap)
 ✅ Không có field tiền tệ/VNĐ/đơn giá trong bất kỳ màn hình nào
 ```
 
-#### 5.3 Optimistic UI Check (từ `10_FE_Architecture_UI_States.md`)
+#### 5.3 Optimistic UI Check (theo `docs/specs/06_Mobile-Expo/07_Mobile-Integration-Acceptance.md`)
 - [ ] KHÔNG optimistic cho: phê duyệt, đóng hồ sơ, publish policy, role change
 - [ ] Optimistic mark-as-read notification có rollback và version đúng không?
 
@@ -316,7 +308,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 **Quy định:**
 - Tên file: `docs/worklogs/<Phase-ID>-<Task-Name>-<YYYYMMDD>-review.md`
-- Ví dụ: `docs/worklogs/M-CREW-03-submit-repair-20260927-review.md`
+- Ví dụ: `docs/worklogs/C-05-submit-repair-20261017-review.md`
 
 **Template chuẩn:**
 
@@ -324,8 +316,8 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 # Báo Cáo Nghiệm Thu & Thẩm Định Mã Nguồn — Code Review Worklog
 
 - **Thời gian:** [YYYY-MM-DD HH:mm] (UTC+7)
-- **Người thẩm định:** Antigravity Auto-Reviewer (theo ủy quyền QA Lead — RoadGuard Canonical 29_9)
-- **Feature / Màn hình:** [Mô tả ngắn, ví dụ: M-CREW-03 Submit Repair Form]
+- **Người thẩm định:** Antigravity Auto-Reviewer (theo ủy quyền QA Lead — RoadGuard Canonical 17_10)
+- **Feature / Màn hình:** [Mô tả ngắn, ví dụ: C-05 Submit Repair Form]
 - **Vòng Auto-Fix đã chạy:** [Số lần / Tối đa 5]
 
 ---
@@ -356,7 +348,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 | I-04 | Platform Scope (3 roles Mobile) | ✅ PASS / ❌ FAIL → đã tự sửa |
 | I-05 | Defect Types (5 mã BTXM) | ✅ PASS / ❌ FAIL → đã tự sửa |
 | I-06 | Branding & Tech Standards | ✅ PASS / ❌ FAIL → đã tự sửa |
-| I-07 | Data Contract (Canonical 29_9) | ✅ PASS / ❌ FAIL → đã tự sửa |
+| I-07 | Data Contract (Canonical 17_10) | ✅ PASS / ❌ FAIL → đã tự sửa |
 | I-08 | Error Handling Convention | ✅ PASS / ❌ FAIL → đã tự sửa |
 
 ---
@@ -365,7 +357,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 ### Attempt #1 / 5
 - **Lỗi phát hiện:** [File, dòng, mô tả lỗi]
-- **Hành vi đúng theo Canonical 29_9:** [Giải thích]
+- **Hành vi đúng theo Canonical 17_10:** [Giải thích]
 - **Fix đã áp dụng:** [Mô tả cụ thể]
 - **Kết quả verify:** [PASS / FAIL]
 
@@ -373,7 +365,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 ---
 
-## 5. Canonical 29_9 Alignment Check
+## 5. Canonical 17_10 Alignment Check
 
 - [ ] State Machine đủ (skeleton/empty/error/offline/stale)
 - [ ] 10 Invariants nghiệp vụ cốt lõi đều đúng
@@ -405,7 +397,7 @@ Trigger phrases: `"review code"`, `"check lại"`, `"tự vả tự sửa"`, `"a
 2. Chạy `npx tsc --noEmit`
 3. Quét 8 bộ lọc invariant
 4. Nếu có lỗi → **TỰ SỬA NGAY** (không hỏi Sếp trước)
-5. Kiểm tra Canonical 29_9 alignment
+5. Kiểm tra Canonical 17_10 alignment
 6. Tạo worklog `.md` trong `docs/worklogs/`
 7. Báo cáo ngắn gọn kết quả cho Sếp (không paste toàn bộ worklog)
 
@@ -414,22 +406,16 @@ Trigger phrases: `"review code"`, `"check lại"`, `"tự vả tự sửa"`, `"a
 ## 📁 CẤU TRÚC THƯ MỤC LIÊN QUAN
 
 ```
-D:\Do_AN_Drone\
-├── 29_9\                              ← Nguồn sự thật (CANONICAL)
-│   └── 09_Frontend\
-│       ├── 01_FE_Scope_Implementation_Guide.md
-│       ├── 02_Authentication_Flow.md
-│       ├── 03_Error_Response_UI_Convention.md
-│       ├── 04_Data_Contract_Type_Definitions.md
-│       ├── 08_Rate_Limit_Timeout_Retry.md
-│       ├── 10_FE_Architecture_UI_States.md
-│       ├── 11_FE_Offline_Test_UAT.md
-│       └── 12_Decisions_Contract_Gaps.md
-└── FE_AppMobile\
-    ├── app\                           ← Code Mobile (3 roles)
-    ├── src\constants\defect-types.ts  ← 5 mã chuẩn BTXM
-    ├── skills\code-review\SKILL.md    ← File này
-    └── docs\worklogs\                 ← Output báo cáo nghiệm thu
+FE_AppMobile\
+├── docs\specs\                        ← Nguồn sự thật (CANONICAL 17_10)
+│   ├── 00_Governance\01_Authority-and-Source-of-Truth.md
+│   ├── 01_Product-and-Roles\02_Actor-Client-Permission-Matrix.md
+│   ├── 04_API-Contracts\              ← 02_Full-API-Catalog.md (241 ops), 03_DTO, 05_Errors, 07_Offline-Sync-Crypto
+│   └── 06_Mobile-Expo\                ← Reporter | Crew | Operator | 07_Mobile-Integration-Acceptance.md
+├── app\                               ← Code Mobile (3 roles)
+├── src\constants\defect-types.ts      ← 5 mã chuẩn BTXM
+├── skills\code-review\SKILL.md        ← File này
+└── docs\worklogs\                     ← Output báo cáo nghiệm thu
 ```
 
 ---

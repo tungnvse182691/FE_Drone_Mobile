@@ -1,18 +1,18 @@
-# RoadGuard Mobile — Bootstrap Prompt (Chuẩn Canonical 29_9 / OpenAPI 0.2.0)
+# RoadGuard Mobile — Bootstrap Prompt (Chuẩn 17_10)
 
-> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình scaffold và phát triển codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/` theo chuẩn đặc tả Canonical 29_9 (OpenAPI 0.2.0-draft-alignment) mới nhất của Công ty TNHH Xây dựng Bê tông Hoàng Hải.
+> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình scaffold và phát triển codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/` theo chuẩn đặc tả Canonical 17_10 mới nhất của Công ty TNHH Xây dựng Bê tông Hoàng Hải. Nguồn sự thật: `docs/specs/` (xem `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`).
 
 ---
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục Chuẩn Hóa Canonical 29_9 (28/09/2026 - 29/09/2026 / 29_9) có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
-- **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, email nội bộ `@hoanghai.vn`, prefix `HH-`).
+**Mọi quy định trong mục Chuẩn Hóa Canonical 17_10 có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
+- **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, email nội bộ `@hoanghai.vn`). **Ghi chú:** 17_10 **KHÔNG định nghĩa** tiền tố `HH-` — không tự chế prefix.
 - **Quy tắc Logo:** Splash/Loading = `assets/logo_hoanghai.png` (có tên công ty); Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png` (chỉ xe bồn, không chữ).
 - **Phân định Nền tảng:** Mobile app dành riêng cho **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`. Web Dashboard dành cho `PROJECT_MANAGER` và `SUPERVISOR` (màn hình PM/Supervisor cũ chuyển vào `archive/web-screens/`).
-- **Hợp đồng Kỹ thuật Frontend (09_Frontend):** Áp dụng nghiêm ngặt danh mục 133 operations (`operation_catalog.md`), types chuẩn (`contracts/api.types.ts`), local types (`contracts/local.types.ts`), và mã lỗi nghiệp vụ (`03_Error_Response_UI_Convention.md`).
+- **Hợp đồng Kỹ thuật Frontend (04_API-Contracts):** Áp dụng nghiêm ngặt `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` — **241 operations / 223 paths / 357 schemas / 47 controllers** (operation ID `API-001` → `API-241`); types/schema tại `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md`.
 - **Nghiệp vụ Fast Track (US-33, BR-05/08/11..18/25):** 
   - `TaskMode`: `INSPECT_AND_REPAIR` vs `MEASURE_ONLY`.
-  - Sửa nhanh tại chỗ khi: Task là `INSPECT_AND_REPAIR`, kích thước $\le$ `FastTrackPolicyVersion` (diện tích $\le 1.0\text{ m}^2$, độ sâu $\le 5\text{ cm}$, chiều dài $\le 2.0\text{ m}$), và có ảnh BEFORE hợp lệ.
+  - Sửa nhanh tại chỗ khi: Task ở chế độ đo-kiểm-và-sửa, **eligibility đọc qua API-146 và fail closed** (ngưỡng kích thước nằm trong policy revision trên server — KHÔNG hardcode; xem `docs/specs/02_Business-Workflows/08_FastTrack-Policy-and-Confirmation.md`), và có ảnh BEFORE hợp lệ.
   - Crew gửi ảnh AFTER $\rightarrow$ PM trực tiếp kiểm tra và đóng lỗi. **Supervisor KHÔNG phê duyệt Fast Track.**
 - **Đợt gom nhiều lỗi (US-35, BR-09):** Bắt buộc `MEASURE_ONLY`; Crew chỉ đo và báo PM, không tự ý sửa tại chỗ.
 - **Tái sử dụng bằng chứng ảnh (BR-17, BR-18):** Ảnh chụp của Reporter hoặc ảnh Drone có thể làm ảnh BEFORE nếu khớp vị trí.
@@ -20,17 +20,17 @@
 - **UD-06:** Tầng UI Mobile (`app/`) **TUYỆT ĐỐI ZERO CHI PHÍ/TIỀN TỆ**, cấm định mức vật tư tiêu hao. Bắt buộc hiển thị bộ 3: Phương án xử lý + Kích thước hình học hư hại (m², cm, m) + Thời hạn.
 - **Vật liệu & Tuyến:** Bê tông xi măng TCVN 10380:2014, 4K RGB + DSM (OpenDroneMap), TUYỆT ĐỐI CẤM LiDAR, Tuyến ĐH.05 Bình Chánh là Pilot Primary Corridor.
 - **5 Mã Defect:** `src/constants/defect-types.ts` (`POTH_DEEP`, `DEPR_POND`, `EDGE_BRK`, `SLAB_CRK`, `SHLD_EROS`).
-- **Reporter Authentication (D25):** Xác thực bằng Email hợp lệ (RFC 5322), không giới hạn nhà cung cấp email; bỏ hoàn toàn giới hạn Gmail-only.
+- **Reporter Authentication:** Đăng ký **email + password + OTP** (không giới hạn nhà cung cấp email) theo `docs/specs/06_Mobile-Expo/Reporter/02_Authentication-OTP-and-Session.md` — API-010 → API-012/011 → API-002.
 
 ---
 
 ## Context nhanh
 
 **RoadGuard** là hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**. App mobile phục vụ **3 vai trò hiện trường cốt lõi**:
-- **Repair Crew (`(crew)`)** — nhận lệnh công tác (`/inspection-tasks`), xem chế độ `INSPECT_AND_REPAIR` hoặc `MEASURE_ONLY`, tự đánh giá Fast Track theo policy, chụp ảnh nghiệm thu BEFORE/AFTER, dẫn đường Google Maps, báo lỗi mới, đồng bộ ngoại tuyến SQLite (10 màn).
-- **Drone Operator (`(drone)`)** — tiếp nhận lệnh bay khảo sát (`/survey-tasks`), dẫn đường tới Điểm tiếp cận cất/hạ cánh, upload video/ảnh 4K RGB từ thẻ nhớ SD (`/uploads`), nhật ký chuyến bay, đồng bộ ngoại tuyến (7 màn).
-- **Reporter (`(reporter)`)** — Người dân & Đại diện Ban QLDA: đăng ký/xác thực OTP Email 6 số (`/auth/reporter-registrations`), tạo phản ánh kèm GPS + 3 ảnh hiện trường (`/reports`), tra cứu tiến độ công khai qua mã tracking, đánh giá 1–5 sao nghiệm thu (4 màn chính + profile tiện ích).
-- **Tầng Auth (`(auth)`)** — Đăng nhập tài khoản nhân viên (`/auth/login`), đổi mật khẩu bắt buộc lần đầu, xác thực OTP cho Reporter (3 màn).
+- **Repair Crew (`(crew)`)** — nhận nhiệm vụ FIELD/repair được giao (API-078/080/081), xem chế độ đo-kiểm-và-sửa hoặc chỉ-đo, kiểm eligibility Fast Track qua API-146 (fail closed), chụp ảnh nghiệm thu BEFORE/AFTER, dẫn đường Google Maps, báo lỗi mới, đồng bộ ngoại tuyến SQLite (**11 màn, C-01 → C-11**).
+- **Drone Operator (`(drone)`)** — tiếp nhận nhiệm vụ khảo sát (`GET /api/v1/me/survey-tasks`, API-038), dẫn đường tới Điểm tiếp cận cất/hạ cánh, upload video/ảnh 4K RGB, nộp dataset (API-229), nhật ký chuyến bay, đồng bộ ngoại tuyến (**8 màn, O-01 → O-08**).
+- **Reporter (`(reporter)`)** — Người dân & Đại diện Ban QLDA: đăng ký email+password rồi xác thực OTP (API-010 → API-012/011), tạo phản ánh kèm GPS + tối đa 3 ảnh riêng tư (API-216 `POST /api/v1/reports`), theo dõi chính phản ánh của mình (**17_10 KHÔNG có mã tra cứu công khai/tracking**), đánh giá 1–5 sao (**10 màn, RPT-01 → RPT-10**).
+- **Tầng Auth (`(auth)`)** — Đăng nhập nhân viên (`POST /api/v1/auth/android/login`, API-002), đổi mật khẩu bắt buộc lần đầu, xác thực OTP cho Reporter.
 
 ---
 
@@ -71,7 +71,7 @@ FE_AppMobile/
       _layout.tsx                        # BottomNav 3 tab: Trang chủ / Phản ánh / Tra cứu
       home.tsx                           # M-REP-01: Trang chủ Người dân & Đại diện Ban QLDA
       report.tsx                         # M-REP-02: Tạo phản ánh hư hại + GPS thiết bị + tối đa 3 ảnh
-      track.tsx                          # M-REP-03: Tra cứu tiến độ xử lý theo mã tracking #REP-xxx
+      track.tsx                          # M-REP-03: Theo dõi trạng thái phản ánh của chính mình (17_10 KHÔNG có tra cứu công khai)
       feedback.tsx                       # M-REP-04: Đánh giá chất lượng nghiệm thu (1–5 sao + nhận xét)
 
   archive/                               # Kho lưu trữ màn hình quản lý (chuyển giao cho Web Dashboard)
@@ -87,7 +87,7 @@ FE_AppMobile/
     constants/
       defect-types.ts                    # 5 mã khuyết tật chuẩn hóa
       routes.ts                          # Định nghĩa route chuẩn có group prefix
-      error-codes.ts                     # 10 mã lỗi nghiệp vụ từ 09_Frontend/03
+      error-codes.ts                     # 17_10 KHÔNG có bảng mã chung — đọc per-operation "Error contract" trong 04_API-Contracts/02_Full-API-Catalog.md
     components/
       Button.tsx                         # primary(gold) / secondary(outline) / text
       Card.tsx
@@ -101,7 +101,7 @@ FE_AppMobile/
       ViewFinder.tsx                     # camera crew + watermark
       EmptyState.tsx
       StarRating.tsx                     # Đánh giá 1–5 sao cho Reporter
-      TrackingTimeline.tsx               # Trục thời gian 5 bước cho Reporter
+      ReportTimeline.tsx                 # Trục thời gian trạng thái phản ánh (chỉ chủ sở hữu xem — 17_10 KHÔNG có tra cứu công khai)
     api/
       client.ts                          # Axios wrapper + auth interceptor + Idempotency-Key
       mock/
@@ -109,14 +109,14 @@ FE_AppMobile/
         tasks.ts                         # Danh sách task, chi tiết WO, cập nhật kích thước & Fast Track check
         surveys.ts                       # Yêu cầu bay khảo sát & upload video/ảnh thẻ SD
         defects.ts                       # Danh sách khuyết tật, chính sách Fast Track
-        reporter.ts                      # Tạo phản ánh, tra cứu timeline, gửi đánh giá sao
+        reporter.ts                      # Tạo phản ánh, xem trạng thái phản ánh của chính mình, gửi đánh giá sao
     store/
       auth.ts                            # Zustand: user, role, token, login/logout, reporter session
       offline.ts                         # Zustand: upload queue count, pending items
     offline/
       database.ts                        # SQLite init + CRUD helpers
-      schema.sql                         # DDL các bảng local SQLite theo 09_Frontend/09
-      upload-queue.ts                    # Queue worker theo state machine 09_Frontend
+      schema.sql                         # DDL các bảng local SQLite theo 04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md
+      upload-queue.ts                    # Queue worker theo state machine 17_10 (offline spec)
       checksum.ts                        # SHA-256 helper
 ```
 
@@ -236,7 +236,7 @@ export interface TokenPair {
 // Actor: response từ GET /me — KHÔNG có token/membership/capabilities
 export interface Actor {
   id: string;                   // UUID opaque, không numeric
-  displayName: string;          // HH-RC-084 Nguyễn Văn A
+  displayName: string;          // Tên hiển thị (vd: Nguyễn Văn A)
   role: RoleCode;               // Chỉ dùng để routing, KHÔNG suy quyền đối tượng từ role
   version: string;              // Opaque concurrency version
   // QUAN TRỌNG: UI không suy membership/project-scope từ Actor.role
@@ -246,13 +246,15 @@ export interface Actor {
 // User (legacy local composite — dùng trong Zustand store nội bộ app)
 export interface User {
   actor: Actor;
-  employeeCode?: string;        // HH-RC-084, HH-2089, M350-HH-02 ...
+  employeeCode?: string;        // Mã nhân sự — 17_10 KHÔNG định nghĩa prefix; để optional, đọc theo DTO/enum thực tế
   phoneOrEmail: string;
   mustChangePassword: boolean;
   // Token KHÔNG lưu ở đây — lưu qua SecureStore (platform key encrypted)
 }
 
 // ── FAST TRACK POLICY ─────────────────────────────────
+// Server là authority: eligibility đọc qua API-146 (fail closed). Các ngưỡng dưới đây
+// đến từ policy revision trên server — KHÔNG hardcode giá trị trong logic app.
 export interface FastTrackPolicyVersion {
   id: string;
   version_code: string;           // FTP-2026-V1
@@ -335,8 +337,7 @@ export interface FlightLog {
 
 // ── REPORTER ──────────────────────────────────────────
 export interface ReporterReport {
-  id: string;                     // REP-2026-0091
-  tracking_code: string;          // TRK-882910
+  id: string;                     // UUID opaque (đọc theo OwnReportDto)
   reporter_email: string;
   reporter_phone?: string;
   route_hint?: string;
@@ -348,67 +349,23 @@ export interface ReporterReport {
   rating?: number;                // 1–5 sao
   feedback_notes?: string;
 }
-
-export interface TrackingTimelineEvent {
-  step: ReporterReportStatus;
-  label: string;
-  description: string;
-  occurred_at?: string;
-  completed: boolean;
-}
 ```
 
 ---
 
-## 4. Chuẩn Hóa Endpoint API (Từ operation_catalog.md) & Mã Lỗi Nghiệp Vụ
+## 4. Hợp Đồng API & Mã Lỗi (trỏ `docs/specs/04_API-Contracts/`)
 
-### Endpoints chính yếu phục vụ Mobile:
-- **Xác thực:**
-  - `POST /api/v1/auth/login` (Body: `{ email, password }` $\rightarrow$ 200 `TokenPair`)
-  - `POST /api/v1/auth/refresh` (Body: `{ refreshToken }` $\rightarrow$ 200 `TokenPair`)
-  - `POST /api/v1/auth/logout` (Header: `Idempotency-Key` $\rightarrow$ 204)
-  - `POST /api/v1/auth/change-password` (Header: `Idempotency-Key` $\rightarrow$ 204)
-  - `GET /api/v1/me` $\rightarrow$ 200 `Actor`
-- **Người dân phản ánh:**
-  - `POST /api/v1/auth/reporter-registrations` (Header: `Idempotency-Key` $\rightarrow$ 202 `RegistrationIntent`)
-  - `POST /api/v1/auth/reporter-registrations/verify` (Header: `Idempotency-Key`, Body: `{ intentId, otp }` $\rightarrow$ 200 `TokenPair`)
-  - `POST /api/v1/reports` (Header: `Idempotency-Key`, Body: `ReportCreate` $\rightarrow$ 201 `IncidentReport`)
-  - `GET /api/v1/reports` (Header: Bearer $\rightarrow$ 200 `PublicReportPage`)
-  - `GET /api/v1/reports/{reportId}` $\rightarrow$ 200 `PublicReport`
-- **Đội sửa chữa (Crew):**
-  - `GET /api/v1/me/inspection-tasks` $\rightarrow$ 200 `InspectionTaskPage`
-  - `GET /api/v1/inspection-tasks/{taskId}` $\rightarrow$ 200 `InspectionTask`
-  - `GET /api/v1/inspection-tasks/{taskId}/snapshot` $\rightarrow$ 200 `TaskSnapshot` (Gói snapshot ngoại tuyến)
-  - `POST /api/v1/inspection-tasks/{taskId}/accept` (Header: `Idempotency-Key`, `If-Match` $\rightarrow$ 200)
-  - `POST /api/v1/inspection-tasks/{taskId}/sessions` (Nộp số đo hiện trường)
-  - `POST /api/v1/inspection-tasks/{taskId}/evaluations` (Đánh giá Fast Track)
-  - `GET /api/v1/me/repair-items` $\rightarrow$ 200 `RepairItemPage`
-  - `POST /api/v1/repair-attempts` (StartAttempt Fast Track hoặc Approval Track)
-  - `POST /api/v1/repair-attempts/{attemptId}/submit` (Nộp ảnh AFTER nghiệm thu)
-- **Phi công Drone:**
-  - `GET /api/v1/me/survey-tasks` $\rightarrow$ 200 `SurveyTaskPage`
-  - `GET /api/v1/survey-tasks/{taskId}` $\rightarrow$ 200 `SurveyTask` (chứa `access_point`)
-  - `POST /api/v1/survey-tasks/{taskId}/accept` (Header: `Idempotency-Key`, `If-Match` $\rightarrow$ 200)
-  - `PUT /api/v1/survey-tasks/{taskId}/access-point` (Cập nhật điểm tiếp cận cất/hạ cánh)
-  - `POST /api/v1/survey-tasks/{taskId}/datasets` (Nộp bộ dữ liệu video 4K RGB + SRT)
-- **Upload & Sync:**
-  - `POST /api/v1/uploads` $\rightarrow$ 201 `UploadSession`
-  - `POST /api/v1/uploads/{uploadId}/part-urls` $\rightarrow$ 200 `UploadPartUrls`
-  - `POST /api/v1/uploads/{uploadId}/complete` $\rightarrow$ 202 `UploadSession`
-  - `POST /api/v1/sync/batches` $\rightarrow$ 200 `SyncResult` (Body: `SyncBatch`)
+> **Quy tắc 17_10:** KHÔNG inline danh mục endpoint vào file này. Danh mục đầy đủ **241 operations / 223 paths / 357 schemas / 47 controllers** (route, method, actor, DTO, headers, error contract) nằm ở `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; schema tại `03_DTO-and-Schema-Reference.md`; quy tắc `409`/`412`/`428` tại `05_Idempotency-Concurrency-and-Errors.md`.
 
-### Bảng Mã Lỗi Nghiệp Vụ Chuẩn R3 (03_Error_Response_UI_Convention.md):
-Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển thị thông báo nghiệp vụ tương ứng:
-- `TASK_MODE_NOT_REPAIRABLE`: "Nhiệm vụ này chỉ cho phép kiểm tra/đo; lưu kết quả đo và báo PM."
-- `POLICY_NOT_CONFIGURED`: "Chưa cấu hình chính sách Fast Track; giữ nháp, liên hệ PM."
-- `FAST_TRACK_NOT_ELIGIBLE`: "Không đủ điều kiện sửa nhanh; kích thước vượt ngưỡng policy."
-- `PM_REPAIR_BLOCKED`: "PM đã khóa quyền tự sửa cho công việc này."
-- `BEFORE_MISSING`: "Bổ sung bằng chứng ảnh hiện trạng TRƯỚC khi sửa."
-- `EVIDENCE_PENDING`: "Ảnh chưa được máy chủ xác minh toàn vẹn."
-- `FILE_INTEGRITY_FAILED`: "Tệp kiểm tra SHA-256 không khớp."
-- `OFFLINE_SNAPSHOT_CONFLICT`: "Nhiệm vụ hoặc chính sách đã thay đổi trên server; giữ bằng chứng, chờ PM giải quyết."
-- `IDEMPOTENCY_KEY_REUSED`: "Mã thao tác đã được sử dụng trước đó."
-- `OPERATION_IN_PROGRESS`: "Đang đối chiếu thao tác trước đó, vui lòng chờ."
+Neo nhanh (luôn đọc file trên để lấy đúng route/DTO/error của từng operation):
+- **Auth:** API-002 `POST /api/v1/auth/android/login`; API-003 refresh; API-007 logout.
+- **Reporter:** API-010 `POST /api/v1/auth/reporter-registrations`; API-012 verify; API-011 resend; API-216 `POST /api/v1/reports`; API-215 `GET /api/v1/reports`; API-217 report detail.
+- **Crew (FIELD/repair):** API-078 danh sách FIELD task; API-080 detail; API-081 accept; API-093 start; API-095 FIELD submission; API-146 eligibility; API-130 offline sync.
+- **Operator (survey):** API-038 `GET /api/v1/me/survey-tasks`; API-226 detail; API-227 accept; API-229 `POST /api/v1/survey-tasks/{taskId}/datasets`.
+- **Upload (dùng chung):** API-233 create; API-236 part URLs; API-235 complete; API-234 status; API-208 file metadata.
+
+### Mã Lỗi — Per-Operation Contract (KHÔNG có bảng mã chung)
+17_10 **KHÔNG định nghĩa bảng mã lỗi dùng chung**. Mỗi operation có mục **"Error contract (declared, not execution)"** riêng trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; body lỗi `application/problem+json` (`ProblemDetails`). UI đọc `code` từ problem+json rồi map sang message; gặp `code` lạ → hiển thị fallback tiếng Việt trung tính thay vì bịa nghĩa. KHÔNG hardcode bảng mã.
 
 ---
 
@@ -417,7 +374,7 @@ Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển 
 ```sql
 -- ═══════════════════════════════════════════════════════════════
 -- SQLite Schema: RoadGuard FE_AppMobile — Offline-First Architecture
--- Theo: 29_9/09_Frontend/09_Offline_App_Sync_Spec.md
+-- Theo: docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md (17_10)
 -- Full 10-store spec: đọc file trên; đây là 7 store cốt lõi cho scaffold
 -- ═══════════════════════════════════════════════════════════════
 
@@ -474,7 +431,7 @@ CREATE TABLE IF NOT EXISTS outbox_intent (
 -- [5] WIRE COMMAND — Command đã serialize xong, sẵn sàng gửi (payload BẤT BIẾN sau lần gửi đầu)
 CREATE TABLE IF NOT EXISTS wire_command (
   operation_id        TEXT PRIMARY KEY, -- UUID idempotency key — KHÔNG đổi sau khi gửi
-  endpoint_kind       TEXT NOT NULL,    -- operationId từ operation_catalog.md
+  endpoint_kind       TEXT NOT NULL,    -- operation ID (API-xxx) từ 04_API-Contracts/02_Full-API-Catalog.md
   serialized_payload  TEXT NOT NULL,    -- JSON base64 — BẤT BIẾN
   payload_hash        TEXT NOT NULL,    -- SHA256 để detect tampering
   serializer_version  TEXT NOT NULL,
@@ -513,8 +470,8 @@ CREATE TABLE IF NOT EXISTS server_cache (
   PRIMARY KEY (resource_type, resource_id, scope_actor_id)
 );
 
--- HƯỚNG DẪN: Xem full 10-store spec (thêm IdMap, ConflictRecord, SyncRun) tại:
--- D:\Do_AN_Drone\29_9\09_Frontend\09_Offline_App_Sync_Spec.md §2 (hoặc docs/specs/09_Frontend/09_Offline_App_Sync_Spec.md)
+-- HƯỚNG DẪN: Xem full offline/crypto wire spec (IdMap, ConflictRecord, SyncRun, signed batch) tại:
+-- docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md §2
 ```
 
 ---
@@ -533,13 +490,13 @@ CREATE TABLE IF NOT EXISTS server_cache (
 
 ---
 
-## 7. Environment Config (từ `29_9/09_Frontend/07_Environment_Base_URL_Config.md`)
+## 7. Environment Config (theo `docs/specs/04_API-Contracts/01_API-Conventions.md` — §Base URL, version and transport)
 
 ### Expo env variables (`.env.development`, `.env.staging`, `.env.production`):
 ```env
 EXPO_PUBLIC_API_BASE_URL=https://<staging-host>/api/v1   # KHÔNG dùng placeholder trong release
 EXPO_PUBLIC_APP_ENV=development                           # 'development' | 'staging' | 'production'
-EXPO_PUBLIC_CONTRACT_VERSION=FE-R3-v1                    # Hash lock với openapi.baseline.yaml
+EXPO_PUBLIC_CONTRACT_VERSION=17_10                        # Khớp 04_API-Contracts/02_Full-API-Catalog.md (241 operations)
 EXPO_PUBLIC_ENABLE_MOCKS=false                            # KHÔNG bật mock trong production
 EXPO_PUBLIC_REALTIME_ENABLED=false                        # Polling MVP trước; socket chỉ khi contract approved
 ```
@@ -549,5 +506,5 @@ EXPO_PUBLIC_REALTIME_ENABLED=false                        # Polling MVP trước
 - **Namespace local store:** `environmentId + API_origin + actorId + localSchemaVersion`
 - **Không sync queue staging sang production** khi đổi env — logout và tạo partition mới
 - **Badge môi trường:** Hiển thị `[STAGING]` / `[DEV]` rõ ràng; production không có mock switch
-- **Realtime/Socket:** Mặc định **Polling MVP**; TUYỆT ĐỐI không scaffold WebSocket trừ khi contract đã được duyệt (FE-GAP-11)
+- **Realtime/Socket:** Mặc định **Polling MVP**; TUYỆT ĐỐI không scaffold WebSocket trừ khi contract đã được duyệt.
 - **Token:** KHÔNG lưu `accessToken`/`refreshToken` trong `AsyncStorage` plain text — dùng `expo-secure-store` (Android Keystore)

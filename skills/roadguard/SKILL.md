@@ -1,23 +1,23 @@
 ---
 name: roadguard
-description: "Skill chuyên cho DỰ ÁN RoadGuard (hệ thống bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải). Bắt buộc dùng BẤT CỨ KHI NÀO làm việc trong repo RoadGuard — scaffold FE_AppMobile (Expo Router + TypeScript), sửa bug, thêm tính năng, review code, viết backend C#/ASP.NET Core, hay thay đổi bất cứ file nào thuộc dự án này. Skill này độc lập hoàn toàn: nhúng sẵn kỷ luật chống AI 'ngáo' + toàn bộ đặc tả dự án chuẩn hóa Canonical 29_9 (Hoàng Hải, TCVN 10380:2014, Phi tài chính UD-06, stack Expo Router + Fabric, 3 vai trò mobile hiện trường: CREW, DRONE, REPORTER, Fast Track sửa nhanh, hợp đồng API 133 operations từ 09_Frontend, 5 mã khuyết tật chuẩn, 100% MaterialIcons - CẤM Ionicons). Phối hợp chặt chẽ với skill 'code-review' để tự kiểm chứng 0 lỗi compiler."
+description: "Skill chuyên cho DỰ ÁN RoadGuard (hệ thống bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải). Bắt buộc dùng BẤT CỨ KHI NÀO làm việc trong repo RoadGuard — scaffold FE_AppMobile (Expo Router + TypeScript), sửa bug, thêm tính năng, review code, viết backend C#/ASP.NET Core, hay thay đổi bất cứ file nào thuộc dự án này. Skill này độc lập hoàn toàn: nhúng sẵn kỷ luật chống AI 'ngáo' + toàn bộ đặc tả dự án chuẩn hóa 17_10 (Hoàng Hải, TCVN 10380:2014, Phi tài chính UD-06, stack Expo Router + Fabric, 3 vai trò mobile hiện trường: CREW, DRONE, REPORTER, Fast Track sửa nhanh, hợp đồng API 241 operations theo `04_API-Contracts/02_Full-API-Catalog.md`, 5 mã khuyết tật chuẩn, 100% MaterialIcons - CẤM Ionicons). Phối hợp chặt chẽ với skill 'code-review' để tự kiểm chứng 0 lỗi compiler."
 ---
 
-# RoadGuard Skill: Kỷ Luật Chống AI Ngáo + Đặc Tả Dự Án Hoàng Hải (Chuẩn Canonical 29_9 / OpenAPI 0.2.0)
+# RoadGuard Skill: Kỷ Luật Chống AI Ngáo + Đặc Tả Dự Án Hoàng Hải (Chuẩn 17_10)
 
 Skill này **độc lập hoàn toàn** — thay thế mọi skill generic cho dự án RoadGuard. Nó bao gồm:
 - **PHẦN A:** Kỷ luật chống bịa & quy trình 6 bước bắt buộc.
-- **PHẦN B:** Nguồn-sự-thật & đặc tả kỹ thuật chuẩn hóa Canonical 29_9 của RoadGuard.
+- **PHẦN B:** Nguồn-sự-thật & đặc tả kỹ thuật chuẩn hóa 17_10 của RoadGuard.
 
 ---
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục "Chuẩn Hóa Canonical 29_9 (28/09/2026 - 29/09/2026 / 29_9)" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (thư mục cũ `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
+**Mọi quy định trong mục "Chuẩn Hóa Canonical 17_10" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (bộ canonical cũ, các thư mục `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
 
 1. **Thương hiệu & Định danh:**
    - Đối tác thực tế: **Công ty TNHH Xây dựng Bê tông Hoàng Hải** (gọi tắt: Bê tông Hoàng Hải).
    - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email nội bộ: `@hoanghai.vn`.
-   - Tiền tố nhân sự / thiết bị / chuyến bay: chuyển sang `HH-` (`HH-RC-084`, `HH-2089`, `M350-HH-02`, `#HH-409...`).
+   - **Ghi chú mã định danh:** bộ 17_10 **KHÔNG định nghĩa** tiền tố `HH-` cho nhân sự/thiết bị/chuyến bay. Không tự chế prefix; đọc mã định danh theo DTO/enum thực tế trong `docs/specs/04_API-Contracts/`.
 2. **Quy tắc phân tách Logo:**
    - *Màn Splash / Loading:* Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
    - *Màn hình nội bộ, AppHeader, App Icon:* Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
@@ -25,15 +25,15 @@ Skill này **độc lập hoàn toàn** — thay thế mọi skill generic cho d
    - **Mobile App (`FE_AppMobile`):** Phục vụ độc quyền **3 vai trò hiện trường**:
      1. `REPAIR_CREW` (`(crew)`): Kỹ thuật viên / Đội sửa chữa hiện trường.
      2. `DRONE_OPERATOR` (`(drone)`): Phi công điều khiển drone khảo sát & thu thập dữ liệu 4K RGB.
-     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA / Chủ đầu tư (đăng ký/xác thực OTP qua Email RFC 5322 hợp lệ theo D25, gửi phản ánh + GPS + tối đa 3 ảnh, tra cứu tiến độ công khai qua mã tracking, đánh giá 1-5 sao).
+     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA / Chủ đầu tư (đăng ký **email + password + OTP** theo `docs/specs/06_Mobile-Expo/Reporter/02_Authentication-OTP-and-Session.md`: API-010 → API-012/011 → API-002; gửi phản ánh + GPS + tối đa 3 ảnh riêng tư, theo dõi **chính các phản ánh của mình** — bộ 17_10 **KHÔNG định nghĩa** mã tra cứu công khai/tracking; đánh giá 1-5 sao).
    - **Web Dashboard:** Phục vụ 2 vai trò quản lý: `PROJECT_MANAGER` (PM) và `SUPERVISOR` (Giám sát viên). Các màn hình PM và Supervisor cũ trên mobile được chuyển lưu trữ tại `archive/web-screens/` nhằm tập trung tài nguyên mobile cho 3 vai trò hiện trường.
 4. **Cơ chế Nghiệp vụ Fast Track & Task Mode (US-33, BR-05, BR-08, BR-11..18, BR-25):**
-   - **Chế độ công việc (`TaskMode`):**
+   - **Chế độ công việc (`TaskMode`):** tên enum/giá trị trên wire PHẢI verify lại trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` và DTO liên quan — không suy diễn từ tài liệu cũ.
      - `INSPECT_AND_REPAIR`: Đo kiểm và được phép sửa nhanh nếu đủ điều kiện.
      - `MEASURE_ONLY`: Chỉ đo đạc hiện trường, cấm tự ý sửa tại chỗ (áp dụng cho đợt gom nhiều lỗi US-35 / BR-09).
    - **Điều kiện kích hoạt Fast Track tại chỗ:**
-     - Nhiệm vụ được giao ở chế độ `INSPECT_AND_REPAIR`.
-     - Kích thước đo đạc thực tế không vượt ngưỡng quy định trong `FastTrackPolicyVersion` (tham chiếu: diện tích $\le 1.0\text{ m}^2$, độ sâu $\le 5\text{ cm}$, chiều dài $\le 2.0\text{ m}$).
+     - Nhiệm vụ được giao ở chế độ đo-kiểm-và-sửa.
+     - **Eligibility đọc trực tiếp qua API-146 `GET /api/v1/projects/{projectId}/repair-packages/{packageId}/items/{itemId}/eligibility` và fail closed** (server là authority; `missingReasons` không đạt → KHÔNG cho sửa). Ngưỡng kích thước nằm trong policy revision trên server — KHÔNG hardcode con số trong app. Xem `docs/specs/02_Business-Workflows/08_FastTrack-Policy-and-Confirmation.md`.
      - Đã có bằng chứng ảnh hiện trạng TRƯỚC khi sửa (BEFORE).
    - **Quy trình nghiệm thu Fast Track:**
      - Crew sửa xong chụp ảnh SAU (AFTER) và gửi báo cáo.
@@ -77,8 +77,8 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 5. **Không chắc → hỏi, không đoán.**
 
 ### A2. Workflow 6 bước
-**B1 — Hiểu yêu cầu.** Viết lại yêu cầu bằng 1-2 câu, gắn với mã màn `M-XXX` hoặc Use Case tương ứng.  
-**B2 — Thu thập evidence.** Đọc file cần sửa, file gọi, type liên quan, spec tương ứng trong `docs/specs/` và `docs/specs/09_Frontend/`.  
+**B1 — Hiểu yêu cầu.** Viết lại yêu cầu bằng 1-2 câu, gắn với mã màn (`RPT-xx`/`C-xx`/`O-xx`) hoặc operation ID (`API-xxx`) tương ứng.  
+**B2 — Thu thập evidence.** Đọc file cần sửa, file gọi, type liên quan, spec tương ứng trong `docs/specs/` (xem B0).  
 **B3 — Plan mini (3-5 dòng).** Ghi rõ: sửa file nào, dòng nào, vì sao sửa.  
 **B4 — Viết bám spec.** Diff nhỏ, giữ nguyên convention, không scope creep.  
 **B5 — Tự kiểm chứng.** Chạy `npm run typecheck` xác nhận 0 lỗi.  
@@ -99,25 +99,26 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 
 ---
 
-## PHẦN B — Nguồn-sự-thật & đặc tả kỹ thuật RoadGuard Canonical 29_9
+## PHẦN B — Nguồn-sự-thật & đặc tả kỹ thuật RoadGuard Canonical 17_10
 
 ### B0. Nguồn-sự-thật (đọc theo thứ tự ưu tiên)
 | Ưu tiên | File | Vai trò |
 |---|---|---|
 | **0** | **Điều khoản Override Tối cao** ở đầu SKILL.md | **LUẬN ĐIỂM TỐI CAO** — Đè bẹp mọi mâu thuẫn lịch sử |
-| 1 | `D:\Do_AN_Drone\29_9\09_Frontend\` (hoặc `docs/specs/09_Frontend/`: `contracts/operation_catalog.md`, `contracts/api.types.ts`, `contracts/local.types.ts`, `03_Error_Response_UI_Convention.md`, `09_Offline_App_Sync_Spec.md`, `openapi.baseline.yaml`) | **Nguồn sự thật Canonical 29_9 (OpenAPI 0.2.0-draft-alignment)** — Hợp đồng kỹ thuật FE/Mobile chính thức |
-| 2 | `D:\Do_AN_Drone\29_9\02_Requirements\` (`01_FRD_SRS.md`, `02_Business_Rules.md`, `04_Use_Cases.md`, `05_User_Stories_Acceptance_Criteria.md`) | Logic Use Case / Business Rules / FR chuẩn R3/V2 |
-| 3 | `D:\Do_AN_Drone\29_9\04_UI_UX\01_Wireframe_Annotations.md` | 12 Wireframes WF-01..WF-12 & button logic |
-| 4 | `FE_AppMobile/skills/BOOTSTRAP_PROMPT.md` | Đặc tả scaffold mobile & routing (cần đọc cùng nguồn 1) |
-| 5 | `FE_AppMobile/skills/DESIGN.md` | Design system & minimalism tokens |
-| 6 | `RoadGuard_Wireframes/Wireframe_Specification.md` + `index.html` | Bố cục wireframe tham khảo (thấp nhất) |
+| 1 | `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md` | **Nguồn sự thật Canonical 17_10** — Authority & source-of-truth chính thức |
+| 2 | `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` | Danh mục API đầy đủ — 241 operations / 223 paths / 357 schemas / 47 controllers (operation ID `API-001` → `API-241`) |
+| 3 | `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` | Actor / client / permission matrix và quyền theo vai trò |
+| 4 | `docs/specs/02_Business-Workflows/` | Luồng nghiệp vụ 17_10 (auth, evidence, Fast Track, offline…) |
+| 5 | `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md` | Ma trận màn hình/API cho Crew, Reporter, Operator |
+| 6 | `FE_AppMobile/skills/BOOTSTRAP_PROMPT.md` + `skills/DESIGN.md` | Scaffold mobile & design system (đọc cùng nguồn 1–5) |
 
 ### B1. Thông tin dự án
 - **RoadGuard:** Hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**.
-- App mobile phục vụ **3 vai trò hiện trường**:
-  - `DRONE_OPERATOR` (`(drone)`): 7 màn hình
-  - `REPAIR_CREW` (`(crew)`): 10 màn hình
-  - `REPORTER` (`(reporter)`): 4 màn hình (M-REP-01..04) + profile tiện ích
+- App mobile phục vụ **3 vai trò hiện trường** (số màn theo `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md`):
+  - `DRONE_OPERATOR` (`(drone)`): 8 màn hình (O-01 → O-08)
+  - `REPAIR_CREW` (`(crew)`): 11 màn hình (C-01 → C-11)
+  - `REPORTER` (`(reporter)`): 10 màn hình (RPT-01 → RPT-10)
+- **Role wire → route group adapter:** wire backend dùng `UserRoleCode.DroneOperator` / `UserRoleCode.RepairCrew` (xem `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`), app dùng `RoleCode.DRONE_OPERATOR` / `RoleCode.REPAIR_CREW` tại `src/types/enums.ts` — cần lớp adapter map wire→local; route group `(crew)`/`(drone)`/`(reporter)` giữ nguyên.
 - Tầng Auth: 3 màn hình (`app/(auth)/index.tsx`, `force-change-password.tsx`, `otp-verify.tsx`).
 - Màn hình PM & Supervisor cũ: Di chuyển vào `archive/web-screens/` cho Web Dashboard, tách biệt khỏi app mobile.
 
@@ -142,27 +143,18 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 3. **Khai báo route tập trung tại `src/constants/routes.ts`:**
    - Mọi mapping như `ROLE_HOMES` đặt tại `src/constants/routes.ts`.
 
-### B4. Offline-first & Queue (Theo 29_9/09_Frontend/09_Offline_App_Sync_Spec.md)
+### B4. Offline-first & Queue (theo `docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md` và `docs/specs/06_Mobile-Expo/Crew/04_Offline-Signed-Sync-and-Handover.md`)
 - **LocalState:** `DRAFT` $\rightarrow$ `WAITING_DEPENDENCIES` $\rightarrow$ `READY` $\rightarrow$ `IN_FLIGHT` $\rightarrow$ `ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`, `BLOCKED_CONTRACT`, `AUTH_REQUIRED`).
 - **Store SQLite phân vùng:** `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
-- **Media Asset Lifecycle:** Ghi file tạm $\rightarrow$ đóng file $\rightarrow$ tính SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media. Trạng thái: `LOCAL_SAVING` $\rightarrow$ `LOCAL_READY` $\rightarrow$ `UPLOADING` $\rightarrow$ `VERIFIED`.
-- **Mutation Headers:** Luôn kèm `Idempotency-Key` (UUID) và `If-Match` (ETag) cho mọi mutation có trạng thái.
+- **Media Asset Lifecycle:** Ghi file tạm $\rightarrow$ đóng file $\rightarrow$ tính SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media. Trạng thái: `LOCAL_SAVING` $\rightarrow$ `LOCAL_READY` $\rightarrow$ `UPLOADING` $\rightarrow$ `VERIFIED` (complete ≠ VERIFIED).
+- **Signed offline batch (chỉ PM/Crew):** chữ ký **ECDSA P-256**, public key **SPKI DER Base64**, định dạng chữ ký **IEEE-P1363 (64 byte)**, canonical bytes (không `JSON.stringify`/DER/timestamp client). Enrollment/device registry chỉ PM/Crew — **Reporter và Operator KHÔNG** có signed sync. Batch gửi qua **API-130** `POST /api/v1/projects/{projectId}/offline/sync`.
+- **Mutation Headers:** `Idempotency-Key` **bắt buộc** cho write theo declaration của từng operation; thiếu → server có thể trả **428** (`precondition_required`). Kèm `If-Match` (ETag) cho mutation có trạng thái. Chi tiết: `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`.
 
-### B5. Bảng Mã Lỗi Nghiệp Vụ Chuẩn R3 (03_Error_Response_UI_Convention.md)
-Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển thị thông báo nghiệp vụ tương ứng:
-- `TASK_MODE_NOT_REPAIRABLE`: "Nhiệm vụ này chỉ cho phép kiểm tra/đo; lưu kết quả đo và báo PM."
-- `POLICY_NOT_CONFIGURED`: "Chưa cấu hình chính sách Fast Track; giữ nháp, liên hệ PM."
-- `FAST_TRACK_NOT_ELIGIBLE`: "Không đủ điều kiện sửa nhanh; kích thước vượt ngưỡng policy."
-- `PM_REPAIR_BLOCKED`: "PM đã khóa quyền tự sửa cho công việc này."
-- `BEFORE_MISSING`: "Bổ sung bằng chứng ảnh hiện trạng TRƯỚC khi sửa."
-- `EVIDENCE_PENDING`: "Ảnh chưa được máy chủ xác minh toàn vẹn."
-- `FILE_INTEGRITY_FAILED`: "Tệp kiểm tra SHA-256 không khớp."
-- `OFFLINE_SNAPSHOT_CONFLICT`: "Nhiệm vụ hoặc chính sách đã thay đổi trên server; giữ bằng chứng, chờ PM giải quyết."
-- `IDEMPOTENCY_KEY_REUSED`: "Mã thao tác đã được sử dụng trước đó."
-- `OPERATION_IN_PROGRESS`: "Đang đối chiếu thao tác trước đó, vui lòng chờ."
-- `CASE_HAS_OPEN_REQUIRED_ITEMS`: "Hồ sơ còn hạng mục chưa hoàn tất; không thể đóng tổng."
-- `TELEMETRY_INSUFFICIENT`: "Thiếu dữ liệu telemetry xác định; không hiển thị 'Không có lỗi'."
-- `OUTSIDE_ASSIGNED_SCOPE`: "Vị trí không thuộc phạm vi được giao; ghi nhận riêng theo quyền."
+### B5. Mã Lỗi — Per-Operation Contract (KHÔNG có bảng mã chung)
+- Bộ 17_10 **KHÔNG định nghĩa một bảng mã lỗi nghiệp vụ dùng chung**. Mỗi operation có mục **"Error contract (declared, not execution)"** riêng liệt kê HTTP status + `code` của chính nó trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` (241 mục).
+- Body lỗi dùng `application/problem+json` (`ProblemDetails`) — xem `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md`.
+- Quy tắc `409`/`412`/`428` áp theo từng operation (không dùng chung): `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`.
+- **UI KHÔNG hardcode bảng mã chung.** Đọc `code` từ problem+json rồi map sang message; gặp `code` lạ → hiển thị fallback message tiếng Việt trung tính thay vì bịa nghĩa.
 
 ### B6. Design Tokens (`src/design-tokens.ts`)
 - `colors.primary`: `#C9A227` (Vàng đồng — tối đa 1 CTA chính/màn + tab active + KPI).
@@ -173,16 +165,16 @@ Khi nhận mã lỗi từ server hoặc kiểm tra cục bộ, UI phải hiển 
 
 ---
 
-### B7. 10 Invariants Bất Phá (từ `29_9/09_Frontend/01_FE_Scope_Implementation_Guide.md`)
+### B7. 10 Invariants Bất Phá (theo `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md` và các spec 17_10)
 
 Các bất biến sau KHÔNG ĐƯỢC phá trong bất kỳ tình huống nào:
 
 1. **Saved local ≠ Sent ≠ File VERIFIED ≠ Task done ≠ Accepted ≠ Published** — Sáu trạng thái hoàn toàn độc lập, không thay thế nhau.
 2. **Token expiry ≠ hết quyền tác nghiệp offline** — Snapshot đã tải vẫn dùng được offline; server sync cần auth hiện hành.
-3. **Mỗi ý định có `operationId`/`idempotency-key` ổn định** — Timeout hay cancel không chứng minh server rollback.
+3. **Mỗi ý định có operation ID (`API-xxx`)/`Idempotency-Key` ổn định** — Timeout hay cancel không chứng minh server rollback.
 4. **Không gửi local temp ID hoặc unknown enum** — Không bypass type checking bằng cách gửi giá trị chưa map.
 5. **BEFORE đúng nguồn phải được gắn trước sửa** — Không đổi AFTER thành BEFORE; ảnh tái dùng giữ nguyên provenance.
-6. **Không silent overwrite khi policy/assignment/version đổi** — Q04/Q17 đã có giải pháp D05/D06/42A, không tự giải quyết cục bộ.
+6. **Không silent overwrite khi policy/assignment/version đổi** — dùng version/`ETag` mới nhất từ server và để server phân xử; không tự giải quyết cục bộ.
 7. **Fast Track đủ điều kiện KHÔNG chờ PM duyệt từng số đo** — PM kiểm/đóng SAU khi Crew gửi AFTER, Supervisor nhận báo.
 8. **Notification/realtime/cache không là nguồn cấp quyền hay ACK** — Phải verify qua server state.
 9. **Offline store partition theo account+môi trường** — Logout không xóa bằng chứng chưa sync; không lộ data account khác.
@@ -190,30 +182,24 @@ Các bất biến sau KHÔNG ĐƯỢC phá trong bất kỳ tình huống nào:
 
 ---
 
-### B8. Mẫu Giao Việc AI & Rate Limit Budget
+### B8. Mẫu Giao Việc AI & Timeout/Retry Budget
 
-#### Mẫu giao task cho AI coding agent (từ `01_FE_Scope_Implementation_Guide.md §6`):
+#### Mẫu giao task cho AI coding agent:
 
 ```text
-Nguồn: Canonical 29_9 và D:\Do_AN_Drone\29_9\09_Frontend\contracts\openapi.baseline.yaml.
+Nguồn: Canonical 17_10 — docs/specs/04_API-Contracts/02_Full-API-Catalog.md (operation ID API-001 → API-241).
 Feature: [tên màn hình / tính năng], actor/scope: [CREW|DRONE|REPORTER|PM|SUP],
-operationId: [từ operation_catalog.md], FR: [FR-xx].
+operation ID: [API-xxx từ 02_Full-API-Catalog.md], FR: [FR-xx].
 Đọc repo instructions/README/package/build files trước khi sửa.
 Giữ wire fields/enum/nullability/error shape; không tự thêm query/header/endpoint.
 Implement loading/empty/error/stale/offline/conflict theo phạm vi feature.
 Queue/media cần durable storage và exact replay; không localStorage evidence/token mặc định.
-Nếu gặp FE-GAP liên quan: làm adapter/mock có nhãn, không giả production support.
+Nếu gặp contract gap: làm adapter/mock có nhãn, không giả production support.
 Báo cáo: diff, migration/recovery, dependencies và phần còn blocked.
 ```
 
-#### Rate Limit / Retry Budget (từ `08_Rate_Limit_Timeout_Retry.md`):
-
-| Tác vụ | Timeout | Retry tự động |
-|---|---|---|
-| GET JSON | 15 giây | Tối đa 2 lần (transient, có jitter) |
-| Login/OTP/Refresh | 15 giây | **Không retry tự động** |
-| Mutation có dedup key | 30 giây | Tối đa 2 lần (cùng key/payload) |
-| Upload 1 part | 120 giây | Tối đa 3 lần (cùng session/part/bytes) |
-| Background sync | — | Tối đa 5 attempt trong 1 lượt drain → `PAUSED_RETRY` |
+#### Timeout / Retry Budget
+- Bộ 17_10 **KHÔNG có bảng retry dùng chung**; timeout/retry đọc theo **từng operation contract** (status/`code`/header) trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` kết hợp `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`.
+- Nguyên tắc chung: retry mutation chỉ với **cùng `Idempotency-Key` + cùng payload**; KHÔNG retry tự động login/OTP/refresh.
 
 **Quy tắc timeout UI:** Sau timeout mutation → hiển thị **"Chưa xác nhận được kết quả, đang kiểm tra"** — TUYỆT ĐỐI KHÔNG hiển thị "Gửi thất bại" khi chưa rõ server state.

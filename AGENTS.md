@@ -3,27 +3,28 @@
 > Nguồn-sự-thật cho mọi AI làm việc trong repo này. Đọc hết file này TRƯỚC khi viết code.
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục "Chuẩn Hóa Canonical 29_9 (28/09/2026 - 29/09/2026 / OpenAPI 0.2.0-draft-alignment)" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (thư mục cũ `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
+**Mọi quy định trong mục "Chuẩn Hóa Canonical 17_10" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (bộ canonical cũ, các thư mục `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
 
 1. **Thương hiệu & Định danh:**
    - Đối tác thực tế: **Công ty TNHH Xây dựng Bê tông Hoàng Hải** (gọi tắt: Bê tông Hoàng Hải). Toàn bộ định danh cũ Cát Tường / `com.cattuong` / `@cattuong.vn` / prefix `CT-` bị bãi bỏ.
-   - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email nhân viên nội bộ: `@hoanghai.vn`, prefix `HH-` (`HH-RC-084`, `HH-2089`, `#HH-409...`, `M350-HH-02`).
+   - Package: `com.hoanghai.roadguard`, scheme `roadguard`, domain email nhân viên nội bộ: `@hoanghai.vn`. **Ghi chú:** bộ 17_10 **KHÔNG định nghĩa** tiền tố `HH-` cho nhân sự/thiết bị/chuyến bay — không tự chế prefix, đọc mã định danh theo DTO/enum trong `docs/specs/04_API-Contracts/`.
 2. **Quy tắc phân tách Logo:**
    - *Màn Splash / Loading:* Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
    - *Màn hình nội bộ, AppHeader, App Icon:* Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
 3. **Phân định Nền tảng & 3 Vai Trò Mobile Cốt Lõi:**
-   - **Mobile App (`FE_AppMobile`):** Phục vụ độc quyền **3 vai trò hiện trường**:
-     1. `REPAIR_CREW` (`(crew)`): Kỹ thuật viên / Đội sửa chữa hiện trường (10 màn hình).
-     2. `DRONE_OPERATOR` (`(drone)`): Phi công điều khiển drone khảo sát (7 màn hình).
-     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA (4 màn hình chính M-REP-01..04 + profile tiện ích; đăng ký và xác thực OTP qua Email RFC 5322 hợp lệ, không giới hạn nhà cung cấp email theo Quyết định D25).
+   - **Mobile App (`FE_AppMobile`):** Phục vụ độc quyền **3 vai trò hiện trường** (số màn theo `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md`):
+     1. `REPAIR_CREW` (`(crew)`): Kỹ thuật viên / Đội sửa chữa hiện trường (11 màn hình C-01 → C-11).
+     2. `DRONE_OPERATOR` (`(drone)`): Phi công điều khiển drone khảo sát (8 màn hình O-01 → O-08).
+     3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA (10 màn hình RPT-01 → RPT-10; đăng ký **email + password + OTP** theo `docs/specs/06_Mobile-Expo/Reporter/02_Authentication-OTP-and-Session.md`: API-010 → API-012/011 → API-002; bộ 17_10 KHÔNG định nghĩa mã tra cứu công khai/tracking).
+   - **Role wire → route group adapter:** wire backend dùng `UserRoleCode.DroneOperator` / `UserRoleCode.RepairCrew` (xem `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`), app dùng `RoleCode.DRONE_OPERATOR` / `RoleCode.REPAIR_CREW` tại `src/types/enums.ts` — cần lớp adapter map wire→local; route group giữ nguyên.
    - **Web Dashboard:** Phục vụ 2 vai trò quản lý: `PROJECT_MANAGER` (PM) và `SUPERVISOR` (Giám sát viên). Các màn hình PM và Supervisor cũ trên mobile được chuyển lưu trữ tại `archive/web-screens/` nhằm tập trung cho 3 vai trò hiện trường.
 4. **Cơ chế Nghiệp vụ Fast Track & Task Mode (US-33, BR-05, BR-08, BR-11..18, BR-25):**
-   - **Chế độ công việc (`TaskMode`):**
+   - **Chế độ công việc (`TaskMode`):** tên enum/giá trị trên wire PHẢI verify lại trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` và DTO liên quan — không suy diễn từ tài liệu cũ.
      - `INSPECT_AND_REPAIR`: Đo kiểm và được phép sửa nhanh nếu đủ điều kiện.
      - `MEASURE_ONLY`: Chỉ đo đạc hiện trường, cấm tự ý sửa tại chỗ (áp dụng cho đợt gom nhiều lỗi US-35 / BR-09).
    - **Điều kiện kích hoạt Fast Track tại chỗ:**
-     - Nhiệm vụ được giao ở chế độ `INSPECT_AND_REPAIR`.
-     - Kích thước đo đạc thực tế không vượt ngưỡng quy định trong `FastTrackPolicyVersion` (tham chiếu: diện tích $\le 1.0\text{ m}^2$, độ sâu $\le 5\text{ cm}$, chiều dài $\le 2.0\text{ m}$).
+     - Nhiệm vụ được giao ở chế độ đo-kiểm-và-sửa.
+     - **Eligibility đọc qua API-146 và fail closed** (server là authority; `missingReasons` không đạt → KHÔNG cho sửa). Ngưỡng kích thước nằm trong policy revision trên server — KHÔNG hardcode con số trong app. Xem `docs/specs/02_Business-Workflows/08_FastTrack-Policy-and-Confirmation.md`.
      - Đã có bằng chứng ảnh hiện trạng TRƯỚC khi sửa (BEFORE).
    - **Quy trình nghiệm thu Fast Track:**
      - Crew sửa xong chụp ảnh SAU (AFTER) và gửi báo cáo.
@@ -56,16 +57,18 @@
 ---
 
 ## Skill bắt buộc
-- **Skill dự án:** `roadguard` (tại `FE_AppMobile/skills/roadguard/SKILL.md`) — **độc lập hoàn toàn**, chứa kỷ luật chống AI "ngáo" + toàn bộ đặc tả RoadGuard Canonical 29_9 (Hoàng Hải).
+- **Skill dự án:** `roadguard` (tại `FE_AppMobile/skills/roadguard/SKILL.md`) — **độc lập hoàn toàn**, chứa kỷ luật chống AI "ngáo" + toàn bộ đặc tả RoadGuard Canonical 17_10 (Hoàng Hải).
 - **Skill thẩm định mã nguồn (Review):** `code-review` (tại `FE_AppMobile/skills/code-review/SKILL.md`) — Quality Gate & cơ chế "Tự vả tự sửa", tự động kiểm chứng `npx tsc --noEmit` 0 lỗi, quét 100% MaterialIcons (cấm Ionicons), quét UD-06 và xuất nhật ký worklog.
 - Skill generic `vibe-guard` (nếu có sẵn) đã được bao gồm trong `roadguard`.
 
 ## Nguồn-sự-thật (đọc theo thứ tự ưu tiên)
 1. **Điều khoản Override Tối cao** ở đầu file này và trong `skills/roadguard/SKILL.md` (Ưu tiên số 0 — luôn thắng).
-2. `docs/specs/09_Frontend/` (`contracts/api.types.ts`, `contracts/local.types.ts`, `contracts/operation_catalog.md`, `03_Error_Response_UI_Convention.md`, `09_Offline_App_Sync_Spec.md`, `openapi.baseline.yaml`) — Hợp đồng kỹ thuật Frontend & Mobile chính thức từ 29_9 (OpenAPI 0.2.0-draft-alignment).
-3. `skills/BOOTSTRAP_PROMPT.md` — đặc tả scaffold mobile (routing, types, schema SQLite, mock API).
-4. `skills/DESIGN.md` — design system (tokens, components, minimalism checklist).
-5. Tài liệu nghiệp vụ trong `docs/specs/` (`01_FRD_SRS.md`, `02_Business_Rules.md`, `03_To_Be_Process.md`, `04_Use_Cases.md`, `05_User_Stories_Acceptance_Criteria.md`, `01_Data_Dictionary.md`, `01_Wireframe_Annotations.md`, `05_Technical/openapi.yaml`, `03_Data/02_ERD_V2.md`, `03_Data/03_Domain_Model_V2.md`).
+2. `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md` — nguồn sự thật Canonical 17_10 (authority & source-of-truth chính thức).
+3. `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` — hợp đồng API Frontend & Mobile chính thức (241 operations / 223 paths / 357 schemas / 47 controllers; operation ID `API-001` → `API-241`).
+4. `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` + `docs/specs/02_Business-Workflows/` — quyền theo vai trò và luồng nghiệp vụ.
+5. `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md` — ma trận màn hình/API cho Crew, Reporter, Operator.
+6. `skills/BOOTSTRAP_PROMPT.md` — đặc tả scaffold mobile (routing, types, schema SQLite, mock API).
+7. `skills/DESIGN.md` — design system (tokens, components, minimalism checklist).
 
 ## Stack được chốt (KHÔNG đổi mà không hỏi)
 - **Expo Router** (file-based) + TypeScript — KHÔNG dùng React Navigation thuần
@@ -98,9 +101,9 @@
    - Mọi mapping như `ROLE_HOMES` đặt tại `src/constants/routes.ts`.
 
 ## Kiến trúc cốt lõi cần nhớ
-- **Offline queue (09_Frontend/09):** `LocalState`: `DRAFT → WAITING_DEPENDENCIES → READY → IN_FLIGHT → ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`). SHA-256 checksum trước khi gửi; retry có backoff.
+- **Offline queue (`docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md`):** `LocalState`: `DRAFT → WAITING_DEPENDENCIES → READY → IN_FLIGHT → ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`). SHA-256 checksum trước khi gửi; retry có backoff. Signed batch chỉ PM/Crew (ECDSA P-256, SPKI DER Base64, P1363, canonical bytes) qua API-130; `Idempotency-Key` bắt buộc (thiếu → 428).
 - `src/offline/schema.sql`: `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
 - **Media Asset Lifecycle:** ghi temp file $\rightarrow$ close $\rightarrow$ SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media.
 - `Defect.geometry` = GeoJSON chuẩn (tương thích `geography(4326)`); tọa độ wire luôn là `[lon, lat]` (kinh độ trước, vĩ độ sau).
-- **Mã lỗi UI chuẩn (09_Frontend/03):** `TASK_MODE_NOT_REPAIRABLE`, `FAST_TRACK_NOT_ELIGIBLE`, `BEFORE_MISSING`, `POLICY_NOT_CONFIGURED`, `OFFLINE_SNAPSHOT_CONFLICT`, v.v.
+- **Mã lỗi UI:** 17_10 **KHÔNG có bảng mã dùng chung** — mỗi operation có mục "Error contract (declared, not execution)" riêng trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; body `application/problem+json`; quy tắc 409/412/428 tại `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`. UI đọc `code` rồi map; `code` lạ → fallback tiếng Việt, KHÔNG hardcode bảng mã.
 - Design tokens trong `src/design-tokens.ts`; vàng đồng `#C9A227` chỉ cho 1 CTA/màn + tab active + KPI.

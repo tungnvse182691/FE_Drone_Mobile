@@ -73,8 +73,8 @@ So sánh: "làm đăng nhập cho ngon" (AI tự do bịa) vs 2 câu EARS trên 
 
 ### Nguồn sự thật bắt buộc đọc (B2 — Thu thập evidence)
 Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít nhất 1** file liên quan trong:
-- `D:\Do_AN_Drone\29_9\09_Frontend\` (hoặc `docs/specs/09_Frontend/`) — Nguồn sự thật Canonical 29_9 (OpenAPI 0.2.0-draft-alignment)
-- `D:\Do_AN_Drone\29_9\02_Requirements\` (hoặc `docs/specs/02_Requirements/`) — Business Rules & Use Cases
+- `docs/specs/` — Nguồn sự thật **Canonical 17_10** (`00_Governance/01_Authority-and-Source-of-Truth.md` + `04_API-Contracts/02_Full-API-Catalog.md`)
+- `docs/specs/01_Product-and-Roles/` + `docs/specs/02_Business-Workflows/` — Business Rules & Use Cases
 - `FE_AppMobile\skills\BOOTSTRAP_PROMPT.md` — Scaffold & routing chuẩn
 
 ### Red Flags đặc thù RoadGuard — DỪNG NGAY khi thấy:
@@ -86,12 +86,12 @@ Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít n
 | Màn hình PM hoặc Supervisor trong thư mục `app/` | DỪNG — Mobile chỉ có 3 role hiện trường |
 | Route thiếu group prefix: `/crew/tasks` (không ngoặc) | DỪNG — bắt buộc `/(crew)/tasks` |
 | Tuyên bố "PASS" mà không chạy `npx tsc --noEmit` | DỪNG — không review bằng trí nhớ |
-| Gán `success` cho HTTP 200 mà không validate schema | DỪNG — xem `04_Data_Contract_Type_Definitions.md` |
+| Gán `success` cho HTTP 200 mà không validate schema | DỪNG — xem `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md` |
 | Dùng mã khuyết tật tự chế (không phải 5 mã BTXM) | DỪNG — đọc `src/constants/defect-types.ts` |
 
 ### Checklist bổ sung cho RoadGuard (thêm vào B2)
-- [ ] Đã đọc file spec tương ứng trong `29_9/09_Frontend/` (hoặc `docs/specs/09_Frontend/`)?
-- [ ] Tên endpoint có trong `contracts/operation_catalog.md` thật?
+- [ ] Đã đọc file spec tương ứng trong `docs/specs/` (Canonical 17_10)?
+- [ ] Tên endpoint + operation ID (`API-xxx`) có trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` thật?
 - [ ] Không render tiền tệ VNĐ trên bất kỳ màn Mobile nào?
 - [ ] Route có đủ group prefix `/(crew)/`, `/(drone)/`, `/(reporter)/`?
 - [ ] Icon dùng `MaterialIcons` (không phải `Ionicons`)?
