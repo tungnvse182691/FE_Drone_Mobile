@@ -35,3 +35,13 @@ export const CREW_TASKS = '/(crew)/tasks';
 export const CREW_WO_DETAIL = '/(crew)/wo-detail';
 export const CREW_REPAIR_CORRECTION = '/(crew)/repair-correction';
 export const CREW_RECEIVING = '/(crew)/receiving';
+
+export const DRONE_HOME = '/(drone)/home';
+export const DRONE_REQUESTS = '/(drone)/requests';
+export const DRONE_REQUEST_DETAIL = '/(drone)/request-detail';
+export const DRONE_REQUEST_DECLINE = '/(drone)/request-decline';
+export const DRONE_WORK_PACKAGE = '/(drone)/work-package';
+export const DRONE_LOG = '/(drone)/log';
+export const DRONE_SYNC = '/(drone)/sync';
+export const DRONE_UPLOAD = '/(drone)/upload';
+export const DRONE_PROFILE = '/(drone)/profile';

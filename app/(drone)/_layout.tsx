@@ -9,7 +9,14 @@ const DRONE_TABS = [
     iconFamily: 'material' as const,
     label: 'Khảo sát',
     route: '/(drone)/requests',
-    activePrefixes: ['/(drone)/requests', '/(drone)/request-detail', '/(drone)/request', '/(drone)/log'],
+    activePrefixes: [
+      '/(drone)/requests',
+      '/(drone)/request-detail',
+      '/(drone)/request-decline',
+      '/(drone)/work-package',
+      '/(drone)/request',
+      '/(drone)/log',
+    ],
   },
   {
     icon: 'sync',
