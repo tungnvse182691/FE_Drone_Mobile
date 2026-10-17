@@ -20,7 +20,12 @@ export const PUBLIC_ROUTE_GROUP = '(reporter)';
 
 export const REPORTER_HOME = '/(reporter)/home';
 export const REPORTER_REPORT = '/(reporter)/report';
+export const REPORTER_CAPTURE = '/(reporter)/capture';
+export const REPORTER_UPLOADS = '/(reporter)/uploads';
+export const REPORTER_REPORT_SUPPLEMENT = '/(reporter)/report-supplement';
+export const REPORTER_ACCOUNT = '/(reporter)/account';
 export const REPORTER_TRACK = '/(reporter)/track';
 export const REPORTER_FEEDBACK = '/(reporter)/feedback';
 export const REPORTER_PROFILE = '/(reporter)/profile';
 export const AUTH_OTP_VERIFY = '/(auth)/otp-verify';
+export const AUTH_FORCE_CHANGE_PASSWORD = '/(auth)/force-change-password';

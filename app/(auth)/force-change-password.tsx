@@ -14,9 +14,38 @@ import { useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, spacing, typography } from '../../src/design-tokens';
-import { changePassword as apiChangePassword } from '../../src/api/mock/auth';
+import {
+  changePassword as apiChangePassword,
+  forcedChangePassword as apiForcedChangePassword,
+} from '../../src/api/mock/auth';
 import { useAuthStore } from '../../src/store/auth';
 import { ROLE_HOMES } from '../../src/constants/routes';
+import { uuidv4 } from '../../src/utils/uuid';
+
+/** BE trả `code` top-level; mock ném `{ response: { data: { code, message } } }`. */
+function problemOf(error: unknown): { code: string | null; message: string | null } {
+  if (typeof error !== 'object' || error === null) {
+    return { code: null, message: null };
+  }
+  const carrier = error as { code?: unknown; response?: { data?: unknown } };
+  const data = carrier.response?.data as
+    | { code?: unknown; message?: unknown; detail?: unknown }
+    | undefined;
+  return {
+    code:
+      typeof carrier.code === 'string'
+        ? carrier.code
+        : typeof data?.code === 'string'
+          ? data.code
+          : null,
+    message:
+      typeof data?.message === 'string'
+        ? data.message
+        : typeof data?.detail === 'string'
+          ? data.detail
+          : null,
+  };
+}
 
 export default function ForceChangePasswordScreen() {
   const [oldPassword, setOldPassword] = useState('');
@@ -53,15 +82,27 @@ export default function ForceChangePasswordScreen() {
     setLoading(true);
     setError(null);
     try {
-      if (!token) {
-        setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-        logout();
-        return;
+      if (isForced && !token) {
+        // API-005: đổi mật khẩu BẮT BUỘC — gọi ẩn danh bằng username, KHÔNG cần bearer.
+        await apiForcedChangePassword({
+          username: user.phone_or_email,
+          currentPassword: oldPassword,
+          newPassword,
+          confirmPassword,
+          operationId: uuidv4(),
+        });
+      } else {
+        // API-004: đổi mật khẩu theo phiên (bearer + Idempotency-Key).
+        if (!token) {
+          setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+          logout();
+          return;
+        }
+        await apiChangePassword(token, oldPassword, newPassword);
       }
-      await apiChangePassword(token, oldPassword, newPassword);
       const updatedUser = {
         ...user,
-        token,
+        token: token ?? user.token,
         must_change_password: false,
       };
       login(updatedUser);
@@ -71,8 +112,9 @@ export default function ForceChangePasswordScreen() {
         const home = ROLE_HOMES[updatedUser.role_code];
         router.replace(home ? (home as any) : ('/(auth)' as any));
       }
-    } catch {
-      setError('Mật khẩu cũ không đúng');
+    } catch (caught) {
+      const problem = problemOf(caught);
+      setError(problem.message ?? 'Không đổi được mật khẩu. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }

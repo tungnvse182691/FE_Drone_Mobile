@@ -127,3 +127,46 @@ export async function changePassword(token: string, old_password: string, new_pa
   entry.user.must_change_password = false;
   return { data: { ok: true } };
 }
+
+/**
+ * API-005 `POST /api/v1/auth/forced-password-change` — anonymous (KHÔNG bearer), dùng
+ * `username` + `confirmPassword` + `operationId`. Khác API-004 (đổi mật khẩu có phiên).
+ */
+export async function forcedChangePassword(input: {
+  username: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  operationId: string;
+}) {
+  await delay(300);
+  if (input.newPassword.length < 6) {
+    throwMockApiError('validation_error', { message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  }
+  if (input.newPassword !== input.confirmPassword) {
+    throwMockApiError('validation_error', { message: 'Xác nhận mật khẩu mới không khớp' });
+  }
+  const username = input.username.trim().toLowerCase();
+  const entry = Object.values(MOCK_USERS).find(
+    (item) => item.user.phone_or_email.toLowerCase() === username,
+  );
+  if (!entry || entry.password !== input.currentPassword) {
+    throwMockApiError('auth_invalid_credentials', { message: 'Tên đăng nhập hoặc mật khẩu không đúng' });
+  }
+  if (entry.password === input.newPassword) {
+    throwMockApiError('validation_error', { message: 'Mật khẩu mới không được trùng mật khẩu cũ' });
+  }
+  entry.password = input.newPassword;
+  entry.user.must_change_password = false;
+  return { data: { ok: true } };
+}
+
+/** API-008 — chỉ GHI NHẬN yêu cầu khôi phục; app KHÔNG tự đặt lại mật khẩu. */
+export async function requestPasswordRecovery(email: string) {
+  await delay(300);
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.includes('@')) {
+    throwMockApiError('validation_error', { message: 'Địa chỉ email không hợp lệ' });
+  }
+  return { data: { accepted: true, email: normalized } };
+}

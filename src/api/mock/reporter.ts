@@ -1,6 +1,27 @@
 import { ReporterReport, TrackingTimelineEvent } from '../../types/domain';
 import { ReporterReportStatus } from '../../types/enums';
 import { DEFECT_TYPE_CODES, DefectTypeCode } from '../../constants/defect-types';
+import { throwMockApiError } from './errors';
+import {
+  MAX_PHOTO_BYTES,
+  PART_SIZE_BYTES,
+  PRESIGNED_URL_TTL_MINUTES,
+  SESSION_TTL_HOURS,
+  isSupportedPhotoMediaType,
+  isValidChecksumSha256,
+} from '../uploads';
+import type {
+  CompletedUploadPartDto,
+  FileMetadataResponseDto,
+  ReporterEvidenceCreateRequestDto,
+  StoredPartResult,
+  UploadCompleteRequestDto,
+  UploadPartUrlResponseDto,
+  UploadPartUrlsRequestDto,
+  UploadPartUrlsResponseDto,
+  UploadSessionResponseDto,
+  UploadTransport,
+} from '../uploads';
 
 export interface ReporterRegistrationIntent {
   intentId: string;
@@ -342,3 +363,327 @@ export function buildTrackingTimeline(
 }
 
 export { MOCK_OTP };
+
+// =============================================================================
+// UPLOAD ẢNH PRIVATE (API-211 / API-212 / API-213 / API-214 / API-208)
+// Mock giữ ĐÚNG shape envelope của BE (kể cả lỗi), nhưng thay presigned URL thật
+// bằng URL giả `storage.mock.roadguard.local` và giả lập verify sau vài lần poll.
+// =============================================================================
+
+const UPLOAD_STORAGE_HOST = 'https://storage.mock.roadguard.local';
+/** Số lần poll API-208 trước khi file chuyển VERIFIED (mock). */
+const VERIFY_POLLS_REQUIRED = 3;
+
+interface MockUploadSession {
+  id: string;
+  fileId: string;
+  status: string;
+  partSizeBytes: number;
+  expiresAt: string;
+  version: string;
+  checksumSha256: string;
+  sizeBytes: number;
+  mediaType: string;
+  fileName: string;
+  partsTotal: number;
+  eTags: Map<number, string>;
+}
+
+interface MockEvidenceFile {
+  id: string;
+  status: string;
+  checksumSha256: string;
+  mediaType: string;
+  sizeBytes: number;
+  version: string;
+  polls: number;
+}
+
+const uploadSessions = new Map<string, MockUploadSession>();
+const evidenceFiles = new Map<string, MockEvidenceFile>();
+const uploadIdempotency = new Map<string, string>();
+const partUrlIdempotency = new Map<string, UploadPartUrlsResponseDto>();
+let uploadCounter = 0;
+
+/** Row-version dạng ETag có dấu ngoặc kép — dùng cho `If-Match` (session) và `version` (file). */
+function mockRowVersion(seed: number): string {
+  return `"${seed.toString(16).toUpperCase().padStart(16, '0')}="`;
+}
+
+function nextUploadIdentifiers(): { uploadId: string; fileId: string } {
+  uploadCounter += 1;
+  const suffix = uploadCounter.toString().padStart(6, '0');
+  return { uploadId: `UP-${suffix}`, fileId: `FILE-${suffix}` };
+}
+
+function requireSession(uploadId: string): MockUploadSession {
+  const session = uploadSessions.get(uploadId);
+  if (!session) {
+    throwMockApiError('upload_session_not_found', {
+      message: 'Phiên tải ảnh không tồn tại hoặc đã hết hạn.',
+    });
+  }
+  return session;
+}
+
+function requireFile(fileId: string): MockEvidenceFile {
+  const file = evidenceFiles.get(fileId);
+  if (!file) {
+    throwMockApiError('file_not_found', { message: 'Không tìm thấy tệp bằng chứng.' });
+  }
+  return file;
+}
+
+function sessionView(session: MockUploadSession): UploadSessionResponseDto {
+  return {
+    id: session.id,
+    fileId: session.fileId,
+    status: session.status,
+    partSizeBytes: session.partSizeBytes,
+    expiresAt: session.expiresAt,
+    version: session.version,
+  };
+}
+
+function normalizeMediaType(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+/** Bộ transport mock — `src/store/uploads.ts` chọn bộ này khi chưa có BE thật. */
+export function createMockUploadTransport(): UploadTransport {
+  return {
+    async createSession(
+      request: ReporterEvidenceCreateRequestDto,
+      idempotencyKey: string,
+    ): Promise<UploadSessionResponseDto> {
+      await delay(350);
+
+      const fileName = request.fileName?.trim();
+      if (!fileName) {
+        throwMockApiError('validation_error', { message: 'Thiếu tên tệp ảnh.' });
+      }
+      const mediaType = normalizeMediaType(request.mediaType ?? '');
+      if (!isSupportedPhotoMediaType(mediaType)) {
+        throwMockApiError('unsupported_media_type', {
+          message: 'Chỉ chấp nhận ảnh JPEG hoặc PNG.',
+        });
+      }
+      if (!Number.isFinite(request.sizeBytes) || request.sizeBytes <= 0) {
+        throwMockApiError('upload_validation_failed', { message: 'Kích thước ảnh không hợp lệ.' });
+      }
+      if (request.sizeBytes > MAX_PHOTO_BYTES) {
+        throwMockApiError('upload_validation_failed', {
+          message: 'Ảnh vượt quá 20 MiB. Vui lòng chọn ảnh nhỏ hơn.',
+        });
+      }
+      if (!isValidChecksumSha256(request.checksumSha256 ?? '')) {
+        throwMockApiError('upload_validation_failed', {
+          message: 'Mã kiểm tra toàn vẹn SHA-256 không hợp lệ.',
+        });
+      }
+
+      const cachedSessionId = uploadIdempotency.get(idempotencyKey);
+      if (cachedSessionId) {
+        const cached = uploadSessions.get(cachedSessionId);
+        if (cached) {
+          return sessionView(cached);
+        }
+      }
+
+      const { uploadId, fileId } = nextUploadIdentifiers();
+      const now = Date.now();
+      const session: MockUploadSession = {
+        id: uploadId,
+        fileId,
+        status: 'PENDING',
+        partSizeBytes: PART_SIZE_BYTES,
+        expiresAt: new Date(now + SESSION_TTL_HOURS * 60 * 60 * 1000).toISOString(),
+        version: mockRowVersion(1),
+        checksumSha256: request.checksumSha256,
+        sizeBytes: request.sizeBytes,
+        mediaType,
+        fileName,
+        partsTotal: Math.max(1, Math.ceil(request.sizeBytes / PART_SIZE_BYTES)),
+        eTags: new Map<number, string>(),
+      };
+      uploadSessions.set(uploadId, session);
+      uploadIdempotency.set(idempotencyKey, uploadId);
+      evidenceFiles.set(fileId, {
+        id: fileId,
+        status: 'PENDING',
+        checksumSha256: request.checksumSha256,
+        mediaType,
+        sizeBytes: request.sizeBytes,
+        version: mockRowVersion(1),
+        polls: 0,
+      });
+      return sessionView(session);
+    },
+
+    async getSession(uploadId: string): Promise<UploadSessionResponseDto> {
+      await delay(200);
+      return sessionView(requireSession(uploadId));
+    },
+
+    async requestPartUrls(
+      uploadId: string,
+      request: UploadPartUrlsRequestDto,
+      idempotencyKey: string,
+    ): Promise<UploadPartUrlsResponseDto> {
+      await delay(250);
+      const session = requireSession(uploadId);
+      const partNumbers = Array.isArray(request.partNumbers) ? request.partNumbers : [];
+      if (partNumbers.length === 0) {
+        throwMockApiError('validation_error', { message: 'Danh sách part rỗng.' });
+      }
+
+      const cached = partUrlIdempotency.get(idempotencyKey);
+      if (cached) {
+        return cached;
+      }
+
+      const expiresAt = new Date(Date.now() + PRESIGNED_URL_TTL_MINUTES * 60 * 1000).toISOString();
+      const parts: UploadPartUrlResponseDto[] = partNumbers.map((partNumber) => ({
+        partNumber,
+        url: `${UPLOAD_STORAGE_HOST}/${session.fileId}/part-${partNumber}?X-Amz-Expires=900&mock=1`,
+        expiresAt,
+      }));
+      const response: UploadPartUrlsResponseDto = { parts };
+      partUrlIdempotency.set(idempotencyKey, response);
+      return response;
+    },
+
+    async putPart(
+      part: UploadPartUrlResponseDto,
+      _bytes: Uint8Array,
+      _contentType: string,
+    ): Promise<StoredPartResult> {
+      await delay(250);
+      if (!part.url || typeof part.partNumber !== 'number' || !part.url.startsWith(UPLOAD_STORAGE_HOST)) {
+        throwMockApiError('upload_storage_unavailable', {
+          message: 'URL tải lên không hợp lệ hoặc đã hết hạn.',
+        });
+      }
+      const fileId = part.url.split('/')[3] ?? '';
+      const session = [...uploadSessions.values()].find((item) => item.fileId === fileId);
+      if (!session) {
+        throwMockApiError('upload_storage_unavailable', {
+          message: 'URL tải lên không hợp lệ hoặc đã hết hạn.',
+        });
+      }
+      const eTag = mockRowVersion(part.partNumber + 10);
+      session.eTags.set(part.partNumber, eTag);
+      session.status = 'UPLOADING';
+      return { partNumber: part.partNumber, eTag };
+    },
+
+    async completeUpload(
+      uploadId: string,
+      request: UploadCompleteRequestDto,
+      sessionVersion: string,
+      _idempotencyKey: string,
+    ): Promise<UploadSessionResponseDto> {
+      await delay(400);
+      const session = requireSession(uploadId);
+      if (sessionVersion !== session.version) {
+        throwMockApiError('auth_concurrency_conflict', {
+          message: 'Phiên tải ảnh vừa được cập nhật ở nơi khác.',
+        });
+      }
+      const parts: CompletedUploadPartDto[] = Array.isArray(request.parts) ? request.parts : [];
+      if (parts.length === 0) {
+        throwMockApiError('validation_error', { message: 'Chưa có part nào được tải lên.' });
+      }
+      if (request.checksumSha256 !== session.checksumSha256) {
+        throwMockApiError('upload_validation_failed', {
+          message: 'Mã SHA-256 không khớp với nội dung đã tải lên.',
+        });
+      }
+      const uploadedParts = new Set(parts.map((part) => part.partNumber));
+      for (let partNumber = 1; partNumber <= session.partsTotal; partNumber += 1) {
+        if (!uploadedParts.has(partNumber)) {
+          throwMockApiError('upload_validation_failed', {
+            message: `Thiếu part ${partNumber} trên ${session.partsTotal}.`,
+          });
+        }
+      }
+
+      session.version = mockRowVersion(2);
+      session.status = 'VERIFYING';
+      const file = requireFile(session.fileId);
+      file.status = 'VERIFYING';
+      file.version = mockRowVersion(2);
+      file.polls = 0;
+      return sessionView(session);
+    },
+
+    async getFileMetadata(fileId: string): Promise<FileMetadataResponseDto> {
+      await delay(250);
+      const file = requireFile(fileId);
+      if (file.status !== 'VERIFIED' && file.status !== 'FAILED') {
+        file.polls += 1;
+        if (file.polls >= VERIFY_POLLS_REQUIRED) {
+          file.status = 'VERIFIED';
+        }
+      }
+      return {
+        id: file.id,
+        status: file.status,
+        checksumSha256: file.checksumSha256,
+        mediaType: file.mediaType,
+        sizeBytes: file.sizeBytes,
+        version: file.version,
+      };
+    },
+  };
+}
+
+// =============================================================================
+// PHẢN ÁNH BỔ SUNG (API-217 đọc / API-219 gửi kèm If-Match)
+// =============================================================================
+
+export interface ReportSupplementInput {
+  description: string;
+  photo_uris: string[];
+}
+
+const reportVersions = new Map<string, number>();
+
+export function getReportWireVersion(trackingCode: string): string {
+  const normalized = normalizeTrackingCode(trackingCode);
+  return mockRowVersion(reportVersions.get(normalized) ?? 1);
+}
+
+export async function submitReportSupplement(
+  trackingCode: string,
+  input: ReportSupplementInput,
+  expectedVersion: string,
+  idempotencyKey?: string,
+): Promise<{ report: ReporterReport; version: string }> {
+  await delay(500);
+  const normalized = normalizeTrackingCode(trackingCode);
+  const report = reports.get(normalized);
+  if (!report) {
+    throwMockApiError('not_found', { message: 'Không tìm thấy phản ánh cần bổ sung.' });
+  }
+  if (!input.description.trim()) {
+    throwMockApiError('validation_error', { message: 'Vui lòng nhập nội dung bổ sung.' });
+  }
+  if (expectedVersion !== getReportWireVersion(normalized)) {
+    throwMockApiError('concurrency_conflict', {
+      message: 'Phản ánh đã được cập nhật ở nơi khác. Vui lòng tải lại bản mới nhất.',
+    });
+  }
+
+  return withIdempotency(idempotencyKey, () => {
+    const nextVersion = (reportVersions.get(normalized) ?? 1) + 1;
+    reportVersions.set(normalized, nextVersion);
+    const updated: ReporterReport = {
+      ...report,
+      description: `${report.description}\n\n[Bổ sung] ${input.description.trim()}`,
+      photo_uris: [...report.photo_uris, ...input.photo_uris],
+    };
+    reports.set(normalized, updated);
+    return { report: updated, version: mockRowVersion(nextVersion) };
+  });
+}
