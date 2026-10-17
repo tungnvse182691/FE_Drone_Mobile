@@ -1,21 +1,47 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import * as SecureStore from 'expo-secure-store';
 import { User } from '../types/domain';
 import { RoleCode } from '../types/enums';
 import { appStorage } from './storage';
-import { configureAuthBridge, type TokenPair } from '../api/client';
+import {
+  configureAuthBridge,
+  type AuthActorWire,
+  type TokenPair,
+} from '../api/client';
+import { toInternalRole } from '../types/roleAdapter';
+
+export type AuthStatus =
+  | 'SIGNED_OUT'
+  | 'OTP_PENDING'
+  | 'VERIFIED_NEEDS_LOGIN'
+  | 'AUTHENTICATED'
+  | 'REFRESHING';
+
+const REFRESH_SECRET_KEY = 'roadguard.refresh_token';
 
 type PersistedUser = Omit<User, 'token' | 'refresh_token'>;
 
+type PersistedAuth = {
+  user: PersistedUser | null;
+  role: RoleCode | null;
+};
+
 interface AuthState {
+  status: AuthStatus;
   user: User | null;
   role: RoleCode | null;
   token: string | null;
   refreshToken: string | null;
-  login: (user: User) => void;
+  login: (user: User, pair?: TokenPair) => void;
   logout: () => void;
   setToken: (token: string | null) => void;
   applyTokenPair: (pair: TokenPair) => void;
+  beginOtp: () => void;
+  markOtpVerified: () => void;
+  beginRefresh: () => void;
+  requirePasswordChange: () => void;
+  restoreRefreshToken: () => Promise<void>;
 }
 
 function stripCredentials(user: User | null): PersistedUser | null {
@@ -26,30 +52,145 @@ function stripCredentials(user: User | null): PersistedUser | null {
   return safe;
 }
 
+async function persistRefreshSecret(token: string | null): Promise<void> {
+  try {
+    if (!(await SecureStore.isAvailableAsync())) {
+      return;
+    }
+    if (token) {
+      await SecureStore.setItemAsync(REFRESH_SECRET_KEY, token);
+    } else {
+      await SecureStore.deleteItemAsync(REFRESH_SECRET_KEY);
+    }
+  } catch {
+    return;
+  }
+}
+
+async function readRefreshSecret(): Promise<string | null> {
+  try {
+    if (!(await SecureStore.isAvailableAsync())) {
+      return null;
+    }
+    return await SecureStore.getItemAsync(REFRESH_SECRET_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function buildUserFromActor(
+  actor: AuthActorWire,
+  fallbackEmail: string,
+  mustChangePassword: boolean,
+): User | null {
+  const role_code = toInternalRole(actor.role);
+  if (!role_code) {
+    return null;
+  }
+  return {
+    id: actor.id,
+    role_code,
+    full_name: actor.displayName,
+    phone_or_email: fallbackEmail,
+    is_reporter: role_code === RoleCode.REPORTER ? true : undefined,
+    employee_code: '',
+    must_change_password: mustChangePassword,
+    token: '',
+    refresh_token: '',
+  };
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
+      status: 'SIGNED_OUT',
       user: null,
       role: null,
       token: null,
       refreshToken: null,
-      login: (user) =>
+
+      login: (user, pair) => {
+        const accessToken = pair?.accessToken ?? user.token ?? null;
+        const refreshToken = pair?.refreshToken ?? user.refresh_token ?? null;
+        const roleCode =
+          (pair?.user ? toInternalRole(pair.user.role) : null) ?? user.role_code;
+        const mustChangePassword = pair?.mustChangePassword ?? user.must_change_password;
+        const nextUser: User = {
+          ...user,
+          role_code: roleCode,
+          must_change_password: mustChangePassword,
+        };
         set({
-          user,
-          role: user.role_code,
-          token: user.token,
-          refreshToken: user.refresh_token,
-        }),
-      logout: () => set({ user: null, role: null, token: null, refreshToken: null }),
+          status: 'AUTHENTICATED',
+          user: nextUser,
+          role: nextUser.role_code,
+          token: accessToken,
+          refreshToken,
+        });
+        void persistRefreshSecret(refreshToken);
+      },
+
+      logout: () => {
+        set({
+          status: 'SIGNED_OUT',
+          user: null,
+          role: null,
+          token: null,
+          refreshToken: null,
+        });
+        void persistRefreshSecret(null);
+      },
+
       setToken: (token) => set({ token }),
-      applyTokenPair: (pair) =>
-        set((state) => ({
-          token: pair.accessToken,
-          refreshToken: pair.refreshToken,
-          user: state.user
-            ? { ...state.user, token: pair.accessToken, refresh_token: pair.refreshToken }
-            : state.user,
-        })),
+
+      applyTokenPair: (pair) => {
+        const wireRole = pair.user ? toInternalRole(pair.user.role) : null;
+        set((state) => {
+          const nextRole = wireRole ?? state.role;
+          const nextUser = state.user
+            ? {
+                ...state.user,
+                role_code: nextRole ?? state.user.role_code,
+                full_name: pair.user?.displayName ?? state.user.full_name,
+                must_change_password: pair.mustChangePassword,
+                token: pair.accessToken,
+                refresh_token: pair.refreshToken,
+              }
+            : state.user;
+          return {
+            status: 'AUTHENTICATED',
+            token: pair.accessToken,
+            refreshToken: pair.refreshToken,
+            role: nextRole,
+            user: nextUser,
+          };
+        });
+        void persistRefreshSecret(pair.refreshToken);
+      },
+
+      beginOtp: () => set({ status: 'OTP_PENDING' }),
+
+      markOtpVerified: () =>
+        set((state) =>
+          state.status === 'OTP_PENDING' ? { status: 'VERIFIED_NEEDS_LOGIN' } : {},
+        ),
+
+      beginRefresh: () =>
+        set((state) => (state.status === 'AUTHENTICATED' ? { status: 'REFRESHING' } : {})),
+
+      requirePasswordChange: () =>
+        set((state) =>
+          state.user
+            ? { user: { ...state.user, must_change_password: true } }
+            : {},
+        ),
+
+      restoreRefreshToken: async () => {
+        const secret = await readRefreshSecret();
+        if (secret) {
+          set({ refreshToken: secret });
+        }
+      },
     }),
     {
       name: 'auth-storage',
@@ -58,6 +199,16 @@ export const useAuthStore = create<AuthState>()(
         user: stripCredentials(state.user),
         role: state.role,
       }),
+      merge: (persisted, current) => {
+        const restored = (persisted ?? {}) as Partial<PersistedAuth>;
+        const user = (restored.user ?? null) as User | null;
+        return {
+          ...current,
+          user,
+          role: (restored.role ?? null) as RoleCode | null,
+          status: user ? 'VERIFIED_NEEDS_LOGIN' : current.status,
+        };
+      },
     },
   ),
 );
@@ -72,9 +223,12 @@ export function initAuthBridge(): void {
   configureAuthBridge({
     getAccessToken: () => useAuthStore.getState().token,
     getRefreshToken: () => useAuthStore.getState().refreshToken,
+    onRefreshStart: () => useAuthStore.getState().beginRefresh(),
     onTokenPair: (pair) => useAuthStore.getState().applyTokenPair(pair),
     onSessionEnded: () => useAuthStore.getState().logout(),
+    onPasswordChangeRequired: () => useAuthStore.getState().requirePasswordChange(),
   });
 }
 
 initAuthBridge();
+void useAuthStore.getState().restoreRefreshToken();

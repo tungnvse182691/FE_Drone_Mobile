@@ -7,6 +7,7 @@ import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { MOCK_OTP, registerReporterEmail, submitReport, verifyReporterIntent } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
+import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_TRACK } from '../../src/constants/routes';
 
 const OTP_LENGTH = 6;
@@ -29,6 +30,8 @@ export default function OtpVerifyScreen() {
   const markVerified = useReporterStore((state) => state.markVerified);
   const addTrackingCode = useReporterStore((state) => state.addTrackingCode);
   const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
+  const beginOtp = useAuthStore((state) => state.beginOtp);
+  const markOtpVerified = useAuthStore((state) => state.markOtpVerified);
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +43,10 @@ export default function OtpVerifyScreen() {
 
   useEffect(() => {
     setActiveIntentId(intentId);
-  }, [intentId]);
+    if (intentId) {
+      beginOtp();
+    }
+  }, [intentId, beginOtp]);
 
   useEffect(() => {
     if (cooldown <= 0) {
@@ -73,6 +79,7 @@ export default function OtpVerifyScreen() {
       markVerified(report.reporter_email);
       addTrackingCode(report.tracking_code);
       clearPendingReport();
+      markOtpVerified();
       router.replace({ pathname: REPORTER_TRACK, params: { code: report.tracking_code } });
     } catch (err) {
       setError(errorMessages[(err as Error).message] ?? 'Không thể xác thực. Vui lòng thử lại.');
@@ -91,6 +98,7 @@ export default function OtpVerifyScreen() {
       );
       setActiveIntentId(next.intentId);
       router.setParams({ intentId: next.intentId, email: next.email });
+      beginOtp();
       setCode('');
       setCooldown(RESEND_COOLDOWN);
       inputRef.current?.focus();

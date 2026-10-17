@@ -5,13 +5,70 @@ import axios, {
 } from 'axios';
 import { uuidv4 } from '../utils/uuid';
 
+export interface AuthActorWire {
+  id: string;
+  displayName: string;
+  role: string;
+  version: string;
+}
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
   tokenType: string;
   expiresIn: number;
   mustChangePassword: boolean;
-  user?: unknown;
+  user?: AuthActorWire;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RefreshRequest {
+  refreshToken: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ForcedPasswordChangeRequest {
+  username: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  operationId: string;
+}
+
+export interface PasswordRecoveryRequest {
+  email: string;
+}
+
+export type ReporterTypeWire = 'CITIZEN' | 'INVESTOR_REPRESENTATIVE';
+
+export interface RegisterReporterRequest {
+  email: string;
+  password: string;
+  displayName: string;
+  reporterType: ReporterTypeWire;
+}
+
+export interface RegistrationIntentResponse {
+  intentId: string;
+  status: string;
+  resendAfterSeconds: number;
+}
+
+export interface VerifyReporterOtpRequest {
+  intentId: string;
+  otp: string;
+}
+
+export interface ResendReporterOtpRequest {
+  intentId: string;
 }
 
 export interface ApiErrorEnvelope {
@@ -25,11 +82,33 @@ export interface ApiErrorEnvelope {
 export interface AuthBridge {
   getAccessToken: () => string | null;
   getRefreshToken: () => string | null;
+  onRefreshStart: () => void;
   onTokenPair: (pair: TokenPair) => void;
   onSessionEnded: () => void;
+  onPasswordChangeRequired: () => void;
 }
 
-const AUTH_PATHS_WITHOUT_REFRESH = ['/auth/refresh', '/auth/login', '/auth/logout'];
+export const API_BASE_URL = 'https://api.roadguard.placeholder.dev/api/v1';
+
+const AUTH_BOOTSTRAP_PATHS = [
+  '/auth/android/login',
+  '/auth/android/refresh',
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/logout',
+];
+
+const SESSION_ENDED_CODES = new Set([
+  'auth_session_revoked',
+  'refresh_token_invalid',
+  'refresh_token_expired',
+]);
+
+const REFRESHABLE_CODES = new Set(['auth_unauthorized', 'token_expired']);
+
+const PASSWORD_CHANGE_REQUIRED_CODE = 'auth_password_change_required';
+
+const ANDROID_REFRESH_PATH = '/auth/android/refresh';
 
 const MAX_TRANSPORT_RETRIES = 2;
 const MAX_RETRY_AFTER_MS = 30000;
@@ -37,8 +116,10 @@ const MAX_RETRY_AFTER_MS = 30000;
 const bridge: AuthBridge = {
   getAccessToken: () => null,
   getRefreshToken: () => null,
+  onRefreshStart: () => undefined,
   onTokenPair: () => undefined,
   onSessionEnded: () => undefined,
+  onPasswordChangeRequired: () => undefined,
 };
 
 export function configureAuthBridge(next: Partial<AuthBridge>): void {
@@ -46,13 +127,13 @@ export function configureAuthBridge(next: Partial<AuthBridge>): void {
 }
 
 const apiClient = axios.create({
-  baseURL: 'https://api.roadguard.placeholder.dev/api/v1',
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 });
 
 const bareClient = axios.create({
-  baseURL: 'https://api.roadguard.placeholder.dev/api/v1',
+  baseURL: API_BASE_URL,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -126,7 +207,7 @@ function isRefreshEligible(url: string | undefined): boolean {
   if (!url) {
     return true;
   }
-  return !AUTH_PATHS_WITHOUT_REFRESH.some((path) => url.includes(path));
+  return !AUTH_BOOTSTRAP_PATHS.some((path) => url.includes(path));
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -139,8 +220,9 @@ async function refreshAccessToken(): Promise<string | null> {
     if (!refreshToken) {
       return null;
     }
+    bridge.onRefreshStart();
     try {
-      const response = await bareClient.post<TokenPair>('/auth/refresh', { refreshToken });
+      const response = await bareClient.post<TokenPair>(ANDROID_REFRESH_PATH, { refreshToken });
       const pair = response.data;
       bridge.onTokenPair(pair);
       return pair.accessToken;
@@ -164,7 +246,6 @@ apiClient.interceptors.request.use((config) => {
   const retriable = config as RetriableConfig;
   const headers = AxiosHeaders.from(config.headers);
   const token = bridge.getAccessToken();
-  // Ghi nhớ token đã dùng để phát hiện "token vừa được đổi" ở response interceptor.
   if (!retriable.__tokenAtSend) {
     retriable.__tokenAtSend = token;
   }
@@ -193,15 +274,20 @@ apiClient.interceptors.response.use(
     const code = readErrorCode(error);
     const status = error instanceof AxiosError ? error.response?.status : undefined;
 
+    if (status === 403 && code === PASSWORD_CHANGE_REQUIRED_CODE) {
+      bridge.onPasswordChangeRequired();
+      throw error;
+    }
+
     if (status === 401) {
-      if (code === 'SESSION_REVOKED' || code === 'TOKEN_INVALID' || code === 'TOKEN_MISSING') {
+      if (code && SESSION_ENDED_CODES.has(code)) {
         bridge.onSessionEnded();
         throw error;
       }
-      // Chỉ TOKEN_EXPIRED mới được auto-refresh. AUTH_REQUIRED / 401 lạ không lặp refresh vô hạn.
-      if (code === 'TOKEN_EXPIRED' && !config.__authRetried && isRefreshEligible(config.url)) {
+
+      const refreshable = code === null || REFRESHABLE_CODES.has(code);
+      if (refreshable && !config.__authRetried && isRefreshEligible(config.url)) {
         const current = bridge.getAccessToken();
-        // Token đã được đổi (refresh ở request khác vừa xong) thì chỉ thử lại, không refresh thêm.
         if (config.__tokenAtSend && current && current !== config.__tokenAtSend) {
           config.__authRetried = true;
           const headers = AxiosHeaders.from(config.headers);
@@ -233,4 +319,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-export { apiClient };
+export { apiClient, bareClient, refreshAccessToken };
