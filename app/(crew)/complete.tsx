@@ -8,7 +8,6 @@ import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
 import { Chip } from '../../src/components/Chip';
 import { defectTypeLabel } from '../../src/constants/defect-types';
-import { BUSINESS_ERROR_MESSAGES } from '../../src/constants/error-codes';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { enqueue } from '../../src/offline/upload-queue';
 import { stableUuid } from '../../src/utils/uuid';
@@ -68,7 +67,7 @@ export default function CrewCompleteScreen() {
           label: 'Ảnh hiện trạng trước sửa',
           detail: session?.before_source
             ? `${EVIDENCE_REUSE_SOURCE_TAGS[session.before_source]} • có đóng dấu GPS`
-            : BUSINESS_ERROR_MESSAGES.BEFORE_MISSING,
+            : 'Chưa có ảnh hiện trạng trước khi sửa.',
           done: Boolean(beforeUri) || Boolean(session?.before_evidence_id),
         },
         {
@@ -270,7 +269,7 @@ export default function CrewCompleteScreen() {
             <View style={styles.imagePlaceholder}>
               <MaterialIcons name="image" size={28} color={colors.secondary} />
               <Text style={[typography.caption, styles.imagePlaceholderText]}>
-                {session?.before_source ? EVIDENCE_REUSE_SOURCE_TAGS[session.before_source] : BUSINESS_ERROR_MESSAGES.BEFORE_MISSING}
+                {session?.before_source ? EVIDENCE_REUSE_SOURCE_TAGS[session.before_source] : 'Chưa có ảnh hiện trạng trước khi sửa.'}
               </Text>
             </View>
           )}
@@ -314,7 +313,7 @@ export default function CrewCompleteScreen() {
           <View style={styles.noticeWarn}>
             <MaterialIcons name="lock" size={15} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
-              {BUSINESS_ERROR_MESSAGES.TASK_MODE_NOT_REPAIRABLE}
+              {'Nhiệm vụ này chỉ cho phép đo kiểm; không sửa tại chỗ.'}
             </Text>
           </View>
         ) : null}

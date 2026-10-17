@@ -8,7 +8,6 @@ import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { InputField } from '../../src/components/InputField';
 import { defectTypeLabel } from '../../src/constants/defect-types';
-import { BUSINESS_ERROR_MESSAGES } from '../../src/constants/error-codes';
 import {
   FAST_TRACK_POLICY,
   evaluateFastTrack,
@@ -152,7 +151,7 @@ export default function CrewWoDetailScreen() {
   const primaryBlockedReason = !measureReady
     ? 'Cần nhập đủ 3 kích thước để tiếp tục'
     : !beforeSelected
-      ? BUSINESS_ERROR_MESSAGES.BEFORE_MISSING
+      ? 'Chưa có ảnh hiện trạng trước khi sửa.'
       : null;
 
   return (
@@ -470,7 +469,7 @@ export default function CrewWoDetailScreen() {
           <View style={styles.noticeWarn}>
             <MaterialIcons name="lock" size={16} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
-              {BUSINESS_ERROR_MESSAGES.TASK_MODE_NOT_REPAIRABLE}
+              {'Nhiệm vụ này chỉ cho phép đo kiểm; không sửa tại chỗ.'}
             </Text>
           </View>
         ) : evaluation.code === 'ELIGIBLE' ? (

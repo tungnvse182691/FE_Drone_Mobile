@@ -107,7 +107,7 @@ export async function login(email: string, password: string) {
   const normalized = email.toLowerCase().trim();
   const entry = MOCK_USERS[normalized];
   if (!entry || (entry.password !== password && password !== '1' && password !== 'HoangHai@2026')) {
-    throwMockApiError('INVALID_CREDENTIALS', { message: 'Sai tài khoản hoặc mật khẩu' });
+    throwMockApiError('auth_invalid_credentials', { message: 'Sai tài khoản hoặc mật khẩu' });
   }
   return { data: { user: entry.user, token: entry.user.token, refresh_token: entry.user.refresh_token } };
 }
@@ -121,7 +121,7 @@ export async function changePassword(token: string, old_password: string, new_pa
   await delay(300);
   const entry = Object.values(MOCK_USERS).find((item) => item.user.token === token);
   if (!entry || entry.password !== old_password) {
-    throwMockApiError('INVALID_REQUEST', { message: 'Mật khẩu cũ không đúng' });
+    throwMockApiError('validation_error', { message: 'Mật khẩu cũ không đúng' });
   }
   entry.password = new_password;
   entry.user.must_change_password = false;

@@ -48,7 +48,7 @@ const WORK_ORDER_ETAGS = new Map<string, string>([['WO-01', 'W/"1"'], ['WO-02', 
 
 /**
  * Idempotency-Key đã dùng → response đã trả trước đó. Khóa tái sử dụng bị server từ chối
- * bằng `IDEMPOTENCY_KEY_REUSED` (spec 03), không phải âm thầm trả kết quả cũ.
+ * bằng `idempotency_key_reused` (spec 03), không phải âm thầm trả kết quả cũ.
  */
 const usedIdempotencyKeys = new Set<string>();
 
@@ -68,7 +68,7 @@ export async function getWorkOrder(id: string) {
   await delay(200);
   const found = MOCK_WORK_ORDERS.find((w) => w.id === id);
   if (!found) {
-    throwMockApiError('NOT_FOUND', { message: 'Không tìm thấy nhiệm vụ' });
+    throwMockApiError('not_found', { message: 'Không tìm thấy nhiệm vụ' });
   }
   return { data: found };
 }
@@ -108,44 +108,44 @@ export async function completeFastTrack(
   const idempotencyKey = headers?.['Idempotency-Key'];
   if (idempotencyKey) {
     if (usedIdempotencyKeys.has(idempotencyKey)) {
-      throwMockApiError('IDEMPOTENCY_KEY_REUSED');
+      throwMockApiError('idempotency_key_reused');
     }
     usedIdempotencyKeys.add(idempotencyKey);
   }
 
   const found = MOCK_WORK_ORDERS.find((w) => w.id === workOrderId);
   if (!found) {
-    throwMockApiError('NOT_FOUND', { message: 'Không tìm thấy nhiệm vụ' });
+    throwMockApiError('not_found', { message: 'Không tìm thấy nhiệm vụ' });
   }
 
   const expectedEtag = WORK_ORDER_ETAGS.get(workOrderId);
   const ifMatch = headers?.['If-Match'];
   if (ifMatch && ifMatch !== expectedEtag) {
-    throwMockApiError('OFFLINE_SNAPSHOT_CONFLICT');
+    throwMockApiError('concurrency_conflict');
   }
 
   if (found.task_mode !== TaskMode.INSPECT_AND_REPAIR) {
-    throwMockApiError('TASK_MODE_NOT_REPAIRABLE');
+    throwMockApiError('invalid_state_transition');
   }
 
   if (found.fast_track_eligible === FastTrackEligibility.LOCKED_BY_PM) {
-    throwMockApiError('PM_REPAIR_BLOCKED');
+    throwMockApiError('access_forbidden');
   }
 
   if (!FAST_TRACK_POLICY.allowed_defect_codes.includes(found.defect_type_code)) {
-    throwMockApiError('POLICY_NOT_CONFIGURED');
+    throwMockApiError('precondition_required');
   }
 
   if (!payload.before_evidence_file_id.trim()) {
-    throwMockApiError('BEFORE_MISSING');
+    throwMockApiError('validation_error');
   }
 
   if (!payload.after_evidence_file_id.trim()) {
-    throwMockApiError('EVIDENCE_PENDING');
+    throwMockApiError('source_not_ready');
   }
 
   if (!geometryWithinPolicy(payload)) {
-    throwMockApiError('FAST_TRACK_NOT_ELIGIBLE');
+    throwMockApiError('precondition_required');
   }
 
   found.status = 'COMPLETED';

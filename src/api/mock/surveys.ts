@@ -150,7 +150,7 @@ export async function getSurvey(id: string) {
   await delay(200);
   const item = MOCK_SURVEYS.find((s) => s.id === id);
   if (!item) {
-    throwMockApiError('NOT_FOUND', { message: 'Không tìm thấy yêu cầu khảo sát' });
+    throwMockApiError('not_found', { message: 'Không tìm thấy yêu cầu khảo sát' });
   }
   return { data: item };
 }
@@ -159,10 +159,10 @@ export async function uploadSurvey(id: string, checksum: string) {
   await delay(800);
   const item = MOCK_SURVEYS.find((s) => s.id === id);
   if (!item) {
-    throwMockApiError('NOT_FOUND', { message: 'Không tìm thấy yêu cầu khảo sát' });
+    throwMockApiError('not_found', { message: 'Không tìm thấy yêu cầu khảo sát' });
   }
   if (!/^[a-f0-9]{64}$/i.test(checksum.trim())) {
-    throwMockApiError('FILE_INTEGRITY_FAILED');
+    throwMockApiError('upload_validation_failed');
   }
   const confirmedAt = new Date().toISOString();
   item.status = SyncStatus.SERVER_CONFIRMED;

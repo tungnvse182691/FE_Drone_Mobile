@@ -1,11 +1,10 @@
-import { businessErrorMessage } from '../../constants/error-codes';
+import { messageFor } from '../errorCatalog';
 import { uuidv4 } from '../../utils/uuid';
 
 /**
  * Lỗi nghiệp vụ trong mock được ném theo hình dạng giống `axios` thật, đúng envelope
- * của spec `docs/specs/09_Frontend/03_Error_Response_UI_Convention.md` §1.
- * Cấu trúc này tương thích với `ApiErrorEnvelope` ở `src/api/client.ts` nên UI
- * đọc `error.response.data.code` không phải sửa.
+ * `application/problem+json` của 17_10. `code` dùng mã snake_case THẬT của backend
+ * (nhánh `huy-review`) — không còn bảng mã HOA cũ.
  */
 export interface MockApiErrorDetail {
   field?: string;
@@ -21,32 +20,58 @@ export interface MockApiErrorEnvelope {
   retryable: boolean;
 }
 
-/** HTTP status cho từng mã lỗi nghiệp vụ, theo spec 03. */
-const BUSINESS_ERROR_STATUS: Record<string, number> = {
-  TASK_MODE_NOT_REPAIRABLE: 422,
-  FAST_TRACK_NOT_ELIGIBLE: 422,
-  POLICY_NOT_CONFIGURED: 422,
-  PM_REPAIR_BLOCKED: 422,
-  BEFORE_MISSING: 422,
-  EVIDENCE_PENDING: 422,
-  FILE_INTEGRITY_FAILED: 422,
-  POLICY_DECISION_PENDING: 422,
-  CASE_HAS_OPEN_REQUIRED_ITEMS: 422,
-  TELEMETRY_INSUFFICIENT: 422,
-  OUTSIDE_ASSIGNED_SCOPE: 422,
-  OFFLINE_SNAPSHOT_CONFLICT: 409,
-  IDEMPOTENCY_KEY_REUSED: 409,
-  OPERATION_IN_PROGRESS: 409,
-  NOT_FOUND: 404,
-  UNAUTHORIZED: 401,
-  INVALID_CREDENTIALS: 401,
-  INVALID_REQUEST: 400,
+/** HTTP status cho từng mã lỗi snake_case (theo code thật của BE). */
+const MOCK_ERROR_STATUS: Record<string, number> = {
+  validation_error: 400,
+  not_found: 404,
+  file_not_found: 404,
+  upload_session_not_found: 404,
+  project_not_found: 404,
+  survey_request_not_found: 404,
+  road_section_version_not_found: 404,
+  segment_set_not_found: 404,
+  auth_unauthorized: 401,
+  unauthorized: 401,
+  auth_invalid_credentials: 401,
+  auth_session_revoked: 401,
+  refresh_token_invalid: 401,
+  refresh_token_expired: 401,
+  access_forbidden: 403,
+  auth_password_change_required: 403,
+  current_assignee_required: 403,
+  csrf_failed: 403,
+  repair_assignment_not_current: 403,
+  repair_binding_not_current: 403,
+  stored_receipt_access_forbidden: 403,
+  duplicate_request: 409,
+  idempotency_key_reused: 409,
+  concurrency_conflict: 409,
+  invalid_state_transition: 409,
+  source_not_ready: 409,
+  identity_email_conflict: 409,
+  survey_scope_incompatible: 409,
+  survey_invalid_state_transition: 409,
+  request_source_stale: 409,
+  project_not_active: 409,
+  formal_intake_source_conflict: 409,
+  physical_claim_source_conflict: 409,
+  submission_lineage_conflict: 409,
+  repair_anchor_not_ready: 409,
+  auth_concurrency_conflict: 412,
+  unsupported_media_type: 415,
+  upload_validation_failed: 422,
+  survey_validation_failed: 422,
+  precondition_required: 428,
+  internal_error: 500,
+  dependency_unavailable: 503,
+  storage_unavailable: 503,
+  upload_storage_unavailable: 503,
 };
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 export function businessErrorStatus(code: string): number {
-  return BUSINESS_ERROR_STATUS[code] ?? 422;
+  return MOCK_ERROR_STATUS[code] ?? 422;
 }
 
 export interface MockApiErrorOptions {
@@ -57,14 +82,14 @@ export interface MockApiErrorOptions {
 }
 
 /**
- * Dựng envelope lỗi đủ 5 trường. `message` mặc định lấy từ catalog
- * `BUSINESS_ERROR_MESSAGES` để mock không tự chế lại câu chữ khác UI.
+ * Dựng envelope lỗi đủ 5 trường. `message` mặc định lấy từ `messageFor` của
+ * `errorCatalog` để mock và UI không lệch câu chữ.
  */
 export function buildMockApiError(code: string, options: MockApiErrorOptions = {}): MockApiErrorEnvelope {
   const status = businessErrorStatus(code);
   return {
     code,
-    message: options.message ?? businessErrorMessage(code) ?? 'Có lỗi xảy ra. Vui lòng thử lại.',
+    message: options.message ?? messageFor(code),
     details: options.details ?? [],
     traceId: options.traceId ?? uuidv4(),
     retryable: options.retryable ?? RETRYABLE_STATUSES.has(status),

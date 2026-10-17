@@ -4,6 +4,7 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 import { uuidv4 } from '../utils/uuid';
+import { parseProblemDetails } from './problemDetails';
 
 export interface AuthActorWire {
   id: string;
@@ -144,8 +145,7 @@ function readErrorCode(error: unknown): string | null {
   if (!(error instanceof AxiosError)) {
     return null;
   }
-  const data = error.response?.data as ApiErrorEnvelope | undefined;
-  return typeof data?.code === 'string' ? data.code : null;
+  return parseProblemDetails(error.response?.data).code;
 }
 
 function readRetryAfter(error: AxiosError): number | null {
