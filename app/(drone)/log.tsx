@@ -470,12 +470,9 @@ export default function DroneLogScreen() {
                 uppercase={false}
               />
             </View>
-            <Text style={[typography.caption, styles.commandMeta]}>
-              {record.apiId} · khoá {record.idempotencyKey.slice(0, 20)}…
-            </Text>
             {record.taskId ? (
               <Text style={[typography.caption, styles.commandMeta]}>
-                Nhiệm vụ: {record.taskId}
+                Nhiệm vụ: {record.taskCode ?? record.taskId}
               </Text>
             ) : null}
             {record.uploadId ? (

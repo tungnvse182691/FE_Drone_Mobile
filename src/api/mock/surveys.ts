@@ -308,6 +308,7 @@ export interface OperatorCommandRecord {
   apiId: string;
   label: string;
   taskId: string | null;
+  taskCode: string | null;
   uploadId: string | null;
   idempotencyKey: string;
   payload: Record<string, unknown>;
@@ -503,6 +504,7 @@ function seedOperatorLedger(): void {
     apiId: 'API-230',
     label: 'Từ chối nhiệm vụ khảo sát',
     taskId: '10000000-0000-4000-8000-000000000089',
+    taskCode: '#HH-KS-089',
     uploadId: null,
     idempotencyKey: 'API-230:seed-089',
     payload: { kind: 'decline', reason: 'Trùng tuyến với nhiệm vụ khác, đề nghị PM gộp chuyến.' },
@@ -517,6 +519,7 @@ function seedOperatorLedger(): void {
     apiId: 'API-235',
     label: 'Hoàn tất tải lên video 4K',
     taskId: '10000000-0000-4000-8000-000000000090',
+    taskCode: '#HH-KS-090',
     uploadId: '30000000-0000-4000-8000-000000000002',
     idempotencyKey: 'API-235:seed-upload-02',
     payload: { kind: 'upload_complete', uploadId: '30000000-0000-4000-8000-000000000002' },
@@ -817,6 +820,7 @@ export async function declineOperatorSurveyTask(
     apiId: 'API-230',
     label: 'Từ chối nhiệm vụ khảo sát',
     taskId: fixture.taskId,
+    taskCode: fixture.code,
     uploadId: null,
     idempotencyKey: key,
     payload,
