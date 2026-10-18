@@ -306,7 +306,7 @@ export default function DroneLogScreen() {
             <View style={styles.droneIconCircle}>
               <MaterialIcons name="flight-takeoff" size={20} color={colors.primary} />
             </View>
-            <View>
+            <View style={styles.featuredHeaderInfo}>
               <View style={styles.codeRow}>
                 <Text style={[typography.titleMd, styles.flightCodeText]}>
                   {ACTIVE_FLIGHT_LOG.flightCode}
@@ -766,6 +766,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3E2',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  featuredHeaderInfo: {
+    flex: 1,
   },
   codeRow: {
     flexDirection: 'row',
