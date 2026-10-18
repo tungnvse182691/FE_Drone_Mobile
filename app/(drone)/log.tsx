@@ -442,8 +442,7 @@ export default function DroneLogScreen() {
         </Pressable>
       </View>
       <Text style={[typography.caption, styles.recoveryHint]}>
-        Kết cục chưa rõ ⇒ phát lại ĐÚNG khoá idempotency + payload gốc (không tạo lệnh mới).
-        409/412 ⇒ đọc lại máy chủ rồi đối chiếu. 401 ⇒ đăng nhập lại; 403 ⇒ dừng, không thử lại.
+        Lệnh gửi đi nhưng chưa rõ kết quả (mất mạng, máy chủ chưa phản hồi) sẽ nằm ở đây. Bấm Phát lại để gửi đúng lệnh cũ — không tạo lệnh trùng.
       </Text>
 
       {loadingCommands ? (
