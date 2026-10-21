@@ -23,6 +23,8 @@ interface ViewFinderProps {
 export interface Coords {
   latitude: number;
   longitude: number;
+  /** Bán kính sai số GPS (mét, 68%); `null` khi thiết bị không cung cấp. */
+  accuracyMeters: number | null;
 }
 
 export function ViewFinder({
@@ -54,7 +56,14 @@ export function ViewFinder({
       }
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       if (mounted) {
-        const next = { latitude: location.coords.latitude, longitude: location.coords.longitude };
+        const next = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracyMeters:
+            typeof location.coords.accuracy === 'number' && Number.isFinite(location.coords.accuracy)
+              ? location.coords.accuracy
+              : null,
+        };
         setCoords(next);
         onCoordsChange?.(next);
       }

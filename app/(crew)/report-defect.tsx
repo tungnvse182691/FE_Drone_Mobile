@@ -48,9 +48,9 @@ export default function CrewReportDefectScreen() {
       // Chữ nhập tay người dùng chỉ lưu ở defect_type_custom, không tạo mã mới.
       await enqueuePayload(
         db,
-        'DEFECT_REPORT',
+        'FIELD_SUBMISSION',
         {
-          kind: 'DEFECT_REPORT',
+          kind: 'FIELD_SUBMISSION',
           taskId: task.id,
           work_order_code: task.wo_code,
           defect_type_code: defectType,

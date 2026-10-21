@@ -24,6 +24,8 @@ import { apiClient } from '../../src/api/client';
 import { getDeviceId } from '../../src/constants/device';
 import {
   SYNC_OUTCOME_TO_LOCAL_STATE,
+  normalizeOfflineOperationKind,
+  toSyncWireKind,
   type SyncOperation,
   type SyncResult,
   isDispatchableSyncOperationKind,
@@ -57,6 +59,14 @@ const SEGMENT_LABELS: Record<SyncSegment, string> = {
 };
 
 const OUTBOX_KIND_LABELS: Record<string, string> = {
+  // Canonical — Phần 5.3 (bộ 6 OfflineOperationKind)
+  FIELD_ACCEPT: 'Tiếp nhận nhiệm vụ hiện trường',
+  FIELD_START: 'Bắt đầu đo kiểm hiện trường',
+  FIELD_SUBMISSION: 'Nộp kết quả đo / báo lỗi phát sinh',
+  REPAIR_ASSESSMENT: 'Đánh giá hạng mục sửa chữa',
+  REPAIR_EXECUTION_START: 'Bắt đầu sửa chữa',
+  REPAIR_EXECUTION_FINISH: 'Nộp kết quả sửa chữa',
+  // Legacy — row cũ ghi trước Phần 5.3 (vẫn hiển thị đúng nhãn)
   DEFECT_REPORT: 'Báo lỗi phát sinh',
   INSPECTION_SUBMIT: 'Nộp kết quả đo',
   REPAIR_START: 'Bắt đầu sửa chữa',
@@ -149,16 +159,18 @@ export default function CrewSyncScreen() {
     try {
       await processQueue(db, async (item) => {
         const payload = JSON.parse(decodeOutboxPayload(item)) as Record<string, unknown>;
-        // Outbox lưu kind theo tên thao tác nội bộ (`submit_inspection`, …) chưa chắc
-        // là kind canonical của SyncOperation. Không ép kiểu để lách schema.
-        const kind = (payload.kind as string | undefined) ?? item.kind;
-        if (!isDispatchableSyncOperationKind(kind)) {
+        // Cột `kind` lưu OfflineOperationKind canonical (Phần 5.3); row cũ có thể giữ
+        // khoá legacy → chuẩn hoá on-read rồi ánh xạ sang kind wire của SyncOperation.
+        const rawKind = payload.kind ?? item.kind;
+        const canonicalKind = normalizeOfflineOperationKind(rawKind);
+        const wireKind = canonicalKind ? toSyncWireKind(canonicalKind) : null;
+        if (!canonicalKind || !wireKind || !isDispatchableSyncOperationKind(wireKind)) {
           return [
             {
               operationId: item.id,
               localState: LocalState.BLOCKED_CONTRACT,
               errorCode: 'UNMAPPED_OPERATION_KIND',
-              errorMessage: `Kind "${kind}" chưa ánh xạ sang SyncOperation canonical.`,
+              errorMessage: `Kind "${String(rawKind)}" chưa ánh xạ sang SyncOperation canonical.`,
             },
           ];
         }
@@ -166,10 +178,10 @@ export default function CrewSyncScreen() {
         // `REPAIR_SUBMIT` dùng attemptId (không taskId) theo SyncAttemptSubmit.
         const operation: SyncOperation = {
           operationId: item.id,
-          kind,
+          kind: wireKind,
           expectedVersion: (payload.expectedVersion as string) ?? item.expected_version ?? '0',
           capturedAt: (payload.capturedAt as string) ?? item.created_at,
-          ...(kind === 'REPAIR_SUBMIT'
+          ...(wireKind === 'REPAIR_SUBMIT'
             ? { attemptId: String(payload.attemptId ?? payload.attempt_id ?? item.id) }
             : { taskId: String(payload.taskId ?? payload.task_id ?? item.task_id ?? '') }),
           payload,

@@ -21,6 +21,12 @@ import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DEFECT_TYPE_OPTIONS, DefectTypeCode } from '../../src/constants/defect-types';
 import { registerReporterEmail, submitReport, ReportCreate } from '../../src/api/mock/reporter';
+import {
+  buildReportEvidenceLocation,
+  hasUsableCoordinate,
+  isZeroCoordinate,
+  locationSourceFor,
+} from '../../src/types/position';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
@@ -48,6 +54,8 @@ const errorMessages: Record<string, string> = {
 interface Coords {
   latitude: number;
   longitude: number;
+  /** Bán kính sai số GPS (mét, 68%); `null` khi thiết bị không cung cấp. */
+  accuracyMeters: number | null;
 }
 
 export default function ReporterReportScreen() {
@@ -104,7 +112,20 @@ export default function ReporterReportScreen() {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-      setCoords({ latitude: location.coords.latitude, longitude: location.coords.longitude });
+      if (isZeroCoordinate(location.coords.latitude, location.coords.longitude)) {
+        // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ, chặn gửi.
+        setCoords(null);
+        setGpsStatus('Chưa có tọa độ (thiết bị chưa bắt được GPS)');
+        return;
+      }
+      setCoords({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracyMeters:
+          typeof location.coords.accuracy === 'number' && Number.isFinite(location.coords.accuracy)
+            ? location.coords.accuracy
+            : null,
+      });
       setGpsStatus(
         `${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}`,
       );
@@ -194,6 +215,7 @@ export default function ReporterReportScreen() {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
+    const usable = hasUsableCoordinate(coords.latitude, coords.longitude);
     const payload: ReportCreate = {
       reporter_email: trimmedEmail,
       route_hint: routeHint.trim(),
@@ -201,6 +223,12 @@ export default function ReporterReportScreen() {
       photo_uris: photos,
       coordinates: [coords.longitude, coords.latitude],
       defect_type: defectType,
+      location_source: locationSourceFor(usable),
+      location: buildReportEvidenceLocation(
+        coords.latitude,
+        coords.longitude,
+        coords.accuracyMeters,
+      ),
     };
 
     const isAlreadyVerified =

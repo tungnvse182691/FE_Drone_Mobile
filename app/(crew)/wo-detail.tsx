@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,11 +7,19 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { InputField } from '../../src/components/InputField';
+import { Toast } from '../../src/components/Toast';
 import { defectTypeLabel } from '../../src/constants/defect-types';
-import { BUSINESS_ERROR_MESSAGES } from '../../src/constants/error-codes';
+import { CREW_REPAIR_CORRECTION } from '../../src/constants/routes';
 import {
-  FAST_TRACK_POLICY,
-  evaluateFastTrack,
+  isRepairVersionConflict,
+  repairCommandErrorMessage,
+  withFreshItemVersion,
+} from '../../src/hooks/useRepairBootstrap';
+import {
+  applyEligibility,
+  computeArea,
+  ELIGIBILITY_FAIL_CLOSED_MESSAGE,
+  fetchRepairEligibility,
   getBeforeEvidenceCandidates,
   getCrewFieldSession,
   selectBeforeEvidence,
@@ -44,6 +52,24 @@ function formatCapturedAt(iso: string): string {
   })}`;
 }
 
+type EligibilityStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface EligibilityState {
+  status: EligibilityStatus;
+  eligible: boolean;
+  missingReasons: string[];
+  policyRevisionId: string | null;
+  message: string | null;
+}
+
+const INITIAL_ELIGIBILITY: EligibilityState = {
+  status: 'idle',
+  eligible: false,
+  missingReasons: [],
+  policyRevisionId: null,
+  message: null,
+};
+
 export default function CrewWoDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const task = getCrewTaskById(params.id);
@@ -54,6 +80,8 @@ export default function CrewWoDetailScreen() {
   const [lengthText, setLengthText] = useState(() => (initialMeasurement.length_m !== null ? String(initialMeasurement.length_m) : ''));
   const [widthText, setWidthText] = useState(() => (initialMeasurement.width_m !== null ? String(initialMeasurement.width_m) : ''));
   const [depthText, setDepthText] = useState(() => (initialMeasurement.depth_cm !== null ? String(initialMeasurement.depth_cm) : ''));
+  const [anchorLoading, setAnchorLoading] = useState(false);
+  const [anchorError, setAnchorError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,10 +113,77 @@ export default function CrewWoDetailScreen() {
   );
 
   const measurement = session?.measurement ?? { length_m: null, width_m: null, depth_cm: null };
-  const evaluation = useMemo(
-    () => evaluateFastTrack(task.task_mode, measurement, task.defect_type_code),
-    [task.task_mode, task.defect_type_code, measurement.length_m, measurement.width_m, measurement.depth_cm],
+  const area = useMemo(
+    () => computeArea(measurement),
+    [measurement.length_m, measurement.width_m],
   );
+  const hasAllDimensions =
+    measurement.length_m !== null && measurement.width_m !== null && measurement.depth_cm !== null;
+  const needsEligibility = task.task_mode === 'INSPECT_AND_REPAIR';
+  const [eligibility, setEligibility] = useState<EligibilityState>(INITIAL_ELIGIBILITY);
+
+  // Đối chiếu điều kiện Sửa Nhanh với máy chủ (mock API-146). Máy chủ là authority;
+  // mọi lỗi/abort đều FAIL CLOSED (coi như không đủ điều kiện), không tự tính ngưỡng ở client.
+  useEffect(() => {
+    if (!needsEligibility || !hasAllDimensions) {
+      applyEligibility('PENDING', null);
+      setSession(getCrewFieldSession());
+      setEligibility(INITIAL_ELIGIBILITY);
+      return;
+    }
+    let active = true;
+    setEligibility((current) => ({ ...current, status: 'loading', eligible: false, message: null }));
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await fetchRepairEligibility({
+            task_id: task.id,
+            task_mode: task.task_mode,
+            defect_type_code: task.defect_type_code,
+            measurement,
+          });
+          if (!active) {
+            return;
+          }
+          applyEligibility(result.eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE', result.policyRevisionId);
+          setSession(getCrewFieldSession());
+          setEligibility({
+            status: 'ready',
+            eligible: result.eligible,
+            missingReasons: result.missingReasons,
+            policyRevisionId: result.policyRevisionId,
+            message: null,
+          });
+        } catch {
+          if (!active) {
+            return;
+          }
+          applyEligibility('NOT_ELIGIBLE', null);
+          setSession(getCrewFieldSession());
+          setEligibility({
+            status: 'error',
+            eligible: false,
+            missingReasons: [],
+            policyRevisionId: null,
+            message: ELIGIBILITY_FAIL_CLOSED_MESSAGE,
+          });
+        }
+      })();
+    }, 400);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [
+    needsEligibility,
+    hasAllDimensions,
+    task.id,
+    task.task_mode,
+    task.defect_type_code,
+    measurement.length_m,
+    measurement.width_m,
+    measurement.depth_cm,
+  ]);
 
   const handleMeasurement = useCallback(
     (patch: { length_m?: number | null; width_m?: number | null; depth_cm?: number | null }) => {
@@ -115,10 +210,12 @@ export default function CrewWoDetailScreen() {
   };
 
   const beforeSelected = Boolean(session?.before_evidence_id);
-  const measureReady = evaluation.hasAllDimensions;
+  const measureReady = hasAllDimensions;
+  const fastTrackEligible = eligibility.status === 'ready' && eligibility.eligible;
+  const eligibilityPending = needsEligibility && hasAllDimensions && eligibility.status !== 'ready';
 
-  const handlePrimaryAction = () => {
-    if (!evaluation.hasAllDimensions) {
+  const handlePrimaryAction = async () => {
+    if (!hasAllDimensions) {
       return;
     }
     if (task.task_mode === 'MEASURE_ONLY') {
@@ -129,9 +226,24 @@ export default function CrewWoDetailScreen() {
       router.push({ pathname: '/(crew)/complete', params: { id: task.id } });
       return;
     }
-    if (evaluation.code === 'ELIGIBLE') {
+    if (fastTrackEligible) {
       if (!beforeSelected) {
         return;
+      }
+      // C-04: đọc lại API-080 ngay trước khi vào luồng sửa để chắc chắn có hạng mục sửa chữa
+      // (itemVersion) còn hiệu lực. Không có anchor → chặn tại chỗ, không tự chế mã phiên bản.
+      setAnchorLoading(true);
+      try {
+        await withFreshItemVersion(task.id, (command) => Promise.resolve(command.headers));
+      } catch (error) {
+        setAnchorError(
+          isRepairVersionConflict(error)
+            ? 'Hạng mục sửa chữa vừa thay đổi trên máy chủ. Vui lòng tải lại rồi thử lại.'
+            : repairCommandErrorMessage(error),
+        );
+        return;
+      } finally {
+        setAnchorLoading(false);
       }
       markAttemptStarted();
       router.push({ pathname: '/(crew)/progress', params: { id: task.id } });
@@ -144,16 +256,18 @@ export default function CrewWoDetailScreen() {
   const primaryLabel =
     task.task_mode === 'MEASURE_ONLY'
       ? 'Gửi kết quả đo cho PM'
-      : evaluation.code === 'ELIGIBLE'
+      : fastTrackEligible
         ? 'Tiến hành sửa nhanh tại chỗ'
         : 'Gửi kết quả đo cho PM';
 
-  const primaryDisabled = !measureReady || !beforeSelected;
+  const primaryDisabled = !measureReady || !beforeSelected || eligibilityPending;
   const primaryBlockedReason = !measureReady
     ? 'Cần nhập đủ 3 kích thước để tiếp tục'
     : !beforeSelected
-      ? BUSINESS_ERROR_MESSAGES.BEFORE_MISSING
-      : null;
+      ? 'Chưa có ảnh hiện trạng trước khi sửa.'
+      : eligibilityPending
+        ? 'Đang đối chiếu điều kiện sửa nhanh với máy chủ...'
+        : null;
 
   return (
     <SafeAreaScreen
@@ -417,80 +531,73 @@ export default function CrewWoDetailScreen() {
           </View>
         </View>
 
-        <View style={styles.quickPresetRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Điền mẫu đạt policy"
-            onPress={() => {
-              setLengthText('1.2');
-              setWidthText('0.6');
-              setDepthText('3.0');
-              handleMeasurement({ length_m: 1.2, width_m: 0.6, depth_cm: 3.0 });
-            }}
-            style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
-          >
-            <Text style={[typography.caption, styles.presetText]}>
-              Mẫu đạt policy: 1.2m × 0.6m × 3cm
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Điền mẫu vượt policy"
-            onPress={() => {
-              setLengthText('2.5');
-              setWidthText('1.2');
-              setDepthText('8.0');
-              handleMeasurement({ length_m: 2.5, width_m: 1.2, depth_cm: 8.0 });
-            }}
-            style={({ pressed }) => [styles.presetChip, pressed && styles.pressed]}
-          >
-            <Text style={[typography.caption, styles.presetText]}>
-              Mẫu vượt policy: 2.5m × 1.2m × 8cm
-            </Text>
-          </Pressable>
-        </View>
-
         {/* Box diện tích L x W */}
         <View style={styles.areaBox}>
           <Text style={[typography.caption, styles.areaLabel]}>Diện tích tự động tính (L × W)</Text>
           <Text style={[typography.titleLg, styles.areaValue]}>
-            {evaluation.area_m2 === null ? '—' : `${evaluation.area_m2.toFixed(2)} m²`}
+            {area === null ? '—' : `${area.toFixed(2)} m²`}
           </Text>
         </View>
 
-        {/* Text ngưỡng quy chuẩn */}
+        {/* Ghi chú: ngưỡng nằm trong policy revision trên máy chủ, KHÔNG hardcode ở app */}
         <Text style={[typography.caption, styles.policyText]}>
-          Ngưỡng quy chuẩn: diện tích ≤ {FAST_TRACK_POLICY.max_area_m2.toFixed(1)} m² • độ sâu ≤{' '}
-          {FAST_TRACK_POLICY.max_depth_cm.toFixed(1)} cm • chiều dài ≤{' '}
-          {FAST_TRACK_POLICY.max_length_m.toFixed(1)} m
+          Điều kiện sửa nhanh do máy chủ đối chiếu theo policy revision hiện hành.
         </Text>
 
-        {/* Phản hồi trạng thái Policy */}
+        {/* Phản hồi trạng thái eligibility (từ máy chủ) */}
         {task.task_mode === 'MEASURE_ONLY' ? (
           <View style={styles.noticeWarn}>
             <MaterialIcons name="lock" size={16} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
-              {BUSINESS_ERROR_MESSAGES.TASK_MODE_NOT_REPAIRABLE}
+              {'Nhiệm vụ này chỉ cho phép đo kiểm; không sửa tại chỗ.'}
             </Text>
           </View>
-        ) : evaluation.code === 'ELIGIBLE' ? (
-          <View style={styles.noticePass}>
-            <Chip variant="policy-pass" label="[Đạt Policy Sửa Nhanh]" uppercase={false} />
+        ) : !hasAllDimensions ? (
+          <Text style={[typography.caption, styles.hintText]}>
+            Nhập đủ 3 kích thước để hệ thống đối chiếu điều kiện sửa nhanh với máy chủ.
+          </Text>
+        ) : eligibility.status === 'loading' || eligibility.status === 'idle' ? (
+          <View style={styles.noticeInfo}>
+            <MaterialIcons name="sync" size={16} color={colors.secondary} />
+            <Text style={[typography.caption, styles.noticeInfoText]}>
+              Đang đối chiếu điều kiện sửa nhanh với máy chủ...
+            </Text>
           </View>
-        ) : evaluation.code === 'NOT_ELIGIBLE' ? (
+        ) : eligibility.status === 'error' ? (
           <View style={styles.noticeFail}>
             <Chip variant="policy-fail" label="[Vượt Policy - Chuyển PM]" uppercase={false} />
             <View style={styles.policyGuideRow}>
               <MaterialIcons name="info-outline" size={14} color={colors.secondary} />
               <Text style={[typography.caption, styles.policyGuideText]}>
-                Kích thước vượt ngưỡng sửa nhanh; lưu số đo và gửi báo cáo về PM.
+                {eligibility.message ?? ELIGIBILITY_FAIL_CLOSED_MESSAGE}
               </Text>
             </View>
           </View>
+        ) : eligibility.eligible ? (
+          <View style={styles.noticePass}>
+            <Chip variant="policy-pass" label="[Đạt Policy Sửa Nhanh]" uppercase={false} />
+          </View>
         ) : (
-          <Text style={[typography.caption, styles.hintText]}>
-            Nhập đủ 3 kích thước để hệ thống đối chiếu điều kiện sửa nhanh.
-          </Text>
+          <View style={styles.noticeFail}>
+            <Chip variant="policy-fail" label="[Vượt Policy - Chuyển PM]" uppercase={false} />
+            {eligibility.missingReasons.length > 0 ? (
+              <View style={styles.reasonList}>
+                {eligibility.missingReasons.map((reason) => (
+                  <View key={reason} style={styles.policyGuideRow}>
+                    <MaterialIcons name="info-outline" size={14} color={colors.secondary} />
+                    <Text style={[typography.caption, styles.policyGuideText]}>{reason}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.policyGuideRow}>
+                <MaterialIcons name="info-outline" size={14} color={colors.secondary} />
+                <Text style={[typography.caption, styles.policyGuideText]}>
+                  Kích thước vượt ngưỡng sửa nhanh; lưu số đo và gửi báo cáo về PM.
+                </Text>
+              </View>
+            )}
+          </View>
         )}
       </Card>
 
@@ -510,9 +617,22 @@ export default function CrewWoDetailScreen() {
               title={primaryLabel}
               onPress={handlePrimaryAction}
               disabled={primaryDisabled}
+              loading={anchorLoading}
             />
           </View>
         </View>
+
+        {/* C-08: đính chính một lượt sửa đã gửi (chỉ nhiệm vụ đo-kiểm-và-sửa). */}
+        {task.task_mode === 'INSPECT_AND_REPAIR' ? (
+          <Button
+            variant="text"
+            title="Đính chính lượt sửa đã gửi"
+            onPress={() =>
+              router.push({ pathname: CREW_REPAIR_CORRECTION, params: { id: task.id } })
+            }
+            style={styles.correctionButton}
+          />
+        ) : null}
 
         {primaryDisabled ? (
           <View style={styles.disabledReasonBox}>
@@ -523,6 +643,8 @@ export default function CrewWoDetailScreen() {
           </View>
         ) : null}
       </View>
+
+      {anchorError ? <Toast type="error" message={anchorError} /> : null}
     </SafeAreaScreen>
   );
 }
@@ -747,23 +869,21 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  quickPresetRow: {
+  noticeInfo: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: spacing.xs,
-    marginTop: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  presetChip: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: radius.full,
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  presetText: {
+  noticeInfoText: {
+    flex: 1,
     color: colors.secondary,
+  },
+  reasonList: {
+    gap: spacing.xs,
   },
   areaBox: {
     flexDirection: 'row',
@@ -830,6 +950,9 @@ const styles = StyleSheet.create({
   },
   ctaSecondary: {
     flex: 1,
+  },
+  correctionButton: {
+    marginTop: spacing.xs,
   },
   ctaPrimary: {
     flex: 2,

@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
+import { Chip } from '../../src/components/Chip';
+import { Button } from '../../src/components/Button';
+import { Toast } from '../../src/components/Toast';
+import { messageFor } from '../../src/api/errorCatalog';
+import { parseProblemDetails } from '../../src/api/problemDetails';
+import {
+  getOperatorUploadSession,
+  listOperatorCommands,
+  reconcileOperatorCommand,
+  replayOperatorCommand,
+  type OperatorCommandRecord,
+  type OperatorCommandState,
+} from '../../src/api/mock/surveys';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const softShadow = Platform.select({
@@ -129,8 +142,142 @@ const SURVEY_LOGS: SurveyLogItem[] = [
 export default function DroneLogScreen() {
   const [expandFlightDetails, setExpandFlightDetails] = useState(true);
 
+  const [commands, setCommands] = useState<OperatorCommandRecord[]>([]);
+  const [loadingCommands, setLoadingCommands] = useState(true);
+  const [busyCommandId, setBusyCommandId] = useState<string | null>(null);
+  const [uploadStatusText, setUploadStatusText] = useState<Record<string, string>>({});
+  const [toast, setToast] = useState<string | null>(null);
+
+  const loadCommands = useCallback(async () => {
+    setLoadingCommands(true);
+    try {
+      const { data } = await listOperatorCommands();
+      setCommands(data.items);
+    } catch {
+      setCommands([]);
+    } finally {
+      setLoadingCommands(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCommands();
+  }, [loadCommands]);
+
+  const commandErrorMessage = (error: unknown): string => {
+    const data = (error as { response?: { data?: unknown } }).response?.data;
+    const code = parseProblemDetails(data).code;
+    if (code) {
+      return messageFor(code);
+    }
+    const parsed = parseProblemDetails(data);
+    return parsed.detail ?? parsed.title ?? 'Không xử lý được lệnh. Vui lòng thử lại.';
+  };
+
+  /**
+   * O-08 — phát lại lệnh với ĐÚNG Idempotency-Key và payload gốc.
+   * Hàm không tạo khoá mới: chỉ truyền commandId, mock tự dùng lại khoá đã lưu.
+   */
+  const handleReplay = (record: OperatorCommandRecord) => {
+    Alert.alert(
+      'Phát lại lệnh đã gửi?',
+      'Hệ thống gửi lại ĐÚNG khoá idempotency và payload gốc. Không tạo lệnh mới, không gửi trùng dữ liệu.',
+      [
+        { text: 'Để sau', style: 'cancel' },
+        {
+          text: 'Phát lại',
+          onPress: () => {
+            void (async () => {
+              setBusyCommandId(record.commandId);
+              try {
+                const { data } = await replayOperatorCommand(record.commandId);
+                setToast(data.message);
+                await loadCommands();
+              } catch (error) {
+                setToast(commandErrorMessage(error));
+                await loadCommands();
+              } finally {
+                setBusyCommandId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  /** O-08 — 409/412: đọc lại trạng thái nhiệm vụ thật rồi đối chiếu, không tự đoán. */
+  const handleReconcile = async (record: OperatorCommandRecord) => {
+    setBusyCommandId(record.commandId);
+    try {
+      const { data } = await reconcileOperatorCommand(record.commandId);
+      setToast(data.message);
+      await loadCommands();
+    } catch (error) {
+      setToast(commandErrorMessage(error));
+    } finally {
+      setBusyCommandId(null);
+    }
+  };
+
+  /** O-08 — đối chiếu trạng thái tải lên qua API-234 (không tự nhận VERIFIED). */
+  const handleCheckUpload = async (record: OperatorCommandRecord) => {
+    if (!record.uploadId) {
+      return;
+    }
+    setBusyCommandId(record.commandId);
+    try {
+      const { data } = await getOperatorUploadSession(record.uploadId);
+      setUploadStatusText((prev) => ({
+        ...prev,
+        [record.commandId]: `Phiên ${data.id.slice(0, 8)}… · trạng thái ${data.status ?? 'không rõ'}`,
+      }));
+    } catch (error) {
+      setToast(commandErrorMessage(error));
+    } finally {
+      setBusyCommandId(null);
+    }
+  };
+
+  const commandStateLabel = (state: OperatorCommandState): string => {
+    switch (state) {
+      case 'ACKED':
+        return 'Máy chủ đã nhận';
+      case 'REJECTED':
+        return 'Máy chủ từ chối';
+      case 'CONFLICT':
+        return 'Xung đột phiên bản';
+      case 'PAUSED_RETRY':
+        return 'Tạm dừng, chờ thử lại';
+      case 'UNKNOWN_OUTCOME':
+      default:
+        return 'Chưa rõ kết cục';
+    }
+  };
+
+  const commandStateVariant = (
+    state: OperatorCommandState,
+  ): 'approved' | 'rejected' | 'severity-high' | 'severity-medium' | 'status-pending' => {
+    switch (state) {
+      case 'ACKED':
+        return 'approved';
+      case 'REJECTED':
+        return 'rejected';
+      case 'CONFLICT':
+        return 'severity-high';
+      case 'PAUSED_RETRY':
+        return 'severity-medium';
+      default:
+        return 'status-pending';
+    }
+  };
+
+  const isReplayable = (state: OperatorCommandState, payloadKind: unknown): boolean =>
+    (state === 'UNKNOWN_OUTCOME' || state === 'PAUSED_RETRY') && payloadKind === 'decline';
+
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
+    <View style={styles.screen}>
+      <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
       {/* Top Segmented Tabs: Yêu cầu mới (3) | Nhật ký */}
       <View style={styles.tabContainer}>
         <Pressable
@@ -159,7 +306,7 @@ export default function DroneLogScreen() {
             <View style={styles.droneIconCircle}>
               <MaterialIcons name="flight-takeoff" size={20} color={colors.primary} />
             </View>
-            <View>
+            <View style={styles.featuredHeaderInfo}>
               <View style={styles.codeRow}>
                 <Text style={[typography.titleMd, styles.flightCodeText]}>
                   {ACTIVE_FLIGHT_LOG.flightCode}
@@ -281,6 +428,92 @@ export default function DroneLogScreen() {
         )}
       </Card>
 
+      {/* O-08: Sổ lệnh đã gửi & phục hồi (API-226 / API-234) */}
+      <View style={styles.sectionHeader}>
+        <Text style={[typography.labelSm, styles.sectionTitle]}>
+          SỔ LỆNH ĐÃ GỬI & PHỤC HỒI ({commands.length})
+        </Text>
+        <Pressable
+          onPress={() => void loadCommands()}
+          accessibilityRole="button"
+          accessibilityLabel="Tải lại sổ lệnh"
+        >
+          <MaterialIcons name="refresh" size={16} color={colors.secondary} />
+        </Pressable>
+      </View>
+      <Text style={[typography.caption, styles.recoveryHint]}>
+        Lệnh gửi đi nhưng chưa rõ kết quả (mất mạng, máy chủ chưa phản hồi) sẽ nằm ở đây. Bấm Phát lại để gửi đúng lệnh cũ — không tạo lệnh trùng.
+      </Text>
+
+      {loadingCommands ? (
+        <View style={styles.commandLoading}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[typography.caption, styles.commandLoadingText]}>Đang đọc sổ lệnh…</Text>
+        </View>
+      ) : commands.length === 0 ? (
+        <Card style={styles.commandCard}>
+          <Text style={[typography.bodyMd, styles.commandMessage]}>
+            Chưa có lệnh nào được gửi từ thiết bị này.
+          </Text>
+        </Card>
+      ) : (
+        commands.map((record) => (
+          <Card key={record.commandId} style={styles.commandCard}>
+            <View style={styles.commandHeader}>
+              <View style={styles.commandTitleGroup}>
+                <MaterialIcons name="outbox" size={16} color={colors.primary} />
+                <Text style={[typography.labelLg, styles.commandTitle]}>{record.label}</Text>
+              </View>
+              <Chip
+                variant={commandStateVariant(record.state)}
+                label={commandStateLabel(record.state)}
+                uppercase={false}
+              />
+            </View>
+            {record.taskId ? (
+              <Text style={[typography.caption, styles.commandMeta]}>
+                Nhiệm vụ: {record.taskCode ?? record.taskId}
+              </Text>
+            ) : null}
+            {record.uploadId ? (
+              <Text style={[typography.caption, styles.commandMeta]}>
+                Phiên tải lên: {record.uploadId}
+              </Text>
+            ) : null}
+            <Text style={[typography.caption, styles.commandMessage]}>{record.message}</Text>
+            {uploadStatusText[record.commandId] ? (
+              <Text style={[typography.caption, styles.commandMessage]}>
+                {uploadStatusText[record.commandId]}
+              </Text>
+            ) : null}
+
+            <View style={styles.commandActions}>
+              {isReplayable(record.state, record.payload.kind) ? (
+                <Button
+                  variant="secondary"
+                  title="Phát lại (đúng khoá)"
+                  loading={busyCommandId === record.commandId}
+                  onPress={() => handleReplay(record)}
+                />
+              ) : null}
+              <Button
+                variant="text"
+                title="Đọc lại & đối chiếu"
+                loading={busyCommandId === record.commandId}
+                onPress={() => void handleReconcile(record)}
+              />
+              {record.uploadId ? (
+                <Button
+                  variant="text"
+                  title="Kiểm tra tải lên (API-234)"
+                  onPress={() => void handleCheckUpload(record)}
+                />
+              ) : null}
+            </View>
+          </Card>
+        ))
+      )}
+
       {/* Section Header: ĐÃ NỘP KHẢO SÁT (5) | Mới nhất */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
@@ -397,11 +630,61 @@ export default function DroneLogScreen() {
           );
         })}
       </View>
-    </SafeAreaScreen>
+      </SafeAreaScreen>
+      {toast ? <Toast type="info" message={toast} /> : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  recoveryHint: {
+    color: colors.secondary,
+    marginBottom: spacing.sm,
+  },
+  commandLoading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  commandLoadingText: {
+    color: colors.secondary,
+  },
+  commandCard: {
+    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+  },
+  commandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  commandTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  commandTitle: {
+    color: colors.neutral,
+    flexShrink: 1,
+  },
+  commandMeta: {
+    color: colors.secondary,
+    marginTop: spacing.xs,
+  },
+  commandMessage: {
+    color: colors.neutral,
+    marginTop: spacing.sm,
+  },
+  commandActions: {
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
   tabContainer: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -479,6 +762,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3E2',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  featuredHeaderInfo: {
+    flex: 1,
   },
   codeRow: {
     flexDirection: 'row',

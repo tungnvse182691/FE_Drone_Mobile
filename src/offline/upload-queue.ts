@@ -51,6 +51,14 @@ function computeBackoffMs(attempt: number): number {
   return Math.min(BASE_RETRY_MS * 2 ** Math.max(0, attempt - 1), MAX_RETRY_MS);
 }
 
+/**
+ * Ghi một intent vào `offline_outbox`.
+ *
+ * `kind` để `string` (KHÔNG ép `OfflineOperationKind`) vì từng vai trò dùng từ vựng riêng:
+ * Crew ghi bộ 6 `OfflineOperationKind` canonical (xem `src/offline/operation-kind.ts`),
+ * Drone/Reporter ghi khoá riêng của luồng họ. Việc ánh xạ sang kind wire của
+ * `POST /sync/batches` nằm ở tầng dispatch (`normalizeOfflineOperationKind` + `toSyncWireKind`).
+ */
 export async function enqueue(
   db: SQLite.SQLiteDatabase,
   kind: string,

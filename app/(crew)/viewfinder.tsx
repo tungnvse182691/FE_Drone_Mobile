@@ -63,6 +63,7 @@ export default function CrewViewfinderScreen() {
     const captureCoords = {
       latitude: coords?.latitude ?? task.coordinates.latitude,
       longitude: coords?.longitude ?? task.coordinates.longitude,
+      accuracyMeters: coords?.accuracyMeters ?? null,
     };
     const now = new Date();
     const line = `Lệnh ${task.wo_code.replace('#HH-WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(now)}`;

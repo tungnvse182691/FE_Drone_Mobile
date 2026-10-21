@@ -8,7 +8,6 @@ import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
 import { Chip } from '../../src/components/Chip';
 import { defectTypeLabel } from '../../src/constants/defect-types';
-import { BUSINESS_ERROR_MESSAGES } from '../../src/constants/error-codes';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { enqueue } from '../../src/offline/upload-queue';
 import { stableUuid } from '../../src/utils/uuid';
@@ -19,6 +18,11 @@ import {
   type CrewFieldSession,
 } from '../../src/api/mock/crew-inspection';
 import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import {
+  itemIfMatch,
+  repairCommandErrorMessage,
+  withFreshItemVersion,
+} from '../../src/hooks/useRepairBootstrap';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 function formatMeasurement(value: number | null, unit: string): string {
@@ -68,7 +72,7 @@ export default function CrewCompleteScreen() {
           label: 'Ảnh hiện trạng trước sửa',
           detail: session?.before_source
             ? `${EVIDENCE_REUSE_SOURCE_TAGS[session.before_source]} • có đóng dấu GPS`
-            : BUSINESS_ERROR_MESSAGES.BEFORE_MISSING,
+            : 'Chưa có ảnh hiện trạng trước khi sửa.',
           done: Boolean(beforeUri) || Boolean(session?.before_evidence_id),
         },
         {
@@ -116,10 +120,10 @@ export default function CrewCompleteScreen() {
     setSubmitting(true);
     const submitted = markSessionSubmitted();
     const attemptId = session?.attempt_id ?? stableUuid(`attempt:${task.id}`);
-    // `kind` phải là kind canonical của SyncOperation (SyncAttemptSubmit) — outbox lưu
-    // đúng giá trị này để màn sync dựng được SyncBatch hợp lệ.
+    // `kind` là OfflineOperationKind canonical (Phần 5.3): REPAIR_EXECUTION_FINISH.
+    // Màn sync ánh xạ canonical → kind wire `REPAIR_SUBMIT` khi dựng SyncBatch.
     const payload = {
-      kind: 'REPAIR_SUBMIT',
+      kind: 'REPAIR_EXECUTION_FINISH',
       attempt_id: attemptId,
       task_id: task.id,
       work_order_code: task.wo_code,
@@ -147,14 +151,36 @@ export default function CrewCompleteScreen() {
     try {
       const db = openDatabase();
       await initDatabase(db);
+      // C-04: đọc lại API-080 NGAY trước khi đóng gói lệnh để lấy `itemVersion` mới nhất.
+      // Nhiệm vụ MEASURE_ONLY hoặc hạng mục chưa sẵn sàng → không có repairContext, ghi null
+      // (lệnh đo đạc không cần If-Match); luồng sửa nhanh thì bắt buộc phải có.
+      const isFastTrackRepair = session?.evaluation_code === 'ELIGIBLE';
+      let itemVersion: string | null = null;
+      try {
+        const repairContext = await withFreshItemVersion(task.id, (command) =>
+          Promise.resolve(command.repairContext),
+        );
+        itemVersion = repairContext.itemVersion;
+      } catch (error) {
+        if (isFastTrackRepair) {
+          setToast(repairCommandErrorMessage(error));
+          setSubmitting(false);
+          return;
+        }
+      }
+      const outbound = {
+        ...payload,
+        item_version: itemVersion,
+        if_match: itemVersion ? itemIfMatch(itemVersion) : null,
+      };
       const now = new Date().toISOString();
-      await enqueue(db, 'REPAIR_SUBMIT', JSON.stringify(payload), {
+      await enqueue(db, 'REPAIR_EXECUTION_FINISH', JSON.stringify(outbound), {
         taskId: task.id,
-        idempotencyKey: stableUuid(`REPAIR_SUBMIT:${attemptId}`),
+        idempotencyKey: stableUuid(`REPAIR_EXECUTION_FINISH:${attemptId}`),
       });
       await upsertOffline(db, 'local_draft', `repair-attempt-${Date.now()}`, {
-        kind: 'REPAIR_SUBMIT',
-        payload: JSON.stringify(payload),
+        kind: 'REPAIR_EXECUTION_FINISH',
+        payload: JSON.stringify(outbound),
         created_at: now,
         updated_at: now,
       });
@@ -270,7 +296,7 @@ export default function CrewCompleteScreen() {
             <View style={styles.imagePlaceholder}>
               <MaterialIcons name="image" size={28} color={colors.secondary} />
               <Text style={[typography.caption, styles.imagePlaceholderText]}>
-                {session?.before_source ? EVIDENCE_REUSE_SOURCE_TAGS[session.before_source] : BUSINESS_ERROR_MESSAGES.BEFORE_MISSING}
+                {session?.before_source ? EVIDENCE_REUSE_SOURCE_TAGS[session.before_source] : 'Chưa có ảnh hiện trạng trước khi sửa.'}
               </Text>
             </View>
           )}
@@ -314,7 +340,7 @@ export default function CrewCompleteScreen() {
           <View style={styles.noticeWarn}>
             <MaterialIcons name="lock" size={15} color={colors.warning} />
             <Text style={[typography.caption, styles.noticeWarnText]}>
-              {BUSINESS_ERROR_MESSAGES.TASK_MODE_NOT_REPAIRABLE}
+              {'Nhiệm vụ này chỉ cho phép đo kiểm; không sửa tại chỗ.'}
             </Text>
           </View>
         ) : null}

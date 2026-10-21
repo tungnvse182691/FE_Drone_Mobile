@@ -17,6 +17,8 @@ const CREW_TABS = [
       '/(crew)/report-defect',
       '/(crew)/viewfinder',
       '/(crew)/complete',
+      '/(crew)/repair-correction',
+      '/(crew)/receiving',
     ],
   },
   { icon: 'sync', iconFamily: 'material' as const, label: 'Đồng bộ', route: '/(crew)/sync' },

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { initDatabase, openDatabase } from '../../src/offline/database';
 import { enqueuePayload } from '../../src/offline/upload-queue';
@@ -201,11 +202,6 @@ export default function DroneRequestDetailScreen() {
   const [isAccepted, setIsAccepted] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
-  const [rejectReason, setRejectReason] = useState(
-    'Thời tiết mưa giông giật cấp 6, không đảm bảo an toàn bay theo quy chuẩn.'
-  );
-  const [rejectionSent, setRejectionSent] = useState(false);
 
   useEffect(() => {
     if (params.code && REQUEST_DETAILS[params.code]) {
@@ -246,23 +242,21 @@ export default function DroneRequestDetailScreen() {
   };
 
 /**
- * Từ chối nhiệm vụ. Contract `declineSurveyTask` cũng cần taskId + If-Match.
- * Cùng lý do: ghi intent cục bộ, không giả vờ đã gửi.
+ * Từ chối nhiệm vụ được tách sang màn O-04 (`request-decline`) để gọi đúng contract
+ * lệnh từ chối (API-230) với Idempotency-Key + If-Match. Màn này chỉ còn điều hướng.
  */
-  const handleSendRejection = async () => {
-    try {
-      await recordAcceptIntent(selectedCode, 'decline_survey_task', { reason: rejectReason });
-      setRejectModalVisible(false);
-      setRejectionSent(true);
-    } catch {
-      setRejectModalVisible(false);
-    }
+  const handleOpenDecline = () => {
+    router.push(`${DRONE_REQUEST_DECLINE}?code=${encodeURIComponent(selectedCode)}`);
+  };
+
+  const handleOpenWorkPackage = () => {
+    router.push(`${DRONE_WORK_PACKAGE}?code=${encodeURIComponent(selectedCode)}`);
   };
 
   /** Ghi intent vào `offline_outbox`; chưa đủ taskId/ETag nên giữ BLOCKED_CONTRACT. */
   const recordAcceptIntent = async (
     code: string,
-    kind: 'accept_survey_task' | 'decline_survey_task',
+    kind: 'accept_survey_task',
     extra: Record<string, unknown> = {},
   ): Promise<void> => {
     const database = openDatabase();
@@ -533,14 +527,6 @@ export default function DroneRequestDetailScreen() {
 
       {/* Actions */}
       <View style={styles.actionContainer}>
-        {rejectionSent && (
-          <View style={styles.successBanner}>
-            <MaterialIcons name="check-circle" size={16} color={colors.success} />
-            <Text style={styles.successBannerText}>
-              Đã lưu lý do từ chối (chờ đồng bộ lên máy chủ).
-            </Text>
-          </View>
-        )}
         {isAccepted && (
           <Text style={[typography.caption, styles.pendingSyncNote]}>
             Ý định đã lưu cục bộ, chờ máy chủ xác nhận (cần taskId + ETag nhiệm vụ).
@@ -560,10 +546,18 @@ export default function DroneRequestDetailScreen() {
           onPress={handleAcceptTask}
         />
 
+        <Button
+          variant="secondary"
+          title="Xem gói công việc (chỉ đọc)"
+          icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
+          onPress={handleOpenWorkPackage}
+        />
+
         <Pressable
           style={styles.rejectButton}
-          onPress={() => setRejectModalVisible(true)}
+          onPress={handleOpenDecline}
           accessibilityRole="button"
+          accessibilityLabel="Từ chối nhiệm vụ"
         >
           <MaterialIcons name="cancel" size={18} color={colors.error} />
           <Text style={[typography.labelLg, styles.rejectButtonText]}>
@@ -575,58 +569,6 @@ export default function DroneRequestDetailScreen() {
           Xác thực mã băm SHA-256 dữ liệu và đồng bộ ngoại tuyến theo TCVN 10380:2014
         </Text>
       </View>
-
-      {/* Modal Reject KS03 */}
-      <Modal visible={rejectModalVisible} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalIconWrap}>
-                <MaterialIcons name="warning" size={24} color={colors.error} />
-              </View>
-              <Text style={[typography.titleMd, styles.modalTitle]}>
-                Từ chối nhiệm vụ bay {current.code}
-              </Text>
-            </View>
-
-            <Text style={[typography.bodyMd, styles.modalDesc]}>
-              Theo quy trình KS03, phi công cần nhập lý do bất khả kháng (thời tiết mưa gió, vùng cấm bay, lỗi thiết bị) để gửi PM điều phối người khác:
-            </Text>
-
-            <TextInput
-              style={styles.modalInput}
-              multiline
-              numberOfLines={4}
-              value={rejectReason}
-              onChangeText={setRejectReason}
-              placeholder="Nhập chi tiết lý do từ chối..."
-              placeholderTextColor={colors.secondary}
-            />
-
-            {rejectionSent && (
-              <View style={styles.successBanner}>
-                <MaterialIcons name="check-circle" size={16} color={colors.success} />
-                <Text style={styles.successBannerText}>
-                  Đã lưu lý do từ chối (chờ đồng bộ lên máy chủ).
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.modalButtonRow}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setRejectModalVisible(false)}
-              >
-                <Text style={[typography.labelSm, styles.modalCancelText]}>Hủy</Text>
-              </Pressable>
-
-              <Pressable style={styles.modalConfirmBtn} onPress={handleSendRejection}>
-                <Text style={[typography.labelSm, styles.modalConfirmText]}>Gửi từ chối</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaScreen>
   );
 }
@@ -1109,87 +1051,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.secondary,
     marginTop: 2,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: spacing.md,
-  },
-  modalCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  modalIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: '#FDECEC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    color: colors.neutral,
-    flex: 1,
-  },
-  modalDesc: {
-    color: colors.secondary,
-    lineHeight: 18,
-    fontSize: 13,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    textAlignVertical: 'top',
-    minHeight: 80,
-    color: colors.neutral,
-    backgroundColor: colors.surfaceAlt,
-  },
-  successBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#E9F7EC',
-    padding: 8,
-    borderRadius: radius.sm,
-  },
-  successBannerText: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  modalButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  modalCancelBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-  },
-  modalCancelText: {
-    color: colors.secondary,
-  },
-  modalConfirmBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: radius.md,
-    backgroundColor: colors.error,
-  },
-  modalConfirmText: {
-    color: colors.surface,
-    fontWeight: 'bold',
   },
 });
