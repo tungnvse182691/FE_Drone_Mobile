@@ -209,8 +209,8 @@ export default function DroneRequestDeclineScreen() {
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            TỪ CHỐI NHIỆM VỤ. Lệnh gửi kèm phiên bản nhiệm vụ (If-Match) và khoá chống trùng
-            (Idempotency-Key). Không tạo lệnh mới khi thử lại.
+            Từ chối nhiệm vụ. Lý do từ chối được gửi tới PM để điều phối lại. Gửi lại nhiều lần
+            cũng không tạo yêu cầu trùng.
           </Text>
         </View>
 
@@ -248,10 +248,6 @@ export default function DroneRequestDeclineScreen() {
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Điểm tiếp cận</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>{detail.accessPointName}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Phiên bản ghim (If-Match)</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{detail.etag}</Text>
           </View>
         </Card>
 

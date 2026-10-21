@@ -161,8 +161,7 @@ export default function ReporterUploadsScreen() {
           Chỉ gửi phản ánh khi mọi ảnh đã xác minh
         </Text>
         <Text style={[typography.caption, styles.gateText]}>
-          Máy chủ trả 202 khi nhận tệp, nhưng phải tới trạng thái “Đã xác minh” mới được ghi vào phản
-          ánh.
+          Máy chủ đã nhận tệp, nhưng tệp chỉ được ghi vào phản ánh khi đã xác minh xong.
         </Text>
       </View>
 
@@ -188,7 +187,13 @@ export default function ReporterUploadsScreen() {
         />
         <Button
           variant="primary"
-          title={canSubmit ? 'Gửi phản ánh' : `Cần xác minh đủ ảnh (${verifiedCount}/${items.length})`}
+          title={
+            canSubmit
+              ? 'Gửi phản ánh'
+              : items.length === 0
+                ? 'Chưa có ảnh nào để xác minh'
+                : `Đã xác minh ${verifiedCount}/${items.length} ảnh`
+          }
           onPress={() => router.push(REPORTER_REPORT)}
           disabled={!canSubmit}
         />

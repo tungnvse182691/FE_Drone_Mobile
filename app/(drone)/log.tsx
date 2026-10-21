@@ -26,6 +26,15 @@ const softShadow = Platform.select({
   default: {},
 });
 
+const UPLOAD_STATUS_LABELS: Record<string, string> = {
+  pending: 'đang chờ',
+  uploading: 'đang tải lên',
+  verifying: 'đang xác minh',
+  complete_requested: 'đang chờ xác minh',
+  verified: 'đã xác minh',
+  failed: 'bị lỗi',
+};
+
 interface SurveyLogItem {
   id: string;
   code: string;
@@ -181,7 +190,7 @@ export default function DroneLogScreen() {
   const handleReplay = (record: OperatorCommandRecord) => {
     Alert.alert(
       'Phát lại lệnh đã gửi?',
-      'Hệ thống gửi lại ĐÚNG khoá idempotency và payload gốc. Không tạo lệnh mới, không gửi trùng dữ liệu.',
+      'Hệ thống gửi lại đúng khóa chống trùng và nội dung gốc. Không tạo lệnh mới, không gửi trùng dữ liệu.',
       [
         { text: 'Để sau', style: 'cancel' },
         {
@@ -230,7 +239,9 @@ export default function DroneLogScreen() {
       const { data } = await getOperatorUploadSession(record.uploadId);
       setUploadStatusText((prev) => ({
         ...prev,
-        [record.commandId]: `Phiên ${data.id.slice(0, 8)}… · trạng thái ${data.status ?? 'không rõ'}`,
+        [record.commandId]: `Trạng thái tệp trên máy chủ: ${
+          UPLOAD_STATUS_LABELS[data.status ?? ''] ?? 'chưa rõ'
+        }`,
       }));
     } catch (error) {
       setToast(commandErrorMessage(error));
@@ -405,7 +416,7 @@ export default function DroneLogScreen() {
                 <Text style={[typography.titleMd, styles.statMainValue]}>
                   {ACTIVE_FLIGHT_LOG.orthophotoCount}
                 </Text>
-                <Text style={styles.statSubValue}>Mã SHA-256 đã khớp</Text>
+                <Text style={styles.statSubValue}>Đã kiểm tra toàn vẹn dữ liệu</Text>
               </View>
             </View>
 
@@ -414,7 +425,7 @@ export default function DroneLogScreen() {
               <View style={styles.checksumInfoRow}>
                 <MaterialIcons name="security" size={16} color={colors.success} />
                 <Text style={styles.flightChecksumText}>
-                  Kiểm tra toàn vẹn: <Text style={styles.boldText}>{ACTIVE_FLIGHT_LOG.sha256Checksum}</Text>
+                  Kiểm tra toàn vẹn: <Text style={styles.boldText}>Đã khớp</Text>
                 </Text>
               </View>
               <View style={styles.checksumInfoRow}>
@@ -475,11 +486,6 @@ export default function DroneLogScreen() {
                 Nhiệm vụ: {record.taskCode ?? record.taskId}
               </Text>
             ) : null}
-            {record.uploadId ? (
-              <Text style={[typography.caption, styles.commandMeta]}>
-                Phiên tải lên: {record.uploadId}
-              </Text>
-            ) : null}
             <Text style={[typography.caption, styles.commandMessage]}>{record.message}</Text>
             {uploadStatusText[record.commandId] ? (
               <Text style={[typography.caption, styles.commandMessage]}>
@@ -491,7 +497,7 @@ export default function DroneLogScreen() {
               {isReplayable(record.state, record.payload.kind) ? (
                 <Button
                   variant="secondary"
-                  title="Phát lại (đúng khoá)"
+                  title="Phát lại (đúng khóa)"
                   loading={busyCommandId === record.commandId}
                   onPress={() => handleReplay(record)}
                 />
@@ -505,7 +511,7 @@ export default function DroneLogScreen() {
               {record.uploadId ? (
                 <Button
                   variant="text"
-                  title="Kiểm tra tải lên (API-234)"
+                  title="Kiểm tra tải lên"
                   onPress={() => void handleCheckUpload(record)}
                 />
               ) : null}

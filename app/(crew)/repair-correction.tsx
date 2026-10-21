@@ -213,7 +213,7 @@ export default function CrewRepairCorrectionScreen() {
         <View style={styles.correctionNotice}>
           <MaterialIcons name="edit" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            ĐÍNH CHÍNH LƯỢT SỬA. Thao tác này gửi bổ sung cho một lượt sửa đã nộp trước đó —
+            Đính chính lượt sửa. Thao tác này gửi bổ sung cho một lượt sửa đã nộp trước đó —
             không xóa và không thay thế bản ghi cũ trong lịch sử.
           </Text>
         </View>
@@ -227,12 +227,6 @@ export default function CrewRepairCorrectionScreen() {
             <Text style={[typography.caption, styles.infoLabel]}>Phương án xử lý</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
               {bootstrap.repairContext.repairPlan ?? '—'}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Phiên bản hạng mục (If-Match)</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              {bootstrap.itemVersion ?? '—'}
             </Text>
           </View>
         </Card>
@@ -273,9 +267,6 @@ export default function CrewRepairCorrectionScreen() {
                       Nộp lúc {formatDateTime(submission.submittedAt)}
                     </Text>
                   </View>
-                  <Text style={[typography.caption, styles.hashText]}>
-                    Mã nội dung: {submission.contentHash.slice(0, 16)}…
-                  </Text>
                 </Card>
               </Pressable>
             );

@@ -42,6 +42,10 @@ function formatCoord(longitude: number, latitude: number): string {
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
+const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
+  PLANNED_RENDEZVOUS: 'Theo kế hoạch',
+};
+
 function operatorErrorMessage(error: unknown): string {
   const response = (error as { response?: { data?: unknown; status?: number } }).response;
   const code = parseProblemDetails(response?.data).code;
@@ -108,6 +112,7 @@ export default function DroneWorkPackageScreen() {
     }
 
     const ref = workPackage.geometryRefs[0];
+    const accessSourceLabel = ACCESS_POINT_SOURCE_LABEL[workPackage.accessPoint.source];
 
     return (
       <>
@@ -122,10 +127,6 @@ export default function DroneWorkPackageScreen() {
         <Card style={styles.card}>
           <Text style={[typography.labelSm, styles.sectionTitle]}>NHIỆM VỤ</Text>
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Mã nhiệm vụ</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{workPackage.task.id}</Text>
-          </View>
-          <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Hạn bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
               {formatDateTime(workPackage.dueAt)}
@@ -138,19 +139,19 @@ export default function DroneWorkPackageScreen() {
         </Card>
 
         <Card style={styles.card}>
-          <Text style={[typography.labelSm, styles.sectionTitle]}>ĐIỂM TIẾP CẬN (RENDEZVOUS)</Text>
+          <Text style={[typography.labelSm, styles.sectionTitle]}>ĐIỂM TIẾP CẬN (ĐIỂM HẸN)</Text>
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Toạ độ WGS84</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
               {formatCoord(workPackage.accessPoint.point.longitude, workPackage.accessPoint.point.latitude)}
             </Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Nguồn</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              {workPackage.accessPoint.source}
-            </Text>
-          </View>
+          {accessSourceLabel ? (
+            <View style={styles.infoRow}>
+              <Text style={[typography.caption, styles.infoLabel]}>Nguồn</Text>
+              <Text style={[typography.bodyMd, styles.infoValue]}>{accessSourceLabel}</Text>
+            </View>
+          ) : null}
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Bán kính an toàn</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
@@ -163,14 +164,6 @@ export default function DroneWorkPackageScreen() {
 
         <Card style={styles.card}>
           <Text style={[typography.labelSm, styles.sectionTitle]}>PHẠM VI ĐÃ GHIM</Text>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Phiên bản tuyến</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{ref?.routeVersionId ?? '—'}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Tập phân đoạn</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{ref?.segmentSetId ?? '—'}</Text>
-          </View>
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Số phân đoạn</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
@@ -218,12 +211,6 @@ export default function DroneWorkPackageScreen() {
               <Text style={[typography.caption, styles.infoLabel]}>Trạng thái siêu dữ liệu</Text>
               <Text style={[typography.bodyMd, styles.infoValue]}>
                 {geometry.route.metadataStatus}
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Mã hình học</Text>
-              <Text style={[typography.bodyMd, styles.infoValue]}>
-                {geometry.route.geometryHash}
               </Text>
             </View>
           </Card>

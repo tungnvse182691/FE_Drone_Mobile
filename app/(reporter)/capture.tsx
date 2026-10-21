@@ -78,14 +78,14 @@ export default function ReporterCaptureScreen() {
       }
       if (!granted) {
         setCoordinates(null);
-        setLocationStatus('Không có tọa độ (ảnh sẽ ghi nguồn UNKNOWN)');
+        setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       if (isZeroCoordinate(position.coords.latitude, position.coords.longitude)) {
         // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ.
         setCoordinates(null);
-        setLocationStatus('Không có tọa độ (ảnh sẽ ghi nguồn UNKNOWN)');
+        setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
         return;
       }
       setCoordinates({
@@ -101,7 +101,7 @@ export default function ReporterCaptureScreen() {
       );
     } catch {
       setCoordinates(null);
-      setLocationStatus('Không có tọa độ (ảnh sẽ ghi nguồn UNKNOWN)');
+      setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
     }
   };
 
@@ -233,8 +233,8 @@ export default function ReporterCaptureScreen() {
     <SafeAreaScreen scroll>
       <Text style={[typography.titleLg, styles.title]}>Ảnh hiện trường</Text>
       <Text style={[typography.caption, styles.subtitle]}>
-        Ảnh được tải lên dạng tệp riêng tư, có kiểm tra toàn vẹn SHA-256. Chỉ gửi phản ánh được khi mọi
-        ảnh đã xác minh xong.
+        Ảnh được tải lên dưới dạng tệp riêng tư và được kiểm tra tính toàn vẹn. Chỉ gửi phản ánh được
+        khi mọi ảnh đã xác minh xong.
       </Text>
 
       <View style={styles.locationCard}>
@@ -337,7 +337,13 @@ export default function ReporterCaptureScreen() {
       <View style={styles.footer}>
         <Button
           variant="primary"
-          title={canSubmit ? 'Tiếp tục gửi phản ánh' : `Đang xác minh ${verifiedCount}/${items.length} ảnh`}
+          title={
+            canSubmit
+              ? 'Tiếp tục gửi phản ánh'
+              : items.length === 0
+                ? 'Chưa chọn ảnh nào'
+                : `Đang xác minh ${verifiedCount}/${items.length} ảnh`
+          }
           onPress={() => router.push(REPORTER_REPORT)}
           disabled={!canSubmit}
         />

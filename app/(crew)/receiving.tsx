@@ -34,6 +34,27 @@ function kindLabel(kind: string | null): string {
   return KIND_LABELS[kind] ?? 'Yêu cầu nhận việc';
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  REPAIR_CREW: 'Đội sửa chữa',
+  DRONE_OPERATOR: 'Phi công drone',
+  REPORTER: 'Người dân',
+  PROJECT_MANAGER: 'Quản lý dự án',
+  SUPERVISOR: 'Giám sát',
+};
+
+function roleLabel(role: string | null | undefined): string {
+  if (!role) {
+    return ROLE_LABELS.REPAIR_CREW;
+  }
+  return ROLE_LABELS[role] ?? '—';
+}
+
+const SOURCE_KIND_LABELS: Record<string, string> = {
+  REPAIR_ATTEMPT: 'Lượt sửa đã nộp',
+  FIELD_SUBMISSION: 'Kết quả đo hiện trường',
+  REPAIR_HANDOVER: 'Bàn giao hạng mục sửa chữa',
+};
+
 function formatWaiting(seconds: number): string {
   if (seconds <= 0) {
     return '—';
@@ -203,7 +224,7 @@ export default function CrewReceivingScreen() {
                 <View style={styles.metaRow}>
                   <MaterialIcons name="person" size={13} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
-                    Người nhận: {request.responsibleRole ?? 'REPAIR_CREW'}
+                    Người nhận: {roleLabel(request.responsibleRole)}
                   </Text>
                 </View>
               </Card>
@@ -220,6 +241,7 @@ export default function CrewReceivingScreen() {
     }
     const state = ackStateChip(selected);
     const acknowledged = Boolean(selected.acknowledgmentId);
+    const sourceLabel = selected.sourceKind ? SOURCE_KIND_LABELS[selected.sourceKind] : undefined;
     return (
       <View>
         <Card style={styles.detailCard}>
@@ -228,14 +250,16 @@ export default function CrewReceivingScreen() {
             <Chip variant={state.variant} label={state.label} uppercase={false} />
           </View>
 
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Nguồn yêu cầu</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{selected.sourceKind ?? '—'}</Text>
-          </View>
+          {sourceLabel ? (
+            <View style={styles.infoRow}>
+              <Text style={[typography.caption, styles.infoLabel]}>Nguồn yêu cầu</Text>
+              <Text style={[typography.bodyMd, styles.infoValue]}>{sourceLabel}</Text>
+            </View>
+          ) : null}
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Vai trò nhận việc</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {selected.responsibleRole ?? 'REPAIR_CREW'}
+              {roleLabel(selected.responsibleRole)}
             </Text>
           </View>
           <View style={styles.infoRow}>
@@ -250,25 +274,13 @@ export default function CrewReceivingScreen() {
               {formatWaiting(selected.waitingSeconds)}
             </Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Phiên bản yêu cầu</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{selected.version ?? '—'}</Text>
-          </View>
           {acknowledged ? (
-            <>
-              <View style={styles.infoRow}>
-                <Text style={[typography.caption, styles.infoLabel]}>Đã nhận việc lúc</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>
-                  {formatDateTime(selected.acknowledgedAt)}
-                </Text>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={[typography.caption, styles.infoLabel]}>Mã xác nhận</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>
-                  {selected.acknowledgmentId}
-                </Text>
-              </View>
-            </>
+            <View style={styles.infoRow}>
+              <Text style={[typography.caption, styles.infoLabel]}>Đã nhận việc lúc</Text>
+              <Text style={[typography.bodyMd, styles.infoValue]}>
+                {formatDateTime(selected.acknowledgedAt)}
+              </Text>
+            </View>
           ) : null}
         </Card>
 
@@ -313,7 +325,7 @@ export default function CrewReceivingScreen() {
               <Text style={[typography.titleMd, styles.topBarTitle]}>Nhận việc</Text>
             </View>
           ) : (
-            <AppHeader subtitle="Nhận việc (ACK)" />
+            <AppHeader subtitle="Nhận việc" />
           )
         }
       >
