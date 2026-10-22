@@ -455,8 +455,12 @@ interface MockEvidenceFile {
 
 const uploadSessions = new Map<string, MockUploadSession>();
 const evidenceFiles = new Map<string, MockEvidenceFile>();
-const uploadIdempotency = new Map<string, string>();
+const uploadIdempotency = new Map<string, { uploadId: string; fingerprint: string }>();
 const partUrlIdempotency = new Map<string, UploadPartUrlsResponseDto>();
+const completeIdempotency = new Map<
+  string,
+  { uploadId: string; fingerprint: string; response: UploadSessionResponseDto }
+>();
 let uploadCounter = 0;
 
 /** Row-version dạng ETag có dấu ngoặc kép — dùng cho `If-Match` (session) và `version` (file). */
@@ -504,6 +508,37 @@ function normalizeMediaType(raw: string): string {
 }
 
 /** Bộ transport mock — `src/store/uploads.ts` chọn bộ này khi chưa có BE thật. */
+/** 211/213 đều khai báo `Idempotency-Key` bắt buộc — thiếu ⇒ 428. */
+function requireUploadKey(idempotencyKey: string | undefined): string {
+  const key = idempotencyKey?.trim();
+  if (!key) {
+    throwMockApiError('idempotency_key_required', {
+      message: 'Thiếu Idempotency-Key cho lệnh tải ảnh.',
+    });
+  }
+  return key;
+}
+
+function evidenceFingerprint(
+  request: ReporterEvidenceCreateRequestDto,
+  mediaType: string,
+): string {
+  return [
+    request.fileName.trim(),
+    mediaType,
+    request.sizeBytes,
+    request.checksumSha256.toLowerCase(),
+  ].join('|');
+}
+
+function completeFingerprint(request: UploadCompleteRequestDto): string {
+  const parts = (Array.isArray(request.parts) ? request.parts : [])
+    .map((part) => `${part.partNumber}:${part.eTag}`)
+    .sort()
+    .join(',');
+  return `${request.checksumSha256.toLowerCase()}|${parts}`;
+}
+
 export function createMockUploadTransport(): UploadTransport {
   return {
     async createSession(
@@ -511,6 +546,7 @@ export function createMockUploadTransport(): UploadTransport {
       idempotencyKey: string,
     ): Promise<UploadSessionResponseDto> {
       await delay(350);
+      const key = requireUploadKey(idempotencyKey);
 
       const fileName = request.fileName?.trim();
       if (!fileName) {
@@ -536,11 +572,16 @@ export function createMockUploadTransport(): UploadTransport {
         });
       }
 
-      const cachedSessionId = uploadIdempotency.get(idempotencyKey);
-      if (cachedSessionId) {
-        const cached = uploadSessions.get(cachedSessionId);
-        if (cached) {
-          return sessionView(cached);
+      const cached = uploadIdempotency.get(key);
+      if (cached) {
+        if (cached.fingerprint !== evidenceFingerprint(request, mediaType)) {
+          throwMockApiError('duplicate_request', {
+            message: 'Khoá idempotency đã dùng cho một yêu cầu tải ảnh khác.',
+          });
+        }
+        const cachedSession = uploadSessions.get(cached.uploadId);
+        if (cachedSession) {
+          return sessionView(cachedSession);
         }
       }
 
@@ -561,7 +602,10 @@ export function createMockUploadTransport(): UploadTransport {
         eTags: new Map<number, string>(),
       };
       uploadSessions.set(uploadId, session);
-      uploadIdempotency.set(idempotencyKey, uploadId);
+      uploadIdempotency.set(key, {
+        uploadId,
+        fingerprint: evidenceFingerprint(request, mediaType),
+      });
       evidenceFiles.set(fileId, {
         id: fileId,
         status: 'PENDING',
@@ -635,9 +679,20 @@ export function createMockUploadTransport(): UploadTransport {
       uploadId: string,
       request: UploadCompleteRequestDto,
       sessionVersion: string,
-      _idempotencyKey: string,
+      idempotencyKey: string,
     ): Promise<UploadSessionResponseDto> {
       await delay(400);
+      const key = requireUploadKey(idempotencyKey);
+      const fingerprint = completeFingerprint(request);
+      const cached = completeIdempotency.get(key);
+      if (cached) {
+        if (cached.uploadId !== uploadId || cached.fingerprint !== fingerprint) {
+          throwMockApiError('duplicate_request', {
+            message: 'Khoá idempotency đã dùng cho một lệnh hoàn tất khác.',
+          });
+        }
+        return { ...cached.response };
+      }
       const session = requireSession(uploadId);
       if (sessionVersion !== session.version) {
         throwMockApiError('auth_concurrency_conflict', {
@@ -668,7 +723,9 @@ export function createMockUploadTransport(): UploadTransport {
       file.status = 'VERIFYING';
       file.version = mockRowVersion(2);
       file.polls = 0;
-      return sessionView(session);
+      const response = sessionView(session);
+      completeIdempotency.set(key, { uploadId, fingerprint, response });
+      return response;
     },
 
     async getFileMetadata(fileId: string): Promise<FileMetadataResponseDto> {
