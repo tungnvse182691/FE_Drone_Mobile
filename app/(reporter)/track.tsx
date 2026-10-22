@@ -3,7 +3,6 @@ import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -11,6 +10,7 @@ import { listMyReports, type OwnReportDto } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
+import { reporterReportCode } from '../../src/api/report-display-code';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -89,11 +89,14 @@ export default function ReporterTrackScreen() {
                 router.push({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: report.id } })
               }
               accessibilityRole="button"
-              accessibilityLabel={`Xem chi tiết phản ánh gửi lúc ${formatDate(report.createdAt)}`}
+              accessibilityLabel={`Xem chi tiết phản ánh ${reporterReportCode(report.id)} gửi lúc ${formatDate(report.createdAt)}`}
             >
               <Card style={styles.reportCard}>
                 <View style={styles.reportHeader}>
                   <MaterialIcons name="description" size={18} color={colors.brandGold} />
+                  <Text style={[typography.labelLg, styles.reportCode]}>
+                    {reporterReportCode(report.id)}
+                  </Text>
                   <Text style={[typography.titleMd, styles.reportDate]}>
                     {formatDate(report.createdAt)}
                   </Text>
@@ -117,8 +120,6 @@ export default function ReporterTrackScreen() {
             </Pressable>
           ))}
         </View>
-
-        <Button variant="text" title="Gửi phản ánh mới" onPress={() => router.push(REPORTER_REPORT)} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -156,7 +157,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  reportDate: { color: colors.onSurface, flex: 1 },
+  reportCode: { color: colors.brandGold },
+  reportDate: { color: colors.secondary, flex: 1 },
   reportDescription: { color: colors.secondary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   metaText: { color: colors.secondary },

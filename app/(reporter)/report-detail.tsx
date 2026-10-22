@@ -10,6 +10,7 @@ import { getOwnReport, type OwnReportDto } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_SUPPLEMENT } from '../../src/constants/routes';
+import { reporterReportCode } from '../../src/api/report-display-code';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -68,6 +69,9 @@ export default function ReporterReportDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={[typography.titleLg, styles.title]}>Chi tiết phản ánh</Text>
+        {reportId ? (
+          <Text style={[typography.labelLg, styles.reportCode]}>{reporterReportCode(reportId)}</Text>
+        ) : null}
 
         {error ? (
           <View style={styles.errorRow}>
@@ -193,6 +197,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.md },
   title: { color: colors.brandGold },
+  reportCode: { color: colors.secondary },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   error: { color: colors.error, flex: 1 },
   card: { gap: spacing.sm, borderRadius: radius.xl, ...softShadow },
