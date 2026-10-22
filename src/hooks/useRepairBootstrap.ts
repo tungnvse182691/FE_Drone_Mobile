@@ -80,10 +80,30 @@ export function repairCommandErrorCode(error: unknown): string | null {
   return parseProblemDetails(response?.data).code;
 }
 
-/** 409 concurrency_conflict / 428 precondition_required → phải đọc lại API-080 rồi hỏi người dùng. */
+/** HTTP status của lỗi, hoặc null nếu không đọc được. */
+export function repairCommandErrorStatus(error: unknown): number | null {
+  const status = (error as { response?: { status?: unknown } } | undefined)?.response?.status;
+  return typeof status === 'number' ? status : null;
+}
+
+/**
+ * 409 concurrency_conflict / 428 precondition_required / 428 validation_error
+ * → phải đọc lại API-080 rồi hỏi người dùng.
+ */
 export function isRepairVersionConflict(error: unknown): boolean {
   const code = repairCommandErrorCode(error);
-  return code === 'concurrency_conflict' || code === 'precondition_required';
+  if (code === 'concurrency_conflict' || code === 'precondition_required') {
+    return true;
+  }
+  return code === 'validation_error' && repairCommandErrorStatus(error) === 428;
+}
+
+/** 428 idempotency_key_required → lệnh chưa có key; thử lại sau khi helper cấp key. */
+export function isRepairIdempotencyKeyRequired(error: unknown): boolean {
+  return (
+    repairCommandErrorCode(error) === 'idempotency_key_required' &&
+    repairCommandErrorStatus(error) === 428
+  );
 }
 
 export function repairCommandErrorMessage(error: unknown): string {
@@ -94,7 +114,7 @@ function syntheticError(code: string, status: number, message: string) {
   return {
     response: {
       status,
-      data: { code, message, details: [], traceId: uuidv4(), retryable: false },
+      data: { code, message, details: [], correlationId: uuidv4(), retryable: false },
     },
   };
 }
