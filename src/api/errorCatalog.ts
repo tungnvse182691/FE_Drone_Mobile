@@ -27,6 +27,7 @@ export type ApiId =
   | 'API-135'
   | 'API-136'
   | 'API-137'
+  | 'API-146'
   | 'API-159'
   | 'API-208'
   | 'API-211'
@@ -264,8 +265,19 @@ export const API_ERROR_CODES: Record<ApiId, ApiErrorContract> = {
       'unsupported_media_type',
     ],
   },
-  'API-159': {
+  'API-146': {
     status: 403,
+    codes: [
+      'validation_error',
+      'access_forbidden',
+      'not_found',
+      'repair_binding_not_current',
+      'repair_scope_source_unavailable',
+      'internal_error',
+    ],
+  },
+  'API-159': {
+    status: 409,
     codes: [
       'validation_error',
       'unauthorized',

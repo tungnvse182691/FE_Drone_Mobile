@@ -97,6 +97,41 @@ const INITIAL_ELIGIBILITY: EligibilityState = {
   message: null,
 };
 
+/**
+ * `missingReasons` từ API-146 là MÃ MÁY (UPPER_SNAKE), không phải câu tiếng Việt.
+ * Mã lạ ⇒ fail closed với câu chung, tuyệt đối không hiển thị mã thô cho Crew.
+ */
+const ELIGIBILITY_REASON_LABEL: Record<string, string> = {
+  CURRENT_EXECUTION_AUTHORITY_DENIED:
+    'Bạn không còn quyền thực hiện hạng mục này tại hiện trường; chuyển PM xử lý.',
+  ROAD_HANDOVER_MAPPING_UNKNOWN: 'Chưa xác định được hồ sơ bàn giao tuyến đường.',
+  NORMAL_FLOW_REQUIRES_SUPERVISOR_APPROVAL:
+    'Nhiệm vụ không ở chế độ đo-kiểm-và-sửa; cần Giám sát/PM duyệt theo luồng thường.',
+  POLICY_UNAVAILABLE: 'Máy chủ chưa công bố chính sách sửa nhanh đang áp dụng.',
+  PINNED_POLICY_SOURCE_MISMATCH: 'Chính sách ghim không khớp nguồn hiện hành của máy chủ.',
+  ASSESSMENT_REQUIRED: 'Chưa có ảnh hiện trạng (BEFORE) hợp lệ để đối chiếu sửa nhanh.',
+  ASSESSMENT_SOURCE_OR_LOCATION_UNVERIFIED:
+    'Ảnh hiện trạng chưa xác thực được nguồn hoặc vị trí khuyết tật.',
+  MEASUREMENT_SOURCE_MISMATCH: 'Nguồn số đo hiện trường không khớp với hồ sơ đánh giá.',
+  POLICY_MEASUREMENT_SOURCE_NOT_UNIQUE: 'Số đo hiện trường có nhiều nguồn, chưa xác định duy nhất.',
+  STOP_CONDITION_OBSERVATION_UNKNOWN: 'Chưa xác nhận được điều kiện dừng khẩn cấp tại hiện trường.',
+  POLICY_THRESHOLDNOTMET: 'Kích thước hư hại vượt ngưỡng sửa nhanh của chính sách hiện hành.',
+  POLICY_NOTCONFIGURED: 'Chính sách hiện hành không cấu hình cho loại khuyết tật này.',
+  POLICY_STOPCONDITION: 'Hiện trường có điều kiện dừng khẩn cấp; không sửa nhanh tại chỗ.',
+  POLICY_UNKNOWNMEASUREMENT:
+    'Chưa ghi nhận đủ số đo hiện trường (chiều dài, chiều rộng, độ sâu).',
+  POLICY_WRONGUNIT: 'Đơn vị số đo không khớp yêu cầu của chính sách.',
+  FIRST_START_NOT_VERIFIED: 'Chưa xác thực thời điểm bắt đầu xử lý đầu tiên.',
+  EXECUTION_WINDOW_EXPIRED: 'Đã quá thời hạn được phép sửa nhanh tại hiện trường.',
+};
+
+const ELIGIBILITY_REASON_FALLBACK =
+  'Điều kiện sửa nhanh chưa đạt theo đánh giá của máy chủ; chuyển PM xử lý.';
+
+function eligibilityReasonLabel(code: string): string {
+  return ELIGIBILITY_REASON_LABEL[code] ?? ELIGIBILITY_REASON_FALLBACK;
+}
+
 export default function CrewWoDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const task = getCrewTaskById(params.id);
@@ -189,12 +224,7 @@ export default function CrewWoDetailScreen() {
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const result = await fetchRepairEligibility({
-            task_id: task.id,
-            task_mode: task.task_mode,
-            defect_type_code: task.defect_type_code,
-            measurement,
-          });
+          const result = await fetchRepairEligibility({ task_id: task.id });
           if (!active) {
             return;
           }
@@ -203,7 +233,7 @@ export default function CrewWoDetailScreen() {
           setEligibility({
             status: 'ready',
             eligible: result.eligible,
-            missingReasons: result.missingReasons,
+            missingReasons: Array.from(new Set(result.missingReasons)),
             policyRevisionId: result.policyRevisionId,
             message: null,
           });
@@ -695,7 +725,9 @@ export default function CrewWoDetailScreen() {
                 {eligibility.missingReasons.map((reason) => (
                   <View key={reason} style={styles.policyGuideRow}>
                     <MaterialIcons name="info-outline" size={14} color={colors.secondary} />
-                    <Text style={[typography.caption, styles.policyGuideText]}>{reason}</Text>
+                    <Text style={[typography.caption, styles.policyGuideText]}>
+                      {eligibilityReasonLabel(reason)}
+                    </Text>
                   </View>
                 ))}
               </View>

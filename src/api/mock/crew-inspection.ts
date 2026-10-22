@@ -3,6 +3,7 @@ import type { DefectTypeCode } from '../../constants/defect-types';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
 import { TaskMode } from '../../types/enums';
 import { getReporterReportsSnapshot } from './reporter';
+import { throwMockApiError } from './errors';
 
 export const FAST_TRACK_POLICY_ID = 'FTP-2026-V1';
 
@@ -269,136 +270,130 @@ export function computeArea(measurement: CrewFieldMeasurement): number | null {
   return Number((length_m * width_m).toFixed(2));
 }
 
-export interface FastTrackEvaluation {
-  area_m2: number | null;
-  hasAllDimensions: boolean;
-  passesArea: boolean;
-  passesDepth: boolean;
-  passesLength: boolean;
-  passesDefectCode: boolean;
-  code: FastTrackEvaluationCode;
+/**
+ * Bản rút gọn của `RepairMeasurementRule` (API-146 trả về trong `rules`).
+ * Đơn vị/ngưỡng do policy revision trên máy chủ quyết định; app chỉ hiển thị.
+ */
+export interface RepairEligibilityRuleDto {
+  measurementCode: string;
+  unit: string;
+  minimum: number | null;
+  maximum: number | null;
 }
 
 /**
- * Bộ luật Fast Track phía MÁY CHỦ (mock). App KHÔNG gọi hàm này trực tiếp —
- * chỉ `fetchRepairEligibility` (tương đương API-146) dùng, mô phỏng server là authority.
+ * Bản rút gọn của `RepairEligibilityReadView` (API-146).
+ *
+ * `missingReasons` là MÃ MÁY (UPPER_SNAKE) do máy chủ trả về, KHÔNG phải câu tiếng Việt.
+ * UI phải map mã → câu tiếng Việt và fail closed với mã lạ.
  */
-function evaluateFastTrack(
-  taskMode: TaskMode,
-  measurement: CrewFieldMeasurement,
-  defectTypeCode: DefectTypeCode,
-): FastTrackEvaluation {
-  const area = computeArea(measurement);
-  const { length_m, width_m, depth_cm } = measurement;
-  const hasAllDimensions = length_m !== null && width_m !== null && depth_cm !== null;
-
-  const pending: FastTrackEvaluation = {
-    area_m2: area,
-    hasAllDimensions,
-    passesArea: false,
-    passesDepth: false,
-    passesLength: false,
-    passesDefectCode: false,
-    code: 'PENDING',
-  };
-
-  if (taskMode !== TaskMode.INSPECT_AND_REPAIR || !hasAllDimensions) {
-    return pending;
-  }
-
-  const passesArea = area !== null && area <= FAST_TRACK_POLICY.max_area_m2;
-  const passesDepth = depth_cm <= FAST_TRACK_POLICY.max_depth_cm;
-  const passesLength = length_m <= FAST_TRACK_POLICY.max_length_m;
-  const passesDefectCode = FAST_TRACK_POLICY.allowed_defect_codes.includes(defectTypeCode);
-
-  return {
-    area_m2: area,
-    hasAllDimensions,
-    passesArea,
-    passesDepth,
-    passesLength,
-    passesDefectCode,
-    code: passesArea && passesDepth && passesLength && passesDefectCode ? 'ELIGIBLE' : 'NOT_ELIGIBLE',
-  };
+export interface RepairEligibilityReadView {
+  eligible: boolean;
+  activation: 'ELIGIBLE' | 'INELIGIBLE';
+  itemId: string | null;
+  bindingId: string | null;
+  policyRevisionId: string | null;
+  policyContentHash: string | null;
+  policyState: string | null;
+  rules: RepairEligibilityRuleDto[];
+  assessmentId: string | null;
+  measurementIds: string[];
+  originalVerifiedStart: string | null;
+  executionExpiresAt: string | null;
+  sourceMapping: string | null;
+  warrantySources: string[];
+  handoverSources: string[];
+  missingReasons: string[];
+  version: string | null;
+  coverageMapping: string | null;
 }
 
 export interface RepairEligibilityInput {
+  /** Chỉ cần mã nhiệm vụ: máy chủ tự đọc dữ liệu hiện trường đã ghi nhận. */
   task_id: string;
-  task_mode: TaskMode;
-  defect_type_code: DefectTypeCode;
-  measurement: CrewFieldMeasurement;
-}
-
-export interface RepairEligibility {
-  eligible: boolean;
-  policyRevisionId: string | null;
-  policyContentHash: string | null;
-  /** Lý do không đạt (tiếng Việt) — hiển thị thẳng cho Crew; rỗng khi đạt. */
-  missingReasons: string[];
-  rules: FastTrackEvaluation;
 }
 
 export const ELIGIBILITY_FAIL_CLOSED_MESSAGE =
   'Không đối chiếu được điều kiện sửa nhanh với máy chủ. Tạm thời chuyển kết quả đo cho PM.';
 
-function buildEligibilityReasons(
-  taskMode: TaskMode,
-  measurement: CrewFieldMeasurement,
-  evaluation: FastTrackEvaluation,
-): string[] {
-  if (taskMode !== TaskMode.INSPECT_AND_REPAIR) {
-    return ['Nhiệm vụ không ở chế độ đo-kiểm-và-sửa.'];
-  }
-  if (!evaluation.hasAllDimensions) {
-    return ['Chưa nhập đủ 3 kích thước: chiều dài, chiều rộng, độ sâu.'];
-  }
-  const reasons: string[] = [];
-  if (!evaluation.passesDefectCode) {
-    reasons.push('Loại khuyết tật không thuộc danh mục áp dụng sửa nhanh.');
-  }
-  if (!evaluation.passesArea) {
-    reasons.push(
-      `Diện tích vượt ngưỡng sửa nhanh (policy hiện hành: tối đa ${FAST_TRACK_POLICY.max_area_m2.toFixed(1)} m²).`,
-    );
-  }
-  if (!evaluation.passesLength) {
-    reasons.push(
-      `Chiều dài vượt ngưỡng sửa nhanh (policy hiện hành: tối đa ${FAST_TRACK_POLICY.max_length_m.toFixed(1)} m).`,
-    );
-  }
-  if (!evaluation.passesDepth) {
-    reasons.push(
-      `Độ sâu vượt ngưỡng sửa nhanh (policy hiện hành: tối đa ${FAST_TRACK_POLICY.max_depth_cm.toFixed(1)} cm).`,
-    );
-  }
-  return reasons;
-}
+const ELIGIBILITY_RULES: RepairEligibilityRuleDto[] = [
+  { measurementCode: 'AREA_M2', unit: 'm2', minimum: null, maximum: FAST_TRACK_POLICY.max_area_m2 },
+  { measurementCode: 'DEPTH_CM', unit: 'cm', minimum: null, maximum: FAST_TRACK_POLICY.max_depth_cm },
+  { measurementCode: 'LENGTH_M', unit: 'm', minimum: null, maximum: FAST_TRACK_POLICY.max_length_m },
+];
 
 /**
  * Mock API-146 — điều kiện Sửa Nhanh do máy chủ đánh giá theo policy revision hiện hành.
- * KHÔNG hardcode ngưỡng ở client; lỗi/abort ở tầng gọi phải fail closed (coi như không đủ điều kiện).
+ *
+ * App KHÔNG giữ ngưỡng, KHÔNG tự suy ra `missingReasons`: mọi kết luận đến từ máy chủ.
+ * Lỗi/abort ở tầng gọi phải fail closed ở phía màn hình.
  */
 export async function fetchRepairEligibility(
   input: RepairEligibilityInput,
   signal?: AbortSignal,
-): Promise<RepairEligibility> {
+): Promise<RepairEligibilityReadView> {
   await new Promise((resolve) => setTimeout(resolve, 450));
   if (signal?.aborted) {
     throw new Error('ELIGIBILITY_ABORTED');
   }
-  const evaluation = evaluateFastTrack(
-    input.task_mode,
-    input.measurement,
-    input.defect_type_code,
-  );
-  const missingReasons = buildEligibilityReasons(input.task_mode, input.measurement, evaluation);
-  const resolved = evaluation.code !== 'PENDING';
+  const session = getCrewFieldSession();
+  if (!session || session.task_id !== input.task_id) {
+    throwMockApiError('not_found', {
+      message: 'Chưa có dữ liệu hiện trường của nhiệm vụ này trên máy chủ.',
+    });
+  }
+
+  const missingReasons: string[] = [];
+  if (session.task_mode !== TaskMode.INSPECT_AND_REPAIR) {
+    missingReasons.push('NORMAL_FLOW_REQUIRES_SUPERVISOR_APPROVAL');
+  }
+  if (!session.before_evidence_id && !session.before_local_uri) {
+    missingReasons.push('ASSESSMENT_REQUIRED');
+  }
+
+  const { length_m, width_m, depth_cm } = session.measurement;
+  const area = session.area_m2 ?? computeArea(session.measurement);
+
+  if (area === null || length_m === null || depth_cm === null) {
+    missingReasons.push('POLICY_UNKNOWNMEASUREMENT');
+  } else {
+    if (area > FAST_TRACK_POLICY.max_area_m2) {
+      missingReasons.push('POLICY_THRESHOLDNOTMET');
+    }
+    if (length_m > FAST_TRACK_POLICY.max_length_m) {
+      missingReasons.push('POLICY_THRESHOLDNOTMET');
+    }
+    if (depth_cm > FAST_TRACK_POLICY.max_depth_cm) {
+      missingReasons.push('POLICY_THRESHOLDNOTMET');
+    }
+  }
+
+  if (!FAST_TRACK_POLICY.allowed_defect_codes.includes(session.defect_type_code)) {
+    missingReasons.push('POLICY_NOTCONFIGURED');
+  }
+
+  const uniqueReasons = Array.from(new Set(missingReasons));
+  const eligible = uniqueReasons.length === 0;
+
   return {
-    eligible: evaluation.code === 'ELIGIBLE',
-    policyRevisionId: resolved ? FAST_TRACK_POLICY_ID : null,
-    policyContentHash: resolved ? `sha256:${FAST_TRACK_POLICY_ID}` : null,
-    missingReasons,
-    rules: evaluation,
+    eligible,
+    activation: eligible ? 'ELIGIBLE' : 'INELIGIBLE',
+    itemId: session.task_id,
+    bindingId: `${session.task_id}:${session.defect_type_code}`,
+    policyRevisionId: FAST_TRACK_POLICY_ID,
+    policyContentHash: `sha256:${FAST_TRACK_POLICY_ID}`,
+    policyState: 'ACTIVE',
+    rules: ELIGIBILITY_RULES,
+    assessmentId: null,
+    measurementIds: [],
+    originalVerifiedStart: null,
+    executionExpiresAt: null,
+    sourceMapping: null,
+    warrantySources: [],
+    handoverSources: [],
+    missingReasons: uniqueReasons,
+    version: FAST_TRACK_POLICY_ID,
+    coverageMapping: null,
   };
 }
 
