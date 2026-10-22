@@ -125,7 +125,6 @@ function syntheticError(code: string, status: number, message: string) {
 
 interface CrewRepairTransport {
   fetchTask(taskId: string, projectId: string): Promise<CrewFieldTaskViewFact>;
-  listSubmissions(taskId: string, itemId: string, projectId: string): Promise<CrewFieldSubmissionView[]>;
   supplement(
     taskId: string,
     repairContext: RepairContext,
@@ -176,7 +175,6 @@ interface CrewRepairTransport {
 
 const mockCrewRepairTransport: CrewRepairTransport = {
   fetchTask: (taskId) => getCrewFieldTaskView(taskId),
-  listSubmissions: (taskId) => listCrewFieldSubmissions(taskId),
   supplement: (taskId, _ctx, _projectId, input, headers) =>
     supplementRepairAttemptMock(taskId, input, headers),
   assess: (taskId, _ctx, _projectId, input, headers) =>
@@ -203,12 +201,6 @@ const httpCrewRepairTransport: CrewRepairTransport = {
       `/projects/${projectId}/field-inspection-tasks/${taskId}`,
     );
     return response.data;
-  },
-  async listSubmissions(taskId, itemId, projectId) {
-    const response = await apiClient.get<{ items?: CrewFieldSubmissionView[] }>(
-      `/projects/${projectId}/repair-packages/${itemId}/field-submissions`,
-    );
-    return response.data.items ?? [];
   },
   async supplement(taskId, ctx, projectId, input, headers) {
     const response = await apiClient.post<RepairAttemptIntakeView>(
@@ -413,11 +405,19 @@ export function supplementRepairAttempt(
 }
 
 /**
- * Danh sách lượt sửa đã gửi để chọn ở C-08. BE chưa có endpoint liệt kê (API-096 chỉ đọc
- * một submission theo id — xem `01_Crew-Screen-API-Matrix.md` dòng C-08) nên hiện dùng mock.
+ * Danh sách lượt sửa đã gửi để chọn ở C-08.
+ *
+ * 17_10 KHÔNG có endpoint liệt kê lượt gửi (API-096 chỉ đọc MỘT submission theo id), nên
+ * không được tự chế endpoint danh sách. Chế độ mock dùng dữ liệu seed nội bộ; chế độ
+ * HTTP thật báo "chưa khả dụng" để Crew chuyển PM thay vì hiển thị dữ liệu giả.
  */
 export function listRepairSubmissions(taskId: string): Promise<CrewFieldSubmissionView[]> {
-  return crewRepairTransport.listSubmissions(taskId, '', CREW_REPAIR_PROJECT_ID);
+  if (USE_MOCK_CREW_REPAIR) {
+    return listCrewFieldSubmissions(taskId);
+  }
+  return Promise.reject(
+    new Error('Máy chủ chưa hỗ trợ danh sách lượt gửi hiện trường. Vui lòng liên hệ PM.'),
+  );
 }
 
 /* -------------------------------------------------------------------------- */
