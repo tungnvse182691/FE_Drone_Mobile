@@ -149,10 +149,6 @@ export default function DroneWorkPackageScreen() {
               {formatDateTime(workPackage.dueAt)}
             </Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Phiên bản phạm vi</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{workPackage.scopeVersion}</Text>
-          </View>
         </Card>
 
         <Card style={styles.card}>

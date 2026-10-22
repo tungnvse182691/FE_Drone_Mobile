@@ -112,7 +112,7 @@ export default function DroneRequestDetailScreen() {
     void loadTask();
   }, [loadTask]);
 
-  const displayCode = task ? operatorTaskDisplayCode(task.id) : 'Nhiệm vụ';
+  const displayCode = task ? operatorTaskDisplayCode(task.id, params.code) : 'Nhiệm vụ';
   const accessPoint = workPackage?.accessPoint ?? null;
 
   const handleOpenGoogleMaps = () => {

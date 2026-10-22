@@ -502,6 +502,11 @@ function findOperatorTask(taskIdOrCode: string): OperatorTaskFixture | undefined
   );
 }
 
+/** Mã hiển thị đã gắn với nhiệm vụ ở tầng seed (chỉ để HIỂN THỊ, không phải wire field). */
+export function operatorTaskSeedCode(taskIdOrCode: string): string | null {
+  return findOperatorTask(taskIdOrCode)?.code ?? null;
+}
+
 function currentOperatorTaskVersion(taskId: string): string {
   return operatorRowVersion(`survey-task:${taskId}`, OPERATOR_TASK_STEPS.get(taskId) ?? 0);
 }
