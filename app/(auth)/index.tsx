@@ -16,7 +16,7 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { login as apiLogin } from '../../src/api/mock/auth';
-import { useAuthStore } from '../../src/store/auth';
+import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
 import { RoleCode } from '../../src/types/enums';
 import { REPORTER_HOME, ROLE_HOMES } from '../../src/constants/routes';
@@ -36,9 +36,18 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
     try {
+      // Wire: `AuthTokenResponseDto` camelCase trần — map sang `User` domain ở đây.
       const response = await apiLogin(phoneOrEmail, password);
-      const loggedUser = response.data.user;
-      login(loggedUser);
+      const loggedUser = buildUserFromActor(
+        response.user,
+        phoneOrEmail.trim().toLowerCase(),
+        response.mustChangePassword,
+      );
+      if (!loggedUser) {
+        setError('Tài khoản không có vai trò hợp lệ cho ứng dụng di động.');
+        return;
+      }
+      login(loggedUser, response);
       if (loggedUser.role_code === RoleCode.REPORTER) {
         useReporterStore.getState().markVerified(loggedUser.phone_or_email);
       }

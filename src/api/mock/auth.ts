@@ -1,5 +1,6 @@
 import { User } from '../../types/domain';
 import { RoleCode } from '../../types/enums';
+import { ROLE_CODE_TO_WIRE_ROLE } from '../../types/roleAdapter';
 import { throwMockApiError } from './errors';
 
 const MOCK_USERS: Record<string, { user: User; password: string }> = {
@@ -102,30 +103,100 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function login(email: string, password: string) {
+type MockUserEntry = { user: User; password: string };
+
+/**
+ * `AuthActorResponseDto` (17_10): `{ id, displayName, role, version }` — KHÔNG có email,
+ * KHÔNG snake_case. Đây là shape wire duy nhất mà mock trả ra.
+ */
+export interface MockAuthActorWire {
+  id: string;
+  displayName: string;
+  role: string;
+  version: string;
+}
+
+/** `AuthTokenResponseDto` — camelCase TRẦN, KHÔNG bọc envelope `{ data }`. */
+export interface MockAuthTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+  mustChangePassword: boolean;
+  user: MockAuthActorWire;
+}
+
+/** Map seed nội bộ (snake_case) → DTO wire của BE. */
+function toTokenResponse(
+  entry: MockUserEntry,
+  accessToken: string = entry.user.token,
+  refreshToken: string = entry.user.refresh_token,
+): MockAuthTokenResponse {
+  return {
+    accessToken,
+    refreshToken,
+    tokenType: 'Bearer',
+    expiresIn: 3600,
+    mustChangePassword: entry.user.must_change_password,
+    user: {
+      id: entry.user.id,
+      displayName: entry.user.full_name,
+      role: ROLE_CODE_TO_WIRE_ROLE[entry.user.role_code],
+      version: '1',
+    },
+  };
+}
+
+/** API-002 — `POST /api/v1/auth/login`. */
+export async function login(email: string, password: string): Promise<MockAuthTokenResponse> {
   await delay(200);
   const normalized = email.toLowerCase().trim();
   const entry = MOCK_USERS[normalized];
   if (!entry || (entry.password !== password && password !== '1' && password !== 'HoangHai@2026')) {
     throwMockApiError('auth_invalid_credentials', { message: 'Sai tài khoản hoặc mật khẩu' });
   }
-  return { data: { user: entry.user, token: entry.user.token, refresh_token: entry.user.refresh_token } };
+  return toTokenResponse(entry);
 }
 
-export async function refresh(refresh_token: string) {
+/** API-003 — `POST /api/v1/auth/refresh` (trả lại đủ cặp token như BE, không chỉ access token). */
+export async function refresh(refreshToken: string): Promise<MockAuthTokenResponse> {
   await delay(200);
-  return { data: { token: `mock-token-refreshed-${Date.now()}` } };
+  const entry = Object.values(MOCK_USERS).find((item) => item.user.refresh_token === refreshToken);
+  if (!entry) {
+    throwMockApiError('refresh_token_invalid');
+  }
+  return toTokenResponse(entry, `mock-token-refreshed-${Date.now()}`);
 }
 
-export async function changePassword(token: string, old_password: string, new_password: string) {
+/** Key của các lệnh đổi mật khẩu đã xử lý — mô phỏng replay idempotent của BE. */
+const appliedPasswordChanges = new Set<string>();
+
+/**
+ * API-004 — `POST /api/v1/auth/change-password`.
+ * BE BẮT BUỘC header `Idempotency-Key`; thiếu key → 428 `idempotency_key_required`.
+ */
+export async function changePassword(
+  token: string,
+  old_password: string,
+  new_password: string,
+  idempotencyKey?: string,
+) {
   await delay(300);
+  const key = idempotencyKey?.trim();
+  if (!key) {
+    throwMockApiError('idempotency_key_required');
+  }
+  if (appliedPasswordChanges.has(key)) {
+    return { ok: true };
+  }
   const entry = Object.values(MOCK_USERS).find((item) => item.user.token === token);
   if (!entry || entry.password !== old_password) {
     throwMockApiError('validation_error', { message: 'Mật khẩu cũ không đúng' });
   }
   entry.password = new_password;
   entry.user.must_change_password = false;
-  return { data: { ok: true } };
+  appliedPasswordChanges.add(key);
+  return { ok: true };
 }
 
 /**
