@@ -252,10 +252,39 @@ export interface OperatorSurveyTaskWorkPackageDto {
   scopeVersion: string;
 }
 
-/** ## Schema WidthProfileItem (rút gọn trường UI cần). */
+/** ## Schema WidthProfileItem — dải chiều rộng theo khoảng offset dọc tuyến. */
 export interface OperatorWidthProfileItemDto {
-  stationMeters: number;
-  halfWidthMeters: number;
+  fromOffsetMeters: number;
+  toOffsetMeters: number;
+  widthMeters: number;
+}
+
+/** ## Schema GeometryShape — GeoJSON hình học (coordinates theo CRS tương ứng). */
+export interface OperatorGeometryShapeDto {
+  type: string | null;
+  coordinates: unknown;
+}
+
+/** ## Schema SegmentGeometryView. */
+export interface OperatorSegmentGeometryViewDto {
+  id: string;
+  sequence: number;
+  fromOffsetMeters: number | null;
+  toOffsetMeters: number | null;
+  startStationMeters: number | null;
+  endStationMeters: number | null;
+  lengthMeters: number | null;
+  metricGeometry: OperatorGeometryShapeDto;
+  wgs84Geometry: OperatorGeometryShapeDto;
+  missingMetadata: string[] | null;
+}
+
+/** ## Schema SegmentDefinition. */
+export interface OperatorSegmentDefinitionDto {
+  targetLengthMeters: number;
+  remainderMode: string;
+  boundariesMeters: number[] | null;
+  tessellationToleranceMeters: number | null;
 }
 
 /** ## Schema RoadGeometryVersionView (rút gọn trường UI cần). */
@@ -278,12 +307,19 @@ export interface OperatorRoadGeometryVersionDto {
   routeKind: string;
 }
 
-/** ## Schema SegmentSetView (rút gọn trường UI cần). */
+/** ## Schema SegmentSetView. */
 export interface OperatorSegmentSetDto {
-  segmentSetId: string;
-  projectId: string;
-  segmentCount: number;
-  lengthMeters: number;
+  id: string;
+  routeVersionId: string;
+  status: string | null;
+  definition: OperatorSegmentDefinitionDto;
+  geometryHash: string | null;
+  segments: OperatorSegmentGeometryViewDto[];
+  publishedBy: string | null;
+  publishedAt: string | null;
+  version: string | null;
+  metadataStatus: string | null;
+  missingMetadata: string[] | null;
 }
 
 /** ## Schema GeometryPackageView (API-104). */
@@ -673,6 +709,37 @@ export async function getOperatorWorkPackage(
   };
 }
 
+const OPERATOR_GEOMETRY_SCHEMA_VERSION = 'anh01.geometry.v1';
+
+const OPERATOR_SEGMENT_IDS = [
+  '20000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000002',
+  '20000000-0000-4000-8000-000000000003',
+  '20000000-0000-4000-8000-000000000004',
+  '20000000-0000-4000-8000-000000000005',
+];
+
+const OPERATOR_SEGMENT_LENGTH_METERS = 400;
+
+function operatorSegments(): OperatorSegmentGeometryViewDto[] {
+  return OPERATOR_SEGMENT_IDS.map((segmentId, index) => {
+    const fromOffsetMeters = index * OPERATOR_SEGMENT_LENGTH_METERS;
+    const toOffsetMeters = fromOffsetMeters + OPERATOR_SEGMENT_LENGTH_METERS;
+    return {
+      id: segmentId,
+      sequence: index + 1,
+      fromOffsetMeters,
+      toOffsetMeters,
+      startStationMeters: fromOffsetMeters,
+      endStationMeters: toOffsetMeters,
+      lengthMeters: OPERATOR_SEGMENT_LENGTH_METERS,
+      metricGeometry: { type: 'LineString', coordinates: [] },
+      wgs84Geometry: { type: 'LineString', coordinates: [] },
+      missingMetadata: [],
+    };
+  });
+}
+
 /** API-104 — gói hình học/hình học tuyến của dự án (chỉ đọc, phạm vi ghim). */
 export async function getOperatorGeometryPackage(
   projectId: string,
@@ -682,24 +749,33 @@ export async function getOperatorGeometryPackage(
   if (!projectId || projectId.trim().length === 0) {
     throwMockApiError('validation_error', { message: 'Thiếu projectId.' });
   }
+  const routeVersionId = params.routeVersionId?.trim();
+  const segmentSetId = params.segmentSetId?.trim();
+  if (!routeVersionId || !segmentSetId) {
+    throwMockApiError('validation_error', {
+      message: 'Gói hình học phải chỉ rõ phiên bản tuyến và tập phân đoạn.',
+      details: [
+        ...(routeVersionId ? [] : [{ field: 'routeVersionId', message: 'Bắt buộc.' }]),
+        ...(segmentSetId ? [] : [{ field: 'segmentSetId', message: 'Bắt buộc.' }]),
+      ],
+    });
+  }
   if (projectId !== OPERATOR_PROJECT_ID) {
     throwMockApiError('project_not_found', { message: 'Không tìm thấy dự án.' });
   }
-  const fixture = OPERATOR_TASK_FIXTURES[0];
-  const routeVersionId = params.routeVersionId ?? fixture.routeVersionId;
-  const segmentSetId = params.segmentSetId ?? fixture.segmentSetId;
-  if (routeVersionId !== fixture.routeVersionId) {
+  if (routeVersionId !== OPERATOR_ROUTE_VERSION_ID) {
     throwMockApiError('road_section_version_not_found', {
       message: 'Không tìm thấy phiên bản tuyến.',
     });
   }
-  if (segmentSetId !== fixture.segmentSetId) {
+  if (segmentSetId !== OPERATOR_SEGMENT_SET_ID) {
     throwMockApiError('segment_set_not_found', { message: 'Không tìm thấy tập phân đoạn.' });
   }
-  const totalLengthMeters = fixture.segmentIds.length * 400;
+  const segments = operatorSegments();
+  const totalLengthMeters = segments.length * OPERATOR_SEGMENT_LENGTH_METERS;
   return {
     data: {
-      schemaVersion: '1.0',
+      schemaVersion: OPERATOR_GEOMETRY_SCHEMA_VERSION,
       projectId,
       route: {
         projectId,
@@ -712,8 +788,8 @@ export async function getOperatorGeometryPackage(
         engineeringSrid: 3405,
         stationOriginMeters: 0,
         widthProfile: [
-          { stationMeters: 0, halfWidthMeters: 1.75 },
-          { stationMeters: 800, halfWidthMeters: 1.75 },
+          { fromOffsetMeters: 0, toOffsetMeters: 800, widthMeters: 3.5 },
+          { fromOffsetMeters: 800, toOffsetMeters: 1600, widthMeters: 3.5 },
         ],
         surveyWidthMeters: 3.5,
         lengthMeters: totalLengthMeters,
@@ -723,10 +799,22 @@ export async function getOperatorGeometryPackage(
         routeKind: 'BTXM_TCVN10380',
       },
       segmentSet: {
-        segmentSetId,
-        projectId,
-        segmentCount: fixture.segmentIds.length,
-        lengthMeters: totalLengthMeters,
+        id: segmentSetId,
+        routeVersionId,
+        status: 'PUBLISHED',
+        definition: {
+          targetLengthMeters: OPERATOR_SEGMENT_LENGTH_METERS,
+          remainderMode: 'KEEP',
+          boundariesMeters: [0, 400, 800, 1200, 1600, 2000],
+          tessellationToleranceMeters: 0.5,
+        },
+        geometryHash: 'sha256:3c4d5e6f708192a3b4c5d6e7f80910',
+        segments,
+        publishedBy: OPERATOR_ACTOR_ID,
+        publishedAt: '2026-09-21T09:00:00Z',
+        version: operatorRowVersion(`segment-set:${segmentSetId}`, 0),
+        metadataStatus: 'COMPLETE',
+        missingMetadata: [],
       },
     },
     etag: `"${operatorRowVersion(`geometry:${projectId}`, 0)}"`,

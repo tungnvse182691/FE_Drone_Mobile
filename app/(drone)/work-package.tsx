@@ -46,6 +46,20 @@ const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
   PLANNED_RENDEZVOUS: 'Theo kế hoạch',
 };
 
+const METADATA_STATUS_LABEL: Record<string, string> = {
+  Approved: 'Đã duyệt',
+  Pending: 'Chờ duyệt',
+  COMPLETE: 'Đầy đủ',
+  PARTIAL: 'Còn thiếu thông tin',
+};
+
+function metadataStatusLabel(status: string | null): string {
+  if (!status) {
+    return 'Đang cập nhật';
+  }
+  return METADATA_STATUS_LABEL[status] ?? 'Đang cập nhật';
+}
+
 function operatorErrorMessage(error: unknown): string {
   const response = (error as { response?: { data?: unknown; status?: number } }).response;
   const code = parseProblemDetails(response?.data).code;
@@ -210,7 +224,7 @@ export default function DroneWorkPackageScreen() {
             <View style={styles.infoRow}>
               <Text style={[typography.caption, styles.infoLabel]}>Trạng thái siêu dữ liệu</Text>
               <Text style={[typography.bodyMd, styles.infoValue]}>
-                {geometry.route.metadataStatus}
+                {metadataStatusLabel(geometry.route.metadataStatus)}
               </Text>
             </View>
           </Card>
