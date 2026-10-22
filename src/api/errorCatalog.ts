@@ -18,7 +18,12 @@ export type ApiId =
   | 'API-011'
   | 'API-012'
   | 'API-104'
+  | 'API-078'
   | 'API-080'
+  | 'API-081'
+  | 'API-091'
+  | 'API-095'
+  | 'API-096'
   | 'API-135'
   | 'API-136'
   | 'API-137'
@@ -30,7 +35,13 @@ export type ApiId =
   | 'API-214'
   | 'API-219'
   | 'API-225'
-  | 'API-230';
+  | 'API-227'
+  | 'API-229'
+  | 'API-230'
+  | 'API-233'
+  | 'API-234'
+  | 'API-235'
+  | 'API-236';
 
 export interface ApiErrorContract {
   status: number;
@@ -91,7 +102,7 @@ export const API_ERROR_CODES: Record<ApiId, ApiErrorContract> = {
     ],
   },
   'API-011': {
-    status: 404,
+    status: 400,
     codes: [
       'validation_error',
       'duplicate_request',
@@ -102,7 +113,7 @@ export const API_ERROR_CODES: Record<ApiId, ApiErrorContract> = {
     ],
   },
   'API-012': {
-    status: 404,
+    status: 400,
     codes: [
       'validation_error',
       'duplicate_request',
@@ -122,6 +133,95 @@ export const API_ERROR_CODES: Record<ApiId, ApiErrorContract> = {
       'road_section_version_not_found',
       'segment_set_not_found',
       'concurrency_conflict',
+      'internal_error',
+    ],
+  },
+  'API-078': {
+    status: 401,
+    codes: [
+      'validation_error',
+      'auth_session_revoked',
+      'auth_unauthorized',
+      'access_forbidden',
+      'auth_password_change_required',
+      'internal_error',
+    ],
+  },
+  'API-081': {
+    status: 409,
+    codes: [
+      'validation_error',
+      'auth_session_revoked',
+      'auth_unauthorized',
+      'access_forbidden',
+      'auth_password_change_required',
+      'csrf_failed',
+      'not_found',
+      'concurrency_conflict',
+      'idempotency_key_reused',
+      'invalid_state_transition',
+      'legacy_task_read_only',
+      'project_not_active',
+      'unsupported_media_type',
+      'precondition_required',
+      'internal_error',
+    ],
+  },
+  'API-091': {
+    status: 409,
+    codes: [
+      'validation_error',
+      'auth_session_revoked',
+      'auth_unauthorized',
+      'access_forbidden',
+      'auth_password_change_required',
+      'csrf_failed',
+      'not_found',
+      'concurrency_conflict',
+      'idempotency_key_reused',
+      'invalid_state_transition',
+      'legacy_task_read_only',
+      'project_not_active',
+      'unsupported_media_type',
+      'precondition_required',
+      'internal_error',
+    ],
+  },
+  'API-095': {
+    status: 409,
+    codes: [
+      'validation_error',
+      'auth_session_revoked',
+      'auth_unauthorized',
+      'access_forbidden',
+      'auth_password_change_required',
+      'csrf_failed',
+      'evidence_access_forbidden',
+      'evidence_not_found',
+      'not_found',
+      'concurrency_conflict',
+      'evidence_version_mismatch',
+      'first_start_required',
+      'idempotency_key_reused',
+      'invalid_state_transition',
+      'legacy_task_read_only',
+      'origin_content_conflict',
+      'project_not_active',
+      'submission_lineage_conflict',
+      'unsupported_media_type',
+      'precondition_required',
+      'internal_error',
+    ],
+  },
+  'API-096': {
+    status: 404,
+    codes: [
+      'validation_error',
+      'auth_session_revoked',
+      'auth_unauthorized',
+      'access_forbidden',
+      'auth_password_change_required',
+      'not_found',
       'internal_error',
     ],
   },
@@ -265,6 +365,84 @@ export const API_ERROR_CODES: Record<ApiId, ApiErrorContract> = {
     status: 404,
     codes: ['auth_unauthorized', 'access_forbidden', 'not_found', 'internal_error'],
   },
+  'API-227': {
+    status: 409,
+    codes: [
+      'auth_unauthorized',
+      'access_forbidden',
+      'survey_request_not_found',
+      'duplicate_request',
+      'survey_invalid_state_transition',
+      'survey_scope_incompatible',
+      'auth_concurrency_conflict',
+      'concurrency_conflict',
+      'survey_validation_failed',
+      'validation_error',
+      'internal_error',
+    ],
+  },
+  'API-229': {
+    status: 409,
+    codes: [
+      'auth_unauthorized',
+      'access_forbidden',
+      'survey_request_not_found',
+      'duplicate_request',
+      'survey_invalid_state_transition',
+      'survey_scope_incompatible',
+      'auth_concurrency_conflict',
+      'concurrency_conflict',
+      'survey_validation_failed',
+      'validation_error',
+      'internal_error',
+      'unsupported_media_type',
+    ],
+  },
+  'API-233': {
+    status: 422,
+    codes: [
+      'validation_error',
+      'auth_unauthorized',
+      'access_forbidden',
+      'duplicate_request',
+      'upload_validation_failed',
+      'upload_session_not_found',
+      'internal_error',
+      'unsupported_media_type',
+    ],
+  },
+  'API-234': {
+    status: 404,
+    codes: ['auth_unauthorized', 'access_forbidden', 'upload_session_not_found', 'internal_error'],
+  },
+  'API-235': {
+    status: 422,
+    codes: [
+      'validation_error',
+      'auth_unauthorized',
+      'access_forbidden',
+      'upload_session_not_found',
+      'duplicate_request',
+      'upload_validation_failed',
+      'auth_concurrency_conflict',
+      'internal_error',
+      'unsupported_media_type',
+    ],
+  },
+  'API-236': {
+    status: 422,
+    codes: [
+      'validation_error',
+      'auth_unauthorized',
+      'access_forbidden',
+      'upload_session_not_found',
+      'duplicate_request',
+      'upload_validation_failed',
+      'upload_storage_unavailable',
+      'internal_error',
+      'unsupported_media_type',
+    ],
+  },
   'API-230': {
     status: 401,
     codes: [
@@ -325,6 +503,14 @@ const CODE_MESSAGES: Record<string, string> = {
   repair_assignment_not_current: 'Phân công sửa chữa đã thay đổi. Vui lòng tải lại.',
   repair_binding_not_current: 'Liên kết sửa chữa đã thay đổi. Vui lòng tải lại.',
   stored_receipt_access_forbidden: 'Bạn không có quyền truy cập biên nhận đã lưu.',
+  csrf_failed: 'Phiên làm việc không hợp lệ. Vui lòng tải lại ứng dụng.',
+  legacy_task_read_only: 'Nhiệm vụ cũ chỉ được xem, không nhận thao tác mới.',
+  first_start_required: 'Cần bắt đầu hiện trường trước khi gửi kết quả.',
+  origin_content_conflict: 'Nội dung gửi không khớp với mốc gốc hiện trường.',
+  submission_lineage_conflict: 'Lượt gửi bổ sung không khớp hồ sơ gốc.',
+  evidence_not_found: 'Không tìm thấy ảnh bằng chứng yêu cầu.',
+  evidence_version_mismatch: 'Ảnh bằng chứng đã thay đổi. Vui lòng tải lại.',
+  evidence_access_forbidden: 'Bạn không có quyền dùng ảnh bằng chứng này.',
   internal_error: 'Hệ thống đang bận. Vui lòng thử lại sau.',
   unsupported_media_type: 'Định dạng nội dung không được hỗ trợ.',
 };

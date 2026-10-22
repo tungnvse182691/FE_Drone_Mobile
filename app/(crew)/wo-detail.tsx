@@ -31,6 +31,13 @@ import {
   type BeforeEvidenceCandidate,
 } from '../../src/api/mock/crew-inspection';
 import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import {
+  acceptFieldTask,
+  getFieldTask,
+  rejectFieldTask,
+  type FieldTaskViewFact,
+} from '../../src/api/mock/field-tasks';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 function parseDimension(value: string): number | null {
@@ -52,8 +59,28 @@ function formatCapturedAt(iso: string): string {
   })}`;
 }
 
-type EligibilityStatus = 'idle' | 'loading' | 'ready' | 'error';
+/** Câu tiếng Việt cho lỗi API-081/091 — không lộ mã kỹ thuật lên màn hình. */
+function fieldTaskActionMessage(error: unknown): string {
+  const errorResponse = (
+    error as { response?: { status?: number; data?: { code?: string } } } | undefined
+  )?.response;
+  const code = errorResponse?.data?.code;
+  if (code === 'concurrency_conflict' || code === 'precondition_required') {
+    return 'Nhiệm vụ vừa thay đổi. Vui lòng tải lại rồi thử lại.';
+  }
+  if (code === 'idempotency_key_reused') {
+    return 'Thao tác này đã được gửi trước đó. Vui lòng tải lại nhiệm vụ.';
+  }
+  if (errorResponse?.status === 403) {
+    return 'Bạn không còn được giao xử lý nhiệm vụ này.';
+  }
+  if (errorResponse?.status === 404) {
+    return 'Nhiệm vụ không còn tồn tại hoặc đã được điều phối lại.';
+  }
+  return 'Không gửi được thao tác. Vui lòng kiểm tra kết nối rồi thử lại.';
+}
 
+type EligibilityStatus = 'idle' | 'loading' | 'ready' | 'error';
 interface EligibilityState {
   status: EligibilityStatus;
   eligible: boolean;
@@ -82,6 +109,32 @@ export default function CrewWoDetailScreen() {
   const [depthText, setDepthText] = useState(() => (initialMeasurement.depth_cm !== null ? String(initialMeasurement.depth_cm) : ''));
   const [anchorLoading, setAnchorLoading] = useState(false);
   const [anchorError, setAnchorError] = useState<string | null>(null);
+
+  const [fieldTask, setFieldTask] = useState<FieldTaskViewFact | null>(null);
+  const [fieldTaskEtag, setFieldTaskEtag] = useState<string | null>(null);
+  const [taskAction, setTaskAction] = useState<'accept' | 'reject' | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [taskNotice, setTaskNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(
+    null,
+  );
+
+  const loadFieldTask = useCallback(async () => {
+    try {
+      const response = await getFieldTask(task.id);
+      setFieldTask(response.data);
+      setFieldTaskEtag(response.etag);
+    } catch {
+      setFieldTask(null);
+      setFieldTaskEtag(null);
+    }
+  }, [task.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadFieldTask();
+    }, [loadFieldTask]),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -207,6 +260,63 @@ export default function CrewWoDetailScreen() {
     Linking.openURL(
       `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
     );
+  };
+
+  const handleAcceptFieldTask = async () => {
+    if (!fieldTask || !fieldTaskEtag) {
+      return;
+    }
+    const keyScope = `crew:field-accept:${task.id}`;
+    setTaskAction('accept');
+    try {
+      const response = await acceptFieldTask(
+        task.id,
+        { reason: 'Nhận nhiệm vụ hiện trường' },
+        { 'Idempotency-Key': getOrCreateCommandKey(keyScope), 'If-Match': fieldTaskEtag },
+      );
+      clearCommandKey(keyScope);
+      setFieldTask(response.data);
+      setFieldTaskEtag(response.etag);
+      setTaskNotice({ type: 'success', message: 'Đã nhận nhiệm vụ. Bắt đầu đo kiểm hiện trường.' });
+    } catch (error) {
+      clearCommandKey(keyScope);
+      setTaskNotice({ type: 'error', message: fieldTaskActionMessage(error) });
+      void loadFieldTask();
+    } finally {
+      setTaskAction(null);
+    }
+  };
+
+  const handleRejectFieldTask = async () => {
+    if (!fieldTask || !fieldTaskEtag) {
+      return;
+    }
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setTaskNotice({ type: 'error', message: 'Vui lòng nêu lý do từ chối nhiệm vụ.' });
+      return;
+    }
+    const keyScope = `crew:field-reject:${task.id}`;
+    setTaskAction('reject');
+    try {
+      const response = await rejectFieldTask(
+        task.id,
+        { reason },
+        { 'Idempotency-Key': getOrCreateCommandKey(keyScope), 'If-Match': fieldTaskEtag },
+      );
+      clearCommandKey(keyScope);
+      setFieldTask(response.data);
+      setFieldTaskEtag(response.etag);
+      setRejectOpen(false);
+      setRejectReason('');
+      setTaskNotice({ type: 'success', message: 'Đã gửi lý do từ chối tới điều phối viên.' });
+    } catch (error) {
+      clearCommandKey(keyScope);
+      setTaskNotice({ type: 'error', message: fieldTaskActionMessage(error) });
+      void loadFieldTask();
+    } finally {
+      setTaskAction(null);
+    }
   };
 
   const beforeSelected = Boolean(session?.before_evidence_id);
@@ -601,6 +711,94 @@ export default function CrewWoDetailScreen() {
         )}
       </Card>
 
+      {/* C-04: nhận / từ chối nhiệm vụ do điều phối viên giao (API-081 / API-091) */}
+      {fieldTask?.status === 'ASSIGNED' ? (
+        <Card style={styles.taskActionCard}>
+          <View style={styles.taskActionHeader}>
+            <MaterialIcons name="assignment-turned-in" size={20} color={colors.brandGold} />
+            <Text style={[typography.titleMd, styles.taskActionTitle]}>Xác nhận nhiệm vụ</Text>
+          </View>
+          <Text style={[typography.caption, styles.taskActionHint]}>
+            Nhận việc để mở khóa đo kiểm hiện trường. Nếu không thể thực hiện, nêu rõ lý do để điều
+            phối viên giao lại.
+          </Text>
+
+          {rejectOpen ? (
+            <View style={styles.taskActionReject}>
+              <InputField
+                label="Lý do từ chối"
+                value={rejectReason}
+                onChangeText={setRejectReason}
+                placeholder="Ví dụ: sai vị trí, thiếu thiết bị đo..."
+                multiline
+              />
+              <View style={styles.taskActionRow}>
+                <View style={styles.taskActionButton}>
+                  <Button
+                    variant="secondary"
+                    title="Huỷ"
+                    onPress={() => {
+                      setRejectOpen(false);
+                      setRejectReason('');
+                    }}
+                  />
+                </View>
+                <View style={styles.taskActionButton}>
+                  <Button
+                    variant="secondary"
+                    title="Gửi lý do từ chối"
+                    onPress={handleRejectFieldTask}
+                    loading={taskAction === 'reject'}
+                    disabled={taskAction !== null}
+                  />
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.taskActionRow}>
+              <View style={styles.taskActionButton}>
+                <Button
+                  variant="secondary"
+                  title="Từ chối nhiệm vụ"
+                  onPress={() => setRejectOpen(true)}
+                  disabled={taskAction !== null}
+                />
+              </View>
+              <View style={styles.taskActionButton}>
+                <Button
+                  variant="primary"
+                  title="Nhận nhiệm vụ"
+                  onPress={handleAcceptFieldTask}
+                  loading={taskAction === 'accept'}
+                  disabled={taskAction !== null}
+                />
+              </View>
+            </View>
+          )}
+        </Card>
+      ) : fieldTask?.status === 'ACCEPTED' || fieldTask?.status === 'IN_PROGRESS' ? (
+        <View style={styles.taskStatusNote}>
+          <MaterialIcons name="check-circle" size={16} color={colors.success} />
+          <Text style={[typography.caption, styles.taskStatusNoteText]}>
+            Đã nhận nhiệm vụ — sẵn sàng đo kiểm hiện trường.
+          </Text>
+        </View>
+      ) : fieldTask?.status === 'SUBMITTED' ? (
+        <View style={styles.taskStatusNote}>
+          <MaterialIcons name="hourglass-bottom" size={16} color={colors.warning} />
+          <Text style={[typography.caption, styles.taskStatusNoteText]}>
+            Đã gửi kết quả hiện trường, đang chờ PM xem xét.
+          </Text>
+        </View>
+      ) : fieldTask?.status === 'REJECTED' ? (
+        <View style={styles.taskStatusNote}>
+          <MaterialIcons name="block" size={16} color={colors.error} />
+          <Text style={[typography.caption, styles.taskStatusNoteText]}>
+            Bạn đã từ chối nhiệm vụ này. Điều phối viên sẽ giao lại cho người khác.
+          </Text>
+        </View>
+      ) : null}
+
       {/* CTA cuối: Chỉ đường (flex 1) + Tiến hành sửa nhanh (flex 2) + lý do disable */}
       <View style={styles.ctaContainer}>
         <View style={styles.ctaRow}>
@@ -645,6 +843,9 @@ export default function CrewWoDetailScreen() {
       </View>
 
       {anchorError ? <Toast type="error" message={anchorError} /> : null}
+      {taskNotice ? (
+        <Toast key={taskNotice.message} type={taskNotice.type} message={taskNotice.message} />
+      ) : null}
     </SafeAreaScreen>
   );
 }
@@ -938,6 +1139,53 @@ const styles = StyleSheet.create({
   noticeWarnText: {
     flex: 1,
     color: colors.brandGold,
+  },
+  /* C-04: thẻ nhận / từ chối nhiệm vụ FIELD */
+  taskActionCard: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.xl,
+    padding: spacing.cardPadding,
+  },
+  taskActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  taskActionTitle: {
+    color: colors.neutral,
+  },
+  taskActionHint: {
+    color: colors.secondary,
+    marginTop: spacing.xs,
+  },
+  taskActionReject: {
+    marginTop: spacing.sm,
+  },
+  taskActionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  taskActionButton: {
+    flex: 1,
+  },
+  taskStatusNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  taskStatusNoteText: {
+    flex: 1,
+    color: colors.secondary,
   },
   /* paddingBottom 48: nhô CTA + dòng lý do disable khỏi gesture bar Android & BottomNav */
   ctaContainer: {

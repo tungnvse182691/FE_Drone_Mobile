@@ -3,6 +3,10 @@ import { TaskMode, FastTrackEligibility } from '../../types/enums';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
 import { throwMockApiError } from './errors';
 import { FAST_TRACK_POLICY } from './crew-inspection';
+import { fakeRowVersion, fakeSha256 } from './wire-ids';
+import { MOCK_CREW_ACTOR_ID, MOCK_CREW_PROJECT_ID, fieldTaskRecord } from './field-tasks';
+
+export { MOCK_CREW_ACTOR_ID, MOCK_CREW_PROJECT_ID };
 
 export const MOCK_WORK_ORDERS: RepairWorkOrder[] = [
   {
@@ -174,43 +178,8 @@ export async function completeFastTrack(
  * `If-Match: "<itemVersion>"` (kèm dấu nháy kép) và server chốt lại sau mỗi lệnh.
  * ========================================================================== */
 
-/** Project mẫu cho luồng Crew (app Crew đang chạy dữ liệu mock, chưa nối BE thật). */
-export const MOCK_CREW_PROJECT_ID = '4f6a2c1e-8b3d-4a5f-9c7e-1d2b3a4c5e6f';
+/** Package sửa chữa mẫu cho `repairContext` của API-080 (Crew NORMAL). */
 export const MOCK_CREW_PACKAGE_ID = '3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f';
-/** Người nhận việc hiện tại (responsibleActorId) trong dữ liệu mock C-11. */
-export const MOCK_CREW_ACTOR_ID = 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e';
-
-const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-function hashSeed(value: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-/** Sinh rowversion giả 8 byte → Base64 12 ký tự kết thúc `=` (đúng shape wire BE). */
-function fakeRowVersion(seed: string, step = 0): string {
-  let state = (hashSeed(seed) + step * 2654435761) >>> 0;
-  let out = '';
-  for (let i = 0; i < 11; i += 1) {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    out += B64_ALPHABET[state % 64];
-  }
-  return `${out}=`;
-}
-
-function fakeSha256(seed: string): string {
-  let state = hashSeed(seed) || 1;
-  let out = '';
-  for (let i = 0; i < 64; i += 1) {
-    state = (Math.imul(state, 1103515245) + 12345) >>> 0;
-    out += (state % 16).toString(16);
-  }
-  return out;
-}
 
 /** Ngữ cảnh sửa chữa (nhánh nullable `repairContext` của API-080 cho Crew NORMAL). */
 export interface CrewRepairContext {
@@ -510,32 +479,24 @@ function assertItemIfMatch(taskId: string, ifMatch: string | undefined): void {
 }
 
 /**
- * Fixture nhiệm vụ Crew cho API-080. Dùng id `task-wo-xx` của màn Công việc
- * (`app/(crew)/tasks.tsx`) — KHÁC `MOCK_WORK_ORDERS` (id `WO-xx`) của luồng cũ.
+ * API-080 — chi tiết task + `repairContext` (null với MEASURE_ONLY / ngoài phân công).
+ * Trạng thái & rowversion ngoài của task lấy từ `field-tasks.ts` để API-078/081/091/095
+ * và màn C-04 luôn thấy cùng một phiên bản.
  */
-const MOCK_CREW_TASK_FIXTURES: { id: string; mode: TaskMode; status: string; defectId: string }[] = [
-  { id: 'task-wo-01', mode: TaskMode.INSPECT_AND_REPAIR, status: 'ASSIGNED', defectId: 'DEF-001' },
-  { id: 'task-wo-02', mode: TaskMode.MEASURE_ONLY, status: 'ASSIGNED', defectId: 'DEF-002' },
-  { id: 'task-wo-03', mode: TaskMode.INSPECT_AND_REPAIR, status: 'ASSIGNED', defectId: 'DEF-003' },
-  { id: 'task-wo-04', mode: TaskMode.INSPECT_AND_REPAIR, status: 'COMPLETED', defectId: 'DEF-002' },
-  { id: 'task-wo-05', mode: TaskMode.INSPECT_AND_REPAIR, status: 'COMPLETED', defectId: 'DEF-004' },
-];
-
-/** API-080 — chi tiết task + `repairContext` (null với MEASURE_ONLY / ngoài phân công). */
 export async function getCrewFieldTaskView(taskId: string): Promise<CrewFieldTaskViewFact> {
   await delay(250);
-  const fixture = MOCK_CREW_TASK_FIXTURES.find((t) => t.id === taskId);
-  if (!fixture) {
+  const record = fieldTaskRecord(taskId);
+  if (!record) {
     throwMockApiError('not_found', { message: 'Không tìm thấy nhiệm vụ' });
   }
   const item = findRepairItem(taskId);
   return {
-    id: taskId,
-    projectId: MOCK_CREW_PROJECT_ID,
-    defectId: item?.defectId ?? fixture.defectId,
-    mode: fixture.mode,
-    status: fixture.status,
-    version: fakeRowVersion(`task:${taskId}`, 0),
+    id: record.id,
+    projectId: record.projectId,
+    defectId: item?.defectId ?? record.defectId,
+    mode: record.mode,
+    status: record.status,
+    version: record.version,
     repairContext: item
       ? {
           packageId: MOCK_CREW_PACKAGE_ID,
