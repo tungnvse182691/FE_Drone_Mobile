@@ -832,9 +832,196 @@ export async function declineOperatorSurveyTask(
   return { data: result };
 }
 
+export interface OperatorAcceptResult {
+  taskId: string;
+  status: OperatorTaskStatus;
+  state: OperatorCommandState;
+  at: string;
+}
+
+/** API-227 khai báo 428 với mã `validation_error` cho header bắt buộc. */
+function requireOperatorWriteKey(key: string | undefined, header: string): string {
+  if (!key || key.trim().length === 0) {
+    throwMockApiError('validation_error', {
+      message: `Thiếu ${header} cho lệnh ghi.`,
+    });
+  }
+  return key.trim();
+}
+
+function requireOperatorTaskId(taskIdOrCode: string): OperatorTaskFixture {
+  const fixture = findOperatorTask(taskIdOrCode);
+  if (!fixture) {
+    throwMockApiError('survey_request_not_found', {
+      message: 'Không tìm thấy nhiệm vụ khảo sát.',
+    });
+  }
+  return fixture;
+}
+
+/**
+ * API-227 — Phi công nhận nhiệm vụ khảo sát.
+ * Cùng key + cùng payload ⇒ phát lại kết quả đã lưu, KHÔNG tạo lệnh mới.
+ */
+export async function acceptOperatorSurveyTask(
+  taskIdOrCode: string,
+  headers: { idempotencyKey?: string; ifMatch?: string },
+): Promise<{ data: OperatorAcceptResult }> {
+  await delay(500);
+  const fixture = requireOperatorTaskId(taskIdOrCode);
+  const key = requireOperatorWriteKey(headers.idempotencyKey, 'Idempotency-Key');
+  assertOperatorIfMatch(fixture.taskId, headers.ifMatch);
+
+  const payload = { kind: 'accept' };
+  const cached = OPERATOR_IDEMPOTENCY.get(key);
+  if (cached) {
+    const cachedPayload = (cached.body as { payload?: Record<string, unknown> } | null)?.payload;
+    if (cachedPayload && cachedPayload.kind === payload.kind) {
+      return { data: cached.body as OperatorAcceptResult };
+    }
+    throwMockApiError('idempotency_key_reused', {
+      message: 'Khoá idempotency đã dùng cho một lệnh khác.',
+    });
+  }
+
+  const current = operatorTaskStatus(fixture.taskId);
+  if (current !== 'NewAssigned') {
+    throwMockApiError('survey_invalid_state_transition', {
+      message: 'Nhiệm vụ không còn ở trạng thái chờ tiếp nhận.',
+    });
+  }
+
+  const result: OperatorAcceptResult = {
+    taskId: fixture.taskId,
+    status: 'Accepted',
+    state: 'ACKED',
+    at: new Date().toISOString(),
+  };
+  OPERATOR_TASK_STATUS.set(fixture.taskId, 'Accepted');
+  bumpOperatorTaskVersion(fixture.taskId);
+  OPERATOR_IDEMPOTENCY.set(key, { status: 200, body: { ...result, payload } });
+  appendOperatorCommand({
+    apiId: 'API-227',
+    label: 'Nhận nhiệm vụ khảo sát',
+    taskId: fixture.taskId,
+    taskCode: fixture.code,
+    uploadId: null,
+    idempotencyKey: key,
+    payload,
+    state: 'ACKED',
+    httpStatus: 200,
+    resultCode: null,
+    message: 'Máy chủ đã xác nhận tiếp nhận nhiệm vụ khảo sát.',
+  });
+  return { data: result };
+}
+
+export interface OperatorDatasetInput {
+  videoFileIds: string[];
+  telemetryFileIds: string[];
+  recordedAt: string;
+  deviceId?: string | null;
+  scope: OperatorBandScopeDto[];
+  pairs?: { videoFileId: string; telemetryFileId?: string | null; timeOffsetMilliseconds: number }[] | null;
+  idempotencyKey?: string;
+  ifMatch?: string;
+}
+
+export interface OperatorDatasetResult {
+  id: string;
+  surveyTaskId: string;
+  dataVersionId: string;
+  integrityStatus: string;
+  telemetryStatus: string;
+  version: string;
+}
+
+/** API-229 — nộp bộ dữ liệu khảo sát (video 4K + telemetry). */
+export async function submitOperatorSurveyDataset(
+  taskIdOrCode: string,
+  input: OperatorDatasetInput,
+): Promise<{ data: OperatorDatasetResult }> {
+  await delay(700);
+  const fixture = requireOperatorTaskId(taskIdOrCode);
+  const key = requireOperatorWriteKey(input.idempotencyKey, 'Idempotency-Key');
+  assertOperatorIfMatch(fixture.taskId, input.ifMatch);
+
+  if (input.videoFileIds.length === 0) {
+    throwMockApiError('validation_error', {
+      message: 'Cần ít nhất một tệp video đã xác minh.',
+      details: [{ field: 'videoFileIds', message: 'Danh sách tệp video rỗng.' }],
+    });
+  }
+  if (!input.recordedAt || Number.isNaN(new Date(input.recordedAt).getTime())) {
+    throwMockApiError('validation_error', {
+      message: 'Thời điểm ghi hình không hợp lệ.',
+      details: [{ field: 'recordedAt', message: 'Cần thời điểm ISO-8601.' }],
+    });
+  }
+  if (input.scope.length === 0) {
+    throwMockApiError('survey_validation_failed', {
+      message: 'Bộ dữ liệu thiếu phạm vi khảo sát.',
+      details: [{ field: 'scope', message: 'Cần ít nhất một dải khảo sát.' }],
+    });
+  }
+
+  const current = operatorTaskStatus(fixture.taskId);
+  if (current !== 'Accepted' && current !== 'InProgress' && current !== 'SupplementRequired') {
+    throwMockApiError('survey_invalid_state_transition', {
+      message: 'Nhiệm vụ chưa ở trạng thái cho phép nộp bộ dữ liệu.',
+    });
+  }
+
+  const payloadKey = JSON.stringify({
+    kind: 'dataset',
+    videoFileIds: input.videoFileIds,
+    telemetryFileIds: input.telemetryFileIds,
+  });
+  const cached = OPERATOR_IDEMPOTENCY.get(key);
+  if (cached) {
+    const cachedPayload = (cached.body as { payloadKey?: string } | null)?.payloadKey;
+    if (cachedPayload === payloadKey) {
+      return { data: cached.body as OperatorDatasetResult };
+    }
+    throwMockApiError('duplicate_request', {
+      message: 'Khoá idempotency đã dùng cho bộ dữ liệu khác.',
+    });
+  }
+
+  const datasetId = `ds-${operatorHashSeed(`dataset:${fixture.taskId}:${key}`).toString(16)}`;
+  const result: OperatorDatasetResult = {
+    id: datasetId,
+    surveyTaskId: fixture.taskId,
+    dataVersionId: `dv-${operatorHashSeed(`data-version:${datasetId}`).toString(16)}`,
+    integrityStatus: 'pending',
+    telemetryStatus: 'pending',
+    version: operatorRowVersion(`dataset:${datasetId}`, 0),
+  };
+
+  OPERATOR_TASK_STATUS.set(fixture.taskId, 'Submitted');
+  bumpOperatorTaskVersion(fixture.taskId);
+  OPERATOR_IDEMPOTENCY.set(key, {
+    status: 201,
+    body: { ...result, payloadKey },
+  });
+  appendOperatorCommand({
+    apiId: 'API-229',
+    label: 'Nộp bộ dữ liệu khảo sát',
+    taskId: fixture.taskId,
+    taskCode: fixture.code,
+    uploadId: null,
+    idempotencyKey: key,
+    payload: { kind: 'dataset', videoFileIds: input.videoFileIds },
+    state: 'ACKED',
+    httpStatus: 201,
+    resultCode: null,
+    message: 'Máy chủ đã nhận bộ dữ liệu; đang chờ xác minh toàn vẹn (chưa VERIFIED).',
+  });
+  return { data: result };
+}
+
 /** O-08 — liệt kê lệnh đã gửi kèm trạng thái/kết quả (mới nhất trước). */
-export async function listOperatorCommands(
-  filter: { taskId?: string } = {},
+export async function listOperatorCommands(  filter: { taskId?: string } = {},
 ): Promise<{ data: { items: OperatorCommandRecord[] } }> {
   await delay(200);
   let items = [...OPERATOR_COMMAND_LEDGER];

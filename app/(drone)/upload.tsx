@@ -1,10 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import * as SQLite from 'expo-sqlite';
-import { initDatabase, openDatabase } from '../../src/offline/database';
-import { enqueuePayload, getReceipts, recoverInFlight } from '../../src/offline/upload-queue';
+import React, { useEffect, useState } from 'react';
 import { getDeviceId } from '../../src/constants/device';
-import { stableUuid } from '../../src/utils/uuid';
-import { LocalState } from '../../src/types/enums';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,6 +8,9 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { getOperatorSurveyTask, submitOperatorSurveyDataset } from '../../src/api/mock/surveys';
+import { uploadOperatorFile } from '../../src/api/operator-uploads';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -125,47 +123,11 @@ export default function DroneUploadScreen() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [note, setNote] = useState('');
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [dbError, setDbError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [onlineMode, setOnlineMode] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
-  const [outboxId, setOutboxId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let database: SQLite.SQLiteDatabase | null = null;
-    try {
-      database = openDatabase();
-    } catch {
-      setDbError('Không mở được kho dữ liệu cục bộ.');
-      return;
-    }
-    void initDatabase(database)
-      .then(() => {
-        if (!cancelled) {
-          setDb(database);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setDbError('Không mở được kho dữ liệu cục bộ.');
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const reloadQueue = useCallback(async () => {
-    if (!db) {
-      return;
-    }
-    try {
-      await recoverInFlight(db);
-    } catch {
-      setDbError('Không chuẩn hoá được các mục đang gửi dở.');
-    }
-  }, [db]);
+  const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [srtUri, setSrtUri] = useState<string | null>(null);
 
   useEffect(() => {
     if (params.code && UPLOAD_CONFIGS[params.code]) {
@@ -177,6 +139,8 @@ export default function DroneUploadScreen() {
       setSrtName(c.defaultSrtName);
       setSrtSize(c.defaultSrtSize);
       setSrtSha(c.srtSha256);
+      setVideoUri(null);
+      setSrtUri(null);
       setUploadStep('LOCAL');
       setUploadProgress(0);
     }
@@ -193,9 +157,10 @@ export default function DroneUploadScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         setVideoName(file.name);
-        const sizeMb = file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '192.4 MB';
+        setVideoUri(file.uri);
+        const sizeMb = file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '—';
         setVideoSize(sizeMb);
-        setVideoSha('7f8a3c...e4b1 - Toàn vẹn 100%');
+        setVideoSha('Chưa đối chiếu — sẽ tính SHA-256 khi nộp');
         setUploadStep('LOCAL');
       }
     } catch (err) {
@@ -214,9 +179,10 @@ export default function DroneUploadScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         setSrtName(file.name);
+        setSrtUri(file.uri);
         // Không bịa dung lượng/checksum khi tệp không cung cấp — hiển thị "—" cho tới khi có.
         setSrtSize(file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : '—');
-        setSrtSha('Chưa đối chiếu — cần SHA-256 cục bộ');
+        setSrtSha('Chưa đối chiếu — sẽ tính SHA-256 khi nộp');
         setUploadStep('LOCAL');
       }
     } catch (err) {
@@ -225,84 +191,115 @@ export default function DroneUploadScreen() {
   };
 
   /**
-   * Nộp bộ dữ liệu 4K RGB.
+   * Nộp bộ dữ liệu khảo sát — API-229.
    *
-   * Contract `submitDataset` (openapi.baseline.yaml#/paths/~1survey-tasks~1{taskId}~1datasets)
-   * yêu cầu path `taskId` (server ID, KHÔNG phải mã yêu cầu hiện trường), header `If-Match`
-   * (ETag) và body `DatasetSubmit` = { videoFileIds[], telemetryFileIds[], recordedAt, scope[] }.
-   * `fileId` chỉ có sau khi chạy xong luồng `POST /uploads` → part-urls → complete.
-   *
-   * Màn này đang chạy bằng dữ liệu mock, chưa có taskId/ETag/fileId thật, nên KHÔNG được bịa
-   * request lên server. Intent được ghi bền vững vào outbox ở trạng thái BLOCKED_CONTRACT
-   * cho tới khi có đủ dữ liệu hợp lệ — không giả ACK, không giả tiến độ.
+   * `POST /survey-tasks/{taskId}/datasets` với `Idempotency-Key` + `If-Match`.
+   * `fileId` chỉ tồn tại sau luồng API-233 → API-236 → PUT part → API-235.
+   * Không upload tệp mẫu/demo: bắt buộc chọn tệp thật từ thẻ nhớ.
    */
   const handleStartSubmitDataset = async () => {
-    if (!db) {
-      setDbError('Chưa mở được kho dữ liệu cục bộ, chưa thể xếp hàng nộp bộ dữ liệu.');
+    if (!onlineMode) {
+      setSubmitError('Cần kết nối mạng để nộp bộ dữ liệu khảo sát.');
+      return;
+    }
+    if (!videoUri) {
+      setSubmitError('Chưa chọn tệp video 4K RGB từ thẻ nhớ.');
+      return;
+    }
+    if (!srtUri) {
+      setSubmitError('Chưa chọn tệp phụ đề GPS (SRT) đi kèm.');
       return;
     }
 
     setSubmitting(true);
     setUploadProgress(0);
-    setStatusMsg('Đang lưu bộ dữ liệu vào hàng đợi ngoại tuyến…');
-    setDbError(null);
+    setSubmitError(null);
+    setStatusMsg('Đang xin phiên tải lên từ máy chủ…');
+    const keyScope = `drone:dataset:${selectedCode}`;
+    let failed = false;
 
     try {
       setUploadStep('QUEUED');
 
-      const blockedReason =
-        'Thiếu taskId/ETag/fileId từ máy chủ — chưa thể gọi submitDataset theo contract.';
+      const fresh = await getOperatorSurveyTask(selectedCode);
+      const { task } = fresh.data;
 
-      const enqueuedId = await enqueuePayload(
-        db,
-        'submit_dataset',
+      const video = await uploadOperatorFile(
         {
-          // Intent nội tuyến. KHÔNG gửi lên API cho tới khi đủ taskId + expectedVersion + fileIds + scope.
-          surveyTaskCode: selectedCode,
-          videoName: videoName,
-          srtName: srtName,
-          recordedAt: new Date().toISOString(),
-          capturedAt: new Date().toISOString(),
-          deviceId: getDeviceId(),
-          videoFileIds: [],
-          telemetryFileIds: [],
-          scope: [],
-          blockedReason,
-          note,
+          uri: videoUri,
+          fileName: videoName,
+          mediaType: 'video/mp4',
+          purpose: 'SURVEY_VIDEO',
+          projectId: task.projectId,
+          targetId: task.id,
+          commandKey: `${keyScope}:video`,
         },
-        {
-          // Chỉ có mã yêu cầu hiện trường, chưa phải taskId server cùng ETag.
-          taskId: null,
-          expectedVersion: null,
-          idempotencyKey: stableUuid(`submit-dataset:${selectedCode}:${videoName}:${srtName}`),
-          initialStatus: LocalState.BLOCKED_CONTRACT,
+        (percent) => {
+          setUploadStep('UPLOADING');
+          setUploadProgress(Math.min(99, percent));
+          setStatusMsg(`Đang tải tệp video 4K RGB lên máy chủ: ${Math.min(99, percent)}%`);
         },
       );
-      setOutboxId(enqueuedId);
+      setVideoSha(`${video.checksumSha256.slice(0, 12)}…${video.checksumSha256.slice(-4)} — đã đối chiếu`);
 
-      await reloadQueue();
+      const srt = await uploadOperatorFile({
+        uri: srtUri,
+        fileName: srtName,
+        mediaType: 'application/x-subrip',
+        purpose: 'TELEMETRY',
+        projectId: task.projectId,
+        targetId: task.id,
+        commandKey: `${keyScope}:telemetry`,
+      });
+      setSrtSha(`${srt.checksumSha256.slice(0, 12)}…${srt.checksumSha256.slice(-4)} — đã đối chiếu`);
 
-      const receipts = await getReceipts(db, enqueuedId);
-      const acked = receipts.some((r) => r.localState === LocalState.ACKED);
+      setStatusMsg('Đang nộp bộ dữ liệu kèm phạm vi khảo sát…');
+      await submitOperatorSurveyDataset(task.id, {
+        videoFileIds: [video.fileId],
+        telemetryFileIds: [srt.fileId],
+        recordedAt: new Date().toISOString(),
+        deviceId: getDeviceId(),
+        scope: task.scope,
+        pairs: [{ videoFileId: video.fileId, telemetryFileId: srt.fileId, timeOffsetMilliseconds: 0 }],
+        idempotencyKey: getOrCreateCommandKey(keyScope),
+        ifMatch: fresh.data.etag,
+      });
 
-      if (acked) {
-        setUploadStep('SERVER_CONFIRMED');
-        setStatusMsg('Máy chủ đã xác nhận toàn vẹn bộ dữ liệu.');
-      } else {
-        setUploadStep('QUEUED');
-        setStatusMsg(
-          'Đã lưu cục bộ và chờ trong hàng đợi. Cần nạp tệp qua phiên tải lên và có ETag nhiệm vụ trước khi nộp lên máy chủ.',
-        );
-      }
+      clearCommandKey(keyScope);
+      setUploadStep('SERVER_CONFIRMED');
+      setUploadProgress(100);
+      setStatusMsg(
+        'Máy chủ đã nhận bộ dữ liệu. Tệp đang chờ xác minh toàn vẹn — chưa được coi là VERIFIED.',
+      );
     } catch (error) {
-      setUploadStep('QUEUED');
-      setDbError(
-        error instanceof Error
-          ? `Lỗi khi nộp: ${error.message}`
-          : 'Lỗi khi nộp bộ dữ liệu, đã giữ trong hàng đợi.',
-      );
+      failed = true;
+      const response = (
+        error as { response?: { status?: number; data?: { code?: string } } } | undefined
+      )?.response;
+      const code = response?.data?.code;
+
+      if (response?.status === 401) {
+        router.replace('/(auth)');
+        return;
+      }
+      if (response?.status === 503 || code === 'upload_storage_unavailable') {
+        setSubmitError('Máy chủ lưu trữ đang bận. Vui lòng thử lại sau ít phút.');
+      } else if (response?.status === 409 || response?.status === 412) {
+        setSubmitError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại nhiệm vụ rồi nộp lại.');
+      } else if (code === 'validation_error' || code === 'survey_validation_failed') {
+        setSubmitError('Bộ dữ liệu chưa hợp lệ. Kiểm tra lại tệp video và tệp GPS.');
+      } else {
+        setSubmitError('Không nộp được bộ dữ liệu. Vui lòng kiểm tra kết nối rồi thử lại.');
+      }
+      if (response?.status !== 503) {
+        clearCommandKey(keyScope);
+      }
     } finally {
       setSubmitting(false);
+      if (failed) {
+        setUploadStep('LOCAL');
+        setUploadProgress(0);
+      }
     }
   };
 
@@ -362,6 +359,8 @@ export default function DroneUploadScreen() {
                   setSrtName(item.defaultSrtName);
                   setSrtSize(item.defaultSrtSize);
                   setSrtSha(item.srtSha256);
+                  setVideoUri(null);
+                  setSrtUri(null);
                   setUploadStep('LOCAL');
                   setUploadProgress(0);
                 }}
@@ -462,8 +461,8 @@ export default function DroneUploadScreen() {
                 }
               />
             </View>
-            <Text style={[typography.caption, styles.stepLabel]}>QUEUED</Text>
-            <Text style={styles.stepSubLabel}>SQLite Outbox</Text>
+            <Text style={[typography.caption, styles.stepLabel]}>CHUẨN BỊ</Text>
+            <Text style={styles.stepSubLabel}>Kiểm tra tệp</Text>
           </View>
 
           <View
@@ -535,7 +534,7 @@ export default function DroneUploadScreen() {
               <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
             </View>
             <Text style={[typography.caption, styles.progressText]}>
-              Đang đẩy tệp 4K RGB lên máy chủ: {uploadProgress}% (Tốc độ ~8.5 MB/s)
+              Đang đẩy tệp 4K RGB lên máy chủ: {uploadProgress}%
             </Text>
           </View>
         )}
@@ -704,7 +703,7 @@ export default function DroneUploadScreen() {
           >
             <View style={[styles.networkDot, { backgroundColor: colors.warning }]} />
             <Text style={[styles.toggleText, !onlineMode && styles.toggleTextActive]}>
-              SQLite Outbox
+              Ngoại tuyến
             </Text>
           </Pressable>
         </View>
@@ -730,7 +729,7 @@ export default function DroneUploadScreen() {
               uploadStep === 'UPLOADING'
                 ? `Đang đẩy dữ liệu (${uploadProgress}%)...`
                 : uploadStep === 'QUEUED'
-                ? 'Đang chuẩn bị outbox...'
+                ? 'Đang chuẩn bị tệp...'
                 : `Nộp bộ dữ liệu 4K RGB (${config.code})`
             }
             loading={submitting}
@@ -738,7 +737,7 @@ export default function DroneUploadScreen() {
             onPress={handleStartSubmitDataset}
           />
         )}
-        {dbError && <Text style={[typography.caption, styles.statusError]}>{dbError}</Text>}
+        {submitError && <Text style={[typography.caption, styles.statusError]}>{submitError}</Text>}
         {statusMsg && <Text style={[typography.caption, styles.statusMsg]}>{statusMsg}</Text>}
       </View>
     </SafeAreaScreen>

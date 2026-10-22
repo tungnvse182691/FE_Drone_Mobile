@@ -7,10 +7,8 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { initDatabase, openDatabase } from '../../src/offline/database';
-import { enqueuePayload } from '../../src/offline/upload-queue';
-import { stableUuid } from '../../src/utils/uuid';
-import { LocalState } from '../../src/types/enums';
+import { acceptOperatorSurveyTask, getOperatorSurveyTask } from '../../src/api/mock/surveys';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -220,22 +218,37 @@ export default function DroneRequestDetailScreen() {
   };
 
   /**
- * Nhận nhiệm vụ khảo sát.
- *
- * Contract `acceptSurveyTask` (openapi.baseline.yaml#/paths/~1survey-tasks~1{taskId}~1accept):
- * POST `/survey-tasks/{taskId}/accept`, header `Idempotency-Key` + `If-Match` (ETag), 200 → SurveyTask.
- *
- * Màn này chỉ có mã yêu cầu hiện trường (mock), KHÔNG có taskId server và ETag, nên không thể
- * gọi đúng contract. Intent được ghi bền vững vào outbox ở BLOCKED_CONTRACT; tuyệt đối không
- * dùng setTimeout để chuyển UI sang "đã tiếp nhận" như thể máy chủ đã trả lời.
- */
+   * Nhận nhiệm vụ khảo sát — API-227.
+   *
+   * `POST /survey-tasks/{taskId}/accept` với `Idempotency-Key` + `If-Match` (ETag) → 200
+   * `SurveyTaskV2ResponseDto` + ETag mới. ETag phải đọc lại ngay trước khi gửi để tránh 412.
+   */
   const handleAcceptTask = async () => {
     setAccepting(true);
+    setAcceptError(null);
+    const keyScope = `drone:accept:${selectedCode}`;
     try {
-      await recordAcceptIntent(selectedCode, 'accept_survey_task');
+      const fresh = await getOperatorSurveyTask(selectedCode);
+      await acceptOperatorSurveyTask(fresh.data.task.id, {
+        idempotencyKey: getOrCreateCommandKey(keyScope),
+        ifMatch: fresh.data.etag,
+      });
+      clearCommandKey(keyScope);
       setIsAccepted(true);
-    } catch {
-      setAcceptError('Không lưu được ý định nhận nhiệm vụ cục bộ.');
+    } catch (error) {
+      clearCommandKey(keyScope);
+      const response = (
+        error as { response?: { status?: number; data?: { code?: string } } } | undefined
+      )?.response;
+      if (response?.status === 412 || response?.data?.code === 'concurrency_conflict') {
+        setAcceptError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại để xem phiên bản mới nhất.');
+      } else if (response?.status === 401) {
+        router.replace('/(auth)');
+      } else if (response?.data?.code === 'survey_invalid_state_transition') {
+        setAcceptError('Nhiệm vụ không còn ở trạng thái chờ tiếp nhận.');
+      } else {
+        setAcceptError('Không nhận được nhiệm vụ. Vui lòng kiểm tra kết nối rồi thử lại.');
+      }
     } finally {
       setAccepting(false);
     }
@@ -251,27 +264,6 @@ export default function DroneRequestDetailScreen() {
 
   const handleOpenWorkPackage = () => {
     router.push(`${DRONE_WORK_PACKAGE}?code=${encodeURIComponent(selectedCode)}`);
-  };
-
-  /** Ghi intent vào `offline_outbox`; chưa đủ taskId/ETag nên giữ BLOCKED_CONTRACT. */
-  const recordAcceptIntent = async (
-    code: string,
-    kind: 'accept_survey_task',
-    extra: Record<string, unknown> = {},
-  ): Promise<void> => {
-    const database = openDatabase();
-    await initDatabase(database);
-    await enqueuePayload(
-      database,
-      kind,
-      { surveyTaskCode: code, capturedAt: new Date().toISOString(), ...extra },
-      {
-        taskId: null,
-        expectedVersion: null,
-        idempotencyKey: stableUuid(`${kind}:${code}`),
-        initialStatus: LocalState.BLOCKED_CONTRACT,
-      },
-    );
   };
 
   const handleShareTask = async () => {
