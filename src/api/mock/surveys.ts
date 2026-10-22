@@ -377,7 +377,6 @@ interface OperatorTaskFixture {
   segmentSetId: string;
   targetBand: string;
   segmentIds: string[];
-  scopeVersion: string;
   accessPointName: string;
   terrain: string;
   longitude: number;
@@ -413,7 +412,6 @@ const OPERATOR_TASK_FIXTURES: OperatorTaskFixture[] = [
       '20000000-0000-4000-8000-000000000002',
       '20000000-0000-4000-8000-000000000003',
     ],
-    scopeVersion: 'rv-2026.09.27-3',
     accessPointName: 'AP-Vĩnh Lộc B-Đầu tuyến',
     terrain: 'Bãi đất trống cạnh lề đường, cách mặt đường 25m',
     longitude: 106.698,
@@ -437,7 +435,6 @@ const OPERATOR_TASK_FIXTURES: OperatorTaskFixture[] = [
     segmentSetId: OPERATOR_SEGMENT_SET_ID,
     targetBand: '4K RGB + DSM',
     segmentIds: ['20000000-0000-4000-8000-000000000004'],
-    scopeVersion: 'rv-2026.09.27-3',
     accessPointName: 'AP-Cầu Bà Lát-Nhánh hạ nguồn',
     terrain: 'Khoảng trống trên bờ cầu phía hạ nguồn, cách lan can 15m',
     longitude: 106.7001,
@@ -461,7 +458,6 @@ const OPERATOR_TASK_FIXTURES: OperatorTaskFixture[] = [
     segmentSetId: OPERATOR_SEGMENT_SET_ID,
     targetBand: '4K RGB + DSM',
     segmentIds: ['20000000-0000-4000-8000-000000000005'],
-    scopeVersion: 'rv-2026.09.27-3',
     accessPointName: 'AP-Tân Kiên-Đầu hướng',
     terrain: 'Bãi đất cạnh đường giao nhánh, cách mặt đường 20m',
     longitude: 106.705,

@@ -17,7 +17,7 @@ export interface User {
 
 export interface FastTrackPolicyVersion {
   id: string;
-  version_code: string;           // FTP-2026-V1
+  version_code: string;           // mã phiên bản policy (do server cấp)
   max_area_m2: number;            // 1.0 m2
   max_depth_cm: number;           // 5.0 cm
   max_length_m: number;           // 2.0 m

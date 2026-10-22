@@ -1,11 +1,13 @@
-﻿import type { FastTrackPolicyVersion } from '../../types/domain';
+import type { FastTrackPolicyVersion } from '../../types/domain';
 import type { DefectTypeCode } from '../../constants/defect-types';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
 import { TaskMode } from '../../types/enums';
 import { getReporterEvidenceSeeds } from './reporter';
 import { throwMockApiError } from './errors';
+import { fakeRowVersion, fakeSha256 } from './wire-ids';
 
-export const FAST_TRACK_POLICY_ID = 'FTP-2026-V1';
+/** Guid của policy revision trên server (mock cố định) — KHÔNG phải định danh tự chế. */
+export const FAST_TRACK_POLICY_ID = '9f2c4a1e-6b3d-4f7a-8c21-5d0e7b9a4c36';
 
 export const FAST_TRACK_POLICY: FastTrackPolicyVersion = {
   id: FAST_TRACK_POLICY_ID,
@@ -375,7 +377,7 @@ export async function fetchRepairEligibility(
     itemId: session.task_id,
     bindingId: `${session.task_id}:${session.defect_type_code}`,
     policyRevisionId: FAST_TRACK_POLICY_ID,
-    policyContentHash: `sha256:${FAST_TRACK_POLICY_ID}`,
+    policyContentHash: fakeSha256(FAST_TRACK_POLICY_ID),
     policyState: 'ACTIVE',
     rules: ELIGIBILITY_RULES,
     assessmentId: null,
@@ -386,7 +388,7 @@ export async function fetchRepairEligibility(
     warrantySources: [],
     handoverSources: [],
     missingReasons: uniqueReasons,
-    version: FAST_TRACK_POLICY_ID,
+    version: fakeRowVersion('fast-track-policy:active'),
     coverageMapping: null,
   };
 }
