@@ -545,7 +545,7 @@ function seedOperatorLedger(): void {
     state: 'ACKED',
     httpStatus: 200,
     resultCode: null,
-    message: 'Máy chủ đã nhận; tệp đang chờ xác minh (chưa VERIFIED).',
+    message: 'Máy chủ đã nhận; tệp đang chờ xác minh toàn vẹn.',
     createdAt: '2026-09-26T22:05:00Z',
   });
 }
@@ -1053,7 +1053,7 @@ export async function submitOperatorSurveyDataset(
     state: 'ACKED',
     httpStatus: 201,
     resultCode: null,
-    message: 'Máy chủ đã nhận bộ dữ liệu; đang chờ xác minh toàn vẹn (chưa VERIFIED).',
+    message: 'Máy chủ đã nhận bộ dữ liệu; đang chờ xác minh toàn vẹn.',
   });
   return { data: result };
 }
