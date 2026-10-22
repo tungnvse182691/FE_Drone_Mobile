@@ -16,7 +16,8 @@ export interface MockApiErrorEnvelope {
   code: string;
   message: string;
   details: MockApiErrorDetail[];
-  traceId: string;
+  correlationId: string;
+  errors?: Record<string, string[]>;
   retryable: boolean;
 }
 
@@ -62,6 +63,7 @@ const MOCK_ERROR_STATUS: Record<string, number> = {
   upload_validation_failed: 422,
   survey_validation_failed: 422,
   precondition_required: 428,
+  idempotency_key_required: 428,
   internal_error: 500,
   dependency_unavailable: 503,
   storage_unavailable: 503,
@@ -77,21 +79,40 @@ export function businessErrorStatus(code: string): number {
 export interface MockApiErrorOptions {
   message?: string;
   details?: MockApiErrorDetail[];
-  traceId?: string;
+  correlationId?: string;
+  errors?: Record<string, string[]>;
   retryable?: boolean;
 }
 
+/** Gom `details` có `field` thành `errors` đúng shape ProblemDetails của BE. */
+function fieldErrorsFromDetails(
+  details: MockApiErrorDetail[],
+): Record<string, string[]> | undefined {
+  const grouped: Record<string, string[]> = {};
+  for (const detail of details) {
+    if (!detail.field) {
+      continue;
+    }
+    const message = detail.message?.trim() || 'Giá trị không hợp lệ.';
+    grouped[detail.field] = [...(grouped[detail.field] ?? []), message];
+  }
+  return Object.keys(grouped).length > 0 ? grouped : undefined;
+}
+
 /**
- * Dựng envelope lỗi đủ 5 trường. `message` mặc định lấy từ `messageFor` của
+ * Dựng envelope lỗi đủ trường. `message` mặc định lấy từ `messageFor` của
  * `errorCatalog` để mock và UI không lệch câu chữ.
  */
 export function buildMockApiError(code: string, options: MockApiErrorOptions = {}): MockApiErrorEnvelope {
   const status = businessErrorStatus(code);
+  const details = options.details ?? [];
+  const errors = options.errors ?? fieldErrorsFromDetails(details);
   return {
     code,
     message: options.message ?? messageFor(code),
-    details: options.details ?? [],
-    traceId: options.traceId ?? uuidv4(),
+    details,
+    correlationId: options.correlationId ?? uuidv4(),
+    ...(errors ? { errors } : {}),
     retryable: options.retryable ?? RETRYABLE_STATUSES.has(status),
   };
 }

@@ -76,7 +76,8 @@ export interface ApiErrorEnvelope {
   code: string;
   message: string;
   details?: Array<{ field?: string; code?: string; message?: string }>;
-  traceId?: string;
+  correlationId?: string;
+  errors?: Record<string, string[]>;
   retryable?: boolean;
 }
 
