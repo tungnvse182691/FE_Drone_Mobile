@@ -564,8 +564,9 @@ function normalizeMediaType(raw: string): string {
 function requireUploadKey(idempotencyKey: string | undefined): string {
   const key = idempotencyKey?.trim();
   if (!key) {
-    throwMockApiError('idempotency_key_required', {
+    throwMockApiError('validation_error', {
       message: 'Thiếu Idempotency-Key cho lệnh tải ảnh.',
+      status: 428,
     });
   }
   return key;

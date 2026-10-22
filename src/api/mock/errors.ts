@@ -88,6 +88,8 @@ export interface MockApiErrorOptions {
   correlationId?: string;
   errors?: Record<string, string[]>;
   retryable?: boolean;
+  /** Ghi đè HTTP status cho các operation dùng chung mã lỗi nhưng khác status (vd: thiếu key upload = 428). */
+  status?: number;
 }
 
 /** Gom `details` có `field` thành `errors` đúng shape ProblemDetails của BE. */
@@ -110,7 +112,7 @@ function fieldErrorsFromDetails(
  * `errorCatalog` để mock và UI không lệch câu chữ.
  */
 export function buildMockApiError(code: string, options: MockApiErrorOptions = {}): MockApiErrorEnvelope {
-  const status = businessErrorStatus(code);
+  const status = options.status ?? businessErrorStatus(code);
   const details = options.details ?? [];
   const errors = options.errors ?? fieldErrorsFromDetails(details);
   return {
@@ -128,7 +130,7 @@ export function throwMockApiError(code: string, options: MockApiErrorOptions = {
   const envelope = buildMockApiError(code, options);
   throw {
     response: {
-      status: businessErrorStatus(code),
+      status: options.status ?? businessErrorStatus(code),
       data: envelope,
     },
   };

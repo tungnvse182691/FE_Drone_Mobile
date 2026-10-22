@@ -80,6 +80,7 @@ function requireKey(key: string | undefined): string {
   if (!key || key.trim().length === 0) {
     throwMockApiError('validation_error', {
       message: 'Thiếu Idempotency-Key cho lệnh tải lên.',
+      status: 428,
     });
   }
   return key.trim();
@@ -97,6 +98,7 @@ function assertUploadIfMatch(state: MockUploadState, ifMatch: string | undefined
   if (!ifMatch || ifMatch.trim().length === 0) {
     throwMockApiError('validation_error', {
       message: 'Thiếu If-Match cho lệnh hoàn tất tải lên.',
+      status: 428,
     });
   }
   if (ifMatch.trim() !== uploadETag(state)) {
