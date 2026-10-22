@@ -784,11 +784,20 @@ export default function CrewWoDetailScreen() {
           </Text>
         </View>
       ) : fieldTask?.status === 'SUBMITTED' ? (
-        <View style={styles.taskStatusNote}>
-          <MaterialIcons name="hourglass-bottom" size={16} color={colors.warning} />
-          <Text style={[typography.caption, styles.taskStatusNoteText]}>
-            Đã gửi kết quả hiện trường, đang chờ PM xem xét.
-          </Text>
+        <View style={styles.taskStatusBlock}>
+          <View style={[styles.taskStatusNote, styles.taskStatusNoteInline]}>
+            <MaterialIcons name="hourglass-bottom" size={16} color={colors.warning} />
+            <Text style={[typography.caption, styles.taskStatusNoteText]}>
+              Đã gửi kết quả hiện trường, đang chờ PM xem xét.
+            </Text>
+          </View>
+          <Button
+            variant="secondary"
+            title="Xem hồ sơ & gửi bổ sung"
+            onPress={() =>
+              router.push({ pathname: '/(crew)/field-review', params: { id: task.id } })
+            }
+          />
         </View>
       ) : fieldTask?.status === 'REJECTED' ? (
         <View style={styles.taskStatusNote}>
@@ -1182,6 +1191,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surfaceAlt,
+  },
+  taskStatusBlock: {
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  taskStatusNoteInline: {
+    marginBottom: 0,
   },
   taskStatusNoteText: {
     flex: 1,

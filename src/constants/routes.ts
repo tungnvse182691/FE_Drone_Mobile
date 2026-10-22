@@ -34,6 +34,7 @@ export const CREW_HOME = '/(crew)/home';
 export const CREW_TASKS = '/(crew)/tasks';
 export const CREW_WO_DETAIL = '/(crew)/wo-detail';
 export const CREW_REPAIR_CORRECTION = '/(crew)/repair-correction';
+export const CREW_FIELD_REVIEW = '/(crew)/field-review';
 export const CREW_RECEIVING = '/(crew)/receiving';
 
 export const DRONE_HOME = '/(drone)/home';
