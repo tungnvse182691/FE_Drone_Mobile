@@ -20,6 +20,7 @@ import {
 } from '../../src/api/mock/auth';
 import { useAuthStore } from '../../src/store/auth';
 import { ROLE_HOMES } from '../../src/constants/routes';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { uuidv4 } from '../../src/utils/uuid';
 
 /** BE trả `code` top-level; mock ném `{ response: { data: { code, message } } }`. */
@@ -98,7 +99,14 @@ export default function ForceChangePasswordScreen() {
           logout();
           return;
         }
-        await apiChangePassword(token, oldPassword, newPassword);
+        const changeScope = `auth:change-password:${user.id}`;
+        await apiChangePassword(
+          token,
+          oldPassword,
+          newPassword,
+          getOrCreateCommandKey(changeScope),
+        );
+        clearCommandKey(changeScope);
       }
       const updatedUser = {
         ...user,

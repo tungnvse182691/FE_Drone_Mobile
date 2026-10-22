@@ -9,6 +9,11 @@ import { MOCK_OTP, registerReporterEmail, submitReport, verifyReporterIntent } f
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_TRACK } from '../../src/constants/routes';
+import {
+  clearCommandKey,
+  getOrCreateCommandKey,
+  newCommandKey,
+} from '../../src/api/idempotency';
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
@@ -73,9 +78,21 @@ export default function OtpVerifyScreen() {
 
     setLoading(true);
     setError(null);
+    // Key bám theo (intent, mã đang nhập): retry cùng mã → replay; đổi mã → lệnh mới.
+    const verifyScope = `reporter:verify:${activeIntentId}:${finalCode}`;
+    const submitScope = `reporter:submit:${activeIntentId}`;
     try {
-      await verifyReporterIntent(activeIntentId, finalCode, `verify:${activeIntentId}`);
-      const { report } = await submitReport(pendingReport, `submit:${activeIntentId}`);
+      await verifyReporterIntent(
+        activeIntentId,
+        finalCode,
+        getOrCreateCommandKey(verifyScope),
+      );
+      const { report } = await submitReport(
+        pendingReport,
+        getOrCreateCommandKey(submitScope),
+      );
+      clearCommandKey(verifyScope);
+      clearCommandKey(submitScope);
       markVerified(report.reporter_email);
       addTrackingCode(report.tracking_code);
       clearPendingReport();
@@ -92,9 +109,11 @@ export default function OtpVerifyScreen() {
     setResending(true);
     setError(null);
     try {
+      // Gửi lại mã là lệnh CỐ Ý lặp lại → cấp key mới ngay tại thời điểm bấm.
+      const resendScope = `reporter:resend:${email}`;
       const next = await registerReporterEmail(
         email,
-        `register:${email}:${Date.now()}`,
+        newCommandKey(resendScope),
       );
       setActiveIntentId(next.intentId);
       router.setParams({ intentId: next.intentId, email: next.email });

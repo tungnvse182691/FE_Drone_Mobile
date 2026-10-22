@@ -14,7 +14,7 @@ import {
 } from '../../src/api/mock/reporter';
 import type { ReporterReport } from '../../src/types/domain';
 import { useUploadsStore } from '../../src/store/uploads';
-import { uuidv4 } from '../../src/utils/uuid';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -110,13 +110,15 @@ export default function ReporterReportSupplementScreen() {
     }
     setError(null);
     setPhase('submitting');
+    const supplementScope = `reporter:supplement:${report.tracking_code}:${expectedVersion}`;
     try {
       const result = await submitReportSupplement(
         report.tracking_code,
         { description, photo_uris: verifiedPhotoUris },
         expectedVersion,
-        uuidv4(),
+        getOrCreateCommandKey(supplementScope),
       );
+      clearCommandKey(supplementScope);
       setReport(result.report);
       setExpectedVersion(result.version);
       setLatestVersion(null);

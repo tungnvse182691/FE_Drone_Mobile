@@ -31,6 +31,8 @@ import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/dat
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { AUTH_OTP_VERIFY, REPORTER_TRACK } from '../../src/constants/routes';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
+import { uuidv4 } from '../../src/utils/uuid';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -78,6 +80,18 @@ export default function ReporterReportScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // Một bản nháp = một phiên lệnh. Key idempotent bám theo draftId, không bám theo Date.now().
+  const draftIdRef = useRef<string | null>(null);
+  const ensureDraftId = () => {
+    if (!draftIdRef.current) {
+      draftIdRef.current = uuidv4();
+    }
+    return draftIdRef.current;
+  };
+  const resetDraftId = () => {
+    draftIdRef.current = null;
+  };
 
   const user = useAuthStore((state) => state.user);
   const emailPrefill = useReporterStore((state) => state.email);
@@ -197,7 +211,7 @@ export default function ReporterReportScreen() {
       const db = openDatabase();
       await initDatabase(db);
       const now = new Date().toISOString();
-      await upsertOffline(db, 'local_draft', `defect-report-${Date.now()}`, {
+      await upsertOffline(db, 'local_draft', `defect-report-${ensureDraftId()}`, {
         kind: 'defect_report',
         payload: JSON.stringify(payload),
         created_at: now,
@@ -236,13 +250,14 @@ export default function ReporterReportScreen() {
       (!!user?.phone_or_email && user.phone_or_email.toLowerCase() === trimmedEmail);
 
     setSubmitting(true);
+    const draftId = ensureDraftId();
     try {
       await saveDraft(payload);
       if (isAlreadyVerified) {
-        const { report } = await submitReport(
-          payload,
-          `submit:${trimmedEmail}:${Date.now()}`,
-        );
+        const submitScope = `reporter:submit:${draftId}`;
+        const { report } = await submitReport(payload, getOrCreateCommandKey(submitScope));
+        clearCommandKey(submitScope);
+        resetDraftId();
         addTrackingCode(report.tracking_code);
         clearPendingReport();
         router.push({
@@ -254,10 +269,12 @@ export default function ReporterReportScreen() {
 
       setEmailPrefill(payload.reporter_email);
       setPendingReport(payload);
+      const registerScope = `reporter:register:${draftId}`;
       const intent = await registerReporterEmail(
         payload.reporter_email,
-        `register:${payload.reporter_email}:${Date.now()}`,
+        getOrCreateCommandKey(registerScope),
       );
+      clearCommandKey(registerScope);
       router.push({
         pathname: AUTH_OTP_VERIFY,
         params: { intentId: intent.intentId, email: intent.email },
