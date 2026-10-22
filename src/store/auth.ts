@@ -9,7 +9,7 @@ import {
   type AuthActorWire,
   type TokenPair,
 } from '../api/client';
-import { toInternalRole } from '../types/roleAdapter';
+import { mapProfileRole } from '../types/roleAdapter';
 
 export type AuthStatus =
   | 'SIGNED_OUT'
@@ -83,7 +83,7 @@ export function buildUserFromActor(
   fallbackEmail: string,
   mustChangePassword: boolean,
 ): User | null {
-  const role_code = toInternalRole(actor.role);
+  const role_code = mapProfileRole(actor.role);
   if (!role_code) {
     return null;
   }
@@ -113,7 +113,7 @@ export const useAuthStore = create<AuthState>()(
         const accessToken = pair?.accessToken ?? user.token ?? null;
         const refreshToken = pair?.refreshToken ?? user.refresh_token ?? null;
         const roleCode =
-          (pair?.user ? toInternalRole(pair.user.role) : null) ?? user.role_code;
+          (pair?.user ? mapProfileRole(pair.user.role) : null) ?? user.role_code;
         const mustChangePassword = pair?.mustChangePassword ?? user.must_change_password;
         const nextUser: User = {
           ...user,
@@ -144,7 +144,7 @@ export const useAuthStore = create<AuthState>()(
       setToken: (token) => set({ token }),
 
       applyTokenPair: (pair) => {
-        const wireRole = pair.user ? toInternalRole(pair.user.role) : null;
+        const wireRole = pair.user ? mapProfileRole(pair.user.role) : null;
         set((state) => {
           const nextRole = wireRole ?? state.role;
           const nextUser = state.user
