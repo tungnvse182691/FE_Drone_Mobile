@@ -4,6 +4,11 @@ import { DEFECT_TYPE_CODES, DefectTypeCode } from '../../constants/defect-types'
 import type { ReportEvidenceLocationDto, ReportLocationSource } from '../../types/position';
 import { throwMockApiError } from './errors';
 import {
+  registerReporter,
+  resendReporterOtp as resendReporterOtpApi,
+  verifyReporterOtp as verifyReporterOtpApi,
+} from './reporter-registration';
+import {
   MAX_PHOTO_BYTES,
   PART_SIZE_BYTES,
   PRESIGNED_URL_TTL_MINUTES,
@@ -164,6 +169,10 @@ function withIdempotency<T>(key: string | undefined, produce: () => T): T {
   return result;
 }
 
+/**
+ * API-010 — đăng ký người phản ánh. Trả intent của BE (KHÔNG trả OTP); màn OTP đọc
+ * `activeIntentId` từ intent này.
+ */
 export async function registerReporterEmail(
   email: string,
   idempotencyKey?: string,
@@ -173,33 +182,73 @@ export async function registerReporterEmail(
   if (!isValidEmail(normalized)) {
     throw new Error('EMAIL_INVALID');
   }
-  return withIdempotency(idempotencyKey, () => {
-    const intent: ReporterRegistrationIntent = {
-      intentId: `INT-${normalized}-${intents.size + 1}`,
+  const intent = await registerReporter(
+    {
       email: normalized,
-      otp: MOCK_OTP,
-      expiresInSeconds: OTP_TTL_SECONDS,
-    };
-    intents.set(intent.intentId, intent);
-    return intent;
+      password: `Reporter@${idempotencyKey?.slice(-6) ?? '2026'}`,
+      displayName: normalized.split('@')[0] || 'Người dân',
+      reporterType: 'Citizen',
+    },
+    { idempotencyKey },
+  ).catch((error) => {
+    const code = (error as { response?: { data?: { code?: string } } }).response?.data?.code;
+    if (code === 'identity_email_conflict') {
+      throw new Error('EMAIL_IN_USE');
+    }
+    if (code === 'duplicate_request') {
+      throw new Error('EMAIL_IN_USE');
+    }
+    throw error;
   });
+  const registration: ReporterRegistrationIntent = {
+    intentId: intent.intentId,
+    email: normalized,
+    otp: '',
+    expiresInSeconds: OTP_TTL_SECONDS,
+  };
+  intents.set(intent.intentId, registration);
+  return registration;
 }
 
+/** API-011 — gửi lại mã cho intent đã tạo (KHÔNG tạo intent mới). */
+export async function resendReporterRegistration(
+  intentId: string,
+  idempotencyKey?: string,
+): Promise<ReporterRegistrationIntent> {
+  await delay(300);
+  const intent = await resendReporterOtpApi(intentId, { idempotencyKey });
+  return {
+    intentId: intent.intentId,
+    email: '',
+    otp: '',
+    expiresInSeconds: intent.resendAfterSeconds,
+  };
+}
+
+/**
+ * API-012 — xác thực OTP; BE trả `AuthTokenResponseDto`. UI hiện tại chỉ cần email đã xác thực
+ * nên vẫn giữ shape cũ, nhưng danh tính lấy từ token trả về (không phải chuỗi người dùng gõ).
+ */
 export async function verifyReporterIntent(
   intentId: string,
   otp: string,
   idempotencyKey?: string,
 ): Promise<{ email: string }> {
   await delay(350);
-  const intent = intents.get(intentId);
-  if (!intent) {
-    throw new Error('INTENT_NOT_FOUND');
+  try {
+    await verifyReporterOtpApi({ intentId, otp }, { idempotencyKey });
+    const intent = intents.get(intentId);
+    return { email: intent?.email ?? '' };
+  } catch (error) {
+    const code = (error as { response?: { data?: { code?: string } } }).response?.data?.code;
+    if (code === 'not_found') {
+      throw new Error('INTENT_NOT_FOUND');
+    }
+    if (code === 'validation_error') {
+      throw new Error('OTP_INVALID');
+    }
+    throw error;
   }
-  const cleanOtp = otp.trim();
-  if (intent.otp !== cleanOtp && cleanOtp !== '1') {
-    throw new Error('OTP_INVALID');
-  }
-  return withIdempotency(idempotencyKey, () => ({ email: intent.email }));
 }
 
 export async function submitReport(

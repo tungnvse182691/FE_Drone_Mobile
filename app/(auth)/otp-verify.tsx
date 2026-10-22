@@ -5,10 +5,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { MOCK_OTP, registerReporterEmail, submitReport, verifyReporterIntent } from '../../src/api/mock/reporter';
+import { MOCK_OTP, resendReporterRegistration, submitReport, verifyReporterIntent } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { REPORTER_TRACK } from '../../src/constants/routes';
+import { REPORTER_HOME, REPORTER_TRACK } from '../../src/constants/routes';
 import {
   clearCommandKey,
   getOrCreateCommandKey,
@@ -67,10 +67,6 @@ export default function OtpVerifyScreen() {
       setError(`Vui lòng nhập đủ ${OTP_LENGTH} ký tự mã xác thực (hoặc nhập 1).`);
       return;
     }
-    if (!pendingReport) {
-      setError('Không tìm thấy nội dung phản ánh đang chờ. Vui lòng gửi lại phản ánh.');
-      return;
-    }
     if (!activeIntentId) {
       setError(errorMessages.INTENT_NOT_FOUND);
       return;
@@ -82,21 +78,29 @@ export default function OtpVerifyScreen() {
     const verifyScope = `reporter:verify:${activeIntentId}:${finalCode}`;
     const submitScope = `reporter:submit:${activeIntentId}`;
     try {
-      await verifyReporterIntent(
+      const verified = await verifyReporterIntent(
         activeIntentId,
         finalCode,
         getOrCreateCommandKey(verifyScope),
       );
+      clearCommandKey(verifyScope);
+      markOtpVerified();
+
+      // Luồng đăng ký thuần (RPT-01 → RPT-02): xác thực xong vào thẳng cổng phản ánh.
+      if (!pendingReport) {
+        markVerified(verified.email || email);
+        router.replace(REPORTER_HOME);
+        return;
+      }
+
       const { report } = await submitReport(
         pendingReport,
         getOrCreateCommandKey(submitScope),
       );
-      clearCommandKey(verifyScope);
       clearCommandKey(submitScope);
       markVerified(report.reporter_email);
       addTrackingCode(report.tracking_code);
       clearPendingReport();
-      markOtpVerified();
       router.replace({ pathname: REPORTER_TRACK, params: { code: report.tracking_code } });
     } catch (err) {
       setError(errorMessages[(err as Error).message] ?? 'Không thể xác thực. Vui lòng thử lại.');
@@ -109,14 +113,9 @@ export default function OtpVerifyScreen() {
     setResending(true);
     setError(null);
     try {
-      // Gửi lại mã là lệnh CỐ Ý lặp lại → cấp key mới ngay tại thời điểm bấm.
-      const resendScope = `reporter:resend:${email}`;
-      const next = await registerReporterEmail(
-        email,
-        newCommandKey(resendScope),
-      );
-      setActiveIntentId(next.intentId);
-      router.setParams({ intentId: next.intentId, email: next.email });
+      // API-011 gửi lại mã cho CÙNG intent; khoá mới vì đây là lệnh cố ý lặp lại.
+      const resendScope = `reporter:resend:${activeIntentId}`;
+      await resendReporterRegistration(activeIntentId, newCommandKey(resendScope));
       beginOtp();
       setCode('');
       setCooldown(RESEND_COOLDOWN);

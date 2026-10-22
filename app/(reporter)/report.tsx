@@ -51,6 +51,7 @@ const errorMessages: Record<string, string> = {
   DEFECT_TYPE_INVALID: 'Loại khuyết tật không thuộc danh mục quy chuẩn.',
   DESCRIPTION_REQUIRED: 'Vui lòng nhập mô tả hiện trạng hư hại.',
   EMAIL_INVALID: 'Địa chỉ email không hợp lệ. Vui lòng kiểm tra lại.',
+  EMAIL_IN_USE: 'Email này đã có tài khoản. Vui lòng đăng nhập để gửi phản ánh.',
 };
 
 interface Coords {

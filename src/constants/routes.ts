@@ -28,6 +28,7 @@ export const REPORTER_TRACK = '/(reporter)/track';
 export const REPORTER_FEEDBACK = '/(reporter)/feedback';
 export const REPORTER_PROFILE = '/(reporter)/profile';
 export const AUTH_OTP_VERIFY = '/(auth)/otp-verify';
+export const AUTH_REGISTER = '/(auth)/register';
 export const AUTH_FORCE_CHANGE_PASSWORD = '/(auth)/force-change-password';
 
 export const CREW_HOME = '/(crew)/home';

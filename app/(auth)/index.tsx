@@ -19,7 +19,7 @@ import { login as apiLogin } from '../../src/api/mock/auth';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
 import { RoleCode } from '../../src/types/enums';
-import { REPORTER_HOME, ROLE_HOMES } from '../../src/constants/routes';
+import { AUTH_REGISTER, REPORTER_HOME, ROLE_HOMES } from '../../src/constants/routes';
 
 export default function LoginScreen() {
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
@@ -234,6 +234,17 @@ export default function LoginScreen() {
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={22} color={colors.brandGold} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(AUTH_REGISTER)}
+              style={styles.registerLink}
+              accessibilityRole="button"
+              accessibilityLabel="Đăng ký tài khoản người phản ánh"
+            >
+              <Text style={[typography.caption, styles.registerLinkText]}>
+                Chưa có tài khoản? Đăng ký người phản ánh
+              </Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -464,5 +475,12 @@ const styles = StyleSheet.create({
   },
   reporterCardSubtitle: {
     color: colors.secondary,
+  },
+  registerLink: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  registerLinkText: {
+    color: colors.primaryDark,
   },
 });

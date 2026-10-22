@@ -3,7 +3,7 @@ import { RoleCode } from '../../types/enums';
 import { ROLE_CODE_TO_WIRE_ROLE } from '../../types/roleAdapter';
 import { throwMockApiError } from './errors';
 
-const MOCK_USERS: Record<string, { user: User; password: string }> = {
+export const MOCK_USERS: Record<string, { user: User; password: string }> = {
   'pilot@hoanghai.vn': {
     user: {
       id: 'U001',
@@ -101,9 +101,9 @@ const MOCK_USERS: Record<string, { user: User; password: string }> = {
   },
 };
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type MockUserEntry = { user: User; password: string };
+export type MockUserEntry = { user: User; password: string };
 
 /**
  * `AuthActorResponseDto` (17_10): `{ id, displayName, role, version }` — KHÔNG có email,
@@ -127,7 +127,7 @@ export interface MockAuthTokenResponse {
 }
 
 /** Map seed nội bộ (snake_case) → DTO wire của BE. */
-function toTokenResponse(
+export function toTokenResponse(
   entry: MockUserEntry,
   accessToken: string = entry.user.token,
   refreshToken: string = entry.user.refresh_token,
@@ -241,3 +241,4 @@ export async function requestPasswordRecovery(email: string) {
   }
   return { data: { accepted: true, email: normalized } };
 }
+
