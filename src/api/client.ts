@@ -3,7 +3,6 @@ import axios, {
   AxiosHeaders,
   InternalAxiosRequestConfig,
 } from 'axios';
-import { uuidv4 } from '../utils/uuid';
 import { parseProblemDetails } from './problemDetails';
 
 export interface AuthActorWire {
@@ -252,10 +251,6 @@ apiClient.interceptors.request.use((config) => {
   }
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
-  }
-  const method = (config.method ?? 'get').toLowerCase();
-  if (method !== 'get' && !headers.has('Idempotency-Key')) {
-    headers.set('Idempotency-Key', uuidv4());
   }
   config.headers = headers;
   return config;
