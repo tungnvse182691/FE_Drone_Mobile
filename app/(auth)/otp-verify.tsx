@@ -7,7 +7,7 @@ import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { MOCK_OTP, resendReporterRegistration, submitReport, verifyReporterIntent } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
-import { useAuthStore } from '../../src/store/auth';
+import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { REPORTER_HOME, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 import {
   clearCommandKey,
@@ -32,10 +32,12 @@ export default function OtpVerifyScreen() {
   const email = params.email ?? '';
 
   const pendingReport = useReporterStore((state) => state.pendingReport);
+  const pendingDraftId = useReporterStore((state) => state.pendingDraftId);
   const markVerified = useReporterStore((state) => state.markVerified);
   const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
   const beginOtp = useAuthStore((state) => state.beginOtp);
   const markOtpVerified = useAuthStore((state) => state.markOtpVerified);
+  const login = useAuthStore((state) => state.login);
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export default function OtpVerifyScreen() {
     setError(null);
     // Key bám theo (intent, mã đang nhập): retry cùng mã → replay; đổi mã → lệnh mới.
     const verifyScope = `reporter:verify:${activeIntentId}:${finalCode}`;
-    const submitScope = `reporter:submit:${activeIntentId}`;
+    const submitScope = `reporter:submit:${pendingDraftId ?? activeIntentId}`;
     try {
       const verified = await verifyReporterIntent(
         activeIntentId,
@@ -85,17 +87,26 @@ export default function OtpVerifyScreen() {
       clearCommandKey(verifyScope);
       markOtpVerified();
 
+      // API-012 trả `AuthTokenResponseDto`: dựng phiên thật để các màn sau dùng chung auth store.
+      const sessionEmail = verified.email || email;
+      const sessionUser = buildUserFromActor(
+        verified.tokens.user,
+        sessionEmail,
+        verified.tokens.mustChangePassword,
+      );
+      if (sessionUser) {
+        login(sessionUser, verified.tokens);
+      }
+      markVerified(sessionEmail);
+
       // Luồng đăng ký thuần (RPT-01 → RPT-02): xác thực xong vào thẳng cổng phản ánh.
       if (!pendingReport) {
-        markVerified(verified.email || email);
         router.replace(REPORTER_HOME);
         return;
       }
 
-      const verifiedEmail = verified.email || email;
-      markVerified(verifiedEmail);
       const { report } = await submitReport(pendingReport, {
-        reporterEmail: verifiedEmail,
+        reporterEmail: sessionEmail,
         idempotencyKey: getOrCreateCommandKey(submitScope),
       });
       clearCommandKey(submitScope);

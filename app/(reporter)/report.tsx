@@ -21,7 +21,6 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
-  registerReporterEmail,
   submitReport,
   type CreateReporterReportRequestDto,
   type ReportEvidenceInputDto,
@@ -37,7 +36,8 @@ import { useUploadsStore } from '../../src/store/uploads';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { AUTH_OTP_VERIFY, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
+import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
+import { RoleCode } from '../../src/types/enums';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { uuidv4 } from '../../src/utils/uuid';
 
@@ -59,8 +59,6 @@ const errorMessages: Record<string, string> = {
   source_not_ready: 'Ảnh chưa xác minh xong. Vui lòng chờ vài giây rồi gửi lại.',
   not_found: 'Không tìm thấy ảnh đã tải lên. Vui lòng chụp lại.',
   auth_unauthorized: 'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại.',
-  EMAIL_INVALID: 'Địa chỉ email không hợp lệ. Vui lòng kiểm tra lại.',
-  EMAIL_IN_USE: 'Email này đã có tài khoản. Vui lòng đăng nhập để gửi phản ánh.',
 };
 
 interface Coords {
@@ -80,7 +78,6 @@ export default function ReporterReportScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
 
   const [description, setDescription] = useState('');
-  const [email, setEmail] = useState('');
   const [coords, setCoords] = useState<Coords | null>(null);
   const [gpsStatus, setGpsStatus] = useState('Đang lấy vị trí...');
   const [gpsLoading, setGpsLoading] = useState(true);
@@ -102,9 +99,7 @@ export default function ReporterReportScreen() {
   };
 
   const user = useAuthStore((state) => state.user);
-  const emailPrefill = useReporterStore((state) => state.email);
   const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
-  const setEmailPrefill = useReporterStore((state) => state.setEmail);
   const setPendingReport = useReporterStore((state) => state.setPendingReport);
   const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
   const enqueuePhoto = useUploadsStore((state) => state.enqueuePhoto);
@@ -112,12 +107,14 @@ export default function ReporterReportScreen() {
   /** uri cục bộ → id hàng đợi upload, tránh tạo phiên trùng khi người dân bấm gửi lại. */
   const uploadedItemIds = useRef<Map<string, string>>(new Map());
 
-  useEffect(() => {
-    const initialEmail = user?.phone_or_email || verifiedEmail || emailPrefill;
-    if (initialEmail) {
-      setEmail(initialEmail);
-    }
-  }, [user?.phone_or_email, verifiedEmail, emailPrefill]);
+  /**
+   * Phiên Reporter hiện có: tài khoản đã đăng nhập đúng vai trò, hoặc email đã xác thực OTP.
+   * Chưa có phiên ⇒ form vẫn dùng được (nháp local), chỉ khi bấm Gửi mới yêu cầu đăng nhập.
+   */
+  const sessionEmail =
+    (user?.role_code === RoleCode.REPORTER ? user.phone_or_email : null) ||
+    verifiedEmail ||
+    null;
 
   const requestLocation = async () => {
     setGpsLoading(true);
@@ -196,13 +193,6 @@ export default function ReporterReportScreen() {
     const next: Record<string, string> = {};
     if (description.trim().length < MIN_DESCRIPTION) {
       next.description = `Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự để đội nghiệp vụ xác định vị trí.`;
-    }
-    const trimmedEmail = email.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!trimmedEmail) {
-      next.email = 'Vui lòng nhập địa chỉ email nhận mã xác thực.';
-    } else if (!emailRegex.test(trimmedEmail)) {
-      next.email = 'Vui lòng nhập địa chỉ email hợp lệ (ví dụ: ten@hoanghai.vn hoặc ten@gmail.com).';
     }
     if (!coords) {
       next.coords = 'Chưa lấy được tọa độ. Vui lòng bật GPS rồi thử lại.';
@@ -299,11 +289,6 @@ export default function ReporterReportScreen() {
       return;
     }
 
-    const trimmedEmail = email.trim().toLowerCase();
-    const isAlreadyVerified =
-      (!!verifiedEmail && verifiedEmail.toLowerCase() === trimmedEmail) ||
-      (!!user?.phone_or_email && user.phone_or_email.toLowerCase() === trimmedEmail);
-
     setSubmitting(true);
     const draftId = ensureDraftId();
     try {
@@ -314,33 +299,27 @@ export default function ReporterReportScreen() {
       };
       await saveDraft(payload);
 
-      if (isAlreadyVerified) {
-        const submitScope = `reporter:submit:${draftId}`;
-        const { report } = await submitReport(payload, {
-          reporterEmail: trimmedEmail,
-          idempotencyKey: getOrCreateCommandKey(submitScope),
-        });
-        clearCommandKey(submitScope);
-        resetDraftId();
-        clearPendingReport();
-        router.replace({
-          pathname: REPORTER_REPORT_DETAIL,
-          params: { reportId: report.id },
-        });
+      if (!sessionEmail) {
+        // Chưa đăng nhập: giữ nháp trong store rồi sang cụm auth; đăng nhập xong sẽ tự nộp.
+        setPendingReport(payload, draftId);
+        router.push('/(auth)');
         return;
       }
 
-      setEmailPrefill(trimmedEmail);
-      setPendingReport(payload);
-      const registerScope = `reporter:register:${draftId}`;
-      const intent = await registerReporterEmail(
-        trimmedEmail,
-        getOrCreateCommandKey(registerScope),
-      );
-      clearCommandKey(registerScope);
-      router.push({
-        pathname: AUTH_OTP_VERIFY,
-        params: { intentId: intent.intentId, email: intent.email },
+      const submitScope = `reporter:submit:${draftId}`;
+      const { report } = await submitReport(payload, {
+        reporterEmail: sessionEmail,
+        idempotencyKey: getOrCreateCommandKey(submitScope),
+      });
+      clearCommandKey(submitScope);
+      resetDraftId();
+      clearPendingReport();
+      setDescription('');
+      setPhotos([]);
+      uploadedItemIds.current.clear();
+      router.replace({
+        pathname: REPORTER_REPORT_DETAIL,
+        params: { reportId: report.id },
       });
     } catch (err) {
       const apiCode = (err as { response?: { data?: { code?: string } } }).response?.data?.code;
@@ -466,34 +445,6 @@ export default function ReporterReportScreen() {
             testID="reporter-description"
           />
 
-          <InputField
-            label="Email nhận mã xác thực"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setErrors((current) => ({ ...current, email: '' }));
-            }}
-            placeholder="vd: ten.email@hoanghai.vn"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={errors.email}
-            testID="reporter-email"
-          />
-
-          <Text style={[typography.caption, styles.emailHelpText]}>
-            Mã OTP 6 số sẽ được gửi qua email để xác thực phản ánh của bạn.
-          </Text>
-
-          {((verifiedEmail && verifiedEmail === email.trim().toLowerCase()) ||
-            (user?.phone_or_email && user.phone_or_email.toLowerCase() === email.trim().toLowerCase())) ? (
-            <View style={styles.verifiedRow}>
-              <MaterialIcons name="verified" size={16} color={colors.success} />
-              <Text style={[typography.caption, styles.verifiedText]}>
-                Email này đã được xác thực trước đó.
-              </Text>
-            </View>
-          ) : null}
-
           {submitError ? (
             <View style={styles.errorRow}>
               <MaterialIcons name="error-outline" size={16} color={colors.error} />
@@ -510,10 +461,9 @@ export default function ReporterReportScreen() {
               disabled={submitting}
             />
             <Text style={[typography.caption, styles.submitHint]}>
-              {(verifiedEmail && verifiedEmail === email.trim().toLowerCase()) ||
-              (user?.phone_or_email && user.phone_or_email.toLowerCase() === email.trim().toLowerCase())
+              {sessionEmail
                 ? 'Phản ánh sẽ được gửi trực tiếp đến Ban Quản lý dự án để tiếp nhận và khảo sát.'
-                : 'Hệ thống sẽ gửi mã xác thực 6 số tới email để xác nhận phản ánh.'}
+                : 'Đăng nhập hoặc đăng ký để gửi phản ánh của bạn.'}
             </Text>
           </View>
         </ScrollView>
@@ -614,11 +564,8 @@ const styles = StyleSheet.create({
   photoAddPressed: { backgroundColor: colors.surfaceAlt },
   photoAddText: { color: colors.brandGold },
   permissionRow: { gap: spacing.sm, marginBottom: spacing.md },
-  verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
-  verifiedText: { color: colors.success },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
   error: { color: colors.error, flex: 1 },
-  emailHelpText: { color: colors.secondary, marginTop: -spacing.xs, marginBottom: spacing.md },
   submitWrapper: { gap: spacing.sm, marginTop: spacing.sm },
   submitHint: { color: colors.secondary, textAlign: 'center' },
   cameraModal: { flex: 1, backgroundColor: colors.neutral },

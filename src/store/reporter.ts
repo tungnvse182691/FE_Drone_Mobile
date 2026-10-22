@@ -7,9 +7,11 @@ interface ReporterSessionState {
   email: string | null;
   verifiedEmail: string | null;
   pendingReport: CreateReporterReportRequestDto | null;
+  /** Id bản nháp đang chờ đăng nhập — dùng làm scope Idempotency-Key ổn định. */
+  pendingDraftId: string | null;
   setEmail: (email: string) => void;
   markVerified: (email: string) => void;
-  setPendingReport: (report: CreateReporterReportRequestDto | null) => void;
+  setPendingReport: (report: CreateReporterReportRequestDto | null, draftId?: string) => void;
   clearPendingReport: () => void;
   clearSession: () => void;
 }
@@ -20,11 +22,14 @@ export const useReporterStore = create<ReporterSessionState>()(
       email: null,
       verifiedEmail: null,
       pendingReport: null,
+      pendingDraftId: null,
       setEmail: (email) => set({ email }),
       markVerified: (email) => set({ email, verifiedEmail: email }),
-      setPendingReport: (report) => set({ pendingReport: report }),
-      clearPendingReport: () => set({ pendingReport: null }),
-      clearSession: () => set({ email: null, verifiedEmail: null, pendingReport: null }),
+      setPendingReport: (report, draftId) =>
+        set({ pendingReport: report, pendingDraftId: report ? draftId ?? null : null }),
+      clearPendingReport: () => set({ pendingReport: null, pendingDraftId: null }),
+      clearSession: () =>
+        set({ email: null, verifiedEmail: null, pendingReport: null, pendingDraftId: null }),
     }),
     {
       name: 'reporter-session',

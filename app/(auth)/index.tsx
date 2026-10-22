@@ -16,10 +16,17 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { login as apiLogin } from '../../src/api/mock/auth';
+import { submitReport } from '../../src/api/mock/reporter';
+import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
 import { RoleCode } from '../../src/types/enums';
-import { AUTH_REGISTER, REPORTER_HOME, ROLE_HOMES } from '../../src/constants/routes';
+import {
+  AUTH_REGISTER,
+  REPORTER_HOME,
+  REPORTER_REPORT_DETAIL,
+  ROLE_HOMES,
+} from '../../src/constants/routes';
 
 export default function LoginScreen() {
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
@@ -28,6 +35,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
   const login = useAuthStore((state) => state.login);
+  const pendingReport = useReporterStore((state) => state.pendingReport);
   const router = useRouter();
 
   const isSubmitDisabled = !phoneOrEmail.trim() || !password.trim();
@@ -49,7 +57,29 @@ export default function LoginScreen() {
       }
       login(loggedUser, response);
       if (loggedUser.role_code === RoleCode.REPORTER) {
-        useReporterStore.getState().markVerified(loggedUser.phone_or_email);
+        const reporter = useReporterStore.getState();
+        reporter.markVerified(loggedUser.phone_or_email);
+        if (reporter.pendingReport) {
+          const draftId = reporter.pendingDraftId;
+          const submitScope = `reporter:submit:${draftId ?? 'pending'}`;
+          try {
+            const { report } = await submitReport(reporter.pendingReport, {
+              reporterEmail: loggedUser.phone_or_email,
+              idempotencyKey: getOrCreateCommandKey(submitScope),
+            });
+            clearCommandKey(submitScope);
+            reporter.clearPendingReport();
+            router.replace({
+              pathname: REPORTER_REPORT_DETAIL,
+              params: { reportId: report.id },
+            });
+            return;
+          } catch {
+            // Giữ nháp + khoá chống trùng để bấm Đăng nhập thử gửi lại (idempotent).
+            setError('Đã đăng nhập nhưng chưa gửi được phản ánh. Vui lòng bấm Đăng nhập để thử lại.');
+            return;
+          }
+        }
       }
       if (loggedUser.must_change_password) {
         router.replace('/(auth)/force-change-password');
@@ -105,6 +135,14 @@ export default function LoginScreen() {
 
           {/* Card trắng chứa form đăng nhập - bo 20, bóng nhẹ, tiêu đề Đăng nhập tác nghiệp */}
           <View style={styles.loginCard}>
+            {pendingReport ? (
+              <View style={styles.pendingNotice}>
+                <MaterialIcons name="info-outline" size={16} color={colors.info} />
+                <Text style={[typography.caption, styles.pendingNoticeText]}>
+                  Đăng nhập hoặc đăng ký để gửi phản ánh của bạn.
+                </Text>
+              </View>
+            ) : null}
             <Text style={[typography.titleMd, styles.cardTitle]}>Đăng nhập tác nghiệp</Text>
 
             <InputField
@@ -356,6 +394,16 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: colors.neutral,
     marginBottom: spacing.sm,
+  },
+  pendingNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  pendingNoticeText: {
+    color: colors.info,
+    flex: 1,
   },
   errorBox: {
     flexDirection: 'row',

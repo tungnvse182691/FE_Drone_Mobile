@@ -2,8 +2,8 @@ import { DEFECT_TYPE_CODES, DefectTypeCode } from '../../constants/defect-types'
 import { uuidv4 } from '../../utils/uuid';
 import type { ReportEvidenceLocationDto, ReportLocationSource } from '../../types/position';
 import { throwMockApiError } from './errors';
+import type { MockAuthTokenResponse } from './auth';
 import {
-  registerReporter,
   resendReporterOtp as resendReporterOtpApi,
   verifyReporterOtp as verifyReporterOtpApi,
 } from './reporter-registration';
@@ -200,55 +200,6 @@ function seedReports(): void {
 seedReports();
 
 
-// RFC 5322 dot-atom: KHONG cho dot dau/cuoi/hai lien tie trong local-part,
-// domain label khong bat dau/bang dau gach, TLD la chu cai >= 2.
-// KHONG khoang trang giua. Chap nhan MOI nha cung cap email (khong khoang han Gmail) - Quyet dinh D25.
-const EMAIL_REGEX =
-  /^[A-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[A-Z0-9](?:[A-Z0-9-]*[A-Z0-9])?\.)+[A-Z]{2,}$/i;
-
-function isValidEmail(email: string): boolean {
-  const normalized = email.trim();
-  if (normalized.length > 254) return false;
-  return EMAIL_REGEX.test(normalized);
-}
-
-export async function registerReporterEmail(
-  email: string,
-  idempotencyKey?: string,
-): Promise<ReporterRegistrationIntent> {
-  await delay(400);
-  const normalized = email.trim().toLowerCase();
-  if (!isValidEmail(normalized)) {
-    throw new Error('EMAIL_INVALID');
-  }
-  const intent = await registerReporter(
-    {
-      email: normalized,
-      password: `Reporter@${idempotencyKey?.slice(-6) ?? '2026'}`,
-      displayName: normalized.split('@')[0] || 'Ng╞░ß╗¥i d├ón',
-      reporterType: 'Citizen',
-    },
-    { idempotencyKey },
-  ).catch((error) => {
-    const code = (error as { response?: { data?: { code?: string } } }).response?.data?.code;
-    if (code === 'identity_email_conflict') {
-      throw new Error('EMAIL_IN_USE');
-    }
-    if (code === 'duplicate_request') {
-      throw new Error('EMAIL_IN_USE');
-    }
-    throw error;
-  });
-  const registration: ReporterRegistrationIntent = {
-    intentId: intent.intentId,
-    email: normalized,
-    otp: '',
-    expiresInSeconds: OTP_TTL_SECONDS,
-  };
-  intents.set(intent.intentId, registration);
-  return registration;
-}
-
 /** API-011 ΓÇö gß╗¡i lß║íi m├ú cho intent ─æ├ú tß║ío (KH├öNG tß║ío intent mß╗¢i). */
 export async function resendReporterRegistration(
   intentId: string,
@@ -272,12 +223,12 @@ export async function verifyReporterIntent(
   intentId: string,
   otp: string,
   idempotencyKey?: string,
-): Promise<{ email: string }> {
+): Promise<{ email: string; tokens: MockAuthTokenResponse }> {
   await delay(350);
   try {
-    await verifyReporterOtpApi({ intentId, otp }, { idempotencyKey });
+    const tokens = await verifyReporterOtpApi({ intentId, otp }, { idempotencyKey });
     const intent = intents.get(intentId);
-    return { email: intent?.email ?? '' };
+    return { email: intent?.email ?? '', tokens };
   } catch (error) {
     const code = (error as { response?: { data?: { code?: string } } }).response?.data?.code;
     if (code === 'not_found') {
