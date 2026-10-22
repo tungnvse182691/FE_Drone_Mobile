@@ -10,6 +10,7 @@ import {
   type TokenPair,
 } from '../api/client';
 import { mapProfileRole } from '../types/roleAdapter';
+import { logout as revokeMockSession } from '../api/mock/auth';
 
 export type AuthStatus =
   | 'SIGNED_OUT'
@@ -102,7 +103,7 @@ export function buildUserFromActor(
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       status: 'SIGNED_OUT',
       user: null,
       role: null,
@@ -131,6 +132,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        const refreshToken = get().refreshToken;
         set({
           status: 'SIGNED_OUT',
           user: null,
@@ -139,6 +141,11 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
         });
         void persistRefreshSecret(null);
+        if (refreshToken) {
+          // API-007: báo server thu hồi phiên (best-effort — phiên local luôn kết thúc ngay,
+          // lỗi mạng không được chặn người dùng đăng xuất).
+          void revokeMockSession(refreshToken).catch(() => undefined);
+        }
       },
 
       setToken: (token) => set({ token }),
@@ -147,6 +154,10 @@ export const useAuthStore = create<AuthState>()(
         const wireRole = pair.user ? mapProfileRole(pair.user.role) : null;
         set((state) => {
           const nextRole = wireRole ?? state.role;
+          // BE rotate cả cặp (API-003): LUÔN lưu refresh token MỚI. Nếu một response
+          // không mang refresh token thì giữ token hiện tại — tuyệt đối không ghi đè rỗng,
+          // nếu không lần refresh sau sẽ dính refresh_token_invalid oan.
+          const nextRefreshToken = pair.refreshToken ?? state.refreshToken;
           const nextUser = state.user
             ? {
                 ...state.user,
@@ -154,18 +165,18 @@ export const useAuthStore = create<AuthState>()(
                 full_name: pair.user?.displayName ?? state.user.full_name,
                 must_change_password: pair.mustChangePassword,
                 token: pair.accessToken,
-                refresh_token: pair.refreshToken,
+                refresh_token: nextRefreshToken ?? '',
               }
             : state.user;
           return {
             status: 'AUTHENTICATED',
             token: pair.accessToken,
-            refreshToken: pair.refreshToken,
+            refreshToken: nextRefreshToken,
             role: nextRole,
             user: nextUser,
           };
         });
-        void persistRefreshSecret(pair.refreshToken);
+        void persistRefreshSecret(get().refreshToken);
       },
 
       beginOtp: () => set({ status: 'OTP_PENDING' }),

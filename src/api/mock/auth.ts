@@ -147,6 +147,27 @@ export function toTokenResponse(
   };
 }
 
+/**
+ * Registry phiên mock — refresh token HIỆN HÀNH theo user id.
+ * BE (API-003) ROTATE cả cặp token: refresh token vừa dùng bị vô hiệu ngay khi cấp token mới;
+ * API-007 (logout) thu hồi phiên thì refresh token cũng chết. Seed khởi tạo = `refresh_token`
+ * trong MOCK_USERS; login đăng ký lại phiên (và gỡ trạng thái đã thu hồi).
+ */
+const currentRefreshTokenByUserId = new Map<string, string>();
+const revokedSessionUserIds = new Set<string>();
+let refreshRotationCounter = 0;
+
+function currentRefreshTokenOf(entry: MockUserEntry): string | null {
+  if (revokedSessionUserIds.has(entry.user.id)) {
+    return null;
+  }
+  return currentRefreshTokenByUserId.get(entry.user.id) ?? entry.user.refresh_token;
+}
+
+function findEntryByRefreshToken(refreshToken: string): MockUserEntry | undefined {
+  return Object.values(MOCK_USERS).find((item) => currentRefreshTokenOf(item) === refreshToken);
+}
+
 /** API-002 — `POST /api/v1/auth/login`. */
 export async function login(email: string, password: string): Promise<MockAuthTokenResponse> {
   await delay(200);
@@ -155,17 +176,36 @@ export async function login(email: string, password: string): Promise<MockAuthTo
   if (!entry || (entry.password !== password && password !== '1' && password !== 'HoangHai@2026')) {
     throwMockApiError('auth_invalid_credentials', { message: 'Sai tài khoản hoặc mật khẩu' });
   }
+  revokedSessionUserIds.delete(entry.user.id);
+  currentRefreshTokenByUserId.set(entry.user.id, entry.user.refresh_token);
   return toTokenResponse(entry);
 }
 
 /** API-003 — `POST /api/v1/auth/refresh` (trả lại đủ cặp token như BE, không chỉ access token). */
 export async function refresh(refreshToken: string): Promise<MockAuthTokenResponse> {
   await delay(200);
-  const entry = Object.values(MOCK_USERS).find((item) => item.user.refresh_token === refreshToken);
+  const entry = findEntryByRefreshToken(refreshToken);
   if (!entry) {
     throwMockApiError('refresh_token_invalid');
   }
-  return toTokenResponse(entry, `mock-token-refreshed-${Date.now()}`);
+  // Rotate như BE: cấp refresh token MỚI, token vừa dùng bị vô hiệu ngay lập tức.
+  refreshRotationCounter += 1;
+  const rotatedRefreshToken = `mock-refresh-${entry.user.id.toLowerCase()}-r${refreshRotationCounter}`;
+  currentRefreshTokenByUserId.set(entry.user.id, rotatedRefreshToken);
+  return toTokenResponse(entry, `mock-token-refreshed-${Date.now()}`, rotatedRefreshToken);
+}
+
+/** API-007 — `POST /api/v1/auth/logout`: thu hồi refresh token của phiên hiện tại. */
+export async function logout(refreshToken: string | null | undefined): Promise<void> {
+  await delay(120);
+  if (!refreshToken) {
+    return;
+  }
+  const entry = findEntryByRefreshToken(refreshToken);
+  if (entry) {
+    currentRefreshTokenByUserId.delete(entry.user.id);
+    revokedSessionUserIds.add(entry.user.id);
+  }
 }
 
 /** Key của các lệnh đổi mật khẩu đã xử lý — mô phỏng replay idempotent của BE. */
