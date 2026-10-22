@@ -312,11 +312,8 @@ export default function DroneRequestDetailScreen() {
             <View style={styles.accessPointHeaderLeft}>
               <MaterialIcons name="flight-takeoff" size={18} color={colors.primary} />
               <Text style={[typography.labelSm, styles.accessPointHeaderTitle]}>
-                ĐIỂM TIẾP CẬN CẤT-HẠ CÁNH (ACCESS POINT)
+                ĐIỂM TIẾP CẬN CẤT-HẠ CÁNH
               </Text>
-            </View>
-            <View style={styles.wgs84Badge}>
-              <Text style={styles.wgs84BadgeText}>WGS84</Text>
             </View>
           </View>
 
@@ -387,12 +384,12 @@ export default function DroneRequestDetailScreen() {
           >
             <MaterialIcons name="cancel" size={18} color={colors.error} />
             <Text style={[typography.labelLg, styles.rejectButtonText]}>
-              Từ chối nhiệm vụ (KS03)
+              Từ chối nhiệm vụ
             </Text>
           </Pressable>
 
           <Text style={[typography.caption, styles.syncFootnote]}>
-            Xác thực mã băm SHA-256 dữ liệu và đồng bộ ngoại tuyến theo TCVN 10380:2014
+            Dữ liệu được kiểm tra toàn vẹn bằng mã băm và đồng bộ ngoại tuyến theo TCVN 10380:2014
           </Text>
         </View>
       </>
@@ -619,19 +616,6 @@ const styles = StyleSheet.create({
   accessPointHeaderTitle: {
     color: colors.secondary,
     fontWeight: '700',
-  },
-  wgs84Badge: {
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  wgs84BadgeText: {
-    color: colors.secondary,
-    fontSize: 10,
-    fontWeight: 'bold',
   },
   accessPointBody: {
     gap: 4,

@@ -48,7 +48,7 @@ const STATE_PRESENTATION: Record<
   [LocalState.CONFLICT]: { label: 'Xung đột phiên bản', tone: 'blocked' },
   [LocalState.REJECTED]: { label: 'Máy chủ từ chối', tone: 'blocked' },
   [LocalState.UNKNOWN_OUTCOME]: { label: 'Chưa rõ kết quả', tone: 'blocked' },
-  [LocalState.ACKED]: { label: 'Đã đối soát SHA-256', tone: 'done' },
+  [LocalState.ACKED]: { label: 'Đã đối soát toàn vẹn', tone: 'done' },
 };
 
 /**
@@ -380,7 +380,7 @@ export default function DroneSyncScreen() {
           {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'TỆP ĐÃ XÁC NHẬN TOÀN VẸN (SERVER)'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
-          {queueTab === 'pending' ? 'Tự động tải khi có Wi-Fi/4G' : 'Khớp mã băm SHA-256'}
+          {queueTab === 'pending' ? 'Tự động tải khi có Wi-Fi/4G' : 'Khớp mã băm toàn vẹn'}
         </Text>
       </View>
 
@@ -452,7 +452,7 @@ export default function DroneSyncScreen() {
         </View>
 
         <Text style={[typography.bodyMd, styles.purgeDesc]}>
-          Ứng dụng hỗ trợ tiếp tục tại điểm ngắt (Auto-resume chunked upload). Bản sao cục bộ trên thẻ SD và bộ nhớ trong chỉ được giải phóng sau khi máy chủ xác nhận nhận đủ bytes và khớp mã SHA-256 100%.
+          Ứng dụng tự tải tiếp từ điểm đã dừng khi có mạng trở lại. Bản sao trên thẻ SD và bộ nhớ trong chỉ được xoá sau khi máy chủ xác nhận đã nhận đủ dữ liệu và mã băm khớp hoàn toàn.
         </Text>
 
         <Pressable

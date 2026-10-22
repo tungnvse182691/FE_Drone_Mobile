@@ -160,7 +160,7 @@ export default function DroneUploadScreen() {
         setVideoUri(file.uri);
         const sizeMb = file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '—';
         setVideoSize(sizeMb);
-        setVideoSha('Chưa đối chiếu — sẽ tính SHA-256 khi nộp');
+        setVideoSha('Chưa đối chiếu — sẽ tính mã băm khi nộp');
         setUploadStep('LOCAL');
       }
     } catch (err) {
@@ -182,7 +182,7 @@ export default function DroneUploadScreen() {
         setSrtUri(file.uri);
         // Không bịa dung lượng/checksum khi tệp không cung cấp — hiển thị "—" cho tới khi có.
         setSrtSize(file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : '—');
-        setSrtSha('Chưa đối chiếu — sẽ tính SHA-256 khi nộp');
+        setSrtSha('Chưa đối chiếu — sẽ tính mã băm khi nộp');
         setUploadStep('LOCAL');
       }
     } catch (err) {
@@ -269,7 +269,7 @@ export default function DroneUploadScreen() {
       setUploadStep('SERVER_CONFIRMED');
       setUploadProgress(100);
       setStatusMsg(
-        'Máy chủ đã nhận bộ dữ liệu. Tệp đang chờ xác minh toàn vẹn — chưa được coi là VERIFIED.',
+        'Máy chủ đã nhận bộ dữ liệu. Tệp đang chờ xác minh toàn vẹn — chưa được coi là đã xác minh.',
       );
     } catch (error) {
       failed = true;
@@ -522,7 +522,7 @@ export default function DroneUploadScreen() {
                 }
               />
             </View>
-            <Text style={[typography.caption, styles.stepLabel]}>VERIFIED</Text>
+            <Text style={[typography.caption, styles.stepLabel]}>ĐÃ XÁC MINH</Text>
             <Text style={styles.stepSubLabel}>Máy chủ ODM</Text>
           </View>
         </View>
@@ -545,10 +545,10 @@ export default function DroneUploadScreen() {
             <MaterialIcons name="check-circle" size={18} color={colors.success} />
             <View style={styles.verifiedBannerContent}>
               <Text style={styles.verifiedBannerTitle}>
-                Máy chủ ODM đã xác nhận toàn vẹn (VERIFIED)
+                Máy chủ đã xác nhận toàn vẹn dữ liệu
               </Text>
               <Text style={styles.verifiedBannerSub}>
-                Mã bộ dữ liệu #DS-2026-089 · Mã băm SHA-256 đã đối soát khớp 100%
+                Mã bộ dữ liệu #DS-2026-089 · Mã băm đã đối soát khớp 100%
               </Text>
             </View>
           </View>
@@ -590,7 +590,7 @@ export default function DroneUploadScreen() {
         <View style={styles.checksumBox}>
           <MaterialIcons name="verified-user" size={16} color={colors.success} />
           <View style={styles.checksumTextGroup}>
-            <Text style={styles.checksumLabel}>Mã băm toàn vẹn SHA-256 (TCVN 10380:2014):</Text>
+            <Text style={styles.checksumLabel}>Mã băm toàn vẹn (theo TCVN 10380:2014):</Text>
             <Text style={styles.checksumHash} numberOfLines={1}>{videoSha}</Text>
           </View>
         </View>
@@ -643,7 +643,7 @@ export default function DroneUploadScreen() {
         </View>
         <View style={styles.gpsInfo}>
           <View style={styles.gpsTopRow}>
-            <Text style={[typography.caption, styles.gpsLabel]}>TỌA ĐỘ GPS KHẢO SÁT WGS84</Text>
+            <Text style={[typography.caption, styles.gpsLabel]}>TỌA ĐỘ GPS KHẢO SÁT</Text>
             <View style={styles.matchedBadge}>
               <Text style={styles.matchedText}>Khớp trạm RTK</Text>
             </View>
