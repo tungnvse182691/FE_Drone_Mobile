@@ -10,10 +10,9 @@ import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
-import { listMyReports } from '../../src/api/mock/reporter';
+import { listMyReports, type OwnReportDto } from '../../src/api/mock/reporter';
 import { REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
-import { ReporterReport } from '../../src/types/domain';
-import { ReporterReportStatus } from '../../src/types/enums';
+
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -33,7 +32,7 @@ export default function ReporterProfileScreen() {
   const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
   const clearSession = useReporterStore((state) => state.clearSession);
 
-  const [reports, setReports] = useState<ReporterReport[]>([]);
+  const [reports, setReports] = useState<OwnReportDto[]>([]);
   const [toast, setToast] = useState<string | null>(null);
 
   const activeEmail = user?.phone_or_email || verifiedEmail;
@@ -50,16 +49,8 @@ export default function ReporterProfileScreen() {
   }, [activeEmail]);
 
   const totalReports = reports.length;
-  const inProgressReports = reports.filter(
-    (r) =>
-      r.status === ReporterReportStatus.SUBMITTED ||
-      r.status === ReporterReportStatus.RECEIVED ||
-      r.status === ReporterReportStatus.INSPECTING ||
-      r.status === ReporterReportStatus.REPAIRING,
-  ).length;
-  const completedReports = reports.filter(
-    (r) => r.status === ReporterReportStatus.COMPLETED,
-  ).length;
+  const totalEvidence = reports.reduce((sum, r) => sum + r.evidence.length, 0);
+  const totalSupplements = reports.reduce((sum, r) => sum + r.supplements.length, 0);
 
   const handleLogout = () => {
     Alert.alert(
@@ -116,12 +107,12 @@ export default function ReporterProfileScreen() {
           <Text style={[typography.caption, styles.statLabel]}>Đã gửi</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={[typography.headlineLg, styles.statValuePrimary]}>{inProgressReports}</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Đang xử lý</Text>
+          <Text style={[typography.headlineLg, styles.statValuePrimary]}>{totalEvidence}</Text>
+          <Text style={[typography.caption, styles.statLabel]}>Ảnh hiện trường</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={[typography.headlineLg, styles.statValueSuccess]}>{completedReports}</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Hoàn thành</Text>
+          <Text style={[typography.headlineLg, styles.statValueSuccess]}>{totalSupplements}</Text>
+          <Text style={[typography.caption, styles.statLabel]}>Bổ sung</Text>
         </Card>
       </View>
 

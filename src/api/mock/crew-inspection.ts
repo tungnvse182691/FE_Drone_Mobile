@@ -2,7 +2,7 @@
 import type { DefectTypeCode } from '../../constants/defect-types';
 import { DEFECT_TYPE_CODES } from '../../constants/defect-types';
 import { TaskMode } from '../../types/enums';
-import { getReporterReportsSnapshot } from './reporter';
+import { getReporterEvidenceSeeds } from './reporter';
 import { throwMockApiError } from './errors';
 
 export const FAST_TRACK_POLICY_ID = 'FTP-2026-V1';
@@ -102,22 +102,16 @@ const DRONE_CAPTURE: BeforeEvidenceCandidate = {
 };
 
 export function getReporterBeforeCandidates(defectTypeCode: DefectTypeCode): BeforeEvidenceCandidate[] {
-  return getReporterReportsSnapshot()
-    .filter(
-      (report) =>
-        report.defect_type === defectTypeCode && report.photo_uris.length > 0,
-    )
-    .map((report) => ({
-      id: `REPORTER-${report.id}`,
+  return getReporterEvidenceSeeds()
+    .filter((seed) => seed.defectTypeCode === defectTypeCode)
+    .map((seed, index) => ({
+      id: `REPORTER-${seed.reportId}`,
       source: 'REPORTER' as const,
-      source_label: `Phản ánh ${report.tracking_code}`,
-      defect_type_code: report.defect_type as DefectTypeCode,
-      captured_at: report.submitted_at,
-      coordinates: {
-        latitude: report.coordinates[1],
-        longitude: report.coordinates[0],
-      },
-      local_uri: report.photo_uris[0],
+      source_label: `Ảnh từ phản ánh người dân #${index + 1}`,
+      defect_type_code: seed.defectTypeCode,
+      captured_at: seed.submittedAt,
+      coordinates: seed.coordinates,
+      local_uri: seed.localUris[0] ?? null,
     }));
 }
 

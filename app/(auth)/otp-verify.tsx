@@ -8,7 +8,7 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { MOCK_OTP, resendReporterRegistration, submitReport, verifyReporterIntent } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { REPORTER_HOME, REPORTER_TRACK } from '../../src/constants/routes';
+import { REPORTER_HOME, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 import {
   clearCommandKey,
   getOrCreateCommandKey,
@@ -33,7 +33,6 @@ export default function OtpVerifyScreen() {
 
   const pendingReport = useReporterStore((state) => state.pendingReport);
   const markVerified = useReporterStore((state) => state.markVerified);
-  const addTrackingCode = useReporterStore((state) => state.addTrackingCode);
   const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
   const beginOtp = useAuthStore((state) => state.beginOtp);
   const markOtpVerified = useAuthStore((state) => state.markOtpVerified);
@@ -93,15 +92,15 @@ export default function OtpVerifyScreen() {
         return;
       }
 
-      const { report } = await submitReport(
-        pendingReport,
-        getOrCreateCommandKey(submitScope),
-      );
+      const verifiedEmail = verified.email || email;
+      markVerified(verifiedEmail);
+      const { report } = await submitReport(pendingReport, {
+        reporterEmail: verifiedEmail,
+        idempotencyKey: getOrCreateCommandKey(submitScope),
+      });
       clearCommandKey(submitScope);
-      markVerified(report.reporter_email);
-      addTrackingCode(report.tracking_code);
       clearPendingReport();
-      router.replace({ pathname: REPORTER_TRACK, params: { code: report.tracking_code } });
+      router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: report.id } });
     } catch (err) {
       setError(errorMessages[(err as Error).message] ?? 'Không thể xác thực. Vui lòng thử lại.');
     } finally {

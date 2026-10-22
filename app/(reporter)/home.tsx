@@ -4,14 +4,12 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../../src/components/Card';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
-import { ReporterStatusBadge } from '../../src/components/ReporterStatusBadge';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { listMyReports } from '../../src/api/mock/reporter';
+import { listMyReports, type OwnReportDto } from '../../src/api/mock/reporter';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
-import { ReporterReport } from '../../src/types/domain';
+import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -24,7 +22,7 @@ export default function ReporterHomeScreen() {
   const user = useAuthStore((state) => state.user);
   const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
   const markVerified = useReporterStore((state) => state.markVerified);
-  const [reports, setReports] = useState<ReporterReport[]>([]);
+  const [reports, setReports] = useState<OwnReportDto[]>([]);
 
   const activeEmail = user?.phone_or_email || verifiedEmail;
 
@@ -98,8 +96,8 @@ export default function ReporterHomeScreen() {
         />
         <ActionCard
           icon="search"
-          title="Tra cứu tiến độ xử lý"
-          description="Nhập mã phản ánh để theo dõi từng bước xử lý"
+          title="Phản ánh của tôi"
+          description="Xem lại các phản ánh đã gửi và bổ sung thông tin"
           onPress={() => router.push(REPORTER_TRACK)}
           testID="reporter-action-track"
         />
@@ -129,28 +127,30 @@ export default function ReporterHomeScreen() {
         <View style={styles.reportList}>
           {reports.map((report) => (
             <AnimatedPressable
-              key={report.tracking_code}
+              key={report.id}
               onPress={() =>
-                router.push({ pathname: REPORTER_TRACK, params: { code: report.tracking_code } })
+                router.push({
+                  pathname: REPORTER_REPORT_DETAIL,
+                  params: { reportId: report.id },
+                })
               }
               accessibilityRole="button"
-              accessibilityLabel={`Xem tiến độ phản ánh ${report.tracking_code}`}
+              accessibilityLabel={`Xem chi tiết phản ánh gửi lúc ${formatDate(report.createdAt)}`}
             >
               <Card style={styles.reportCard}>
                 <View style={styles.reportHeader}>
-                  <Text style={[typography.titleMd, styles.reportCode]}>{report.tracking_code}</Text>
-                  <ReporterStatusBadge status={report.status} />
+                  <Text style={[typography.titleMd, styles.reportCode]}>
+                    {formatDate(report.createdAt)}
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
                 </View>
-                <Text style={[typography.bodyMd, styles.reportRoute]} numberOfLines={1}>
-                  {report.route_hint || 'Chưa cung cấp vị trí cụ thể'}
-                </Text>
                 <Text style={[typography.caption, styles.reportDescription]} numberOfLines={2}>
-                  {report.description}
+                  {report.description?.trim() || 'Chưa có mô tả'}
                 </Text>
                 <View style={styles.reportFooter}>
-                  <MaterialIcons name="schedule" size={12} color={colors.secondary} />
+                  <MaterialIcons name="photo-library" size={12} color={colors.secondary} />
                   <Text style={[typography.caption, styles.reportDate]}>
-                    {formatDate(report.submitted_at)}
+                    {report.evidence.length} ảnh hiện trường
                   </Text>
                 </View>
               </Card>

@@ -88,11 +88,3 @@ export enum LocalState {
   ACKED                = 'ACKED',
 }
 
-export enum ReporterReportStatus {
-  SUBMITTED  = 'SUBMITTED',  // Đã gửi
-  RECEIVED   = 'RECEIVED',   // Đã tiếp nhận
-  INSPECTING = 'INSPECTING', // Đang khảo sát/đo đạc
-  REPAIRING  = 'REPAIRING',  // Đang sửa chữa
-  COMPLETED  = 'COMPLETED',  // Đã hoàn thành nghiệm thu
-  REJECTED   = 'REJECTED',   // Không hợp lệ
-}

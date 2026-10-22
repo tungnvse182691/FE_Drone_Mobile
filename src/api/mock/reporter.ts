@@ -1,6 +1,5 @@
-import { ReporterReport, TrackingTimelineEvent } from '../../types/domain';
-import { ReporterReportStatus } from '../../types/enums';
 import { DEFECT_TYPE_CODES, DefectTypeCode } from '../../constants/defect-types';
+import { uuidv4 } from '../../utils/uuid';
 import type { ReportEvidenceLocationDto, ReportLocationSource } from '../../types/position';
 import { throwMockApiError } from './errors';
 import {
@@ -36,104 +35,170 @@ export interface ReporterRegistrationIntent {
   expiresInSeconds: number;
 }
 
-export interface ReportCreate {
-  reporter_email: string;
-  route_hint?: string;
-  description: string;
-  photo_uris: string[];
-  coordinates: [number, number];
-  defect_type?: DefectTypeCode;
-  /** Nguồn tọa độ ảnh — khớp `ReportEvidenceInputDto.locationSource`. */
-  location_source?: ReportLocationSource;
-  /** Khối vị trí kèm sai số GPS — khớp `ReportEvidenceLocationDto`. */
+/** `## Schema ReportEvidenceInputDto` — phần tử `evidence` của API-216/219. */
+export interface ReportEvidenceInputDto {
+  fileId: string;
+  fileVersion?: string | null;
+  locationSource?: ReportLocationSource | null;
+  capturedAt?: string | null;
   location?: ReportEvidenceLocationDto | null;
+}
+
+/**
+ * `## Schema CreateReporterReportRequestDto` — body API-216/219. BE đặt
+ * `JsonUnmappedMemberHandling.Disallow` nên KHÔNG được gửi field ngoài `description`/`evidence`.
+ */
+export interface CreateReporterReportRequestDto {
+  description?: string | null;
+  evidence?: ReportEvidenceInputDto[] | null;
+}
+
+/** `## Schema ReporterReportResponseDto` — 201 của API-216. */
+export interface ReporterReportResponseDto {
+  id: string;
+  description: string | null;
+  createdAt: string;
+  version: string | null;
+  evidenceIds: string[];
+}
+
+/** `## Schema OwnReportEvidenceDto`. */
+export interface OwnReportEvidenceDto {
+  id: string;
+  fileId: string;
+  fileVersion: string | null;
+  supplementId: string | null;
+  capturedAt: string | null;
+  locationSource: string | null;
+  location: ReportEvidenceLocationDto | null;
+}
+
+/** `## Schema OwnReportSupplementDto`. */
+export interface OwnReportSupplementDto {
+  id: string;
+  description: string | null;
+  createdAt: string;
+}
+
+/** `## Schema OwnReportUpdateDto`. */
+export interface OwnReportUpdateDto {
+  id: string;
+  summary: string | null;
+  publishedAt: string;
+  evidenceIds: string[];
+}
+
+/** `## Schema OwnReportDto` — 200 của API-217/219 (KHÔNG có mã tra cứu/status nội bộ). */
+export interface OwnReportDto {
+  id: string;
+  description: string | null;
+  createdAt: string;
+  version: string | null;
+  evidence: OwnReportEvidenceDto[];
+  routingStatus: string | null;
+  publicUpdates: OwnReportUpdateDto[];
+  supplements: OwnReportSupplementDto[];
+}
+
+/** `## Schema OwnReportPageDto` — 200 của API-215. */
+export interface OwnReportPageDto {
+  items: OwnReportDto[];
+  nextCursor: string | null;
+}
+
+export interface ReportWriteOptions {
+  /** Mock-only: danh tính người phản ánh (BE lấy từ bearer, mock lấy từ phiên app). */
+  reporterEmail?: string;
+  idempotencyKey?: string;
+}
+
+export interface OwnReportResult {
+  report: OwnReportDto;
+  etag: string;
 }
 
 const MOCK_OTP = '111111';
 const OTP_TTL_SECONDS = 300;
-const TRACKING_SEED = 882920;
 const MAX_PHOTOS = 3;
 
 const DEFECT_CODE_VALUES = Object.values(DEFECT_TYPE_CODES);
 
-function isDefectTypeCode(value: string): value is DefectTypeCode {
-  return (DEFECT_CODE_VALUES as string[]).includes(value);
-}
-
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const intents = new Map<string, ReporterRegistrationIntent>();
-const reports = new Map<string, ReporterReport>();
+/** reportId (uuid) → chủ sở hữu + projection `OwnReportDto`. */
+const ownReports = new Map<string, { ownerEmail: string; view: OwnReportDto }>();
 const idempotencyCache = new Map<string, unknown>();
-let trackingCounter = 0;
+let reportVersionSeed = 1;
 
-function nextTrackingCode(): string {
-  trackingCounter += 1;
-  return `#HH-${TRACKING_SEED + trackingCounter - 1}`;
+/** Dữ liệu demo mock (KHÔNG phải wire DTO): giữ defect/location để màn Crew tái sử dụng bằng chứng. */
+export interface ReporterEvidenceSeed {
+  reportId: string;
+  ownerEmail: string;
+  description: string;
+  submittedAt: string;
+  defectTypeCode: DefectTypeCode;
+  coordinates: { latitude: number; longitude: number };
+  localUris: string[];
+}
+
+const reporterEvidenceSeeds: ReporterEvidenceSeed[] = [
+  {
+    reportId: '5c1d0f7e-8a11-4b52-9c1e-6f0d2b7a4c31',
+    ownerEmail: 'dan.nguyen@gmail.com',
+    description: 'Ổ gà sâu bong vỡ mặt tấm bê tông, nước đọng sau mưa.',
+    submittedAt: '2026-09-27T09:40:00.000Z',
+    defectTypeCode: DEFECT_TYPE_CODES.POTH_DEEP,
+    coordinates: { latitude: 10.7842, longitude: 106.7018 },
+    localUris: [],
+  },
+  {
+    reportId: 'b8e4a2c6-3d95-4f18-a7b0-92c5e1d6f803',
+    ownerEmail: 'dan.nguyen@gmail.com',
+    description: 'Lún sụt khe co giãn giữa hai tấm đan, xe cộ qua lại bị dằn xóc mạnh.',
+    submittedAt: '2026-09-26T08:15:00.000Z',
+    defectTypeCode: DEFECT_TYPE_CODES.SLAB_CRK,
+    coordinates: { latitude: 10.786, longitude: 106.7035 },
+    localUris: [],
+  },
+];
+
+export function getReporterEvidenceSeeds(): ReporterEvidenceSeed[] {
+  return reporterEvidenceSeeds.map((seed) => ({ ...seed }));
 }
 
 function seedReports(): void {
-  const seeds: ReporterReport[] = [
-    {
-      id: 'RPT-SEED-882910',
-      tracking_code: '#HH-882910',
-      reporter_email: 'nguoidan.binhchanh@gmail.com',
-      route_hint: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850), làn xe buýt hướng Vĩnh Lộc B',
-      description:
-        'Ổ gà sâu vỡ tấm bê tông trên làn xe buýt, đo được khoảng 1 tấm bê tông bị vỡ. Nguy cơ rất cao, xe máy đi qua có thể sụp lún.',
-      photo_uris: [],
-      coordinates: [106.7001, 10.783],
-      defect_type: DEFECT_TYPE_CODES.POTH_DEEP,
-      status: ReporterReportStatus.COMPLETED,
-      submitted_at: '2026-09-18T02:15:00.000Z',
-    },
-    {
-      id: 'RPT-SEED-104928',
-      tracking_code: '#HH-104928',
-      reporter_email: 'nguoidan.binhchanh@gmail.com',
-      route_hint: 'Tuyến ĐH.05 - Vĩnh Lộc B, đoạn trước cầu Bà Lát về hướng Tân Kiên',
-      description:
-        'Nứt tấm bê tông lan rộng khoảng 1,5m, nước đọng lại sau mưa. Vị trí nằm sát mép tảm, xe tải trọng đi qua rất dễ vỡ thêm.',
-      photo_uris: [],
-      coordinates: [106.705, 10.7875],
-      defect_type: DEFECT_TYPE_CODES.SLAB_CRK,
-      status: ReporterReportStatus.INSPECTING,
-      submitted_at: '2026-09-25T07:40:00.000Z',
-    },
-    {
-      id: 'RPT-SEED-772910',
-      tracking_code: '#HH-772910',
-      reporter_email: 'dan.nguyen@gmail.com',
-      route_hint: 'Tuyến ĐH.05 - Km02+100 gần ngã ba liên ấp',
-      description:
-        'Mặt đường bê tông bị bong tróc bề mặt lớn, tạo hố lõm sâu khoảng 6cm, gây nguy hiểm cho người đi xe gắn máy.',
-      photo_uris: [],
-      coordinates: [106.7012, 10.7845],
-      defect_type: DEFECT_TYPE_CODES.POTH_DEEP,
-      status: ReporterReportStatus.COMPLETED,
-      submitted_at: '2026-09-20T03:30:00.000Z',
-    },
-    {
-      id: 'RPT-SEED-664928',
-      tracking_code: '#HH-664928',
-      reporter_email: 'dan.nguyen@gmail.com',
-      route_hint: 'Tuyến ĐH.05 - Cầu Bà Lát hướng về chợ Vĩnh Lộc',
-      description:
-        'Lún sụt khe co giãn giữa hai tấm đan, xe cộ qua lại bị dằn xóc mạnh.',
-      photo_uris: [],
-      coordinates: [106.7035, 10.786],
-      defect_type: DEFECT_TYPE_CODES.SLAB_CRK,
-      status: ReporterReportStatus.INSPECTING,
-      submitted_at: '2026-09-26T08:15:00.000Z',
-    },
-  ];
-
-  for (const seed of seeds) {
-    reports.set(seed.tracking_code, seed);
+  for (const seed of reporterEvidenceSeeds) {
+    ownReports.set(seed.reportId, {
+      ownerEmail: seed.ownerEmail,
+      view: {
+        id: seed.reportId,
+        description: seed.description,
+        createdAt: seed.submittedAt,
+        version: mockRowVersion(reportVersionSeed++),
+        evidence: seed.localUris.map((uri, index) => ({
+          id: `${seed.reportId}-EV-${index + 1}`,
+          fileId: `${seed.reportId}-FILE-${index + 1}`,
+          fileVersion: null,
+          supplementId: null,
+          capturedAt: seed.submittedAt,
+          locationSource: 'MANUAL',
+          location: {
+            latitude: seed.coordinates.latitude,
+            longitude: seed.coordinates.longitude,
+            accuracyMeters: null,
+          },
+        })),
+        routingStatus: null,
+        publicUpdates: [],
+        supplements: [],
+      },
+    });
   }
 }
 
 seedReports();
+
 
 // RFC 5322 dot-atom: KHONG cho dot dau/cuoi/hai lien tie trong local-part,
 // domain label khong bat dau/bang dau gach, TLD la chu cai >= 2.
@@ -147,32 +212,6 @@ function isValidEmail(email: string): boolean {
   return EMAIL_REGEX.test(normalized);
 }
 
-function isValidLonLat(coords: [number, number]): boolean {
-  if (!Array.isArray(coords) || coords.length !== 2) return false;
-  const [lon, lat] = coords;
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return false;
-  if (lon < -180 || lon > 180) return false;
-  if (lat < -90 || lat > 90) return false;
-  return true;
-}
-
-function withIdempotency<T>(key: string | undefined, produce: () => T): T {
-  if (!key) {
-    return produce();
-  }
-  const cached = idempotencyCache.get(key);
-  if (cached !== undefined) {
-    return cached as T;
-  }
-  const result = produce();
-  idempotencyCache.set(key, result);
-  return result;
-}
-
-/**
- * API-010 — đăng ký người phản ánh. Trả intent của BE (KHÔNG trả OTP); màn OTP đọc
- * `activeIntentId` từ intent này.
- */
 export async function registerReporterEmail(
   email: string,
   idempotencyKey?: string,
@@ -186,7 +225,7 @@ export async function registerReporterEmail(
     {
       email: normalized,
       password: `Reporter@${idempotencyKey?.slice(-6) ?? '2026'}`,
-      displayName: normalized.split('@')[0] || 'Người dân',
+      displayName: normalized.split('@')[0] || 'Ng╞░ß╗¥i d├ón',
       reporterType: 'Citizen',
     },
     { idempotencyKey },
@@ -210,7 +249,7 @@ export async function registerReporterEmail(
   return registration;
 }
 
-/** API-011 — gửi lại mã cho intent đã tạo (KHÔNG tạo intent mới). */
+/** API-011 ΓÇö gß╗¡i lß║íi m├ú cho intent ─æ├ú tß║ío (KH├öNG tß║ío intent mß╗¢i). */
 export async function resendReporterRegistration(
   intentId: string,
   idempotencyKey?: string,
@@ -226,8 +265,8 @@ export async function resendReporterRegistration(
 }
 
 /**
- * API-012 — xác thực OTP; BE trả `AuthTokenResponseDto`. UI hiện tại chỉ cần email đã xác thực
- * nên vẫn giữ shape cũ, nhưng danh tính lấy từ token trả về (không phải chuỗi người dùng gõ).
+ * API-012 ΓÇö x├íc thß╗▒c OTP; BE trß║ú `AuthTokenResponseDto`. UI hiß╗çn tß║íi chß╗ë cß║ºn email ─æ├ú x├íc thß╗▒c
+ * n├¬n vß║½n giß╗» shape c┼⌐, nh╞░ng danh t├¡nh lß║Ñy tß╗½ token trß║ú vß╗ü (kh├┤ng phß║úi chuß╗ùi ng╞░ß╗¥i d├╣ng g├╡).
  */
 export async function verifyReporterIntent(
   intentId: string,
@@ -251,169 +290,182 @@ export async function verifyReporterIntent(
   }
 }
 
-export async function submitReport(
-  payload: ReportCreate,
-  idempotencyKey?: string,
-): Promise<{ report: ReporterReport }> {
-  await delay(600);
-  if (!payload.description.trim()) {
-    throw new Error('DESCRIPTION_REQUIRED');
+function requireReporterEmail(email: string | undefined): string {
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) {
+    throwMockApiError('auth_unauthorized', {
+      message: 'Cần đăng nhập để thao tác với phản ánh.',
+    });
   }
-  if (!isValidEmail(payload.reporter_email)) {
-    throw new Error('EMAIL_INVALID');
-  }
-  if (!isValidLonLat(payload.coordinates)) {
-    throw new Error('COORDINATES_INVALID');
-  }
-  if (payload.photo_uris.length > MAX_PHOTOS) {
-    throw new Error('TOO_MANY_PHOTOS');
-  }
-  if (payload.defect_type !== undefined && !isDefectTypeCode(payload.defect_type)) {
-    throw new Error('DEFECT_TYPE_INVALID');
-  }
+  return normalized;
+}
 
-  return withIdempotency(idempotencyKey, () => {
-    const trackingCode = nextTrackingCode();
-    const report: ReporterReport = {
-      id: `RPT-${trackingCounter}`,
-      tracking_code: trackingCode,
-      reporter_email: payload.reporter_email.trim().toLowerCase(),
-      route_hint: payload.route_hint,
-      description: payload.description.trim(),
-      photo_uris: payload.photo_uris,
-      coordinates: payload.coordinates,
-      defect_type: payload.defect_type,
-      status: ReporterReportStatus.SUBMITTED,
-      submitted_at: new Date().toISOString(),
-    };
-    reports.set(trackingCode, report);
-    return { report };
+/** API-216/219 khai báo `Idempotency-Key` bắt buộc — thiếu ⇒ 428. */
+function requireCommandKey(idempotencyKey: string | undefined): string {
+  const key = idempotencyKey?.trim();
+  if (!key) {
+    throwMockApiError('precondition_required', {
+      message: 'Thiếu Idempotency-Key cho lệnh gửi phản ánh.',
+    });
+  }
+  return key;
+}
+
+function reportFingerprint(request: CreateReporterReportRequestDto): string {
+  return JSON.stringify({
+    description: (request.description ?? '').trim(),
+    evidence: (request.evidence ?? []).map(
+      (item) => `${item.fileId}:${item.fileVersion ?? ''}`,
+    ),
   });
 }
 
-export async function getReportByTracking(
-  trackingCode: string,
-): Promise<{ report: ReporterReport | null }> {
-  await delay(300);
-  const normalized = normalizeTrackingCode(trackingCode);
-  return { report: reports.get(normalized) ?? null };
-}
-
-export function getReporterReportsSnapshot(): ReporterReport[] {
-  return [...reports.values()];
-}
-
-export async function listMyReports(email: string): Promise<{ items: ReporterReport[] }> {
-  await delay(300);
-  const normalized = email.trim().toLowerCase();
-  const items = [...reports.values()]
-    .filter((report) => report.reporter_email === normalized)
-    .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
-  return { items };
-}
-
-export async function submitFeedback(
-  trackingCode: string,
-  rating: number,
-  feedbackNotes: string,
-): Promise<{ report: ReporterReport }> {
-  await delay(400);
-  const normalized = normalizeTrackingCode(trackingCode);
-  const report = reports.get(normalized);
-  if (!report) {
-    throw new Error('REPORT_NOT_FOUND');
+function normalizeReportEvidence(
+  input: ReportEvidenceInputDto[] | null | undefined,
+): OwnReportEvidenceDto[] {
+  const list = Array.isArray(input) ? input : [];
+  if (list.length > MAX_PHOTOS) {
+    throwMockApiError('validation_error', {
+      message: `Chỉ nhận tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`,
+      details: [{ field: 'evidence', code: 'validation_error', message: 'Quá số ảnh cho phép.' }],
+    });
   }
-  if (rating < 1 || rating > 5) {
-    throw new Error('RATING_INVALID');
-  }
-  const updated: ReporterReport = {
-    ...report,
-    rating,
-    feedback_notes: feedbackNotes.trim() || undefined,
-    status: ReporterReportStatus.COMPLETED,
-  };
-  reports.set(normalized, updated);
-  return { report: updated };
-}
-
-export function advanceReportStatus(trackingCode: string, status: ReporterReportStatus): void {
-  const normalized = normalizeTrackingCode(trackingCode);
-  const report = reports.get(normalized);
-  if (!report) {
-    return;
-  }
-  reports.set(normalized, { ...report, status });
-}
-
-export function normalizeTrackingCode(input: string): string {
-  const trimmed = input.trim().toUpperCase();
-  if (!trimmed) {
-    return '';
-  }
-  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-}
-
-export function buildTrackingTimeline(
-  status: ReporterReportStatus,
-  submittedAt: string,
-): TrackingTimelineEvent[] {
-  const rejected = status === ReporterReportStatus.REJECTED;
-  const order: ReporterReportStatus[] = [
-    ReporterReportStatus.SUBMITTED,
-    ReporterReportStatus.RECEIVED,
-    ReporterReportStatus.INSPECTING,
-    ReporterReportStatus.REPAIRING,
-    ReporterReportStatus.COMPLETED,
-  ];
-  const labels: Record<ReporterReportStatus, string> = {
-    [ReporterReportStatus.SUBMITTED]: 'Đã gửi phản ánh',
-    [ReporterReportStatus.RECEIVED]: 'Đã tiếp nhận',
-    [ReporterReportStatus.INSPECTING]: 'Đang khảo sát / đo đạc',
-    [ReporterReportStatus.REPAIRING]: 'Đang sửa chữa',
-    [ReporterReportStatus.COMPLETED]: 'Hoàn thành nghiệm thu',
-    [ReporterReportStatus.REJECTED]: 'Không hợp lệ',
-  };
-  const descriptions: Record<ReporterReportStatus, string> = {
-    [ReporterReportStatus.SUBMITTED]: 'Hệ thống đã ghi nhận phản ánh của bạn',
-    [ReporterReportStatus.RECEIVED]: 'Ban QLDA đã tiếp nhận hồ sơ',
-    [ReporterReportStatus.INSPECTING]: 'Đội khảo sát hiện trường đang kiểm tra vị trí hư hại',
-    [ReporterReportStatus.REPAIRING]: 'Đội sửa chữa đang khắc phục khiếm khuyết',
-    [ReporterReportStatus.COMPLETED]: 'Đã sửa chữa xong và nghiệm thu đạt yêu cầu',
-    [ReporterReportStatus.REJECTED]: 'Phản ánh không thuộc phạm vi tuyến đường bê tông phụ trách',
-  };
-
-  if (rejected) {
-    return [
-      {
-        step: ReporterReportStatus.SUBMITTED,
-        label: labels[ReporterReportStatus.SUBMITTED],
-        description: descriptions[ReporterReportStatus.SUBMITTED],
-        occurred_at: submittedAt,
-        completed: true,
-      },
-      {
-        step: ReporterReportStatus.REJECTED,
-        label: labels[ReporterReportStatus.REJECTED],
-        description: descriptions[ReporterReportStatus.REJECTED],
-        completed: true,
-      },
-    ];
-  }
-
-  const currentIndex = order.indexOf(status);
-  const base = new Date(submittedAt).getTime() || Date.now();
-  const stepGapMs = 1000 * 60 * 60 * 12;
-
-  return order.map((step, index) => {
-    const completed = currentIndex >= index;
+  return list.map((item, index) => {
+    const fileId = typeof item.fileId === 'string' ? item.fileId.trim() : '';
+    if (!fileId) {
+      throwMockApiError('validation_error', {
+        message: 'Thiếu mã ảnh đã tải lên.',
+        details: [
+          {
+            field: `evidence[${index}].fileId`,
+            code: 'validation_error',
+            message: 'Thiếu mã ảnh đã tải lên.',
+          },
+        ],
+      });
+    }
+    const file = evidenceFiles.get(fileId);
+    if (!file) {
+      throwMockApiError('not_found', { message: 'Không tìm thấy ảnh đã tải lên.' });
+    }
+    if (file.status !== 'VERIFIED') {
+      throwMockApiError('source_not_ready', {
+        message: 'Ảnh chưa xác minh xong. Vui lòng chờ trong giây lát rồi gửi lại.',
+      });
+    }
     return {
-      step,
-      label: labels[step],
-      description: descriptions[step],
-      occurred_at: completed ? new Date(base + index * stepGapMs).toISOString() : undefined,
-      completed,
+      id: uuidv4(),
+      fileId,
+      fileVersion: item.fileVersion ?? file.version ?? null,
+      supplementId: null,
+      capturedAt: item.capturedAt ?? null,
+      locationSource: item.locationSource ?? null,
+      location: item.location ?? null,
     };
   });
+}
+
+function ownedReport(reportId: string, ownerEmail: string): OwnReportDto {
+  const row = ownReports.get(reportId);
+  if (!row || row.ownerEmail !== ownerEmail) {
+    throwMockApiError('not_found', { message: 'Không tìm thấy phản ánh của bạn.' });
+  }
+  return row.view;
+}
+
+/** API-216 — `POST /api/v1/reports`. Trả `ReporterReportResponseDto` + `ETag`. */
+export async function submitReport(
+  request: CreateReporterReportRequestDto,
+  options: ReportWriteOptions = {},
+): Promise<{ report: ReporterReportResponseDto; etag: string }> {
+  await delay(600);
+  const ownerEmail = requireReporterEmail(options.reporterEmail);
+  const key = requireCommandKey(options.idempotencyKey);
+  const description = (request.description ?? '').trim();
+  if (!description) {
+    throwMockApiError('validation_error', {
+      message: 'Vui lòng nhập mô tả hiện trạng hư hại.',
+      details: [{ field: 'description', code: 'validation_error', message: 'Thiếu mô tả.' }],
+    });
+  }
+  const evidence = normalizeReportEvidence(request.evidence);
+  if (evidence.length === 0) {
+    throwMockApiError('validation_error', {
+      message: 'Phản ánh cần ít nhất một ảnh hiện trường đã xác minh.',
+      details: [{ field: 'evidence', code: 'validation_error', message: 'Thiếu ảnh hiện trường.' }],
+    });
+  }
+  const fingerprint = reportFingerprint(request);
+
+  const cached = idempotencyCache.get(key) as
+    | { fingerprint: string; response: { report: ReporterReportResponseDto; etag: string } }
+    | undefined;
+  if (cached) {
+    if (cached.fingerprint !== fingerprint) {
+      throwMockApiError('idempotency_key_reused', {
+        message: 'Khoá idempotency đã dùng cho một phản ánh khác.',
+      });
+    }
+    return cached.response;
+  }
+
+  const id = uuidv4();
+  const now = new Date().toISOString();
+  const version = mockRowVersion(reportVersionSeed++);
+  const view: OwnReportDto = {
+    id,
+    description,
+    createdAt: now,
+    version,
+    evidence,
+    routingStatus: null,
+    publicUpdates: [],
+    supplements: [],
+  };
+  ownReports.set(id, { ownerEmail, view });
+
+  const response = {
+    report: {
+      id,
+      description,
+      createdAt: now,
+      version,
+      evidenceIds: evidence.map((item) => item.id),
+    },
+    etag: version,
+  };
+  idempotencyCache.set(key, { fingerprint, response });
+  return response;
+}
+
+/** API-215 — `GET /api/v1/reports` (chỉ phản ánh của chính người đang đăng nhập). */
+export async function listMyReports(
+  email: string | undefined,
+  options: { cursor?: string | null; pageSize?: number } = {},
+): Promise<OwnReportPageDto> {
+  await delay(300);
+  const ownerEmail = requireReporterEmail(email);
+  const pageSize = Math.min(Math.max(options.pageSize ?? 20, 1), 50);
+  const all = [...ownReports.values()]
+    .filter((row) => row.ownerEmail === ownerEmail)
+    .map((row) => row.view)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const parsed = Number.parseInt(options.cursor ?? '0', 10);
+  const start = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  const items = all.slice(start, start + pageSize);
+  const nextIndex = start + pageSize;
+  return { items, nextCursor: nextIndex < all.length ? String(nextIndex) : null };
+}
+
+/** API-217 — `GET /api/v1/reports/{reportId}`. */
+export async function getOwnReport(
+  reportId: string,
+  email: string | undefined,
+): Promise<OwnReportResult> {
+  await delay(250);
+  const ownerEmail = requireReporterEmail(email);
+  const view = ownedReport(reportId, ownerEmail);
+  return { report: view, etag: view.version ?? mockRowVersion(1) };
 }
 
 export { MOCK_OTP };
@@ -750,51 +802,74 @@ export function createMockUploadTransport(): UploadTransport {
 }
 
 // =============================================================================
-// PHẢN ÁNH BỔ SUNG (API-217 đọc / API-219 gửi kèm If-Match)
+// PHẢN ÁNH BỔ SUNG (API-219 — body CreateReporterReportRequestDto, If-Match + Idempotency-Key)
 // =============================================================================
 
-export interface ReportSupplementInput {
-  description: string;
-  photo_uris: string[];
-}
+export type ReportSupplementInput = CreateReporterReportRequestDto;
 
-const reportVersions = new Map<string, number>();
-
-export function getReportWireVersion(trackingCode: string): string {
-  const normalized = normalizeTrackingCode(trackingCode);
-  return mockRowVersion(reportVersions.get(normalized) ?? 1);
-}
-
+/** API-219 — `POST /api/v1/reports/{reportId}/supplements`. Trả `OwnReportDto` + `ETag` mới. */
 export async function submitReportSupplement(
-  trackingCode: string,
+  reportId: string,
   input: ReportSupplementInput,
-  expectedVersion: string,
-  idempotencyKey?: string,
-): Promise<{ report: ReporterReport; version: string }> {
+  options: ReportWriteOptions & { ifMatch?: string } = {},
+): Promise<OwnReportResult> {
   await delay(500);
-  const normalized = normalizeTrackingCode(trackingCode);
-  const report = reports.get(normalized);
-  if (!report) {
-    throwMockApiError('not_found', { message: 'Không tìm thấy phản ánh cần bổ sung.' });
+  const ownerEmail = requireReporterEmail(options.reporterEmail);
+  const key = requireCommandKey(options.idempotencyKey);
+  const ifMatch = options.ifMatch?.trim();
+  if (!ifMatch) {
+    throwMockApiError('precondition_required', {
+      message: 'Thiếu If-Match cho lệnh bổ sung phản ánh.',
+    });
   }
-  if (!input.description.trim()) {
-    throwMockApiError('validation_error', { message: 'Vui lòng nhập nội dung bổ sung.' });
+  const view = ownedReport(reportId, ownerEmail);
+  const description = (input.description ?? '').trim();
+  if (!description) {
+    throwMockApiError('validation_error', {
+      message: 'Vui lòng nhập nội dung bổ sung.',
+      details: [{ field: 'description', code: 'validation_error', message: 'Thiếu nội dung.' }],
+    });
   }
-  if (expectedVersion !== getReportWireVersion(normalized)) {
+  const evidence = normalizeReportEvidence(input.evidence);
+  const fingerprint = `${ifMatch}|${description}|${evidence
+    .map((item) => item.fileId)
+    .join(',')}`;
+
+  const cached = idempotencyCache.get(key) as
+    | { fingerprint: string; result: OwnReportResult }
+    | undefined;
+  if (cached) {
+    if (cached.fingerprint !== fingerprint) {
+      throwMockApiError('idempotency_key_reused', {
+        message: 'Khoá idempotency đã dùng cho một nội dung bổ sung khác.',
+      });
+    }
+    return cached.result;
+  }
+
+  if (ifMatch !== view.version) {
     throwMockApiError('concurrency_conflict', {
       message: 'Phản ánh đã được cập nhật ở nơi khác. Vui lòng tải lại bản mới nhất.',
     });
   }
 
-  return withIdempotency(idempotencyKey, () => {
-    const nextVersion = (reportVersions.get(normalized) ?? 1) + 1;
-    reportVersions.set(normalized, nextVersion);
-    const updated: ReporterReport = {
-      ...report,
-      description: `${report.description}\n\n[Bổ sung] ${input.description.trim()}`,
-      photo_uris: [...report.photo_uris, ...input.photo_uris],
-    };
-    reports.set(normalized, updated);
-    return { report: updated, version: mockRowVersion(nextVersion) };
-  });
+  const supplement: OwnReportSupplementDto = {
+    id: uuidv4(),
+    description,
+    createdAt: new Date().toISOString(),
+  };
+  const version = mockRowVersion(reportVersionSeed++);
+  const next: OwnReportDto = {
+    ...view,
+    version,
+    supplements: [...view.supplements, supplement],
+    evidence: [
+      ...view.evidence,
+      ...evidence.map((item) => ({ ...item, supplementId: supplement.id })),
+    ],
+  };
+  ownReports.set(reportId, { ownerEmail, view: next });
+  const result: OwnReportResult = { report: next, etag: version };
+  idempotencyCache.set(key, { fingerprint, result });
+  return result;
 }

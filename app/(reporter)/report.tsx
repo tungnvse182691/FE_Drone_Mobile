@@ -16,21 +16,28 @@ import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { DEFECT_TYPE_OPTIONS, DefectTypeCode } from '../../src/constants/defect-types';
-import { registerReporterEmail, submitReport, ReportCreate } from '../../src/api/mock/reporter';
 import {
-  buildReportEvidenceLocation,
-  hasUsableCoordinate,
-  isZeroCoordinate,
+  registerReporterEmail,
+  submitReport,
+  type CreateReporterReportRequestDto,
+  type ReportEvidenceInputDto,
+} from '../../src/api/mock/reporter';
+import {
+  MAX_PHOTO_BYTES,
   locationSourceFor,
-} from '../../src/types/position';
+  normalizePhotoMediaType,
+  sha256HexOfBytes,
+} from '../../src/api/uploads';
+import { hasUsableCoordinate, isZeroCoordinate } from '../../src/types/position';
+import { useUploadsStore } from '../../src/store/uploads';
 import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { AUTH_OTP_VERIFY, REPORTER_TRACK } from '../../src/constants/routes';
+import { AUTH_OTP_VERIFY, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { uuidv4 } from '../../src/utils/uuid';
 
@@ -44,12 +51,14 @@ const MAX_PHOTOS = 3;
 const MIN_DESCRIPTION = 10;
 const SUBMIT_FALLBACK_ERROR = 'Không thể gửi phản ánh. Vui lòng thử lại sau.';
 
-/** Mã lỗi từ `submitReport`/`registerReporterEmail` → thông báo tiếng Việt cho người dân. */
+/** Mã lỗi ProblemDetails từ mock API → thông báo tiếng Việt cho người dân. */
 const errorMessages: Record<string, string> = {
-  TOO_MANY_PHOTOS: 'Bạn chỉ được tải lên tối đa 3 hình ảnh hiện trường.',
-  COORDINATES_INVALID: 'Tọa độ vị trí không hợp lệ. Vui lòng bật GPS và thử lại.',
-  DEFECT_TYPE_INVALID: 'Loại khuyết tật không thuộc danh mục quy chuẩn.',
-  DESCRIPTION_REQUIRED: 'Vui lòng nhập mô tả hiện trạng hư hại.',
+  validation_error: 'Thông tin phản ánh chưa hợp lệ. Vui lòng kiểm tra lại mô tả và ảnh.',
+  precondition_required: 'Thiếu khoá chống gửi trùng. Vui lòng thử lại.',
+  idempotency_key_reused: 'Lần gửi trước đã dùng cho nội dung khác. Vui lòng thử lại.',
+  source_not_ready: 'Ảnh chưa xác minh xong. Vui lòng chờ vài giây rồi gửi lại.',
+  not_found: 'Không tìm thấy ảnh đã tải lên. Vui lòng chụp lại.',
+  auth_unauthorized: 'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại.',
   EMAIL_INVALID: 'Địa chỉ email không hợp lệ. Vui lòng kiểm tra lại.',
   EMAIL_IN_USE: 'Email này đã có tài khoản. Vui lòng đăng nhập để gửi phản ánh.',
 };
@@ -70,8 +79,6 @@ export default function ReporterReportScreen() {
   const [cameraReady, setCameraReady] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
 
-  const [defectType, setDefectType] = useState<DefectTypeCode | null>(null);
-  const [routeHint, setRouteHint] = useState('');
   const [description, setDescription] = useState('');
   const [email, setEmail] = useState('');
   const [coords, setCoords] = useState<Coords | null>(null);
@@ -99,8 +106,11 @@ export default function ReporterReportScreen() {
   const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
   const setEmailPrefill = useReporterStore((state) => state.setEmail);
   const setPendingReport = useReporterStore((state) => state.setPendingReport);
-  const addTrackingCode = useReporterStore((state) => state.addTrackingCode);
   const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
+  const enqueuePhoto = useUploadsStore((state) => state.enqueuePhoto);
+  const advanceAll = useUploadsStore((state) => state.advanceAll);
+  /** uri cục bộ → id hàng đợi upload, tránh tạo phiên trùng khi người dân bấm gửi lại. */
+  const uploadedItemIds = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const initialEmail = user?.phone_or_email || verifiedEmail || emailPrefill;
@@ -184,9 +194,6 @@ export default function ReporterReportScreen() {
 
   const validate = () => {
     const next: Record<string, string> = {};
-    if (!defectType) {
-      next.defectType = 'Vui lòng chọn loại khuyết tật.';
-    }
     if (description.trim().length < MIN_DESCRIPTION) {
       next.description = `Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự để đội nghiệp vụ xác định vị trí.`;
     }
@@ -197,17 +204,17 @@ export default function ReporterReportScreen() {
     } else if (!emailRegex.test(trimmedEmail)) {
       next.email = 'Vui lòng nhập địa chỉ email hợp lệ (ví dụ: ten@hoanghai.vn hoặc ten@gmail.com).';
     }
-    if (!routeHint.trim()) {
-      next.routeHint = 'Vui lòng nhập vị trí hoặc mốc giao thông gần nhất.';
-    }
     if (!coords) {
       next.coords = 'Chưa lấy được tọa độ. Vui lòng bật GPS rồi thử lại.';
+    }
+    if (photos.length === 0) {
+      next.photos = 'Vui lòng chụp hoặc chọn ít nhất một ảnh hiện trường.';
     }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const saveDraft = async (payload: ReportCreate) => {
+  const saveDraft = async (payload: CreateReporterReportRequestDto) => {
     try {
       const db = openDatabase();
       await initDatabase(db);
@@ -223,29 +230,76 @@ export default function ReporterReportScreen() {
     }
   };
 
+  /**
+   * Đưa ảnh vào hàng đợi API-211/213 rồi chờ API-208 xác minh — chỉ ảnh VERIFIED
+   * mới có `fileId` để gửi kèm phản ánh.
+   */
+  const uploadEvidence = async (): Promise<ReportEvidenceInputDto[]> => {
+    const usable = hasUsableCoordinate(coords?.latitude, coords?.longitude);
+    for (const uri of photos) {
+      if (uploadedItemIds.current.has(uri)) {
+        continue;
+      }
+      const fileName = uri.split('/').pop() || `hien-truong-${uuidv4()}.jpg`;
+      const mediaType = normalizePhotoMediaType(fileName, null);
+      if (!mediaType) {
+        throw new Error('validation_error');
+      }
+      const bytes = new Uint8Array(await new File(uri).arrayBuffer());
+      if (bytes.byteLength <= 0 || bytes.byteLength > MAX_PHOTO_BYTES) {
+        throw new Error('validation_error');
+      }
+      const checksumSha256 = await sha256HexOfBytes(bytes);
+      const itemId = await enqueuePhoto({
+        uriLocal: uri,
+        fileName,
+        mediaType,
+        sizeBytes: bytes.byteLength,
+        checksumSha256,
+        capturedAt: new Date().toISOString(),
+        locationSource: locationSourceFor(usable),
+        latitude: usable ? coords?.latitude ?? null : null,
+        longitude: usable ? coords?.longitude ?? null : null,
+        accuracyMeters: usable ? coords?.accuracyMeters ?? null : null,
+      });
+      uploadedItemIds.current.set(uri, itemId);
+    }
+
+    await advanceAll();
+
+    const items = useUploadsStore.getState().items;
+    const evidence: ReportEvidenceInputDto[] = [];
+    for (const uri of photos) {
+      const itemId = uploadedItemIds.current.get(uri);
+      const item = items.find((entry) => entry.id === itemId);
+      if (!item || item.mediaState !== 'VERIFIED' || !item.fileId) {
+        throw new Error('source_not_ready');
+      }
+      evidence.push({
+        fileId: item.fileId,
+        fileVersion: item.verifiedVersion,
+        locationSource: item.locationSource,
+        capturedAt: item.capturedAt,
+        location:
+          item.latitude !== null && item.longitude !== null
+            ? {
+                latitude: item.latitude,
+                longitude: item.longitude,
+                accuracyMeters: item.accuracyMeters,
+              }
+            : null,
+      });
+    }
+    return evidence;
+  };
+
   const handleSubmit = async () => {
     setSubmitError(null);
-    if (!validate() || !defectType || !coords) {
+    if (!validate() || !coords) {
       return;
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const usable = hasUsableCoordinate(coords.latitude, coords.longitude);
-    const payload: ReportCreate = {
-      reporter_email: trimmedEmail,
-      route_hint: routeHint.trim(),
-      description: description.trim(),
-      photo_uris: photos,
-      coordinates: [coords.longitude, coords.latitude],
-      defect_type: defectType,
-      location_source: locationSourceFor(usable),
-      location: buildReportEvidenceLocation(
-        coords.latitude,
-        coords.longitude,
-        coords.accuracyMeters,
-      ),
-    };
-
     const isAlreadyVerified =
       (!!verifiedEmail && verifiedEmail.toLowerCase() === trimmedEmail) ||
       (!!user?.phone_or_email && user.phone_or_email.toLowerCase() === trimmedEmail);
@@ -253,26 +307,34 @@ export default function ReporterReportScreen() {
     setSubmitting(true);
     const draftId = ensureDraftId();
     try {
+      const evidence = await uploadEvidence();
+      const payload: CreateReporterReportRequestDto = {
+        description: description.trim(),
+        evidence,
+      };
       await saveDraft(payload);
+
       if (isAlreadyVerified) {
         const submitScope = `reporter:submit:${draftId}`;
-        const { report } = await submitReport(payload, getOrCreateCommandKey(submitScope));
+        const { report } = await submitReport(payload, {
+          reporterEmail: trimmedEmail,
+          idempotencyKey: getOrCreateCommandKey(submitScope),
+        });
         clearCommandKey(submitScope);
         resetDraftId();
-        addTrackingCode(report.tracking_code);
         clearPendingReport();
-        router.push({
-          pathname: REPORTER_TRACK,
-          params: { code: report.tracking_code },
+        router.replace({
+          pathname: REPORTER_REPORT_DETAIL,
+          params: { reportId: report.id },
         });
         return;
       }
 
-      setEmailPrefill(payload.reporter_email);
+      setEmailPrefill(trimmedEmail);
       setPendingReport(payload);
       const registerScope = `reporter:register:${draftId}`;
       const intent = await registerReporterEmail(
-        payload.reporter_email,
+        trimmedEmail,
         getOrCreateCommandKey(registerScope),
       );
       clearCommandKey(registerScope);
@@ -281,7 +343,8 @@ export default function ReporterReportScreen() {
         params: { intentId: intent.intentId, email: intent.email },
       });
     } catch (err) {
-      const code = (err as Error).message;
+      const apiCode = (err as { response?: { data?: { code?: string } } }).response?.data?.code;
+      const code = apiCode ?? (err as Error).message;
       setSubmitError(errorMessages[code] ?? SUBMIT_FALLBACK_ERROR);
     } finally {
       setSubmitting(false);
@@ -303,49 +366,6 @@ export default function ReporterReportScreen() {
           <Text style={[typography.caption, styles.subtitle]}>
             Mô tả hiện trạng hư hại để Ban Quản lý dự án khảo sát và xử lý.
           </Text>
-
-          <Text style={[typography.labelLg, styles.label]}>Loại khuyết tật</Text>
-          <View style={styles.chipWrap}>
-            {DEFECT_TYPE_OPTIONS.map((option) => {
-              const selected = option.code === defectType;
-              return (
-                <Pressable
-                  key={option.code}
-                  onPress={() => {
-                    setDefectType(option.code);
-                    setErrors((current) => ({ ...current, defectType: '' }));
-                  }}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  testID={`defect-${option.code}`}
-                  style={({ pressed }) => [
-                    styles.chip,
-                    selected && styles.chipSelected,
-                    pressed && styles.chipPressed,
-                  ]}
-                >
-                  <Text style={[typography.labelLg, selected ? styles.chipTextSelected : styles.chipText]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {errors.defectType ? (
-            <Text style={[typography.caption, styles.error]}>{errors.defectType}</Text>
-          ) : null}
-
-          <InputField
-            label="Vị trí / mốc giao thông"
-            value={routeHint}
-            onChangeText={(text) => {
-              setRouteHint(text);
-              setErrors((current) => ({ ...current, routeHint: '' }));
-            }}
-            placeholder="Ví dụ: Km02+200 hướng Vĩnh Lộc B, gần cầu Bà Lát"
-            error={errors.routeHint}
-            testID="reporter-route-hint"
-          />
 
           <View style={styles.gpsCard}>
             <View style={styles.gpsRow}>
@@ -421,6 +441,9 @@ export default function ReporterReportScreen() {
               </Pressable>
             ) : null}
           </View>
+          {errors.photos ? (
+            <Text style={[typography.caption, styles.error]}>{errors.photos}</Text>
+          ) : null}
           {!permission?.granted ? (
             <View style={styles.permissionRow}>
               <Text style={[typography.caption, styles.gpsText]}>

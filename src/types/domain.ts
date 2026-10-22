@@ -1,5 +1,5 @@
 /// <reference types="geojson" />
-import { RoleCode, SyncStatus, IntegrationStatus, DefectStatus, Severity, RepairBatchStatus, FieldInspectionTaskStatus, MeasurementType, TaskMode, FastTrackEligibility, ReporterReportStatus, LocalState } from './enums';
+import { RoleCode, SyncStatus, IntegrationStatus, DefectStatus, Severity, RepairBatchStatus, FieldInspectionTaskStatus, MeasurementType, TaskMode, FastTrackEligibility, LocalState } from './enums';
 import type { DefectTypeCode } from '../constants/defect-types';
 import { isOfflineOperationKind, type OfflineOperationKind } from '../offline/operation-kind';
 
@@ -192,30 +192,6 @@ export interface RepairEvidence {
   captured_at: string;
   is_reused_from_source?: 'REPORTER' | 'DRONE'; // BR-17
   synced: SyncStatus;
-}
-
-export interface ReporterReport {
-  id: string;
-  tracking_code: string;
-  reporter_email: string;
-  reporter_phone?: string;
-  route_hint?: string;
-  description: string;
-  photo_uris: string[];
-  coordinates: [number, number]; // WGS84 GeoJSON order: [longitude, latitude]
-  defect_type?: DefectTypeCode;
-  status: ReporterReportStatus;
-  submitted_at: string;
-  rating?: number;
-  feedback_notes?: string;
-}
-
-export interface TrackingTimelineEvent {
-  step: ReporterReportStatus;
-  label: string;
-  description: string;
-  occurred_at?: string;
-  completed: boolean;
 }
 
 // ===========================================================================
