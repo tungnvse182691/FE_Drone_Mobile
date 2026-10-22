@@ -1,13 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { Chip } from '../../src/components/Chip';
+import { EmptyState } from '../../src/components/EmptyState';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { acceptOperatorSurveyTask, getOperatorSurveyTask } from '../../src/api/mock/surveys';
+import {
+  acceptOperatorSurveyTask,
+  getOperatorSurveyTask,
+  getOperatorWorkPackage,
+  type OperatorSurveyTaskV2Dto,
+  type OperatorSurveyTaskWorkPackageDto,
+} from '../../src/api/mock/surveys';
+import {
+  operatorTaskDisplayCode,
+  operatorTaskSegmentCount,
+  operatorTaskStatusLabel,
+  operatorTaskTargetBand,
+} from '../../src/api/operator-task-view';
+import { messageFor } from '../../src/api/errorCatalog';
+import { parseProblemDetails } from '../../src/api/problemDetails';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 
 const softShadow = Platform.select({
@@ -16,202 +41,86 @@ const softShadow = Platform.select({
   default: {},
 });
 
-interface RequestDetailData {
-  code: string;
-  roadTitle: string;
-  location: string;
-  statusText: string;
-  length: string;
-  altitude: string;
-  overlap: string;
-  format: string;
-  sensor: string;
-  postProcess: string;
-  droneModel: string;
-  coordinates: string;
-  corridorTitle: string;
-  roadName: string;
-  targetPoint: string;
-  pmName: string;
-  instructionTime: string;
-  instructionQuote: string;
-  priority: string;
-  accessPoint: {
-    name: string;
-    terrain: string;
-    wgs84Coord: string;
-    lat: number;
-    lng: number;
-  };
-}
-
-const REQUEST_DETAILS: Record<string, RequestDetailData> = {
-  '#HH-KS-089': {
-    code: '#HH-KS-089',
-    roadTitle: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
-    location: 'Km03+000 - Km03+300, Tân Kiên, Bình Chánh, TP.HCM',
-    statusText: 'MỚI TIẾP NHẬN',
-    length: '3.5 km',
-    altitude: '45 m (AGL)',
-    overlap: '80% / 70%',
-    format: '4K 60fps + RTK',
-    sensor: 'Camera 4K RGB 60fps + RTK độ chính xác cm',
-    postProcess: 'Tái dựng mô hình độ cao số DSM bằng OpenDroneMap (ODM)',
-    droneModel: 'M350-HH-02 (DJI Matrice 350 RTK)',
-    coordinates: '10.7412° B, 106.5524° Đ',
-    corridorTitle: 'ĐOẠN TÂN KIÊN - TUYẾN ĐH.05',
-    roadName: 'Tân Kiên (Km03+000 - Km03+300)',
-    targetPoint: 'Xói lở vai đường mép taluy âm',
-    pmName: 'Trần Hoàng Quân (PM)',
-    instructionTime: 'Hôm nay, 08:30',
-    instructionQuote:
-      '“Khảo sát đoạn từ Km03+000 đến Km03+300. Chú ý quét kỹ khu vực mép taluy âm đang có dấu hiệu xói lở vai đường sau mưa lớn. Cần bay ở độ cao 45m và quét ảnh 4K RGB kết hợp mô hình độ cao số DSM (ODM) 2 lượt.”',
-    priority: 'Khẩn cấp',
-    accessPoint: {
-      name: 'Bãi đất trống Km01+850 - Cầu Bà Lát, Bình Chánh',
-      terrain: 'Mặt bằng phẳng, không vướng đường điện cao thế, bán kính an toàn 15m',
-      wgs84Coord: '10.7412° B, 106.5524° Đ',
-      lat: 10.7412,
-      lng: 106.5524,
-    },
-  },
-  '#HH-KS-090': {
-    code: '#HH-KS-090',
-    roadTitle: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
-    location: 'Km01+200 - Km02+500, Vĩnh Lộc B, Bình Chánh, TP.HCM',
-    statusText: 'MỚI TIẾP NHẬN',
-    length: '2.4 km',
-    altitude: '45 m (AGL)',
-    overlap: '80% / 70%',
-    format: '4K 60fps + RTK',
-    sensor: 'Camera 4K RGB 60fps + RTK độ chính xác cm',
-    postProcess: 'Tái dựng mô hình độ cao số DSM bằng OpenDroneMap (ODM)',
-    droneModel: 'M350-HH-02 (DJI Matrice 350 RTK)',
-    coordinates: '10.7333° B, 106.6833° Đ',
-    corridorTitle: 'ĐOẠN VĨNH LỘC B - TUYẾN ĐH.05',
-    roadName: 'Vĩnh Lộc B (Km01+200 - Km02+500)',
-    targetPoint: 'Ổ gà sâu & nứt tấm bê tông nông thôn',
-    pmName: 'Nguyễn Thùy Lan (PM)',
-    instructionTime: 'Hôm nay, 07:45',
-    instructionQuote:
-      '“Lưu lượng xe tải trọng nặng di chuyển đông, bay dọc theo tim dải phân cách giữa, đảm bảo độ cao an toàn 45m tránh đường dây điện trung thế.”',
-    priority: 'Ưu tiên cao',
-    accessPoint: {
-      name: 'Sân bê tông UBND xã Vĩnh Lộc B, Bình Chánh',
-      terrain: 'Mặt bằng phẳng, tầm nhìn thoáng, không vướng vật cản, bán kính an toàn 20m',
-      wgs84Coord: '10.7333° B, 106.6833° Đ',
-      lat: 10.7333,
-      lng: 106.6833,
-    },
-  },
-  '#HH-KS-088': {
-    code: '#HH-KS-088',
-    roadTitle: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
-    location: 'Km01+600 - Km02+100, Cầu Bà Lát, Bình Chánh, TP.HCM',
-    statusText: 'MỚI TIẾP NHẬN',
-    length: '4.0 km',
-    altitude: '45 m (AGL)',
-    overlap: '80% / 70%',
-    format: '4K 60fps + RTK',
-    sensor: 'Camera 4K RGB 60fps + RTK độ chính xác cm',
-    postProcess: 'Tái dựng mô hình độ cao số DSM bằng OpenDroneMap (ODM)',
-    droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
-    coordinates: '10.7833° B, 106.7333° Đ',
-    corridorTitle: 'ĐOẠN CẦU BÀ LÁT - TUYẾN ĐH.05',
-    roadName: 'Cầu Bà Lát (Km01+600 - Km02+100)',
-    targetPoint: 'Vỡ mép tấm & khe co giãn cầu cạn',
-    pmName: 'Nguyễn Thùy Lan (PM)',
-    instructionTime: 'Hôm qua, 16:15',
-    instructionQuote:
-      '“Quét ảnh trực giao 3D độ phân giải cao phục vụ đo lường tiến độ và xuất mô hình bề mặt DSM (OpenDroneMap/ODM). Kiểm tra kỹ 2 mố dầm tiếp giáp bờ kênh.”',
-    priority: 'Tiêu chuẩn',
-    accessPoint: {
-      name: 'Bãi đất trống Km01+850 - Cầu Bà Lát, Bình Chánh',
-      terrain: 'Mặt bằng phẳng, không vướng đường điện cao thế, bán kính an toàn 15m',
-      wgs84Coord: '10.7833° B, 106.7333° Đ',
-      lat: 10.7833,
-      lng: 106.7333,
-    },
-  },
-  '#HH-KS-087': {
-    code: '#HH-KS-087',
-    roadTitle: 'Tuyến ĐH.05 - Ngã ba Tân Kiên (Km03+100)',
-    location: 'Km02+900 - Km03+200, Tân Kiên, Bình Chánh, TP.HCM',
-    statusText: 'ĐANG THỰC HIỆN',
-    length: '5.2 km',
-    altitude: '45 m (AGL)',
-    overlap: '80% / 70%',
-    format: '4K 60fps + RTK',
-    sensor: 'Camera 4K RGB 60fps + RTK độ chính xác cm',
-    postProcess: 'Tái dựng mô hình độ cao số DSM bằng OpenDroneMap (ODM)',
-    droneModel: 'M350-HH-02 (DJI Matrice 350 RTK)',
-    coordinates: '10.7700° B, 106.7050° Đ',
-    corridorTitle: 'NÚT GIAO NGÃ BA TÂN KIÊN',
-    roadName: 'Ngã ba Tân Kiên (Km03+100)',
-    targetPoint: 'Đoạn lề taluy dương',
-    pmName: 'Trần Văn Nam (PM)',
-    instructionTime: 'Hôm nay, 06:30',
-    instructionQuote:
-      '“Bay quét toàn bộ nút giao hình hoa thị, chú ý điểm tiếp giáp tuyến ĐH.05 và trạm thu phát.”',
-    priority: 'Đang bay',
-    accessPoint: {
-      name: 'Điểm tập kết hành lang an toàn Km03+050 - Tân Kiên',
-      terrain: 'Khu đất dự phòng cách tim đường 12m, không có cáp viễn thông chăng ngang',
-      wgs84Coord: '10.7700° B, 106.7050° Đ',
-      lat: 10.7700,
-      lng: 106.7050,
-    },
-  },
-  '#HH-KS-085': {
-    code: '#HH-KS-085',
-    roadTitle: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
-    location: 'Km02+000 - Km02+400, Vĩnh Lộc B, Bình Chánh, TP.HCM',
-    statusText: 'ĐÃ HOÀN THÀNH BAY',
-    length: '3.1 km',
-    altitude: '45 m (AGL)',
-    overlap: '80% / 70%',
-    format: '4K 60fps + RTK',
-    sensor: 'Camera 4K RGB 60fps + RTK độ chính xác cm',
-    postProcess: 'Tái dựng mô hình độ cao số DSM bằng OpenDroneMap (ODM)',
-    droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
-    coordinates: '10.7400° B, 106.6900° Đ',
-    corridorTitle: 'ĐOẠN VĨNH LỘC B Km02+180',
-    roadName: 'Vĩnh Lộc B (Km02+000 - Km02+400)',
-    targetPoint: 'Bản mặt cầu & khe lún đầu cầu',
-    pmName: 'Lê Minh Tuấn (PM)',
-    instructionTime: '20/10/2023, 14:00',
-    instructionQuote:
-      '“Khảo sát định kỳ hiện trạng lún sụt đầu cầu Suối Cả trước mùa mưa bão. Tệp video và ảnh trực giao đã được nạp an toàn.”',
-    priority: 'Hoàn thành',
-    accessPoint: {
-      name: 'Khu đất trống đầu cống hộp Km02+180 - Vĩnh Lộc B',
-      terrain: 'Mặt bằng phẳng, nền đất đầm chặt, bán kính an toàn 18m',
-      wgs84Coord: '10.7400° B, 106.6900° Đ',
-      lat: 10.7400,
-      lng: 106.6900,
-    },
-  },
+const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
+  PLANNED_RENDEZVOUS: 'Theo kế hoạch',
 };
 
+function formatDateTime(iso: string | null): string {
+  if (!iso) {
+    return 'Chưa đặt hạn';
+  }
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return 'Chưa đặt hạn';
+  }
+  return `${date.toLocaleDateString('vi-VN')} ${date.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
+
+function formatCoordinates(longitude: number, latitude: number): string {
+  return `${latitude.toFixed(6)}° B, ${longitude.toFixed(6)}° Đ`;
+}
+
+function operatorErrorMessage(error: unknown): string {
+  const response = (error as { response?: { status?: number; data?: unknown } }).response;
+  const code = parseProblemDetails(response?.data).code;
+  if (code) {
+    return messageFor(code);
+  }
+  const parsed = parseProblemDetails(response?.data);
+  return parsed.detail ?? parsed.title ?? 'Không đọc được nhiệm vụ. Vui lòng thử lại.';
+}
+
 export default function DroneRequestDetailScreen() {
-  const params = useLocalSearchParams<{ code?: string }>();
-  const initialCode = params.code && REQUEST_DETAILS[params.code] ? params.code : '#HH-KS-089';
-  const [selectedCode, setSelectedCode] = useState<string>(initialCode);
-  const [isAccepted, setIsAccepted] = useState(false);
+  const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
+  const target = params.taskId || params.code || '';
+
+  const [task, setTask] = useState<OperatorSurveyTaskV2Dto | null>(null);
+  const [workPackage, setWorkPackage] = useState<OperatorSurveyTaskWorkPackageDto | null>(null);
+  const [etag, setEtag] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (params.code && REQUEST_DETAILS[params.code]) {
-      setSelectedCode(params.code);
+  const loadTask = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const detail = await getOperatorSurveyTask(target);
+      setTask(detail.data);
+      setEtag(detail.etag);
+      try {
+        const work = await getOperatorWorkPackage(target);
+        setWorkPackage(work.data);
+      } catch {
+        setWorkPackage(null);
+      }
+    } catch (error) {
+      setLoadError(operatorErrorMessage(error));
+      setTask(null);
+      setEtag(null);
+      setWorkPackage(null);
+    } finally {
+      setLoading(false);
     }
-  }, [params.code]);
+  }, [target]);
 
-  const current = REQUEST_DETAILS[selectedCode] ?? REQUEST_DETAILS['#HH-KS-089'];
+  useEffect(() => {
+    void loadTask();
+  }, [loadTask]);
+
+  const displayCode = task ? operatorTaskDisplayCode(task.id) : 'Nhiệm vụ';
+  const accessPoint = workPackage?.accessPoint ?? null;
 
   const handleOpenGoogleMaps = () => {
+    if (!accessPoint) {
+      return;
+    }
     // US-40, BR-38: Dẫn đường WGS84 tới Điểm tiếp cận cất/hạ cánh (Access Point)
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${current.accessPoint.lat},${current.accessPoint.lng}`;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${accessPoint.point.latitude},${accessPoint.point.longitude}`;
     Linking.openURL(url).catch((err) => {
       console.warn('Could not open Google Maps', err);
     });
@@ -224,30 +133,38 @@ export default function DroneRequestDetailScreen() {
    * `SurveyTaskV2ResponseDto` + ETag mới. ETag phải đọc lại ngay trước khi gửi để tránh 412.
    */
   const handleAcceptTask = async () => {
+    if (!task) {
+      return;
+    }
     setAccepting(true);
     setAcceptError(null);
-    const keyScope = `drone:accept:${selectedCode}`;
+    const keyScope = `drone:accept:${task.id}`;
     try {
-      const fresh = await getOperatorSurveyTask(selectedCode);
-      await acceptOperatorSurveyTask(fresh.data.task.id, {
+      const fresh = await getOperatorSurveyTask(task.id);
+      setEtag(fresh.etag);
+      const accepted = await acceptOperatorSurveyTask(task.id, {
         idempotencyKey: getOrCreateCommandKey(keyScope),
-        ifMatch: fresh.data.etag,
+        ifMatch: fresh.etag,
       });
       clearCommandKey(keyScope);
-      setIsAccepted(true);
+      setTask(accepted.data);
+      setEtag(accepted.etag);
     } catch (error) {
       clearCommandKey(keyScope);
       const response = (
-        error as { response?: { status?: number; data?: { code?: string } } } | undefined
+        error as { response?: { status?: number; data?: unknown } } | undefined
       )?.response;
-      if (response?.status === 412 || response?.data?.code === 'concurrency_conflict') {
+      const code = parseProblemDetails(response?.data).code;
+      if (response?.status === 412 || code === 'concurrency_conflict') {
         setAcceptError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại để xem phiên bản mới nhất.');
+        await loadTask();
       } else if (response?.status === 401) {
         router.replace('/(auth)');
-      } else if (response?.data?.code === 'survey_invalid_state_transition') {
+      } else if (code === 'survey_invalid_state_transition') {
         setAcceptError('Nhiệm vụ không còn ở trạng thái chờ tiếp nhận.');
+        await loadTask();
       } else {
-        setAcceptError('Không nhận được nhiệm vụ. Vui lòng kiểm tra kết nối rồi thử lại.');
+        setAcceptError(operatorErrorMessage(error));
       }
     } finally {
       setAccepting(false);
@@ -259,18 +176,36 @@ export default function DroneRequestDetailScreen() {
  * lệnh từ chối (API-230) với Idempotency-Key + If-Match. Màn này chỉ còn điều hướng.
  */
   const handleOpenDecline = () => {
-    router.push(`${DRONE_REQUEST_DECLINE}?code=${encodeURIComponent(selectedCode)}`);
+    if (!task) {
+      return;
+    }
+    router.push(`${DRONE_REQUEST_DECLINE}?taskId=${encodeURIComponent(task.id)}`);
   };
 
   const handleOpenWorkPackage = () => {
-    router.push(`${DRONE_WORK_PACKAGE}?code=${encodeURIComponent(selectedCode)}`);
+    if (!task) {
+      return;
+    }
+    router.push(`${DRONE_WORK_PACKAGE}?taskId=${encodeURIComponent(task.id)}`);
   };
 
   const handleShareTask = async () => {
+    if (!task) {
+      return;
+    }
+    const parts = [
+      `Nhiệm vụ khảo sát ${displayCode}`,
+      operatorTaskStatusLabel(task.status),
+      `Dải mục tiêu: ${operatorTaskTargetBand(task)}`,
+      `Hạn bay: ${formatDateTime(workPackage?.dueAt ?? null)}`,
+    ];
+    if (accessPoint) {
+      parts.push(
+        `Điểm tiếp cận WGS84: ${accessPoint.point.latitude.toFixed(6)}, ${accessPoint.point.longitude.toFixed(6)}`,
+      );
+    }
     try {
-      await Share.share({
-        message: `Nhiệm vụ bay khảo sát ${current.code}: ${current.roadTitle} (${current.location}). Thiết bị: ${current.droneModel}. Tọa độ WGS84: ${current.accessPoint.wgs84Coord}`,
-      });
+      await Share.share({ message: parts.join(' • ') });
     } catch {
       // ignore
     }
@@ -282,6 +217,186 @@ export default function DroneRequestDetailScreen() {
     } else {
       router.replace('/(drone)/home');
     }
+  };
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[typography.caption, styles.loadingText]}>Đang đọc nhiệm vụ khảo sát…</Text>
+        </View>
+      );
+    }
+
+    if (loadError || !task) {
+      return (
+        <EmptyState
+          icon="error-outline"
+          title="Không đọc được nhiệm vụ"
+          message={loadError ?? 'Vui lòng thử lại.'}
+          actionLabel="Tải lại"
+          onAction={() => void loadTask()}
+        />
+      );
+    }
+
+    const canAccept = task.status === 'NewAssigned';
+
+    return (
+      <>
+        <Card style={styles.headerCard}>
+          <View style={styles.headerTitleRow}>
+            <View style={styles.headerTextGroup}>
+              <Text style={[typography.caption, styles.codeLabel]}>MÃ NHIỆM VỤ: {displayCode}</Text>
+              <Text style={[typography.titleLg, styles.roadTitle]}>Nhiệm vụ khảo sát</Text>
+            </View>
+            <Chip
+              variant={task.status === 'Rejected' ? 'rejected' : 'status-pending'}
+              label={operatorTaskStatusLabel(task.status)}
+              uppercase={false}
+            />
+          </View>
+
+          <View style={styles.locationDivider}>
+            <MaterialIcons name="map" size={18} color={colors.primary} />
+            <Text style={[typography.bodyMd, styles.locationFull]}>
+              Dải mục tiêu: {operatorTaskTargetBand(task)}
+            </Text>
+          </View>
+        </Card>
+
+        <Card style={styles.paramCard}>
+          <View style={styles.paramCardHeader}>
+            <MaterialIcons name="assignment" size={18} color={colors.primary} />
+            <Text style={[typography.labelSm, styles.paramHeaderTitle]}>PHẠM VI ĐƯỢC GHIM</Text>
+          </View>
+
+          <View style={styles.paramGrid}>
+            <View style={styles.paramItem}>
+              <Text style={[typography.caption, styles.paramLabel]}>Số phân đoạn</Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>
+                {operatorTaskSegmentCount(task)}
+              </Text>
+            </View>
+
+            <View style={styles.paramItem}>
+              <Text style={[typography.caption, styles.paramLabel]}>Hạn bay</Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>
+                {formatDateTime(workPackage?.dueAt ?? null)}
+              </Text>
+            </View>
+
+            <View style={styles.paramItem}>
+              <Text style={[typography.caption, styles.paramLabel]}>Dải mục tiêu</Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>
+                {operatorTaskTargetBand(task)}
+              </Text>
+            </View>
+          </View>
+
+          {workPackage ? (
+            <View style={styles.techDetailBox}>
+              <View style={styles.techRow}>
+                <MaterialIcons name="lock-outline" size={16} color={colors.primary} />
+                <Text style={[typography.caption, styles.techText]}>
+                  Phạm vi chỉ đọc, ghim theo nhiệm vụ; xem chi tiết ở Gói công việc.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </Card>
+
+        <Card style={styles.accessPointCard}>
+          <View style={styles.accessPointHeader}>
+            <View style={styles.accessPointHeaderLeft}>
+              <MaterialIcons name="flight-takeoff" size={18} color={colors.primary} />
+              <Text style={[typography.labelSm, styles.accessPointHeaderTitle]}>
+                ĐIỂM TIẾP CẬN CẤT-HẠ CÁNH (ACCESS POINT)
+              </Text>
+            </View>
+            <View style={styles.wgs84Badge}>
+              <Text style={styles.wgs84BadgeText}>WGS84</Text>
+            </View>
+          </View>
+
+          {accessPoint ? (
+            <>
+              <View style={styles.accessPointBody}>
+                <View style={styles.accessPointDetailRow}>
+                  <MaterialIcons name="my-location" size={16} color={colors.primary} />
+                  <Text style={[typography.caption, styles.accessPointCoord]}>
+                    Tọa độ WGS84:{' '}
+                    <Text style={styles.boldCoord}>
+                      {formatCoordinates(accessPoint.point.longitude, accessPoint.point.latitude)}
+                    </Text>
+                  </Text>
+                </View>
+                <View style={styles.accessPointDetailRow}>
+                  <MaterialIcons name="landscape" size={16} color={colors.secondary} />
+                  <Text style={[typography.caption, styles.accessPointDesc]}>
+                    {ACCESS_POINT_SOURCE_LABEL[accessPoint.source] ?? 'Theo dữ liệu máy chủ'}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                style={styles.navMapButton}
+                onPress={handleOpenGoogleMaps}
+                accessibilityRole="button"
+              >
+                <MaterialIcons name="near-me" size={18} color={colors.primary} />
+                <Text style={[typography.labelLg, styles.navMapButtonText]}>
+                  Dẫn đường đến Điểm tiếp cận (Google Maps)
+                </Text>
+              </Pressable>
+            </>
+          ) : (
+            <View style={styles.accessPointBody}>
+              <Text style={[typography.caption, styles.accessPointDesc]}>
+                Máy chủ chưa công bố điểm tiếp cận cho nhiệm vụ này. Liên hệ PM nếu cần bổ sung.
+              </Text>
+            </View>
+          )}
+        </Card>
+
+        <View style={styles.actionContainer}>
+          {acceptError ? (
+            <Text style={[typography.caption, styles.pendingSyncNote]}>{acceptError}</Text>
+          ) : null}
+          <Button
+            variant="primary"
+            title={canAccept ? `Chấp nhận nhiệm vụ (${displayCode})` : 'Nhiệm vụ đã được tiếp nhận'}
+            loading={accepting}
+            disabled={!canAccept}
+            onPress={handleAcceptTask}
+          />
+
+          <Button
+            variant="secondary"
+            title="Xem gói công việc (chỉ đọc)"
+            icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
+            onPress={handleOpenWorkPackage}
+          />
+
+          <Pressable
+            style={styles.rejectButton}
+            onPress={handleOpenDecline}
+            accessibilityRole="button"
+            accessibilityLabel="Từ chối nhiệm vụ"
+          >
+            <MaterialIcons name="cancel" size={18} color={colors.error} />
+            <Text style={[typography.labelLg, styles.rejectButtonText]}>
+              Từ chối nhiệm vụ (KS03)
+            </Text>
+          </Pressable>
+
+          <Text style={[typography.caption, styles.syncFootnote]}>
+            Xác thực mã băm SHA-256 dữ liệu và đồng bộ ngoại tuyến theo TCVN 10380:2014
+          </Text>
+        </View>
+      </>
+    );
   };
 
   return (
@@ -299,7 +414,7 @@ export default function DroneRequestDetailScreen() {
           </Pressable>
 
           <View style={styles.topBarCenter}>
-            <Text style={[typography.titleMd, styles.topBarCode]}>{current.code}</Text>
+            <Text style={[typography.titleMd, styles.topBarCode]}>{displayCode}</Text>
             <Text style={[typography.caption, styles.topBarSub]}>Chi tiết nhiệm vụ bay</Text>
           </View>
 
@@ -314,259 +429,22 @@ export default function DroneRequestDetailScreen() {
         </View>
       }
     >
-      {/* Task Switcher Chips */}
-      <View style={styles.selectorBar}>
-        <Text style={[typography.labelSm, styles.selectorTitle]}>CHỌN YÊU CẦU BAY KHÁC:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.selectorScroll}>
-          {Object.values(REQUEST_DETAILS).map((item) => {
-            const isSelected = item.code === selectedCode;
-            return (
-              <Pressable
-                key={item.code}
-                style={[styles.taskChip, isSelected && styles.taskChipActive]}
-                onPress={() => setSelectedCode(item.code)}
-              >
-                <Text style={[styles.taskChipCode, isSelected && styles.taskChipCodeActive]}>
-                  {item.code}
-                </Text>
-                <Text style={[styles.taskChipRoad, isSelected && styles.taskChipRoadActive]} numberOfLines={1}>
-                  {item.roadTitle.split('-')[0].trim()}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Target Road Overview Card */}
-      <Card style={styles.headerCard}>
-        <View style={styles.headerTitleRow}>
-          <View style={styles.headerTextGroup}>
-            <Text style={[typography.caption, styles.codeLabel]}>MÃ YÊU CẦU: {current.code}</Text>
-            <Text style={[typography.titleLg, styles.roadTitle]}>{current.roadTitle}</Text>
-          </View>
-          <View style={styles.statusPill}>
-            <Text style={[typography.labelSm, styles.statusPillText]}>{isAccepted ? 'ĐÃ TIẾP NHẬN' : current.statusText}</Text>
-          </View>
-        </View>
-
-        <View style={styles.locationDivider}>
-          <MaterialIcons name="location-on" size={18} color={colors.primary} />
-          <Text style={[typography.bodyMd, styles.locationFull]}>{current.location}</Text>
-        </View>
-      </Card>
-
-      {/* Access Point Information Card (BR-38 & US-40) */}
-      <Card style={styles.accessPointCard}>
-        <View style={styles.accessPointHeader}>
-          <View style={styles.accessPointHeaderLeft}>
-            <MaterialIcons name="flight-takeoff" size={18} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.accessPointHeaderTitle]}>
-              ĐIỂM TIẾP CẬN CẤT-HẠ CÁNH (ACCESS POINT)
-            </Text>
-          </View>
-          <View style={styles.wgs84Badge}>
-            <Text style={styles.wgs84BadgeText}>WGS84</Text>
-          </View>
-        </View>
-
-        <View style={styles.accessPointBody}>
-          <Text style={[typography.titleMd, styles.accessPointName]}>
-            {current.accessPoint.name}
-          </Text>
-
-          <View style={styles.accessPointDetailRow}>
-            <MaterialIcons name="landscape" size={16} color={colors.secondary} />
-            <Text style={[typography.caption, styles.accessPointDesc]}>
-              {current.accessPoint.terrain}
-            </Text>
-          </View>
-
-          <View style={styles.accessPointDetailRow}>
-            <MaterialIcons name="my-location" size={16} color={colors.primary} />
-            <Text style={[typography.caption, styles.accessPointCoord]}>
-              Tọa độ WGS84: <Text style={styles.boldCoord}>{current.accessPoint.wgs84Coord}</Text>
-            </Text>
-          </View>
-        </View>
-
-        {/* Nút CTA Dẫn đường đến Điểm tiếp cận */}
-        <Pressable
-          style={styles.navMapButton}
-          onPress={handleOpenGoogleMaps}
-          accessibilityRole="button"
-        >
-          <MaterialIcons name="near-me" size={18} color={colors.primary} />
-          <Text style={[typography.labelLg, styles.navMapButtonText]}>
-            Dẫn đường đến Điểm tiếp cận (Google Maps)
-          </Text>
-        </Pressable>
-      </Card>
-
-      {/* Flight Parameters Card */}
-      <Card style={styles.paramCard}>
-        <View style={styles.paramCardHeader}>
-          <MaterialIcons name="settings" size={18} color={colors.primary} />
-          <Text style={[typography.labelSm, styles.paramHeaderTitle]}>
-            THÔNG SỐ KỸ THUẬT BAY (PM CẤU HÌNH)
-          </Text>
-        </View>
-
-        <View style={styles.paramGrid}>
-          <View style={styles.paramItem}>
-            <Text style={[typography.caption, styles.paramLabel]}>Thiết bị bay chỉ định</Text>
-            <Text style={[typography.caption, styles.paramValue]}>{current.droneModel}</Text>
-          </View>
-
-          <View style={styles.paramItem}>
-            <Text style={[typography.caption, styles.paramLabel]}>Độ cao bay cố định</Text>
-            <Text style={[typography.bodyMd, styles.paramValue]}>{current.altitude}</Text>
-          </View>
-
-          <View style={styles.paramItem}>
-            <Text style={[typography.caption, styles.paramLabel]}>Độ phủ ảnh (dọc/ngang)</Text>
-            <Text style={[typography.bodyMd, styles.paramValue]}>{current.overlap}</Text>
-          </View>
-
-          <View style={styles.paramItem}>
-            <Text style={[typography.caption, styles.paramLabel]}>Chiều dài tuyến</Text>
-            <Text style={[typography.bodyMd, styles.paramValue]}>{current.length}</Text>
-          </View>
-        </View>
-
-        <View style={styles.techDetailBox}>
-          <View style={styles.techRow}>
-            <MaterialIcons name="videocam" size={16} color={colors.primary} />
-            <Text style={[typography.caption, styles.techText]}>
-              Cảm biến: <Text style={styles.techBold}>{current.sensor}</Text>
-            </Text>
-          </View>
-
-          <View style={styles.techRow}>
-            <MaterialIcons name="layers" size={16} color={colors.primary} />
-            <Text style={[typography.caption, styles.techText]}>
-              Xử lý hậu kỳ: <Text style={styles.techBold}>{current.postProcess}</Text>
-            </Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Map Corridor Visualization Simulation */}
-      <Card style={styles.mapCard}>
-        <View style={styles.mapHeader}>
-          <View style={styles.mapHeaderLeft}>
-            <MaterialIcons name="map" size={16} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.mapHeaderTitle]}>RANH GIỚI HÀNH LANG BAY GIS</Text>
-          </View>
-          <Text style={[typography.caption, styles.gpsCoord]}>{current.coordinates}</Text>
-        </View>
-
-        <View style={styles.mapVisualContainer}>
-          {/* Simulated Map Background */}
-          <View style={styles.simulatedRiver}>
-            <Text style={styles.riverLabel}>{current.corridorTitle}</Text>
-          </View>
-
-          <View style={styles.simulatedRoad}>
-            <View style={styles.roadStripe} />
-            <Text style={styles.roadNameLabel}>{current.roadName}</Text>
-          </View>
-
-          {/* Survey Target Point Pin */}
-          <View style={styles.pinTarget}>
-            <View style={styles.pinCallout}>
-              <View style={styles.pinDot} />
-              <Text style={styles.pinText}>{current.targetPoint}</Text>
-            </View>
-            <View style={styles.pinIconWrap}>
-              <MaterialIcons name="place" size={24} color={colors.error} />
-            </View>
-          </View>
-
-          <Pressable style={styles.mapsLinkOverlay} onPress={handleOpenGoogleMaps}>
-            <MaterialIcons name="navigation" size={16} color={colors.primary} />
-            <Text style={styles.mapsLinkText}>Mở Google Maps WGS84</Text>
-          </Pressable>
-        </View>
-      </Card>
-
-      {/* PM Instructions Card */}
-      <Card style={styles.instructionCard}>
-        <View style={styles.instructionHeader}>
-          <View style={styles.instructionHeaderLeft}>
-            <MaterialIcons name="account-circle" size={18} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.instructionTitle]}>CHỈ ĐẠO TỪ PROJECT MANAGER</Text>
-          </View>
-          <Text style={[typography.caption, styles.instructionTime]}>{current.instructionTime}</Text>
-        </View>
-
-        <View style={styles.quoteBox}>
-          <Text style={[typography.bodyMd, styles.quoteText]}>{current.instructionQuote}</Text>
-        </View>
-
-        <View style={styles.instructionFooter}>
-          <View style={styles.senderGroup}>
-            <View style={styles.onlineDot} />
-            <Text style={[typography.caption, styles.senderName]}>
-              Người gửi: <Text style={styles.boldText}>{current.pmName}</Text>
-            </Text>
-          </View>
-          <View style={styles.priorityPill}>
-            <Text style={styles.priorityText}>{current.priority}</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Actions */}
-      <View style={styles.actionContainer}>
-        {isAccepted && (
-          <Text style={[typography.caption, styles.pendingSyncNote]}>
-            Ý định đã lưu cục bộ, chờ máy chủ xác nhận (cần taskId + ETag nhiệm vụ).
-          </Text>
-        )}
-        {acceptError && (
-          <Text style={[typography.caption, styles.pendingSyncNote]}>{acceptError}</Text>
-        )}
-        <Button
-          variant="primary"
-          title={
-            isAccepted
-              ? `Tiếp tục nạp dữ liệu (${current.code})`
-              : `Chấp nhận nhiệm vụ & Bắt đầu bay (${current.code})`
-          }
-          loading={accepting}
-          onPress={handleAcceptTask}
-        />
-
-        <Button
-          variant="secondary"
-          title="Xem gói công việc (chỉ đọc)"
-          icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
-          onPress={handleOpenWorkPackage}
-        />
-
-        <Pressable
-          style={styles.rejectButton}
-          onPress={handleOpenDecline}
-          accessibilityRole="button"
-          accessibilityLabel="Từ chối nhiệm vụ"
-        >
-          <MaterialIcons name="cancel" size={18} color={colors.error} />
-          <Text style={[typography.labelLg, styles.rejectButtonText]}>
-            Từ chối nhiệm vụ (KS03)
-          </Text>
-        </Pressable>
-
-        <Text style={[typography.caption, styles.syncFootnote]}>
-          Xác thực mã băm SHA-256 dữ liệu và đồng bộ ngoại tuyến theo TCVN 10380:2014
-        </Text>
-      </View>
+      {renderBody()}
     </SafeAreaScreen>
   );
 }
 
 
 const styles = StyleSheet.create({
+  loading: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    gap: spacing.sm,
+  },
+  loadingText: {
+    color: colors.secondary,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',

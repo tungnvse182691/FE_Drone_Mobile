@@ -14,9 +14,16 @@ import { parseProblemDetails } from '../../src/api/problemDetails';
 import {
   declineOperatorSurveyTask,
   getOperatorSurveyTask,
-  type OperatorSurveyTaskDetailView,
-  type OperatorTaskStatus,
+  getOperatorWorkPackage,
+  type OperatorSurveyTaskV2Dto,
+  type OperatorSurveyTaskWorkPackageDto,
 } from '../../src/api/mock/surveys';
+import {
+  operatorTaskDisplayCode,
+  operatorTaskSegmentCount,
+  operatorTaskStatusLabel,
+  operatorTaskTargetBand,
+} from '../../src/api/operator-task-view';
 import { uuidv4 } from '../../src/utils/uuid';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
@@ -28,26 +35,13 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
  * Việc điều phối lại/bổ sung thuộc về PM trên Web — Operator không được gọi.
  */
 
-const STATUS_LABEL: Record<OperatorTaskStatus, string> = {
-  NewAssigned: 'Mới giao',
-  Accepted: 'Đã nhận',
-  InProgress: 'Đang thực hiện',
-  Submitted: 'Đã nộp',
-  SupplementRequired: 'Cần bổ sung',
-  Completed: 'Hoàn tất',
-  Rejected: 'Đã từ chối',
-  Cancelled: 'Đã huỷ',
-  Postponed: 'Tạm hoãn',
-};
-
-function statusLabel(status: OperatorTaskStatus): string {
-  return STATUS_LABEL[status] ?? status;
-}
-
-function formatDateTime(iso: string): string {
+function formatDateTime(iso: string | null): string {
+  if (!iso) {
+    return 'Chưa đặt hạn';
+  }
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
-    return iso;
+    return 'Chưa đặt hạn';
   }
   return `${date.toLocaleDateString('vi-VN')} ${date.toLocaleTimeString('vi-VN', {
     hour: '2-digit',
@@ -78,7 +72,8 @@ export default function DroneRequestDeclineScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
 
-  const [detail, setDetail] = useState<OperatorSurveyTaskDetailView | null>(null);
+  const [detail, setDetail] = useState<OperatorSurveyTaskV2Dto | null>(null);
+  const [workPackage, setWorkPackage] = useState<OperatorSurveyTaskWorkPackageDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -101,9 +96,16 @@ export default function DroneRequestDeclineScreen() {
     try {
       const { data } = await getOperatorSurveyTask(target);
       setDetail(data);
+      try {
+        const work = await getOperatorWorkPackage(target);
+        setWorkPackage(work.data);
+      } catch {
+        setWorkPackage(null);
+      }
     } catch (error) {
       setLoadError(operatorErrorMessage(error));
       setDetail(null);
+      setWorkPackage(null);
     } finally {
       setLoading(false);
     }
@@ -123,13 +125,13 @@ export default function DroneRequestDeclineScreen() {
     setSubmitting(true);
     try {
       // Đọc lại API-226 ngay trước khi gửi để lấy If-Match mới nhất.
-      const fresh = await getOperatorSurveyTask(detail.task.id);
-      setDetail(fresh.data);
-      const result = await declineOperatorSurveyTask(fresh.data.task.id, {
+      const fresh = await getOperatorSurveyTask(detail.id);
+      const result = await declineOperatorSurveyTask(fresh.data.id, {
         reason: reason.trim(),
         idempotencyKey: idempotencyKey(),
-        ifMatch: fresh.data.etag,
+        ifMatch: fresh.etag,
       });
+      setDetail(result.data);
       if (result.data.status === 'Rejected') {
         setDone(true);
       }
@@ -191,8 +193,8 @@ export default function DroneRequestDeclineScreen() {
             <Text style={[typography.titleMd, styles.doneTitle]}>Đã gửi từ chối</Text>
           </View>
           <Text style={[typography.bodyMd, styles.doneText]}>
-            Máy chủ đã ghi nhận từ chối cho nhiệm vụ {detail.code}. PM sẽ xem xét điều phối lại
-            chuyến bay; bạn không cần thao tác thêm.
+            Máy chủ đã ghi nhận từ chối cho nhiệm vụ {operatorTaskDisplayCode(detail.id)}. PM sẽ
+            xem xét điều phối lại chuyến bay; bạn không cần thao tác thêm.
           </Text>
           <Button
             variant="primary"
@@ -216,38 +218,42 @@ export default function DroneRequestDeclineScreen() {
 
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={[typography.titleMd, styles.cardCode]}>{detail.code}</Text>
+            <Text style={[typography.titleMd, styles.cardCode]}>
+              {operatorTaskDisplayCode(detail.id)}
+            </Text>
             <Chip
-              variant={detail.task.status === 'Rejected' ? 'rejected' : 'status-pending'}
-              label={statusLabel(detail.task.status)}
+              variant={detail.status === 'Rejected' ? 'rejected' : 'status-pending'}
+              label={operatorTaskStatusLabel(detail.status)}
               uppercase={false}
             />
           </View>
-          <Text style={[typography.bodyMd, styles.cardTitle]}>{detail.title}</Text>
+          <Text style={[typography.bodyMd, styles.cardTitle]}>Nhiệm vụ khảo sát</Text>
 
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Tuyến / phân đoạn</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{detail.routeTitle}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Vị trí</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{detail.location}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Thiết bị bay</Text>
+            <Text style={[typography.caption, styles.infoLabel]}>Dải mục tiêu</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {detail.droneModel} — {detail.droneSerial}
+              {operatorTaskTargetBand(detail)}
+            </Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={[typography.caption, styles.infoLabel]}>Số phân đoạn</Text>
+            <Text style={[typography.bodyMd, styles.infoValue]}>
+              {operatorTaskSegmentCount(detail)}
             </Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Hạn bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {formatDateTime(detail.dueAt)}
+              {formatDateTime(workPackage?.dueAt ?? null)}
             </Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Điểm tiếp cận</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{detail.accessPointName}</Text>
+            <Text style={[typography.bodyMd, styles.infoValue]}>
+              {workPackage?.accessPoint
+                ? `${workPackage.accessPoint.point.latitude.toFixed(6)}, ${workPackage.accessPoint.point.longitude.toFixed(6)}`
+                : 'Máy chủ chưa công bố'}
+            </Text>
           </View>
         </Card>
 
@@ -291,7 +297,7 @@ export default function DroneRequestDeclineScreen() {
           onPress={() =>
             router.replace(
               detail
-                ? `${DRONE_REQUEST_DETAIL}?code=${encodeURIComponent(detail.code)}`
+                ? `${DRONE_REQUEST_DETAIL}?taskId=${encodeURIComponent(detail.id)}`
                 : DRONE_REQUESTS,
             )
           }

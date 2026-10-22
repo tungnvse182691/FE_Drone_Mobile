@@ -126,7 +126,10 @@ export default function DroneWorkPackageScreen() {
     }
 
     const ref = workPackage.geometryRefs[0];
-    const accessSourceLabel = ACCESS_POINT_SOURCE_LABEL[workPackage.accessPoint.source];
+    const accessPoint = workPackage.accessPoint;
+    const accessSourceLabel = accessPoint
+      ? ACCESS_POINT_SOURCE_LABEL[accessPoint.source]
+      : undefined;
 
     return (
       <>
@@ -154,26 +157,34 @@ export default function DroneWorkPackageScreen() {
 
         <Card style={styles.card}>
           <Text style={[typography.labelSm, styles.sectionTitle]}>ĐIỂM TIẾP CẬN (ĐIỂM HẸN)</Text>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Toạ độ WGS84</Text>
+          {accessPoint ? (
+            <>
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Toạ độ WGS84</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>
+                  {formatCoord(accessPoint.point.longitude, accessPoint.point.latitude)}
+                </Text>
+              </View>
+              {accessSourceLabel ? (
+                <View style={styles.infoRow}>
+                  <Text style={[typography.caption, styles.infoLabel]}>Nguồn</Text>
+                  <Text style={[typography.bodyMd, styles.infoValue]}>{accessSourceLabel}</Text>
+                </View>
+              ) : null}
+              <View style={styles.infoRow}>
+                <Text style={[typography.caption, styles.infoLabel]}>Bán kính an toàn</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>
+                  {accessPoint.accuracyMeters != null
+                    ? `${accessPoint.accuracyMeters}m`
+                    : 'Theo quy định an toàn hiện trường'}
+                </Text>
+              </View>
+            </>
+          ) : (
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {formatCoord(workPackage.accessPoint.point.longitude, workPackage.accessPoint.point.latitude)}
+              Máy chủ chưa công bố điểm tiếp cận cho nhiệm vụ này.
             </Text>
-          </View>
-          {accessSourceLabel ? (
-            <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Nguồn</Text>
-              <Text style={[typography.bodyMd, styles.infoValue]}>{accessSourceLabel}</Text>
-            </View>
-          ) : null}
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Bán kính an toàn</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              {workPackage.accessPoint.accuracyMeters != null
-                ? `${workPackage.accessPoint.accuracyMeters}m`
-                : 'Theo quy định an toàn hiện trường'}
-            </Text>
-          </View>
+          )}
         </Card>
 
         <Card style={styles.card}>

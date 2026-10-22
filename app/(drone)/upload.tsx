@@ -222,7 +222,7 @@ export default function DroneUploadScreen() {
       setUploadStep('QUEUED');
 
       const fresh = await getOperatorSurveyTask(selectedCode);
-      const { task } = fresh.data;
+      const task = fresh.data;
 
       const video = await uploadOperatorFile(
         {
@@ -262,7 +262,7 @@ export default function DroneUploadScreen() {
         scope: task.scope,
         pairs: [{ videoFileId: video.fileId, telemetryFileId: srt.fileId, timeOffsetMilliseconds: 0 }],
         idempotencyKey: getOrCreateCommandKey(keyScope),
-        ifMatch: fresh.data.etag,
+        ifMatch: fresh.etag,
       });
 
       clearCommandKey(keyScope);

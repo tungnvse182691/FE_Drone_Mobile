@@ -232,22 +232,23 @@ export interface OperatorSurveyGeometryRefDto {
   segmentIds: string[];
 }
 
-/** ## Schema SurveyTaskV2ResponseDto (rút gọn trường UI cần). */
+/** ## Schema SurveyTaskV2ResponseDto. */
 export interface OperatorSurveyTaskV2Dto {
   id: string;
   projectId: string;
   operatorId: string;
   status: OperatorTaskStatus;
   scope: OperatorBandScopeDto[];
-  rejectionReason?: string | null;
+  version: string;
+  supplementTaskId?: string | null;
 }
 
 /** ## Schema SurveyTaskWorkPackage (API-225). */
 export interface OperatorSurveyTaskWorkPackageDto {
   schemaVersion: string;
   task: OperatorSurveyTaskV2Dto;
-  dueAt: string;
-  accessPoint: OperatorPositionDto;
+  dueAt: string | null;
+  accessPoint: OperatorPositionDto | null;
   geometryRefs: OperatorSurveyGeometryRefDto[];
   scopeVersion: string;
 }
@@ -355,24 +356,10 @@ export interface OperatorCommandRecord {
   createdAt: string;
 }
 
-/** Kết quả đọc API-226 kèm ETag (phiên bản mới nhất để gửi If-Match). */
-export interface OperatorSurveyTaskDetailView {
-  task: OperatorSurveyTaskV2Dto;
+/** Kết quả đọc/ghi nhiệm vụ: DTO phẳng + ETag ở tầng transport (ngoài body). */
+export interface OperatorTaskResponse {
+  data: OperatorSurveyTaskV2Dto;
   etag: string;
-  code: string;
-  title: string;
-  routeTitle: string;
-  location: string;
-  droneModel: string;
-  droneSerial: string;
-  dueAt: string;
-  scopeVersion: string;
-  targetBand: string;
-  segmentIds: string[];
-  accessPointName: string;
-  terrain: string;
-  accessPoint: OperatorPointDto;
-  safeRadiusM: number;
 }
 
 interface OperatorTaskFixture {
@@ -617,21 +604,12 @@ function assertOperatorIfMatch(taskId: string, ifMatch: string | undefined): voi
   }
 }
 
-/** API-226 — đọc chi tiết nhiệm vụ khảo sát (kèm ETag phiên bản để gửi If-Match). */
-export async function getOperatorSurveyTask(
-  taskIdOrCode: string,
-): Promise<{ data: OperatorSurveyTaskDetailView }> {
-  await delay(250);
-  const fixture = findOperatorTask(taskIdOrCode);
-  if (!fixture) {
-    throwMockApiError('not_found', { message: 'Không tìm thấy nhiệm vụ khảo sát.' });
-  }
-  const status = operatorTaskStatus(fixture.taskId);
-  const task: OperatorSurveyTaskV2Dto = {
+function operatorTaskDto(fixture: OperatorTaskFixture): OperatorSurveyTaskV2Dto {
+  return {
     id: fixture.taskId,
     projectId: fixture.projectId,
     operatorId: fixture.operatorId,
-    status,
+    status: operatorTaskStatus(fixture.taskId),
     scope: [
       {
         routeVersionId: fixture.routeVersionId,
@@ -640,26 +618,25 @@ export async function getOperatorSurveyTask(
         targetBand: fixture.targetBand,
       },
     ],
+    version: currentOperatorTaskVersion(fixture.taskId),
   };
+}
+
+/**
+ * API-226 — đọc nhiệm vụ khảo sát.
+ * Thân phản hồi là `SurveyTaskV2ResponseDto` phẳng; ETag nằm ở tầng transport.
+ */
+export async function getOperatorSurveyTask(
+  taskIdOrCode: string,
+): Promise<OperatorTaskResponse> {
+  await delay(250);
+  const fixture = findOperatorTask(taskIdOrCode);
+  if (!fixture) {
+    throwMockApiError('not_found', { message: 'Không tìm thấy nhiệm vụ khảo sát.' });
+  }
   return {
-    data: {
-      task,
-      etag: `"${currentOperatorTaskVersion(fixture.taskId)}"`,
-      code: fixture.code,
-      title: fixture.title,
-      routeTitle: fixture.routeTitle,
-      location: fixture.location,
-      droneModel: fixture.droneModel,
-      droneSerial: fixture.droneSerial,
-      dueAt: fixture.dueAt,
-      scopeVersion: fixture.scopeVersion,
-      targetBand: fixture.targetBand,
-      segmentIds: [...fixture.segmentIds],
-      accessPointName: fixture.accessPointName,
-      terrain: fixture.terrain,
-      accessPoint: { longitude: fixture.longitude, latitude: fixture.latitude },
-      safeRadiusM: fixture.safeRadiusM,
-    },
+    data: operatorTaskDto(fixture),
+    etag: `"${currentOperatorTaskVersion(fixture.taskId)}"`,
   };
 }
 
@@ -672,24 +649,11 @@ export async function getOperatorWorkPackage(
   if (!fixture) {
     throwMockApiError('not_found', { message: 'Không tìm thấy gói công việc.' });
   }
-  const status = operatorTaskStatus(fixture.taskId);
+  const task = operatorTaskDto(fixture);
   return {
     data: {
-      schemaVersion: '1.0',
-      task: {
-        id: fixture.taskId,
-        projectId: fixture.projectId,
-        operatorId: fixture.operatorId,
-        status,
-        scope: [
-          {
-            routeVersionId: fixture.routeVersionId,
-            segmentSetId: fixture.segmentSetId,
-            segmentIds: [...fixture.segmentIds],
-            targetBand: fixture.targetBand,
-          },
-        ],
-      },
+      schemaVersion: 'anh01.survey-work.v1',
+      task,
       dueAt: fixture.dueAt,
       accessPoint: {
         point: { longitude: fixture.longitude, latitude: fixture.latitude },
@@ -704,7 +668,7 @@ export async function getOperatorWorkPackage(
           segmentIds: [...fixture.segmentIds],
         },
       ],
-      scopeVersion: fixture.scopeVersion,
+      scopeVersion: task.version,
     },
   };
 }
@@ -853,21 +817,15 @@ export interface OperatorDeclineInput {
   ifMatch: string;
 }
 
-export interface OperatorDeclineResult {
-  taskId: string;
-  status: OperatorTaskStatus;
-  state: OperatorCommandState;
-  at: string;
-}
-
 /**
  * API-230 — từ chối nhiệm vụ khảo sát. Yêu cầu Idempotency-Key + If-Match.
+ * Trả `SurveyTaskV2ResponseDto` (ETag ở tầng transport).
  * Cùng key + cùng payload ⇒ phát lại kết quả đã lưu (KHÔNG tạo lệnh mới).
  */
 export async function declineOperatorSurveyTask(
   taskIdOrCode: string,
   input: OperatorDeclineInput,
-): Promise<{ data: OperatorDeclineResult }> {
+): Promise<OperatorTaskResponse> {
   await delay(600);
   const fixture = findOperatorTask(taskIdOrCode);
   if (!fixture) {
@@ -885,25 +843,26 @@ export async function declineOperatorSurveyTask(
   const payload = { kind: 'decline', reason: input.reason.trim() };
   const cached = OPERATOR_IDEMPOTENCY.get(key);
   if (cached) {
-    const cachedPayload = (cached.body as { payload?: Record<string, unknown> } | null)?.payload;
-    if (cachedPayload && cachedPayload.reason === payload.reason) {
-      return { data: cached.body as OperatorDeclineResult };
+    const body = cached.body as {
+      data?: OperatorSurveyTaskV2Dto;
+      etag?: string;
+      payload?: Record<string, unknown>;
+    } | null;
+    if (body?.payload && body.payload.reason === payload.reason && body.data && body.etag) {
+      return { data: body.data, etag: body.etag };
     }
     throwMockApiError('idempotency_key_reused', {
       message: 'Khoá idempotency đã dùng cho một lệnh khác.',
     });
   }
 
-  const status: OperatorTaskStatus = 'Rejected';
-  OPERATOR_TASK_STATUS.set(fixture.taskId, status);
+  OPERATOR_TASK_STATUS.set(fixture.taskId, 'Rejected');
   bumpOperatorTaskVersion(fixture.taskId);
-  const result: OperatorDeclineResult = {
-    taskId: fixture.taskId,
-    status,
-    state: 'ACKED',
-    at: new Date().toISOString(),
+  const response: OperatorTaskResponse = {
+    data: operatorTaskDto(fixture),
+    etag: `"${currentOperatorTaskVersion(fixture.taskId)}"`,
   };
-  OPERATOR_IDEMPOTENCY.set(key, { status: 200, body: { ...result, payload } });
+  OPERATOR_IDEMPOTENCY.set(key, { status: 200, body: { ...response, payload } });
   appendOperatorCommand({
     apiId: 'API-230',
     label: 'Từ chối nhiệm vụ khảo sát',
@@ -917,14 +876,7 @@ export async function declineOperatorSurveyTask(
     resultCode: null,
     message: 'Máy chủ đã ghi nhận từ chối; nhiệm vụ chuyển sang Rejected.',
   });
-  return { data: result };
-}
-
-export interface OperatorAcceptResult {
-  taskId: string;
-  status: OperatorTaskStatus;
-  state: OperatorCommandState;
-  at: string;
+  return response;
 }
 
 /** API-227 khai báo 428 với mã `validation_error` cho header bắt buộc. */
@@ -954,7 +906,7 @@ function requireOperatorTaskId(taskIdOrCode: string): OperatorTaskFixture {
 export async function acceptOperatorSurveyTask(
   taskIdOrCode: string,
   headers: { idempotencyKey?: string; ifMatch?: string },
-): Promise<{ data: OperatorAcceptResult }> {
+): Promise<OperatorTaskResponse> {
   await delay(500);
   const fixture = requireOperatorTaskId(taskIdOrCode);
   const key = requireOperatorWriteKey(headers.idempotencyKey, 'Idempotency-Key');
@@ -963,9 +915,13 @@ export async function acceptOperatorSurveyTask(
   const payload = { kind: 'accept' };
   const cached = OPERATOR_IDEMPOTENCY.get(key);
   if (cached) {
-    const cachedPayload = (cached.body as { payload?: Record<string, unknown> } | null)?.payload;
-    if (cachedPayload && cachedPayload.kind === payload.kind) {
-      return { data: cached.body as OperatorAcceptResult };
+    const body = cached.body as {
+      data?: OperatorSurveyTaskV2Dto;
+      etag?: string;
+      payload?: Record<string, unknown>;
+    } | null;
+    if (body?.payload?.kind === payload.kind && body.data && body.etag) {
+      return { data: body.data, etag: body.etag };
     }
     throwMockApiError('idempotency_key_reused', {
       message: 'Khoá idempotency đã dùng cho một lệnh khác.',
@@ -979,15 +935,13 @@ export async function acceptOperatorSurveyTask(
     });
   }
 
-  const result: OperatorAcceptResult = {
-    taskId: fixture.taskId,
-    status: 'Accepted',
-    state: 'ACKED',
-    at: new Date().toISOString(),
-  };
   OPERATOR_TASK_STATUS.set(fixture.taskId, 'Accepted');
   bumpOperatorTaskVersion(fixture.taskId);
-  OPERATOR_IDEMPOTENCY.set(key, { status: 200, body: { ...result, payload } });
+  const response: OperatorTaskResponse = {
+    data: operatorTaskDto(fixture),
+    etag: `"${currentOperatorTaskVersion(fixture.taskId)}"`,
+  };
+  OPERATOR_IDEMPOTENCY.set(key, { status: 200, body: { ...response, payload } });
   appendOperatorCommand({
     apiId: 'API-227',
     label: 'Nhận nhiệm vụ khảo sát',
@@ -1001,7 +955,7 @@ export async function acceptOperatorSurveyTask(
     resultCode: null,
     message: 'Máy chủ đã xác nhận tiếp nhận nhiệm vụ khảo sát.',
   });
-  return { data: result };
+  return response;
 }
 
 export interface OperatorDatasetInput {
@@ -1213,7 +1167,7 @@ export async function reconcileOperatorCommand(
     });
   }
   const { data } = await getOperatorSurveyTask(record.taskId);
-  const status = data.task.status;
+  const status = data.status;
   const state: OperatorCommandState =
     record.payload.kind === 'decline'
       ? status === 'Rejected'
