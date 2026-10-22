@@ -377,7 +377,7 @@ export default function DroneSyncScreen() {
       {/* Section Title */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
-          {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'TỆP ĐÃ XÁC NHẬN TOÀN VẸN (SERVER)'}
+          {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'TỆP ĐÃ XÁC NHẬN TOÀN VẸN'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
           {queueTab === 'pending' ? 'Tự động tải khi có Wi-Fi/4G' : 'Khớp mã băm toàn vẹn'}
@@ -447,7 +447,7 @@ export default function DroneSyncScreen() {
         <View style={styles.purgeHeader}>
           <MaterialIcons name="verified" size={20} color={colors.success} />
           <Text style={[typography.labelSm, styles.purgeTitle]}>
-            QUY TRÌNH DỌN DẸP BẢN SAO AN TOÀN (SAFE LOCAL PURGE)
+            QUY TRÌNH DỌN DẸP BẢN SAO AN TOÀN
           </Text>
         </View>
 

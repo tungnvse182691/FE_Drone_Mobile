@@ -109,7 +109,7 @@ const ELIGIBILITY_REASON_LABEL: Record<string, string> = {
     'Nhiệm vụ không ở chế độ đo-kiểm-và-sửa; cần Giám sát/PM duyệt theo luồng thường.',
   POLICY_UNAVAILABLE: 'Máy chủ chưa công bố chính sách sửa nhanh đang áp dụng.',
   PINNED_POLICY_SOURCE_MISMATCH: 'Chính sách ghim không khớp nguồn hiện hành của máy chủ.',
-  ASSESSMENT_REQUIRED: 'Chưa có ảnh hiện trạng (BEFORE) hợp lệ để đối chiếu sửa nhanh.',
+  ASSESSMENT_REQUIRED: 'Chưa có ảnh hiện trạng hợp lệ để đối chiếu sửa nhanh.',
   ASSESSMENT_SOURCE_OR_LOCATION_UNVERIFIED:
     'Ảnh hiện trạng chưa xác thực được nguồn hoặc vị trí khuyết tật.',
   MEASUREMENT_SOURCE_MISMATCH: 'Nguồn số đo hiện trường không khớp với hồ sơ đánh giá.',
