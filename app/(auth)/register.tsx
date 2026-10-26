@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { registerReporter } from '../../src/api/mock/reporter-registration';
+import { registerReporterReal, extractProblemCode } from '../../src/api/reporterApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { AUTH_OTP_VERIFY } from '../../src/constants/routes';
 
@@ -63,14 +63,14 @@ export default function ReporterRegisterScreen() {
     const normalizedEmail = email.trim().toLowerCase();
     const keyScope = `reporter:register:${normalizedEmail}`;
     try {
-      const intent = await registerReporter(
+      const intent = await registerReporterReal(
         {
           email: normalizedEmail,
           password,
           displayName: displayName.trim(),
           reporterType,
         },
-        { idempotencyKey: getOrCreateCommandKey(keyScope) },
+        getOrCreateCommandKey(keyScope),
       );
       clearCommandKey(keyScope);
       router.push({
@@ -79,7 +79,7 @@ export default function ReporterRegisterScreen() {
       });
     } catch (err) {
       clearCommandKey(keyScope);
-      const code = (err as { response?: { data?: { code?: string } } }).response?.data?.code;
+      const code = extractProblemCode(err);
       setError(
         (code && REGISTER_ERRORS[code]) ||
           'Không đăng ký được. Vui lòng kiểm tra kết nối rồi thử lại.',

@@ -21,10 +21,10 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
-  submitReport,
+  submitReportReal,
   type CreateReporterReportRequestDto,
   type ReportEvidenceInputDto,
-} from '../../src/api/mock/reporter';
+} from '../../src/api/reporterApi';
 import {
   MAX_PHOTO_BYTES,
   locationSourceFor,
@@ -307,10 +307,7 @@ export default function ReporterReportScreen() {
       }
 
       const submitScope = `reporter:submit:${draftId}`;
-      const { report } = await submitReport(payload, {
-        reporterEmail: sessionEmail,
-        idempotencyKey: getOrCreateCommandKey(submitScope),
-      });
+      const { report } = await submitReportReal(payload, getOrCreateCommandKey(submitScope));
       clearCommandKey(submitScope);
       resetDraftId();
       clearPendingReport();

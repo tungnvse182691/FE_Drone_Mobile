@@ -16,7 +16,7 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { loginReal, extractProblemCode } from '../../src/api/authApi';
-import { submitReport } from '../../src/api/mock/reporter';
+import { submitReportReal } from '../../src/api/reporterApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
@@ -67,10 +67,10 @@ export default function LoginScreen() {
           const draftId = reporter.pendingDraftId;
           const submitScope = `reporter:submit:${draftId ?? 'pending'}`;
           try {
-            const { report } = await submitReport(reporter.pendingReport, {
-              reporterEmail: loggedUser.phone_or_email,
-              idempotencyKey: getOrCreateCommandKey(submitScope),
-            });
+            const { report } = await submitReportReal(
+              reporter.pendingReport,
+              getOrCreateCommandKey(submitScope),
+            );
             clearCommandKey(submitScope);
             reporter.clearPendingReport();
             router.replace({

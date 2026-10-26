@@ -5,7 +5,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { MOCK_OTP, resendReporterRegistration, submitReport, verifyReporterIntent } from '../../src/api/mock/reporter';
+import {
+  verifyReporterOtpReal,
+  resendReporterOtpReal,
+  submitReportReal,
+  extractProblemCode,
+} from '../../src/api/reporterApi';
 import { useReporterStore } from '../../src/store/reporter';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { REPORTER_HOME, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
@@ -79,7 +84,7 @@ export default function OtpVerifyScreen() {
     const verifyScope = `reporter:verify:${activeIntentId}:${finalCode}`;
     const submitScope = `reporter:submit:${pendingDraftId ?? activeIntentId}`;
     try {
-      const verified = await verifyReporterIntent(
+      const verified = await verifyReporterOtpReal(
         activeIntentId,
         finalCode,
         getOrCreateCommandKey(verifyScope),
@@ -89,6 +94,11 @@ export default function OtpVerifyScreen() {
 
       // API-012 trả `AuthTokenResponseDto`: dựng phiên thật để các màn sau dùng chung auth store.
       const sessionEmail = verified.email || email;
+      if (!verified.tokens.user) {
+        setError('Máy chủ không trả về thông tin tài khoản. Vui lòng thử lại.');
+        setLoading(false);
+        return;
+      }
       const sessionUser = buildUserFromActor(
         verified.tokens.user,
         sessionEmail,
@@ -105,15 +115,16 @@ export default function OtpVerifyScreen() {
         return;
       }
 
-      const { report } = await submitReport(pendingReport, {
-        reporterEmail: sessionEmail,
-        idempotencyKey: getOrCreateCommandKey(submitScope),
-      });
+      const { report } = await submitReportReal(
+        pendingReport,
+        getOrCreateCommandKey(submitScope),
+      );
       clearCommandKey(submitScope);
       clearPendingReport();
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: report.id } });
     } catch (err) {
-      setError(errorMessages[(err as Error).message] ?? 'Không thể xác thực. Vui lòng thử lại.');
+      const code = extractProblemCode(err);
+      setError(errorMessages[code] ?? 'Không thể xác thực. Vui lòng thử lại.');
     } finally {
       setLoading(false);
     }
@@ -125,13 +136,14 @@ export default function OtpVerifyScreen() {
     try {
       // API-011 gửi lại mã cho CÙNG intent; khoá mới vì đây là lệnh cố ý lặp lại.
       const resendScope = `reporter:resend:${activeIntentId}`;
-      await resendReporterRegistration(activeIntentId, newCommandKey(resendScope));
+      await resendReporterOtpReal(activeIntentId, newCommandKey(resendScope));
       beginOtp();
       setCode('');
       setCooldown(RESEND_COOLDOWN);
       inputRef.current?.focus();
     } catch (err) {
-      setError(errorMessages[(err as Error).message] ?? 'Không thể gửi lại mã.');
+      const code = extractProblemCode(err);
+      setError(errorMessages[code] ?? 'Không thể gửi lại mã.');
     } finally {
       setResending(false);
     }
@@ -187,7 +199,7 @@ export default function OtpVerifyScreen() {
             <View style={styles.devHint}>
               <MaterialIcons name="info-outline" size={14} color={colors.brandGold} />
               <Text style={[typography.caption, styles.devHintText]}>
-                Mã xác thực demo: {MOCK_OTP} (hoặc chỉ cần gõ 1)
+                Mã thật qua Mailpit (localhost:18026). Demo: nhập OTP từ email.
               </Text>
               <Pressable
                 onPress={() => {

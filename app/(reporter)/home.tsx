@@ -6,7 +6,7 @@ import { Card } from '../../src/components/Card';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { listMyReports, type OwnReportDto } from '../../src/api/mock/reporter';
+import { listMyReportsReal, type OwnReportDto } from '../../src/api/reporterApi';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
@@ -38,7 +38,7 @@ export default function ReporterHomeScreen() {
       return;
     }
     try {
-      const { items } = await listMyReports(activeEmail);
+      const { items } = await listMyReportsReal();
       setReports(items);
     } catch {
       setReports([]);

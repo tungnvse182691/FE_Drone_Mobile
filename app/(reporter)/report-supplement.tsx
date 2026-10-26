@@ -6,7 +6,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { getOwnReport, submitReportSupplement, type OwnReportDto } from '../../src/api/mock/reporter';
+import { getOwnReportReal, submitReportSupplementReal, type OwnReportDto } from '../../src/api/reporterApi';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
@@ -90,7 +90,7 @@ export default function ReporterReportSupplementScreen() {
     }
     setError(null);
     try {
-      const found = await getOwnReport(reportId, activeEmail);
+      const found = await getOwnReportReal(reportId);
       setReport(found.report);
       setExpectedVersion(found.etag);
       setLoadedAt(new Date().toISOString());
@@ -118,14 +118,11 @@ export default function ReporterReportSupplementScreen() {
     setPhase('submitting');
     const supplementScope = `reporter:supplement:${report.id}:${expectedVersion}`;
     try {
-      const result = await submitReportSupplement(
+      const result = await submitReportSupplementReal(
         report.id,
         { description: description.trim(), evidence: [] },
-        {
-          reporterEmail: activeEmail,
-          idempotencyKey: getOrCreateCommandKey(supplementScope),
-          ifMatch: expectedVersion,
-        },
+        getOrCreateCommandKey(supplementScope),
+        expectedVersion,
       );
       clearCommandKey(supplementScope);
       setReport(result.report);
@@ -156,7 +153,7 @@ export default function ReporterReportSupplementScreen() {
     }
     setError(null);
     try {
-      const found = await getOwnReport(report.id, activeEmail);
+      const found = await getOwnReportReal(report.id);
       setReport(found.report);
       setExpectedVersion(found.etag);
       setLoadedAt(new Date().toISOString());

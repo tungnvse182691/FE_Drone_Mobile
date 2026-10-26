@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../../src/components/Card';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { listMyReports, type OwnReportDto } from '../../src/api/mock/reporter';
+import { listMyReportsReal, type OwnReportDto } from '../../src/api/reporterApi';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
@@ -39,7 +39,7 @@ export default function ReporterTrackScreen() {
     }
     setError(null);
     try {
-      const page = await listMyReports(activeEmail);
+      const page = await listMyReportsReal();
       setReports(page.items);
     } catch {
       setError(LOAD_ERROR);

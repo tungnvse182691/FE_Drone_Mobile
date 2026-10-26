@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { getOwnReport, type OwnReportDto } from '../../src/api/mock/reporter';
+import { getOwnReportReal, type OwnReportDto } from '../../src/api/reporterApi';
 import { useReporterStore } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_SUPPLEMENT } from '../../src/constants/routes';
@@ -48,7 +48,7 @@ export default function ReporterReportDetailScreen() {
     }
     setError(null);
     try {
-      const result = await getOwnReport(reportId, activeEmail);
+      const result = await getOwnReportReal(reportId);
       setReport(result.report);
     } catch {
       setError(LOAD_ERROR);
