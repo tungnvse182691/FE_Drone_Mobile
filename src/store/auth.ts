@@ -10,7 +10,7 @@ import {
   type TokenPair,
 } from '../api/client';
 import { mapProfileRole } from '../types/roleAdapter';
-import { logout as revokeMockSession } from '../api/mock/auth';
+import { logoutReal } from '../api/authApi';
 
 export type AuthStatus =
   | 'SIGNED_OUT'
@@ -132,7 +132,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
-        const refreshToken = get().refreshToken;
+        const accessToken = get().token;
         set({
           status: 'SIGNED_OUT',
           user: null,
@@ -141,10 +141,10 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
         });
         void persistRefreshSecret(null);
-        if (refreshToken) {
+        if (accessToken) {
           // API-007: báo server thu hồi phiên (best-effort — phiên local luôn kết thúc ngay,
           // lỗi mạng không được chặn người dùng đăng xuất).
-          void revokeMockSession(refreshToken).catch(() => undefined);
+          void logoutReal(accessToken).catch(() => undefined);
         }
       },
 

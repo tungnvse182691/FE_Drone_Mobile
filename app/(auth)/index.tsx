@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { login as apiLogin } from '../../src/api/mock/auth';
+import { loginReal, extractProblemCode } from '../../src/api/authApi';
 import { submitReport } from '../../src/api/mock/reporter';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
@@ -45,7 +45,11 @@ export default function LoginScreen() {
     setError(null);
     try {
       // Wire: `AuthTokenResponseDto` camelCase trần — map sang `User` domain ở đây.
-      const response = await apiLogin(phoneOrEmail, password);
+      const response = await loginReal(phoneOrEmail, password);
+      if (!response.user) {
+        setError('Máy chủ không trả về thông tin tài khoản. Vui lòng thử lại.');
+        return;
+      }
       const loggedUser = buildUserFromActor(
         response.user,
         phoneOrEmail.trim().toLowerCase(),
@@ -89,8 +93,19 @@ export default function LoginScreen() {
       if (home) {
         router.replace(home as any);
       }
-    } catch {
-      setError('Sai tài khoản hoặc mật khẩu');
+    } catch (err: unknown) {
+      const code = extractProblemCode(err);
+      if (code === 'auth_invalid_credentials') {
+        setError('Sai tài khoản hoặc mật khẩu.');
+      } else if (code === 'auth_account_locked' || code === 'auth_account_disabled') {
+        setError('Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.');
+      } else if (code === 'auth_password_change_required') {
+        // Server báo phải đổi mật khẩu — vào flow đổi mật khẩu bắt buộc.
+        router.replace('/(auth)/force-change-password');
+        return;
+      } else {
+        setError('Không kết nối được máy chủ. Kiểm tra mạng và thử lại.');
+      }
     } finally {
       setLoading(false);
     }

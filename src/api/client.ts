@@ -98,22 +98,38 @@ const LOCAL_BACKEND_PORT = 18081;
 
 /**
  * Tự chọn base URL theo môi trường chạy:
- *   - web (Expo web / browser):        http://localhost:<port>/api/v1
- *   - android emulator (AVD):          http://10.0.2.2:<port>/api/v1
- *     (10.0.2.2 là alias của host machine từ bên trong Android emulator)
- *   - ios simulator / máy thật chưa
- *     cấu hình IP LAN:                 http://localhost:<port>/api/v1
- *     (trên máy thật thay bằng IP LAN của máy tính lúc chạy)
  *
- * Quy tắc (AGENTS.md Phase-1a):
- *   - Chỉ dùng 3 URL được chốt, không tự chế URL khác.
- *   - Mock fallback vẫn giữ nguyên — chỉ API_BASE_URL thay đổi.
+ *   1. web (Expo web / browser):
+ *        http://localhost:<port>/api/v1
+ *
+ *   2. android emulator (AVD):
+ *        http://10.0.2.2:<port>/api/v1
+ *        (10.0.2.2 là alias của host machine từ bên trong Android emulator)
+ *
+ *   3. Máy thật (Android / iOS vật lý):
+ *        Đặt biến môi trường EXPO_PUBLIC_API_HOST = <IP LAN của máy tính>,
+ *        ví dụ: EXPO_PUBLIC_API_HOST=192.168.1.100 trong file .env.local
+ *        → URL: http://192.168.1.100:<port>/api/v1
+ *        Nếu không set → fallback về localhost (chỉ chạy đúng trên simulator/web).
+ *
+ * Hướng dẫn cài đặt cho máy thật:
+ *   1. Tạo file .env.local tại gốc project (đã có trong .gitignore).
+ *   2. Thêm dòng: EXPO_PUBLIC_API_HOST=<IP LAN thật của máy>
+ *      (tìm IP LAN: ipconfig | findstr IPv4 trên Windows)
+ *   3. Restart `expo start`.
  */
 function resolveApiBaseUrl(): string {
+  // Ưu tiên 1: biến môi trường (dành cho máy thật / CI)
+  const envHost = process.env.EXPO_PUBLIC_API_HOST?.trim();
+  if (envHost) {
+    return `http://${envHost}:${LOCAL_BACKEND_PORT}/api/v1`;
+  }
+
+  // Ưu tiên 2: tự chọn theo Platform
   const base = Platform.select({
-    web: `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`,
+    web:     `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`,
     android: `http://10.0.2.2:${LOCAL_BACKEND_PORT}/api/v1`,
-    // ios simulator: localhost trỏ thẳng vào máy. Máy thật cần IP LAN.
+    // ios simulator: localhost trỏ thẳng vào máy host. Máy thật dùng EXPO_PUBLIC_API_HOST.
     default: `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`,
   });
   return base ?? `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`;
@@ -346,3 +362,6 @@ apiClient.interceptors.response.use(
 );
 
 export { apiClient, bareClient, refreshAccessToken };
+
+/** Path refresh token Android — export để `authApi.ts` tham chiếu tập trung. */
+export const ANDROID_REFRESH_PATH_EXPORT = '/auth/android/refresh';
