@@ -3,6 +3,7 @@ import axios, {
   AxiosHeaders,
   InternalAxiosRequestConfig,
 } from 'axios';
+import { Platform } from 'react-native';
 import { parseProblemDetails } from './problemDetails';
 
 export interface AuthActorWire {
@@ -89,7 +90,36 @@ export interface AuthBridge {
   onPasswordChangeRequired: () => void;
 }
 
-export const API_BASE_URL = 'https://api.roadguard.placeholder.dev/api/v1';
+/**
+ * Cổng Backend RoadGuard (Candidate3 local, Docker roadguard-fe-starter01).
+ * Thay đổi số cổng tại đây nếu docker-compose ánh xạ sang cổng khác.
+ */
+const LOCAL_BACKEND_PORT = 18081;
+
+/**
+ * Tự chọn base URL theo môi trường chạy:
+ *   - web (Expo web / browser):        http://localhost:<port>/api/v1
+ *   - android emulator (AVD):          http://10.0.2.2:<port>/api/v1
+ *     (10.0.2.2 là alias của host machine từ bên trong Android emulator)
+ *   - ios simulator / máy thật chưa
+ *     cấu hình IP LAN:                 http://localhost:<port>/api/v1
+ *     (trên máy thật thay bằng IP LAN của máy tính lúc chạy)
+ *
+ * Quy tắc (AGENTS.md Phase-1a):
+ *   - Chỉ dùng 3 URL được chốt, không tự chế URL khác.
+ *   - Mock fallback vẫn giữ nguyên — chỉ API_BASE_URL thay đổi.
+ */
+function resolveApiBaseUrl(): string {
+  const base = Platform.select({
+    web: `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`,
+    android: `http://10.0.2.2:${LOCAL_BACKEND_PORT}/api/v1`,
+    // ios simulator: localhost trỏ thẳng vào máy. Máy thật cần IP LAN.
+    default: `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`,
+  });
+  return base ?? `http://localhost:${LOCAL_BACKEND_PORT}/api/v1`;
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 const AUTH_BOOTSTRAP_PATHS = [
   '/auth/android/login',
