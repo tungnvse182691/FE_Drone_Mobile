@@ -23,13 +23,16 @@ export default function DroneHomeScreen() {
   const user = useAuthStore((state) => state.user);
   const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const page = await listOperatorSurveyTasksReal(null, 50);
       setTasks(page.items || []);
     } catch {
+      setLoadError('Không thể tải danh sách nhiệm vụ. Vui lòng kiểm tra kết nối.');
       setTasks([]);
     } finally {
       setLoading(false);
@@ -155,6 +158,14 @@ export default function DroneHomeScreen() {
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[typography.caption, styles.loadingText]}>Đang đọc nhiệm vụ khảo sát…</Text>
         </View>
+      ) : loadError ? (
+        <EmptyState
+          icon="error-outline"
+          title="Không tải được dữ liệu"
+          message={loadError}
+          actionLabel="Thử lại"
+          onAction={() => void fetchTasks()}
+        />
       ) : tasks.length === 0 ? (
         <EmptyState
           icon="flight-takeoff"

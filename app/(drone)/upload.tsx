@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDeviceId } from '../../src/constants/device';
+
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import {
   FIXTURE_DRONE_DEVICE_ID,
 } from '../../src/api/droneApi';
 import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
+import { parseProblemDetails } from '../../src/api/problemDetails';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 
 const softShadow = Platform.select({
@@ -46,12 +47,12 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     code: '#HH-KS-089',
     road: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
     droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
-    defaultVideoName: 'DJI_0488_SURVEY_DH05.MP4',
-    defaultVideoSize: '184.2 MB',
-    defaultSrtName: 'DJI_0488_SURVEY_DH05.SRT',
-    defaultSrtSize: '420 KB',
-    videoSha256: '7f8a3c4b92d189aef41b...e4b1 (demo — chưa đối chiếu)',
-    srtSha256: '9b2c3d4e5f6a1109bc42...77c2 (demo — chưa đối chiếu)',
+    defaultVideoName: 'Chưa chọn tệp',
+    defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp',
+    defaultSrtSize: '—',
+    videoSha256: '—',
+    srtSha256: '—',
     gpsCoord: '10.7412° B, 106.5524° Đ (Sai số RTK ±1.2cm)',
     gpsAddress: 'Tân Kiên, Huyện Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -59,12 +60,12 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     code: '#HH-KS-090',
     road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
     droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
-    defaultVideoName: 'DJI_0490_SURVEY_DH05.MP4',
-    defaultVideoSize: '195.4 MB',
-    defaultSrtName: 'DJI_0490_SURVEY_DH05.SRT',
-    defaultSrtSize: '380 KB',
-    videoSha256: '8e1b2c3d4f5a6b7c8d9e...33f2 (demo — chưa đối chiếu)',
-    srtSha256: '1a2b3c4d5e6f7a8b9c0d...55a1 (demo — chưa đối chiếu)',
+    defaultVideoName: 'Chưa chọn tệp',
+    defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp',
+    defaultSrtSize: '—',
+    videoSha256: '—',
+    srtSha256: '—',
     gpsCoord: '10.7333° B, 106.6833° Đ (Sai số RTK ±1.1cm)',
     gpsAddress: 'Vĩnh Lộc B, Huyện Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -72,12 +73,12 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     code: '#HH-KS-088',
     road: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
     droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
-    defaultVideoName: 'DJI_0488_SURVEY_DH05.MP4',
-    defaultVideoSize: '210.0 MB',
-    defaultSrtName: 'DJI_0488_SURVEY_DH05.SRT',
-    defaultSrtSize: '512 KB',
-    videoSha256: '4a5b6c7d8e9f1234abcd...12a4 (demo — chưa đối chiếu)',
-    srtSha256: '5b6c7d8e9f0a1b2c3d4e...66b2 (demo — chưa đối chiếu)',
+    defaultVideoName: 'Chưa chọn tệp',
+    defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp',
+    defaultSrtSize: '—',
+    videoSha256: '—',
+    srtSha256: '—',
     gpsCoord: '10.7833° B, 106.7333° Đ (Sai số RTK ±0.9cm)',
     gpsAddress: 'Cầu Bà Lát, Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -85,12 +86,12 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     code: '#HH-KS-087',
     road: 'Tuyến ĐH.05 - Ngã ba Tân Kiên (Km03+100)',
     droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
-    defaultVideoName: 'DJI_0487_SURVEY_DH05.MP4',
-    defaultVideoSize: '240.5 MB',
-    defaultSrtName: 'DJI_0487_SURVEY_DH05.SRT',
-    defaultSrtSize: '620 KB',
-    videoSha256: '1e2f3a4b5c6d7e8f9a0b...99b0 (demo — chưa đối chiếu)',
-    srtSha256: '2f3a4b5c6d7e8f9a0b1c...88c3 (demo — chưa đối chiếu)',
+    defaultVideoName: 'Chưa chọn tệp',
+    defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp',
+    defaultSrtSize: '—',
+    videoSha256: '—',
+    srtSha256: '—',
     gpsCoord: '10.7700° B, 106.7050° Đ (Sai số RTK ±1.4cm)',
     gpsAddress: 'Ngã ba Tân Kiên, Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -98,12 +99,12 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
     code: '#HH-KS-085',
     road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
     droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
-    defaultVideoName: 'DJI_0485_SURVEY_DH05.MP4',
-    defaultVideoSize: '165.8 MB',
-    defaultSrtName: 'DJI_0485_SURVEY_DH05.SRT',
-    defaultSrtSize: '310 KB',
-    videoSha256: '3c4d5e6f7a8b9c0d1e2f...44d9 (demo — chưa đối chiếu)',
-    srtSha256: '4d5e6f7a8b9c0d1e2f3a...33e4 (demo — chưa đối chiếu)',
+    defaultVideoName: 'Chưa chọn tệp',
+    defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp',
+    defaultSrtSize: '—',
+    videoSha256: '—',
+    srtSha256: '—',
     gpsCoord: '10.7400° B, 106.6900° Đ (Sai số RTK ±1.0cm)',
     gpsAddress: 'Vĩnh Lộc B Km02+180, Bình Chánh, TP. Hồ Chí Minh',
   },
@@ -117,13 +118,13 @@ export default function DroneUploadScreen() {
   const config = UPLOAD_CONFIGS[selectedCode] ?? UPLOAD_CONFIGS['#HH-KS-089'];
 
   // File state (Video & SRT)
-  const [videoName, setVideoName] = useState(config.defaultVideoName);
-  const [videoSize, setVideoSize] = useState(config.defaultVideoSize);
-  const [videoSha, setVideoSha] = useState(config.videoSha256);
+  const [videoName, setVideoName] = useState('Chưa chọn tệp');
+  const [videoSize, setVideoSize] = useState('—');
+  const [videoSha, setVideoSha] = useState('—');
 
-  const [srtName, setSrtName] = useState(config.defaultSrtName);
-  const [srtSize, setSrtSize] = useState(config.defaultSrtSize);
-  const [srtSha, setSrtSha] = useState(config.srtSha256);
+  const [srtName, setSrtName] = useState('Chưa chọn tệp');
+  const [srtSize, setSrtSize] = useState('—');
+  const [srtSha, setSrtSha] = useState('—');
 
   // Upload workflow state: LOCAL -> QUEUED -> UPLOADING -> SERVER_CONFIRMED
   const [uploadStep, setUploadStep] = useState<UploadStep>('LOCAL');
@@ -140,12 +141,12 @@ export default function DroneUploadScreen() {
     if (params.code && UPLOAD_CONFIGS[params.code]) {
       setSelectedCode(params.code);
       const c = UPLOAD_CONFIGS[params.code];
-      setVideoName(c.defaultVideoName);
-      setVideoSize(c.defaultVideoSize);
-      setVideoSha(c.videoSha256);
-      setSrtName(c.defaultSrtName);
-      setSrtSize(c.defaultSrtSize);
-      setSrtSha(c.srtSha256);
+      setVideoName('Chưa chọn tệp');
+      setVideoSize('—');
+      setVideoSha('—');
+      setSrtName('Chưa chọn tệp');
+      setSrtSize('—');
+      setSrtSha('—');
       setVideoUri(null);
       setSrtUri(null);
       setUploadStep('LOCAL');
@@ -237,7 +238,10 @@ export default function DroneUploadScreen() {
         const found = allTasks.find(
           (t) => t.id === taskIdToFetch || operatorTaskDisplayCode(t.id) === selectedCode,
         );
-        taskIdToFetch = found ? found.id : allTasks[0]?.id;
+        if (!found) {
+          throw new Error('Không tìm thấy nhiệm vụ khảo sát phù hợp để nộp dữ liệu.');
+        }
+        taskIdToFetch = found.id;
       }
       if (!taskIdToFetch) {
         throw new Error('Không tìm thấy nhiệm vụ khảo sát phù hợp để nộp dữ liệu.');
@@ -275,6 +279,9 @@ export default function DroneUploadScreen() {
 
       setSrtSha(`${srt.checksumSha256.slice(0, 12)}…${srt.checksumSha256.slice(-4)} — đã đối chiếu`);
 
+      if (video.status?.toUpperCase() !== 'VERIFIED' || srt.status?.toUpperCase() !== 'VERIFIED') {
+        throw new Error('Tệp chưa được máy chủ xác minh xong, vui lòng thử lại sau.');
+      }
       setStatusMsg('Đang nộp bộ dữ liệu kèm phạm vi khảo sát…');
       await submitOperatorDatasetReal(task.id, {
         videoFileIds: [video.fileId],
@@ -304,12 +311,15 @@ export default function DroneUploadScreen() {
         router.replace('/(auth)');
         return;
       }
-      if (response?.status === 503 || code === 'upload_storage_unavailable') {
+      if (error instanceof Error && !response) {
+        setSubmitError(error.message);
+      } else if (response?.status === 503 || code === 'upload_storage_unavailable') {
         setSubmitError('Máy chủ lưu trữ đang bận. Vui lòng thử lại sau ít phút.');
       } else if (isConcurrencyConflict(error) || response?.status === 409 || response?.status === 412) {
         setSubmitError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại nhiệm vụ rồi nộp lại.');
       } else if (code === 'validation_error' || code === 'survey_validation_failed') {
-        setSubmitError('Bộ dữ liệu chưa hợp lệ. Kiểm tra lại tệp video và tệp GPS.');
+        const pd = parseProblemDetails(response?.data);
+        setSubmitError(pd.detail ? `Bộ dữ liệu chưa hợp lệ: ${pd.detail}` : 'Bộ dữ liệu chưa hợp lệ. Kiểm tra lại tệp video và tệp GPS.');
       } else {
         setSubmitError('Không nộp được bộ dữ liệu. Vui lòng kiểm tra kết nối rồi thử lại.');
       }

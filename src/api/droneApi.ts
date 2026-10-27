@@ -10,9 +10,10 @@
  *   API-104 GET  /api/v1/projects/{projectId}/geometry-package?routeVersionId=...&segmentSetId=... (Gói hình học tuyến)
  *   API-229 POST /api/v1/survey-tasks/{taskId}/datasets                                       (Nộp bộ dữ liệu khảo sát)
  *   API-233 POST /api/v1/uploads                                                              (Tạo phiên upload SURVEY_VIDEO / TELEMETRY)
- *   API-234 POST /api/v1/uploads/{uploadId}/part-urls                                         (Lấy presigned S3/MinIO URLs)
+ *   API-234 GET  /api/v1/uploads/{uploadId}                                                   (GetSession — Đọc phiên upload)
+ *   API-236 POST /api/v1/uploads/{uploadId}/part-urls                                         (GetPartUrls — Lấy presigned S3/MinIO URLs)
  *   API-235 POST /api/v1/uploads/{uploadId}/complete                                          (Hoàn tất upload kèm parts + checksumSha256)
- *   API-236 GET  /api/v1/files/{fileId}                                                       (Kiểm tra file metadata & VERIFIED)
+ *   API-029 GET  /api/v1/files/{fileId}                                                       (GetFileMetadata — Kiểm tra file metadata & VERIFIED)
  *
  * Quy tắc If-Match:
  *   LUÔN gửi dạng strong ETag: `"${version}"`.
@@ -216,7 +217,14 @@ export interface GeometryPackageWithEtag {
   etag: string;
 }
 
-// Active fixture drone device seeded in BE database (DroneDeviceSeedStep.cs)
+/**
+ * DEMO-ONLY cho môi trường Candidate3:
+ * Thiết bị bay đã đăng ký và đang Active trong cơ sở dữ liệu BE (DroneDeviceSeedStep.cs: RG-DRONE-0001).
+ * CHÚ Ý: Backend kiểm tra d.Id == request.DeviceId && d.Status == Active trong bảng DroneDevices.
+ * Backend hiện KHÔNG có endpoint công khai nào để truy vấn hay đăng ký DroneDevice cho Operator.
+ * Giá trị này chỉ hoạt động khi Backend seed đúng thiết bị này; trên môi trường khác hoặc production
+ * mà không có thiết bị tương ứng thì Backend sẽ từ chối với mã lỗi survey_validation_failed.
+ */
 export const FIXTURE_DRONE_DEVICE_ID = '5f1e9338-3f89-48f0-9d90-097b4ced4e62';
 
 // =============================================================================
@@ -460,7 +468,8 @@ export async function createOperatorUploadSessionReal(
 }
 
 /**
- * Đọc phiên tải lên để lấy version mới nhất hoặc kiểm tra trạng thái.
+ * API-234: GET /api/v1/uploads/{uploadId}
+ * Đọc phiên tải lên (GetSession) để lấy version mới nhất hoặc kiểm tra trạng thái.
  */
 export async function getOperatorUploadSessionReal(
   uploadId: string,
@@ -470,8 +479,8 @@ export async function getOperatorUploadSessionReal(
 }
 
 /**
- * API-234: POST /api/v1/uploads/{uploadId}/part-urls
- * Lấy presigned URLs để PUT các phần của tệp.
+ * API-236: POST /api/v1/uploads/{uploadId}/part-urls
+ * Lấy presigned URLs (GetPartUrls) để PUT các phần của tệp.
  */
 export async function getOperatorUploadPartUrlsReal(
   uploadId: string,
@@ -535,8 +544,8 @@ export async function completeOperatorUploadReal(
 }
 
 /**
- * API-236: GET /api/v1/files/{fileId}
- * Đọc metadata tệp sau khi đã xác minh xong.
+ * API-029: GET /api/v1/files/{fileId}
+ * Đọc metadata tệp (GetFileMetadata) sau khi đã xác minh xong.
  */
 export async function getOperatorFileMetadataReal(
   fileId: string,
@@ -726,7 +735,7 @@ export async function uploadOperatorFileReal(
   }
 
   if (!verified) {
-    // Nếu hết thời gian chờ mà chưa verified, kiểm tra lần cuối qua API-236
+    // Nếu hết thời gian chờ mà chưa verified, kiểm tra lần cuối qua API-029
     try {
       const fileMeta = await getOperatorFileMetadataReal(session.fileId);
       if (fileMeta.status?.toUpperCase() === 'VERIFIED') {
