@@ -7,7 +7,8 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-import { CREW_TASKS, CREW_COMPLETED_TASKS } from './tasks';
+import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP } from './tasks';
+import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { CREW_RECEIVING } from '../../src/constants/routes';
 import { TaskMode } from '../../src/types/enums';
 
@@ -23,22 +24,22 @@ interface CrewMetric {
 
 const CREW_METRICS: CrewMetric[] = [
   {
-    label: 'Việc đang làm',
-    value: String(CREW_TASKS.length),
+    label: 'Chưa hoàn thành',
+    value: '',
     icon: 'build',
     valueColor: colors.primaryDark,
     iconColor: '#6B5219',
     iconBg: '#FEF9E7',
-    subLabel: 'Cần xử lý hôm nay',
+    subLabel: 'Trong nhiệm vụ được giao đã tải',
   },
   {
     label: 'Hoàn thành',
-    value: String(CREW_COMPLETED_TASKS.length),
+    value: '',
     icon: 'check-circle',
     valueColor: colors.success,
     iconColor: '#2F9E44',
     iconBg: '#E9F7EC',
-    subLabel: 'Đã nghiệm thu',
+    subLabel: 'Trạng thái BE trong dữ liệu đã tải',
   },
 ];
 
@@ -50,8 +51,10 @@ function normalizeName(raw: string | undefined, fallback: string): string {
 
 export default function CrewHomeScreen() {
   const user = useAuthStore((state) => state.user);
-  const displayName = normalizeName(user?.full_name, 'Lê Văn Tuấn');
-  const employeeCode = user?.employee_code ?? 'HH-RC-084';
+  const inbox = useCrewInbox();
+  const tasks = inbox.tasks.filter(t => !crewTaskIsComplete(t));
+  const displayName = normalizeName(inbox.enabled ? user?.full_name : undefined, 'Chưa có tên tài khoản');
+  const employeeCode = inbox.enabled ? user?.employee_code ?? 'Chưa có mã nhân viên' : 'Chưa đăng nhập';
 
   return (
     <View style={styles.screen}>
@@ -73,7 +76,7 @@ export default function CrewHomeScreen() {
           <View style={styles.teamHeaderRow}>
             <View style={styles.teamTitleGroup}>
               <MaterialIcons name="engineering" size={18} color={colors.brandGold} />
-              <Text style={[typography.titleMd, styles.teamTitle]}>ĐỘI THI CÔNG 01</Text>
+              <Text style={[typography.titleMd, styles.teamTitle]}>ĐỘI THI CÔNG</Text>
             </View>
             <View style={styles.teamStatusPill}>
               <View style={styles.statusDot} />
@@ -90,7 +93,7 @@ export default function CrewHomeScreen() {
                 <Text style={[typography.caption, styles.memberRoleLabel]}>Đội trưởng:</Text>
               </View>
               <Text style={[typography.bodyMd, styles.memberNameText]} numberOfLines={1}>
-                Trần Văn Vượng
+                Chưa có dữ liệu đội trưởng
               </Text>
             </View>
 
@@ -108,7 +111,7 @@ export default function CrewHomeScreen() {
 
         {/* 2 THẺ METRIC: 24px+, icon ô màu pastel, card trắng viền 1px bo 12px */}
         <View style={styles.metricRow}>
-          {CREW_METRICS.map((metric) => (
+          {CREW_METRICS.map((metric, index) => (
             <Card key={metric.label} style={styles.metricCard}>
               <View style={styles.metricTopRow}>
                 <Text style={[typography.caption, styles.metricLabel]}>{metric.label}</Text>
@@ -117,7 +120,7 @@ export default function CrewHomeScreen() {
                 </View>
               </View>
               <Text style={[typography.headlineLg, styles.metricValue, { color: metric.valueColor }]}>
-                {metric.value}
+                {inbox.error || inbox.query.isPending ? '—' : String(index === 0 ? tasks.length : inbox.tasks.filter(crewTaskIsComplete).length)}
               </Text>
               <Text style={[typography.caption, styles.metricSub]}>{metric.subLabel}</Text>
             </Card>
@@ -140,15 +143,15 @@ export default function CrewHomeScreen() {
           </Pressable>
         </View>
 
-        {/* Nút inline Chụp ảnh hiện trường */}
+        {/* Nút inline Chọn nhiệm vụ để chụp ảnh */}
         <Pressable
           style={({ pressed }) => [styles.captureBtn, pressed && styles.captureBtnPressed]}
-          onPress={() => router.push('/(crew)/viewfinder')}
+          onPress={() => router.push('/(crew)/tasks')}
           accessibilityRole="button"
-          accessibilityLabel="Chụp ảnh hiện trường"
+          accessibilityLabel="Chọn nhiệm vụ để chụp ảnh"
         >
           <MaterialIcons name="photo-camera" size={20} color={colors.onPrimary} />
-          <Text style={[typography.labelLg, styles.captureBtnText]}>Chụp ảnh hiện trường</Text>
+          <Text style={[typography.labelLg, styles.captureBtnText]}>Chọn nhiệm vụ để chụp ảnh</Text>
         </Pressable>
 
         {/* Nút inline Nhận việc (ACK) — C-11 */}
@@ -167,13 +170,15 @@ export default function CrewHomeScreen() {
 
 
         {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, footer #HH-WO-xx, chevron phải */}
+        <CrewInboxState inbox={inbox} />
         <View style={styles.taskList}>
-          {CREW_TASKS.map((task) => {
+          {tasks.map((task) => {
             const isRepair = task.task_mode === TaskMode.INSPECT_AND_REPAIR;
             return (
               <Pressable
                 key={task.id}
-                onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id } })}
+                disabled={!task.projectId || !task.version}
+                onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}
                 accessibilityRole="button"
                 style={({ pressed }) => [styles.taskCardTouch, pressed && styles.taskCardPressed]}
               >
@@ -199,7 +204,7 @@ export default function CrewHomeScreen() {
                           isRepair ? styles.modeTextRepair : styles.modeTextMeasure,
                         ]}
                       >
-                        {isRepair ? 'Đo & Sửa nhanh' : 'Chỉ đo đợt'}
+                        {TASK_MODE_CHIP[task.task_mode].label}
                       </Text>
                     </View>
 
@@ -225,14 +230,14 @@ export default function CrewHomeScreen() {
 
                   {/* Hàng 2: Tiêu đề công việc 16px rõ nét ngoài nắng */}
                   <Text style={[typography.titleMd, styles.taskTitle]} numberOfLines={2}>
-                    {task.title}
+                    {task.title || 'Nhiệm vụ hiện trường'} · {task.id}
                   </Text>
 
                   {/* Hàng 3: Dòng tuyến • trạm • lý trình kèm icon near-me */}
                   <View style={styles.locationRow}>
                     <MaterialIcons name="near-me" size={14} color={colors.brandGold} />
                     <Text style={[typography.bodyMd, styles.locationText]} numberOfLines={1}>
-                      {task.route_code} • {task.section_name} • {task.chainage}
+                      {[task.route_code, task.section_name, task.chainage].filter(Boolean).join(' • ') || 'Chưa có tuyến / vị trí'}
                     </Text>
                   </View>
 
@@ -240,7 +245,7 @@ export default function CrewHomeScreen() {
                   <View style={styles.taskCardFooter}>
                     <View style={styles.footerLeftMeta}>
                       <View style={styles.woCodeBadge}>
-                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code}</Text>
+                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || 'Chưa có mã WO'}</Text>
                       </View>
                       {task.distance_label ? (
                         <Text style={[typography.caption, styles.distanceText]}>

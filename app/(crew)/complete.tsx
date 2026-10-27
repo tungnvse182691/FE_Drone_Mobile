@@ -17,7 +17,9 @@ import {
   markSessionSubmitted,
   type CrewFieldSession,
 } from '../../src/api/mock/crew-inspection';
-import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
+import { TASK_MODE_CHIP } from './tasks';
+import { CrewTaskBoundary } from './tasks';
+import type { OperationalCrewTask } from '../../src/api/crewApi';
 import {
   getFieldInspectionTaskDetailReal,
   newIdempotencyKey,
@@ -40,8 +42,10 @@ function getTaskSession(taskId: string): CrewFieldSession | null {
 }
 
 export default function CrewCompleteScreen() {
+  return <CrewTaskBoundary>{task => <CrewCompleteScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewCompleteScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
   const modeChip = TASK_MODE_CHIP[task.task_mode];
 
   const [session, setSession] = useState(() => getTaskSession(task.id));
@@ -174,7 +178,7 @@ export default function CrewCompleteScreen() {
         }
       }
 
-      const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+      const projectId = task.projectId || null;
       if (isFastTrackRepair && projectId) {
         try {
           const detail = await getFieldInspectionTaskDetailReal(projectId, task.id);

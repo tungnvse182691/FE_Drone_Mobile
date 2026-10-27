@@ -7,23 +7,24 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Toast } from '../../src/components/Toast';
-import { CREW_COMPLETED_TASKS, CREW_TASKS } from './tasks';
+import { useCrewInbox, CrewInboxState } from './tasks';
+import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const PERFORMANCE_STATS = [
   {
-    value: CREW_COMPLETED_TASKS.length.toString().padStart(2, '0'),
+    value: '',
     label: 'HOÀN THÀNH',
     color: colors.neutral,
   },
   {
-    value: CREW_TASKS.length.toString().padStart(2, '0'),
-    label: 'ĐANG XỬ LÝ',
+    value: '',
+    label: 'CHƯA HOÀN THÀNH',
     color: colors.primary,
   },
   {
-    value: (CREW_COMPLETED_TASKS.length + CREW_TASKS.length).toString().padStart(2, '0'),
-    label: 'TỔNG NHIỆM VỤ',
+    value: '',
+    label: 'ĐÃ TẢI',
     color: colors.success,
   },
 ];
@@ -61,7 +62,9 @@ function normalizeName(raw: string | undefined, fallback: string): string {
 
 export default function CrewProfileScreen() {
   const user = useAuthStore((state) => state.user);
-  const displayName = normalizeName(user?.full_name, 'Lê Văn Tuấn');
+  const inbox = useCrewInbox();
+  const completed = inbox.tasks.filter(crewTaskIsComplete).length;
+  const displayName = normalizeName(inbox.enabled ? user?.full_name : undefined, 'Chưa có tên tài khoản');
   const logout = useAuthStore((state) => state.logout);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -81,7 +84,7 @@ export default function CrewProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${displayName}\nMã nhân viên: ${user?.employee_code ?? 'HH-RC-084'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Đội 01 - Tuyến ĐH.05\nTrạng thái hoạt động: Đang hoạt động`,
+          `Họ tên: ${displayName}\nMã nhân viên: ${user?.employee_code ?? 'Chưa có dữ liệu'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Chưa có dữ liệu\nTrạng thái hoạt động: Chưa có dữ liệu`,
         );
         return;
       case 'help':
@@ -95,6 +98,7 @@ export default function CrewProfileScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ Sơ" />}>
+      <CrewInboxState inbox={inbox} />
       <View style={styles.profileHeader}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
@@ -112,12 +116,12 @@ export default function CrewProfileScreen() {
 
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
-          Mã NV: {user?.employee_code ?? 'HH-RC-084'} • Đội sửa chữa số 2
+          Mã NV: {user?.employee_code ?? 'Chưa có dữ liệu'}
         </Text>
         <Text style={[typography.caption, styles.unit]}>
-          Đội sửa chữa số 2 — Phụ trách Bảo trì đường bê tông ĐH.05
+          Chưa có thông tin đội phụ trách
         </Text>
-        <Text style={[typography.caption, styles.email]}>{user?.phone_or_email ?? 'crew@hoanghai.vn'}</Text>
+        <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>
           <MaterialIcons name="build" size={14} color={colors.brandGold} />
@@ -132,7 +136,7 @@ export default function CrewProfileScreen() {
               {idx > 0 && <View style={styles.statDivider} />}
               <View style={styles.statCol}>
                 <Text style={[typography.headlineLg, { color: stat.color, fontWeight: '700' }]}>
-                  {stat.value}
+                  {inbox.error || inbox.query.isPending ? '—' : String(idx === 0 ? completed : idx === 1 ? inbox.tasks.length - completed : inbox.tasks.length)}
                 </Text>
                 <Text style={[typography.labelSm, styles.statLabel]}>{stat.label}</Text>
               </View>

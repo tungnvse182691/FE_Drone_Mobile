@@ -13,7 +13,7 @@ import {
   setAfterCapture,
   setBeforeCapture,
 } from '../../src/api/mock/crew-inspection';
-import { getCrewTaskById } from './tasks';
+import { CrewTaskBoundary, type OperationalCrewTask } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 type ViewfinderMode = 'before' | 'after' | 'video';
@@ -38,8 +38,10 @@ function formatDateTime(date: Date): string {
 }
 
 export default function CrewViewfinderScreen() {
+  return <CrewTaskBoundary>{task => <CrewViewfinderScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string; mode?: string }>();
-  const task = getCrewTaskById(params.id);
   const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';
 
   const [mode, setMode] = useState<ViewfinderMode>(initialMode);

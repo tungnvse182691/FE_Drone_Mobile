@@ -30,7 +30,6 @@ import {
   type SyncResult,
   isDispatchableSyncOperationKind,
 } from '../../src/types/domain';
-import { getCrewTaskById } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { LocalState, SyncStatus } from '../../src/types/enums';
 
@@ -89,7 +88,6 @@ const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
 
 export default function CrewSyncScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
   const [segment, setSegment] = useState<SyncSegment>('pending');
   const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);

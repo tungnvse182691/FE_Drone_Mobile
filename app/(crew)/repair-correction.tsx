@@ -24,7 +24,8 @@ import {
   supplementRepairAttemptReal,
 } from '../../src/api/crewApi';
 import type { CrewFieldSubmissionView } from '../../src/api/mock/tasks';
-import { getCrewTaskById, getProjectIdForTask } from './tasks';
+import { CrewTaskBoundary } from './tasks';
+import type { OperationalCrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -61,9 +62,11 @@ function pickDefaultSubmission(
 }
 
 export default function CrewRepairCorrectionScreen() {
+  return <CrewTaskBoundary>{task => <CrewRepairCorrectionScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewRepairCorrectionScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string; submissionId?: string }>();
-  const task = getCrewTaskById(params.id);
-  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+  const projectId = task.projectId || null;
   const bootstrap = useRepairBootstrap(task.id, { projectId: projectId ?? undefined });
 
   const [submissions, setSubmissions] = useState<CrewFieldSubmissionView[] | null>(null);

@@ -30,7 +30,8 @@ import {
   EVIDENCE_REUSE_SOURCE_TAGS,
   type BeforeEvidenceCandidate,
 } from '../../src/api/mock/crew-inspection';
-import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
+import { CrewTaskBoundary, TASK_MODE_CHIP } from './tasks';
+import { crewTaskActionBlock, type OperationalCrewTask } from '../../src/api/crewApi';
 import {
   acceptFieldTaskReal,
   formatStrongIfMatch,
@@ -148,8 +149,29 @@ function eligibilityReasonLabel(code: string): string {
 }
 
 export default function CrewWoDetailScreen() {
+  return <CrewTaskBoundary operational={false}>{task => crewTaskActionBlock(task) ?
+    <SafeAreaScreen scroll header={<View style={styles.topBar}><Text style={typography.titleMd}>Chi tiết lệnh công tác</Text></View>}>
+      <Card style={styles.card}>
+        <Text style={typography.titleMd}>Nhiệm vụ hiện trường</Text>
+        <Text selectable>Mã nhiệm vụ: {task.id}</Text>
+        <Text selectable>Dự án: {task.projectId}</Text>
+        <Text>Trạng thái: {task.status || 'Chưa có dữ liệu'}</Text>
+        <Text>Chế độ BE: {task.rawMode || 'Chưa có dữ liệu'}</Text>
+        <Text selectable>Phiên bản: {task.version}</Text>
+        <Text>Mô tả: {task.description || 'Chưa có dữ liệu'}</Text>
+        <Text>Thời hạn: {task.due_label || 'Chưa có dữ liệu'}</Text>
+        <Text>WO / tuyến / GPS / loại khuyết tật: Chưa có dữ liệu từ máy chủ.</Text>
+        <Text>{crewTaskActionBlock(task)}</Text>
+        <Text>Nhận / từ chối và tác nghiệp hiện trường chưa khả dụng trên giao diện này khi thiếu dữ liệu tác nghiệp thật.</Text>
+        {!task.detail?.repairContext ? <Text>P5-G02: chưa có ngữ cảnh sửa chữa hợp lệ; không mở thao tác sửa chữa.</Text> : <Text>Đã có ngữ cảnh sửa chữa từ BE; chuỗi lệnh sửa chữa chưa thuộc nghiệm thu T04.</Text>}
+      </Card>
+      <Button variant="secondary" title="Dẫn đường" disabled onPress={() => {}} />
+      <Button variant="secondary" title="Tác nghiệp hiện trường" disabled onPress={() => {}} />
+      <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
+    </SafeAreaScreen> : <CrewWoDetailContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewWoDetailContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
   const modeChip = TASK_MODE_CHIP[task.task_mode];
 
   const [session, setSession] = useState(() => getCrewFieldSession());
@@ -169,7 +191,7 @@ export default function CrewWoDetailScreen() {
     null,
   );
 
-  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+  const projectId = task.projectId || null;
 
   const loadFieldTask = useCallback(async () => {
     if (!projectId) {

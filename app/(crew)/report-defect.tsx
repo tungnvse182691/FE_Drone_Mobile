@@ -11,7 +11,7 @@ import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES, defectTypeLabel } from '../../s
 import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
 import { initDatabase, openDatabase } from '../../src/offline/database';
 import { enqueuePayload } from '../../src/offline/upload-queue';
-import { getCrewTaskById } from './tasks';
+import { CrewTaskBoundary, type OperationalCrewTask } from './tasks';
 
 const DEFECT_TYPES = DEFECT_TYPE_OPTIONS;
 
@@ -22,8 +22,10 @@ const SEVERITY_OPTIONS = [
 ];
 
 export default function CrewReportDefectScreen() {
+  return <CrewTaskBoundary>{task => <CrewReportDefectScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewReportDefectScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
   const [defectType, setDefectType] = useState<string>(DEFECT_TYPE_CODES.POTH_DEEP);
   const [customType, setCustomType] = useState('');
   const [severity, setSeverity] = useState<string>('Khẩn cấp');

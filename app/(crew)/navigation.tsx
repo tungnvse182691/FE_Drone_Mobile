@@ -7,19 +7,21 @@ import * as Linking from 'expo-linking';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { defectTypeLabel } from '../../src/constants/defect-types';
-import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import { TASK_MODE_CHIP } from './tasks';
+import { CrewTaskBoundary } from './tasks';
+import type { OperationalCrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
 
 export default function CrewNavigationScreen() {
+  return <CrewTaskBoundary>{task => <CrewNavigationScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
   const modeChip = TASK_MODE_CHIP[task.task_mode];
 
   const targetLng = task.coordinates.longitude;
   const targetLat = task.coordinates.latitude;
-  const vehicleLng = targetLng - 0.0035;
-  const vehicleLat = targetLat - 0.0008;
 
   const openGoogleMaps = () => {
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}`).catch(() => {});
@@ -103,27 +105,15 @@ export default function CrewNavigationScreen() {
           controlsTopOffset={56}
           markers={[
             {
-              id: 'vehicle',
-              title: 'Xe sửa chữa (Bạn)',
-              subtitle: `Cách vị trí lỗi 450 m`,
-              coordinate: [vehicleLng, vehicleLat],
-              type: 'vehicle',
-            },
-            {
               id: `defect-${task.id}`,
               title: defectTypeLabel(task.defect_type_code),
               label: defectTypeLabel(task.defect_type_code),
               subtitle: `${task.chainage} • Tuyến ${task.route_code} • ${task.section_name}`,
               coordinate: [targetLng, targetLat],
               type: 'defect',
-              severity: task.due_urgency === 'urgent' ? 'high' : 'medium',
             },
           ]}
-          routeCoordinates={[
-            [vehicleLng, vehicleLat],
-            [(vehicleLng + targetLng) / 2, (vehicleLat + targetLat) / 2],
-            [targetLng, targetLat],
-          ]}
+
         />
 
         {/* Top Header Bar */}
@@ -134,7 +124,7 @@ export default function CrewNavigationScreen() {
 
           <View style={styles.gpsBadge}>
             <View style={styles.gpsDot} />
-            <Text style={[typography.caption, styles.gpsText]}>GPS Đang hoạt động</Text>
+            <Text style={[typography.caption, styles.gpsText]}>Điểm hiện trường từ máy chủ</Text>
           </View>
         </View>
       </View>
@@ -173,7 +163,7 @@ export default function CrewNavigationScreen() {
               <View style={styles.collapsedLeft}>
                 <MaterialIcons name="navigation" size={16} color={colors.brandGold} />
                 <Text style={[typography.labelSm, styles.collapsedTitle]}>
-                  450 m &bull; {task.chainage} Tuyến {task.route_code} (BTXM)
+                  Chưa có khoảng cách • {task.chainage} Tuyến {task.route_code} (BTXM)
                 </Text>
               </View>
               <View style={styles.collapsedRight}>
@@ -185,18 +175,14 @@ export default function CrewNavigationScreen() {
             <View style={styles.distanceRow}>
               <View style={styles.distanceInfo}>
                 <Text style={[typography.titleLg, styles.distanceValue]}>
-                  450 m <Text style={[typography.bodyMd, styles.distanceHint]}>(khoảng 2 phút đi xe)</Text>
+                  Chưa có dữ liệu khoảng cách
                 </Text>
                 <Text style={[typography.titleMd, styles.roadTag]} numberOfLines={1}>
                   {task.chainage} Tuyến {task.route_code} ({task.locality})
                 </Text>
                 <View style={styles.tagRow}>
                   <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
-                  {task.due_urgency === 'urgent' ? (
-                    <Chip variant="severity-high" label="NGHIÊM TRỌNG" />
-                  ) : (
-                    <Chip variant="severity-medium" label="TRUNG BÌNH" />
-                  )}
+
                 </View>
               </View>
 

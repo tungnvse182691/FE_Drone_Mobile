@@ -6,6 +6,7 @@ import { uuidv4 } from '../utils/uuid';
 import {
   finishRepairExecutionReal,
   getFieldInspectionTaskDetailReal,
+  isCrewResourceId,
   startRepairExecutionReal,
   submitRepairAssessmentReal,
   submitRepairAttemptReal,
@@ -304,9 +305,11 @@ export const CREW_REPAIR_PROJECT_ID = MOCK_CREW_PROJECT_ID;
 /** Đọc API-080 và bóc `repairContext` (itemVersion) tại thời điểm gọi. */
 export async function readRepairBootstrap(
   taskId: string,
-  projectId: string = CREW_REPAIR_PROJECT_ID,
+  projectId?: string,
 ): Promise<RepairBootstrap> {
+  if (!isCrewResourceId(projectId) || !isCrewResourceId(taskId)) throw syntheticError('crew_identity_missing', 428, 'Project and task identity are required');
   const view = await crewRepairTransport.fetchTask(taskId, projectId);
+  if (view.id !== taskId || view.projectId !== projectId || !view.version) throw syntheticError('crew_identity_invalid', 409, 'Task identity or version mismatch');
   return {
     taskId,
     projectId,

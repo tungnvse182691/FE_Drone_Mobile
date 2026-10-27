@@ -34,7 +34,9 @@ import {
 } from '../../src/api/crewApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { releaseStableUuid, stableUuid } from '../../src/utils/uuid';
-import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
+import { TASK_MODE_CHIP } from './tasks';
+import { CrewTaskBoundary } from './tasks';
+import type { OperationalCrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const DIMENSION_LABELS: Record<string, string> = {
@@ -114,8 +116,10 @@ function measurementText(value: number | null): string {
 }
 
 export default function CrewFieldReviewScreen() {
+  return <CrewTaskBoundary>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewFieldReviewScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
 
   const [fieldTask, setFieldTask] = useState<FieldTaskViewFact | null>(null);
   const [submission, setSubmission] = useState<FieldSubmissionViewFact | null>(null);
@@ -136,7 +140,7 @@ export default function CrewFieldReviewScreen() {
     return session && session.task_id === task.id ? session.after_local_uri : null;
   }, [task.id]);
 
-  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+  const projectId = task.projectId || null;
 
   const loadSubmission = useCallback(async () => {
     setLoading(true);

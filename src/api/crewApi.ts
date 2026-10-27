@@ -2,7 +2,8 @@
  * crewApi.ts — Gọi các endpoint Crew & Field Inspection thật của RoadGuard Backend.
  *
  * Paths đã xác minh từ code BE và đo thật bằng PowerShell:
- *   API-078 GET  /me/inspection-tasks
+ *   API-037 GET  /me/inspection-tasks
+ *   API-078 GET  /projects/{projectId}/field-inspection-tasks
  *   API-080 GET  /projects/{projectId}/field-inspection-tasks/{taskId}
  *   API-081 POST /projects/{projectId}/field-inspection-tasks/{taskId}/accept
  *   API-091 POST /projects/{projectId}/field-inspection-tasks/{taskId}/reject
@@ -33,12 +34,71 @@
 import axios, { type AxiosError } from 'axios';
 import { apiClient } from './client';
 import { parseProblemDetails, type ParsedProblemDetails } from './problemDetails';
+import type { CrewFieldTaskCard } from './mock/field-tasks';
+import type { TaskMode } from '../types/enums';
+
+/** UI projection: unknown fields stay absent; never manufacture business facts. */
+export type CrewTask = Omit<CrewFieldTaskCard, 'coordinates' | 'task_mode' | 'defect_type_code'> & {
+  projectId: string; version: string; crewId: string; status: string; rawMode: string;
+  task_mode: TaskMode | 'UNKNOWN'; defect_type_code: string;
+  coordinates: { latitude: number; longitude: number } | null;
+  detail?: FieldTaskViewFact; etag?: string;
+};
+export type OperationalCrewTask = CrewTask & CrewFieldTaskCard;
+export function isCrewResourceId(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
+    value !== '00000000-0000-0000-0000-000000000000';
+}
+export function validateCrewTaskIdentity(item: { id: string; projectId: string; crewId: string; version: string }, actorId: string): void {
+  if (!isCrewResourceId(item.id) || !isCrewResourceId(item.projectId) || !isCrewResourceId(item.crewId) ||
+      item.crewId.toLowerCase() !== actorId.toLowerCase() || !item.version?.trim()) throw new Error('crew_identity_invalid');
+}
+export function validateCrewTaskDetail(item: FieldTaskViewFact, etag: string, projectId: string, taskId: string, actorId: string): void {
+  validateCrewTaskIdentity({ ...item, crewId: item.assignedToUserId ?? '', version: item.version ?? '' }, actorId);
+  if (item.id.toLowerCase() !== taskId.toLowerCase() || item.projectId.toLowerCase() !== projectId.toLowerCase() ||
+      !etag || etag !== `"${item.version}"`) throw new Error('crew_version_or_identity_invalid');
+}
+export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: FieldTaskViewFact, etag?: string): CrewTask {
+  const rawMode = detail?.mode ?? item.mode;
+  return {
+    id: item.id, projectId: item.projectId, version: detail?.version ?? item.version, crewId: item.crewId,
+    status: detail?.status ?? item.status, rawMode,
+    task_mode: (['MEASURE_ONLY','INSPECT_AND_REPAIR','INSPECT_ONLY'].includes(rawMode) ? rawMode : 'UNKNOWN') as CrewTask['task_mode'],
+    wo_code: '', title: '', defect_type_code: '', coordinates: null,
+    route_code: '', section_name: '', chainage: '', locality: '', due_label: detail?.dueAt ?? '',
+    due_urgency: 'normal', distance_label: '', defect_location: '', description: detail?.instructions ?? '',
+    repair_method: '', safety_note: '', batch_size: item.defectIds.length, detail, etag,
+  };
+}
+export function crewTaskIsComplete(task: { status: string }): boolean { return task.status.toUpperCase() === 'COMPLETED'; }
+export function crewTaskActionBlock(task: CrewTask | null): string | null {
+  if (!task || !task.projectId || !task.id || !task.version || !task.etag) return 'Chưa có định danh hoặc phiên bản nhiệm vụ hợp lệ.';
+  if (!task.coordinates || !Number.isFinite(task.coordinates.latitude) || !Number.isFinite(task.coordinates.longitude) ||
+      Math.abs(task.coordinates.latitude) > 90 || Math.abs(task.coordinates.longitude) > 180) return 'Máy chủ chưa cung cấp tọa độ hiện trường; chưa thể mở thao tác này.';
+  if (task.task_mode === 'UNKNOWN' || !task.defect_type_code || !task.wo_code) return 'Chưa đủ dữ liệu tác nghiệp từ máy chủ. Chỉ có thể xem thông tin nhiệm vụ.';
+  return null;
+}
+export function crewInboxOptions(scope: string) {
+  return {
+    queryKey: ['crew-inbox', scope], initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }: { pageParam: string | null; signal: AbortSignal }) => listCrewInspectionTasksReal(pageParam, 50, signal),
+    getNextPageParam: (page: InspectionTaskPageResponseDto, _pages: InspectionTaskPageResponseDto[], _last: string | null, cursors: (string | null)[]) =>
+      page.nextCursor && !cursors.includes(page.nextCursor) ? page.nextCursor : undefined,
+    retry: false as const, gcTime: 0,
+  };
+}
+/** API-078 uses an afterId UUID, not the API-037 opaque cursor. */
+export async function listProjectCrewTasksReal(projectId: string, afterId?: string | null, limit = 50, signal?: AbortSignal): Promise<{ items: FieldTaskViewFact[]; nextCursor: string | null }> {
+  if (!isCrewResourceId(projectId) || (afterId && !isCrewResourceId(afterId))) throw new Error('crew_identity_missing');
+  const response = await apiClient.get(`/projects/${projectId}/field-inspection-tasks`, { params: { afterId: afterId || undefined, limit }, signal });
+  return response.data;
+}
 
 // =============================================================================
 // TYPES & DTOs
 // =============================================================================
 
-/** Item trả về từ GET /api/v1/me/inspection-tasks (API-078). */
+/** Item trả về từ GET /api/v1/me/inspection-tasks (API-037). */
 export interface InspectionTaskResponseDto {
   id: string;
   projectId: string;
@@ -52,7 +112,7 @@ export interface InspectionTaskResponseDto {
   updatedAt?: string | null;
 }
 
-/** Phân trang từ GET /api/v1/me/inspection-tasks (API-078). */
+/** Phân trang từ GET /api/v1/me/inspection-tasks (API-037). */
 export interface InspectionTaskPageResponseDto {
   items: InspectionTaskResponseDto[];
   nextCursor: string | null;
@@ -391,12 +451,13 @@ export function newIdempotencyKey(): string {
 // =============================================================================
 
 /**
- * API-078: GET /api/v1/me/inspection-tasks
+ * API-037: GET /api/v1/me/inspection-tasks
  * Lấy danh sách nhiệm vụ được giao cho Crew đang đăng nhập.
  */
 export async function listCrewInspectionTasksReal(
   cursor?: string | null,
   limit: number = 50,
+  signal?: AbortSignal,
 ): Promise<InspectionTaskPageResponseDto> {
   const params: Record<string, unknown> = { limit };
   if (cursor) {
@@ -404,6 +465,7 @@ export async function listCrewInspectionTasksReal(
   }
   const response = await apiClient.get<InspectionTaskPageResponseDto>('/me/inspection-tasks', {
     params,
+    signal,
   });
   return response.data;
 }
@@ -415,11 +477,15 @@ export async function listCrewInspectionTasksReal(
 export async function getFieldInspectionTaskDetailReal(
   projectId: string,
   taskId: string,
+  signal?: AbortSignal,
 ): Promise<{ data: FieldTaskViewFact; etag: string }> {
+  if (!isCrewResourceId(projectId) || !isCrewResourceId(taskId)) throw new Error('crew_identity_missing');
   const response = await apiClient.get<FieldTaskViewFact>(
     `/projects/${projectId}/field-inspection-tasks/${taskId}`,
+    { signal },
   );
-  const etag = extractEtagFromResponse(response);
+  // Read contract requires the actual strong ETag, not a generated fallback.
+  const etag = String(response.headers['etag'] ?? '').trim();
   return { data: response.data, etag };
 }
 

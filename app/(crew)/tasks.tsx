@@ -9,87 +9,91 @@ import { Chip, type ChipVariant } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
 import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useLocalSearchParams } from 'expo-router';
+import { Button } from '../../src/components/Button';
+import { useAuthStore } from '../../src/store/auth';
+import { passwordSessionIdentity } from '../../src/api/authApi';
 import {
-  crewFieldTaskCard,
-  fieldTaskStatusOf,
-  listCrewFieldTaskCards,
-  type CrewFieldTaskCard,
-} from '../../src/api/mock/field-tasks';
-import {
-  listCrewInspectionTasksReal,
-  type InspectionTaskResponseDto,
+  crewInboxOptions, crewTaskFromWire, crewTaskIsComplete, crewTaskActionBlock,
+  getFieldInspectionTaskDetailReal, isCrewResourceId, validateCrewTaskDetail,
+  type CrewTask, type OperationalCrewTask,
 } from '../../src/api/crewApi';
-import { TaskMode } from '../../src/types/enums';
+import { RoleCode, TaskMode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
 type TaskSegment = 'active' | 'done';
 
-/** Thẻ nhiệm vụ hiển thị ở C-02; dữ liệu wire do API-078 cấp. */
-export type CrewTask = CrewFieldTaskCard & { projectId?: string };
-
-export const CREW_TASKS: CrewTask[] = listCrewFieldTaskCards('active');
-export const CREW_COMPLETED_TASKS: CrewTask[] = listCrewFieldTaskCards('done');
-
-export const DEFAULT_CREW_TASK_ID = CREW_TASKS[0]?.id ?? 'task-wo-01';
-
-// Bộ nhớ đệm task động từ backend thật
-const dynamicTaskRegistry = new Map<string, CrewTask>();
-const taskStatusRegistry = new Map<string, string>();
-
-/** Chỉ dùng dữ liệu thật do API-078 trả về, tuyệt đối không tự điền dữ liệu giả */
-function synthesizeCrewTaskCard(item: InspectionTaskResponseDto): CrewTask {
-  const shortId = item.id.slice(0, 8);
-  const isRepair = (item.mode ?? '').toUpperCase() === 'INSPECT_AND_REPAIR';
-  const statusUpper = (item.status ?? '').toUpperCase();
-  const isDone = ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(statusUpper);
-  return {
-    id: item.id,
-    wo_code: `#HH-WO-${shortId.toUpperCase()}`,
-    title: `Nhiệm vụ kiểm tra #${shortId.toUpperCase()}`,
-    task_mode: isRepair ? TaskMode.INSPECT_AND_REPAIR : TaskMode.MEASURE_ONLY,
-    defect_type_code: '' as DefectTypeCode, // Không tự điền loại hư hại giả
-    route_code: '', // Không tự điền tuyến đường giả
-    section_name: '', // Không tự điền phân đoạn giả
-    chainage: '', // Không tự điền lý trình giả
-    locality: '', // Không tự điền địa phương giả
-    due_label: '—', // Không tự điền hạn giả
-    due_urgency: 'normal',
-    distance_label: '—', // Không tự điền khoảng cách giả
-    defect_location: '—', // Không tự điền vị trí giả
-    description: '—', // Không tự điền mô tả giả
-    repair_method: '—', // Không tự điền phương pháp giả
-    safety_note: '—', // Không tự điền an toàn giả
-    batch_size: item.defectIds?.length || 1,
-    coordinates: { latitude: 0, longitude: 0 }, // Không tự điền tọa độ giả
-    completedAt: isDone ? (item.updatedAt || undefined) : undefined,
-    projectId: item.projectId,
-  };
+export function useCrewIdentity() {
+  const user = useAuthStore(s => s.user), token = useAuthStore(s => s.token), status = useAuthStore(s => s.status);
+  const scope = passwordSessionIdentity(token);
+  const enabled = !!scope && !!user && JSON.parse(scope)[0] === user.id && user.role_code === RoleCode.REPAIR_CREW &&
+    !user.must_change_password && ['AUTHENTICATED', 'REFRESHING'].includes(status);
+  return { user, scope: enabled ? scope : null, enabled };
 }
-
-export function getCrewTaskById(id?: string | null): CrewTask {
-  if (!id) return CREW_TASKS[0];
-  const dynamic = dynamicTaskRegistry.get(id);
-  if (dynamic) return dynamic;
-  const mockCard = crewFieldTaskCard(id);
-  if (mockCard) return mockCard;
-  // Không hardcode projectId giả
-  const placeholder = synthesizeCrewTaskCard({
-    id,
-    projectId: '',
-    defectIds: [],
-    mode: 'MEASURE_ONLY',
-    crewId: '',
-    policyVersionId: null,
-    status: 'Assigned',
-    version: '',
+export function crewReadError(error: unknown): string {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 401) return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
+  if (status === 403) return 'Bạn không có quyền hoặc không còn được giao nhiệm vụ này.';
+  if (status === 404) return 'Không tìm thấy nhiệm vụ trong phạm vi của bạn.';
+  return 'Không tải được dữ liệu nhiệm vụ. Vui lòng thử lại.';
+}
+export function useCrewInbox() {
+  const identity = useCrewIdentity();
+  const query = useInfiniteQuery({ ...crewInboxOptions(identity.scope ?? ''), enabled: identity.enabled });
+  const { refetch } = query;
+  useFocusEffect(useCallback(() => { if (identity.enabled) void refetch(); }, [identity.enabled, refetch]));
+  const items = new Map<string, CrewTask>();
+  let foreign = false;
+  if (identity.enabled && !query.isError) for (const page of query.data?.pages ?? []) for (const item of page.items) {
+    if (!item.crewId || item.crewId.toLowerCase() !== identity.user!.id.toLowerCase()) { foreign = true; continue; }
+    if (isCrewResourceId(item.id) && !items.has(item.id)) items.set(item.id, crewTaskFromWire(item));
+  }
+  const error = !identity.enabled ? 'Vui lòng đăng nhập bằng tài khoản Crew.' : foreign ? 'Dữ liệu phân công không khớp tài khoản hiện tại.' : query.isError ? crewReadError(query.error) : null;
+  return { ...identity, query, error, tasks: error ? [] : [...items.values()] };
+}
+export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbox> }) {
+  return <View>
+    {inbox.query.isPending && inbox.enabled ? <Text>Đang tải nhiệm vụ…</Text> : null}
+    {inbox.error ? <Text>{inbox.error}</Text> : null}
+    {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text>Chưa có nhiệm vụ được giao.</Text> : null}
+    <Text>Phạm vi: nhiệm vụ được giao đã tải; không phải tổng lịch sử.</Text>
+    {inbox.query.data?.pages[0]?.asOf ? <Text>Đã tải lúc: {inbox.query.data.pages[0].asOf}</Text> : null}
+    <Button variant="secondary" title="Tải lại" disabled={!inbox.enabled} loading={inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} />
+    {inbox.query.hasNextPage && !inbox.error ? <Button variant="secondary" title="Tải thêm" loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} /> : null}
+  </View>;
+}
+/** Mount children only after an owner-scoped detail read. A new sid unmounts old task UI. */
+export function CrewTaskBoundary({ children, operational = true }: {
+  children: (task: OperationalCrewTask) => React.ReactNode; operational?: boolean;
+}) {
+  const params = useLocalSearchParams<{ id?: string; projectId?: string }>();
+  const inbox = useCrewInbox();
+  const id = typeof params.id === 'string' ? params.id : '';
+  const item = inbox.tasks.find(t => t.id === id);
+  const projectId = typeof params.projectId === 'string' ? params.projectId : item?.projectId ?? '';
+  const validIds = isCrewResourceId(id) && isCrewResourceId(projectId);
+  const query = useQuery({
+    queryKey: ['crew-task', inbox.scope, projectId, id], enabled: inbox.enabled && validIds, retry: false, gcTime: 0,
+    queryFn: async ({ signal }) => {
+      const response = await getFieldInspectionTaskDetailReal(projectId, id, signal);
+      validateCrewTaskDetail(response.data, response.etag, projectId, id, inbox.user!.id);
+      return crewTaskFromWire({ id, projectId, crewId: response.data.assignedToUserId!, mode: response.data.mode ?? '',
+        status: response.data.status ?? '', version: response.data.version!, defectIds: [response.data.defectId], policyVersionId: null }, response.data, response.etag);
+    },
   });
-  dynamicTaskRegistry.set(id, placeholder);
-  return placeholder;
-}
-
-export function getProjectIdForTask(id?: string | null): string | null {
-  if (!id) return null;
-  return dynamicTaskRegistry.get(id)?.projectId ?? null;
+  const { refetch } = query;
+  useFocusEffect(useCallback(() => { if (inbox.enabled && validIds) void refetch(); }, [inbox.enabled, validIds, refetch]));
+  const task = inbox.enabled && validIds && !query.isError ? query.data : undefined;
+  const blocked = operational && task ? crewTaskActionBlock(task) : null;
+  if (!task || blocked) return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ" />}>
+    <Text>{blocked ?? (!inbox.enabled ? 'Vui lòng đăng nhập bằng tài khoản Crew.' : !id ? 'Chưa chọn nhiệm vụ.' : !validIds ? 'Chưa xác định được dự án của nhiệm vụ. Chọn nhiệm vụ trong danh sách.' : query.isError ? crewReadError(query.error) : 'Đang tải nhiệm vụ…')}</Text>
+    {query.isError ? <Button variant="secondary" title="Thử lại" onPress={() => { void query.refetch(); }} /> : null}
+    {!validIds && id ? <CrewInboxState inbox={inbox} /> : null}
+    <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
+  </SafeAreaScreen>;
+  return <React.Fragment key={`${inbox.scope}:${projectId}:${id}`}>{children(task as OperationalCrewTask)}</React.Fragment>;
 }
 
 export type TaskModeFilter = 'ALL' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
@@ -100,7 +104,8 @@ export const TASK_MODE_FILTERS: { key: TaskModeFilter; label: string }[] = [
   { key: 'MEASURE_ONLY', label: 'Chỉ đo đợt' },
 ];
 
-export const TASK_MODE_CHIP: Record<TaskMode, { variant: ChipVariant; label: string }> = {
+export const TASK_MODE_CHIP: Record<TaskMode | 'UNKNOWN', { variant: ChipVariant; label: string }> = {
+  UNKNOWN: { variant: 'status-pending', label: 'Chưa xác định chế độ' },
   INSPECT_AND_REPAIR: { variant: 'fast-track', label: 'Đo & Sửa nhanh' },
   MEASURE_ONLY: { variant: 'measure-only', label: 'Chỉ đo đợt' },
   INSPECT_ONLY: { variant: 'status-pending', label: 'Chỉ kiểm tra' },
@@ -109,48 +114,13 @@ export const TASK_MODE_CHIP: Record<TaskMode, { variant: ChipVariant; label: str
 export default function CrewTasksScreen() {
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
-  const [activeTasks, setActiveTasks] = useState<CrewTask[]>([]);
-  const [doneTasks, setDoneTasks] = useState<CrewTask[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const loadTasks = useCallback(async () => {
-    try {
-      setLoadError(null);
-      // 1. Gọi backend thật: GET /api/v1/me/inspection-tasks (API-078)
-      const page = await listCrewInspectionTasksReal(null, 50);
-      const active: CrewTask[] = [];
-      const done: CrewTask[] = [];
-
-      for (const item of page.items) {
-        taskStatusRegistry.set(item.id, item.status);
-        const card: CrewTask = synthesizeCrewTaskCard(item);
-        dynamicTaskRegistry.set(item.id, card);
-
-        const statusUpper = (item.status ?? '').toUpperCase();
-        if (['COMPLETED', 'REJECTED', 'CANCELLED'].includes(statusUpper)) {
-          done.push(card);
-        } else {
-          active.push(card);
-        }
-      }
-
-      setActiveTasks(active);
-      setDoneTasks(done);
-    } catch {
-      // Khi gọi thật lỗi, KHÔNG gọi mock thay thế (tránh hiện dữ liệu giả im lặng).
-      // Nếu đã có cache từ lần gọi thật trước đó trong session thì giữ hiển thị dữ liệu cũ đó.
-      setLoadError('Không tải được danh sách nhiệm vụ từ máy chủ. Vui lòng kiểm tra kết nối.');
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadTasks();
-    }, [loadTasks]),
-  );
+  const inbox = useCrewInbox();
+  const activeTasks = inbox.tasks.filter(t => !crewTaskIsComplete(t));
+  const doneTasks = inbox.tasks.filter(crewTaskIsComplete);
+  const loadError = inbox.error;
 
   const segments: { key: TaskSegment; label: string; count: number }[] = [
-    { key: 'active', label: 'Đang làm', count: activeTasks.length },
+    { key: 'active', label: 'Chưa hoàn thành', count: activeTasks.length },
     { key: 'done', label: 'Hoàn thành', count: doneTasks.length },
   ];
 
@@ -162,6 +132,7 @@ export default function CrewTasksScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Công việc" />}>
+        <CrewInboxState inbox={inbox} />
         <View style={styles.segments}>
           {segments.map((s) => {
             const active = s.key === segment;
@@ -218,7 +189,7 @@ export default function CrewTasksScreen() {
             title="Lỗi tải danh sách nhiệm vụ"
             message={loadError}
           />
-        ) : list.length === 0 ? (
+        ) : inbox.query.isPending ? null : list.length === 0 ? (
           <EmptyState
             icon="check-circle"
             title="Không có công việc trong bộ lọc này"
@@ -234,21 +205,22 @@ export default function CrewTasksScreen() {
               <Pressable
                 key={task.id}
                 onPress={() =>
-                  router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id } })
+                  router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
                 }
+                disabled={!isCrewResourceId(task.projectId) || !task.version}
                 accessibilityRole="button"
               >
                 <Card style={styles.taskCard}>
                   <View style={[styles.rail, { backgroundColor: railColor }]} />
                   <View style={styles.taskHeader}>
                     <View style={styles.taskMetaRow}>
-                      {task.completedAt ? (
-                        <Chip variant="approved" label="Đã nghiệm thu" />
-                      ) : (taskStatusRegistry.get(task.id)?.toUpperCase() === 'SUBMITTED' || fieldTaskStatusOf(task.id) === 'SUBMITTED') ? (
+                      {crewTaskIsComplete(task) ? (
+                        <Chip variant="approved" label="Hoàn thành (trạng thái BE)" />
+                      ) : (task.status.toUpperCase() === 'SUBMITTED') ? (
                         <Chip variant="status-pending" label="Chờ PM duyệt" uppercase={false} />
-                      ) : (taskStatusRegistry.get(task.id)?.toUpperCase() === 'SUPPLEMENTREQUIRED') ? (
+                      ) : (task.status.toUpperCase() === 'SUPPLEMENTREQUIRED') ? (
                         <Chip variant="status-pending" label="Cần bổ sung" uppercase={false} />
-                      ) : (taskStatusRegistry.get(task.id)?.toUpperCase() === 'ASSIGNED') ? (
+                      ) : (task.status.toUpperCase() === 'ASSIGNED') ? (
                         <Chip variant="status-pending" label="Chờ nhận việc" uppercase={false} />
                       ) : (
                         <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
@@ -262,7 +234,9 @@ export default function CrewTasksScreen() {
                     ) : null}
                   </View>
 
-                  <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
+                  <Text style={[typography.titleMd, styles.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
+                  <Text>{task.id}</Text>
+                  {!isCrewResourceId(task.projectId) || !task.version ? <Text>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
 
                   {task.route_code || task.section_name || task.chainage ? (
                     <View style={styles.taskRouteRow}>
@@ -284,7 +258,7 @@ export default function CrewTasksScreen() {
 
                   <View style={styles.taskFooter}>
                     <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || 'Chưa có mã WO'}</Text>
                     </View>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
@@ -315,7 +289,7 @@ export default function CrewTasksScreen() {
         )}
       </SafeAreaScreen>
 
-      <FAB icon="add" onPress={() => router.push('/(crew)/report-defect')} />
+
     </View>
   );
 }

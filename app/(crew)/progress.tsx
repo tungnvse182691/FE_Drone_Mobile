@@ -15,7 +15,9 @@ import {
   startRepairExecutionReal,
 } from '../../src/api/crewApi';
 import { stableUuid } from '../../src/utils/uuid';
-import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
+import { TASK_MODE_CHIP } from './tasks';
+import { CrewTaskBoundary } from './tasks';
+import type { OperationalCrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 type WorkStatus = 'doing' | 'blocked' | 'done';
@@ -40,9 +42,11 @@ const CONSTRUCTION_STEPS = [
 const QUICK_TAGS = ['+ Đã chặn giao thông', '+ Thời tiết mưa lớn', '+ Kẹt xe tuyến ngoài'];
 
 export default function CrewProgressScreen() {
+  return <CrewTaskBoundary>{task => <CrewProgressScreenContent task={task} />}</CrewTaskBoundary>;
+}
+function CrewProgressScreenContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
-  const task = getCrewTaskById(params.id);
-  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+  const projectId = task.projectId || null;
   const activeSession = getCrewFieldSession();
   const session = activeSession?.task_id === task.id ? activeSession : null;
   const modeChip = TASK_MODE_CHIP[task.task_mode];
