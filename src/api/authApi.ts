@@ -134,8 +134,8 @@ export async function fetchMe(): Promise<MeWire> {
  * Trả `ProfileWire` với `roleCode` là DB-code dialect.
  * Dùng `apiClient` để được inject Bearer tự động.
  */
-export async function fetchProfile(): Promise<ProfileWire> {
-  const response = await apiClient.get<ProfileWire>('/profile');
+export async function fetchProfile(signal?: AbortSignal): Promise<ProfileWire> {
+  const response = await apiClient.get<ProfileWire>('/profile', { signal });
   return response.data;
 }
 

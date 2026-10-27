@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../../src/components/Card';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { listMyReportsReal, type OwnReportDto } from '../../src/api/reporterApi';
-import { useReporterStore } from '../../src/store/reporter';
+import { reporterReportsOptions, reportItemsFromPages, canShowReportPages } from '../../src/api/reporterApi';
+import { passwordSessionIdentity } from '../../src/api/authApi';
+import { isReporterSession } from '../../src/api/uploads';
+import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
@@ -20,34 +23,15 @@ const softShadow = Platform.select({
 export default function ReporterHomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
-  const markVerified = useReporterStore((state) => state.markVerified);
-  const [reports, setReports] = useState<OwnReportDto[]>([]);
-
-  const activeEmail = user?.phone_or_email || verifiedEmail;
-
-  useEffect(() => {
-    if (user?.phone_or_email && !verifiedEmail) {
-      markVerified(user.phone_or_email);
-    }
-  }, [user?.phone_or_email, verifiedEmail, markVerified]);
-
-  const loadReports = useCallback(async () => {
-    if (!activeEmail) {
-      setReports([]);
-      return;
-    }
-    try {
-      const { items } = await listMyReportsReal();
-      setReports(items);
-    } catch {
-      setReports([]);
-    }
-  }, [activeEmail]);
-
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
+  const token = useAuthStore(state => state.token);
+  const status = useAuthStore(state => state.status);
+  const scope = passwordSessionIdentity(token);
+  const enabled = isReporterSession({ user, token, status }) && !!scope;
+  const query = useInfiniteQuery({ ...reporterReportsOptions(scope ?? 'guest'), enabled });
+  const { refetch } = query;
+  useFocusEffect(useCallback(() => { if (enabled) void refetch(); }, [enabled, refetch]));
+  const reports = enabled && canShowReportPages(query) ? reportItemsFromPages(query.data?.pages) : [];
+  const activeEmail = enabled ? user?.phone_or_email : null;
 
   return (
     <SafeAreaScreen
@@ -105,16 +89,19 @@ export default function ReporterHomeScreen() {
 
       <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây của bạn</Text>
 
+      {enabled ? <Button variant="secondary" title="Làm mới" loading={query.isFetching && !query.isFetchingNextPage} onPress={() => void query.refetch()} /> : null}
+      {enabled && query.isError ? <Text style={{ color: colors.error }}>{query.isFetchNextPageError && canShowReportPages(query) ? 'Không tải thêm được. Đang hiển thị phản ánh đã tải; thử tải thêm hoặc làm mới.' : 'Không tải được phản ánh. Vui lòng làm mới để thử lại.'}</Text> : null}
+      {enabled && query.isPending ? <Text>Đang tải phản ánh…</Text> : null}
       {!activeEmail ? (
         <Card style={styles.hintCard}>
           <View style={styles.hintRow}>
             <MaterialIcons name="mail-outline" size={20} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.hintText]}>
-              Chưa có email đã xác thực. Gửi phản ánh để hệ thống gửi mã OTP xác thực tới email của bạn.
+              Bạn có thể tạo nháp trước; vui lòng đăng nhập để xem các phản ánh đã gửi.
             </Text>
           </View>
         </Card>
-      ) : reports.length === 0 ? (
+      ) : !query.isPending && !query.isError && reports.length === 0 ? (
         <Card style={styles.hintCard}>
           <View style={styles.hintRow}>
             <MaterialIcons name="inbox" size={20} color={colors.secondary} />
@@ -158,6 +145,7 @@ export default function ReporterHomeScreen() {
           ))}
         </View>
       )}
+      {enabled && query.hasNextPage ? <Button variant="secondary" title="Tải thêm phản ánh" loading={query.isFetchingNextPage} disabled={query.isFetching} onPress={() => void query.fetchNextPage()} /> : null}
     </SafeAreaScreen>
   );
 }

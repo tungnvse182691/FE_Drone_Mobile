@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
@@ -10,7 +11,9 @@ import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
-import { listMyReports, type OwnReportDto } from '../../src/api/mock/reporter';
+import { reporterReportsOptions, reportItemsFromPages, canShowReportPages } from '../../src/api/reporterApi';
+import { fetchProfile, passwordSessionIdentity } from '../../src/api/authApi';
+import { isReporterSession } from '../../src/api/uploads';
 import { REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 
 
@@ -22,32 +25,40 @@ const softShadow = Platform.select({
 
 function normalizeName(fullName?: string | null): string {
   if (!fullName) return 'Người dân';
-  return fullName.replace(/\s*\([^)]*\)/g, '').trim() || 'Người dân';
+  return fullName.trim() || 'Người dân';
 }
 
 export default function ReporterProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
   const clearSession = useReporterStore((state) => state.clearSession);
 
-  const [reports, setReports] = useState<OwnReportDto[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
-
-  const activeEmail = user?.phone_or_email || verifiedEmail;
-  const isVerified = Boolean(activeEmail);
-
-  useEffect(() => {
-    if (!activeEmail) {
-      setReports([]);
-      return;
-    }
-    listMyReports(activeEmail)
-      .then(({ items }) => setReports(items))
-      .catch(() => setReports([]));
-  }, [activeEmail]);
-
+  const token = useAuthStore(state => state.token);
+  const status = useAuthStore(state => state.status);
+  const scope = passwordSessionIdentity(token);
+  const enabled = isReporterSession({ user, token, status }) && !!scope;
+  const [toast] = useState<string | null>(null);
+  const reportQuery = useInfiniteQuery({ ...reporterReportsOptions(scope ?? 'guest'), enabled });
+  const profileQuery = useQuery({
+    queryKey: ['reporter-profile', scope], enabled, retry: false, gcTime: 0,
+    queryFn: async ({ signal }) => {
+      const profile = await fetchProfile(signal);
+      if (profile.userId !== user?.id || profile.roleCode !== 'REPORTER') throw new Error('profile_identity_mismatch');
+      return profile;
+    },
+  });
+  const { refetch: refreshReports } = reportQuery;
+  const { refetch: refreshProfile } = profileQuery;
+  useFocusEffect(useCallback(() => {
+    if (enabled) { void refreshReports(); void refreshProfile(); }
+  }, [enabled, refreshReports, refreshProfile]));
+  const reports = enabled ? reportItemsFromPages(reportQuery.data?.pages) : [];
+  const profile = enabled && !profileQuery.isError ? profileQuery.data : undefined;
+  const activeEmail = profile?.email;
+  // GET /profile has no emailVerified/OTP claim. Do not invent one from an email.
+  const isActive = profile?.status === 'ACTIVE';
+  const countAvailable = enabled && !!reportQuery.data && canShowReportPages(reportQuery);
   const totalReports = reports.length;
   const totalEvidence = reports.reduce((sum, r) => sum + r.evidence.length, 0);
   const totalSupplements = reports.reduce((sum, r) => sum + r.supplements.length, 0);
@@ -71,8 +82,7 @@ export default function ReporterProfileScreen() {
     );
   };
 
-  const displayName =
-    normalizeName(user?.full_name) || (isVerified ? 'Người dân phản ánh' : 'Khách vãng lai');
+  const displayName = profile ? normalizeName(profile.displayName) : 'Chưa tải hồ sơ';
 
   return (
     <SafeAreaScreen scroll>
@@ -81,41 +91,44 @@ export default function ReporterProfileScreen() {
           <View style={styles.avatar}>
             <MaterialIcons name="person" size={52} color={colors.secondary} />
           </View>
-          {isVerified && (
-            <View style={styles.verifiedBadge}>
-              <MaterialIcons name="check" size={14} color={colors.surface} />
-            </View>
-          )}
+
         </View>
 
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.email]}>
-          {activeEmail || 'Chưa liên kết email'}
+          {activeEmail || 'Chưa có dữ liệu hồ sơ'}
         </Text>
 
         <View style={styles.statusPill}>
-          <View style={[styles.statusDot, isVerified ? styles.statusDotGreen : styles.statusDotYellow]} />
-          <Text style={[typography.caption, isVerified ? styles.statusTextGreen : styles.statusTextYellow]}>
-            {isVerified ? 'Tài khoản đã xác thực OTP' : 'Chưa xác thực email'}
+          <View style={[styles.statusDot, isActive ? styles.statusDotGreen : styles.statusDotYellow]} />
+          <Text style={[typography.caption, isActive ? styles.statusTextGreen : styles.statusTextYellow]}>
+            {profile ? (profile.status === 'ACTIVE' ? 'Tài khoản đang hoạt động' : 'Trạng thái: ' + profile.status) : 'Chưa xác nhận trạng thái tài khoản'}
           </Text>
         </View>
       </View>
 
+      <Button variant="secondary" title="Làm mới hồ sơ" loading={enabled && (profileQuery.isFetching || (reportQuery.isFetching && !reportQuery.isFetchingNextPage))}
+        disabled={!enabled} onPress={() => { void refreshProfile(); void refreshReports(); }} />
+      {!enabled ? <Text>Vui lòng đăng nhập để xem hồ sơ.</Text> : null}
+      {enabled && (profileQuery.isError || reportQuery.isError) ? <Text style={{ color: colors.error }}>{reportQuery.isFetchNextPageError && canShowReportPages(reportQuery) && !profileQuery.isError ? 'Không tải thêm được. Thống kê hiện chỉ gồm các phản ánh đã tải.' : 'Không tải được dữ liệu. Vui lòng làm mới để thử lại.'}</Text> : null}
+      {enabled && (profileQuery.isPending || reportQuery.isPending) ? <Text>Đang tải hồ sơ…</Text> : null}
+      <Text style={typography.caption}>Thống kê trong các phản ánh đã tải; không phải tổng toàn bộ lịch sử.</Text>
       <View style={styles.statsRow}>
         <Card style={styles.statCard}>
-          <Text style={[typography.headlineLg, styles.statValue]}>{totalReports}</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Đã gửi</Text>
+          <Text style={[typography.headlineLg, styles.statValue]}>{countAvailable ? totalReports : '—'}</Text>
+          <Text style={[typography.caption, styles.statLabel]}>Phản ánh đã tải</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={[typography.headlineLg, styles.statValuePrimary]}>{totalEvidence}</Text>
+          <Text style={[typography.headlineLg, styles.statValuePrimary]}>{countAvailable ? totalEvidence : '—'}</Text>
           <Text style={[typography.caption, styles.statLabel]}>Ảnh hiện trường</Text>
         </Card>
         <Card style={styles.statCard}>
-          <Text style={[typography.headlineLg, styles.statValueSuccess]}>{totalSupplements}</Text>
+          <Text style={[typography.headlineLg, styles.statValueSuccess]}>{countAvailable ? totalSupplements : '—'}</Text>
           <Text style={[typography.caption, styles.statLabel]}>Bổ sung</Text>
         </Card>
       </View>
 
+      {enabled && reportQuery.hasNextPage ? <Button variant="secondary" title="Tải thêm phản ánh" loading={reportQuery.isFetchingNextPage} disabled={reportQuery.isFetching} onPress={() => void reportQuery.fetchNextPage()} /> : null}
       <Text style={[typography.titleMd, styles.sectionTitle]}>Thao tác nhanh</Text>
 
       <Card style={styles.menuCard}>

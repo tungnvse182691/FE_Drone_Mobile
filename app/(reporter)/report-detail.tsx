@@ -1,13 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Image, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { getOwnReportReal, type OwnReportDto } from '../../src/api/reporterApi';
-import { useReporterStore } from '../../src/store/reporter';
+import { getOwnReportReal, downloadReportEvidenceReal } from '../../src/api/reporterApi';
+import { passwordSessionIdentity } from '../../src/api/authApi';
+import { isReporterSession } from '../../src/api/uploads';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_SUPPLEMENT } from '../../src/constants/routes';
 import { reporterReportCode } from '../../src/api/report-display-code';
@@ -33,33 +35,21 @@ export default function ReporterReportDetailScreen() {
   const reportId = typeof params.reportId === 'string' ? params.reportId : '';
 
   const user = useAuthStore((state) => state.user);
-  const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
-  const activeEmail = user?.phone_or_email || verifiedEmail || undefined;
-
-  const [report, setReport] = useState<OwnReportDto | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!reportId || !activeEmail) {
-      setLoading(false);
-      setError('Không tìm thấy phản ánh của bạn.');
-      return;
-    }
-    setError(null);
-    try {
-      const result = await getOwnReportReal(reportId);
-      setReport(result.report);
-    } catch {
-      setError(LOAD_ERROR);
-    } finally {
-      setLoading(false);
-    }
-  }, [reportId, activeEmail]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const token = useAuthStore(state => state.token);
+  const status = useAuthStore(state => state.status);
+  const scope = passwordSessionIdentity(token);
+  const enabled = isReporterSession({ user, token, status }) && !!scope && !!reportId;
+  const query = useQuery({
+    queryKey: ['reporter-detail', scope, reportId], enabled, retry: false, gcTime: 0,
+    queryFn: ({ signal }) => getOwnReportReal(reportId, signal),
+  });
+  const { refetch } = query;
+  useFocusEffect(useCallback(() => { if (enabled) void refetch(); }, [enabled, refetch]));
+  // A failed ownership check must hide previously loaded detail and its controls.
+  const report = enabled && !query.isError ? query.data?.report : undefined;
+  const loading = enabled && query.isFetching;
+  const error = !enabled ? 'Vui lòng đăng nhập và chọn phản ánh của bạn.' : query.isError ? LOAD_ERROR : null;
+  const load = () => { if (enabled) void query.refetch(); };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -73,6 +63,8 @@ export default function ReporterReportDetailScreen() {
           <Text style={[typography.labelLg, styles.reportCode]}>{reporterReportCode(reportId)}</Text>
         ) : null}
 
+        <Button variant="secondary" title="Làm mới" loading={loading} disabled={!enabled} onPress={load} />
+        {enabled && query.isPending ? <Text>Đang tải phản ánh…</Text> : null}
         {error ? (
           <View style={styles.errorRow}>
             <MaterialIcons name="error-outline" size={16} color={colors.error} />
@@ -89,6 +81,9 @@ export default function ReporterReportDetailScreen() {
                   Đã gửi lúc {formatDate(report.createdAt)}
                 </Text>
               </View>
+              <Text style={[typography.caption, styles.metaText]}>
+                {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
+              </Text>
               <Text style={[typography.bodyMd, styles.description]}>
                 {report.description?.trim() || 'Chưa có mô tả'}
               </Text>
@@ -105,7 +100,8 @@ export default function ReporterReportDetailScreen() {
                   <View key={item.id} style={styles.evidenceRow}>
                     <MaterialIcons name="image" size={16} color={colors.brandGold} />
                     <View style={styles.evidenceText}>
-                      <Text style={[typography.bodyMd, styles.metaText]}>Ảnh {index + 1}</Text>
+                      <Text style={[typography.bodyMd, styles.metaText]}>Ảnh {index + 1}{item.supplementId ? ' · Bổ sung' : ''}</Text>
+                      <EvidencePreview scope={scope!} reportId={report.id} evidenceId={item.id} />
                       <Text style={[typography.caption, styles.metaText]}>
                         {LOCATION_SOURCE_LABELS[item.locationSource ?? 'UNKNOWN'] ??
                           'Chưa có vị trí'}
@@ -177,6 +173,26 @@ export default function ReporterReportDetailScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function EvidencePreview({ scope, reportId, evidenceId }: { scope: string; reportId: string; evidenceId: string }) {
+  const [requested, setRequested] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const query = useQuery({
+    queryKey: ['reporter-private-evidence', scope, reportId, evidenceId],
+    enabled: requested, retry: false, gcTime: 0,
+    queryFn: ({ signal }) => downloadReportEvidenceReal(reportId, evidenceId, signal),
+  });
+  return <View>
+    <Button variant="secondary" title="Xem ảnh riêng tư" loading={query.isFetching} onPress={() => {
+      setImageError(false);
+      if (requested) void query.refetch(); else setRequested(true);
+    }} />
+    {requested && (query.isError || imageError) ? <Text style={{ color: colors.error }}>Không tải được ảnh riêng tư. Vui lòng thử lại.</Text> : null}
+    {requested && !query.isError && !imageError && query.data ? <Image source={{ uri: query.data }}
+      style={{ width: '100%', height: 220 }} resizeMode="contain" accessibilityLabel="Ảnh bằng chứng riêng tư"
+      onError={() => setImageError(true)} /> : null}
+  </View>;
 }
 
 function formatDate(iso: string) {

@@ -12,6 +12,7 @@
  *   API-215 GET  /reports                              (apiClient)
  *   API-216 POST /reports                              (apiClient, Idempotency-Key required)
  *   API-217 GET  /reports/{reportId}                   (apiClient)
+ *   API-218 GET  /reports/{reportId}/evidence/{evidenceId}/download (private bytes)
  *   API-219 POST /reports/{reportId}/supplements       (apiClient, Idempotency-Key + If-Match required)
  *
  * Upload evidence: httpUploadTransport trong src/api/uploads.ts đã đúng paths
@@ -152,6 +153,7 @@ export async function verifyReporterOtpReal(
 export async function listMyReportsReal(options?: {
   cursor?: string | null;
   pageSize?: number;
+  signal?: AbortSignal;
 }): Promise<OwnReportPageDto> {
   const params: Record<string, string | number> = {};
   if (options?.cursor) {
@@ -160,8 +162,40 @@ export async function listMyReportsReal(options?: {
   if (options?.pageSize) {
     params.pageSize = options.pageSize;
   }
-  const response = await apiClient.get<OwnReportPageDto>('/reports', { params });
+  const response = await apiClient.get<OwnReportPageDto>('/reports', { params, signal: options?.signal });
   return response.data;
+}
+
+/** scope is a real actor/session identity, never an access token or email. */
+export function reporterReportsOptions(scope: string) {
+  return {
+    queryKey: ['reporter-reports', scope],
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }: { pageParam: string | null; signal: AbortSignal }) =>
+      listMyReportsReal({ cursor: pageParam, pageSize: 20, signal }),
+    getNextPageParam: (page: OwnReportPageDto, _pages: OwnReportPageDto[], _last: string | null, cursors: (string | null)[]) => {
+      if (page.nextCursor && cursors.includes(page.nextCursor)) return undefined;
+      return page.nextCursor || undefined;
+    },
+    retry: false as const,
+    gcTime: 0,
+  };
+}
+
+/** Cursor pages may overlap while new reports arrive; never count one ID twice. */
+export function reportItemsFromPages(pages: OwnReportPageDto[] = []): OwnReportDto[] {
+  const items = new Map<string, OwnReportDto>();
+  for (const page of pages) for (const item of page.items) if (!items.has(item.id)) items.set(item.id, item);
+  return Array.from(items.values());
+}
+
+/** A transient next-page failure does not invalidate already loaded own reports. */
+export function canShowReportPages(query: { isError: boolean; isFetchNextPageError: boolean; error: unknown }): boolean {
+  if (!query.isError) return true;
+  const error = query.error as AxiosError | null;
+  const status = error?.response?.status;
+  return query.isFetchNextPageError && error?.code !== 'auth_session_changed' &&
+    (!status || status === 408 || status === 429 || status >= 500);
 }
 
 // ---------------------------------------------------------------------------
@@ -172,13 +206,41 @@ export async function listMyReportsReal(options?: {
  * Chi tiết một phản ánh. Response header `ETag` = `report.version`.
  * Trả cả `etag` để màn supplement dùng cho If-Match.
  */
-export async function getOwnReportReal(reportId: string): Promise<OwnReportResult> {
-  const response = await apiClient.get<OwnReportDto>(`/reports/${reportId}`);
+export async function getOwnReportReal(reportId: string, signal?: AbortSignal): Promise<OwnReportResult> {
+  const response = await apiClient.get<OwnReportDto>(`/reports/${encodeURIComponent(reportId)}`, { signal });
   const etag =
     (response.headers as Record<string, string | undefined>)['etag'] ??
     response.data.version ??
     '';
   return { report: response.data, etag };
+}
+
+/** API-218 streams private bytes with the same auth/refresh/actor guard as other reads.
+ * No external navigation, public URL, filesystem copy or persisted image cache.
+ */
+export async function downloadReportEvidenceReal(reportId: string, evidenceId: string, signal?: AbortSignal): Promise<string> {
+  const response = await apiClient.get<ArrayBuffer>(
+    `/reports/${encodeURIComponent(reportId)}/evidence/${encodeURIComponent(evidenceId)}/download`,
+    { responseType: 'arraybuffer', signal },
+  );
+  const mediaType = String(response.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+  const bytes = new Uint8Array(response.data);
+  if (response.status !== 200 || !['image/jpeg', 'image/png'].includes(mediaType) || !bytes.length || bytes.length > 20 * 1024 * 1024) {
+    throw new Error('unsupported_private_media');
+  }
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const chunks: string[] = [];
+  for (let start = 0; start < bytes.length; start += 12288) {
+    let chunk = '';
+    for (let i = start; i < Math.min(start + 12288, bytes.length); i += 3) {
+      const value = (bytes[i] << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
+      chunk += alphabet[(value >>> 18) & 63] + alphabet[(value >>> 12) & 63] +
+        (i + 1 < bytes.length ? alphabet[(value >>> 6) & 63] : '=') +
+        (i + 2 < bytes.length ? alphabet[value & 63] : '=');
+    }
+    chunks.push(chunk);
+  }
+  return `data:${mediaType};base64,${chunks.join('')}`;
 }
 
 // ---------------------------------------------------------------------------

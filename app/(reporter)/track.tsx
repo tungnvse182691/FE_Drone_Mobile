@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../../src/components/Card';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { listMyReportsReal, type OwnReportDto } from '../../src/api/reporterApi';
-import { useReporterStore } from '../../src/store/reporter';
+import { reporterReportsOptions, reportItemsFromPages, canShowReportPages } from '../../src/api/reporterApi';
+import { passwordSessionIdentity } from '../../src/api/authApi';
+import { isReporterSession } from '../../src/api/uploads';
+import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 import { reporterReportCode } from '../../src/api/report-display-code';
@@ -23,34 +26,18 @@ const LOAD_ERROR = 'Không tải được danh sách phản ánh. Vui lòng th�
 export default function ReporterTrackScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
-  const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
-
-  const activeEmail = user?.phone_or_email || verifiedEmail || undefined;
-
-  const [reports, setReports] = useState<OwnReportDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!activeEmail) {
-      setReports([]);
-      setLoading(false);
-      return;
-    }
-    setError(null);
-    try {
-      const page = await listMyReportsReal();
-      setReports(page.items);
-    } catch {
-      setError(LOAD_ERROR);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeEmail]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const token = useAuthStore(state => state.token);
+  const status = useAuthStore(state => state.status);
+  const scope = passwordSessionIdentity(token);
+  const enabled = isReporterSession({ user, token, status }) && !!scope;
+  const query = useInfiniteQuery({ ...reporterReportsOptions(scope ?? 'guest'), enabled });
+  const { refetch } = query;
+  useFocusEffect(useCallback(() => { if (enabled) void refetch(); }, [enabled, refetch]));
+  const reports = enabled && canShowReportPages(query) ? reportItemsFromPages(query.data?.pages) : [];
+  const activeEmail = enabled ? user?.phone_or_email : undefined;
+  const loading = enabled && query.isFetching && !query.isFetchingNextPage;
+  const error = query.isError && enabled ? (canShowReportPages(query) ? 'Không tải thêm được. Đang hiển thị phản ánh đã tải; thử tải thêm hoặc làm mới.' : LOAD_ERROR) : null;
+  const load = () => { if (enabled) void query.refetch(); };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -71,7 +58,9 @@ export default function ReporterTrackScreen() {
           </View>
         ) : null}
 
-        {!loading && reports.length === 0 ? (
+        <Button variant="secondary" title="Làm mới" loading={loading} onPress={load} disabled={!enabled} />
+        {!enabled ? <Text>Vui lòng đăng nhập để xem phản ánh của bạn.</Text> : null}
+        {enabled && !query.isPending && !error && reports.length === 0 ? (
           <EmptyState
             icon="inbox"
             title="Chưa có phản ánh nào"
@@ -120,6 +109,7 @@ export default function ReporterTrackScreen() {
             </Pressable>
           ))}
         </View>
+        {enabled && query.hasNextPage ? <Button variant="secondary" title="Tải thêm phản ánh" loading={query.isFetchingNextPage} disabled={query.isFetching} onPress={() => void query.fetchNextPage()} /> : null}
       </ScrollView>
     </SafeAreaView>
   );
