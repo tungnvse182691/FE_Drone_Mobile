@@ -78,6 +78,120 @@ export function crewTaskActionBlock(task: CrewTask | null): string | null {
   if (task.task_mode === 'UNKNOWN' || !task.defect_type_code || !task.wo_code) return 'Chưa đủ dữ liệu tác nghiệp từ máy chủ. Chỉ có thể xem thông tin nhiệm vụ.';
   return null;
 }
+
+export type FieldCommandAction = 'accept' | 'reject' | 'start';
+/** These commands do not require GPS, defect labels, WO metadata or repair eligibility. */
+export function fieldCommandBlock(task: FieldTaskViewFact, etag: string, actorId: string, action: FieldCommandAction): string | null {
+  try { validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId); } catch { return 'Định danh, người nhận hoặc phiên bản nhiệm vụ không hợp lệ.'; }
+  if (!isCrewResourceId(task.assignmentId) || !/^"[A-Za-z0-9+/]{11}="$/.test(etag)) return 'Thiếu assignment hoặc strong ETag hợp lệ.';
+  if (task.status !== (action === 'start' ? 'Accepted' : 'NewAssigned')) return 'Trạng thái nhiệm vụ không cho phép thao tác này.';
+  return null;
+}
+export interface FieldCommandRecord {
+  actorId: string; scope: string; projectId: string; taskId: string; assignmentId: string;
+  action: FieldCommandAction; key: string; ifMatch: string; body: FieldTaskActionInput | FieldStartInput;
+  phase: 'pending' | 'acknowledged' | 'confirmed' | 'rejected';
+  rejectionStatus?: number;
+  task?: FieldTaskViewFact; etag?: string; origin?: FieldTaskStartOrigin; readbackStatus?: number;
+}
+export interface FieldCommandPort {
+  currentScope(): string | null;
+  currentActor(): string | null;
+  read(): Promise<FieldCommandRecord | null>;
+  write(record: FieldCommandRecord): Promise<void>;
+}
+export function createFieldCommand(input: {
+  task: FieldTaskViewFact; etag: string; actorId: string; scope: string; action: FieldCommandAction;
+  reason: string; key: string; originId?: string; claimedAt?: string;
+}): FieldCommandRecord {
+  const { task, etag, actorId, scope, action, key } = input;
+  const blocked = fieldCommandBlock(task, etag, actorId, action);
+  if (blocked || !scope || !/^[\x21-\x7e]{1,150}$/.test(key)) throw new Error(blocked ?? 'field_command_invalid');
+  const reason = input.reason.trim();
+  if (action !== 'start' && (!reason || reason.length > 2000)) throw new Error('Lý do phải có từ 1 đến 2000 ký tự.');
+  if (action === 'start' && (!isCrewResourceId(input.originId) || !input.claimedAt || !Number.isFinite(Date.parse(input.claimedAt)))) throw new Error('field_origin_invalid');
+  return { actorId, scope, projectId: task.projectId, taskId: task.id, assignmentId: task.assignmentId!, action, key, ifMatch: etag,
+    body: action === 'start' ? { originId: input.originId!, claimedAt: input.claimedAt! } : { reason }, phase: 'pending' };
+}
+function commandIdentity(c: FieldCommandRecord): string {
+  return JSON.stringify([c.actorId,c.scope,c.projectId,c.taskId,c.assignmentId,c.action,c.key,c.ifMatch,c.body]);
+}
+const fieldCommandsInFlight = new Set<string>();
+/** Explicit replay only; immutable durable intent, session checks across every await. No optimistic status/version. */
+export async function executeFieldCommand(command: FieldCommandRecord, port: FieldCommandPort, replay: boolean): Promise<FieldCommandRecord> {
+  const lock = JSON.stringify([command.actorId,command.projectId,command.taskId]);
+  if (fieldCommandsInFlight.has(lock)) throw new Error('field_command_in_flight');
+  fieldCommandsInFlight.add(lock);
+  const scope = port.currentScope();
+  const guard = () => { if (!scope || port.currentScope() !== scope || port.currentActor() !== command.actorId || (replay && command.scope !== scope)) throw new Error('field_session_changed'); };
+  try {
+    guard();
+    const saved = await port.read(); guard();
+    if (saved && commandIdentity(saved) !== commandIdentity(command) &&
+      (!replay || command.phase !== 'pending' || !['confirmed','rejected'].includes(saved.phase) || saved.key === command.key)) throw new Error('field_command_pending');
+    let record = saved && commandIdentity(saved) === commandIdentity(command) ? saved : command;
+    const firstSend = !saved || commandIdentity(saved) !== commandIdentity(command);
+    let postFailure: unknown;
+    if (replay && record.phase === 'pending') {
+      await port.write(record); guard(); // Fail closed if durable storage fails, before network.
+      try {
+        const response = await apiClient.post(`/projects/${record.projectId}/field-inspection-tasks/${record.taskId}/${record.action}`, record.body,
+          { headers: { 'If-Match': record.ifMatch, 'Idempotency-Key': record.key } });
+        guard();
+        if (record.action === 'start') {
+          const origin = response.data as FieldTaskStartOrigin;
+          if (!isCrewResourceId(origin.id) || origin.taskId !== record.taskId) throw new Error('field_origin_response_invalid');
+          record = { ...record, origin, phase: 'acknowledged' };
+        } else {
+          const task = response.data as FieldTaskViewFact;
+          if (task.id !== record.taskId || task.projectId !== record.projectId || task.status !== (record.action === 'accept' ? 'Accepted' : 'Rejected')) throw new Error('field_ack_invalid');
+          record = { ...record, phase: 'acknowledged' };
+        }
+        await port.write(record); guard();
+      } catch (error) {
+        guard();
+        const status = (error as { response?: { status?: number; data?: { code?: string } } })?.response?.status;
+        const code = (error as { response?: { data?: { code?: string } } })?.response?.data?.code;
+        // Only a definitive first-send rejection is terminal. A replay error may follow a committed write.
+        if (firstSend && status && [400,401,403,404,409,412,428].includes(status) && code !== 'idempotency_key_reused') {
+          record = { ...record, phase: 'rejected', rejectionStatus: status };
+          await port.write(record); guard();
+        } else postFailure = error;
+      }
+    }
+    record = { ...record, task: undefined, etag: undefined, readbackStatus: undefined };
+    try {
+      const fresh = await getFieldInspectionTaskDetailReal(record.projectId, record.taskId); guard();
+      validateCrewTaskDetail(fresh.data, fresh.etag, record.projectId, record.taskId, record.actorId);
+      if (fresh.data.assignmentId !== record.assignmentId && !['rejected','confirmed'].includes(record.phase)) throw new Error('field_assignment_changed');
+      let origin = record.origin;
+      if (record.phase !== 'rejected' && record.action === 'start' && fresh.data.status === 'InProgress') {
+        origin = await getFieldTaskStartOriginReal(record.projectId, record.taskId); guard();
+        if (!isCrewResourceId(origin.id) || origin.taskId !== record.taskId || fresh.data.firstStartOriginId !== origin.id) throw new Error('field_origin_readback_invalid');
+        // A previous immutable first-start may be resumed after handover; never manufacture its ID.
+        if (record.origin && record.origin.id !== origin.id) throw new Error('field_origin_readback_mismatch');
+        if (!record.origin && origin.originId !== (record.body as FieldStartInput).originId) throw new Error('field_origin_unreconciled');
+      }
+      const expected = record.action === 'accept' ? 'Accepted' : record.action === 'reject' ? 'Rejected' : 'InProgress';
+      record = { ...record, task: fresh.data, etag: fresh.etag, origin,
+        phase: record.phase !== 'rejected' && fresh.data.status === expected ? 'confirmed' : record.phase, readbackStatus: 200 };
+    } catch (error) {
+      guard();
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      record = { ...record, readbackStatus: status };
+      // A reject ACK can revoke Crew access. Keep receipt without claiming GET confirmation.
+    }
+    await port.write(record); guard();
+    if (postFailure && record.phase !== 'confirmed') throw postFailure;
+    return record;
+  } finally { fieldCommandsInFlight.delete(lock); }
+}
+
+/** API-094: immutable server first-start record (its ETag is not a task rowversion). */
+export async function getFieldTaskStartOriginReal(projectId: string, taskId: string): Promise<FieldTaskStartOrigin> {
+  if (!isCrewResourceId(projectId) || !isCrewResourceId(taskId)) throw new Error('crew_identity_missing');
+  return (await apiClient.get(`/projects/${projectId}/field-inspection-tasks/${taskId}/start-origin`)).data;
+}
 export function crewInboxOptions(scope: string) {
   return {
     queryKey: ['crew-inbox', scope], initialPageParam: null as string | null,

@@ -30,7 +30,12 @@ import {
   EVIDENCE_REUSE_SOURCE_TAGS,
   type BeforeEvidenceCandidate,
 } from '../../src/api/mock/crew-inspection';
-import { CrewTaskBoundary, TASK_MODE_CHIP } from './tasks';
+import { CrewTaskBoundary, TASK_MODE_CHIP, useCrewIdentity } from './tasks';
+import { useAuthStore } from '../../src/store/auth';
+import { passwordSessionIdentity } from '../../src/api/authApi';
+import { randomUUID } from 'expo-crypto';
+import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
+import { createFieldCommand, executeFieldCommand, fieldCommandBlock, validateCrewTaskDetail, type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
 import { crewTaskActionBlock, type OperationalCrewTask } from '../../src/api/crewApi';
 import {
   acceptFieldTaskReal,
@@ -149,26 +154,142 @@ function eligibilityReasonLabel(code: string): string {
 }
 
 export default function CrewWoDetailScreen() {
-  return <CrewTaskBoundary operational={false}>{task => crewTaskActionBlock(task) ?
+  return <CrewTaskBoundary operational={false}>{task => <CrewFieldActions task={task} />}</CrewTaskBoundary>;
+}
+
+/** Durable online command journal, separate from offline repair sync. Errors never fall back to memory. */
+async function fieldJournal(actor: string, project: string, task: string) {
+  const db = openDatabase();
+  await initDatabase(db);
+  const key = `t05a-field:${actor}:${project}:${task}`;
+  return {
+    read: async (): Promise<FieldCommandRecord | null> => {
+      const row = await db.getFirstAsync<{ payload: string }>('SELECT payload FROM local_draft WHERE id = ?', key);
+      if (!row) return null;
+      const record = JSON.parse(row.payload) as FieldCommandRecord;
+      if (record.actorId !== actor || record.projectId !== project || record.taskId !== task || !record.key || !record.scope ||
+        !['pending','acknowledged','confirmed','rejected'].includes(record.phase)) throw new Error('field_journal_invalid');
+      return record;
+    },
+    write: async (record: FieldCommandRecord) => saveDraft(db, key, 'T05A_FIELD_COMMAND', { ...record }),
+  };
+}
+
+function currentCrewScope(): string | null {
+  const { user, token, status } = useAuthStore.getState();
+  const scope = passwordSessionIdentity(token);
+  return user?.role_code === 'REPAIR_CREW' && !user.must_change_password && ['AUTHENTICATED','REFRESHING'].includes(status) &&
+    scope && JSON.parse(scope)[0] === user.id ? scope : null;
+}
+function currentCrewActor(): string | null {
+  return currentCrewScope() ? useAuthStore.getState().user?.id ?? null : null;
+}
+
+function CrewFieldActions({ task }: { task: CrewTask }) {
+  const identity = useCrewIdentity();
+  const [fresh, setFresh] = useState(task);
+  const [record, setRecord] = useState<FieldCommandRecord | null>(null);
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [reason, setReason] = useState('');
+  const [notice, setNotice] = useState('');
+  const scope = identity.scope;
+  const actor = identity.user?.id ?? '';
+  const apply = useCallback((result: FieldCommandRecord) => {
+    if (currentCrewScope() !== scope) return;
+    setRecord(result);
+    if (result.task && result.etag) setFresh(previous => ({ ...previous, detail: result.task, status: result.task!.status ?? '', version: result.task!.version!, etag: result.etag }));
+    setNotice(result.phase === 'rejected' ? 'Máy chủ từ chối lệnh (HTTP ' + result.rejectionStatus + '). Tải lại dữ liệu trước khi thử một lệnh mới.' :
+      result.phase === 'confirmed' && result.readbackStatus === 200 ? 'Đã xác nhận trạng thái và phiên bản bằng dữ liệu mới từ máy chủ.' :
+      result.phase === 'acknowledged' ? 'Máy chủ đã ghi nhận lệnh; chưa xác nhận được bằng GET. Giữ biên nhận để đối soát.' :
+      'Chưa xác định được kết quả lệnh. Giữ nguyên lệnh cũ; tải lại để đối soát.');
+  }, [scope]);
+  useEffect(() => {
+    let live = true;
+    setFresh(task);setReady(false);setRecord(null);setNotice('');
+    void (async () => {
+      try {
+        const journal = await fieldJournal(actor, task.projectId, task.id);
+        const saved = await journal.read();
+        if (!live || currentCrewScope() !== scope) return;
+        if (saved) {
+          const result = await executeFieldCommand(saved, { ...journal, currentScope: currentCrewScope, currentActor: currentCrewActor }, false);
+          if (live) apply(result);
+        }
+        if (live && currentCrewScope() === scope) setReady(true);
+      } catch { if (live && currentCrewScope() === scope) setNotice('Không đọc/đối soát được nhật ký lệnh. Tạm khóa gửi để tránh ghi trùng.'); }
+    })();
+    return () => { live = false; };
+  }, [actor, scope, task, apply]);
+  const run = async (action?: FieldCommandAction, replay = false) => {
+    if ((!ready && !!action) || busy || !scope || currentCrewScope() !== scope) return;
+    setBusy(true);setNotice('');
+    try {
+      const journal = await fieldJournal(actor, task.projectId, task.id);
+      if (currentCrewScope() !== scope) return;
+      const saved = await journal.read();
+      if (currentCrewScope() !== scope) return;
+      const unresolved = saved && !['confirmed','rejected'].includes(saved.phase);
+      if (action && unresolved) throw new Error('field_command_pending');
+      const command = action ? createFieldCommand({ task: fresh.detail!, etag: fresh.etag ?? '', actorId: actor, scope, action,
+        reason: action === 'accept' ? 'Nhận nhiệm vụ hiện trường' : reason, key: newIdempotencyKey(),
+        originId: action === 'start' ? randomUUID() : undefined, claimedAt: new Date().toISOString() }) : saved;
+      if (!command) {
+        const response = await getFieldInspectionTaskDetailReal(task.projectId, task.id);
+        if (currentCrewScope() !== scope) return;
+        validateCrewTaskDetail(response.data, response.etag, task.projectId, task.id, actor);
+        setFresh(previous => ({ ...previous, detail: response.data, status: response.data.status ?? '', version: response.data.version!, etag: response.etag }));
+        setNotice('Đã tải lại dữ liệu nhiệm vụ từ máy chủ.');
+        setReady(true);
+        return;
+      }
+      const result = await executeFieldCommand(command, { ...journal, currentScope: currentCrewScope, currentActor: currentCrewActor }, !!action || replay);
+      apply(result);
+      if (currentCrewScope() === scope) setReady(true);
+    } catch (error) {
+      if (currentCrewScope() === scope) {
+        // Reload the persisted immutable intent even when POST has an unknown outcome.
+        try { const saved = await (await fieldJournal(actor, task.projectId, task.id)).read(); if (currentCrewScope() === scope) setRecord(saved); } catch { setReady(false); }
+        setNotice(fieldTaskActionMessage(error) + ' Không tạo lệnh mới khi kết quả cũ chưa rõ; dùng đối soát hoặc gửi lại đúng lệnh cũ.');
+      }
+    } finally { if (currentCrewScope() === scope) setBusy(false); }
+  };
+  const pending = !!record && (!['confirmed','rejected'].includes(record.phase) || (record.phase === 'rejected' && record.readbackStatus !== 200));
+  const blocked = (action: FieldCommandAction) => !ready || busy || pending || !fresh.detail || !!fieldCommandBlock(fresh.detail, fresh.etag ?? '', actor, action);
+  return (
     <SafeAreaScreen scroll header={<View style={styles.topBar}><Text style={typography.titleMd}>Chi tiết lệnh công tác</Text></View>}>
       <Card style={styles.card}>
         <Text style={typography.titleMd}>Nhiệm vụ hiện trường</Text>
         <Text selectable>Mã nhiệm vụ: {task.id}</Text>
         <Text selectable>Dự án: {task.projectId}</Text>
-        <Text>Trạng thái: {task.status || 'Chưa có dữ liệu'}</Text>
+        <Text>Trạng thái: {fresh.status || 'Chưa có dữ liệu'}</Text>
         <Text>Chế độ BE: {task.rawMode || 'Chưa có dữ liệu'}</Text>
-        <Text selectable>Phiên bản: {task.version}</Text>
+        <Text selectable>Phiên bản: {fresh.version}</Text>
         <Text>Mô tả: {task.description || 'Chưa có dữ liệu'}</Text>
         <Text>Thời hạn: {task.due_label || 'Chưa có dữ liệu'}</Text>
         <Text>WO / tuyến / GPS / loại khuyết tật: Chưa có dữ liệu từ máy chủ.</Text>
         <Text>{crewTaskActionBlock(task)}</Text>
-        <Text>Nhận / từ chối và tác nghiệp hiện trường chưa khả dụng trên giao diện này khi thiếu dữ liệu tác nghiệp thật.</Text>
+        <Text>Nhận / từ chối / bắt đầu dùng assignment và phiên bản thật; không yêu cầu GPS.</Text>
         {!task.detail?.repairContext ? <Text>P5-G02: chưa có ngữ cảnh sửa chữa hợp lệ; không mở thao tác sửa chữa.</Text> : <Text>Đã có ngữ cảnh sửa chữa từ BE; chuỗi lệnh sửa chữa chưa thuộc nghiệm thu T04.</Text>}
       </Card>
-      <Button variant="secondary" title="Dẫn đường" disabled onPress={() => {}} />
+      <Card style={styles.taskActionCard}>
+        <Text style={typography.titleMd}>Nhận / từ chối nhiệm vụ</Text>
+        <InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline />
+        <Button variant="primary" title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} />
+        <Button variant="secondary" title="Từ chối nhiệm vụ" disabled={blocked('reject') || !reason.trim() || reason.trim().length > 2000} onPress={() => void run('reject')} />
+        <Button variant="secondary" title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} />
+        {notice ? <Text accessibilityLiveRegion="polite">{notice}</Text> : null}
+        {record?.origin ? <Text selectable>Mã first-start từ máy chủ: {record.origin.id}</Text> : null}
+        <Button variant="secondary" title="Tải lại / đối soát" disabled={busy} onPress={() => void run()} />
+        {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
+      </Card>
+      <Button variant="secondary" title="Dẫn đường" disabled={!fresh.coordinates} onPress={() => {
+        if (fresh.coordinates) router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } });
+      }} />
       <Button variant="secondary" title="Tác nghiệp hiện trường" disabled onPress={() => {}} />
       <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
-    </SafeAreaScreen> : <CrewWoDetailContent task={task} />}</CrewTaskBoundary>;
+    </SafeAreaScreen>
+  );
 }
 function CrewWoDetailContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
