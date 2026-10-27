@@ -32,19 +32,16 @@ import {
 } from '../../src/api/mock/crew-inspection';
 import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
 import {
-  acceptFieldTask,
-  getFieldTask,
-  rejectFieldTask,
-} from '../../src/api/mock/field-tasks';
-import {
   acceptFieldTaskReal,
   formatStrongIfMatch,
   getFieldInspectionTaskDetailReal,
   getRepairEligibilityReal,
   isConcurrencyConflict,
   isPreconditionRequired,
+  newIdempotencyKey,
   rejectFieldTaskReal,
   startFieldTaskReal,
+  submitRepairAssessmentReal,
   type FieldTaskViewFact,
 } from '../../src/api/crewApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
@@ -172,23 +169,27 @@ export default function CrewWoDetailScreen() {
     null,
   );
 
-  const projectId =
-    task.projectId || getProjectIdForTask(task.id) || '72f84201-c001-4000-8000-000000000001';
+  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
 
   const loadFieldTask = useCallback(async () => {
+    if (!projectId) {
+      setTaskNotice({ type: 'error', message: 'Không xác định được dự án của nhiệm vụ.' });
+      setFieldTask(null);
+      setFieldTaskEtag(null);
+      return;
+    }
     try {
       const response = await getFieldInspectionTaskDetailReal(projectId, task.id);
       setFieldTask(response.data as unknown as FieldTaskViewFact);
       setFieldTaskEtag(response.etag);
     } catch {
-      try {
-        const response = await getFieldTask(task.id);
-        setFieldTask(response.data);
-        setFieldTaskEtag(response.etag);
-      } catch {
-        setFieldTask(null);
-        setFieldTaskEtag(null);
-      }
+      // Khi gọi thật lỗi, KHÔNG gọi mock thay thế để tránh thành công giả
+      setFieldTask(null);
+      setFieldTaskEtag(null);
+      setTaskNotice({
+        type: 'error',
+        message: 'Không tải được thông tin nhiệm vụ từ máy chủ. Vui lòng kiểm tra kết nối.',
+      });
     }
   }, [projectId, task.id]);
 
@@ -254,7 +255,7 @@ export default function CrewWoDetailScreen() {
           // Thử gọi API-146 từ backend thật nếu nhiệm vụ có ngữ cảnh sửa chữa (repairContext)
           const pkgId = fieldTask?.repairContext?.packageId;
           const itmId = fieldTask?.repairContext?.itemId;
-          if (pkgId && itmId) {
+          if (projectId && pkgId && itmId) {
             try {
               const res = await getRepairEligibilityReal(projectId, pkgId, itmId);
               if (!active) return;
@@ -296,26 +297,23 @@ export default function CrewWoDetailScreen() {
                   missingReasons: [],
                   policyRevisionId: null,
                   message:
-                    'Nhiệm vụ chưa được liên kết với hạng mục sửa chữa hợp lệ. Chuyển luồng thường cho PM.',
+                    'Hồ sơ sửa chữa đang ở trạng thái không thể thẩm định lúc này. Chuyển luồng thường cho PM.',
                 });
                 return;
               }
             }
           }
 
-          // Fallback về mock API-146
-          const result = await fetchRepairEligibility({ task_id: task.id });
-          if (!active) {
-            return;
-          }
-          applyEligibility(result.eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE', result.policyRevisionId);
+          // Không tự ý gọi mock khi không có repairContext hoặc lỗi máy chủ
+          if (!active) return;
+          applyEligibility('NOT_ELIGIBLE', null);
           setSession(getCrewFieldSession());
           setEligibility({
-            status: 'ready',
-            eligible: result.eligible,
-            missingReasons: Array.from(new Set(result.missingReasons)),
-            policyRevisionId: result.policyRevisionId,
-            message: null,
+            status: 'error',
+            eligible: false,
+            missingReasons: [],
+            policyRevisionId: null,
+            message: ELIGIBILITY_FAIL_CLOSED_MESSAGE,
           });
         } catch {
           if (!active) {
@@ -379,61 +377,46 @@ export default function CrewWoDetailScreen() {
     if (!fieldTask || !fieldTaskEtag) {
       return;
     }
+    if (!projectId) {
+      setTaskNotice({ type: 'error', message: 'Không xác định được dự án của nhiệm vụ.' });
+      return;
+    }
     const keyScope = `crew:field-accept:${task.id}`;
     setTaskAction('accept');
     try {
       const idempotencyKey = getOrCreateCommandKey(keyScope);
-      let responseData: FieldTaskViewFact;
-      let newEtag: string;
-
-      try {
-        const realRes = await acceptFieldTaskReal(
-          projectId,
-          task.id,
-          'Nhận nhiệm vụ hiện trường',
-          fieldTaskEtag,
-          idempotencyKey,
-        );
-        responseData = realRes.data as unknown as FieldTaskViewFact;
-        newEtag = realRes.etag;
-      } catch (realErr) {
-        if (isConcurrencyConflict(realErr)) {
-          throw realErr;
-        }
-        // Fallback for 400 validation error: verify if version changed
-        const status = (realErr as { response?: { status?: number } })?.response?.status;
-        if (status === 400) {
-          try {
-            const fresh = await getFieldInspectionTaskDetailReal(projectId, task.id);
-            if (fresh.etag && fresh.etag.replace(/"/g, '') !== fieldTaskEtag.replace(/"/g, '')) {
-              setFieldTask(fresh.data as unknown as FieldTaskViewFact);
-              setFieldTaskEtag(fresh.etag);
-              setTaskNotice({
-                type: 'error',
-                message: 'Nhiệm vụ vừa thay đổi trên máy chủ. Vui lòng thử lại.',
-              });
-              return;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        // Fallback to mock accept
-        const mockRes = await acceptFieldTask(
-          task.id,
-          { reason: 'Nhận nhiệm vụ hiện trường' },
-          { 'Idempotency-Key': idempotencyKey, 'If-Match': fieldTaskEtag },
-        );
-        responseData = mockRes.data;
-        newEtag = mockRes.etag;
-      }
+      const realRes = await acceptFieldTaskReal(
+        projectId,
+        task.id,
+        'Nhận nhiệm vụ hiện trường',
+        fieldTaskEtag,
+        idempotencyKey,
+      );
 
       clearCommandKey(keyScope);
-      setFieldTask(responseData);
-      setFieldTaskEtag(newEtag);
+      setFieldTask(realRes.data as unknown as FieldTaskViewFact);
+      setFieldTaskEtag(realRes.etag);
       setTaskNotice({ type: 'success', message: 'Đã nhận nhiệm vụ. Sẵn sàng đo kiểm hiện trường.' });
     } catch (error) {
       clearCommandKey(keyScope);
+      // Kiểm tra 400 validation error xem phiên bản có bị thay đổi không
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 400 && projectId) {
+        try {
+          const fresh = await getFieldInspectionTaskDetailReal(projectId, task.id);
+          if (fresh.etag && fresh.etag.replace(/"/g, '') !== fieldTaskEtag.replace(/"/g, '')) {
+            setFieldTask(fresh.data as unknown as FieldTaskViewFact);
+            setFieldTaskEtag(fresh.etag);
+            setTaskNotice({
+              type: 'error',
+              message: 'Nhiệm vụ vừa thay đổi trên máy chủ (phiên bản không khớp). Vui lòng tải lại.',
+            });
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
       setTaskNotice({ type: 'error', message: fieldTaskActionMessage(error) });
       void loadFieldTask();
     } finally {
@@ -450,63 +433,48 @@ export default function CrewWoDetailScreen() {
       setTaskNotice({ type: 'error', message: 'Vui lòng nêu lý do từ chối nhiệm vụ.' });
       return;
     }
+    if (!projectId) {
+      setTaskNotice({ type: 'error', message: 'Không xác định được dự án của nhiệm vụ.' });
+      return;
+    }
     const keyScope = `crew:field-reject:${task.id}`;
     setTaskAction('reject');
     try {
       const idempotencyKey = getOrCreateCommandKey(keyScope);
-      let responseData: FieldTaskViewFact;
-      let newEtag: string;
-
-      try {
-        const realRes = await rejectFieldTaskReal(
-          projectId,
-          task.id,
-          reason,
-          fieldTaskEtag,
-          idempotencyKey,
-        );
-        responseData = realRes.data as unknown as FieldTaskViewFact;
-        newEtag = realRes.etag;
-      } catch (realErr) {
-        if (isConcurrencyConflict(realErr)) {
-          throw realErr;
-        }
-        // Fallback for 400 validation error: verify if version changed
-        const status = (realErr as { response?: { status?: number } })?.response?.status;
-        if (status === 400) {
-          try {
-            const fresh = await getFieldInspectionTaskDetailReal(projectId, task.id);
-            if (fresh.etag && fresh.etag.replace(/"/g, '') !== fieldTaskEtag.replace(/"/g, '')) {
-              setFieldTask(fresh.data as unknown as FieldTaskViewFact);
-              setFieldTaskEtag(fresh.etag);
-              setTaskNotice({
-                type: 'error',
-                message: 'Nhiệm vụ vừa thay đổi trên máy chủ. Vui lòng thử lại.',
-              });
-              return;
-            }
-          } catch {
-            // ignore
-          }
-        }
-        // Fallback to mock reject
-        const mockRes = await rejectFieldTask(
-          task.id,
-          { reason },
-          { 'Idempotency-Key': idempotencyKey, 'If-Match': fieldTaskEtag },
-        );
-        responseData = mockRes.data;
-        newEtag = mockRes.etag;
-      }
+      const realRes = await rejectFieldTaskReal(
+        projectId,
+        task.id,
+        reason,
+        fieldTaskEtag,
+        idempotencyKey,
+      );
 
       clearCommandKey(keyScope);
-      setFieldTask(responseData);
-      setFieldTaskEtag(newEtag);
+      setFieldTask(realRes.data as unknown as FieldTaskViewFact);
+      setFieldTaskEtag(realRes.etag);
       setRejectOpen(false);
       setRejectReason('');
       setTaskNotice({ type: 'success', message: 'Đã gửi lý do từ chối tới điều phối viên.' });
     } catch (error) {
       clearCommandKey(keyScope);
+      // Kiểm tra 400 validation error xem phiên bản có bị thay đổi không
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 400 && projectId) {
+        try {
+          const fresh = await getFieldInspectionTaskDetailReal(projectId, task.id);
+          if (fresh.etag && fresh.etag.replace(/"/g, '') !== fieldTaskEtag.replace(/"/g, '')) {
+            setFieldTask(fresh.data as unknown as FieldTaskViewFact);
+            setFieldTaskEtag(fresh.etag);
+            setTaskNotice({
+              type: 'error',
+              message: 'Nhiệm vụ vừa thay đổi trên máy chủ (phiên bản không khớp). Vui lòng tải lại.',
+            });
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
       setTaskNotice({ type: 'error', message: fieldTaskActionMessage(error) });
       void loadFieldTask();
     } finally {
@@ -516,6 +484,10 @@ export default function CrewWoDetailScreen() {
 
   const handleStartFieldTask = async () => {
     if (!fieldTask || !fieldTaskEtag) return;
+    if (!projectId) {
+      setTaskNotice({ type: 'error', message: 'Không xác định được dự án của nhiệm vụ.' });
+      return;
+    }
     const keyScope = `crew:field-start:${task.id}`;
     setTaskAction('start');
     try {
@@ -536,7 +508,7 @@ export default function CrewWoDetailScreen() {
         prev
           ? {
               ...prev,
-              status: 'IN_PROGRESS',
+              status: 'InProgress',
               firstStartOriginId: res.data.id,
               version: res.etag,
             }
@@ -579,6 +551,58 @@ export default function CrewWoDetailScreen() {
       setAnchorLoading(true);
       try {
         await withFreshItemVersion(task.id, (command) => Promise.resolve(command.headers));
+        // Gọi API-156: nộp đánh giá hiện trường trước khi bắt đầu thi công
+        if (projectId && fieldTask?.repairContext) {
+          const freshTask = await getFieldInspectionTaskDetailReal(projectId, task.id);
+          const itemVersion = freshTask.data.repairContext?.itemVersion ?? fieldTaskEtag;
+          if (itemVersion) {
+            await submitRepairAssessmentReal(
+              projectId,
+              fieldTask.repairContext.packageId,
+              fieldTask.repairContext.itemId,
+              task.id,
+              {
+                originId: stableUuid(`crew:assessment-origin:${task.id}`),
+                fieldFirstStartId: fieldTask.firstStartOriginId ?? task.id,
+                measurements: [
+                  {
+                    sampleId: stableUuid(`sample:length:${task.id}`),
+                    type: 'DepressionDepth',
+                    value: measurement.length_m,
+                    state: 'KNOWN',
+                    dimension: 'LENGTH',
+                    unit: 'm',
+                    instrument: 'Thước đo thép',
+                    method: 'Thủ công',
+                  },
+                  {
+                    sampleId: stableUuid(`sample:width:${task.id}`),
+                    type: 'DepressionDepth',
+                    value: measurement.width_m,
+                    state: 'KNOWN',
+                    dimension: 'LENGTH',
+                    unit: 'm',
+                    instrument: 'Thước đo thép',
+                    method: 'Thủ công',
+                  },
+                  {
+                    sampleId: stableUuid(`sample:depth:${task.id}`),
+                    type: 'DepressionDepth',
+                    value: measurement.depth_cm,
+                    state: 'KNOWN',
+                    dimension: 'LENGTH',
+                    unit: 'cm',
+                    instrument: 'Thước đo thép',
+                    method: 'Thủ công',
+                  },
+                ],
+                deviceId: 'mobile-app',
+              },
+              itemVersion,
+              newIdempotencyKey(),
+            );
+          }
+        }
       } catch (error) {
         setAnchorError(
           isRepairVersionConflict(error)

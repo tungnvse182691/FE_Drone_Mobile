@@ -15,16 +15,6 @@ import { defectTypeLabel } from '../../src/constants/defect-types';
 import { sha256HexOfBytes } from '../../src/api/uploads';
 import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
 import {
-  getFieldSubmission,
-  getFieldTask,
-  listFieldSubmissionsForTask,
-  submitFieldSubmission,
-  type FieldEvidenceDeclaration,
-  type FieldMeasurementInput,
-  type FieldSubmissionViewFact,
-  type FieldTaskViewFact,
-} from '../../src/api/mock/field-tasks';
-import {
   completeCrewUpload,
   createCrewUploadSession,
   formatStrongIfMatch,
@@ -36,7 +26,11 @@ import {
   putCrewUploadPartBytes,
   requestCrewUploadPartUrls,
   submitFieldTaskReal,
+  type FieldEvidenceDeclaration,
+  type FieldMeasurementInput,
   type FieldSubmissionInput,
+  type FieldSubmissionViewFact,
+  type FieldTaskViewFact,
 } from '../../src/api/crewApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { releaseStableUuid, stableUuid } from '../../src/utils/uuid';
@@ -142,44 +136,31 @@ export default function CrewFieldReviewScreen() {
     return session && session.task_id === task.id ? session.after_local_uri : null;
   }, [task.id]);
 
-  const projectId =
-    task.projectId || getProjectIdForTask(task.id) || '72f84201-c001-4000-8000-000000000001';
+  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
 
   const loadSubmission = useCallback(async () => {
     setLoading(true);
+    if (!projectId) {
+      setFieldTask(null);
+      setSubmission(null);
+      setEtag(null);
+      setLoading(false);
+      setToast({ type: 'error', message: 'Không xác định được dự án của nhiệm vụ.' });
+      return;
+    }
     try {
-      let taskData: FieldTaskViewFact;
-      let taskEtag: string;
+      const realTaskRes = await getFieldInspectionTaskDetailReal(projectId, task.id);
+      const taskData = realTaskRes.data;
+      const taskEtag = realTaskRes.etag;
       let latest: FieldSubmissionViewFact | null = null;
 
-      try {
-        const realTaskRes = await getFieldInspectionTaskDetailReal(projectId, task.id);
-        taskData = realTaskRes.data as unknown as FieldTaskViewFact;
-        taskEtag = realTaskRes.etag;
-
-        if (realTaskRes.data.latestSubmissionId) {
-          const realSubRes = await getFieldSubmissionDetailReal(
-            projectId,
-            task.id,
-            realTaskRes.data.latestSubmissionId,
-          );
-          latest = realSubRes.data as unknown as FieldSubmissionViewFact;
-        }
-      } catch {
-        // Fallback to mock
-        const taskResponse = await getFieldTask(task.id);
-        taskData = taskResponse.data;
-        taskEtag = taskResponse.etag;
-
-        if (taskResponse.data.latestSubmissionId) {
-          const submissionResponse = await getFieldSubmission(
-            task.id,
-            taskResponse.data.latestSubmissionId,
-          );
-          latest = submissionResponse.data;
-        } else {
-          latest = listFieldSubmissionsForTask(task.id)[0] ?? null;
-        }
+      if (realTaskRes.data.latestSubmissionId) {
+        const realSubRes = await getFieldSubmissionDetailReal(
+          projectId,
+          task.id,
+          realTaskRes.data.latestSubmissionId,
+        );
+        latest = realSubRes.data;
       }
 
       setFieldTask(taskData);
@@ -195,9 +176,11 @@ export default function CrewFieldReviewScreen() {
         setUnrepairedReason(latest.unrepairedReason ?? '');
       }
     } catch {
+      // Không fallback mock im lặng; giữ lại trạng thái lỗi rõ ràng
       setFieldTask(null);
       setSubmission(null);
       setEtag(null);
+      setToast({ type: 'error', message: 'Không tải được hồ sơ hiện trường từ máy chủ.' });
     } finally {
       setLoading(false);
     }
@@ -249,6 +232,10 @@ export default function CrewFieldReviewScreen() {
   const dirty = measurementsChanged || resultChanged || willAddAfter;
 
   const handleSubmit = async () => {
+    if (!projectId) {
+      setToast({ type: 'error', message: 'Không xác định được dự án của nhiệm vụ.' });
+      return;
+    }
     if (!fieldTask || !etag) {
       setToast({ type: 'error', message: 'Chưa tải được nhiệm vụ. Vui lòng thử lại.' });
       return;
@@ -264,55 +251,61 @@ export default function CrewFieldReviewScreen() {
     try {
       const evidence: FieldEvidenceDeclaration[] = [...(submission?.evidence ?? [])];
       if (willAddAfter && afterUri) {
+        let fileId: string | null = null;
+        let checksum: string | null = null;
         try {
           const buffer = await new File(afterUri).arrayBuffer();
           const bytes = new Uint8Array(buffer);
-          const checksum = await sha256HexOfBytes(bytes);
-          let fileId: string | null = null;
+          checksum = await sha256HexOfBytes(bytes);
 
-          try {
-            // Upload minh chứng lên backend thật qua /api/v1/uploads
-            const uploadSession = await createCrewUploadSession(
-              projectId,
-              task.id,
-              `after-${Date.now()}.jpg`,
+          // Upload minh chứng lên backend thật qua /api/v1/uploads
+          const uploadSession = await createCrewUploadSession(
+            projectId,
+            task.id,
+            `after-${Date.now()}.jpg`,
+            'image/jpeg',
+            bytes.length,
+            checksum,
+            'AFTER',
+          );
+          const partUrls = await requestCrewUploadPartUrls(uploadSession.id, [1]);
+          if (partUrls.parts[0]?.url) {
+            const putRes = await putCrewUploadPartBytes(
+              partUrls.parts[0].url,
+              bytes,
               'image/jpeg',
-              bytes.length,
-              checksum,
-              'AFTER',
             );
-            const partUrls = await requestCrewUploadPartUrls(uploadSession.id, [1]);
-            if (partUrls.parts[0]?.url) {
-              const putRes = await putCrewUploadPartBytes(
-                partUrls.parts[0].url,
-                bytes,
-                'image/jpeg',
-              );
-              await completeCrewUpload(
-                uploadSession.id,
-                [{ partNumber: 1, etag: putRes.etag }],
-                checksum,
-                uploadSession.version,
-              );
-              const verifiedSession = await pollCrewUploadVerified(uploadSession.id, 35000, 1000);
-              fileId = verifiedSession.fileId;
-            }
-          } catch {
-            // Nếu upload lên server gặp lỗi (ví dụ offline), giữ fileId null để fallback
+            await completeCrewUpload(
+              uploadSession.id,
+              [{ partNumber: 1, etag: putRes.etag }],
+              checksum,
+              uploadSession.version,
+            );
+            const verifiedSession = await pollCrewUploadVerified(uploadSession.id, 35000, 1000);
+            fileId = verifiedSession.fileId;
           }
-
-          evidence.push({
-            captureOriginId: stableUuid(`crew:field-after:${task.id}:${afterUri}`),
-            fileId,
-            purpose: 'AFTER',
-            checksumSha256: checksum,
-            mediaType: 'image/jpeg',
-            capturedAt: new Date().toISOString(),
-            attemptChecklist: 'Chụp tại hiện trường sau khi xử lý',
-          });
         } catch {
-          // Bỏ qua lỗi đọc file nếu chạy trên môi trường không hỗ trợ File API
+          // Bắt lỗi upload
         }
+
+        if (!fileId || !checksum) {
+          setToast({
+            type: 'error',
+            message: 'Tải ảnh nghiệm thu sau sửa lên máy chủ thất bại. Vui lòng thử lại.',
+          });
+          setSubmitting(false);
+          return;
+        }
+
+        evidence.push({
+          captureOriginId: stableUuid(`crew:field-after:${task.id}:${afterUri}`),
+          fileId,
+          purpose: 'AFTER',
+          checksumSha256: checksum,
+          mediaType: 'image/jpeg',
+          capturedAt: new Date().toISOString(),
+          attemptChecklist: 'Chụp tại hiện trường sau khi xử lý',
+        });
       }
 
       const idempotencyKey = getOrCreateCommandKey(keyScope);
@@ -335,7 +328,7 @@ export default function CrewFieldReviewScreen() {
           captureOriginId: e.captureOriginId,
           fileId: e.fileId ?? null,
           purpose: e.purpose,
-          checksumSha256: e.checksumSha256 || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+          checksumSha256: e.checksumSha256,
           mediaType: e.mediaType || 'image/jpeg',
           capturedAt: e.capturedAt || new Date().toISOString(),
           attemptChecklist: e.attemptChecklist || null,
@@ -382,18 +375,8 @@ export default function CrewFieldReviewScreen() {
             // ignore
           }
         }
-        // Fallback về mock submit
-        const mockRes = await submitFieldSubmission(
-          task.id,
-          {
-            ...submissionInput,
-            measurements,
-            evidence,
-          },
-          { 'Idempotency-Key': idempotencyKey, 'If-Match': etag },
-        );
-        responseData = mockRes.data;
-        newEtag = mockRes.etag;
+        // Không fallback mock; ném lỗi thật để UI thông báo thất bại
+        throw realErr;
       }
 
       clearCommandKey(keyScope);

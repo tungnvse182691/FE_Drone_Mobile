@@ -8,13 +8,11 @@ import { Card } from '../../src/components/Card';
 import { Chip, type ChipVariant } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
-import { DEFECT_TYPE_CODES, defectTypeLabel } from '../../src/constants/defect-types';
+import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
 import {
   crewFieldTaskCard,
   fieldTaskStatusOf,
-  isActiveFieldTaskStatus,
   listCrewFieldTaskCards,
-  listFieldInspectionTasks,
   type CrewFieldTaskCard,
 } from '../../src/api/mock/field-tasks';
 import {
@@ -26,7 +24,7 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 type TaskSegment = 'active' | 'done';
 
-/** Thẻ nhiệm vụ hiển thị ở C-02; dữ liệu wire do API-078 (hoặc mock) cấp. */
+/** Thẻ nhiệm vụ hiển thị ở C-02; dữ liệu wire do API-078 cấp. */
 export type CrewTask = CrewFieldTaskCard & { projectId?: string };
 
 export const CREW_TASKS: CrewTask[] = listCrewFieldTaskCards('active');
@@ -38,6 +36,7 @@ export const DEFAULT_CREW_TASK_ID = CREW_TASKS[0]?.id ?? 'task-wo-01';
 const dynamicTaskRegistry = new Map<string, CrewTask>();
 const taskStatusRegistry = new Map<string, string>();
 
+/** Chỉ dùng dữ liệu thật do API-078 trả về, tuyệt đối không tự điền dữ liệu giả */
 function synthesizeCrewTaskCard(item: InspectionTaskResponseDto): CrewTask {
   const shortId = item.id.slice(0, 8);
   const isRepair = (item.mode ?? '').toUpperCase() === 'INSPECT_AND_REPAIR';
@@ -46,23 +45,23 @@ function synthesizeCrewTaskCard(item: InspectionTaskResponseDto): CrewTask {
   return {
     id: item.id,
     wo_code: `#HH-WO-${shortId.toUpperCase()}`,
-    title: `Nhiệm vụ kiểm tra hiện trường #${shortId.toUpperCase()}`,
+    title: `Nhiệm vụ kiểm tra #${shortId.toUpperCase()}`,
     task_mode: isRepair ? TaskMode.INSPECT_AND_REPAIR : TaskMode.MEASURE_ONLY,
-    defect_type_code: DEFECT_TYPE_CODES.POTH_DEEP,
-    route_code: 'ĐH.05',
-    section_name: 'Khu vực khảo sát',
-    chainage: 'Km02+150',
-    locality: 'TP. Hồ Chí Minh',
-    due_label: 'Hôm nay',
+    defect_type_code: '' as DefectTypeCode, // Không tự điền loại hư hại giả
+    route_code: '', // Không tự điền tuyến đường giả
+    section_name: '', // Không tự điền phân đoạn giả
+    chainage: '', // Không tự điền lý trình giả
+    locality: '', // Không tự điền địa phương giả
+    due_label: '—', // Không tự điền hạn giả
     due_urgency: 'normal',
-    distance_label: 'Tại chỗ',
-    defect_location: 'Làn đường chính',
-    description: 'Khảo sát và ghi nhận số đo hư hại mặt đường theo quy chuẩn.',
-    repair_method: 'Theo quy trình TCVN 10380:2014',
-    safety_note: 'Mặc áo phản quang, đặt biển cảnh báo an toàn',
+    distance_label: '—', // Không tự điền khoảng cách giả
+    defect_location: '—', // Không tự điền vị trí giả
+    description: '—', // Không tự điền mô tả giả
+    repair_method: '—', // Không tự điền phương pháp giả
+    safety_note: '—', // Không tự điền an toàn giả
     batch_size: item.defectIds?.length || 1,
-    coordinates: { latitude: 10.762622, longitude: 106.660172 },
-    completedAt: isDone ? (item.updatedAt || new Date().toISOString()) : undefined,
+    coordinates: { latitude: 0, longitude: 0 }, // Không tự điền tọa độ giả
+    completedAt: isDone ? (item.updatedAt || undefined) : undefined,
     projectId: item.projectId,
   };
 }
@@ -73,9 +72,10 @@ export function getCrewTaskById(id?: string | null): CrewTask {
   if (dynamic) return dynamic;
   const mockCard = crewFieldTaskCard(id);
   if (mockCard) return mockCard;
+  // Không hardcode projectId giả
   const placeholder = synthesizeCrewTaskCard({
     id,
-    projectId: '72f84201-c001-4000-8000-000000000001',
+    projectId: '',
     defectIds: [],
     mode: 'MEASURE_ONLY',
     crewId: '',
@@ -109,11 +109,13 @@ export const TASK_MODE_CHIP: Record<TaskMode, { variant: ChipVariant; label: str
 export default function CrewTasksScreen() {
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
-  const [activeTasks, setActiveTasks] = useState<CrewTask[]>(CREW_TASKS);
-  const [doneTasks, setDoneTasks] = useState<CrewTask[]>(CREW_COMPLETED_TASKS);
+  const [activeTasks, setActiveTasks] = useState<CrewTask[]>([]);
+  const [doneTasks, setDoneTasks] = useState<CrewTask[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
     try {
+      setLoadError(null);
       // 1. Gọi backend thật: GET /api/v1/me/inspection-tasks (API-078)
       const page = await listCrewInspectionTasksReal(null, 50);
       const active: CrewTask[] = [];
@@ -121,11 +123,7 @@ export default function CrewTasksScreen() {
 
       for (const item of page.items) {
         taskStatusRegistry.set(item.id, item.status);
-        const mockCard = crewFieldTaskCard(item.id);
-        const card: CrewTask = mockCard
-          ? { ...mockCard, projectId: item.projectId }
-          : synthesizeCrewTaskCard(item);
-
+        const card: CrewTask = synthesizeCrewTaskCard(item);
         dynamicTaskRegistry.set(item.id, card);
 
         const statusUpper = (item.status ?? '').toUpperCase();
@@ -139,27 +137,9 @@ export default function CrewTasksScreen() {
       setActiveTasks(active);
       setDoneTasks(done);
     } catch {
-      // Khi không có mạng hoặc chưa đăng nhập, fallback về mock hiện có
-      try {
-        const page = await listFieldInspectionTasks({ limit: 50 });
-        const active: CrewTask[] = [];
-        const done: CrewTask[] = [];
-        for (const item of page.items) {
-          const card = crewFieldTaskCard(item.id);
-          if (!card) {
-            continue;
-          }
-          if (isActiveFieldTaskStatus(item.status ?? '')) {
-            active.push(card);
-          } else if (item.status === 'COMPLETED') {
-            done.push(card);
-          }
-        }
-        setActiveTasks(active);
-        setDoneTasks(done);
-      } catch {
-        // Giữ danh sách đang hiển thị khi lỗi mạng
-      }
+      // Khi gọi thật lỗi, KHÔNG gọi mock thay thế (tránh hiện dữ liệu giả im lặng).
+      // Nếu đã có cache từ lần gọi thật trước đó trong session thì giữ hiển thị dữ liệu cũ đó.
+      setLoadError('Không tải được danh sách nhiệm vụ từ máy chủ. Vui lòng kiểm tra kết nối.');
     }
   }, []);
 
@@ -232,7 +212,13 @@ export default function CrewTasksScreen() {
           </View>
         ) : null}
 
-        {list.length === 0 ? (
+        {loadError && list.length === 0 ? (
+          <EmptyState
+            icon="error-outline"
+            title="Lỗi tải danh sách nhiệm vụ"
+            message={loadError}
+          />
+        ) : list.length === 0 ? (
           <EmptyState
             icon="check-circle"
             title="Không có công việc trong bộ lọc này"
@@ -268,23 +254,29 @@ export default function CrewTasksScreen() {
                         <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
                       )}
                     </View>
-                    <View style={styles.taskDistPill}>
-                      <MaterialIcons name="near-me" size={14} color={colors.brandGold} />
-                      <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
-                    </View>
+                    {task.distance_label && task.distance_label !== '—' ? (
+                      <View style={styles.taskDistPill}>
+                        <MaterialIcons name="near-me" size={14} color={colors.brandGold} />
+                        <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   <Text style={[typography.titleMd, styles.taskTitle]}>{task.title}</Text>
 
-                  <View style={styles.taskRouteRow}>
-                    <MaterialIcons name="alt-route" size={14} color={colors.secondary} />
-                    <Text style={[typography.caption, styles.taskRoute]}>
-                      Tuyến {task.route_code} • {task.section_name} • {task.chainage}
-                    </Text>
-                  </View>
+                  {task.route_code || task.section_name || task.chainage ? (
+                    <View style={styles.taskRouteRow}>
+                      <MaterialIcons name="alt-route" size={14} color={colors.secondary} />
+                      <Text style={[typography.caption, styles.taskRoute]}>
+                        {[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage]
+                          .filter(Boolean)
+                          .join(' • ')}
+                      </Text>
+                    </View>
+                  ) : null}
 
                   <Text style={[typography.caption, styles.taskDefect]}>
-                    {defectTypeLabel(task.defect_type_code)}
+                    {task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Nhiệm vụ kiểm tra hiện trường'}
                     {task.batch_size > 1 ? (
                       <Text style={styles.taskBatch}> • Đợt gom {task.batch_size} vị trí</Text>
                     ) : null}
@@ -294,21 +286,25 @@ export default function CrewTasksScreen() {
                     <View style={styles.woChip}>
                       <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code}</Text>
                     </View>
-                    <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
-                      <MaterialIcons
-                        name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
-                        size={13}
-                        color={task.due_urgency === 'urgent' ? colors.error : colors.secondary}
-                      />
-                      <Text
-                        style={[
-                          typography.caption,
-                          task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
-                        ]}
-                      >
-                        {task.due_label}
-                      </Text>
-                    </View>
+                    {task.due_label && task.due_label !== '—' ? (
+                      <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
+                        <MaterialIcons
+                          name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
+                          size={13}
+                          color={task.due_urgency === 'urgent' ? colors.error : colors.secondary}
+                        />
+                        <Text
+                          style={[
+                            typography.caption,
+                            task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
+                          ]}
+                        >
+                          {task.due_label}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={{ flex: 1 }} />
+                    )}
                     <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} />
                   </View>
                 </Card>

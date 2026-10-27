@@ -17,7 +17,12 @@ import {
   markSessionSubmitted,
   type CrewFieldSession,
 } from '../../src/api/mock/crew-inspection';
-import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
+import {
+  getFieldInspectionTaskDetailReal,
+  newIdempotencyKey,
+  submitRepairAttemptReal,
+} from '../../src/api/crewApi';
 import {
   itemIfMatch,
   repairCommandErrorMessage,
@@ -166,6 +171,31 @@ export default function CrewCompleteScreen() {
           setToast(repairCommandErrorMessage(error));
           setSubmitting(false);
           return;
+        }
+      }
+
+      const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+      if (isFastTrackRepair && projectId) {
+        try {
+          const detail = await getFieldInspectionTaskDetailReal(projectId, task.id);
+          const ctx = detail.data.repairContext;
+          if (ctx && ctx.itemVersion) {
+            await submitRepairAttemptReal(
+              projectId,
+              ctx.packageId,
+              ctx.itemId,
+              task.id,
+              {
+                fieldSubmissionId: detail.data.latestSubmissionId ?? stableUuid(`sub:${task.id}`),
+                expectedContentHash: stableUuid(`hash:${task.id}`),
+                executionFinishId: stableUuid(`crew:repair-finish-origin:${task.id}`),
+              },
+              ctx.itemVersion,
+              stableUuid(`API-160:${task.id}:${attemptId}`),
+            );
+          }
+        } catch {
+          // Gặp lỗi gọi trực tiếp, tiếp tục đưa vào hàng đợi offline bên dưới để đồng bộ
         }
       }
       const outbound = {

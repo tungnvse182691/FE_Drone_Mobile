@@ -1,4 +1,4 @@
-import React, { ComponentProps, useState } from 'react';
+import React, { ComponentProps, useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,7 +8,14 @@ import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { defectTypeLabel } from '../../src/constants/defect-types';
 import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
-import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import {
+  finishRepairExecutionReal,
+  getFieldInspectionTaskDetailReal,
+  newIdempotencyKey,
+  startRepairExecutionReal,
+} from '../../src/api/crewApi';
+import { stableUuid } from '../../src/utils/uuid';
+import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 type WorkStatus = 'doing' | 'blocked' | 'done';
@@ -35,6 +42,7 @@ const QUICK_TAGS = ['+ Đã chặn giao thông', '+ Thời tiết mưa lớn', '
 export default function CrewProgressScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const task = getCrewTaskById(params.id);
+  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
   const activeSession = getCrewFieldSession();
   const session = activeSession?.task_id === task.id ? activeSession : null;
   const modeChip = TASK_MODE_CHIP[task.task_mode];
@@ -46,12 +54,83 @@ export default function CrewProgressScreen() {
   const [checked, setChecked] = useState<boolean[]>([false, false, false, false]);
   const [workStatus, setWorkStatus] = useState<WorkStatus>('done');
   const [note, setNote] = useState('');
+  const [executionStartId, setExecutionStartId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const doneCount = checked.filter(Boolean).length;
   const progress = Math.round((doneCount / CONSTRUCTION_STEPS.length) * 100);
 
   const toggleStep = (index: number) => {
     setChecked((prev) => prev.map((value, i) => (i === index ? !value : value)));
+  };
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!projectId) return;
+      try {
+        const detail = await getFieldInspectionTaskDetailReal(projectId, task.id);
+        const ctx = detail.data.repairContext;
+        if (ctx && ctx.itemVersion) {
+          const originId = stableUuid(`crew:repair-start-origin:${task.id}`);
+          const startRes = await startRepairExecutionReal(
+            projectId,
+            ctx.packageId,
+            ctx.itemId,
+            task.id,
+            {
+              originId,
+              fieldFirstStartId: detail.data.firstStartOriginId ?? task.id,
+              claimedAt: new Date().toISOString(),
+              assessmentId: stableUuid(`crew:assessment-origin:${task.id}`),
+            },
+            ctx.itemVersion,
+            newIdempotencyKey(),
+          );
+          if (active) {
+            setExecutionStartId(startRes.data.id);
+          }
+        }
+      } catch {
+        // Bỏ qua nếu lệnh start đã được gọi hoặc task không thuộc sửa nhanh
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [projectId, task.id]);
+
+  const handleSaveAndProceed = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      if (projectId) {
+        try {
+          const detail = await getFieldInspectionTaskDetailReal(projectId, task.id);
+          const ctx = detail.data.repairContext;
+          if (ctx && ctx.itemVersion) {
+            await finishRepairExecutionReal(
+              projectId,
+              ctx.packageId,
+              ctx.itemId,
+              task.id,
+              {
+                originId: stableUuid(`crew:repair-finish-origin:${task.id}`),
+                executionStartId: executionStartId ?? stableUuid(`crew:repair-start-origin:${task.id}`),
+                claimedAt: new Date().toISOString(),
+              },
+              ctx.itemVersion,
+              newIdempotencyKey(),
+            );
+          }
+        } catch {
+          // Bắt lỗi server, tiếp tục luồng chuyển màn hình
+        }
+      }
+    } finally {
+      setSubmitting(false);
+      router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, mode: 'AFTER' } });
+    }
   };
 
   return (
@@ -214,7 +293,8 @@ export default function CrewProgressScreen() {
       <Button
         variant="primary"
         title="Lưu cập nhật & Chụp bằng chứng"
-        onPress={() => router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, mode: 'AFTER' } })}
+        loading={submitting}
+        onPress={handleSaveAndProceed}
       />
       <Text style={[typography.caption, styles.nextHint]}>Hành động tiếp theo: Mở màn hình Chụp ảnh hiện trường nghiệm thu</Text>
     </SafeAreaScreen>

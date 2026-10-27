@@ -17,10 +17,14 @@ import {
   repairCommandErrorMessage,
   useIdempotencyKey,
   useRepairBootstrap,
-  supplementRepairAttempt,
 } from '../../src/hooks/useRepairBootstrap';
+import {
+  getFieldInspectionTaskDetailReal,
+  isConcurrencyConflict,
+  supplementRepairAttemptReal,
+} from '../../src/api/crewApi';
 import type { CrewFieldSubmissionView } from '../../src/api/mock/tasks';
-import { getCrewTaskById } from './tasks';
+import { getCrewTaskById, getProjectIdForTask } from './tasks';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const STAGE_LABELS: Record<string, string> = {
@@ -59,7 +63,8 @@ function pickDefaultSubmission(
 export default function CrewRepairCorrectionScreen() {
   const params = useLocalSearchParams<{ id?: string; submissionId?: string }>();
   const task = getCrewTaskById(params.id);
-  const bootstrap = useRepairBootstrap(task.id);
+  const projectId = task.projectId || getProjectIdForTask(task.id) || null;
+  const bootstrap = useRepairBootstrap(task.id, { projectId: projectId ?? undefined });
 
   const [submissions, setSubmissions] = useState<CrewFieldSubmissionView[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(params.submissionId ?? null);
@@ -113,17 +118,29 @@ export default function CrewRepairCorrectionScreen() {
     if (!selected || !canSubmit) {
       return;
     }
+    if (!projectId || !bootstrap.repairContext) {
+      setToast('Không xác định được dự án hoặc hạng mục sửa chữa.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const result = await supplementRepairAttempt(
+      // Đọc fresh detail trước khi gọi lệnh để có itemVersion mới nhất
+      const freshTask = await getFieldInspectionTaskDetailReal(projectId, task.id);
+      const itemVersion = freshTask.data.repairContext?.itemVersion ?? bootstrap.repairContext.itemVersion;
+
+      const result = await supplementRepairAttemptReal(
+        projectId,
+        bootstrap.repairContext.packageId,
+        bootstrap.repairContext.itemId,
         task.id,
         { fieldSubmissionId: selected.id, expectedContentHash: selected.contentHash },
-        { idempotencyKey: nextIdempotencyKey() },
+        itemVersion,
+        nextIdempotencyKey(),
       );
-      setDone({ intakeReadiness: result.intakeReadiness, reviewDueAt: result.originalReviewDueAt });
+      setDone({ intakeReadiness: result.data.intakeReadiness, reviewDueAt: result.data.originalReviewDueAt });
     } catch (error) {
       const code = repairCommandErrorCode(error);
-      if (isRepairVersionConflict(error)) {
+      if (isRepairVersionConflict(error) || isConcurrencyConflict(error)) {
         await bootstrap.reload();
         Alert.alert(
           'Lượt sửa đã thay đổi',

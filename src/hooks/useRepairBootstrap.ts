@@ -4,6 +4,14 @@ import { messageFor } from '../api/errorCatalog';
 import { parseProblemDetails } from '../api/problemDetails';
 import { uuidv4 } from '../utils/uuid';
 import {
+  finishRepairExecutionReal,
+  getFieldInspectionTaskDetailReal,
+  startRepairExecutionReal,
+  submitRepairAssessmentReal,
+  submitRepairAttemptReal,
+  supplementRepairAttemptReal,
+} from '../api/crewApi';
+import {
   MOCK_CREW_PROJECT_ID,
   ackReceivingRequest as ackReceivingRequestMock,
   finishRepairExecution as finishRepairExecutionMock,
@@ -27,10 +35,10 @@ import {
 } from '../api/mock/tasks';
 
 /**
- * BE thật chưa sẵn sàng (`API_BASE_URL` vẫn là placeholder) — mặc định chạy mock.
- * Cùng quy ước với `USE_MOCK_UPLOAD` ở `src/store/uploads.ts`.
+ * BE thật đã sẵn sàng kết nối qua RoadGuardBackend.
+ * Đổi sang false để httpCrewRepairTransport gọi các API thật (156-161).
  */
-const USE_MOCK_CREW_REPAIR = true;
+const USE_MOCK_CREW_REPAIR = false;
 
 /** Ngữ cảnh sửa chữa đọc từ API-080 (nhánh nullable `repairContext` cho Crew NORMAL). */
 export type RepairContext = CrewRepairContext;
@@ -197,50 +205,68 @@ function repairItemPath(projectId: string, ctx: RepairContext, taskId: string, s
 
 const httpCrewRepairTransport: CrewRepairTransport = {
   async fetchTask(taskId, projectId) {
-    const response = await apiClient.get<CrewFieldTaskViewFact>(
-      `/projects/${projectId}/field-inspection-tasks/${taskId}`,
-    );
-    return response.data;
+    const res = await getFieldInspectionTaskDetailReal(projectId, taskId);
+    return res.data as unknown as CrewFieldTaskViewFact;
   },
   async supplement(taskId, ctx, projectId, input, headers) {
-    const response = await apiClient.post<RepairAttemptIntakeView>(
-      repairItemPath(projectId, ctx, taskId, 'attempts/supplements'),
+    const res = await supplementRepairAttemptReal(
+      projectId,
+      ctx.packageId,
+      ctx.itemId,
+      taskId,
       input,
-      { headers },
+      headers['If-Match'],
+      headers['Idempotency-Key'],
     );
-    return response.data;
+    return res.data as unknown as RepairAttemptIntakeView;
   },
   async assess(taskId, ctx, projectId, input, headers) {
-    const response = await apiClient.post<RepairAssessmentView>(
-      repairItemPath(projectId, ctx, taskId, 'assessment'),
-      input,
-      { headers },
+    const res = await submitRepairAssessmentReal(
+      projectId,
+      ctx.packageId,
+      ctx.itemId,
+      taskId,
+      input as any,
+      headers['If-Match'],
+      headers['Idempotency-Key'],
     );
-    return response.data;
+    return res.data as unknown as RepairAssessmentView;
   },
   async attempt(taskId, ctx, projectId, input, headers) {
-    const response = await apiClient.post<RepairAttemptIntakeView>(
-      repairItemPath(projectId, ctx, taskId, 'attempts'),
-      input,
-      { headers },
+    const res = await submitRepairAttemptReal(
+      projectId,
+      ctx.packageId,
+      ctx.itemId,
+      taskId,
+      input as any,
+      headers['If-Match'],
+      headers['Idempotency-Key'],
     );
-    return response.data;
+    return res.data as unknown as RepairAttemptIntakeView;
   },
   async startExecution(taskId, ctx, projectId, input, headers) {
-    const response = await apiClient.post<RepairExecutionStartView>(
-      repairItemPath(projectId, ctx, taskId, 'execution-start'),
-      input,
-      { headers },
+    const res = await startRepairExecutionReal(
+      projectId,
+      ctx.packageId,
+      ctx.itemId,
+      taskId,
+      input as any,
+      headers['If-Match'],
+      headers['Idempotency-Key'],
     );
-    return response.data;
+    return res.data as unknown as RepairExecutionStartView;
   },
   async finishExecution(taskId, ctx, projectId, input, headers) {
-    const response = await apiClient.post<RepairExecutionFinishView>(
-      repairItemPath(projectId, ctx, taskId, 'execution-finish'),
-      input,
-      { headers },
+    const res = await finishRepairExecutionReal(
+      projectId,
+      ctx.packageId,
+      ctx.itemId,
+      taskId,
+      input as any,
+      headers['If-Match'],
+      headers['Idempotency-Key'],
     );
-    return response.data;
+    return res.data as unknown as RepairExecutionFinishView;
   },
   async listReceiving(projectId, params) {
     const response = await apiClient.get<{ items: BusinessDutyView[]; continuation: string | null }>(
