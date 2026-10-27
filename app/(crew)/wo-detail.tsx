@@ -30,14 +30,25 @@ import {
   EVIDENCE_REUSE_SOURCE_TAGS,
   type BeforeEvidenceCandidate,
 } from '../../src/api/mock/crew-inspection';
-import { getCrewTaskById, TASK_MODE_CHIP } from './tasks';
+import { getCrewTaskById, getProjectIdForTask, TASK_MODE_CHIP } from './tasks';
 import {
   acceptFieldTask,
   getFieldTask,
   rejectFieldTask,
-  type FieldTaskViewFact,
 } from '../../src/api/mock/field-tasks';
+import {
+  acceptFieldTaskReal,
+  formatStrongIfMatch,
+  getFieldInspectionTaskDetailReal,
+  getRepairEligibilityReal,
+  isConcurrencyConflict,
+  isPreconditionRequired,
+  rejectFieldTaskReal,
+  startFieldTaskReal,
+  type FieldTaskViewFact,
+} from '../../src/api/crewApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
+import { stableUuid } from '../../src/utils/uuid';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 function parseDimension(value: string): number | null {
@@ -59,14 +70,21 @@ function formatCapturedAt(iso: string): string {
   })}`;
 }
 
-/** Câu tiếng Việt cho lỗi API-081/091 — không lộ mã kỹ thuật lên màn hình. */
+/** Câu tiếng Việt cho lỗi API-081/091/093 — không lộ mã kỹ thuật lên màn hình. */
 function fieldTaskActionMessage(error: unknown): string {
   const errorResponse = (
     error as { response?: { status?: number; data?: { code?: string } } } | undefined
   )?.response;
   const code = errorResponse?.data?.code;
-  if (code === 'concurrency_conflict' || code === 'precondition_required') {
-    return 'Nhiệm vụ vừa thay đổi. Vui lòng tải lại rồi thử lại.';
+  if (
+    code === 'concurrency_conflict' ||
+    code === 'precondition_required' ||
+    errorResponse?.status === 409 ||
+    errorResponse?.status === 412 ||
+    isConcurrencyConflict(error) ||
+    isPreconditionRequired(error)
+  ) {
+    return 'Nhiệm vụ vừa thay đổi trên máy chủ (phiên bản không khớp). Vui lòng tải lại rồi thử lại.';
   }
   if (code === 'idempotency_key_reused') {
     return 'Thao tác này đã được gửi trước đó. Vui lòng tải lại nhiệm vụ.';
@@ -147,23 +165,32 @@ export default function CrewWoDetailScreen() {
 
   const [fieldTask, setFieldTask] = useState<FieldTaskViewFact | null>(null);
   const [fieldTaskEtag, setFieldTaskEtag] = useState<string | null>(null);
-  const [taskAction, setTaskAction] = useState<'accept' | 'reject' | null>(null);
+  const [taskAction, setTaskAction] = useState<'accept' | 'reject' | 'start' | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [taskNotice, setTaskNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null,
   );
 
+  const projectId =
+    task.projectId || getProjectIdForTask(task.id) || '72f84201-c001-4000-8000-000000000001';
+
   const loadFieldTask = useCallback(async () => {
     try {
-      const response = await getFieldTask(task.id);
-      setFieldTask(response.data);
+      const response = await getFieldInspectionTaskDetailReal(projectId, task.id);
+      setFieldTask(response.data as unknown as FieldTaskViewFact);
       setFieldTaskEtag(response.etag);
     } catch {
-      setFieldTask(null);
-      setFieldTaskEtag(null);
+      try {
+        const response = await getFieldTask(task.id);
+        setFieldTask(response.data);
+        setFieldTaskEtag(response.etag);
+      } catch {
+        setFieldTask(null);
+        setFieldTaskEtag(null);
+      }
     }
-  }, [task.id]);
+  }, [projectId, task.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -224,6 +251,59 @@ export default function CrewWoDetailScreen() {
     const timer = setTimeout(() => {
       void (async () => {
         try {
+          // Thử gọi API-146 từ backend thật nếu nhiệm vụ có ngữ cảnh sửa chữa (repairContext)
+          const pkgId = fieldTask?.repairContext?.packageId;
+          const itmId = fieldTask?.repairContext?.itemId;
+          if (pkgId && itmId) {
+            try {
+              const res = await getRepairEligibilityReal(projectId, pkgId, itmId);
+              if (!active) return;
+              const result = res.data;
+              applyEligibility(result.eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE', result.policyRevisionId);
+              setSession(getCrewFieldSession());
+              setEligibility({
+                status: 'ready',
+                eligible: result.eligible,
+                missingReasons: Array.from(new Set(result.missingReasons || [])),
+                policyRevisionId: result.policyRevisionId,
+                message: null,
+              });
+              return;
+            } catch (err: unknown) {
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 403) {
+                // Gap P5-G02: Crew không có quyền đọc trực tiếp Repair Item
+                if (!active) return;
+                applyEligibility('NOT_ELIGIBLE', null);
+                setSession(getCrewFieldSession());
+                setEligibility({
+                  status: 'error',
+                  eligible: false,
+                  missingReasons: [],
+                  policyRevisionId: null,
+                  message:
+                    'Không có quyền truy cập thẩm định sửa nhanh (Khoảng trống phân quyền P5-G02). Chuyển luồng thường cho PM.',
+                });
+                return;
+              }
+              if (status === 409) {
+                if (!active) return;
+                applyEligibility('NOT_ELIGIBLE', null);
+                setSession(getCrewFieldSession());
+                setEligibility({
+                  status: 'error',
+                  eligible: false,
+                  missingReasons: [],
+                  policyRevisionId: null,
+                  message:
+                    'Nhiệm vụ chưa được liên kết với hạng mục sửa chữa hợp lệ. Chuyển luồng thường cho PM.',
+                });
+                return;
+              }
+            }
+          }
+
+          // Fallback về mock API-146
           const result = await fetchRepairEligibility({ task_id: task.id });
           if (!active) {
             return;
@@ -266,6 +346,9 @@ export default function CrewWoDetailScreen() {
     measurement.length_m,
     measurement.width_m,
     measurement.depth_cm,
+    fieldTask?.repairContext?.packageId,
+    fieldTask?.repairContext?.itemId,
+    projectId,
   ]);
 
   const handleMeasurement = useCallback(
@@ -299,15 +382,56 @@ export default function CrewWoDetailScreen() {
     const keyScope = `crew:field-accept:${task.id}`;
     setTaskAction('accept');
     try {
-      const response = await acceptFieldTask(
-        task.id,
-        { reason: 'Nhận nhiệm vụ hiện trường' },
-        { 'Idempotency-Key': getOrCreateCommandKey(keyScope), 'If-Match': fieldTaskEtag },
-      );
+      const idempotencyKey = getOrCreateCommandKey(keyScope);
+      let responseData: FieldTaskViewFact;
+      let newEtag: string;
+
+      try {
+        const realRes = await acceptFieldTaskReal(
+          projectId,
+          task.id,
+          'Nhận nhiệm vụ hiện trường',
+          fieldTaskEtag,
+          idempotencyKey,
+        );
+        responseData = realRes.data as unknown as FieldTaskViewFact;
+        newEtag = realRes.etag;
+      } catch (realErr) {
+        if (isConcurrencyConflict(realErr)) {
+          throw realErr;
+        }
+        // Fallback for 400 validation error: verify if version changed
+        const status = (realErr as { response?: { status?: number } })?.response?.status;
+        if (status === 400) {
+          try {
+            const fresh = await getFieldInspectionTaskDetailReal(projectId, task.id);
+            if (fresh.etag && fresh.etag.replace(/"/g, '') !== fieldTaskEtag.replace(/"/g, '')) {
+              setFieldTask(fresh.data as unknown as FieldTaskViewFact);
+              setFieldTaskEtag(fresh.etag);
+              setTaskNotice({
+                type: 'error',
+                message: 'Nhiệm vụ vừa thay đổi trên máy chủ. Vui lòng thử lại.',
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        // Fallback to mock accept
+        const mockRes = await acceptFieldTask(
+          task.id,
+          { reason: 'Nhận nhiệm vụ hiện trường' },
+          { 'Idempotency-Key': idempotencyKey, 'If-Match': fieldTaskEtag },
+        );
+        responseData = mockRes.data;
+        newEtag = mockRes.etag;
+      }
+
       clearCommandKey(keyScope);
-      setFieldTask(response.data);
-      setFieldTaskEtag(response.etag);
-      setTaskNotice({ type: 'success', message: 'Đã nhận nhiệm vụ. Bắt đầu đo kiểm hiện trường.' });
+      setFieldTask(responseData);
+      setFieldTaskEtag(newEtag);
+      setTaskNotice({ type: 'success', message: 'Đã nhận nhiệm vụ. Sẵn sàng đo kiểm hiện trường.' });
     } catch (error) {
       clearCommandKey(keyScope);
       setTaskNotice({ type: 'error', message: fieldTaskActionMessage(error) });
@@ -329,20 +453,100 @@ export default function CrewWoDetailScreen() {
     const keyScope = `crew:field-reject:${task.id}`;
     setTaskAction('reject');
     try {
-      const response = await rejectFieldTask(
-        task.id,
-        { reason },
-        { 'Idempotency-Key': getOrCreateCommandKey(keyScope), 'If-Match': fieldTaskEtag },
-      );
+      const idempotencyKey = getOrCreateCommandKey(keyScope);
+      let responseData: FieldTaskViewFact;
+      let newEtag: string;
+
+      try {
+        const realRes = await rejectFieldTaskReal(
+          projectId,
+          task.id,
+          reason,
+          fieldTaskEtag,
+          idempotencyKey,
+        );
+        responseData = realRes.data as unknown as FieldTaskViewFact;
+        newEtag = realRes.etag;
+      } catch (realErr) {
+        if (isConcurrencyConflict(realErr)) {
+          throw realErr;
+        }
+        // Fallback for 400 validation error: verify if version changed
+        const status = (realErr as { response?: { status?: number } })?.response?.status;
+        if (status === 400) {
+          try {
+            const fresh = await getFieldInspectionTaskDetailReal(projectId, task.id);
+            if (fresh.etag && fresh.etag.replace(/"/g, '') !== fieldTaskEtag.replace(/"/g, '')) {
+              setFieldTask(fresh.data as unknown as FieldTaskViewFact);
+              setFieldTaskEtag(fresh.etag);
+              setTaskNotice({
+                type: 'error',
+                message: 'Nhiệm vụ vừa thay đổi trên máy chủ. Vui lòng thử lại.',
+              });
+              return;
+            }
+          } catch {
+            // ignore
+          }
+        }
+        // Fallback to mock reject
+        const mockRes = await rejectFieldTask(
+          task.id,
+          { reason },
+          { 'Idempotency-Key': idempotencyKey, 'If-Match': fieldTaskEtag },
+        );
+        responseData = mockRes.data;
+        newEtag = mockRes.etag;
+      }
+
       clearCommandKey(keyScope);
-      setFieldTask(response.data);
-      setFieldTaskEtag(response.etag);
+      setFieldTask(responseData);
+      setFieldTaskEtag(newEtag);
       setRejectOpen(false);
       setRejectReason('');
       setTaskNotice({ type: 'success', message: 'Đã gửi lý do từ chối tới điều phối viên.' });
     } catch (error) {
       clearCommandKey(keyScope);
       setTaskNotice({ type: 'error', message: fieldTaskActionMessage(error) });
+      void loadFieldTask();
+    } finally {
+      setTaskAction(null);
+    }
+  };
+
+  const handleStartFieldTask = async () => {
+    if (!fieldTask || !fieldTaskEtag) return;
+    const keyScope = `crew:field-start:${task.id}`;
+    setTaskAction('start');
+    try {
+      const idempotencyKey = getOrCreateCommandKey(keyScope);
+      const res = await startFieldTaskReal(
+        projectId,
+        task.id,
+        {
+          originId: stableUuid(`crew:field-start-origin:${task.id}`),
+          claimedAt: new Date().toISOString(),
+          deviceId: 'mobile-app',
+        },
+        fieldTaskEtag,
+        idempotencyKey,
+      );
+      clearCommandKey(keyScope);
+      setFieldTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'IN_PROGRESS',
+              firstStartOriginId: res.data.id,
+              version: res.etag,
+            }
+          : null,
+      );
+      setFieldTaskEtag(res.etag);
+      setTaskNotice({ type: 'success', message: 'Đã ghi nhận bắt đầu công việc tại hiện trường.' });
+    } catch (err) {
+      clearCommandKey(keyScope);
+      setTaskNotice({ type: 'error', message: fieldTaskActionMessage(err) });
       void loadFieldTask();
     } finally {
       setTaskAction(null);
@@ -744,7 +948,7 @@ export default function CrewWoDetailScreen() {
       </Card>
 
       {/* C-04: nhận / từ chối nhiệm vụ do điều phối viên giao (API-081 / API-091) */}
-      {fieldTask?.status === 'ASSIGNED' ? (
+      {fieldTask?.status?.toUpperCase() === 'ASSIGNED' ? (
         <Card style={styles.taskActionCard}>
           <View style={styles.taskActionHeader}>
             <MaterialIcons name="assignment-turned-in" size={20} color={colors.brandGold} />
@@ -808,14 +1012,30 @@ export default function CrewWoDetailScreen() {
             </View>
           )}
         </Card>
-      ) : fieldTask?.status === 'ACCEPTED' || fieldTask?.status === 'IN_PROGRESS' ? (
+      ) : fieldTask?.status?.toUpperCase() === 'ACCEPTED' ? (
+        <View style={styles.taskStatusBlock}>
+          <View style={[styles.taskStatusNote, styles.taskStatusNoteInline]}>
+            <MaterialIcons name="check-circle" size={16} color={colors.success} />
+            <Text style={[typography.caption, styles.taskStatusNoteText]}>
+              Đã nhận nhiệm vụ — sẵn sàng đo kiểm hiện trường.
+            </Text>
+          </View>
+          <Button
+            variant="primary"
+            title="Bắt đầu thực hiện tại hiện trường"
+            onPress={handleStartFieldTask}
+            loading={taskAction === 'start'}
+            disabled={taskAction !== null}
+          />
+        </View>
+      ) : fieldTask?.status?.toUpperCase() === 'IN_PROGRESS' || fieldTask?.status?.toUpperCase() === 'INPROGRESS' ? (
         <View style={styles.taskStatusNote}>
-          <MaterialIcons name="check-circle" size={16} color={colors.success} />
+          <MaterialIcons name="play-circle" size={16} color={colors.primary} />
           <Text style={[typography.caption, styles.taskStatusNoteText]}>
-            Đã nhận nhiệm vụ — sẵn sàng đo kiểm hiện trường.
+            Đang thực hiện tại hiện trường. Nhập số đo và chọn ảnh để hoàn tất.
           </Text>
         </View>
-      ) : fieldTask?.status === 'SUBMITTED' ? (
+      ) : fieldTask?.status?.toUpperCase() === 'SUBMITTED' ? (
         <View style={styles.taskStatusBlock}>
           <View style={[styles.taskStatusNote, styles.taskStatusNoteInline]}>
             <MaterialIcons name="hourglass-bottom" size={16} color={colors.warning} />
@@ -831,7 +1051,23 @@ export default function CrewWoDetailScreen() {
             }
           />
         </View>
-      ) : fieldTask?.status === 'REJECTED' ? (
+      ) : fieldTask?.status?.toUpperCase() === 'SUPPLEMENTREQUIRED' ? (
+        <View style={styles.taskStatusBlock}>
+          <View style={[styles.taskStatusNote, styles.taskStatusNoteInline]}>
+            <MaterialIcons name="announcement" size={16} color={colors.error} />
+            <Text style={[typography.caption, styles.taskStatusNoteText]}>
+              PM yêu cầu bổ sung hồ sơ. Nhấn nút dưới để xem chi tiết và bổ sung.
+            </Text>
+          </View>
+          <Button
+            variant="primary"
+            title="Xem yêu cầu & gửi bổ sung"
+            onPress={() =>
+              router.push({ pathname: '/(crew)/field-review', params: { id: task.id } })
+            }
+          />
+        </View>
+      ) : fieldTask?.status?.toUpperCase() === 'REJECTED' ? (
         <View style={styles.taskStatusNote}>
           <MaterialIcons name="block" size={16} color={colors.error} />
           <Text style={[typography.caption, styles.taskStatusNoteText]}>

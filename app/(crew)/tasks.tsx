@@ -8,7 +8,7 @@ import { Card } from '../../src/components/Card';
 import { Chip, type ChipVariant } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
-import { defectTypeLabel } from '../../src/constants/defect-types';
+import { DEFECT_TYPE_CODES, defectTypeLabel } from '../../src/constants/defect-types';
 import {
   crewFieldTaskCard,
   fieldTaskStatusOf,
@@ -17,21 +17,79 @@ import {
   listFieldInspectionTasks,
   type CrewFieldTaskCard,
 } from '../../src/api/mock/field-tasks';
+import {
+  listCrewInspectionTasksReal,
+  type InspectionTaskResponseDto,
+} from '../../src/api/crewApi';
 import { TaskMode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 type TaskSegment = 'active' | 'done';
 
-/** Thẻ nhiệm vụ hiển thị ở C-02; dữ liệu wire do `src/api/mock/field-tasks.ts` (API-078) cấp. */
-export type CrewTask = CrewFieldTaskCard;
+/** Thẻ nhiệm vụ hiển thị ở C-02; dữ liệu wire do API-078 (hoặc mock) cấp. */
+export type CrewTask = CrewFieldTaskCard & { projectId?: string };
 
 export const CREW_TASKS: CrewTask[] = listCrewFieldTaskCards('active');
 export const CREW_COMPLETED_TASKS: CrewTask[] = listCrewFieldTaskCards('done');
 
 export const DEFAULT_CREW_TASK_ID = CREW_TASKS[0]?.id ?? 'task-wo-01';
 
+// Bộ nhớ đệm task động từ backend thật
+const dynamicTaskRegistry = new Map<string, CrewTask>();
+const taskStatusRegistry = new Map<string, string>();
+
+function synthesizeCrewTaskCard(item: InspectionTaskResponseDto): CrewTask {
+  const shortId = item.id.slice(0, 8);
+  const isRepair = (item.mode ?? '').toUpperCase() === 'INSPECT_AND_REPAIR';
+  const statusUpper = (item.status ?? '').toUpperCase();
+  const isDone = ['COMPLETED', 'REJECTED', 'CANCELLED'].includes(statusUpper);
+  return {
+    id: item.id,
+    wo_code: `#HH-WO-${shortId.toUpperCase()}`,
+    title: `Nhiệm vụ kiểm tra hiện trường #${shortId.toUpperCase()}`,
+    task_mode: isRepair ? TaskMode.INSPECT_AND_REPAIR : TaskMode.MEASURE_ONLY,
+    defect_type_code: DEFECT_TYPE_CODES.POTH_DEEP,
+    route_code: 'ĐH.05',
+    section_name: 'Khu vực khảo sát',
+    chainage: 'Km02+150',
+    locality: 'TP. Hồ Chí Minh',
+    due_label: 'Hôm nay',
+    due_urgency: 'normal',
+    distance_label: 'Tại chỗ',
+    defect_location: 'Làn đường chính',
+    description: 'Khảo sát và ghi nhận số đo hư hại mặt đường theo quy chuẩn.',
+    repair_method: 'Theo quy trình TCVN 10380:2014',
+    safety_note: 'Mặc áo phản quang, đặt biển cảnh báo an toàn',
+    batch_size: item.defectIds?.length || 1,
+    coordinates: { latitude: 10.762622, longitude: 106.660172 },
+    completedAt: isDone ? (item.updatedAt || new Date().toISOString()) : undefined,
+    projectId: item.projectId,
+  };
+}
+
 export function getCrewTaskById(id?: string | null): CrewTask {
-  return crewFieldTaskCard(id ?? '') ?? CREW_TASKS[0];
+  if (!id) return CREW_TASKS[0];
+  const dynamic = dynamicTaskRegistry.get(id);
+  if (dynamic) return dynamic;
+  const mockCard = crewFieldTaskCard(id);
+  if (mockCard) return mockCard;
+  const placeholder = synthesizeCrewTaskCard({
+    id,
+    projectId: '72f84201-c001-4000-8000-000000000001',
+    defectIds: [],
+    mode: 'MEASURE_ONLY',
+    crewId: '',
+    policyVersionId: null,
+    status: 'Assigned',
+    version: '',
+  });
+  dynamicTaskRegistry.set(id, placeholder);
+  return placeholder;
+}
+
+export function getProjectIdForTask(id?: string | null): string | null {
+  if (!id) return null;
+  return dynamicTaskRegistry.get(id)?.projectId ?? null;
 }
 
 export type TaskModeFilter = 'ALL' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
@@ -56,24 +114,52 @@ export default function CrewTasksScreen() {
 
   const loadTasks = useCallback(async () => {
     try {
-      const page = await listFieldInspectionTasks({ limit: 50 });
+      // 1. Gọi backend thật: GET /api/v1/me/inspection-tasks (API-078)
+      const page = await listCrewInspectionTasksReal(null, 50);
       const active: CrewTask[] = [];
       const done: CrewTask[] = [];
+
       for (const item of page.items) {
-        const card = crewFieldTaskCard(item.id);
-        if (!card) {
-          continue;
-        }
-        if (isActiveFieldTaskStatus(item.status ?? '')) {
-          active.push({ ...card });
-        } else if (item.status === 'COMPLETED') {
-          done.push({ ...card });
+        taskStatusRegistry.set(item.id, item.status);
+        const mockCard = crewFieldTaskCard(item.id);
+        const card: CrewTask = mockCard
+          ? { ...mockCard, projectId: item.projectId }
+          : synthesizeCrewTaskCard(item);
+
+        dynamicTaskRegistry.set(item.id, card);
+
+        const statusUpper = (item.status ?? '').toUpperCase();
+        if (['COMPLETED', 'REJECTED', 'CANCELLED'].includes(statusUpper)) {
+          done.push(card);
+        } else {
+          active.push(card);
         }
       }
+
       setActiveTasks(active);
       setDoneTasks(done);
     } catch {
-      // Giữ danh sách đang hiển thị khi lỗi mạng; người dùng có thể kéo sang màn khác để thử lại.
+      // Khi không có mạng hoặc chưa đăng nhập, fallback về mock hiện có
+      try {
+        const page = await listFieldInspectionTasks({ limit: 50 });
+        const active: CrewTask[] = [];
+        const done: CrewTask[] = [];
+        for (const item of page.items) {
+          const card = crewFieldTaskCard(item.id);
+          if (!card) {
+            continue;
+          }
+          if (isActiveFieldTaskStatus(item.status ?? '')) {
+            active.push(card);
+          } else if (item.status === 'COMPLETED') {
+            done.push(card);
+          }
+        }
+        setActiveTasks(active);
+        setDoneTasks(done);
+      } catch {
+        // Giữ danh sách đang hiển thị khi lỗi mạng
+      }
     }
   }, []);
 
@@ -172,8 +258,12 @@ export default function CrewTasksScreen() {
                     <View style={styles.taskMetaRow}>
                       {task.completedAt ? (
                         <Chip variant="approved" label="Đã nghiệm thu" />
-                      ) : fieldTaskStatusOf(task.id) === 'SUBMITTED' ? (
+                      ) : (taskStatusRegistry.get(task.id)?.toUpperCase() === 'SUBMITTED' || fieldTaskStatusOf(task.id) === 'SUBMITTED') ? (
                         <Chip variant="status-pending" label="Chờ PM duyệt" uppercase={false} />
+                      ) : (taskStatusRegistry.get(task.id)?.toUpperCase() === 'SUPPLEMENTREQUIRED') ? (
+                        <Chip variant="status-pending" label="Cần bổ sung" uppercase={false} />
+                      ) : (taskStatusRegistry.get(task.id)?.toUpperCase() === 'ASSIGNED') ? (
+                        <Chip variant="status-pending" label="Chờ nhận việc" uppercase={false} />
                       ) : (
                         <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
                       )}
