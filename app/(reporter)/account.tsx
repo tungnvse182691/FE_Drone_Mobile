@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { RoleCode } from '../../src/types/enums';
-import { requestPasswordRecovery } from '../../src/api/mock/auth';
+import { requestPasswordRecoveryReal } from '../../src/api/authApi';
 import {
   AUTH_FORCE_CHANGE_PASSWORD,
   REPORTER_PROFILE,
@@ -37,23 +37,32 @@ export default function ReporterAccountScreen() {
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const recoveryLock = useRef(false);
+  const [recoveryUncertain, setRecoveryUncertain] = useState(false);
 
   const roleLabel = user ? ROLE_LABELS[user.role_code] ?? 'Người dùng' : 'Khách';
 
   const sendRecovery = async () => {
+    if (recoveryLock.current || recoveryUncertain) return;
     setNotice(null);
     setError(null);
-    if (!recoveryEmail.includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail.trim()) || recoveryEmail.trim().length > 254) {
       setError('Vui lòng nhập địa chỉ email hợp lệ.');
       return;
     }
     setRecoveryBusy(true);
+    recoveryLock.current = true;
     try {
-      await requestPasswordRecovery(recoveryEmail);
-      setNotice('Đã ghi nhận yêu cầu khôi phục mật khẩu. Vui lòng kiểm tra email để tiếp tục.');
-    } catch {
-      setError('Không gửi được yêu cầu khôi phục. Vui lòng thử lại.');
+      await requestPasswordRecoveryReal(recoveryEmail);
+      setNotice('Đã ghi nhận yêu cầu khôi phục mật khẩu. Yêu cầu sẽ được xử lý theo quy trình hỗ trợ.');
+    } catch (caught) {
+      const status = (caught as { response?: { status?: number } })?.response?.status;
+      if (!status || status >= 500 || status === 408) {
+        setRecoveryUncertain(true);
+        setError('Chưa xác nhận được yêu cầu khôi phục. Không gửi lại tự động; vui lòng liên hệ hỗ trợ trước khi gửi thêm.');
+      } else setError('Thông tin chưa hợp lệ hoặc yêu cầu chưa được chấp nhận. Vui lòng kiểm tra lại.');
     } finally {
+      recoveryLock.current = false;
       setRecoveryBusy(false);
     }
   };
@@ -128,6 +137,7 @@ export default function ReporterAccountScreen() {
           title="Gửi yêu cầu khôi phục"
           onPress={() => void sendRecovery()}
           loading={recoveryBusy}
+          disabled={recoveryUncertain}
         />
       </View>
 

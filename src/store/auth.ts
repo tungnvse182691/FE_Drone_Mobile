@@ -29,6 +29,8 @@ type PersistedAuth = {
 };
 
 interface AuthState {
+  forcedChangeUsername: string | null;
+  beginForcedPasswordChange: (username: string) => void;
   status: AuthStatus;
   user: User | null;
   role: RoleCode | null;
@@ -104,6 +106,9 @@ export function buildUserFromActor(
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
+      forcedChangeUsername: null,
+      // Ephemeral routing context only; never contains a password or grants a session.
+      beginForcedPasswordChange: (username) => set({ forcedChangeUsername: username.trim() }),
       status: 'SIGNED_OUT',
       user: null,
       role: null,
@@ -122,6 +127,7 @@ export const useAuthStore = create<AuthState>()(
           must_change_password: mustChangePassword,
         };
         set({
+          forcedChangeUsername: null,
           status: 'AUTHENTICATED',
           user: nextUser,
           role: nextUser.role_code,
@@ -134,6 +140,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         const accessToken = get().token;
         set({
+          forcedChangeUsername: null,
           status: 'SIGNED_OUT',
           user: null,
           role: null,

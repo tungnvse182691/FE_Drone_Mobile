@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -15,38 +15,10 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, spacing, typography } from '../../src/design-tokens';
 import {
-  changePassword as apiChangePassword,
-  forcedChangePassword as apiForcedChangePassword,
-} from '../../src/api/mock/auth';
+  changePasswordReal, forcedChangePasswordReal, passwordValidationMessage,
+  passwordFailureMessage, passwordSessionIdentity, preparePasswordAttempt, type PasswordAttempt,
+} from '../../src/api/authApi';
 import { useAuthStore } from '../../src/store/auth';
-import { ROLE_HOMES } from '../../src/constants/routes';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
-import { uuidv4 } from '../../src/utils/uuid';
-
-/** BE trả `code` top-level; mock ném `{ response: { data: { code, message } } }`. */
-function problemOf(error: unknown): { code: string | null; message: string | null } {
-  if (typeof error !== 'object' || error === null) {
-    return { code: null, message: null };
-  }
-  const carrier = error as { code?: unknown; response?: { data?: unknown } };
-  const data = carrier.response?.data as
-    | { code?: unknown; message?: unknown; detail?: unknown }
-    | undefined;
-  return {
-    code:
-      typeof carrier.code === 'string'
-        ? carrier.code
-        : typeof data?.code === 'string'
-          ? data.code
-          : null,
-    message:
-      typeof data?.message === 'string'
-        ? data.message
-        : typeof data?.detail === 'string'
-          ? data.detail
-          : null,
-  };
-}
 
 export default function ForceChangePasswordScreen() {
   const [oldPassword, setOldPassword] = useState('');
@@ -58,72 +30,60 @@ export default function ForceChangePasswordScreen() {
 
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
-  const login = useAuthStore((state) => state.login);
+  const status = useAuthStore((state) => state.status);
+  const forcedUsername = useAuthStore((state) => state.forcedChangeUsername);
+  const attempt = useRef<PasswordAttempt | null>(null);
+  const busy = useRef(false);
   const logout = useAuthStore((state) => state.logout);
   const router = useRouter();
 
-  const isForced = user?.must_change_password === true;
+  const hasSession = !!user && !!token && (status === 'AUTHENTICATED' || status === 'REFRESHING');
+  const isForced = user?.must_change_password === true || !!forcedUsername;
 
   const handleChangePassword = async () => {
-    if (!user) {
+    if (busy.current) return;
+    const validation = passwordValidationMessage(oldPassword, newPassword, confirmPassword);
+    if (validation) { setError(validation); return; }
+    if (!hasSession && !forcedUsername) {
+      setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
       return;
     }
-    if (newPassword.length < 6) {
-      setError('Mật khẩu mới phải có ít nhất 6 ký tự');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Mật khẩu mới không khớp');
-      return;
-    }
-    if (newPassword === oldPassword) {
-      setError('Mật khẩu mới không được trùng mật khẩu cũ');
-      return;
-    }
+    const identity = passwordSessionIdentity(token);
+    if (hasSession && !identity) { setError('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.'); return; }
+    const snapshot = { identity, userId: user?.id, forcedUsername };
+    const stillOwnsForm = () => {
+      const current = useAuthStore.getState();
+      return passwordSessionIdentity(current.token) === snapshot.identity && current.user?.id === snapshot.userId &&
+        current.forcedChangeUsername === snapshot.forcedUsername;
+    };
+    busy.current = true;
     setLoading(true);
     setError(null);
+    const command = preparePasswordAttempt(attempt.current, {
+      identity: hasSession ? identity! : forcedUsername!, mode: hasSession ? 'session' : 'forced',
+      username: hasSession ? user!.phone_or_email : forcedUsername!,
+      currentPassword: oldPassword, newPassword, confirmPassword,
+    });
+    attempt.current = command;
     try {
-      if (isForced && !token) {
-        // API-005: đổi mật khẩu BẮT BUỘC — gọi ẩn danh bằng username, KHÔNG cần bearer.
-        await apiForcedChangePassword({
-          username: user.phone_or_email,
-          currentPassword: oldPassword,
-          newPassword,
-          confirmPassword,
-          operationId: uuidv4(),
+      if (command.mode === 'session') {
+        await changePasswordReal(token!, command.currentPassword, command.newPassword, command.key);
+      } else {
+        await forcedChangePasswordReal({
+          username: command.username, currentPassword: command.currentPassword,
+          newPassword: command.newPassword, confirmPassword: command.confirmPassword, operationId: command.key,
         });
-      } else {
-        // API-004: đổi mật khẩu theo phiên (bearer + Idempotency-Key).
-        if (!token) {
-          setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
-          logout();
-          return;
-        }
-        const changeScope = `auth:change-password:${user.id}`;
-        await apiChangePassword(
-          token,
-          oldPassword,
-          newPassword,
-          getOrCreateCommandKey(changeScope),
-        );
-        clearCommandKey(changeScope);
       }
-      const updatedUser = {
-        ...user,
-        token: token ?? user.token,
-        must_change_password: false,
-      };
-      login(updatedUser);
-      if (!isForced && router.canGoBack()) {
-        router.back();
-      } else {
-        const home = ROLE_HOMES[updatedUser.role_code];
-        router.replace(home ? (home as any) : ('/(auth)' as any));
-      }
+      attempt.current = null;
+      setOldPassword(''); setNewPassword(''); setConfirmPassword('');
+      if (!stillOwnsForm()) return;
+      // Candidate3 revokes sessions/security stamp on either password mutation.
+      logout();
+      router.replace({ pathname: '/(auth)', params: { passwordChanged: '1' } });
     } catch (caught) {
-      const problem = problemOf(caught);
-      setError(problem.message ?? 'Không đổi được mật khẩu. Vui lòng thử lại.');
+      if (stillOwnsForm()) setError(passwordFailureMessage(caught));
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };

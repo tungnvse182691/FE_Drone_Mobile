@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -33,6 +33,7 @@ export default function LoginScreen() {
   const login = useAuthStore((state) => state.login);
   const pendingReport = useReporterStore((state) => state.pendingDraft);
   const router = useRouter();
+  const { passwordChanged } = useLocalSearchParams<{ passwordChanged?: string }>();
 
   const isSubmitDisabled = !phoneOrEmail.trim() || !password.trim();
 
@@ -86,8 +87,10 @@ export default function LoginScreen() {
       } else if (code === 'auth_account_locked' || code === 'auth_account_disabled') {
         setError('Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.');
       } else if (code === 'auth_password_change_required') {
-        // Server báo phải đổi mật khẩu — vào flow đổi mật khẩu bắt buộc.
-        setError('Cần phiên đăng nhập hợp lệ để đổi mật khẩu.');
+        // Candidate3 normally returns 200 + mustChangePassword; handle explicit 403 too.
+        useAuthStore.getState().beginForcedPasswordChange(phoneOrEmail);
+        setPassword('');
+        router.replace('/(auth)/force-change-password');
       } else {
         setError('Không kết nối được máy chủ. Kiểm tra mạng và thử lại.');
       }
@@ -129,6 +132,9 @@ export default function LoginScreen() {
 
           {/* Card trắng chứa form đăng nhập - bo 20, bóng nhẹ, tiêu đề Đăng nhập tác nghiệp */}
           <View style={styles.loginCard}>
+            {passwordChanged === '1' ? (
+              <Text style={[typography.caption, styles.pendingNoticeText]}>Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.</Text>
+            ) : null}
             {pendingReport ? (
               <View style={styles.pendingNotice}>
                 <MaterialIcons name="info-outline" size={16} color={colors.info} />

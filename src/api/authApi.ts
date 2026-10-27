@@ -1,8 +1,7 @@
 /**
  * authApi.ts — Gọi các endpoint Auth thật của RoadGuard Backend.
  *
- * Tất cả hàm ở đây dùng `bareClient` (không có interceptor auth/retry) để tránh
- * vòng lặp vô tận khi login / refresh / logout.
+ * Bootstrap/anonymous dùng bareClient; thao tác có phiên dùng apiClient.
  *
  * Wire response shape (AuthTokenResponseDto):
  *   { accessToken, refreshToken, tokenType, expiresIn, mustChangePassword,
@@ -15,8 +14,9 @@
  */
 
 import type { AxiosError } from 'axios';
-import { bareClient, apiClient, type TokenPair } from './client';
+import { bareClient, apiClient, type TokenPair, type ForcedPasswordChangeRequest } from './client';
 import { parseProblemDetails } from './problemDetails';
+import { uuidv4 } from '../utils/uuid';
 
 // ---------------------------------------------------------------------------
 // Request / Response shapes (wire types)
@@ -141,3 +141,81 @@ export async function fetchProfile(): Promise<ProfileWire> {
 
 // Re-export để caller có thể kiểm tra code lỗi mà không import thêm
 export { extractProblemCode };
+
+/** API-004: caller owns the in-memory command key. No automatic mutation replay. */
+export async function changePasswordReal(
+  token: string, currentPassword: string, newPassword: string, key: string,
+): Promise<void> {
+  const response = await apiClient.post('/auth/change-password', { currentPassword, newPassword }, {
+    headers: { Authorization: `Bearer ${token}`, 'Idempotency-Key': key },
+  });
+  if (response.status !== 204) throw new Error('unexpected_password_status');
+}
+
+/** API-005: credentials, never Bearer. operationId must survive manual retry. */
+export async function forcedChangePasswordReal(body: ForcedPasswordChangeRequest): Promise<void> {
+  const response = await bareClient.post('/auth/forced-password-change', body);
+  if (response.status !== 204) throw new Error('unexpected_password_status');
+}
+
+/** API-008 acknowledges receipt only; it does not reset a password or promise email. */
+export async function requestPasswordRecoveryReal(email: string): Promise<void> {
+  const response = await bareClient.post('/auth/password-recovery-requests', { email: email.trim().toLowerCase() });
+  if (response.status !== 202) throw new Error('unexpected_recovery_status');
+}
+
+export interface PasswordAttemptInput {
+  identity: string;
+  mode: 'session' | 'forced';
+  username: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+export type PasswordAttempt = PasswordAttemptInput & { key: string };
+
+/** Continuity only (sub/sid from Candidate3), never authorization. Hermes-safe. */
+export function passwordSessionIdentity(token: string | null): string | null {
+  try {
+    const parts = token?.split('.');
+    if (parts?.length !== 3) return null;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+    if (!encoded || /[^A-Za-z0-9+/]/.test(encoded) || encoded.length % 4 === 1) return null;
+    let bits = 0, value = 0, json = '';
+    for (const character of encoded) {
+      value = (value << 6) | alphabet.indexOf(character); bits += 6;
+      if (bits >= 8) { bits -= 8; json += String.fromCharCode((value >>> bits) & 255); }
+    }
+    const claims = JSON.parse(json) as { sub?: unknown; sid?: unknown };
+    return typeof claims.sub === 'string' && claims.sub && typeof claims.sid === 'string' && claims.sid
+      ? JSON.stringify([claims.sub, claims.sid]) : null;
+  } catch { return null; }
+}
+
+/** Memory only: never send to storage, routes or logs. Changed input gets a new key. */
+export function preparePasswordAttempt(previous: PasswordAttempt | null, input: PasswordAttemptInput): PasswordAttempt {
+  if (previous && (Object.keys(input) as Array<keyof PasswordAttemptInput>).every(key => previous[key] === input[key])) return previous;
+  return { ...input, key: uuidv4() };
+}
+
+export function passwordValidationMessage(current: string, next: string, confirm: string): string | null {
+  if (!current.trim() || !next.trim()) return 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới.';
+  if (current.length > 1024 || next.length > 1024) return 'Mật khẩu không được vượt quá 1024 ký tự.';
+  if (next.length < 6) return 'Mật khẩu mới phải có ít nhất 6 ký tự; máy chủ kiểm tra chính sách mật khẩu.';
+  if (next !== confirm) return 'Mật khẩu mới không khớp.';
+  if (next === current) return 'Mật khẩu mới không được trùng mật khẩu cũ.';
+  return null;
+}
+
+export function passwordFailureMessage(error: unknown): string {
+  const status = (error as AxiosError)?.response?.status;
+  const code = (error as AxiosError)?.code === 'auth_session_changed' ? 'auth_session_changed' : extractProblemCode(error);
+  if (code === 'auth_session_changed') return 'Phiên đăng nhập đã thay đổi. Vui lòng đăng nhập lại.';
+  if (!status || status >= 500 || status === 408) return 'Chưa xác nhận được kết quả. Giữ nguyên thông tin khi thử lại hoặc đăng nhập bằng mật khẩu mới để kiểm tra.';
+  if (status === 401) return 'Mật khẩu hiện tại không đúng hoặc phiên đã hết hạn. Vui lòng kiểm tra hoặc đăng nhập lại.';
+  if (status === 409) return 'Yêu cầu có xung đột. Vui lòng đăng nhập lại để kiểm tra trước khi đổi tiếp.';
+  if (status === 400) return 'Thông tin chưa hợp lệ hoặc mật khẩu không đạt chính sách máy chủ.';
+  if (status === 403) return 'Phiên không được phép đổi mật khẩu. Vui lòng đăng nhập lại.';
+  return 'Không thực hiện được yêu cầu. Vui lòng thử lại.';
+}
