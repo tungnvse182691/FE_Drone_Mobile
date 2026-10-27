@@ -19,12 +19,13 @@ import { EmptyState } from '../../src/components/EmptyState';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
-  acceptOperatorSurveyTask,
-  getOperatorSurveyTask,
-  getOperatorWorkPackage,
-  type OperatorSurveyTaskV2Dto,
-  type OperatorSurveyTaskWorkPackageDto,
-} from '../../src/api/mock/surveys';
+  acceptOperatorSurveyTaskReal,
+  getOperatorSurveyTaskDetailReal,
+  getOperatorWorkPackageReal,
+  isConcurrencyConflict,
+  type SurveyTaskV2ResponseDto,
+  type SurveyTaskWorkPackageDto,
+} from '../../src/api/droneApi';
 import {
   operatorTaskDisplayCode,
   operatorTaskSegmentCount,
@@ -77,8 +78,8 @@ export default function DroneRequestDetailScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
 
-  const [task, setTask] = useState<OperatorSurveyTaskV2Dto | null>(null);
-  const [workPackage, setWorkPackage] = useState<OperatorSurveyTaskWorkPackageDto | null>(null);
+  const [task, setTask] = useState<SurveyTaskV2ResponseDto | null>(null);
+  const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
   const [etag, setEtag] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,11 +90,11 @@ export default function DroneRequestDetailScreen() {
     setLoading(true);
     setLoadError(null);
     try {
-      const detail = await getOperatorSurveyTask(target);
+      const detail = await getOperatorSurveyTaskDetailReal(target);
       setTask(detail.data);
       setEtag(detail.etag);
       try {
-        const work = await getOperatorWorkPackage(target);
+        const work = await getOperatorWorkPackageReal(target);
         setWorkPackage(work.data);
       } catch {
         setWorkPackage(null);
@@ -140,12 +141,9 @@ export default function DroneRequestDetailScreen() {
     setAcceptError(null);
     const keyScope = `drone:accept:${task.id}`;
     try {
-      const fresh = await getOperatorSurveyTask(task.id);
+      const fresh = await getOperatorSurveyTaskDetailReal(task.id);
       setEtag(fresh.etag);
-      const accepted = await acceptOperatorSurveyTask(task.id, {
-        idempotencyKey: getOrCreateCommandKey(keyScope),
-        ifMatch: fresh.etag,
-      });
+      const accepted = await acceptOperatorSurveyTaskReal(task.id, fresh.etag, getOrCreateCommandKey(keyScope));
       clearCommandKey(keyScope);
       setTask(accepted.data);
       setEtag(accepted.etag);
@@ -155,7 +153,7 @@ export default function DroneRequestDetailScreen() {
         error as { response?: { status?: number; data?: unknown } } | undefined
       )?.response;
       const code = parseProblemDetails(response?.data).code;
-      if (response?.status === 412 || code === 'concurrency_conflict') {
+      if (isConcurrencyConflict(error) || response?.status === 412 || code === 'concurrency_conflict') {
         setAcceptError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại để xem phiên bản mới nhất.');
         await loadTask();
       } else if (response?.status === 401) {
@@ -241,7 +239,8 @@ export default function DroneRequestDetailScreen() {
       );
     }
 
-    const canAccept = task.status === 'NewAssigned';
+    const s = task.status?.toUpperCase();
+    const canAccept = s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED' || task.status === 'NewAssigned';
 
     return (
       <>

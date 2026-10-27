@@ -9,11 +9,11 @@ import { EmptyState } from '../../src/components/EmptyState';
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
 import {
-  getOperatorGeometryPackage,
-  getOperatorWorkPackage,
-  type OperatorGeometryPackageViewDto,
-  type OperatorSurveyTaskWorkPackageDto,
-} from '../../src/api/mock/surveys';
+  getOperatorGeometryPackageReal,
+  getOperatorWorkPackageReal,
+  type GeometryPackageViewDto,
+  type SurveyTaskWorkPackageDto,
+} from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /**
@@ -74,8 +74,8 @@ export default function DroneWorkPackageScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
 
-  const [workPackage, setWorkPackage] = useState<OperatorSurveyTaskWorkPackageDto | null>(null);
-  const [geometry, setGeometry] = useState<OperatorGeometryPackageViewDto | null>(null);
+  const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
+  const [geometry, setGeometry] = useState<GeometryPackageViewDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,13 +83,16 @@ export default function DroneWorkPackageScreen() {
     setLoading(true);
     setError(null);
     try {
-      const wp = await getOperatorWorkPackage(target);
+      const wp = await getOperatorWorkPackageReal(target);
       setWorkPackage(wp.data);
-      const gp = await getOperatorGeometryPackage(wp.data.task.projectId, {
-        routeVersionId: wp.data.geometryRefs[0]?.routeVersionId,
-        segmentSetId: wp.data.geometryRefs[0]?.segmentSetId,
-      });
-      setGeometry(gp.data);
+      const ref = wp.data.geometryRefs?.[0];
+      if (ref && wp.data.task.projectId) {
+        const gp = await getOperatorGeometryPackageReal(wp.data.task.projectId, {
+          routeVersionId: ref.routeVersionId,
+          segmentSetId: ref.segmentSetId,
+        });
+        setGeometry(gp.data);
+      }
     } catch (err) {
       setError(operatorErrorMessage(err));
       setWorkPackage(null);
@@ -146,7 +149,7 @@ export default function DroneWorkPackageScreen() {
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Hạn bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {formatDateTime(workPackage.dueAt)}
+              {formatDateTime(workPackage.dueAt ?? null)}
             </Text>
           </View>
         </Card>

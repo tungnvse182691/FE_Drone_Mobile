@@ -1,14 +1,17 @@
-import React from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
+import { EmptyState } from '../../src/components/EmptyState';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
+import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
+import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -16,75 +19,50 @@ const softShadow = Platform.select({
   default: {},
 });
 
-interface DroneTask {
-  code: string;
-  displayCode: string;
-  title: string;
-  subtitle: string;
-  priority: 'urgent' | 'pending';
-  chipVariant: 'severity-high' | 'severity-medium' | 'severity-low';
-  chipLabel: string;
-  iconName: keyof typeof MaterialIcons.glyphMap;
-  iconBg: string;
-  iconColor: string;
-}
-
-export const INITIAL_DRONE_TASKS: DroneTask[] = [
-  {
-    code: '#HH-KS-089',
-    displayCode: 'Mã: HH-KS-089',
-    title: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
-    subtitle: 'Xói lở vai đường mép taluy âm • Cần ảnh 4K RGB & DSM (ODM)',
-    priority: 'urgent',
-    chipVariant: 'severity-high',
-    chipLabel: 'KHẨN CẤP',
-    iconName: 'warning',
-    iconBg: colors.surfaceAlt,
-    iconColor: colors.secondary,
-  },
-  {
-    code: '#HH-KS-090',
-    displayCode: 'Mã: HH-KS-090',
-    title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
-    subtitle: 'Kiểm tra ổ gà sâu & nứt tấm bê tông • 2.4 km',
-    priority: 'pending',
-    chipVariant: 'severity-medium',
-    chipLabel: 'CHỜ KHẢO SÁT',
-    iconName: 'explore',
-    iconBg: colors.surfaceAlt,
-    iconColor: colors.secondary,
-  },
-  {
-    code: '#HH-KS-088',
-    displayCode: 'Mã: HH-KS-088',
-    title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
-    subtitle: 'Ảnh trực quan 3D tiến độ thi công hạ tầng',
-    priority: 'pending',
-    chipVariant: 'severity-medium',
-    chipLabel: 'CHỜ KHẢO SÁT',
-    iconName: 'alt-route',
-    iconBg: colors.surfaceAlt,
-    iconColor: colors.secondary,
-  },
-];
-
 export default function DroneHomeScreen() {
   const user = useAuthStore((state) => state.user);
-  const tasks = INITIAL_DRONE_TASKS;
-  const urgentCount = tasks.filter((t) => t.priority === 'urgent').length;
-  const pendingCount = tasks.length - urgentCount;
+  const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchTasks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const page = await listOperatorSurveyTasksReal(null, 50);
+      setTasks(page.items || []);
+    } catch {
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void fetchTasks();
+    }, [fetchTasks]),
+  );
+
+  const pendingTasks = tasks.filter((t) => {
+    const s = t.status?.toUpperCase();
+    return s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED';
+  });
+  const ongoingTasks = tasks.filter((t) => {
+    const s = t.status?.toUpperCase();
+    return s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS';
+  });
+  const urgentCount = pendingTasks.length;
+  const ongoingCount = ongoingTasks.length;
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
-
       {/* Greeting Header */}
       <View style={styles.greetingHeader}>
         <View style={styles.greetingTextGroup}>
           <Text style={[typography.headlineLg, styles.greetingName]}>
-            Chào, {user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Nguyễn Văn An'}
+            Chào, {user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Kỹ thuật viên Drone'}
           </Text>
           <Text style={[typography.caption, styles.greetingMeta]}>
-            Kỹ thuật viên Drone • Đội Khảo sát Số 2
+            Phi công hiện trường • {user?.phone_or_email ?? 'RoadGuard'}
           </Text>
         </View>
         <View style={styles.readyBadge}>
@@ -93,7 +71,7 @@ export default function DroneHomeScreen() {
         </View>
       </View>
 
-      {/* Minimal Unified KPI & Telemetry Strip */}
+      {/* KPI Metric Strip */}
       <Card style={styles.metricStripCard}>
         <View style={styles.metricMainRow}>
           <View style={styles.metricIconWrap}>
@@ -101,9 +79,9 @@ export default function DroneHomeScreen() {
           </View>
           <View style={styles.metricContent}>
             <Text style={[typography.headlineLg, styles.metricNumber]}>{tasks.length}</Text>
-            <Text style={[typography.caption, styles.metricDesc]}>yêu cầu khảo sát hôm nay</Text>
+            <Text style={[typography.caption, styles.metricDesc]}>nhiệm vụ khảo sát được gán</Text>
             <Text style={[typography.caption, styles.metricSub]}>
-              {urgentCount} khẩn cấp • {pendingCount} chờ khảo sát
+              {urgentCount} chờ tiếp nhận • {ongoingCount} đang thực hiện
             </Text>
           </View>
         </View>
@@ -113,11 +91,11 @@ export default function DroneHomeScreen() {
         <View style={styles.telemetryStripRow}>
           <View style={styles.telemetryTag}>
             <MaterialIcons name="cloud-queue" size={15} color={colors.secondary} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Gió 8.4 km/h • An toàn</Text>
+            <Text style={[typography.caption, styles.telemetryTagText]}>Thời tiết: An toàn bay</Text>
           </View>
           <View style={styles.telemetryTag}>
             <MaterialIcons name="battery-charging-full" size={15} color={colors.success} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Pin M350-HH-02: 98% (4 cụm)</Text>
+            <Text style={[typography.caption, styles.telemetryTagText]}>Thiết bị: Sẵn sàng</Text>
           </View>
         </View>
       </Card>
@@ -126,12 +104,13 @@ export default function DroneHomeScreen() {
       <View style={styles.quickAccessRow}>
         <AnimatedPressable
           style={styles.quickButton}
-          onPress={() =>
+          onPress={() => {
+            const firstActive = ongoingTasks[0] || tasks[0];
             router.push({
               pathname: '/(drone)/upload',
-              params: { code: '#HH-KS-089' },
-            })
-          }
+              params: firstActive ? { code: operatorTaskDisplayCode(firstActive.id), taskId: firstActive.id } : {},
+            });
+          }}
           accessibilityRole="button"
         >
           <MaterialIcons name="sd-card" size={18} color={colors.primaryDark} />
@@ -140,16 +119,11 @@ export default function DroneHomeScreen() {
 
         <AnimatedPressable
           style={styles.quickButton}
-          onPress={() =>
-            router.push({
-              pathname: '/(drone)/log',
-              params: { code: '#HH-KS-089' },
-            })
-          }
+          onPress={() => router.push('/(drone)/log')}
           accessibilityRole="button"
         >
           <MaterialIcons name="history" size={18} color={colors.primaryDark} />
-          <Text style={[typography.labelSm, styles.quickButtonText]}>Nhật ký bay</Text>
+          <Text style={[typography.labelSm, styles.quickButtonText]}>Nhật ký lệnh</Text>
         </AnimatedPressable>
 
         <AnimatedPressable
@@ -170,55 +144,87 @@ export default function DroneHomeScreen() {
           accessibilityRole="button"
           style={styles.seeAllPress}
         >
-          <Text style={[typography.caption, styles.seeAll]}>Xem tất cả</Text>
+          <Text style={[typography.caption, styles.seeAll]}>Xem tất cả ({tasks.length})</Text>
           <MaterialIcons name="chevron-right" size={16} color={colors.primaryDark} />
         </AnimatedPressable>
       </View>
 
-      {/* Tasks List Matching Figma Image 1 */}
-      <View style={styles.taskList}>
-        {tasks.map((task) => (
-          <AnimatedPressable
-            key={task.code}
-            onPress={() =>
-              router.push({
-                pathname: '/(drone)/request-detail',
-                params: { code: task.code },
-              })
-            }
-            accessibilityRole="button"
-          >
-            <Card style={styles.taskCardItem}>
-              <View
-                style={[
-                  styles.rail,
-                  { backgroundColor: task.priority === 'urgent' ? colors.error : colors.warning },
-                ]}
-              />
+      {/* Tasks List */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[typography.caption, styles.loadingText]}>Đang đọc nhiệm vụ khảo sát…</Text>
+        </View>
+      ) : tasks.length === 0 ? (
+        <EmptyState
+          icon="flight-takeoff"
+          title="Chưa có nhiệm vụ"
+          message="Bạn chưa có nhiệm vụ khảo sát nào được giao trên hệ thống."
+          actionLabel="Tải lại"
+          onAction={() => void fetchTasks()}
+        />
+      ) : (
+        <View style={styles.taskList}>
+          {tasks.slice(0, 5).map((task) => {
+            const displayCode = operatorTaskDisplayCode(task.id);
+            const statusLabel = operatorTaskStatusLabel(task.status);
+            const totalSegments = task.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
+            const targetBand = task.scope?.[0]?.targetBand ?? '—';
+            const s = task.status?.toUpperCase();
+            const isPending = s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED';
+            const isOngoing = s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS';
 
-              <View style={[styles.taskIconBox, { backgroundColor: task.iconBg }]}>
-                <MaterialIcons name={task.iconName} size={20} color={task.iconColor} />
-              </View>
+            return (
+              <AnimatedPressable
+                key={task.id}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(drone)/request-detail',
+                    params: { taskId: task.id, code: displayCode },
+                  })
+                }
+                accessibilityRole="button"
+              >
+                <Card style={styles.taskCardItem}>
+                  <View
+                    style={[
+                      styles.rail,
+                      { backgroundColor: isPending ? colors.warning : isOngoing ? colors.primary : colors.success },
+                    ]}
+                  />
 
-              <View style={styles.taskContentBox}>
-                <View style={styles.taskBadgeRow}>
-                  <Chip variant={task.chipVariant} label={task.chipLabel} />
-                  <Text style={[typography.caption, styles.taskCodeText]}>
-                    {task.displayCode}
-                  </Text>
-                </View>
+                  <View style={[styles.taskIconBox, { backgroundColor: colors.surfaceAlt }]}>
+                    <MaterialIcons
+                      name={isPending ? 'explore' : isOngoing ? 'flight-takeoff' : 'check-circle'}
+                      size={20}
+                      color={isPending ? colors.warning : isOngoing ? colors.primary : colors.success}
+                    />
+                  </View>
 
-                <Text style={[typography.titleMd, styles.taskTitleText]}>{task.title}</Text>
-                <Text style={[typography.caption, styles.taskSubtitleText]} numberOfLines={1}>
-                  {task.subtitle}
-                </Text>
-              </View>
+                  <View style={styles.taskContentBox}>
+                    <View style={styles.taskBadgeRow}>
+                      <Chip
+                        variant={isPending ? 'status-pending' : isOngoing ? 'severity-medium' : 'approved'}
+                        label={statusLabel}
+                      />
+                      <Text style={[typography.caption, styles.taskCodeText]}>{displayCode}</Text>
+                    </View>
 
-              <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-            </Card>
-          </AnimatedPressable>
-        ))}
-      </View>
+                    <Text style={[typography.titleMd, styles.taskTitleText]}>
+                      Dải {targetBand} • {totalSegments} phân đoạn
+                    </Text>
+                    <Text style={[typography.caption, styles.taskSubtitleText]} numberOfLines={1}>
+                      Dự án: {task.projectId.slice(0, 8).toUpperCase()}… • Bản: {task.version ?? '—'}
+                    </Text>
+                  </View>
+
+                  <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
+                </Card>
+              </AnimatedPressable>
+            );
+          })}
+        </View>
+      )}
     </SafeAreaScreen>
   );
 }
@@ -251,9 +257,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   readyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.full,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
     backgroundColor: colors.success,
   },
   readyText: {
@@ -262,33 +268,31 @@ const styles = StyleSheet.create({
   metricStripCard: {
     padding: spacing.md,
     marginBottom: spacing.md,
-    borderRadius: radius.md,
+    ...softShadow,
   },
   metricMainRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
   },
   metricIconWrap: {
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: spacing.md,
   },
   metricContent: {
     flex: 1,
   },
   metricNumber: {
-    color: colors.primary,
-    fontSize: 30,
-    lineHeight: 34,
-    fontWeight: '700',
+    color: colors.neutral,
+    lineHeight: 30,
   },
   metricDesc: {
     color: colors.secondary,
-    marginTop: 2,
+    fontWeight: '500',
   },
   metricSub: {
     color: colors.secondary,
@@ -301,28 +305,25 @@ const styles = StyleSheet.create({
   },
   telemetryStripRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.sm,
   },
   telemetryTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
   },
   telemetryTagText: {
-    color: colors.neutral,
-    fontSize: 12,
+    color: colors.secondary,
   },
   quickAccessRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   quickButton: {
     flex: 1,
@@ -330,12 +331,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    minHeight: 48,
     backgroundColor: colors.surface,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: 10,
+    ...softShadow,
   },
   quickButtonText: {
     color: colors.primaryDark,
@@ -343,8 +344,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'baseline',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.sm,
   },
   sectionTitle: {
@@ -353,22 +354,32 @@ const styles = StyleSheet.create({
   seeAllPress: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 2,
   },
   seeAll: {
     color: colors.primaryDark,
     fontWeight: '600',
   },
+  loadingContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  loadingText: {
+    color: colors.secondary,
+  },
   taskList: {
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    paddingBottom: spacing.xl,
   },
   taskCardItem: {
+    position: 'relative',
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderRadius: radius.xl,
-    overflow: 'hidden',
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
+    paddingVertical: spacing.md,
     ...softShadow,
   },
   rail: {
@@ -377,35 +388,33 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    borderTopLeftRadius: radius.xl,
-    borderBottomLeftRadius: radius.xl,
   },
   taskIconBox: {
-    width: 44,
-    height: 44,
+    width: 38,
+    height: 38,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: spacing.md,
   },
   taskContentBox: {
     flex: 1,
-    gap: 2,
   },
   taskBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
+    gap: spacing.xs,
+    marginBottom: 4,
   },
   taskCodeText: {
     color: colors.secondary,
-    fontSize: 12,
+    fontWeight: '500',
   },
   taskTitleText: {
     color: colors.neutral,
+    marginBottom: 2,
   },
   taskSubtitleText: {
     color: colors.secondary,
-    fontSize: 12,
   },
 });

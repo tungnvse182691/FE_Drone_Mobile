@@ -1,4 +1,4 @@
-import type { OperatorSurveyTaskV2Dto } from './mock/surveys';
+import type { SurveyTaskV2ResponseDto } from './droneApi';
 import { operatorTaskSeedCode } from './mock/surveys';
 
 /**
@@ -11,18 +11,27 @@ import { operatorTaskSeedCode } from './mock/surveys';
 
 const STATUS_LABEL: Record<string, string> = {
   NewAssigned: 'Mới giao',
+  NEW_ASSIGNED: 'Mới giao',
   Accepted: 'Đã nhận',
+  ACCEPTED: 'Đã nhận',
   InProgress: 'Đang thực hiện',
+  IN_PROGRESS: 'Đang thực hiện',
   Submitted: 'Đã nộp',
+  SUBMITTED: 'Đã nộp',
   SupplementRequired: 'Cần bổ sung',
+  SUPPLEMENT_REQUIRED: 'Cần bổ sung',
   Completed: 'Hoàn tất',
+  COMPLETED: 'Hoàn tất',
   Rejected: 'Đã từ chối',
+  REJECTED: 'Đã từ chối',
   Cancelled: 'Đã huỷ',
+  CANCELLED: 'Đã huỷ',
   Postponed: 'Tạm hoãn',
+  POSTPONED: 'Tạm hoãn',
 };
 
 export function operatorTaskStatusLabel(status: string): string {
-  return STATUS_LABEL[status] ?? 'Đang cập nhật';
+  return STATUS_LABEL[status] ?? STATUS_LABEL[status?.toUpperCase()] ?? 'Đang cập nhật';
 }
 
 /**
@@ -39,10 +48,14 @@ export function operatorTaskDisplayCode(taskId: string, seedCode?: string | null
   return `#HH-${compact.slice(0, 8)}`;
 }
 
-export function operatorTaskTargetBand(task: OperatorSurveyTaskV2Dto): string {
+export interface TaskWithScopeLike {
+  scope: { targetBand: string; segmentIds: string[] }[];
+}
+
+export function operatorTaskTargetBand(task: TaskWithScopeLike): string {
   return task.scope[0]?.targetBand ?? '—';
 }
 
-export function operatorTaskSegmentCount(task: OperatorSurveyTaskV2Dto): number {
+export function operatorTaskSegmentCount(task: TaskWithScopeLike): number {
   return task.scope.reduce((total, scope) => total + scope.segmentIds.length, 0);
 }

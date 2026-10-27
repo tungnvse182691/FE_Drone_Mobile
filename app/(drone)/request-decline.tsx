@@ -12,12 +12,13 @@ import { DRONE_REQUEST_DETAIL, DRONE_REQUESTS } from '../../src/constants/routes
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
 import {
-  declineOperatorSurveyTask,
-  getOperatorSurveyTask,
-  getOperatorWorkPackage,
-  type OperatorSurveyTaskV2Dto,
-  type OperatorSurveyTaskWorkPackageDto,
-} from '../../src/api/mock/surveys';
+  declineOperatorSurveyTaskReal,
+  getOperatorSurveyTaskDetailReal,
+  getOperatorWorkPackageReal,
+  isConcurrencyConflict,
+  type SurveyTaskV2ResponseDto,
+  type SurveyTaskWorkPackageDto,
+} from '../../src/api/droneApi';
 import {
   operatorTaskDisplayCode,
   operatorTaskSegmentCount,
@@ -72,8 +73,8 @@ export default function DroneRequestDeclineScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
 
-  const [detail, setDetail] = useState<OperatorSurveyTaskV2Dto | null>(null);
-  const [workPackage, setWorkPackage] = useState<OperatorSurveyTaskWorkPackageDto | null>(null);
+  const [detail, setDetail] = useState<SurveyTaskV2ResponseDto | null>(null);
+  const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -94,10 +95,10 @@ export default function DroneRequestDeclineScreen() {
     setLoading(true);
     setLoadError(null);
     try {
-      const { data } = await getOperatorSurveyTask(target);
+      const { data } = await getOperatorSurveyTaskDetailReal(target);
       setDetail(data);
       try {
-        const work = await getOperatorWorkPackage(target);
+        const work = await getOperatorWorkPackageReal(target);
         setWorkPackage(work.data);
       } catch {
         setWorkPackage(null);
@@ -125,20 +126,16 @@ export default function DroneRequestDeclineScreen() {
     setSubmitting(true);
     try {
       // Đọc lại API-226 ngay trước khi gửi để lấy If-Match mới nhất.
-      const fresh = await getOperatorSurveyTask(detail.id);
-      const result = await declineOperatorSurveyTask(fresh.data.id, {
-        reason: reason.trim(),
-        idempotencyKey: idempotencyKey(),
-        ifMatch: fresh.etag,
-      });
+      const fresh = await getOperatorSurveyTaskDetailReal(detail.id);
+      const result = await declineOperatorSurveyTaskReal(fresh.data.id, reason.trim(), fresh.etag, idempotencyKey());
       setDetail(result.data);
-      if (result.data.status === 'Rejected') {
+      if (result.data.status?.toUpperCase() === 'REJECTED' || result.data.status === 'Rejected') {
         setDone(true);
       }
     } catch (error) {
       const status = operatorHttpStatus(error);
       const code = operatorErrorCode(error);
-      if (code === 'concurrency_conflict' || code === 'precondition_required' || status === 412) {
+      if (isConcurrencyConflict(error) || code === 'concurrency_conflict' || code === 'precondition_required' || status === 412) {
         await loadDetail();
         Alert.alert(
           'Nhiệm vụ đã thay đổi',

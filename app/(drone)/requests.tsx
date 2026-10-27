@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
+import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
+import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
+import { parseProblemDetails } from '../../src/api/problemDetails';
+import { messageFor } from '../../src/api/errorCatalog';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -16,88 +21,80 @@ const softShadow = Platform.select({
 
 type TabKey = 'pending' | 'ongoing' | 'completed';
 
-interface SurveyRequest {
+interface SurveyRequestItem {
   id: string;
   code: string;
   timeAgo: string;
   title: string;
   location: string;
   note: string;
-  status: 'new' | 'ongoing' | 'uploaded';
+  statusRaw: string;
   statusLabel: string;
   tab: TabKey;
   isCurrentTask?: boolean;
 }
 
-const REQUESTS_DATA: SurveyRequest[] = [
-  {
-    id: '1',
-    code: '#HH-KS-089',
-    timeAgo: '30 phút trước',
-    title: 'Tuyến ĐH.05 - Tân Kiên Km03+100',
-    location: 'Tân Kiên, Bình Chánh, TP.HCM',
-    note: 'Ghi chú: Khảo sát xói lở vai đường và sạt lở mép taluy',
-    status: 'new',
-    statusLabel: 'KHẨN CẤP',
-    tab: 'pending',
-  },
-  {
-    id: '2',
-    code: '#HH-KS-090',
-    timeAgo: 'Hôm nay, 08:15',
-    title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
-    location: 'Vĩnh Lộc B, Bình Chánh, TP.HCM',
-    note: 'Kiểm tra ổ gà sâu & nứt tấm bê tông • 2.4 km',
-    status: 'new',
-    statusLabel: 'MỚI',
-    tab: 'pending',
-  },
-  {
-    id: '3',
-    code: '#HH-KS-087',
-    timeAgo: 'Hôm nay, 07:30',
-    title: 'Tuyến ĐH.05 - Ngã ba Tân Kiên',
-    location: 'Tân Kiên, Bình Chánh, TP.HCM',
-    note: 'Drone Matrice 350 sẵn sàng cất cánh',
-    status: 'ongoing',
-    statusLabel: 'ĐANG THỰC HIỆN',
-    tab: 'ongoing',
-    isCurrentTask: true,
-  },
-  {
-    id: '4',
-    code: '#HH-KS-088',
-    timeAgo: 'Hôm qua, 15:40',
-    title: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
-    location: 'Cầu Bà Lát, Bình Chánh, TP.HCM',
-    note: 'Ghi chú: Đoạn vỡ mép tấm và khe co giãn dầm cầu',
-    status: 'new',
-    statusLabel: 'MỚI',
-    tab: 'pending',
-  },
-  {
-    id: '5',
-    code: '#HH-KS-085',
-    timeAgo: '20/10/2023',
-    title: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
-    location: 'Vĩnh Lộc B, Bình Chánh, TP.HCM',
-    note: 'Video 4K RGB đã tải lên máy chủ đối soát',
-    status: 'uploaded',
-    statusLabel: 'ĐÃ GỬI VIDEO',
-    tab: 'completed',
-  },
-];
+function classifyTab(status: string): TabKey {
+  const s = status?.toUpperCase();
+  if (s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED') return 'pending';
+  if (s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS') return 'ongoing';
+  return 'completed';
+}
+
+function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
+  const tab = classifyTab(dto.status);
+  const totalSegments = dto.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
+  const targetBand = dto.scope?.[0]?.targetBand ?? '—';
+  const isOngoing = tab === 'ongoing';
+
+  return {
+    id: dto.id,
+    code: operatorTaskDisplayCode(dto.id),
+    timeAgo: 'Đã giao',
+    title: `Khảo sát dải ${targetBand} • ${totalSegments} phân đoạn`,
+    location: `Mã dự án: ${dto.projectId.slice(0, 8).toUpperCase()}…`,
+    note: `Phiên bản: ${dto.version ?? '—'}`,
+    statusRaw: dto.status,
+    statusLabel: operatorTaskStatusLabel(dto.status),
+    tab,
+    isCurrentTask: isOngoing,
+  };
+}
 
 export default function DroneRequestsScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('pending');
+  const [tasks, setTasks] = useState<SurveyRequestItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const pendingCount = REQUESTS_DATA.filter((r) => r.tab === 'pending').length;
+  const fetchTasks = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const page = await listOperatorSurveyTasksReal(null, 50);
+      const mapped = (page.items || []).map(mapDtoToItem);
+      setTasks(mapped);
+    } catch (err) {
+      const data = (err as { response?: { data?: unknown } })?.response?.data;
+      const code = parseProblemDetails(data).code;
+      setError(code ? messageFor(code) : 'Không thể tải danh sách nhiệm vụ khảo sát.');
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const filteredRequests = REQUESTS_DATA.filter((item) => {
-    if (activeTab === 'pending') return item.tab === 'pending';
-    if (activeTab === 'ongoing') return item.tab === 'ongoing';
-    return item.tab === 'completed';
-  });
+  useFocusEffect(
+    useCallback(() => {
+      void fetchTasks();
+    }, [fetchTasks]),
+  );
+
+  const pendingCount = tasks.filter((r) => r.tab === 'pending').length;
+  const ongoingCount = tasks.filter((r) => r.tab === 'ongoing').length;
+  const completedCount = tasks.filter((r) => r.tab === 'completed').length;
+
+  const filteredRequests = tasks.filter((item) => item.tab === activeTab);
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
@@ -129,7 +126,7 @@ export default function DroneRequestsScreen() {
           onPress={() => setActiveTab('pending')}
         >
           <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextActive]}>
-            Chờ nhận ({REQUESTS_DATA.filter((r) => r.tab === 'pending').length})
+            Chờ nhận ({pendingCount})
           </Text>
         </Pressable>
 
@@ -138,7 +135,7 @@ export default function DroneRequestsScreen() {
           onPress={() => setActiveTab('ongoing')}
         >
           <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
-            Đang bay ({REQUESTS_DATA.filter((r) => r.tab === 'ongoing').length})
+            Đang thực hiện ({ongoingCount})
           </Text>
         </Pressable>
 
@@ -147,7 +144,7 @@ export default function DroneRequestsScreen() {
           onPress={() => setActiveTab('completed')}
         >
           <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextActive]}>
-            Đã xong ({REQUESTS_DATA.filter((r) => r.tab === 'completed').length})
+            Đã xong ({completedCount})
           </Text>
         </Pressable>
       </View>
@@ -155,85 +152,111 @@ export default function DroneRequestsScreen() {
       {/* Header Info Section */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
-          ĐOẠN ĐƯỜNG CẦN KIỂM TRA ({filteredRequests.length})
+          NHIỆM VỤ KHẢO SÁT ({filteredRequests.length})
         </Text>
-        <View style={styles.filterChip}>
-          <MaterialIcons name="near-me" size={14} color={colors.primary} />
-          <Text style={[typography.caption, styles.filterChipText]}>Ưu tiên gần bạn</Text>
+        <Pressable style={styles.filterChip} onPress={() => void fetchTasks()}>
+          <MaterialIcons name="refresh" size={14} color={colors.primary} />
+          <Text style={[typography.caption, styles.filterChipText]}>Làm mới</Text>
+        </Pressable>
+      </View>
+
+      {/* Content */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[typography.caption, styles.loadingText]}>Đang tải danh sách nhiệm vụ…</Text>
         </View>
-      </View>
-
-      {/* Requests List */}
-      <View style={styles.listContainer}>
-        {filteredRequests.map((item) => {
-          const isOngoing = item.isCurrentTask;
-          const isUrgent = item.statusLabel === 'KHẨN CẤP';
-          const railColor =
-            item.tab === 'pending'
-              ? isUrgent
-                ? colors.error
-                : colors.warning
-              : item.tab === 'ongoing'
-                ? colors.border
+      ) : error ? (
+        <EmptyState
+          icon="error-outline"
+          title="Không tải được nhiệm vụ"
+          message={error}
+          actionLabel="Thử lại"
+          onAction={() => void fetchTasks()}
+        />
+      ) : filteredRequests.length === 0 ? (
+        <EmptyState
+          icon="flight-takeoff"
+          title="Không có nhiệm vụ"
+          message={
+            activeTab === 'pending'
+              ? 'Hiện tại không có nhiệm vụ mới đang chờ tiếp nhận.'
+              : activeTab === 'ongoing'
+                ? 'Không có nhiệm vụ nào đang trong quá trình thực hiện.'
+                : 'Chưa có nhiệm vụ nào hoàn tất trong mục này.'
+          }
+          actionLabel="Tải lại"
+          onAction={() => void fetchTasks()}
+        />
+      ) : (
+        <View style={styles.listContainer}>
+          {filteredRequests.map((item) => {
+            const isOngoing = item.isCurrentTask;
+            const isPending = item.tab === 'pending';
+            const railColor = isPending
+              ? colors.warning
+              : isOngoing
+                ? colors.primary
                 : colors.success;
-          return (
-            <Pressable
-              key={item.id}
-              onPress={() =>
-                router.push({
-                  pathname: '/(drone)/request-detail',
-                  params: { code: item.code },
-                })
-              }
-              accessibilityRole="button"
-            >
-              <Card style={[styles.requestCard, isOngoing && styles.requestCardHighlight]}>
-                <View style={[styles.rail, { backgroundColor: railColor }]} />
-                {isOngoing && (
-                  <View style={styles.floatingTaskBadge}>
-                    <Text style={styles.floatingBadgeText}>NHIỆM VỤ HIỆN TẠI</Text>
-                  </View>
-                )}
 
-                <View style={styles.cardHeader}>
-                  <View style={styles.metaRow}>
-                    <Text style={[typography.caption, styles.codeText]}>{item.code}</Text>
-                    <Text style={[typography.caption, styles.timeText]}>• {item.timeAgo}</Text>
-                  </View>
-
-                  {item.status === 'new' && (
-                    <Chip
-                      variant={isUrgent ? 'severity-high' : 'status-pending'}
-                      label={item.statusLabel}
-                    />
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() =>
+                  router.push({
+                    pathname: '/(drone)/request-detail',
+                    params: { taskId: item.id, code: item.code },
+                  })
+                }
+                accessibilityRole="button"
+              >
+                <Card style={[styles.requestCard, isOngoing && styles.requestCardHighlight]}>
+                  <View style={[styles.rail, { backgroundColor: railColor }]} />
+                  {isOngoing && (
+                    <View style={styles.floatingTaskBadge}>
+                      <Text style={styles.floatingBadgeText}>ĐANG THỰC HIỆN</Text>
+                    </View>
                   )}
-                  {item.status === 'ongoing' && (
-                    <Chip variant="severity-medium" label={item.statusLabel} />
-                  )}
-                  {item.status === 'uploaded' && <Chip variant="approved" label={item.statusLabel} />}
-                </View>
 
-                <Text style={[typography.titleMd, styles.roadTitle]}>{item.title}</Text>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.metaRow}>
+                      <Text style={[typography.caption, styles.codeText]}>{item.code}</Text>
+                      <Text style={[typography.caption, styles.timeText]}>• {item.timeAgo}</Text>
+                    </View>
 
-                <View style={styles.locationRow}>
-                  <MaterialIcons name="location-on" size={16} color={colors.secondary} />
-                  <Text style={[typography.bodyMd, styles.locationText]}>{item.location}</Text>
-                </View>
-
-                <View style={styles.cardFooter}>
-                  <Text style={[typography.caption, styles.noteText]} numberOfLines={1}>
-                    {item.note}
-                  </Text>
-                  <View style={styles.detailArrow}>
-                    <Text style={[typography.labelSm, styles.detailLink]}>Chi tiết</Text>
-                    <MaterialIcons name="arrow-forward" size={14} color={colors.primary} />
+                    {item.tab === 'pending' && (
+                      <Chip variant="status-pending" label={item.statusLabel} />
+                    )}
+                    {item.tab === 'ongoing' && (
+                      <Chip variant="severity-medium" label={item.statusLabel} />
+                    )}
+                    {item.tab === 'completed' && (
+                      <Chip variant="approved" label={item.statusLabel} />
+                    )}
                   </View>
-                </View>
-              </Card>
-            </Pressable>
-          );
-        })}
-      </View>
+
+                  <Text style={[typography.titleMd, styles.roadTitle]}>{item.title}</Text>
+
+                  <View style={styles.locationRow}>
+                    <MaterialIcons name="folder-open" size={16} color={colors.secondary} />
+                    <Text style={[typography.bodyMd, styles.locationText]}>{item.location}</Text>
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <Text style={[typography.caption, styles.noteText]} numberOfLines={1}>
+                      {item.note}
+                    </Text>
+                    <View style={styles.detailArrow}>
+                      <Text style={[typography.labelSm, styles.detailLink]}>Chi tiết</Text>
+                      <MaterialIcons name="arrow-forward" size={14} color={colors.primary} />
+                    </View>
+                  </View>
+                </Card>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </SafeAreaScreen>
   );
 }
@@ -249,80 +272,74 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: spacing.sm,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topTabItemActive: {
     position: 'relative',
   },
-  topTabItemActive: {},
   topTabTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   topTabTitleActive: {
+    ...typography.labelLg,
+    color: colors.primary,
+  },
+  topTabTitleInactive: {
     ...typography.bodyMd,
-    color: colors.neutral,
-    fontWeight: '700',
+    color: colors.secondary,
   },
   countBadgeActive: {
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.primary,
     borderRadius: radius.full,
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
   countBadgeTextActive: {
-    fontSize: 10,
-    color: colors.primaryDark,
+    ...typography.caption,
+    color: colors.surface,
     fontWeight: 'bold',
   },
   activeUnderline: {
     position: 'absolute',
     bottom: -1,
-    left: 20,
-    right: 20,
-    height: 2.5,
+    left: spacing.lg,
+    right: spacing.lg,
+    height: 3,
     backgroundColor: colors.primary,
-    borderRadius: radius.full,
-  },
-  topTabTitleInactive: {
-    ...typography.bodyMd,
-    color: colors.secondary,
-    fontWeight: '500',
+    borderRadius: radius.sm,
   },
   tabRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    height: 44,
-    gap: spacing.xs,
     backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,
-    padding: 4,
+    padding: 3,
     marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   tabButton: {
     flex: 1,
-    height: '100%',
+    paddingVertical: spacing.xs + 2,
     alignItems: 'center',
-    justifyContent: 'center',
     borderRadius: radius.sm,
   },
   tabButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surface,
+    ...softShadow,
   },
   tabText: {
     ...typography.labelSm,
     color: colors.secondary,
   },
   tabTextActive: {
-    color: colors.onPrimary,
-    fontWeight: '700',
+    color: colors.neutral,
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.sm,
-    paddingHorizontal: 2,
   },
   sectionTitle: {
     color: colors.secondary,
@@ -331,27 +348,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
   },
   filterChipText: {
-    color: colors.primaryDark,
-    fontWeight: '600',
+    color: colors.primary,
+  },
+  loadingContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  loadingText: {
+    color: colors.secondary,
   },
   listContainer: {
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   requestCard: {
-    marginBottom: spacing.sm,
     position: 'relative',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
-    ...softShadow,
+    overflow: 'hidden',
+    paddingLeft: spacing.lg,
   },
   requestCardHighlight: {
     borderColor: colors.primary,
-    borderWidth: 2,
-    marginTop: spacing.sm,
+    borderWidth: 1.5,
   },
   rail: {
     position: 'absolute',
@@ -359,46 +383,43 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
-    borderTopLeftRadius: radius.xl,
-    borderBottomLeftRadius: radius.xl,
   },
   floatingTaskBadge: {
     position: 'absolute',
-    top: -10,
-    left: spacing.md,
+    top: 0,
+    right: 0,
     backgroundColor: colors.primary,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: radius.sm,
-    zIndex: 10,
+    borderBottomLeftRadius: radius.sm,
   },
   floatingBadgeText: {
-    color: colors.onPrimary,
-    fontSize: 9,
+    ...typography.caption,
+    color: colors.surface,
     fontWeight: 'bold',
+    fontSize: 10,
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.xs,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
   },
   codeText: {
-    color: colors.primaryDark,
     fontWeight: 'bold',
-    fontFamily: 'Roboto',
+    color: colors.neutral,
   },
   timeText: {
     color: colors.secondary,
   },
   roadTitle: {
     color: colors.neutral,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
   },
   locationRow: {
     flexDirection: 'row',
@@ -408,15 +429,15 @@ const styles = StyleSheet.create({
   },
   locationText: {
     color: colors.secondary,
-    fontSize: 13,
+    flex: 1,
   },
   cardFooter: {
-    borderTopWidth: 1,
-    borderTopColor: colors.surfaceAlt,
-    paddingTop: spacing.xs,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: spacing.xs,
   },
   noteText: {
     color: colors.secondary,
@@ -429,7 +450,6 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   detailLink: {
-    color: colors.primaryDark,
-    fontWeight: '700',
+    color: colors.primary,
   },
 });

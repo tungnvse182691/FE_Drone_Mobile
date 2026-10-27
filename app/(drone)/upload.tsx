@@ -8,8 +8,15 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { getOperatorSurveyTask, submitOperatorSurveyDataset } from '../../src/api/mock/surveys';
-import { uploadOperatorFile } from '../../src/api/operator-uploads';
+import {
+  getOperatorSurveyTaskDetailReal,
+  listOperatorSurveyTasksReal,
+  uploadOperatorFileReal,
+  submitOperatorDatasetReal,
+  isConcurrencyConflict,
+  FIXTURE_DRONE_DEVICE_ID,
+} from '../../src/api/droneApi';
+import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 
 const softShadow = Platform.select({
@@ -103,7 +110,7 @@ const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
 };
 
 export default function DroneUploadScreen() {
-  const params = useLocalSearchParams<{ code?: string }>();
+  const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const initialCode = params.code && UPLOAD_CONFIGS[params.code] ? params.code : '#HH-KS-089';
   const [selectedCode, setSelectedCode] = useState<string>(initialCode);
 
@@ -154,6 +161,7 @@ export default function DroneUploadScreen() {
         copyToCacheDirectory: false,
       });
 
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         setVideoName(file.name);
@@ -175,6 +183,7 @@ export default function DroneUploadScreen() {
         type: '*/*',
         copyToCacheDirectory: false,
       });
+
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
@@ -221,10 +230,22 @@ export default function DroneUploadScreen() {
     try {
       setUploadStep('QUEUED');
 
-      const fresh = await getOperatorSurveyTask(selectedCode);
+      let taskIdToFetch = params.taskId;
+      if (!taskIdToFetch || !/^[0-9a-fA-F-]{36}$/.test(taskIdToFetch)) {
+        const taskPage = await listOperatorSurveyTasksReal();
+        const allTasks = taskPage.items;
+        const found = allTasks.find(
+          (t) => t.id === taskIdToFetch || operatorTaskDisplayCode(t.id) === selectedCode,
+        );
+        taskIdToFetch = found ? found.id : allTasks[0]?.id;
+      }
+      if (!taskIdToFetch) {
+        throw new Error('Không tìm thấy nhiệm vụ khảo sát phù hợp để nộp dữ liệu.');
+      }
+      const fresh = await getOperatorSurveyTaskDetailReal(taskIdToFetch);
       const task = fresh.data;
 
-      const video = await uploadOperatorFile(
+      const video = await uploadOperatorFileReal(
         {
           uri: videoUri,
           fileName: videoName,
@@ -234,7 +255,7 @@ export default function DroneUploadScreen() {
           targetId: task.id,
           commandKey: `${keyScope}:video`,
         },
-        (percent) => {
+        (percent: number) => {
           setUploadStep('UPLOADING');
           setUploadProgress(Math.min(99, percent));
           setStatusMsg(`Đang tải tệp video 4K RGB lên máy chủ: ${Math.min(99, percent)}%`);
@@ -242,7 +263,7 @@ export default function DroneUploadScreen() {
       );
       setVideoSha(`${video.checksumSha256.slice(0, 12)}…${video.checksumSha256.slice(-4)} — đã đối chiếu`);
 
-      const srt = await uploadOperatorFile({
+      const srt = await uploadOperatorFileReal({
         uri: srtUri,
         fileName: srtName,
         mediaType: 'application/x-subrip',
@@ -251,19 +272,20 @@ export default function DroneUploadScreen() {
         targetId: task.id,
         commandKey: `${keyScope}:telemetry`,
       });
+
       setSrtSha(`${srt.checksumSha256.slice(0, 12)}…${srt.checksumSha256.slice(-4)} — đã đối chiếu`);
 
       setStatusMsg('Đang nộp bộ dữ liệu kèm phạm vi khảo sát…');
-      await submitOperatorSurveyDataset(task.id, {
+      await submitOperatorDatasetReal(task.id, {
         videoFileIds: [video.fileId],
         telemetryFileIds: [srt.fileId],
         recordedAt: new Date().toISOString(),
-        deviceId: getDeviceId(),
+        deviceId: FIXTURE_DRONE_DEVICE_ID,
         scope: task.scope,
         pairs: [{ videoFileId: video.fileId, telemetryFileId: srt.fileId, timeOffsetMilliseconds: 0 }],
-        idempotencyKey: getOrCreateCommandKey(keyScope),
-        ifMatch: fresh.etag,
-      });
+      }, fresh.etag, getOrCreateCommandKey(keyScope));
+
+
 
       clearCommandKey(keyScope);
       setUploadStep('SERVER_CONFIRMED');
@@ -284,7 +306,7 @@ export default function DroneUploadScreen() {
       }
       if (response?.status === 503 || code === 'upload_storage_unavailable') {
         setSubmitError('Máy chủ lưu trữ đang bận. Vui lòng thử lại sau ít phút.');
-      } else if (response?.status === 409 || response?.status === 412) {
+      } else if (isConcurrencyConflict(error) || response?.status === 409 || response?.status === 412) {
         setSubmitError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại nhiệm vụ rồi nộp lại.');
       } else if (code === 'validation_error' || code === 'survey_validation_failed') {
         setSubmitError('Bộ dữ liệu chưa hợp lệ. Kiểm tra lại tệp video và tệp GPS.');

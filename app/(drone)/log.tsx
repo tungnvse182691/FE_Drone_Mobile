@@ -11,7 +11,10 @@ import { Toast } from '../../src/components/Toast';
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
 import {
-  getOperatorUploadSession,
+  getOperatorUploadSessionReal,
+  getOperatorSurveyTaskDetailReal,
+} from '../../src/api/droneApi';
+import {
   listOperatorCommands,
   reconcileOperatorCommand,
   replayOperatorCommand,
@@ -236,7 +239,7 @@ export default function DroneLogScreen() {
     }
     setBusyCommandId(record.commandId);
     try {
-      const { data } = await getOperatorUploadSession(record.uploadId);
+      const data = await getOperatorUploadSessionReal(record.uploadId);
       setUploadStatusText((prev) => ({
         ...prev,
         [record.commandId]: `Trạng thái tệp trên máy chủ: ${
