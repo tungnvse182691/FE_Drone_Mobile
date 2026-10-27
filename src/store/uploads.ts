@@ -13,8 +13,9 @@ import {
   planUploadParts,
   sha256HexOfBytes,
   uploadErrorCode,
-  uploadErrorMessage,
+  isReporterSession,
 } from '../api/uploads';
+import { useAuthStore } from './auth';
 import type {
   CompletedUploadPartDto,
   LocationSource,
@@ -22,7 +23,6 @@ import type {
   UploadTransport,
 } from '../api/uploads';
 import { hasUsableCoordinate } from '../types/position';
-import { createMockUploadTransport } from '../api/mock/reporter';
 
 /**
  * Hàng đợi upload ảnh private của Reporter (RPT-05/RPT-06).
@@ -34,12 +34,13 @@ import { createMockUploadTransport } from '../api/mock/reporter';
  * checksum, ETag từng part, version) đều ghi xuống đĩa để resume qua API-212 sau khi app bị kill.
  */
 
-/** BE thật chưa sẵn sàng (`API_BASE_URL` vẫn là placeholder) → mặc định chạy mock. */
-const USE_MOCK_UPLOAD = true;
-
-export const uploadTransport: UploadTransport = USE_MOCK_UPLOAD
-  ? createMockUploadTransport()
-  : httpUploadTransport;
+// Guard every authenticated call, including foreground/background queue entry points.
+export const uploadTransport: UploadTransport = Object.fromEntries(
+  Object.entries(httpUploadTransport).map(([name, method]) => [name, (...args: unknown[]) => {
+    if (!isReporterSession(useAuthStore.getState())) throw { code: 'auth_unauthorized', status: 401 };
+    return (method as (...values: unknown[]) => unknown)(...args);
+  }]),
+) as unknown as UploadTransport;
 
 export type UploadMediaState =
   | 'LOCAL_READY'
@@ -302,7 +303,20 @@ type ItemPatch = Partial<UploadQueueItem>;
 type ItemUpdater = (patch: ItemPatch) => Promise<UploadQueueItem>;
 
 /** Bước 2→6 của 03_Private-Photo-Upload.md. Idempotent: chạy lại sẽ resume từ part còn thiếu. */
-async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<UploadQueueItem> {
+async function runPipeline(item: UploadQueueItem, update: ItemUpdater, transport: UploadTransport): Promise<UploadQueueItem> {
+  if (item.mediaState === 'COMPLETE_REQUESTED' || item.mediaState === 'VERIFYING') {
+    const checked = await pollVerification(item, update, transport);
+    if (checked.mediaState === 'VERIFIED' || checked.mediaState === 'FAILED') return checked;
+    const session = await transport.getSession(item.uploadId!);
+    if (['VERIFYING', 'VERIFIED', 'COMPLETED'].includes(session.status?.toUpperCase() ?? '')) return checked;
+    // Unknown complete outcome: replay the frozen command, never adopt a new precondition.
+    const parts = planUploadParts(item.sizeBytes, item.partSizeBytes).map(part => ({
+      partNumber: part.partNumber, eTag: item.partETags[String(part.partNumber)],
+    }));
+    await transport.completeUpload(item.uploadId!, { parts, checksumSha256: item.checksumSha256 },
+      item.sessionVersion!, `complete:${item.id}:${item.checksumSha256}`);
+    return update({ mediaState: 'VERIFYING' });
+  }
   const bytes = await readPhotoBytes(item.uriLocal);
   if (bytes.byteLength <= 0) {
     throw { code: 'upload_validation_failed', message: 'Tệp ảnh rỗng, vui lòng chụp lại.' };
@@ -314,11 +328,14 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<
   const checksum = await sha256HexOfBytes(bytes);
   let current = item;
   if (current.sizeBytes !== bytes.byteLength || current.checksumSha256 !== checksum) {
+    if (current.uploadId || current.attempt > 0) {
+      throw { code: 'upload_bytes_changed', message: 'Ảnh đã thay đổi. Giữ nguyên phiên cũ; vui lòng chọn lại ảnh cho một lần gửi mới.' };
+    }
     current = await update({ sizeBytes: bytes.byteLength, checksumSha256: checksum });
   }
 
   if (!current.uploadId || !current.fileId) {
-    const created = await uploadTransport.createSession(
+    const created = await transport.createSession(
       {
         fileName: current.fileName,
         mediaType: current.mediaType,
@@ -333,6 +350,7 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<
       sessionVersion: created.version,
       serverStatus: created.status,
       mediaState: 'SESSION_CREATED',
+      partSizeBytes: created.partSizeBytes,
     });
   }
 
@@ -348,11 +366,17 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<
   const parts = planUploadParts(bytes.byteLength, current.partSizeBytes);
   const missingParts = parts.filter((part) => !current.partETags[String(part.partNumber)]);
   if (missingParts.length > 0) {
-    const urlsResponse = await uploadTransport.requestPartUrls(
+    const previousExpiry = current.partETags._urlsExpireAt;
+    if (!current.partETags._urlsKey || (previousExpiry && Date.parse(previousExpiry) <= Date.now())) {
+      current = await update({ partETags: { ...current.partETags, _urlsKey: uuidv4(), _urlsExpireAt: '' } });
+    }
+    const urlsResponse = await transport.requestPartUrls(
       uploadId,
-      { partNumbers: missingParts.map((part) => part.partNumber) },
-      `parts:${current.id}:${current.sessionVersion ?? ''}`,
+      { partNumbers: parts.map((part) => part.partNumber) },
+      current.partETags._urlsKey,
     );
+    const expiries = (urlsResponse.parts ?? []).map(part => part.expiresAt).filter((v): v is string => Boolean(v));
+    if (expiries.length) current = await update({ partETags: { ...current.partETags, _urlsExpireAt: expiries.sort()[0] } });
     const urlByPartNumber = new Map<number, UploadPartUrlResponseDto>();
     for (const part of urlsResponse.parts ?? []) {
       if (typeof part.partNumber === 'number') {
@@ -367,7 +391,7 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<
           message: 'Không lấy được URL tải lên cho một phần của ảnh.',
         };
       }
-      const stored = await uploadTransport.putPart(
+      const stored = await transport.putPart(
         partUrl,
         bytes.subarray(range.start, range.end),
         current.mediaType,
@@ -387,7 +411,10 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<
     throw { code: 'upload_validation_failed', message: 'Thiếu ETag của một số phần ảnh.' };
   }
 
-  const completed = await uploadTransport.completeUpload(
+  const session = await transport.getSession(uploadId);
+  if (!session.version) throw { code: 'precondition_required', status: 428 };
+  current = await update({ sessionVersion: session.version, mediaState: 'COMPLETE_REQUESTED' });
+  const completed = await transport.completeUpload(
     uploadId,
     { parts: completedParts, checksumSha256: checksum },
     current.sessionVersion ?? '',
@@ -395,19 +422,19 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater): Promise<
   );
   return update({
     mediaState: 'COMPLETE_REQUESTED',
-    sessionVersion: completed.version,
     serverStatus: completed.status,
   });
 }
 
 /** Bước 7: poll API-208 tới khi terminal. `UNKNOWN` KHÔNG được coi là xong. */
-async function pollVerification(item: UploadQueueItem, update: ItemUpdater): Promise<UploadQueueItem> {
+async function pollVerification(item: UploadQueueItem, update: ItemUpdater, transport: UploadTransport): Promise<UploadQueueItem> {
   if (!item.fileId) {
     throw { code: 'upload_validation_failed', message: 'Thiếu mã tệp để xác minh.' };
   }
-  const metadata = await uploadTransport.getFileMetadata(item.fileId);
+  const metadata = await transport.getFileMetadata(item.fileId);
   const status = parseFileStatus(metadata.status);
-  if (status === 'VERIFIED') {
+  if (status === 'VERIFIED' && metadata.id === item.fileId && metadata.version &&
+      metadata.checksumSha256 === item.checksumSha256 && metadata.sizeBytes === item.sizeBytes) {
     return update({
       mediaState: 'VERIFIED',
       serverStatus: metadata.status,
@@ -464,7 +491,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
   watching: false,
 
   setPartition(partitionId) {
-    set({ partitionId });
+    set({ partitionId, items: [], hydrated: false });
     void get().hydrate(partitionId);
   },
 
@@ -472,7 +499,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     const target = partitionId ?? get().partitionId;
     set({ partitionId: target, hydrated: false });
     const items = await loadItems(target);
-    set({ items, hydrated: true });
+    if (get().partitionId === target) set({ items, hydrated: true });
   },
 
   async enqueuePhoto(input) {
@@ -517,7 +544,9 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
 
   async advanceItem(id) {
     const start = get().items.find((item) => item.id === id);
-    if (!start || start.mediaState === 'VERIFIED') {
+    const auth = useAuthStore.getState();
+    if (!isReporterSession(auth) || !start || start.partitionId !== `reporter-${auth.user?.id}`) return;
+    if (start.mediaState === 'FAILED') {
       return;
     }
     if (get().busyItemIds.includes(id)) {
@@ -526,30 +555,40 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     set((state) => ({ busyItemIds: [...state.busyItemIds, id] }));
 
     const update: ItemUpdater = async (patch) => {
+      if (!isReporterSession(useAuthStore.getState()) || useAuthStore.getState().user?.id !== auth.user?.id ||
+          get().partitionId !== start.partitionId) throw { code: 'auth_unauthorized', status: 401 };
       const latest = get().items.find((item) => item.id === id) ?? start;
       const next: UploadQueueItem = { ...latest, ...patch, updatedAt: new Date().toISOString() };
-      set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
       await persistItem(next);
+      if (get().partitionId !== start.partitionId || useAuthStore.getState().user?.id !== auth.user?.id) throw { status: 401 };
+      set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
       return next;
     };
 
+    const transport = Object.fromEntries(Object.entries(uploadTransport).map(([name, method]) => [name, (...args: unknown[]) => {
+      const live = useAuthStore.getState();
+      if (!isReporterSession(live) || live.user?.id !== auth.user?.id || get().partitionId !== start.partitionId) throw { status: 401, code: 'auth_unauthorized' };
+      return (method as (...values: unknown[]) => unknown)(...args);
+    }])) as unknown as UploadTransport;
     try {
-      let current = start;
-      if (current.mediaState !== 'COMPLETE_REQUESTED' && current.mediaState !== 'VERIFYING') {
-        current = await runPipeline(current, update);
-      }
+      let current = start.mediaState === 'VERIFIED' ? await pollVerification(start, update, transport) : await runPipeline(start, update, transport);
       if (current.mediaState === 'COMPLETE_REQUESTED' || current.mediaState === 'VERIFYING') {
-        await pollVerification(current, update);
+        await pollVerification(current, update, transport);
       }
     } catch (error) {
+      const latest = get().items.find(item => item.id === id) ?? start;
+      const status = (error as { response?: { status?: number }; status?: number }).response?.status ?? (error as { status?: number }).status;
       await update({
-        mediaState: 'FAILED',
+        mediaState: status && [400, 403, 409, 412, 422, 428].includes(status) ? 'FAILED' : latest.mediaState,
         attempt: start.attempt + 1,
         lastErrorCode: uploadErrorCode(error) ?? 'upload_validation_failed',
         lastErrorMessage:
-          uploadErrorMessage(error) ??
-          'Chưa xác nhận được kết quả tải ảnh. Bấm “Tải lại” để kiểm tra lại (giữ nguyên phiên và mã xác minh).',
-      });
+          status === 401 ? 'Vui lòng đăng nhập lại để tiếp tục tải ảnh.' :
+          status === 412 ? 'Phiên tải đã thay đổi. Cần kiểm tra phiên bản trước khi gửi lại.' :
+          status === 403 ? 'Tài khoản không có quyền tải ảnh này.' :
+          status === 428 ? 'Thiếu điều kiện gửi. Nháp được giữ nguyên.' :
+          'Chưa xác nhận kết quả tải ảnh. Thử lại để kiểm tra, giữ nguyên phiên và khóa lệnh.',
+      }).catch(() => undefined);
     } finally {
       set((state) => ({ busyItemIds: state.busyItemIds.filter((itemId) => itemId !== id) }));
     }
@@ -569,21 +608,8 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     if (!current || current.mediaState !== 'FAILED') {
       return;
     }
-    const next: UploadQueueItem = {
-      ...current,
-      mediaState: 'LOCAL_READY',
-      uploadId: null,
-      fileId: null,
-      sessionVersion: null,
-      partETags: {},
-      serverStatus: null,
-      verifiedVersion: null,
-      lastErrorCode: null,
-      lastErrorMessage: null,
-      updatedAt: new Date().toISOString(),
-    };
-    set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
-    await persistItem(next);
+    // A terminal rejection needs explicit correction. Retain its diagnostic and command.
+    return;
   },
 
   async removeItem(id) {
@@ -626,6 +652,13 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     set({ watching: false });
   },
 }));
+
+useAuthStore.subscribe?.((state, previous) => {
+  if (state.user?.id !== previous.user?.id || !isReporterSession(state)) {
+    useUploadsStore.getState().stopWatch();
+    useUploadsStore.setState({ items: [], hydrated: false, partitionId: `reporter-${state.user?.id ?? 'guest'}` });
+  }
+});
 
 /** Một nhịp poll: chỉ chạy khi app đang foreground, dừng hẳn khi mọi ảnh đã terminal. */
 async function watchTick(): Promise<void> {

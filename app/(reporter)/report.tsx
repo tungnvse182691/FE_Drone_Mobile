@@ -16,30 +16,17 @@ import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
-  submitReportReal,
-  type CreateReporterReportRequestDto,
-  type ReportEvidenceInputDto,
-} from '../../src/api/reporterApi';
-import {
-  MAX_PHOTO_BYTES,
-  locationSourceFor,
+  isReporterSession,
   normalizePhotoMediaType,
-  sha256HexOfBytes,
 } from '../../src/api/uploads';
-import { hasUsableCoordinate, isZeroCoordinate } from '../../src/types/position';
-import { useUploadsStore } from '../../src/store/uploads';
-import { openDatabase, initDatabase, upsertOffline } from '../../src/offline/database';
-import { useReporterStore } from '../../src/store/reporter';
+import { isZeroCoordinate } from '../../src/types/position';
+import { useReporterStore, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
-import { RoleCode } from '../../src/types/enums';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
-import { uuidv4 } from '../../src/utils/uuid';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -49,18 +36,6 @@ const softShadow = Platform.select({
 
 const MAX_PHOTOS = 3;
 const MIN_DESCRIPTION = 10;
-const SUBMIT_FALLBACK_ERROR = 'Không thể gửi phản ánh. Vui lòng thử lại sau.';
-
-/** Mã lỗi ProblemDetails từ mock API → thông báo tiếng Việt cho người dân. */
-const errorMessages: Record<string, string> = {
-  validation_error: 'Thông tin phản ánh chưa hợp lệ. Vui lòng kiểm tra lại mô tả và ảnh.',
-  precondition_required: 'Thiếu khoá chống gửi trùng. Vui lòng thử lại.',
-  idempotency_key_reused: 'Lần gửi trước đã dùng cho nội dung khác. Vui lòng thử lại.',
-  source_not_ready: 'Ảnh chưa xác minh xong. Vui lòng chờ vài giây rồi gửi lại.',
-  not_found: 'Không tìm thấy ảnh đã tải lên. Vui lòng chụp lại.',
-  auth_unauthorized: 'Phiên đăng nhập đã hết. Vui lòng đăng nhập lại.',
-};
-
 interface Coords {
   latitude: number;
   longitude: number;
@@ -86,35 +61,52 @@ export default function ReporterReportScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Một bản nháp = một phiên lệnh. Key idempotent bám theo draftId, không bám theo Date.now().
-  const draftIdRef = useRef<string | null>(null);
-  const ensureDraftId = () => {
-    if (!draftIdRef.current) {
-      draftIdRef.current = uuidv4();
+  const [restored, setRestored] = useState(false);
+  const saves = useRef<Promise<unknown>>(Promise.resolve());
+  const completed = useRef(false);
+  const submitted = useRef(false);
+  const resumed = useRef(false);
+  const photoMeta = useRef<Map<string, DraftPhoto>>(new Map());
+  const authenticated = useAuthStore(state => isReporterSession(state));
+  const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.request));
+  const actorId = useAuthStore(state => state.user?.id);
+  const photoInputs = () => photos.map(uri => {
+    let photo = photoMeta.current.get(uri);
+    if (!photo) {
+      const fileName = uri.split('/').pop() || 'hien-truong.jpg';
+      photo = { uri, fileName, mediaType: normalizePhotoMediaType(fileName, null) || '', capturedAt: new Date().toISOString() };
+      photoMeta.current.set(uri, photo);
     }
-    return draftIdRef.current;
-  };
-  const resetDraftId = () => {
-    draftIdRef.current = null;
-  };
+    return photo;
+  });
 
-  const user = useAuthStore((state) => state.user);
-  const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
-  const setPendingReport = useReporterStore((state) => state.setPendingReport);
-  const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
-  const enqueuePhoto = useUploadsStore((state) => state.enqueuePhoto);
-  const advanceAll = useUploadsStore((state) => state.advanceAll);
-  /** uri cục bộ → id hàng đợi upload, tránh tạo phiên trùng khi người dân bấm gửi lại. */
-  const uploadedItemIds = useRef<Map<string, string>>(new Map());
+  useEffect(() => {
+    let active = true;
+    setRestored(false);
+    void useReporterStore.getState().restorePendingDraft().then(draft => {
+      if (!active) return;
+      if (draft?.targetReportId) {
+        router.replace({ pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } });
+        return;
+      }
+      setDescription(draft?.description ?? '');
+      setPhotos(draft?.photos.map(p => p.uri) ?? []);
+      photoMeta.current = new Map(draft?.photos.map(p => [p.uri, p]) ?? []);
+      setCoords(draft?.coords ?? null);
+      if (draft?.coords) {
+        setGpsStatus('Đã khôi phục vị trí của nháp'); setGpsLoading(false);
+      } else void requestLocation();
+      setRestored(true);
+    }).catch(error => { if (active) setSubmitError(reporterFailureMessage(error)); });
+    return () => { active = false; };
+  }, [actorId, authenticated]);
 
-  /**
-   * Phiên Reporter hiện có: tài khoản đã đăng nhập đúng vai trò, hoặc email đã xác thực OTP.
-   * Chưa có phiên ⇒ form vẫn dùng được (nháp local), chỉ khi bấm Gửi mới yêu cầu đăng nhập.
-   */
-  const sessionEmail =
-    (user?.role_code === RoleCode.REPORTER ? user.phone_or_email : null) ||
-    verifiedEmail ||
-    null;
+  useEffect(() => {
+    if (!restored || submitting || completed.current || (!description.trim() && photos.length === 0 && !useReporterStore.getState().pendingDraft)) return;
+    const input = { description: description.trim(), photos: photoInputs(), coords };
+    saves.current = saves.current.catch(() => undefined).then(() => useReporterStore.getState().savePendingDraft(input));
+    void saves.current.catch(error => setSubmitError(reporterFailureMessage(error)));
+  }, [restored, description, photos, coords, submitting]);
 
   const requestLocation = async () => {
     setGpsLoading(true);
@@ -160,9 +152,6 @@ export default function ReporterReportScreen() {
     }
   };
 
-  useEffect(() => {
-    void requestLocation();
-  }, []);
 
   const handleCapture = async () => {
     if (!cameraReady || photos.length >= MAX_PHOTOS) {
@@ -182,7 +171,10 @@ export default function ReporterReportScreen() {
         copyToCacheDirectory: true,
       });
       if (!res.canceled && res.assets && res.assets.length > 0) {
-        setPhotos((current) => [...current, res.assets[0].uri].slice(0, MAX_PHOTOS));
+        const asset = res.assets[0];
+        photoMeta.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
+          mediaType: normalizePhotoMediaType(asset.name, asset.mimeType) || '', capturedAt: new Date().toISOString() });
+        setPhotos((current) => [...current, asset.uri].slice(0, MAX_PHOTOS));
       }
     } catch {
       // ignore
@@ -204,128 +196,34 @@ export default function ReporterReportScreen() {
     return Object.keys(next).length === 0;
   };
 
-  const saveDraft = async (payload: CreateReporterReportRequestDto) => {
-    try {
-      const db = openDatabase();
-      await initDatabase(db);
-      const now = new Date().toISOString();
-      await upsertOffline(db, 'local_draft', `defect-report-${ensureDraftId()}`, {
-        kind: 'defect_report',
-        payload: JSON.stringify(payload),
-        created_at: now,
-        updated_at: now,
-      });
-    } catch {
-      return;
-    }
-  };
-
-  /**
-   * Đưa ảnh vào hàng đợi API-211/213 rồi chờ API-208 xác minh — chỉ ảnh VERIFIED
-   * mới có `fileId` để gửi kèm phản ánh.
-   */
-  const uploadEvidence = async (): Promise<ReportEvidenceInputDto[]> => {
-    const usable = hasUsableCoordinate(coords?.latitude, coords?.longitude);
-    for (const uri of photos) {
-      if (uploadedItemIds.current.has(uri)) {
-        continue;
-      }
-      const fileName = uri.split('/').pop() || `hien-truong-${uuidv4()}.jpg`;
-      const mediaType = normalizePhotoMediaType(fileName, null);
-      if (!mediaType) {
-        throw new Error('validation_error');
-      }
-      const bytes = new Uint8Array(await new File(uri).arrayBuffer());
-      if (bytes.byteLength <= 0 || bytes.byteLength > MAX_PHOTO_BYTES) {
-        throw new Error('validation_error');
-      }
-      const checksumSha256 = await sha256HexOfBytes(bytes);
-      const itemId = await enqueuePhoto({
-        uriLocal: uri,
-        fileName,
-        mediaType,
-        sizeBytes: bytes.byteLength,
-        checksumSha256,
-        capturedAt: new Date().toISOString(),
-        locationSource: locationSourceFor(usable),
-        latitude: usable ? coords?.latitude ?? null : null,
-        longitude: usable ? coords?.longitude ?? null : null,
-        accuracyMeters: usable ? coords?.accuracyMeters ?? null : null,
-      });
-      uploadedItemIds.current.set(uri, itemId);
-    }
-
-    await advanceAll();
-
-    const items = useUploadsStore.getState().items;
-    const evidence: ReportEvidenceInputDto[] = [];
-    for (const uri of photos) {
-      const itemId = uploadedItemIds.current.get(uri);
-      const item = items.find((entry) => entry.id === itemId);
-      if (!item || item.mediaState !== 'VERIFIED' || !item.fileId) {
-        throw new Error('source_not_ready');
-      }
-      evidence.push({
-        fileId: item.fileId,
-        fileVersion: item.verifiedVersion,
-        locationSource: item.locationSource,
-        capturedAt: item.capturedAt,
-        location:
-          item.latitude !== null && item.longitude !== null
-            ? {
-                latitude: item.latitude,
-                longitude: item.longitude,
-                accuracyMeters: item.accuracyMeters,
-              }
-            : null,
-      });
-    }
-    return evidence;
-  };
-
   const handleSubmit = async () => {
-    setSubmitError(null);
-    if (!validate() || !coords) {
-      return;
-    }
-
-    setSubmitting(true);
-    const draftId = ensureDraftId();
+    if (submitted.current || !restored || !validate() || !coords) return;
+    submitted.current = true;
+    setSubmitting(true); setSubmitError(null);
     try {
-      const evidence = await uploadEvidence();
-      const payload: CreateReporterReportRequestDto = {
-        description: description.trim(),
-        evidence,
-      };
-      await saveDraft(payload);
-
-      if (!sessionEmail) {
-        // Chưa đăng nhập: giữ nháp trong store rồi sang cụm auth; đăng nhập xong sẽ tự nộp.
-        setPendingReport(payload, draftId);
+      await saves.current.catch(() => undefined);
+      await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
+      if (!isReporterSession(useAuthStore.getState())) {
         router.push('/(auth)');
         return;
       }
-
-      const submitScope = `reporter:submit:${draftId}`;
-      const { report } = await submitReportReal(payload, getOrCreateCommandKey(submitScope));
-      clearCommandKey(submitScope);
-      resetDraftId();
-      clearPendingReport();
-      setDescription('');
-      setPhotos([]);
-      uploadedItemIds.current.clear();
-      router.replace({
-        pathname: REPORTER_REPORT_DETAIL,
-        params: { reportId: report.id },
-      });
-    } catch (err) {
-      const apiCode = (err as { response?: { data?: { code?: string } } }).response?.data?.code;
-      const code = apiCode ?? (err as Error).message;
-      setSubmitError(errorMessages[code] ?? SUBMIT_FALLBACK_ERROR);
+      const reportId = await useReporterStore.getState().submitPendingDraft();
+      completed.current = true;
+      router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId } });
+    } catch (error) {
+      setSubmitError(reporterFailureMessage(error));
     } finally {
-      setSubmitting(false);
+      submitted.current = false; setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    const draft = useReporterStore.getState().pendingDraft;
+    if (restored && !resumed.current && draft?.submitRequested && isReporterSession(useAuthStore.getState())) {
+      resumed.current = true;
+      void handleSubmit();
+    }
+  }, [restored, authenticated]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
@@ -353,7 +251,7 @@ export default function ReporterReportScreen() {
               <Text style={[typography.caption, styles.gpsText]}>{gpsStatus}</Text>
               <Pressable
                 onPress={requestLocation}
-                disabled={gpsLoading}
+                disabled={gpsLoading || submitting || draftLocked}
                 style={({ pressed }) => [styles.gpsRetry, pressed && styles.photoAddPressed]}
                 accessibilityRole="button"
                 accessibilityLabel="Lấy lại vị trí"
@@ -373,7 +271,7 @@ export default function ReporterReportScreen() {
           <Text style={[typography.labelLg, styles.label]}>
             Ảnh hiện trường ({photos.length}/{MAX_PHOTOS})
           </Text>
-          <View style={styles.photoGrid}>
+          <View style={styles.photoGrid} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} />
@@ -429,6 +327,7 @@ export default function ReporterReportScreen() {
             </View>
           ) : null}
 
+          <View pointerEvents={submitting || draftLocked ? "none" : "auto"}>
           <InputField
             label="Mô tả hiện trạng"
             value={description}
@@ -441,6 +340,8 @@ export default function ReporterReportScreen() {
             multiline
             testID="reporter-description"
           />
+          </View>
+          {draftLocked ? <Text style={typography.caption}>Đang giữ nguyên nội dung lần gửi trước. Bấm gửi lại để kiểm tra kết quả.</Text> : null}
 
           {submitError ? (
             <View style={styles.errorRow}>
@@ -455,10 +356,10 @@ export default function ReporterReportScreen() {
               title="Gửi phản ánh"
               onPress={handleSubmit}
               loading={submitting}
-              disabled={submitting}
+              disabled={!restored || submitting}
             />
             <Text style={[typography.caption, styles.submitHint]}>
-              {sessionEmail
+              {isReporterSession(useAuthStore.getState())
                 ? 'Phản ánh sẽ được gửi trực tiếp đến Ban Quản lý dự án để tiếp nhận và khảo sát.'
                 : 'Đăng nhập hoặc đăng ký để gửi phản ánh của bạn.'}
             </Text>

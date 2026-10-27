@@ -18,7 +18,9 @@ import {
   ROLE_HOMES,
   WEB_ONLY_ROLE_MESSAGE,
 } from '../src/constants/routes';
+import { useReporterStore } from '../src/store/reporter';
 import { Toast } from '../src/components/Toast';
+import { hasAuthenticatedSession, type MobileSession } from '../src/api/uploads';
 
 
 
@@ -49,24 +51,17 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!fontsLoaded && !fontError && !fontTimeout) {
-    return (
-      <View style={styles.loading}>
-        <Image
-          source={require('../assets/logo_hoanghai.png')}
-          style={styles.loadingLogo}
-          resizeMode="contain"
-        />
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
       <AuthGuard>
         <Stack screenOptions={{ headerShown: false }} />
+        {!fontsLoaded && !fontError && !fontTimeout ? (
+          <View style={styles.loading}>
+            <Image source={require('../assets/logo_hoanghai.png')} style={styles.loadingLogo} resizeMode="contain" />
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : null}
       </AuthGuard>
     </QueryClientProvider>
   );
@@ -74,15 +69,38 @@ export default function RootLayout() {
 
 const WEB_ONLY_TOAST_MS = 5000;
 
+/** Restored identity is not a session. Only the guest form/entry pages are public. */
+export function authGuardDestination(session: MobileSession, segments: string[]): string | null {
+  if (!segments.length) return null;
+  const inAuth = segments[0] === '(auth)';
+  const inForceChange = inAuth && segments[1] === 'force-change-password';
+  const publicPage = segments[0] === PUBLIC_ROUTE_GROUP &&
+    ['home', 'report', 'account', 'capture'].includes(segments[1] ?? 'home');
+  if (!hasAuthenticatedSession(session)) {
+    // A force-change screen also needs a valid session.
+    return publicPage || (inAuth && !inForceChange) ? null : '/(auth)';
+  }
+  const role = session.user!.role_code as keyof typeof ROLE_HOMES;
+  const home = ROLE_HOMES[role];
+  if (!home) return inAuth ? null : '/(auth)';
+  if (session.user!.must_change_password) {
+    return inForceChange ? null : '/(auth)/force-change-password';
+  }
+  if (inAuth) return home;
+  if (segments[0]?.startsWith('(') && segments[0] !== ROLE_GROUPS[role]) return home;
+  return null;
+}
+
 function AuthGuard({ children }: { children: ReactNode }) {
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const status = useAuthStore((state) => state.status);
+  const pending = useReporterStore(state => state.pendingDraft);
   const segments: string[] = useSegments();
   const router = useRouter();
   const [showWebOnlyToast, setShowWebOnlyToast] = useState(false);
 
   const isWebOnlyRole = !!user && !ROLE_HOMES[user.role_code];
-  const inAuthGroup = segments[0] === '(auth)';
-  const inPublicGroup = segments[0] === PUBLIC_ROUTE_GROUP;
 
   useEffect(() => {
     if (!isWebOnlyRole) return;
@@ -92,50 +110,15 @@ function AuthGuard({ children }: { children: ReactNode }) {
   }, [isWebOnlyRole]);
 
   useEffect(() => {
-    if (!segments || segments.length === 0) return;
-
-    if (inPublicGroup) return;
-
-    const inForceChange = segments[1] === 'force-change-password';
-
-    if (!user) {
-      if (!inAuthGroup) {
-        router.replace('/(auth)');
-      }
-      return;
-    }
-
-    if (isWebOnlyRole) {
-      if (!inAuthGroup) {
-        router.replace('/(auth)');
-      }
-      return;
-    }
-
-    if (user.must_change_password) {
-      if (!inForceChange) {
-        router.replace('/(auth)/force-change-password');
-      }
-      return;
-    }
-
-    if (inAuthGroup && !inForceChange) {
-      router.replace(ROLE_HOMES[user.role_code] as any);
-      return;
-    }
-
-    // Bảo vệ phân quyền vai trò: chống nhảy chéo sang màn role khác khi F5 trên Web
-    const expectedGroup = ROLE_GROUPS[user.role_code];
-    if (
-      expectedGroup &&
-      segments[0] &&
-      segments[0].startsWith('(') &&
-      segments[0] !== expectedGroup &&
-      !inForceChange
-    ) {
-      router.replace(ROLE_HOMES[user.role_code] as any);
-    }
-  }, [user, segments, isWebOnlyRole, inPublicGroup]);
+    const destination = authGuardDestination({ user, token, status }, segments);
+    if (destination && segments[0] === '(auth)' && user?.role_code === 'REPORTER' &&
+        hasAuthenticatedSession({ user, token, status }) && !user.must_change_password &&
+        pending && (!pending.ownerId || pending.ownerId === user.id)) {
+      router.replace(pending.targetReportId
+        ? { pathname: '/(reporter)/report-supplement', params: { reportId: pending.targetReportId } }
+        : '/(reporter)/report');
+    } else if (destination) router.replace(destination as any);
+  }, [user, token, status, segments, router, pending]);
 
   return (
     <View style={styles.guardRoot}>
@@ -150,7 +133,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loading: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 20,

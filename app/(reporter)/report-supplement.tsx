@@ -13,7 +13,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
-import { File } from 'expo-file-system';
 import type { AxiosError } from 'axios';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/Button';
@@ -21,24 +20,17 @@ import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
   getOwnReportReal,
-  submitReportSupplementReal,
   type OwnReportDto,
-  type ReportEvidenceInputDto,
 } from '../../src/api/reporterApi';
 import {
-  MAX_PHOTO_BYTES,
-  locationSourceFor,
+  isReporterSession,
   normalizePhotoMediaType,
-  sha256HexOfBytes,
 } from '../../src/api/uploads';
-import { hasUsableCoordinate, isZeroCoordinate } from '../../src/types/position';
+import { isZeroCoordinate } from '../../src/types/position';
 import { parseProblemDetails } from '../../src/api/problemDetails';
-import { useUploadsStore } from '../../src/store/uploads';
-import { useReporterStore } from '../../src/store/reporter';
+import { useReporterStore, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
-import { uuidv4 } from '../../src/utils/uuid';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -69,13 +61,14 @@ export default function ReporterReportSupplementScreen() {
   const params = useLocalSearchParams<{ reportId?: string }>();
   const reportId = typeof params.reportId === 'string' ? params.reportId : '';
 
-  const user = useAuthStore((state) => state.user);
-  const verifiedEmail = useReporterStore((state) => state.verifiedEmail);
-  const activeEmail = user?.phone_or_email || verifiedEmail || undefined;
-
-  const enqueuePhoto = useUploadsStore((state) => state.enqueuePhoto);
-  const advanceAll = useUploadsStore((state) => state.advanceAll);
-
+  const activeEmail = useAuthStore(state => isReporterSession(state) ? state.user?.phone_or_email : undefined);
+  const pendingDraft = useReporterStore(state => state.pendingDraft);
+  const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.request));
+  const [restored, setRestored] = useState(false);
+  const saves = useRef<Promise<unknown>>(Promise.resolve());
+  const completed = useRef(false);
+  const submittingRef = useRef(false);
+  const metadata = useRef<Map<string, DraftPhoto>>(new Map());
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -96,23 +89,22 @@ export default function ReporterReportSupplementScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  /** uri cục bộ → id hàng đợi upload, tránh tạo phiên trùng khi người dân bấm gửi lại. */
-  const uploadedItemIds = useRef<Map<string, string>>(new Map());
-  /** uri cục bộ → metadata file gốc khi chọn qua DocumentPicker */
-  const photoMetaRef = useRef<Map<string, { fileName?: string; mimeType?: string }>>(new Map());
-
   useEffect(() => {
     setNotice(null);
   }, [phase]);
 
   // Cố gắng lấy tọa độ thiết bị (không bắt buộc, nếu có thì gắn CAPTURE, không có thì UNKNOWN)
   useEffect(() => {
+    let active = true;
+    const actorId = useAuthStore.getState().user?.id;
     (async () => {
       try {
         const perm = await Location.getForegroundPermissionsAsync();
         if (perm.status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          if (!isZeroCoordinate(loc.coords.latitude, loc.coords.longitude)) {
+          if (active && actorId === useAuthStore.getState().user?.id &&
+              !useReporterStore.getState().pendingDraft && !submittingRef.current && !completed.current &&
+              !isZeroCoordinate(loc.coords.latitude, loc.coords.longitude)) {
             setCoords({
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
@@ -124,10 +116,11 @@ export default function ReporterReportSupplementScreen() {
         // Không có GPS thì tiếp tục với UNKNOWN
       }
     })();
+    return () => { active = false; };
   }, []);
 
   const loadReport = useCallback(async () => {
-    if (!reportId || !activeEmail) {
+    if (!reportId || !isReporterSession(useAuthStore.getState())) {
       setPhase('failed');
       setError('Không tìm thấy phản ánh của bạn.');
       return;
@@ -135,15 +128,22 @@ export default function ReporterReportSupplementScreen() {
     setError(null);
     try {
       const found = await getOwnReportReal(reportId);
+      const draft = await useReporterStore.getState().restorePendingDraft();
+      if (draft && draft.targetReportId !== reportId) throw { code: 'draft_locked' };
       setReport(found.report);
-      setExpectedVersion(found.etag);
+      setExpectedVersion(draft?.ifMatch ?? found.etag);
+      setDescription(draft?.description ?? '');
+      setPhotos(draft?.photos.map(p => p.uri) ?? []);
+      metadata.current = new Map(draft?.photos.map(p => [p.uri, p]) ?? []);
+      setCoords(draft?.coords ?? null);
+      setRestored(true);
       setLoadedAt(new Date().toISOString());
       setPhase('ready');
     } catch (caught) {
       const axErr = caught as AxiosError | undefined;
       const problem = parseProblemDetails(axErr?.response?.data);
       setPhase('failed');
-      setError(problem.detail ?? problem.title ?? 'Không tải được phản ánh. Vui lòng thử lại.');
+      setError(reporterFailureMessage(caught));
     }
   }, [reportId, activeEmail]);
 
@@ -159,10 +159,8 @@ export default function ReporterReportSupplementScreen() {
       });
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
-        photoMetaRef.current.set(asset.uri, {
-          fileName: asset.name,
-          mimeType: asset.mimeType,
-        });
+        metadata.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
+          mediaType: normalizePhotoMediaType(asset.name, asset.mimeType) || '', capturedAt: new Date().toISOString() });
         setPhotos((current) => [...current, asset.uri].slice(0, MAX_PHOTOS));
         if (error) {
           setError(null);
@@ -203,204 +201,45 @@ export default function ReporterReportSupplementScreen() {
     setPhotos((current) => current.filter((_, i) => i !== index));
   };
 
-  /**
-   * Đưa ảnh vào hàng đợi upload rồi chờ BE xác minh.
-   * Chỉ ảnh VERIFIED mới có fileId/fileVersion để gửi kèm supplement.
-   */
-  const uploadEvidence = async (): Promise<ReportEvidenceInputDto[]> => {
-    const usable = hasUsableCoordinate(coords?.latitude, coords?.longitude);
-    for (const uri of photos) {
-      if (uploadedItemIds.current.has(uri)) {
-        continue;
-      }
-      const meta = photoMetaRef.current.get(uri);
-      const rawName = meta?.fileName || uri.split('/').pop() || `bo-sung-${uuidv4()}.jpg`;
-      const fileName = rawName.includes('.') ? rawName : `${rawName}.jpg`;
-      const mediaType = normalizePhotoMediaType(fileName, meta?.mimeType);
-      if (!mediaType) {
-        throw new Error('validation_error');
-      }
-
-      let bytes: Uint8Array;
-      try {
-        bytes = new Uint8Array(await new File(uri).arrayBuffer());
-      } catch {
-        const res = await fetch(uri);
-        const buf = await res.arrayBuffer();
-        bytes = new Uint8Array(buf);
-      }
-
-      if (bytes.byteLength <= 0 || bytes.byteLength > MAX_PHOTO_BYTES) {
-        throw new Error('validation_error');
-      }
-
-      const checksumSha256 = await sha256HexOfBytes(bytes);
-      const itemId = await enqueuePhoto({
-        uriLocal: uri,
-        fileName,
-        mediaType,
-        sizeBytes: bytes.byteLength,
-        checksumSha256,
-        capturedAt: new Date().toISOString(),
-        locationSource: locationSourceFor(usable),
-        latitude: usable ? coords?.latitude ?? null : null,
-        longitude: usable ? coords?.longitude ?? null : null,
-        accuracyMeters: usable ? coords?.accuracyMeters ?? null : null,
-      });
-      uploadedItemIds.current.set(uri, itemId);
+  const photoInputs = () => photos.map(uri => {
+    let photo = metadata.current.get(uri);
+    if (!photo) {
+      const fileName = uri.split('/').pop() || 'bo-sung.jpg';
+      photo = { uri, fileName, mediaType: normalizePhotoMediaType(fileName, null) || '', capturedAt: new Date().toISOString() };
+      metadata.current.set(uri, photo);
     }
+    return photo;
+  });
 
-    await advanceAll();
-
-    const items = useUploadsStore.getState().items;
-    const evidence: ReportEvidenceInputDto[] = [];
-    for (const uri of photos) {
-      const itemId = uploadedItemIds.current.get(uri);
-      const item = items.find((entry) => entry.id === itemId);
-      if (!item || item.mediaState !== 'VERIFIED' || !item.fileId) {
-        throw new Error('source_not_ready');
-      }
-      evidence.push({
-        fileId: item.fileId,
-        fileVersion: item.verifiedVersion,
-        locationSource: item.locationSource,
-        capturedAt: item.capturedAt,
-        location:
-          item.latitude !== null && item.longitude !== null
-            ? {
-                latitude: item.latitude,
-                longitude: item.longitude,
-                accuracyMeters: item.accuracyMeters,
-              }
-            : null,
-      });
-    }
-    return evidence;
-  };
+  useEffect(() => {
+    if (!restored || !expectedVersion || completed.current || phase === 'submitting' || phase === 'done') return;
+    const input = { description: description.trim(), photos: photoInputs(), coords, targetReportId: reportId, ifMatch: expectedVersion };
+    saves.current = saves.current.catch(() => undefined).then(() => useReporterStore.getState().savePendingDraft(input));
+    void saves.current.catch(error => setError(reporterFailureMessage(error)));
+  }, [restored, description, photos, coords, expectedVersion, reportId, phase]);
 
   const submit = async () => {
-    if (!report || !expectedVersion) {
-      return;
+    if (submittingRef.current || !restored || !expectedVersion) return;
+    if (!description.trim() || !photos.length) {
+      setError('Vui lòng nhập nội dung và chọn ít nhất một ảnh bổ sung.'); return;
     }
-    if (!description.trim()) {
-      setError('Vui lòng nhập nội dung bổ sung.');
-      return;
-    }
-    if (photos.length === 0) {
-      setError('Vui lòng chọn hoặc chụp ít nhất một ảnh hiện trường bổ sung.');
-      return;
-    }
-
-    setError(null);
-    setPhase('submitting');
-    const supplementScope = `reporter:supplement:${report.id}:${expectedVersion}`;
-    const ifMatchHeader = expectedVersion.startsWith('"')
-      ? expectedVersion
-      : `"${expectedVersion}"`;
-
+    submittingRef.current = true;
+    setError(null); setPhase('submitting');
     try {
-      const evidence = await uploadEvidence();
-      const result = await submitReportSupplementReal(
-        report.id,
-        { description: description.trim(), evidence },
-        getOrCreateCommandKey(supplementScope),
-        ifMatchHeader,
-      );
-      clearCommandKey(supplementScope);
-      setReport(result.report);
-      setExpectedVersion(result.etag);
-      setLoadedAt(new Date().toISOString());
-      setDescription('');
-      setPhotos([]);
-      uploadedItemIds.current.clear();
-      setNotice('Đã gửi thông tin bổ sung.');
-      setPhase('done');
-    } catch (caught) {
-      if (caught instanceof Error && caught.message === 'source_not_ready') {
-        setPhase('ready');
-        setError('Ảnh chưa xác minh xong. Vui lòng chờ vài giây rồi gửi lại.');
-        return;
-      }
-      if (caught instanceof Error && caught.message === 'validation_error') {
-        setPhase('ready');
-        setError('Ảnh hiện trường chưa hợp lệ. Vui lòng kiểm tra lại ảnh.');
-        return;
-      }
-
-      const axErr = caught as AxiosError | undefined;
-      const problem = parseProblemDetails(axErr?.response?.data);
-      const code = problem.code ?? (caught as Error)?.message ?? null;
-
-      // 1. Nếu BE trả mã concurrency_conflict (412 hoặc 409) → nạp bản mới và bật conflict UI
-      if (code === 'concurrency_conflict') {
-        try {
-          const fresh = await getOwnReportReal(report.id);
-          setReport(fresh.report);
-          setExpectedVersion(fresh.etag);
-          setLoadedAt(new Date().toISOString());
-        } catch {
-          // ignore
-        }
-        setPhase('conflict');
-        return;
-      }
-
-      // 2. Nếu BE trả validation_error:
-      // Kiểm tra fallback mục 5.4(c): gọi lại detail, so version mới với expectedVersion lúc load
-      if (code === 'validation_error') {
-        try {
-          const fresh = await getOwnReportReal(report.id);
-          const rawFreshVersion = (fresh.etag || fresh.report.version || '').replace(/^"|"$/g, '');
-          const rawExpectedVersion = (expectedVersion || '').replace(/^"|"$/g, '');
-          if (rawFreshVersion && rawFreshVersion !== rawExpectedVersion) {
-            // Version đã đổi trên máy chủ → bật đúng conflict UI
-            setReport(fresh.report);
-            setExpectedVersion(fresh.etag);
-            setLoadedAt(new Date().toISOString());
-            setPhase('conflict');
-            return;
-          }
-        } catch {
-          // ignore
-        }
-
-        // Version không đổi → lỗi validation input thật (KHÔNG bật conflict UI)
-        setPhase('ready');
-        const fieldMsg = problem.fieldErrors
-          ? Object.values(problem.fieldErrors).flat()[0]
-          : null;
-        setError(fieldMsg ?? problem.detail ?? 'Thông tin bổ sung chưa hợp lệ. Vui lòng kiểm tra lại.');
-        return;
-      }
-
-      // 3. Các lỗi khác
-      setPhase('ready');
-      setError(problem.detail ?? problem.title ?? 'Không gửi được thông tin bổ sung. Vui lòng thử lại.');
-    }
+      await saves.current.catch(() => undefined);
+      await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords,
+        targetReportId: reportId, ifMatch: expectedVersion, submitRequested: true });
+      const id = await useReporterStore.getState().submitPendingDraft();
+      completed.current = true;
+      router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: id } });
+    } catch (error) {
+      setError(reporterFailureMessage(error)); setPhase('ready');
+    } finally { submittingRef.current = false; }
   };
 
-  const keepMine = () => {
-    setNotice('Đã nạp phiên bản mới nhất — bấm “Gửi bổ sung” để gửi lại nội dung của bạn.');
-    setPhase('ready');
-  };
-
-  const takeLatest = async () => {
-    if (!report || !activeEmail) {
-      return;
-    }
-    setError(null);
-    try {
-      const found = await getOwnReportReal(report.id);
-      setReport(found.report);
-      setExpectedVersion(found.etag);
-      setLoadedAt(new Date().toISOString());
-      setNotice('Đã tải bản mới nhất. Nội dung bạn đang nhập vẫn được giữ nguyên.');
-      setPhase('ready');
-    } catch {
-      setError('Không tải được bản mới nhất. Vui lòng thử lại.');
-      setPhase('ready');
-    }
-  };
+  // Frozen commands never silently adopt a fresh ETag or a fresh idempotency key.
+  const keepMine = () => { setPhase('ready'); setNotice('Giữ nguyên nháp và điều kiện của lần gửi trước.'); };
+  const takeLatest = async () => { setError('Cần giải quyết xung đột trước khi tạo một lệnh bổ sung mới; nháp hiện tại được giữ nguyên.'); };
 
   const busy = phase === 'loading' || phase === 'submitting';
 
@@ -411,6 +250,13 @@ export default function ReporterReportSupplementScreen() {
         Gửi thêm thông tin cho phản ánh đã tạo. Nếu phản ánh đã thay đổi ở nơi khác, hệ thống sẽ cảnh
         báo xung đột phiên bản.
       </Text>
+
+      {phase === 'failed' && pendingDraft && pendingDraft.targetReportId !== reportId ? (
+        <View>
+          <Text style={typography.caption}>Bạn đang có nháp khác chưa gửi. Hãy mở lại nháp để tiếp tục.</Text>
+          <Button variant="secondary" title="Mở nháp đang lưu" onPress={() => router.replace('/(reporter)/report')} />
+        </View>
+      ) : null}
 
       {report ? (
         <View style={styles.card}>
@@ -452,6 +298,7 @@ export default function ReporterReportSupplementScreen() {
 
       {report ? (
         <>
+          <View pointerEvents={busy || draftLocked ? "none" : "auto"}>
           <InputField
             label="Nội dung bổ sung"
             value={description}
@@ -466,11 +313,13 @@ export default function ReporterReportSupplementScreen() {
             numberOfLines={5}
             testID="supplement-description-input"
           />
+          </View>
+          {draftLocked ? <Text style={typography.caption}>Đang giữ nguyên nội dung và điều kiện của lần gửi trước.</Text> : null}
 
           <Text style={[typography.labelLg, styles.sectionLabel]}>
             Ảnh hiện trường bổ sung ({photos.length}/{MAX_PHOTOS})
           </Text>
-          <View style={styles.photoGrid}>
+          <View style={styles.photoGrid} pointerEvents={busy || draftLocked ? "none" : "auto"}>
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} />

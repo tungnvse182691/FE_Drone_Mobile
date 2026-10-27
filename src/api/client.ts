@@ -185,7 +185,67 @@ const bareClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-let refreshInFlight: Promise<string | null> | null = null;
+interface SessionIdentity { subject: string; sessionId: string }
+let refreshInFlight: { identity: SessionIdentity; promise: Promise<string | null> } | null = null;
+
+/** Untrusted claims are ONLY a continuity guard. The server still authenticates every JWT.
+ * Candidate3 AccessTokenFactory emits real sub/sid; never synthesize a session version.
+ * Decode locally without depending on browser atob/Node Buffer in Hermes.
+ */
+function tokenIdentity(token: string | null): SessionIdentity | null {
+  try {
+    const parts = token?.split('.');
+    if (parts?.length !== 3) return null;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    const encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+    if (!encoded || /[^A-Za-z0-9+/]/.test(encoded) || encoded.length % 4 === 1) return null;
+    let bits = 0, value = 0, json = '';
+    for (const character of encoded) {
+      value = (value << 6) | alphabet.indexOf(character); bits += 6;
+      if (bits >= 8) { bits -= 8; json += String.fromCharCode((value >>> bits) & 255); }
+    }
+    const claims = JSON.parse(json) as { sub?: unknown; sid?: unknown };
+    return typeof claims.sub === 'string' && claims.sub && typeof claims.sid === 'string' && claims.sid
+      ? { subject: claims.sub, sessionId: claims.sid } : null;
+  } catch { return null; }
+}
+
+function sameSession(a: SessionIdentity | null, b: SessionIdentity | null): boolean {
+  return Boolean(a && b && a.subject === b.subject && a.sessionId === b.sessionId);
+}
+
+type RetriableConfig = InternalAxiosRequestConfig & {
+  __transportRetries?: number;
+  __authRetried?: boolean;
+  __tokenAtSend?: string | null;
+  __sessionBound?: boolean;
+  __sessionIdentity?: SessionIdentity | null;
+  __detachedLogout?: boolean;
+};
+
+function sessionChanged(config: RetriableConfig): AxiosError {
+  // No response body from a previous actor is exposed to the new session.
+  return new AxiosError('Phiên đăng nhập đã thay đổi. Giữ nháp để kiểm tra kết quả.', 'auth_session_changed', config);
+}
+
+function isCurrentSession(config: RetriableConfig): boolean {
+  const liveToken = bridge.getAccessToken();
+  return config.__sessionIdentity
+    ? sameSession(config.__sessionIdentity, tokenIdentity(liveToken))
+    : !liveToken;
+}
+
+function mayReplay(config: RetriableConfig): boolean {
+  if (config.__detachedLogout) return false;
+  const method = config.method?.toUpperCase() ?? 'GET';
+  if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return true;
+  if (method !== 'POST' || !String(AxiosHeaders.from(config.headers).get('Idempotency-Key') ?? '').trim()) return false;
+  // Only writes whose idempotency contract was verified in T01. Other commands still
+  // send once; ambiguous outcomes stay with their caller for reconciliation.
+  const path = config.url?.split('?')[0] ?? '';
+  return /^\/reports(?:\/[^/]+\/supplements)?$/.test(path) ||
+    /^\/reporter-evidence\/uploads(?:\/[^/]+\/(?:part-urls|complete))?$/.test(path);
+}
 
 function readErrorCode(error: unknown): string | null {
   if (!(error instanceof AxiosError)) {
@@ -225,6 +285,7 @@ function shouldRetryTransport(error: unknown): boolean {
   if (!(error instanceof AxiosError)) {
     return false;
   }
+  if (error.code === 'ERR_CANCELED' || error.code === 'auth_session_changed') return false;
   const status = error.response?.status;
   if (status === undefined) {
     return true;
@@ -256,59 +317,71 @@ function isRefreshEligible(url: string | undefined): boolean {
   return !AUTH_BOOTSTRAP_PATHS.some((path) => url.includes(path));
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  if (refreshInFlight) {
-    return refreshInFlight;
-  }
-
-  refreshInFlight = (async () => {
-    const refreshToken = bridge.getRefreshToken();
-    if (!refreshToken) {
-      return null;
-    }
-    bridge.onRefreshStart();
+async function refreshAccessToken(expected?: SessionIdentity): Promise<string | null> {
+  const accessToken = bridge.getAccessToken();
+  const identity = tokenIdentity(accessToken);
+  const refreshToken = bridge.getRefreshToken();
+  if (!identity || !refreshToken || (expected && !sameSession(identity, expected))) return null;
+  if (refreshInFlight && sameSession(refreshInFlight.identity, identity)) return refreshInFlight.promise;
+  const stillOwnsCredentials = () => bridge.getAccessToken() === accessToken && bridge.getRefreshToken() === refreshToken;
+  const flight = { identity, promise: Promise.resolve<string | null>(null) };
+  refreshInFlight = flight;
+  flight.promise = (async () => {
     try {
+      bridge.onRefreshStart();
       const response = await bareClient.post<TokenPair>(ANDROID_REFRESH_PATH, { refreshToken });
       const pair = response.data;
+      if (!stillOwnsCredentials() || !sameSession(identity, tokenIdentity(pair.accessToken)) ||
+          !pair.refreshToken || (pair.user && pair.user.id !== identity.subject)) return null;
       bridge.onTokenPair(pair);
-      return pair.accessToken;
+      return bridge.getAccessToken() === pair.accessToken ? pair.accessToken : null;
     } catch {
       return null;
     } finally {
-      refreshInFlight = null;
+      if (refreshInFlight === flight) refreshInFlight = null;
     }
   })();
 
-  return refreshInFlight;
+  return flight.promise;
 }
-
-type RetriableConfig = InternalAxiosRequestConfig & {
-  __transportRetries?: number;
-  __authRetried?: boolean;
-  __tokenAtSend?: string | null;
-};
 
 apiClient.interceptors.request.use((config) => {
   const retriable = config as RetriableConfig;
   const headers = AxiosHeaders.from(config.headers);
   const token = bridge.getAccessToken();
-  if (!retriable.__tokenAtSend) {
-    retriable.__tokenAtSend = token;
+  if (!retriable.__sessionBound) {
+    retriable.__sessionBound = true;
+    // logoutReal captures A's bearer before clearing the store. Never replace it
+    // with B's token or let an old logout response change B's auth state.
+    retriable.__detachedLogout = config.url === '/auth/logout';
+    retriable.__sessionIdentity = tokenIdentity(token);
+    if (retriable.__detachedLogout) return config;
+    const explicit = headers.get('Authorization');
+    if ((token && !retriable.__sessionIdentity) || (explicit && explicit !== `Bearer ${token}`)) throw sessionChanged(retriable);
   }
+  if (retriable.__detachedLogout) return config;
+  if (!isCurrentSession(retriable)) throw sessionChanged(retriable);
+  retriable.__tokenAtSend = token;
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
   config.headers = headers;
   return config;
-});
+}, (error: unknown) => { throw error; }, { synchronous: true });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const config = response.config as RetriableConfig;
+    if (!config.__detachedLogout && !isCurrentSession(config)) throw sessionChanged(config);
+    return response;
+  },
   async (error: unknown) => {
     const config = error instanceof AxiosError ? (error.config as RetriableConfig | undefined) : undefined;
     if (!config) {
       throw error;
     }
+    if (config.__detachedLogout) throw error;
+    if (!isCurrentSession(config)) throw sessionChanged(config);
 
     config.__transportRetries = config.__transportRetries ?? 0;
     config.__authRetried = config.__authRetried ?? false;
@@ -316,21 +389,22 @@ apiClient.interceptors.response.use(
     const code = readErrorCode(error);
     const status = error instanceof AxiosError ? error.response?.status : undefined;
 
-    if (status === 403 && code === PASSWORD_CHANGE_REQUIRED_CODE) {
+    if (status === 403 && code === PASSWORD_CHANGE_REQUIRED_CODE && config.__sessionIdentity && config.__tokenAtSend === bridge.getAccessToken()) {
       bridge.onPasswordChangeRequired();
       throw error;
     }
 
     if (status === 401) {
       if (code && SESSION_ENDED_CODES.has(code)) {
-        bridge.onSessionEnded();
+        if (config.__sessionIdentity && config.__tokenAtSend === bridge.getAccessToken()) bridge.onSessionEnded();
         throw error;
       }
 
       const refreshable = code === null || REFRESHABLE_CODES.has(code);
-      if (refreshable && !config.__authRetried && isRefreshEligible(config.url)) {
+      if (refreshable && config.__sessionIdentity && !config.__authRetried && isRefreshEligible(config.url)) {
         const current = bridge.getAccessToken();
         if (config.__tokenAtSend && current && current !== config.__tokenAtSend) {
+          if (!mayReplay(config)) throw error;
           config.__authRetried = true;
           const headers = AxiosHeaders.from(config.headers);
           headers.set('Authorization', `Bearer ${current}`);
@@ -339,20 +413,23 @@ apiClient.interceptors.response.use(
         }
 
         config.__authRetried = true;
-        const token = await refreshAccessToken();
+        const token = await refreshAccessToken(config.__sessionIdentity);
+        if (!isCurrentSession(config)) throw sessionChanged(config);
         if (token) {
+          if (!mayReplay(config)) throw error;
           const headers = AxiosHeaders.from(config.headers);
           headers.set('Authorization', `Bearer ${token}`);
           config.headers = headers;
           return apiClient.request(config);
         }
-        bridge.onSessionEnded();
+        if (config.__tokenAtSend === bridge.getAccessToken()) bridge.onSessionEnded();
       }
       throw error;
     }
 
-    if (shouldRetryTransport(error) && config.__transportRetries < MAX_TRANSPORT_RETRIES) {
+    if (mayReplay(config) && shouldRetryTransport(error) && config.__transportRetries < MAX_TRANSPORT_RETRIES) {
       await sleep(computeRetryDelay(error as AxiosError, config.__transportRetries));
+      if (!isCurrentSession(config)) throw sessionChanged(config);
       config.__transportRetries += 1;
       return apiClient.request(config);
     }

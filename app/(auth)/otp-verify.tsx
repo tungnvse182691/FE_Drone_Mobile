@@ -8,14 +8,14 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
   verifyReporterOtpReal,
   resendReporterOtpReal,
-  submitReportReal,
   extractProblemCode,
 } from '../../src/api/reporterApi';
 import { useReporterStore } from '../../src/store/reporter';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
-import { REPORTER_HOME, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
+import { isValidReporterOtp, isReporterSession } from '../../src/api/uploads';
+import { RoleCode } from '../../src/types/enums';
+import { REPORTER_HOME } from '../../src/constants/routes';
 import {
-  clearCommandKey,
   getOrCreateCommandKey,
   newCommandKey,
 } from '../../src/api/idempotency';
@@ -36,10 +36,7 @@ export default function OtpVerifyScreen() {
   const intentId = params.intentId ?? '';
   const email = params.email ?? '';
 
-  const pendingReport = useReporterStore((state) => state.pendingReport);
-  const pendingDraftId = useReporterStore((state) => state.pendingDraftId);
   const markVerified = useReporterStore((state) => state.markVerified);
-  const clearPendingReport = useReporterStore((state) => state.clearPendingReport);
   const beginOtp = useAuthStore((state) => state.beginOtp);
   const markOtpVerified = useAuthStore((state) => state.markOtpVerified);
   const login = useAuthStore((state) => state.login);
@@ -68,9 +65,9 @@ export default function OtpVerifyScreen() {
   }, [cooldown]);
 
   const handleVerify = async () => {
-    const finalCode = code === '1' ? '111111' : code;
-    if (finalCode.length !== OTP_LENGTH) {
-      setError(`Vui lòng nhập đủ ${OTP_LENGTH} ký tự mã xác thực (hoặc nhập 1).`);
+    const finalCode = code;
+    if (!isValidReporterOtp(finalCode)) {
+      setError(`Vui lòng nhập đủ ${OTP_LENGTH} số của mã xác thực.`);
       return;
     }
     if (!activeIntentId) {
@@ -82,14 +79,12 @@ export default function OtpVerifyScreen() {
     setError(null);
     // Key bám theo (intent, mã đang nhập): retry cùng mã → replay; đổi mã → lệnh mới.
     const verifyScope = `reporter:verify:${activeIntentId}:${finalCode}`;
-    const submitScope = `reporter:submit:${pendingDraftId ?? activeIntentId}`;
     try {
       const verified = await verifyReporterOtpReal(
         activeIntentId,
         finalCode,
         getOrCreateCommandKey(verifyScope),
       );
-      clearCommandKey(verifyScope);
       markOtpVerified();
 
       // API-012 trả `AuthTokenResponseDto`: dựng phiên thật để các màn sau dùng chung auth store.
@@ -104,24 +99,23 @@ export default function OtpVerifyScreen() {
         sessionEmail,
         verified.tokens.mustChangePassword,
       );
-      if (sessionUser) {
-        login(sessionUser, verified.tokens);
-      }
-      markVerified(sessionEmail);
-
-      // Luồng đăng ký thuần (RPT-01 → RPT-02): xác thực xong vào thẳng cổng phản ánh.
-      if (!pendingReport) {
-        router.replace(REPORTER_HOME);
+      if (!sessionUser || sessionUser.role_code !== RoleCode.REPORTER || !verified.tokens.accessToken) {
+        setError('Chưa có phiên Reporter hợp lệ. Vui lòng đăng nhập lại.');
         return;
       }
-
-      const { report } = await submitReportReal(
-        pendingReport,
-        getOrCreateCommandKey(submitScope),
-      );
-      clearCommandKey(submitScope);
-      clearPendingReport();
-      router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: report.id } });
+      login(sessionUser, verified.tokens);
+      if (sessionUser.must_change_password) {
+        router.replace('/(auth)/force-change-password');
+        return;
+      }
+      if (!isReporterSession(useAuthStore.getState())) return;
+      markVerified(sessionEmail);
+      const draft = await useReporterStore.getState().bindPendingDraft();
+      router.replace(draft
+        ? draft.targetReportId
+          ? { pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } }
+          : '/(reporter)/report'
+        : REPORTER_HOME);
     } catch (err) {
       const code = extractProblemCode(err);
       setError(errorMessages[code] ?? 'Không thể xác thực. Vui lòng thử lại.');
@@ -195,26 +189,6 @@ export default function OtpVerifyScreen() {
             testID="otp-input"
           />
 
-          {__DEV__ ? (
-            <View style={styles.devHint}>
-              <MaterialIcons name="info-outline" size={14} color={colors.brandGold} />
-              <Text style={[typography.caption, styles.devHintText]}>
-                Mã thật qua Mailpit (localhost:18026). Demo: nhập OTP từ email.
-              </Text>
-              <Pressable
-                onPress={() => {
-                  setCode('111111');
-                  setError(null);
-                }}
-                style={({ pressed }) => [styles.quickFillBtn, pressed && styles.quickFillBtnPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Điền nhanh 111111"
-              >
-                <Text style={styles.quickFillText}>Điền nhanh 111111</Text>
-              </Pressable>
-            </View>
-          ) : null}
-
           {error ? (
             <View style={styles.errorRow}>
               <MaterialIcons name="error-outline" size={16} color={colors.error} />
@@ -227,7 +201,7 @@ export default function OtpVerifyScreen() {
             title="Xác nhận OTP"
             onPress={handleVerify}
             loading={loading}
-            disabled={code.length !== OTP_LENGTH && code !== '1'}
+            disabled={!isValidReporterOtp(code) || loading}
           />
 
           <Button

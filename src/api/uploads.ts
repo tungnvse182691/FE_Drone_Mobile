@@ -4,6 +4,33 @@ import { apiClient } from './client';
 import { parseProblemDetails } from './problemDetails';
 import type { ReportLocationSource } from '../types/position';
 
+export interface MobileSession {
+  status: string;
+  token: string | null;
+  user: { id?: string; role_code: string; must_change_password?: boolean } | null;
+}
+
+export function hasAuthenticatedSession(session: MobileSession): boolean {
+  return Boolean(session.user && session.token &&
+    (session.status === 'AUTHENTICATED' || session.status === 'REFRESHING'));
+}
+
+export function isReporterSession(session: MobileSession): boolean {
+  return hasAuthenticatedSession(session) && session.user?.role_code === 'REPORTER' &&
+    !session.user.must_change_password;
+}
+
+export function isValidReporterOtp(code: string): boolean {
+  return /^\d{6}$/.test(code);
+}
+
+export function strongUploadETag(version: string): string {
+  if (!version || version.startsWith('W/') || /[\r\n]/.test(version)) {
+    throw { code: 'precondition_required', status: 428 };
+  }
+  return version.startsWith('"') && version.endsWith('"') ? version : `"${version}"`;
+}
+
 /**
  * Hợp đồng upload ảnh private của Reporter (API-208 / API-211 / API-212 / API-213 / API-214).
  *
@@ -338,7 +365,7 @@ export const httpUploadTransport: UploadTransport = {
     const response = await apiClient.post<UploadSessionResponseDto>(
       `/reporter-evidence/uploads/${uploadId}/complete`,
       request,
-      { headers: { 'Idempotency-Key': idempotencyKey, 'If-Match': sessionVersion } },
+      { headers: { 'Idempotency-Key': idempotencyKey, 'If-Match': strongUploadETag(sessionVersion) } },
     );
     return response.data;
   },

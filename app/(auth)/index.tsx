@@ -16,15 +16,12 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { loginReal, extractProblemCode } from '../../src/api/authApi';
-import { submitReportReal } from '../../src/api/reporterApi';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
+import { isReporterSession } from '../../src/api/uploads';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
-import { RoleCode } from '../../src/types/enums';
 import {
   AUTH_REGISTER,
   REPORTER_HOME,
-  REPORTER_REPORT_DETAIL,
   ROLE_HOMES,
 } from '../../src/constants/routes';
 
@@ -33,9 +30,8 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
   const login = useAuthStore((state) => state.login);
-  const pendingReport = useReporterStore((state) => state.pendingReport);
+  const pendingReport = useReporterStore((state) => state.pendingDraft);
   const router = useRouter();
 
   const isSubmitDisabled = !phoneOrEmail.trim() || !password.trim();
@@ -59,35 +55,25 @@ export default function LoginScreen() {
         setError('Tài khoản không có vai trò hợp lệ cho ứng dụng di động.');
         return;
       }
-      login(loggedUser, response);
-      if (loggedUser.role_code === RoleCode.REPORTER) {
-        const reporter = useReporterStore.getState();
-        reporter.markVerified(loggedUser.phone_or_email);
-        if (reporter.pendingReport) {
-          const draftId = reporter.pendingDraftId;
-          const submitScope = `reporter:submit:${draftId ?? 'pending'}`;
-          try {
-            const { report } = await submitReportReal(
-              reporter.pendingReport,
-              getOrCreateCommandKey(submitScope),
-            );
-            clearCommandKey(submitScope);
-            reporter.clearPendingReport();
-            router.replace({
-              pathname: REPORTER_REPORT_DETAIL,
-              params: { reportId: report.id },
-            });
-            return;
-          } catch {
-            // Giữ nháp + khoá chống trùng để bấm Đăng nhập thử gửi lại (idempotent).
-            setError('Đã đăng nhập nhưng chưa gửi được phản ánh. Vui lòng bấm Đăng nhập để thử lại.');
-            return;
-          }
-        }
+      if (!response.accessToken) {
+        setError('Chưa có phiên đăng nhập hợp lệ. Vui lòng thử lại.');
+        return;
       }
+      login(loggedUser, response);
       if (loggedUser.must_change_password) {
         router.replace('/(auth)/force-change-password');
         return;
+      }
+      if (isReporterSession(useAuthStore.getState())) {
+        const reporter = useReporterStore.getState();
+        reporter.markVerified(loggedUser.phone_or_email);
+        const draft = await reporter.bindPendingDraft();
+        if (draft) {
+          router.replace(draft.targetReportId
+            ? { pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } }
+            : '/(reporter)/report');
+          return;
+        }
       }
       const home = ROLE_HOMES[loggedUser.role_code];
       if (home) {
@@ -101,20 +87,13 @@ export default function LoginScreen() {
         setError('Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên.');
       } else if (code === 'auth_password_change_required') {
         // Server báo phải đổi mật khẩu — vào flow đổi mật khẩu bắt buộc.
-        router.replace('/(auth)/force-change-password');
-        return;
+        setError('Cần phiên đăng nhập hợp lệ để đổi mật khẩu.');
       } else {
         setError('Không kết nối được máy chủ. Kiểm tra mạng và thử lại.');
       }
     } finally {
       setLoading(false);
     }
-  };
-
-  const fillQuickTest = (account: string, pass: string) => {
-    setPhoneOrEmail(account);
-    setPassword(pass);
-    setError(null);
   };
 
   return (
@@ -200,67 +179,6 @@ export default function LoginScreen() {
               <Text style={[typography.caption, styles.disabledReason]}>
                 Vui lòng nhập tài khoản và mật khẩu để tiếp tục
               </Text>
-            ) : null}
-          </View>
-
-          {/* Block Tài khoản kiểm thử nhanh -> Thu gọn mặc định */}
-          <View style={styles.demoSection}>
-            <Pressable
-              style={styles.demoToggle}
-              onPress={() => setShowDemo((prev) => !prev)}
-              accessibilityRole="button"
-              accessibilityLabel="Chế độ demo — tài khoản kiểm thử nhanh"
-            >
-              <View style={styles.demoToggleLeft}>
-                <MaterialIcons name="bug-report" size={14} color={colors.secondary} />
-                <Text style={[typography.caption, styles.demoToggleText]}>
-                  Chế độ demo — tài khoản kiểm thử nhanh
-                </Text>
-              </View>
-              <MaterialIcons
-                name={showDemo ? 'expand-less' : 'expand-more'}
-                size={16}
-                color={colors.secondary}
-              />
-            </Pressable>
-
-            {showDemo ? (
-              <View style={styles.demoBox}>
-                <Text style={[typography.caption, styles.demoHint]}>
-                  Mật khẩu tất cả: 1
-                </Text>
-                <View style={styles.quickTestRow}>
-                  <Pressable
-                    style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                    onPress={() => fillQuickTest('crew@hoanghai.vn', '1')}
-                    accessibilityRole="button"
-                    accessibilityLabel="Chọn tài khoản Đội Sửa Chữa"
-                  >
-                    <MaterialIcons name="build" size={16} color={colors.brandGold} />
-                    <Text style={[typography.caption, styles.quickTestChipText]}>Đội Sửa Chữa</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                    onPress={() => fillQuickTest('drone@hoanghai.vn', '1')}
-                    accessibilityRole="button"
-                    accessibilityLabel="Chọn tài khoản Phi Công Drone"
-                  >
-                    <MaterialIcons name="flight-takeoff" size={16} color={colors.brandGold} />
-                    <Text style={[typography.caption, styles.quickTestChipText]}>Phi Công</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={({ pressed }) => [styles.quickTestChip, pressed && styles.quickTestChipPressed]}
-                    onPress={() => fillQuickTest('dan.nguyen@gmail.com', '1')}
-                    accessibilityRole="button"
-                    accessibilityLabel="Chọn tài khoản Người Dân"
-                  >
-                    <MaterialIcons name="person" size={16} color={colors.brandGold} />
-                    <Text style={[typography.caption, styles.quickTestChipText]}>Người Dân</Text>
-                  </Pressable>
-                </View>
-              </View>
             ) : null}
           </View>
 
