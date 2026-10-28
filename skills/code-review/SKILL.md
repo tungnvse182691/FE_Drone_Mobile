@@ -1,10 +1,10 @@
 ---
 name: code-review
-description: "Kỹ năng thẩm định + tự sửa mã nguồn (Code Review & Auto-Fix) chuyên biệt cho dự án RoadGuard (Công ty TNHH Xây dựng Bê tông Hoàng Hải). Bắt buộc kích hoạt sau khi AI viết code xong bất kỳ màn hình/tính năng nào, hoặc khi Sếp yêu cầu ('review code', 'check lại', 'tự vả tự sửa', 'kiểm tra chất lượng', 'auto-fix', 'fix lỗi'). Skill hoạt động như một QA Lead / Senior Reviewer độc lập: quét diff thực, chạy compiler, rà soát 8 invariant cứng (MaterialIcons, UD-06, Fabric-safe, platform scope, defect-types, branding, contract data, error handling), tự sửa lỗi theo vòng lặp Self-Healing tối đa 5 vòng, và xuất nhật ký nghiệm thu vào docs/worklogs/."
+description: "Dùng khi review, audit, tự kiểm chứng hoặc nghiệm thu thay đổi trong dự án RoadGuard."
 ---
 
-# RoadGuard Code Review & Auto-Fix Skill
-### Quality Gate — Cơ chế Tự Vả Tự Sửa (Self-Healing Loop)
+# RoadGuard Code Review — Audit và Scoped Self-Review
+### Quality Gate — chọn mode trước khi review
 
 > *Bộ tài liệu chuẩn nguồn sự thật: `FE_AppMobile/docs/specs/` — Phiên bản Canonical 17_10 (xem `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`)*
 
@@ -12,13 +12,33 @@ AI khi đóng vai QA Reviewer **KHÔNG ĐƯỢC CHÂM CHƯỚC** cho bất kỳ 
 
 ---
 
+## Mode bắt buộc và authority
+
+Áp dụng authority/evidence tại `AGENTS.md` và canonical governance. Current owner/governance quyết định business; pinned BE controller/DTO/guard quyết định actual wire/quyền; executed evidence chứng minh riêng từng trục. Catalog 241 là snapshot Phase2C 15/10/2026 (`36c3a1d273f17dd29b816136ae0182a821fd79e4`), không current count. Historical scaffold/mock không cấp authority.
+
+| Mode | Ai / khi nào | Quyền |
+|---|---|---|
+| `AUDIT_READ_ONLY` | Mặc định cho independent reviewer/Muse; khi task chỉ audit | Chỉ read/search/git show/report chat. Không sửa source/worklog/fixture/index/commit/BE. P0/P1 có proof phải báo sớm |
+| `IMPLEMENT_AND_SELF_REVIEW` | Codex được giao implement với allowlist rõ | Self-fix đúng scope tối đa 5 vòng; worklog chỉ khi task cho phép. Ngoài scope báo file/lý do/impact trước sửa |
+
+Mọi nhãn Auto-Fix/Self-Healing còn ở checklist dưới đây CHỈ áp dụng `IMPLEMENT_AND_SELF_REVIEW` và trong allowlist. Trong audit, cùng finding chỉ được báo, kể cả deadline gấp, tests đang xanh hoặc yêu cầu “tự vả”. Independent reviewer không tự nhận quyền implement.
+
+### Reachability và evidence gates
+
+- Finding P0/P1/P2 cần active caller/route reachability, exact source:line/SHA, EXPECTED/ACTUAL/impact; dormant legacy/mock không tự thành runtime severity. Không xác minh được thì ghi UNKNOWN/NOT_RUN.
+- Typecheck + full regression theo scope, mounted Stack/route reachability, permission/headers/mutation preconditions, exact body/key replay, actor/session/environment switch, SQLite persistence/restart, upload VERIFIED và server receipt/readback.
+- Privacy, changed-file secret scan, `git diff --check` và allowlist/remote gates trước delivery. Không tải package/provider/native config khi chưa approval; BE read-only, state-changing HTTP chỉ fixture riêng được ủy quyền.
+- `API_CONNECTED`, `LOGIC_TESTED`, `PROTOCOL_INTEROP_TESTED`, `HTTP_VERIFIED`, `NATIVE_VERIFIED`, `ANDROID_E2E_VERIFIED`, `NOT_RUN`, `BE_CONTRACT_GAP`, `BE_DISCOVERY_GAP`, `BE_FIXTURE_BLOCKED` giữ định nghĩa tại `AGENTS.md`. Không lấy Node/.NET/component test thay HTTP/native/Android.
+- `LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`; HTTP 200 batch/local flag không là durable per-item ACK. Timeout giữ immutable journal/identity/payload/key/version và unknown outcome.
+- FastTrack API-146/policy revision + bootstrap package/item/binding/itemVersion thật; không số đo local, không NORMAL context thay FT. Thiếu contract production fail closed; mock chỉ isolated tests/dev harness.
+
 ## ⚙️ CORE PRINCIPLES — BẤT DI BẤT DỊCH
 
 | # | Nguyên tắc | Giải thích |
 |---|---|---|
 | P1 | **Evidence-Based Only** | Không review bằng trí nhớ hay suy đoán. Mọi đánh giá phải xuất phát từ lệnh chạy thật và đọc nội dung file thật. |
-| P2 | **Self-Healing Loop (Auto-Fix)** | Khi phát hiện lỗi, AI **KHÔNG ĐƯỢC** dừng lại báo cáo suông. Phải **TỰ ĐỘNG SỬA FILE NGAY LẬP TỨC**, sau đó kiểm chứng lại. Tối đa **5 vòng lặp**. Nếu sau 5 vòng vẫn fail → ghi nhận `ESCALATE_TO_HUMAN`. |
-| P3 | **Mandatory Worklog** | Mỗi session review xong, AI **BẮT BUỘC TẠO 1 FILE .MD MỚI** trong `docs/worklogs/` ghi đầy đủ kết quả. |
+| P2 | **Self-Healing Loop (Auto-Fix)** | Trong IMPLEMENT_AND_SELF_REVIEW, tự sửa finding đã chứng minh trong allowlist rồi verify. AUDIT_READ_ONLY chỉ báo finding, không sửa. Tối đa **5 vòng lặp**. Nếu sau 5 vòng vẫn fail → ghi nhận `ESCALATE_TO_HUMAN`. |
+| P3 | **Mandatory Worklog** | Chỉ IMPLEMENT_AND_SELF_REVIEW và task cho phép mới ghi worklog; AUDIT_READ_ONLY báo chat, không tạo file. |
 | P4 | **No Silent Pass** | TUYỆT ĐỐI CẤM tuyên bố "PASS" mà không chạy lệnh compiler thực tế. |
 | P5 | **Specification Inference** | Trước khi fix lỗi phức tạp (không phải lint), AI phải trình bày rõ *"Hành vi mong muốn theo Canonical 17_10 là gì"* rồi mới áp dụng fix. |
 
@@ -70,7 +90,7 @@ npx tsc --noEmit
 
 **Tiêu chí:** Kết quả đầu ra phải đạt đúng **0 lỗi (exit code 0)**.
 
-> Nếu có lỗi: CHUYỂN NGAY SANG BƯỚC 4 (Auto-Fix), KHÔNG báo cáo lỗi suông.
+> Nếu có lỗi: audit báo evidence; implement self-fix trong allowlist tại bước 4. Ngoài scope dừng phần phụ thuộc và báo.
 
 ---
 
@@ -89,7 +109,16 @@ AI Reviewer phải kiểm tra từng bộ lọc bên dưới, ghi nhận kết q
 
 **Lệnh quét:**
 ```powershell
-Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "Ionicons" -Recurse
+Get-ChildItem -LiteralPath app,src -Recurse -File -Include *.ts,*.tsx | Select-String -Pattern 'Ionicons'
+```
+
+No-match của PowerShell `Select-String` là output rỗng; không suy exit code native từ `$LASTEXITCODE` của lệnh trước. Với `git grep`/`rg`, exit 0 = match, 1 = no match, >=2 = lỗi công cụ; đọc match để phân loại, không tự xem mọi match là violation.
+
+```powershell
+git grep -n -I -e Ionicons -- app src
+$scanExit = $LASTEXITCODE
+if ($scanExit -ge 2) { throw "git grep failed: $scanExit" }
+if ($scanExit -eq 1) { Write-Output 'No matches' }
 ```
 
 **Bảng chuyển đổi icon tự động:**
@@ -121,7 +150,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "Ionicon
 
 **Lệnh quét:**
 ```powershell
-Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "vnđ|vnd|chi phí|dự toán|kinh phí|định mức|đơn giá|42\.500|74\.900|₫" -Recurse -CaseSensitive:$false
+Get-ChildItem -LiteralPath app,src -Recurse -File -Include *.ts,*.tsx | Select-String -Pattern 'vnđ|vnd|chi phí|dự toán|kinh phí|định mức|đơn giá|₫'
 ```
 
 **Được phép hiển thị:** Bộ 3 thông số thi công:
@@ -180,7 +209,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\_layout.tsx" -Pattern "Redi
 
 **Lệnh quét vi phạm:**
 ```powershell
-Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "'CRACK'|'POTHOLE'|'EROSION'|'DAMAGE'|defectType:\s*['\"](?!POTH_DEEP|DEPR_POND|EDGE_BRK|SLAB_CRK|SHLD_EROS)" -Recurse
+Get-ChildItem -LiteralPath app,src -Recurse -File -Include *.ts,*.tsx | Select-String -Pattern 'CRACK|POTHOLE|EROSION|DAMAGE|defectType'
 ```
 
 **Auto-Fix:** Thay mã tự chế bằng 5 mã chuẩn từ `defect-types.ts`.
@@ -208,18 +237,18 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\app\**\*.tsx" -Pattern "'CRACK'
 
 ```powershell
 # Kiểm tra dùng array index làm ID (cấm)
-Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "\.id\s*=\s*index|key=\{index\}" -Recurse
+Get-ChildItem -LiteralPath app,src -Recurse -File -Include *.ts,*.tsx | Select-String -Pattern '\.id\s*=\s*index|key=\{index\}'
 
 # Kiểm tra tọa độ GPS sai (dùng (0,0) thay null)
-Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s*0,\s*longitude:\s*0" -Recurse
+Get-ChildItem -LiteralPath app,src -Recurse -File -Include *.ts,*.tsx | Select-String -Pattern 'latitude:\s*0,\s*longitude:\s*0'
 ```
 
 **Quy tắc bắt buộc:**
 - UUID là `string`, không dùng numeric ID
 - Tọa độ GPS thiếu → `null`, không phải `{latitude: 0, longitude: 0}`
 - Timestamp phải RFC3339 có timezone
-- Enum giữ nguyên chữ hoa, UI label dịch riêng
-- `Page<T>` chứa `items/nextCursor/asOf`, không có `total/page/hasNextPage`
+- Enum giữ wire spelling/casing theo pinned DTO và explicit adapter; UI label dịch riêng
+- Pagination theo từng current DTO; không bịa total/page hoặc coi trang đầu là tổng
 
 ---
 
@@ -232,7 +261,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 | Hiển thị message "Gửi thất bại" sau timeout (nên là "Chưa xác nhận, đang kiểm tra") | Thay text error message |
 | Toast cho mỗi chunk upload hoặc mỗi retry | Gộp thành 1 banner |
 | Render HTML error từ server lên UI | Dùng fallback message trung tính |
-| Hiển thị "Đã đồng bộ" khi chỉ `navigator.onLine = true` | Cần API probe thực |
+| Hiển thị "Đã đồng bộ" khi chỉ `navigator.onLine = true` | Cần durable per-item server receipt/readback; API probe chỉ là tín hiệu kết nối |
 | `innerHTML` để render error message | Thay bằng `text` render |
 | Double-submit không khóa | Thêm `disabled` state trong khi loading |
 
@@ -242,7 +271,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 
 ### BƯỚC 4 — AUTO-FIX LOOP (Self-Healing Execution)
 
-> **Đây là phần CỐT LÕI của skill. Không được bỏ qua.**
+> Chỉ IMPLEMENT_AND_SELF_REVIEW trong allowlist. Audit bỏ qua toàn bộ mutation và báo finding.
 
 ```
 ┌─ VÒNG LẶP AUTO-FIX ─────────────────────────────────────────┐
@@ -261,7 +290,7 @@ Select-String -Path "D:\Do_AN_Drone\FE_AppMobile\**\*.tsx" -Pattern "latitude:\s
 │  IF attempt > 5 AND errors_exist:                            │
 │    → Trạng thái: ESCALATE_TO_HUMAN                           │
 │    → Mô tả chi tiết lỗi tồn đọng, lý do không tự fix được  │
-│    → Vẫn tạo worklog với mục "4. Lỗi Cần Người Can Thiệp"  │
+│    → Worklog chỉ khi task cho phép; audit báo chat  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -286,7 +315,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 #### 5.2 Invariants Nghiệp Vụ Cốt Lõi (theo `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`, `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` và `docs/specs/06_Mobile-Expo/07_Mobile-Integration-Acceptance.md`)
 ```
-✅ Saved ≠ Sent ≠ Verified ≠ Done   ← Bốn trạng thái KHÔNG thay thế nhau
+✅ LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED
 ✅ Mobile: chỉ 3 role hiện trường (Crew/Drone/Reporter)
 ✅ Web: PM + Supervisor — ONLINE ONLY
 ✅ Fast Track: Crew làm → PM kiểm/đóng → Supervisor nhận báo
@@ -306,7 +335,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 ### BƯỚC 6 — Xuất Báo Cáo Nghiệm Thu Worklog Bắt Buộc
 
-**Quy định:**
+**Quy định:** Chỉ tạo khi task implement cho phép; independent audit dùng template trong chat, không ghi file.
 - Tên file: `docs/worklogs/<Phase-ID>-<Task-Name>-<YYYYMMDD>-review.md`
 - Ví dụ: `docs/worklogs/C-05-submit-repair-20261017-review.md`
 
@@ -316,7 +345,11 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 # Báo Cáo Nghiệm Thu & Thẩm Định Mã Nguồn — Code Review Worklog
 
 - **Thời gian:** [YYYY-MM-DD HH:mm] (UTC+7)
-- **Người thẩm định:** Antigravity Auto-Reviewer (theo ủy quyền QA Lead — RoadGuard Canonical 17_10)
+- **Người thẩm định:** {reviewer}
+- **Mode:** {mode}
+- **SHA / scope:** {SHA} / {scope}
+- **Executed evidence:** {evidence}
+- **Chưa chạy / gap:** {NOT_RUN} / {blocking_gap}
 - **Feature / Màn hình:** [Mô tả ngắn, ví dụ: C-05 Submit Repair Form]
 - **Vòng Auto-Fix đã chạy:** [Số lần / Tối đa 5]
 
@@ -384,7 +417,7 @@ Sau khi pass tất cả 8 Invariants, kiểm tra thêm các quy tắc nghiệp v
 
 ## 🚀 CÁCH SỬ DỤNG SKILL NÀY
 
-### Cho Sếp — Khi giao việc cho AI trong IDE:
+### Cho owner — Khi giao việc cho AI trong IDE:
 
 > *"Làm xong màn [tên màn hình], kích hoạt skill `code-review` tự thẩm định, nếu có lỗi thì tự sửa tối đa 5 vòng, ghi kết quả vào docs/worklogs/ theo template chuẩn."*
 
@@ -396,10 +429,10 @@ Trigger phrases: `"review code"`, `"check lại"`, `"tự vả tự sửa"`, `"a
 1. Đọc danh sách file vừa thay đổi
 2. Chạy `npx tsc --noEmit`
 3. Quét 8 bộ lọc invariant
-4. Nếu có lỗi → **TỰ SỬA NGAY** (không hỏi Sếp trước)
+4. Audit báo finding; implement tự sửa trong allowlist tối đa 5 vòng, ngoài scope báo trước
 5. Kiểm tra Canonical 17_10 alignment
-6. Tạo worklog `.md` trong `docs/worklogs/`
-7. Báo cáo ngắn gọn kết quả cho Sếp (không paste toàn bộ worklog)
+6. Worklog chỉ khi implement task cho phép; audit báo trong chat
+7. Báo cáo ngắn gọn kết quả cho owner (không paste toàn bộ worklog)
 
 ---
 
@@ -423,7 +456,7 @@ FE_AppMobile\
 ## ⚠️ NHỮNG ĐIỀU TUYỆT ĐỐI CẤM
 
 1. ❌ Tuyên bố "PASS" mà không chạy compiler thực tế
-2. ❌ Báo cáo lỗi mà không tự sửa (khi còn trong giới hạn 5 vòng)
+2. ❌ Reviewer độc lập sửa file; implement sửa ngoài allowlist hoặc quá 5 vòng không báo
 3. ❌ Dùng Ionicons thay MaterialIcons
 4. ❌ Hiển thị tiền/VNĐ/chi phí trên Mobile UI
 5. ❌ Đổi payload hay idempotency key của request đã gửi
@@ -431,4 +464,4 @@ FE_AppMobile\
 7. ❌ Đặt màn hình PM/Supervisor trong app/ Mobile
 8. ❌ Dùng mã khuyết tật ngoài 5 mã chuẩn BTXM
 9. ❌ Sử dụng LiDAR trong bất kỳ context nào
-10. ❌ Bỏ qua bước tạo worklog sau review
+10. ❌ Tạo worklog khi audit read-only; claim reviewer/mode/evidence không đúng người thực hiện

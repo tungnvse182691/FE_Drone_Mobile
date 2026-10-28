@@ -215,7 +215,7 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 - **Chips Task Mode & Fast Track (Chữ thuần, tuyệt đối KHÔNG chứa emoji/icon màu tự chế):**
   - `[Đo & Sửa nhanh]`: Nền `#E9F7EC`, chữ xanh lá `#2F9E44`.
   - `[Chỉ đo đợt]`: Nền `#F1F3F5`, chữ xám `#2D3748`.
-  - `[Đạt Policy Sửa Nhanh]`: Nền xanh lá nhạt `#E9F7EC`, chữ xanh lá `#2F9E44`, xuất hiện khi kích thước đo $\le$ ngưỡng quy định.
+  - `[Đạt Policy Sửa Nhanh]`: Nền xanh lá nhạt `#E9F7EC`, chữ xanh lá `#2F9E44`, chỉ xuất hiện khi API-146 + policy revision + Crew package/item/binding/itemVersion bootstrap và mọi precondition đã verified; không tự cấp mutation authority.
   - `[Vượt Policy - Chuyển PM]`: Nền cam nhạt `#FEF3E2`, chữ cam `#F59E0B`, hướng dẫn gửi số đo về cho PM duyệt.
 - **Reporter Tracking Timeline:**
   - Trục dọc 5 bước hiển thị rõ ràng tiến độ: `Gửi phản ánh` $\rightarrow$ `Đã tiếp nhận` $\rightarrow$ `Khảo sát/Đo đạc` $\rightarrow$ `Đang sửa chữa` $\rightarrow$ `Hoàn thành nghiệm thu`.
@@ -230,7 +230,7 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 
 - Do dùng vàng đồng `{colors.primary}` cho đúng một hành động chính trên mỗi màn hình.
 - Do hiển thị rõ Task Mode (`INSPECT_AND_REPAIR` vs `MEASURE_ONLY`) trên màn hình chi tiết công việc của Crew.
-- Do hiển thị kết quả kiểm tra Fast Track Policy ngay khi Crew nhập đủ 3 kích thước (dài x rộng x sâu).
+- Do ghi “Đã nhập dữ liệu” khi đủ số đo; chỉ hiển thị kết quả policy từ API-146 và bootstrap thật. Thiếu contract thì khóa kèm lý do.
 - Do giữ tương phản văn bản đạt chuẩn WCAG AA ngoài trời nắng.
 - Don't đưa bất kỳ thông tin chi phí, giá tiền hay định mức vật tư tiêu hao vào giao diện (UD-06).
 - Don't tự ý cho phép Crew sửa nhanh khi công việc đang ở chế độ `MEASURE_ONLY` (BR-09).
@@ -251,12 +251,12 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 ### Offline Badge (bắt buộc xuyên màn hình tác nghiệp)
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  📶 Offline • Đã tải lúc 08:32 • Chạm để đồng bộ ngay      │
+│  📶 Offline • Cache lúc HH:mm • Transport: bị chặn      │
 └─────────────────────────────────────────────────────────────┘
 ```
 - Màu nền: `#FEF3E2` (cam nhạt), chữ `#F59E0B`
-- Hiển thị xuyên suốt màn hình Crew/Drone khi `navigator.onLine = false`
-- Nhãn `"Đã tải lúc HH:mm"` phải luôn hiển thị được (không ẩn sau loading)
+- React Native dùng device connectivity signal để mô tả mạng, không dùng `navigator.onLine` làm authority. Hiển thị riêng last API probe, cache timestamp, durable queue state và transport capability. API probe thành công không là durable ACK.
+- Nhãn “Đã tải lúc HH:mm” chỉ dùng timestamp cache thật; nếu chưa có thì ghi chưa tải, không bịa thời gian. Không ẩn metadata cache đã có sau loading.
 - Trạng thái offline KHÔNG disable capture ảnh/form nhập liệu
 
 ### Thông báo Success — Dùng từ cụ thể, không dùng từ chung
@@ -266,3 +266,7 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 | "Đã gửi" (generic) | "Đã gửi lên máy chủ" |
 | "Hoàn thành" (generic) | "PM đã kiểm tra" / "Máy chủ đã xác minh tệp" / "Đã nghiệm thu" |
 | "Thất bại" sau timeout | "Chưa xác nhận được kết quả, đang kiểm tra" |
+
+### Authority và offline capability
+
+Áp dụng `AGENTS.md` cho business/BE/evidence/mode; file này chỉ hướng dẫn UI. Khi C10 API-130 còn `BLOCKED_CONTRACT`, không hiển thị CTA “Đồng bộ ngay” có vẻ gửi được; disabled action phải kèm lý do thiếu provider/contract/fixture thực. Local save, network availability, server receipt và PM acceptance hiển thị riêng: `LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`. Native/Android chưa chạy ghi `NOT_RUN`.

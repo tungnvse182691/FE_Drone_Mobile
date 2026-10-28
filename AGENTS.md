@@ -1,6 +1,8 @@
 # AGENTS.md — RoadGuard FE_AppMobile
 
-> Nguồn-sự-thật cho mọi AI làm việc trong repo này. Đọc hết file này TRƯỚC khi viết code.
+> Entrypoint cho mọi AI trong repo. Đọc hết trước khi viết code; authority phân theo business, implementation và verification dưới đây.
+
+> Override dưới đây chỉ áp dụng với tài liệu lịch sử; không đè current owner decision, canonical governance, current BE DTO/guard hoặc executed evidence.
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
 **Mọi quy định trong mục "Chuẩn Hóa Canonical 17_10" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (bộ canonical cũ, các thư mục `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
@@ -58,17 +60,27 @@
 
 ## Skill bắt buộc
 - **Skill dự án:** `roadguard` (tại `FE_AppMobile/skills/roadguard/SKILL.md`) — **độc lập hoàn toàn**, chứa kỷ luật chống AI "ngáo" + toàn bộ đặc tả RoadGuard Canonical 17_10 (Hoàng Hải).
-- **Skill thẩm định mã nguồn (Review):** `code-review` (tại `FE_AppMobile/skills/code-review/SKILL.md`) — Quality Gate & cơ chế "Tự vả tự sửa", tự động kiểm chứng `npx tsc --noEmit` 0 lỗi, quét 100% MaterialIcons (cấm Ionicons), quét UD-06 và xuất nhật ký worklog.
+- **Skill thẩm định mã nguồn (Review):** `code-review` (tại `FE_AppMobile/skills/code-review/SKILL.md`) — Quality Gate & cơ chế "Tự vả tự sửa", tự động kiểm chứng `npx tsc --noEmit` 0 lỗi, quét 100% MaterialIcons (cấm Ionicons), quét UD-06 và worklog chỉ khi task implement cho phép; independent review mặc định AUDIT_READ_ONLY.
 - Skill generic `vibe-guard` (nếu có sẵn) đã được bao gồm trong `roadguard`.
 
-## Nguồn-sự-thật (đọc theo thứ tự ưu tiên)
-1. **Điều khoản Override Tối cao** ở đầu file này và trong `skills/roadguard/SKILL.md` (Ưu tiên số 0 — luôn thắng).
-2. `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md` — nguồn sự thật Canonical 17_10 (authority & source-of-truth chính thức).
-3. `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` — hợp đồng API Frontend & Mobile chính thức (241 operations / 223 paths / 357 schemas / 47 controllers; operation ID `API-001` → `API-241`).
-4. `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` + `docs/specs/02_Business-Workflows/` — quyền theo vai trò và luồng nghiệp vụ.
-5. `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md` — ma trận màn hình/API cho Crew, Reporter, Operator.
-6. `skills/BOOTSTRAP_PROMPT.md` — đặc tả scaffold mobile (routing, types, schema SQLite, mock API).
-7. `skills/DESIGN.md` — design system (tokens, components, minimalism checklist).
+## Authority và evidence — RULES-01 (2026-10-28)
+
+Entrypoint: `AGENTS.md`; áp dụng governance tại `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`.
+
+| Trục | Nguồn | Cách dùng |
+|---|---|---|
+| Business target | Quyết định owner mới nhất có scope/ngày/nguồn + canonical governance | Chỉ supersede phần được quyết định; không tự duyệt wire/quyền mới |
+| Implementation contract | Current BE controller/DTO/service/repository/guard ở pinned SHA + authorized HTTP contract | Quyết định wire shape, quyền runtime và preconditions thực; không tự hợp thức hóa business gap |
+| Verification | Exact executed command, SHA, environment, output và giới hạn | Tests, HTTP, protocol interop, native và Android là các trục riêng |
+| Historical reference | Scaffold, mock, snapshot cũ | Chỉ truy vết; không cấp production authority |
+
+Owner khác source: ghi EXPECTED/ACTUAL + `PRODUCT_SOURCE_GAP`; wire/guard thiếu: `BE_CONTRACT_GAP`. Production fail closed, báo checkpoint phụ thuộc; tiếp tục phần độc lập an toàn. Override canonical chỉ đè tài liệu lịch sử, không đè owner/governance/current BE/evidence.
+
+Catalog 241 operations / 223 paths / 357 schemas / 47 controllers là snapshot Phase2C 15/10/2026, source `36c3a1d273f17dd29b816136ae0182a821fd79e4`; không phải current operation count. Mọi cập nhật số lượng cần inventory method/path/actor/status/source SHA và delta; không tự thay bằng 260.
+
+- Quyền/business: `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` và `docs/specs/02_Business-Workflows/`.
+- Màn/API: `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md`; đọc cùng current BE guard.
+- `skills/BOOTSTRAP_PROMPT.md` là historical scaffold; `skills/DESIGN.md` là hướng dẫn UI, không cấp quyền wire.
 
 ## Stack được chốt (KHÔNG đổi mà không hỏi)
 - **Expo Router** (file-based) + TypeScript — KHÔNG dùng React Navigation thuần
@@ -102,8 +114,37 @@
 
 ## Kiến trúc cốt lõi cần nhớ
 - **Offline queue (`docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md`):** `LocalState`: `DRAFT → WAITING_DEPENDENCIES → READY → IN_FLIGHT → ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`). SHA-256 checksum trước khi gửi; retry có backoff. Signed batch chỉ PM/Crew (ECDSA P-256, SPKI DER Base64, P1363, canonical bytes) qua API-130; `Idempotency-Key` bắt buộc (thiếu → 428).
-- `src/offline/schema.sql`: `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
+- Historical/conceptual scaffold `src/offline/schema.sql` (không mặc định là current SQLite DDL; xác minh `src/offline/database.ts`, migration và caller hiện hành trước thay đổi): `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
 - **Media Asset Lifecycle:** ghi temp file $\rightarrow$ close $\rightarrow$ SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media.
 - `Defect.geometry` = GeoJSON chuẩn (tương thích `geography(4326)`); tọa độ wire luôn là `[lon, lat]` (kinh độ trước, vĩ độ sau).
 - **Mã lỗi UI:** 17_10 **KHÔNG có bảng mã dùng chung** — mỗi operation có mục "Error contract (declared, not execution)" riêng trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; body `application/problem+json`; quy tắc 409/412/428 tại `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`. UI đọc `code` rồi map; `code` lạ → fallback tiếng Việt, KHÔNG hardcode bảng mã.
 - Design tokens trong `src/design-tokens.ts`; vàng đồng `#C9A227` chỉ cho 1 CTA/màn + tab active + KPI.
+
+## Current RoadFE Delivery Discipline
+
+- ChatGPT: planning/review. Muse/independent reviewer: `AUDIT_READ_ONLY` mặc định, chỉ read/search/git show/report trong chat; không sửa source, worklog, fixture, git index/commit hay BE. Báo sớm P0/P1 có proof.
+- Codex: `IMPLEMENT_AND_SELF_REVIEW` khi được giao implement với allowlist; tự sửa trong scope tối đa 5 vòng. Ngoài scope: báo file/lý do/tác động trước khi sửa. Worklog chỉ ghi khi task cho phép, attribution đúng reviewer/mode/SHA/scope/evidence; không nhận review độc lập là self-review.
+- Trước edit và push: xác minh HEAD, branch, origin/main đã fetch, tracked/untracked và WIP. Gặp tracked WIP agent khác thì dừng báo; không reset/clean/overwrite, không xóa artifact/journal/media pending. Stage bằng đường dẫn cụ thể.
+- BE Candidate3 READ-ONLY; đối chiếu remote develop và pin SHA. HTTP state-changing chỉ trên fixture riêng được ủy quyền, không assignment/demo chung, SQL hay Docker. Thiếu fixture ghi `BE_FIXTURE_BLOCKED`; thiếu discovery ghi `BE_DISCOVERY_GAP`.
+- Command journal durable trước POST; identity actor/environment/session/resource, payload, version và Idempotency-Key bất biến. Exact replay không đổi actor/body/key; timeout/cancel giữ `UNKNOWN_OUTCOME` và dữ liệu đối soát. Logout không xóa pending; kiểm session qua mọi await/restart.
+- Source/receipt validation bắt buộc: không fake server ID/hash/version/ACK, không dùng task ETag hay eligibility ETag làm RepairItem rowversion. HTTP 200 batch/local ACK không chứng minh durable per-item receipt; cần server receipt/readback đúng quyền/nguồn.
+- FastTrack chỉ từ API-146/policy revision + bootstrap Crew package/item/binding/itemVersion thật và preconditions verified. Số đo local không cấp mutation authority. NORMAL repairContext không thay FastTrack bootstrap. Correction thiếu current review/intake lineage hoặc FastTrack thiếu nguồn thì `BE_CONTRACT_GAP`, khóa production capability.
+- Không runtime mock/adapter giả khi BE gap. Mock chỉ isolated test/dev harness. Giữ problem code/status/source để truy vết; UI fallback trung tính, không log token/password/OTP/signed URL/PII.
+- Gate: typecheck, full regression, route mount/reachability, permission/headers/preconditions, immutable replay, actor/session/env switch, SQLite persistence/restart, upload `VERIFIED`, receipt/readback, privacy, secret scan và `git diff --check`. Missing native/Android evidence phải ghi `NOT_RUN`, không suy PASS từ Node/.NET.
+- Không tự thêm package/provider/native crypto/plugin/app config. Chỉ triển khai sau approval cụ thể và native proof phù hợp; không private key plaintext trong SQLite/AsyncStorage. SecureStore không tự là EC signer hay hardware-backed proof.
+- Commit/push riêng từng checkpoint khi gate và quyền cho phép, kiểm remote không tiến lên; không force-push. Roadmap không là quyền tự mở checkpoint tiếp theo.
+
+### Evidence labels
+
+| Label | Chứng minh trong phạm vi đã ghi |
+|---|---|
+| `API_CONNECTED` | Có real wrapper/caller; chưa chứng minh HTTP thực |
+| `LOGIC_TESTED` | Logic/fixture tests đã chạy; không phải native/HTTP |
+| `PROTOCOL_INTEROP_TESTED` | Byte/signature/reference parity trên vector và numeric domain đã chạy |
+| `HTTP_VERIFIED` | Method/path/actor/fixture/status/readback thực, ghi rõ read hay mutation |
+| `NATIVE_VERIFIED` | Provider/build/key lifecycle thực trên native device với giới hạn rõ |
+| `ANDROID_E2E_VERIFIED` | Luồng Android thực đã chạy; không thay bằng component test |
+| `NOT_RUN` | Chưa chạy; ghi lý do và gate còn thiếu |
+| `BE_CONTRACT_GAP` / `BE_DISCOVERY_GAP` / `BE_FIXTURE_BLOCKED` | Thiếu contract / discovery / fixture; không gọi chung là BE chưa có API |
+
+`LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`.

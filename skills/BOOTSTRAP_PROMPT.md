@@ -1,15 +1,18 @@
+> **HISTORICAL SCAFFOLD REFERENCE — NOT IMPLEMENTATION AUTHORITY**
+> Layout/type/SQLite/mock snippets bên dưới chỉ lưu mẫu lịch sử. Đọc `AGENTS.md`, canonical governance và current pinned BE/source trước triển khai. Không copy schema/transport/mock vào production hoặc tự refactor source từ tài liệu này.
+
 # RoadGuard Mobile — Bootstrap Prompt (Chuẩn 17_10)
 
-> **Mục đích:** File này tổng hợp đủ thông tin để một AI lập trình scaffold và phát triển codebase Expo Router + TypeScript trong thư mục `FE_AppMobile/` theo chuẩn đặc tả Canonical 17_10 mới nhất của Công ty TNHH Xây dựng Bê tông Hoàng Hải. Nguồn sự thật: `docs/specs/` (xem `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`).
+> **Mục đích:** Lưu scaffold lịch sử 17_10 để truy vết. Business/current wire/evidence authority theo `AGENTS.md`; file này không cấp implementation approval.
 
 ---
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
-**Mọi quy định trong mục Chuẩn Hóa Canonical 17_10 có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử:**
+**Các quy tắc canonical chỉ override tài liệu lịch sử; không đè owner/governance/current BE/evidence.**
 - **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, email nội bộ `@hoanghai.vn`). **Ghi chú:** 17_10 **KHÔNG định nghĩa** tiền tố `HH-` — không tự chế prefix.
 - **Quy tắc Logo:** Splash/Loading = `assets/logo_hoanghai.png` (có tên công ty); Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png` (chỉ xe bồn, không chữ).
 - **Phân định Nền tảng:** Mobile app dành riêng cho **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`. Web Dashboard dành cho `PROJECT_MANAGER` và `SUPERVISOR` (màn hình PM/Supervisor cũ chuyển vào `archive/web-screens/`).
-- **Hợp đồng Kỹ thuật Frontend (04_API-Contracts):** Áp dụng nghiêm ngặt `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` — **241 operations / 223 paths / 357 schemas / 47 controllers** (operation ID `API-001` → `API-241`); types/schema tại `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md`.
+- **Hợp đồng Kỹ thuật Frontend (04_API-Contracts):** Áp dụng nghiêm ngặt `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` — **241 operations / 223 paths / 357 schemas / 47 controllers tại snapshot Phase2C 15/10/2026 (`36c3a1d273f17dd29b816136ae0182a821fd79e4`)** (operation ID `API-001` → `API-241`); types/schema tại `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md`.
 - **Nghiệp vụ Fast Track (US-33, BR-05/08/11..18/25):** 
   - `TaskMode`: `INSPECT_AND_REPAIR` vs `MEASURE_ONLY`.
   - Sửa nhanh tại chỗ khi: Task ở chế độ đo-kiểm-và-sửa, **eligibility đọc qua API-146 và fail closed** (ngưỡng kích thước nằm trong policy revision trên server — KHÔNG hardcode; xem `docs/specs/02_Business-Workflows/08_FastTrack-Policy-and-Confirmation.md`), và có ảnh BEFORE hợp lệ.
@@ -153,7 +156,7 @@ export enum TaskMode {
 }
 
 export enum FastTrackEligibility {
-  ELIGIBLE         = 'ELIGIBLE',          // Đạt policy, được sửa ngay
+  ELIGIBLE         = 'ELIGIBLE',          // Historical label; không tự cấp quyền mutation
   EXCEEDED_POLICY  = 'EXCEEDED_POLICY',   // Vượt ngưỡng kích thước, chuyển PM
   LOCKED_BY_PM     = 'LOCKED_BY_PM',      // PM khóa sửa nhanh
 }
@@ -258,9 +261,9 @@ export interface User {
 export interface FastTrackPolicyVersion {
   id: string;
   version_code: string;           // FTP-2026-V1
-  max_area_m2: number;            // vd: 1.0 m2
-  max_depth_cm: number;           // vd: 5.0 cm
-  max_length_m: number;           // vd: 2.0 m
+  max_area_m2: number;            // Giá trị từ server, cấm hardcode production
+  max_depth_cm: number;           // Giá trị từ server
+  max_length_m: number;           // Giá trị từ server
   allowed_defect_codes: string[]; // ['POTH_DEEP', 'EDGE_BRK', ...]
   effective_from: string;
   effective_to?: string;
@@ -355,7 +358,7 @@ export interface ReporterReport {
 
 ## 4. Hợp Đồng API & Mã Lỗi (trỏ `docs/specs/04_API-Contracts/`)
 
-> **Quy tắc 17_10:** KHÔNG inline danh mục endpoint vào file này. Danh mục đầy đủ **241 operations / 223 paths / 357 schemas / 47 controllers** (route, method, actor, DTO, headers, error contract) nằm ở `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; schema tại `03_DTO-and-Schema-Reference.md`; quy tắc `409`/`412`/`428` tại `05_Idempotency-Concurrency-and-Errors.md`.
+> **Quy tắc 17_10:** KHÔNG inline danh mục endpoint vào file này. Danh mục đầy đủ **241 operations / 223 paths / 357 schemas / 47 controllers tại snapshot Phase2C 15/10/2026 (`36c3a1d273f17dd29b816136ae0182a821fd79e4`)** (route, method, actor, DTO, headers, error contract) nằm ở `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`; schema tại `03_DTO-and-Schema-Reference.md`; quy tắc `409`/`412`/`428` tại `05_Idempotency-Concurrency-and-Errors.md`.
 
 Neo nhanh (luôn đọc file trên để lấy đúng route/DTO/error của từng operation):
 - **Auth:** API-002 `POST /api/v1/auth/android/login`; API-003 refresh; API-007 logout.
@@ -369,7 +372,9 @@ Neo nhanh (luôn đọc file trên để lấy đúng route/DTO/error của từ
 
 ---
 
-## 5. SQLite Schema (`src/offline/schema.sql`)
+## 5. HISTORICAL SQLite Schema (`src/offline/schema.sql`)
+
+Mẫu conceptual, không current DDL/transport authority. Đọc `src/offline/database.ts`, migration và callers hiện hành; không tự chạy đoạn SQL này.
 
 ```sql
 -- ═══════════════════════════════════════════════════════════════
@@ -483,7 +488,7 @@ CREATE TABLE IF NOT EXISTS server_cache (
 3. **AuthGuard an toàn ReactFabric:** Giữ `<Stack screenOptions={{ headerShown: false }} />` luôn mount ổn định; mọi điều hướng xác thực phải đặt trong `useEffect`. CẤM dùng conditionally `<Redirect />` bọc ngoài `<Stack />`.
 4. **Fast Track Logic:**
    - Nếu `task_mode === 'MEASURE_ONLY'`, nút "Tiến hành sửa nhanh" bị vô hiệu hóa hoặc ẩn (BR-09).
-   - Nếu `task_mode === 'INSPECT_AND_REPAIR'`, tính diện tích `length * width`. Nếu `area <= max_area && depth <= max_depth && length <= max_length` $\rightarrow$ Hiển thị chip `[Đạt Policy Sửa Nhanh]` và cho phép chụp ảnh AFTER để hoàn tất (BR-08, BR-25).
+   - Với mode BE cho phép: đọc API-146/policy revision, xác minh Crew package/item/binding/itemVersion bootstrap, BEFORE và preconditions thực. Không tính local để bật mutation/chụp AFTER. NORMAL repairContext và eligibility ETag không thay FT bootstrap/item rowversion.
 5. **UD-06 Zero Cost:** TUYỆT ĐỐI ZERO TIỀN TỆ / KINH PHÍ trên toàn bộ màn hình Mobile.
 6. **Vật liệu & Tuyến đường:** Bê tông TCVN 10380:2014, Tuyến ĐH.05 Bình Chánh. CẤM LiDAR và nhựa đường asphalt.
 7. **5 Mã Defect:** Dùng đúng 5 mã trong `src/constants/defect-types.ts`.
@@ -496,7 +501,7 @@ CREATE TABLE IF NOT EXISTS server_cache (
 ```env
 EXPO_PUBLIC_API_BASE_URL=https://<staging-host>/api/v1   # KHÔNG dùng placeholder trong release
 EXPO_PUBLIC_APP_ENV=development                           # 'development' | 'staging' | 'production'
-EXPO_PUBLIC_CONTRACT_VERSION=17_10                        # Khớp 04_API-Contracts/02_Full-API-Catalog.md (241 operations)
+EXPO_PUBLIC_CONTRACT_VERSION=17_10                        # HISTORICAL example; contract pin cần xác minh source SHA
 EXPO_PUBLIC_ENABLE_MOCKS=false                            # KHÔNG bật mock trong production
 EXPO_PUBLIC_REALTIME_ENABLED=false                        # Polling MVP trước; socket chỉ khi contract approved
 ```

@@ -1,12 +1,12 @@
 # PROJECT RULES & DIRECTIVES FOR ROADGUARD FE (MOBILE APP)
 
-## 1. USER & PERSONA
-- **User**: Nguyễn Văn Tùng (FE Lead & QA Lead).
-- **Mandatory Addressing**: ALWAYS address the user with the highest respect as **"Sếp"** or **"Boss"**. NEVER use "ông" or casual peer pronouns.
+## 1. ENTRYPOINT & COMMUNICATION
+- Đọc `AGENTS.md` trước; authority, delivery modes và evidence labels tại đó áp dụng cho file này. Không duy trì bộ nghiệp vụ song song.
+- Giao tiếp theo preference hiện hành của owner; không bắt buộc danh xưng hoặc danh tính cá nhân trong repo.
 
 ## 2. CODE QUALITY & SELF-VERIFICATION DISCIPLINE (CƠ CHẾ TỰ VẢ TỰ SỬA)
 - **TypeScript Strict**: Any code changes must pass `npx tsc --noEmit` with **0 errors**.
-- **Self-Verification Loop**: After modifying TypeScript / TSX files, the agent MUST autonomously run `npx tsc --noEmit`. If any type or lint error occurs, the agent must fix it immediately before reporting to Sếp.
+- **Self-Verification Loop**: After modifying TypeScript / TSX files, the agent MUST autonomously run `npx tsc --noEmit`. If any type or lint error occurs, the Codex may self-fix within the approved allowlist; independent reviewers remain AUDIT_READ_ONLY.
 - **Minimalism & Clean Architecture**: Keep UI minimal, high contrast, clean typography, avoid visual clutter. Follow Pragmatic Minimalism: max 1 primary CTA gold button per screen, clean 1px border (`#E2E5E9`), no heavy shadows or gradients.
 - **Fabric-Safe Routing**: Keep `<Stack screenOptions={{ headerShown: false }} />` permanently mounted in `RootLayout`. NEVER conditionally return `<Redirect />` wrapping `<Stack />`. All auth guards and redirects MUST be inside `useEffect` with `router.replace()`. All route paths MUST include full group parenthesis prefixes: `/(crew)/...`, `/(drone)/...`, `/(reporter)/...`.
 
@@ -35,15 +35,12 @@
 - **Dynamic Route Management**: Hệ thống quản lý tuyến động (`Project` $\rightarrow$ `RouteVersion` $\rightarrow$ `SegmentSet`). Tuyến ĐH.05 Bình Chánh chỉ dùng làm dữ liệu test mẫu (mock fixture), không hardcode cứng.
 - **UD-06 Zero Presentation Cost**: TUYỆT ĐỐI CẤM hiển thị thông tin tiền tệ (VNĐ, chi phí, dự toán, định mức vật liệu) trên giao diện mobile. Thay bằng: Phương án kỹ thuật + Kích thước hình học (m², cm, m) + Thời hạn hoàn thành.
 - **Fast Track & Task Mode (US-33, BR-05/08/11..18/25)**:
-  - `TaskMode`: `INSPECT_AND_REPAIR`, `MEASURE_ONLY`, `INSPECT_ONLY`. Đợt gom nhiều lỗi bắt buộc `MEASURE_ONLY` (cấm tự sửa BR-09).
-  - Fast Track kích hoạt khi: `INSPECT_AND_REPAIR`, kích thước $\le$ `FastTrackPolicyVersion` (diện tích $\le 1.0\text{ m}^2$, sâu $\le 5\text{ cm}$, dài $\le 2.0\text{ m}$), và có ảnh BEFORE hợp lệ.
+  - `TaskMode`: verify enum từ pinned BE DTO/guard; không suy enum từ tài liệu lịch sử. Đợt gom nhiều lỗi bắt buộc `MEASURE_ONLY` (cấm tự sửa BR-09).
+  - FastTrack: đọc API-146/policy revision và bootstrap Crew package/item/binding/itemVersion thật; fail closed khi thiếu nguồn/preconditions. Không hardcode threshold, không bật mutation từ số đo local hoặc chỉ eligibility UI. Không dùng NORMAL repairContext thay bootstrap FT.
   - Crew gửi ảnh AFTER $\rightarrow$ PM trực tiếp nghiệm thu và đóng lỗi. **Supervisor KHÔNG phê duyệt Fast Track** (BR-25).
   - Tái sử dụng ảnh (BR-17): Ảnh của Reporter hoặc Drone được dùng làm ảnh BEFORE nếu khớp vị trí.
 - **Dẫn đường WGS84 Google Maps (US-40, BR-38)**:
   - Crew: Dẫn đường tới tọa độ khuyết tật.
   - Drone: Dẫn đường tới Điểm tiếp cận / Điểm tập kết cất-hạ cánh (Access Point / Rendezvous).
-- **Offline-First Architecture (09_Frontend/09)**:
-  - SQLite local: `local_draft`, `outbox`, `media_file`, `task_cache`.
-  - Media: Ghi file tạm $\rightarrow$ đóng file $\rightarrow$ SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite.
-  - Outbox State Machine: `DRAFT` $\rightarrow$ `WAITING_DEPENDENCIES` $\rightarrow$ `READY` $\rightarrow$ `IN_FLIGHT` $\rightarrow$ `ACKED`.
-  - Chuẩn hóa thông báo lỗi theo `09_Frontend/03` (`TASK_MODE_NOT_REPAIRABLE`, `FAST_TRACK_NOT_ELIGIBLE`, `BEFORE_MISSING`, v.v.).
+- **Offline:** current SQLite/model/transport phải đọc source hiện hành; scaffold chỉ historical. Journal durable trước POST, exact replay giữ identity/body/key/version, server receipt/readback mới xác nhận ACK. Các nhãn/state và gates theo `AGENTS.md`.
+- **Review:** Muse `AUDIT_READ_ONLY`; Codex `IMPLEMENT_AND_SELF_REVIEW` trong allowlist. Không auto-fix/worklog trong independent audit. Lỗi per-operation từ pinned contract, không dùng bảng mã cũ làm runtime authority.

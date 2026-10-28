@@ -1,15 +1,17 @@
 ---
 name: roadguard
-description: "Skill chuyên cho DỰ ÁN RoadGuard (hệ thống bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải). Bắt buộc dùng BẤT CỨ KHI NÀO làm việc trong repo RoadGuard — scaffold FE_AppMobile (Expo Router + TypeScript), sửa bug, thêm tính năng, review code, viết backend C#/ASP.NET Core, hay thay đổi bất cứ file nào thuộc dự án này. Skill này độc lập hoàn toàn: nhúng sẵn kỷ luật chống AI 'ngáo' + toàn bộ đặc tả dự án chuẩn hóa 17_10 (Hoàng Hải, TCVN 10380:2014, Phi tài chính UD-06, stack Expo Router + Fabric, 3 vai trò mobile hiện trường: CREW, DRONE, REPORTER, Fast Track sửa nhanh, hợp đồng API 241 operations theo `04_API-Contracts/02_Full-API-Catalog.md`, 5 mã khuyết tật chuẩn, 100% MaterialIcons - CẤM Ionicons). Phối hợp chặt chẽ với skill 'code-review' để tự kiểm chứng 0 lỗi compiler."
+description: "Dùng khi làm việc trong repo RoadGuard: scaffold, sửa code, audit, review hoặc cập nhật hướng dẫn dự án."
 ---
 
 # RoadGuard Skill: Kỷ Luật Chống AI Ngáo + Đặc Tả Dự Án Hoàng Hải (Chuẩn 17_10)
 
-Skill này **độc lập hoàn toàn** — thay thế mọi skill generic cho dự án RoadGuard. Nó bao gồm:
+Skill dự án đọc cùng `AGENTS.md` và canonical governance; không tự nâng authority cao hơn owner/current BE/evidence. Nó bao gồm:
 - **PHẦN A:** Kỷ luật chống bịa & quy trình 6 bước bắt buộc.
 - **PHẦN B:** Nguồn-sự-thật & đặc tả kỹ thuật chuẩn hóa 17_10 của RoadGuard.
 
 ---
+
+> Override chỉ đè tài liệu lịch sử; authority/mode/evidence tại `AGENTS.md` áp dụng.
 
 ## ⚠️ ĐIỀU KHOẢN OVERRIDE TỐI CAO (CANONICAL PRIORITY)
 **Mọi quy định trong mục "Chuẩn Hóa Canonical 17_10" dưới đây có hiệu lực ưu tiên cao nhất, OVERRIDE (đè) lên toàn bộ các tài liệu đặc tả lịch sử (bộ canonical cũ, các thư mục `14-9/`, `22_9/`, `27_9_V3`, `28_9` và các file spec v1/v2 cũ):**
@@ -34,6 +36,7 @@ Skill này **độc lập hoàn toàn** — thay thế mọi skill generic cho d
    - **Điều kiện kích hoạt Fast Track tại chỗ:**
      - Nhiệm vụ được giao ở chế độ đo-kiểm-và-sửa.
      - **Eligibility đọc trực tiếp qua API-146 `GET /api/v1/projects/{projectId}/repair-packages/{packageId}/items/{itemId}/eligibility` và fail closed** (server là authority; `missingReasons` không đạt → KHÔNG cho sửa). Ngưỡng kích thước nằm trong policy revision trên server — KHÔNG hardcode con số trong app. Xem `docs/specs/02_Business-Workflows/08_FastTrack-Policy-and-Confirmation.md`.
+     - Phải có Crew package/item/binding/itemVersion thật; eligibility UI không cấp mutation authority, NORMAL context không thay FT bootstrap.
      - Đã có bằng chứng ảnh hiện trạng TRƯỚC khi sửa (BEFORE).
    - **Quy trình nghiệm thu Fast Track:**
      - Crew sửa xong chụp ảnh SAU (AFTER) và gửi báo cáo.
@@ -71,10 +74,10 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 
 ### A1. 5 nguyên tắc vàng
 1. **Evidence trước, edit sau.** AI chỉ được sửa file sau khi đã đọc file đó + các file liên quan (caller, type, test, config).
-2. **Spec là source of truth, code chỉ là bản dịch.**
+2. **Owner/governance quyết định business; pinned BE source/guard quyết định actual wire; executed evidence chứng minh từng verification axis.**
 3. **Đừng tưởng tượng — hãy thực thi.** Chạy thật bằng `npm run typecheck` (`tsc --noEmit`), đọc output thật.
 4. **Mọi tên đều phải có căn cứ.**
-5. **Không chắc → hỏi, không đoán.**
+5. **Thiếu quyết định/contract bắt buộc → dừng phần phụ thuộc và hỏi; tiếp tục phần độc lập an toàn.**
 
 ### A2. Workflow 6 bước
 **B1 — Hiểu yêu cầu.** Viết lại yêu cầu bằng 1-2 câu, gắn với mã màn (`RPT-xx`/`C-xx`/`O-xx`) hoặc operation ID (`API-xxx`) tương ứng.  
@@ -101,16 +104,24 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 
 ## PHẦN B — Nguồn-sự-thật & đặc tả kỹ thuật RoadGuard Canonical 17_10
 
-### B0. Nguồn-sự-thật (đọc theo thứ tự ưu tiên)
-| Ưu tiên | File | Vai trò |
+### B0. Nguồn-sự-thật
+
+#### Authority và evidence — RULES-01 (2026-10-28)
+
+Entrypoint: `AGENTS.md`; áp dụng governance tại `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`.
+
+| Trục | Nguồn | Cách dùng |
 |---|---|---|
-| **0** | **Điều khoản Override Tối cao** ở đầu SKILL.md | **LUẬN ĐIỂM TỐI CAO** — Đè bẹp mọi mâu thuẫn lịch sử |
-| 1 | `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md` | **Nguồn sự thật Canonical 17_10** — Authority & source-of-truth chính thức |
-| 2 | `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` | Danh mục API đầy đủ — 241 operations / 223 paths / 357 schemas / 47 controllers (operation ID `API-001` → `API-241`) |
-| 3 | `docs/specs/01_Product-and-Roles/02_Actor-Client-Permission-Matrix.md` | Actor / client / permission matrix và quyền theo vai trò |
-| 4 | `docs/specs/02_Business-Workflows/` | Luồng nghiệp vụ 17_10 (auth, evidence, Fast Track, offline…) |
-| 5 | `docs/specs/06_Mobile-Expo/*/01_*-Screen-API-Matrix.md` | Ma trận màn hình/API cho Crew, Reporter, Operator |
-| 6 | `FE_AppMobile/skills/BOOTSTRAP_PROMPT.md` + `skills/DESIGN.md` | Scaffold mobile & design system (đọc cùng nguồn 1–5) |
+| Business target | Quyết định owner mới nhất có scope/ngày/nguồn + canonical governance | Chỉ supersede phần được quyết định; không tự duyệt wire/quyền mới |
+| Implementation contract | Current BE controller/DTO/service/repository/guard ở pinned SHA + authorized HTTP contract | Quyết định wire shape, quyền runtime và preconditions thực; không tự hợp thức hóa business gap |
+| Verification | Exact executed command, SHA, environment, output và giới hạn | Tests, HTTP, protocol interop, native và Android là các trục riêng |
+| Historical reference | Scaffold, mock, snapshot cũ | Chỉ truy vết; không cấp production authority |
+
+Owner khác source: ghi EXPECTED/ACTUAL + `PRODUCT_SOURCE_GAP`; wire/guard thiếu: `BE_CONTRACT_GAP`. Production fail closed, báo checkpoint phụ thuộc; tiếp tục phần độc lập an toàn. Override canonical chỉ đè tài liệu lịch sử, không đè owner/governance/current BE/evidence.
+
+Catalog 241 operations / 223 paths / 357 schemas / 47 controllers là snapshot Phase2C 15/10/2026, source `36c3a1d273f17dd29b816136ae0182a821fd79e4`; không phải current operation count. Mọi cập nhật số lượng cần inventory method/path/actor/status/source SHA và delta; không tự thay bằng 260.
+
+Delivery modes, allowlist, journal, native approval và evidence labels áp dụng nguyên văn từ `AGENTS.md` / `skills/code-review/SKILL.md`. `skills/BOOTSTRAP_PROMPT.md` chỉ historical; `skills/DESIGN.md` không cấp quyền nghiệp vụ.
 
 ### B1. Thông tin dự án
 - **RoadGuard:** Hệ thống quản lý bảo hành & sửa chữa hạ tầng đường bộ của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**.
@@ -145,13 +156,13 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 
 ### B4. Offline-first & Queue (theo `docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md` và `docs/specs/06_Mobile-Expo/Crew/04_Offline-Signed-Sync-and-Handover.md`)
 - **LocalState:** `DRAFT` $\rightarrow$ `WAITING_DEPENDENCIES` $\rightarrow$ `READY` $\rightarrow$ `IN_FLIGHT` $\rightarrow$ `ACKED` (hoặc `CONFLICT`, `REJECTED`, `PAUSED_RETRY`, `UNKNOWN_OUTCOME`, `BLOCKED_CONTRACT`, `AUTH_REQUIRED`).
-- **Store SQLite phân vùng:** `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
+- **Conceptual stores (không phải current DDL; đọc database.ts/migrations/caller thực):** `account_partition`, `task_pack`, `server_cache`, `draft`, `media_asset`, `outbox_intent`, `wire_command`, `upload_ledger`, `id_map`, `conflict_record`.
 - **Media Asset Lifecycle:** Ghi file tạm $\rightarrow$ đóng file $\rightarrow$ tính SHA-256 $\rightarrow$ atomic rename $\rightarrow$ commit SQLite media. Trạng thái: `LOCAL_SAVING` $\rightarrow$ `LOCAL_READY` $\rightarrow$ `UPLOADING` $\rightarrow$ `VERIFIED` (complete ≠ VERIFIED).
 - **Signed offline batch (chỉ PM/Crew):** chữ ký **ECDSA P-256**, public key **SPKI DER Base64**, định dạng chữ ký **IEEE-P1363 (64 byte)**, canonical bytes (không `JSON.stringify`/DER/timestamp client). Enrollment/device registry chỉ PM/Crew — **Reporter và Operator KHÔNG** có signed sync. Batch gửi qua **API-130** `POST /api/v1/projects/{projectId}/offline/sync`.
 - **Mutation Headers:** `Idempotency-Key` **bắt buộc** cho write theo declaration của từng operation; thiếu → server có thể trả **428** (`precondition_required`). Kèm `If-Match` (ETag) cho mutation có trạng thái. Chi tiết: `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`.
 
 ### B5. Mã Lỗi — Per-Operation Contract (KHÔNG có bảng mã chung)
-- Bộ 17_10 **KHÔNG định nghĩa một bảng mã lỗi nghiệp vụ dùng chung**. Mỗi operation có mục **"Error contract (declared, not execution)"** riêng liệt kê HTTP status + `code` của chính nó trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` (241 mục).
+- Bộ 17_10 **KHÔNG định nghĩa một bảng mã lỗi nghiệp vụ dùng chung**. Mỗi operation có mục **"Error contract (declared, not execution)"** riêng liệt kê HTTP status + `code` của chính nó trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` (241 mục tại snapshot Phase2C, không current inventory).
 - Body lỗi dùng `application/problem+json` (`ProblemDetails`) — xem `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md`.
 - Quy tắc `409`/`412`/`428` áp theo từng operation (không dùng chung): `docs/specs/04_API-Contracts/05_Idempotency-Concurrency-and-Errors.md`.
 - **UI KHÔNG hardcode bảng mã chung.** Đọc `code` từ problem+json rồi map sang message; gặp `code` lạ → hiển thị fallback message tiếng Việt trung tính thay vì bịa nghĩa.
@@ -194,7 +205,7 @@ operation ID: [API-xxx từ 02_Full-API-Catalog.md], FR: [FR-xx].
 Giữ wire fields/enum/nullability/error shape; không tự thêm query/header/endpoint.
 Implement loading/empty/error/stale/offline/conflict theo phạm vi feature.
 Queue/media cần durable storage và exact replay; không localStorage evidence/token mặc định.
-Nếu gặp contract gap: làm adapter/mock có nhãn, không giả production support.
+Nếu BE_CONTRACT_GAP: production fail closed; báo source/SHA và blocked capability. Mock chỉ isolated tests/dev harness, không runtime fallback hay success giả.
 Báo cáo: diff, migration/recovery, dependencies và phần còn blocked.
 ```
 

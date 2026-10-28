@@ -10,14 +10,14 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 ## 5 nguyên tắc vàng (hiểu TẠI SAO, không học vẹt)
 
 1. **Evidence trước, edit sau.** AI chỉ được sửa file sau khi đã đọc file đó + các file liên quan (caller, type, test, config). Vì phán đoán từ 1 hàm đơn lẻ hầu như luôn thiếu context — caller vô hình, constraint vô hình sẽ lật ngược quyết định tưởng chừng đúng.
-2. **Spec là source of truth, code chỉ là bản dịch.** Yêu cầu mơ hồ → code sai là tất yếu, không phải do AI dốt. Viết yêu cầu ra chữ (dù chỉ 5 dòng) trước khi cho code.
+2. **Authority theo `AGENTS.md`/canonical governance: owner quyết định business, pinned BE quyết định actual wire/guard, evidence chứng minh từng trục.** Yêu cầu mơ hồ → code sai là tất yếu, không phải do AI dốt. Viết yêu cầu ra chữ (dù chỉ 5 dòng) trước khi cho code.
 3. **Đừng tưởng tượng — hãy thực thi.** Không bao giờ "nhẩm" code chạy đúng. Chạy thật, đọc output thật, hoặc ít nhất grep/read-back lại đoạn vừa sửa. Trace trong đầu càng dài càng sai.
 4. **Mọi tên đều phải có căn cứ.** Tên hàm, API, package, field, đường dẫn — mỗi cái phải trỏ được về một nơi đã đọc (file, docs, registry). Không trỏ được = bịa = cấm dùng.
-5. **Không chắc → hỏi, không đoán.** Đoán sai gây corrupt state khó cứu; hỏi chỉ tốn một câu. Khi thiếu thông tin quyết định, dừng và hỏi user thay vì lấp chỗ trống bằng tưởng tượng.
+5. **Không chắc → hỏi, không đoán.** Đoán sai gây corrupt state khó cứu; hỏi chỉ tốn một câu. Khi thiếu quyết định/contract bắt buộc, dừng phần phụ thuộc và hỏi; tiếp tục phần độc lập an toàn. Không hỏi lại approval đã có.
 
 ## Workflow 6 bước (mọi task code đều đi qua)
 
-**B1 — Hiểu yêu cầu.** Viết lại yêu cầu bằng 1-2 câu theo ý mình. Nếu có hơn 1 cách hiểu khả thi → hỏi user trước, không tự chọn.
+**B1 — Hiểu yêu cầu.** Viết lại yêu cầu bằng 1-2 câu theo ý mình. Nếu thiếu quyết định bắt buộc ảnh hưởng scope/contract → hỏi; routine implementation trong allowlist dùng evidence và phán đoán.
 
 **B2 — Thu thập evidence.** Trước khi sửa bất cứ gì, đọc: file cần sửa, file gọi nó (caller), type/interface liên quan, test hiện có, config liên quan. Checklist ở dưới quy định mức tối thiểu.
 
@@ -72,10 +72,10 @@ So sánh: "làm đăng nhập cho ngon" (AI tự do bịa) vs 2 câu EARS trên 
 > *Áp dụng thêm các quy tắc sau khi làm việc trong repo `D:\Do_AN_Drone\FE_AppMobile`*
 
 ### Nguồn sự thật bắt buộc đọc (B2 — Thu thập evidence)
-Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít nhất 1** file liên quan trong:
+Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc authority tại `AGENTS.md` và spec/current BE liên quan; scaffold không thay contract:
 - `docs/specs/` — Nguồn sự thật **Canonical 17_10** (`00_Governance/01_Authority-and-Source-of-Truth.md` + `04_API-Contracts/02_Full-API-Catalog.md`)
 - `docs/specs/01_Product-and-Roles/` + `docs/specs/02_Business-Workflows/` — Business Rules & Use Cases
-- `FE_AppMobile\skills\BOOTSTRAP_PROMPT.md` — Scaffold & routing chuẩn
+- `skills/BOOTSTRAP_PROMPT.md` — HISTORICAL scaffold reference, không ngang canonical/current BE và không đủ làm nguồn duy nhất
 
 ### Red Flags đặc thù RoadGuard — DỪNG NGAY khi thấy:
 | Dấu hiệu | Xử lý bắt buộc |
@@ -95,3 +95,10 @@ Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc **ít n
 - [ ] Không render tiền tệ VNĐ trên bất kỳ màn Mobile nào?
 - [ ] Route có đủ group prefix `/(crew)/`, `/(drone)/`, `/(reporter)/`?
 - [ ] Icon dùng `MaterialIcons` (không phải `Ionicons`)?
+
+## Mode và fail closed
+
+- Independent reviewer/Muse: `AUDIT_READ_ONLY`, chỉ read/search/git show/report chat. Không sửa file/worklog/fixture/index/commit/BE, kể cả deadline gấp hoặc được gọi “tự vả”. Báo sớm P0/P1 có active reachability + source:line.
+- Codex implement có allowlist: `IMPLEMENT_AND_SELF_REVIEW`, được self-fix tối đa 5 vòng trong scope; worklog khi task cho phép. Ngoài scope báo trước, không tự sửa.
+- `BE_CONTRACT_GAP`: không mock/adapter giả làm production fallback. Thiếu nguồn thì khóa capability; tests/dev harness cô lập được dùng fixture có nhãn.
+- Evidence labels, FastTrack API-146 + bootstrap thật và exact durable replay theo `AGENTS.md`. Tests xanh không cấp `HTTP_VERIFIED`, `NATIVE_VERIFIED` hoặc `ANDROID_E2E_VERIFIED`.
