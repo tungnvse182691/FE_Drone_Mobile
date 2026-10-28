@@ -11,7 +11,7 @@ import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal,
-  type CrewTask, type FieldMeasurementInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
+  type CrewTask, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
 import { currentFieldContext, openFieldRuntime, loadFieldDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto,
   type FieldDraft } from '../../src/api/crewFieldDraft';
@@ -25,6 +25,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [draft,setDraft]=useState<FieldDraft|null>(null);
   const [measurements,setMeasurements]=useState<FieldMeasurementInput[]>([]);
   const [rawValues,setRawValues]=useState<Record<string,string>>({});
+  const [locationProof,setLocationProof]=useState<FieldPositionProofInput|null>(null);
+  const [chainage,setChainage]=useState('');
   const [latest,setLatest]=useState<FieldSubmissionViewFact|null>(null);
   const [busy,setBusy]=useState(false), busyRef=useRef(false);
   const [loading,setLoading]=useState(true), [error,setError]=useState('');
@@ -43,6 +45,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!current(c.scope))return;
       setDraft(saved);setLatest(previous);
+      setLocationProof(saved.locationProof);setChainage(saved.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));
       setRawValues({});
       const initial=measurementTemplate(fresh.data.requiredMeasurementType,randomUUID());
       setMeasurements(saved.measurements.length?saved.measurements:previous?.measurements?.length?previous.measurements:initial?[initial]:[]);
@@ -65,7 +68,9 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(['save','upload','submit'].includes(action)) {
         if(saved.command)throw Error('field_command_pending');
         if(Object.values(rawValues).some(v=>v.trim()!==''&&(!Number.isFinite(Number(v.replace(',','.')))||Number(v.replace(',','.'))<0)))throw Error('field_measurements_required');
-        saved=await saveFieldMeasurements(c,measurements,saved.locationProof);
+        if(chainage.trim()!==''&&(!Number.isFinite(Number(chainage.replace(',','.')))||Number(chainage.replace(',','.'))<0))throw Error('field_measurements_required');
+        const proof=locationProof?{...locationProof,observedChainageMeters:chainage.trim()===''?null:Number(chainage.replace(',','.'))}:null;
+        saved=await saveFieldMeasurements(c,measurements,proof);
       }
       if(action==='upload') for(let i=0;i<saved.captures.length;i++)saved=await uploadFieldCapture(saved,i,runtime);
       if(action==='submit'||action==='replay')saved=await submitFieldDraft(saved,runtime,action==='replay');
@@ -109,6 +114,16 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </View>)}
           <Button variant="secondary" title="Lưu nháp số đo" disabled={busy||frozen} onPress={()=>void run('save')}/>
           <Text>Nhấn lưu nháp để giữ số đo khi đóng app. Không gán tọa độ task làm GPS quan sát.</Text>
+          <Text>Đối chiếu vị trí thực tế (tùy chọn; máy chủ đánh giá readiness)</Text>
+          <Text>Chỉ nhập dấu mốc bạn đã quan sát. Không lấy tọa độ hoặc ID nhiệm vụ thay bằng chứng vị trí.</Text>
+          <Button variant="secondary" title="Đối chiếu dấu mốc tuyến / lý trình" disabled={busy||frozen} onPress={()=>setLocationProof({kind:'POSITION_CHECKLIST',checklist:'ROUTE_CHAINAGE_MARKINGS_CONFIRMED'})}/>
+          <Button variant="secondary" title="Đối chiếu ký hiệu tấm bê tông" disabled={busy||frozen} onPress={()=>setLocationProof({kind:'POSITION_CHECKLIST',checklist:'SLAB_MARKINGS_CONFIRMED'})}/>
+          <Button variant="secondary" title="Chưa xác định vị trí" disabled={busy||frozen} onPress={()=>{setLocationProof(null);setChainage('');}}/>
+          {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
+            <InputField label="Route version ID trên dấu mốc / hồ sơ đối chiếu" value={locationProof.observedRouteVersionId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedRouteVersionId:value});}}/>
+            <InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>
+          </>:null}
+          {locationProof?.checklist==='SLAB_MARKINGS_CONFIRMED'?<InputField label="Ký hiệu tấm đã đối chiếu thực tế" value={locationProof.observedSlabId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSlabId:value});}}/>:null}
         </Card>
         <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
           {!draft.captures.length?<Text>Chưa có ảnh nháp của phiên và nhiệm vụ này.</Text>:null}

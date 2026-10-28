@@ -285,7 +285,12 @@ export function normalRepairBlock(task: FieldTaskViewFact, etag: string, actorId
       !isRepairItemVersion(ctx.itemVersion) || !ctx.repairPlan?.trim() || !ctx.checklistVersion?.trim() ||
       !['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired','Cancelled'].includes(ctx.status)) return 'Ngữ cảnh hạng mục, binding hoặc phiên bản sửa chữa không hợp lệ.';
   if (expected && ['packageId','itemId','bindingId','itemVersion'].some(k => ctx[k as keyof CrewRepairContext] !== expected[k as keyof CrewRepairContext])) return 'Ngữ cảnh sửa chữa đã thay đổi; cần đối soát lệnh cũ.';
-  return capability === 'bootstrap' ? null : 'T06-A chỉ đọc ngữ cảnh; thao tác thi công chưa được mở.';
+  if (capability === 'bootstrap') return null;
+  if (capability === 'assessment' || capability === 'start') {
+    if (ctx.status !== 'Assigned' || task.status !== 'InProgress' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục Assigned, nhiệm vụ InProgress và first-start thật trước khi sửa.';
+    return null;
+  }
+  return 'Kết thúc, nộp và bổ sung sửa chữa chưa được mở.';
 }
 
 /** Inspect both durable row kind and payload kind; a FIELD alias cannot hide repair work. */
@@ -442,6 +447,14 @@ export interface RepairEligibilityReadView {
 // -----------------------------------------------------------------------------
 // DTOs cho các lệnh Sửa Chữa (API-156..161)
 // -----------------------------------------------------------------------------
+
+/** Repair commands require the actual strong item ETag; never fall back to contentHash. */
+function repairItemResponseEtag(response: { headers?: unknown }): string {
+  const headers=response.headers as Record<string,unknown>|undefined;
+  const etag=headers?.etag??headers?.ETag;
+  if(typeof etag!=='string'||!/^"[A-Za-z0-9+/]+=\"$/.test(etag)||!isRepairItemVersion(etag.slice(1,-1)))throw Error('repair_item_version_invalid');
+  return etag;
+}
 
 export interface RepairMeasurementAssessmentInput {
   originId: string;
@@ -812,7 +825,7 @@ export async function submitRepairAssessmentReal(
       },
     },
   );
-  return { data: response.data, etag: extractEtagFromResponse(response) };
+  return { data: response.data, etag: repairItemResponseEtag(response) };
 }
 
 /**
@@ -837,7 +850,7 @@ export async function startRepairExecutionReal(
       },
     },
   );
-  return { data: response.data, etag: extractEtagFromResponse(response) };
+  return { data: response.data, etag: repairItemResponseEtag(response) };
 }
 
 /**

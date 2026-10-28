@@ -17,7 +17,9 @@ export interface RepairIntent {
   itemVersion: string; payload: Record<string, unknown>;
 }
 export interface RepairJournalRecord extends RepairIntent {
-  schema: 1; phase: 'PREPARED'; ifMatch: string;
+  schema: 1; phase: 'PREPARED' | 'PENDING' | 'ACKNOWLEDGED' | 'CONFIRMED' | 'REJECTED'; ifMatch: string;
+  receipt?: { data: Record<string, unknown>; itemVersion: string };
+  rejection?: { status: number; code: string | null };
 }
 const KIND = 'T06A_REPAIR_COMMAND';
 
@@ -65,7 +67,14 @@ function snapshot(intent: RepairIntent): RepairJournalRecord {
 function decode(payload: string): RepairJournalRecord {
   try {
     const row = JSON.parse(payload) as RepairJournalRecord;
-    if (row.schema !== 1 || row.phase !== 'PREPARED' || canonical(snapshot(row)) !== canonical(row)) throw new Error();
+    const base = snapshot(row);
+    if (row.schema !== 1 || !['PREPARED','PENDING','ACKNOWLEDGED','CONFIRMED','REJECTED'].includes(row.phase)) throw new Error();
+    if (row.receipt && (!isRepairItemVersion(row.receipt.itemVersion) || !isCrewResourceId(row.receipt.data.id) ||
+        row.receipt.data.itemId !== row.identity.itemId || row.receipt.data.taskId !== row.identity.taskId)) throw new Error();
+    if (['ACKNOWLEDGED','CONFIRMED'].includes(row.phase) && !row.receipt) throw new Error();
+    if (row.phase === 'REJECTED' && (!row.rejection || ![400,401,403,404,409,412,422,428].includes(row.rejection.status))) throw new Error();
+    if (canonical({ ...base, phase: row.phase, ...(row.receipt ? {receipt:row.receipt} : {}),
+      ...(row.rejection ? {rejection:row.rejection} : {}) }) !== canonical(row)) throw new Error();
     return row;
   } catch { throw new Error('repair_journal_invalid'); }
 }
@@ -92,7 +101,7 @@ export async function openRepairJournal(identity: RepairIdentity,
     // Sessions share this partition so relogin cannot overwrite unresolved work.
     const prefix = taskPartition(context);
     const result = await connection.getAllAsync<{payload:string}>(
-      'SELECT payload FROM local_draft WHERE kind = ? AND substr(id, 1, ?) = ?', KIND, prefix.length, prefix);
+      'SELECT payload FROM local_draft WHERE kind = ? AND substr(id, 1, ?) = ? ORDER BY rowid', KIND, prefix.length, prefix);
     return result.map(row => {
       const record = decode(row.payload);
       if (!sameTask(context, record.identity)) throw new Error('repair_journal_invalid');
@@ -100,6 +109,11 @@ export async function openRepairJournal(identity: RepairIdentity,
     });
   };
   return {
+    async list(): Promise<RepairJournalRecord[]> {
+      guard(); const result = await rows(db); guard();
+      if (result.some(r => !sameRepairIdentity(context,r.identity) && !['CONFIRMED','REJECTED'].includes(r.phase))) throw new Error('repair_previous_session_unresolved');
+      return result.filter(r => sameRepairIdentity(context,r.identity));
+    },
     async read(key: string): Promise<RepairJournalRecord | null> {
       guard(); const result = await rows(db); guard();
       const row = result.find(r => sameRepairIdentity(context,r.identity) && r.key === key);
@@ -110,11 +124,30 @@ export async function openRepairJournal(identity: RepairIdentity,
       if (!sameRepairIdentity(context, record.identity)) throw new Error('repair_session_changed');
       await db.withExclusiveTransactionAsync(async transaction => {
         guard(); const stored = await rows(transaction); guard();
-        const existing = stored.find(r => sameTask(context,r.identity));
+        const identical = stored.find(r => r.key === record.key);
+        if (identical) {
+          if (canonical(snapshot(identical)) !== canonical(record)) throw new Error('repair_unresolved_command');
+          return;
+        }
+        const existing = stored.find(r => !['CONFIRMED','REJECTED'].includes(r.phase));
         // Includes old sessions and replaced items: unknown work cannot be overwritten by relogin/reassignment.
         if (existing) {
-          if (canonical(existing) !== canonical(record)) throw new Error('repair_unresolved_command');
-          return;
+          throw new Error('repair_unresolved_command');
+        }
+        if (record.operation === 'start') {
+          const assessment = stored.find(r => sameRepairIdentity(context,r.identity) && r.operation === 'assessment' &&
+            r.phase === 'CONFIRMED' && r.receipt?.data.id === record.payload.assessmentId);
+          if (!assessment || assessment.receipt?.data.readiness !== 'READY' ||
+            assessment.receipt.data.stage !== 'PRE_EXECUTION' ||
+            canonical(assessment.identity) !== canonical(record.identity) ||
+            assessment.payload.fieldFirstStartId !== record.payload.fieldFirstStartId ||
+            assessment.receipt.itemVersion !== record.itemVersion || stored.some(r => r.operation === 'start')) throw new Error('repair_assessment_required');
+        } else if (stored.length) {
+          const previous=stored[stored.length-1];
+          if (record.operation!=='assessment' || stored.some(r=>r.operation!=='assessment'||r.phase!=='CONFIRMED') ||
+              !sameRepairIdentity(context,previous.identity) || canonical(previous.identity)!==canonical(record.identity) ||
+              previous.receipt?.data.readiness!=='INCOMPLETE' || previous.receipt.itemVersion!==record.itemVersion ||
+              canonical(previous.payload)===canonical(record.payload)) throw new Error('repair_history_requires_reconciliation');
         }
         const now = new Date().toISOString();
         await transaction.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
@@ -123,6 +156,23 @@ export async function openRepairJournal(identity: RepairIdentity,
       });
       guard();
       return record;
+    },
+    async transition(key: string, phase: RepairJournalRecord['phase'],
+      evidence?: Pick<RepairJournalRecord,'receipt'|'rejection'>): Promise<RepairJournalRecord> {
+      guard(); let updated: RepairJournalRecord | undefined;
+      await db.withExclusiveTransactionAsync(async transaction => {
+        guard(); const stored = await rows(transaction); guard();
+        const row = stored.find(r => sameRepairIdentity(context,r.identity) && r.key === key);
+        if (!row) throw new Error('repair_command_missing');
+        const allowed: Record<RepairJournalRecord['phase'],string[]> = {PREPARED:['PENDING'],PENDING:['PENDING','ACKNOWLEDGED','REJECTED'],ACKNOWLEDGED:['CONFIRMED'],CONFIRMED:[],REJECTED:[]};
+        if (!allowed[row.phase].includes(phase)) throw new Error('repair_phase_invalid');
+        if (row.receipt && evidence?.receipt && canonical(row.receipt) !== canonical(evidence.receipt)) throw new Error('repair_receipt_immutable');
+        updated = decode(canonical({...row,...evidence,phase}));
+        await transaction.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?',
+          canonical(updated),new Date().toISOString(),journalKey(row),KIND);
+        guard();
+      });
+      guard(); return updated!;
     },
   };
 }

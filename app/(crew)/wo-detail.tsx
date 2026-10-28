@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -37,7 +37,7 @@ import { passwordSessionIdentity } from '../../src/api/authApi';
 import { randomUUID } from 'expo-crypto';
 import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
 import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal, validateCrewTaskDetail, type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
-import { crewTaskActionBlock, type OperationalCrewTask } from '../../src/api/crewApi';
+import { crewTaskActionBlock, normalRepairBlock, type OperationalCrewTask } from '../../src/api/crewApi';
 import {
   acceptFieldTaskReal,
   formatStrongIfMatch,
@@ -53,6 +53,9 @@ import {
 } from '../../src/api/crewApi';
 import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
 import { stableUuid } from '../../src/utils/uuid';
+import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
+import { prepareRepairAssessment, prepareRepairStart, dispatchRepair, readRepairFieldDraft, readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
+import type { FieldDraft } from '../../src/api/crewFieldDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 function parseDimension(value: string): number | null {
@@ -310,9 +313,46 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
   );
 }
 
-/** Read-only NORMAL capability. Never mounts the legacy repair UI or sends a command. */
+/** Explicit NORMAL commands only. Legacy repair content remains unmounted. */
 export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
+  const identity=useCrewIdentity();
+  const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên Crew hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
+  const [history,setHistory]=useState<RepairJournalRecord[]>([]),[draft,setDraft]=useState<FieldDraft|null>(null);
+  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
+  const active=useRef(false),lock=useRef(false);
+  const load=useCallback(async()=>{
+    const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
+    setLoaded(false);setHistory([]);setDraft(null);setNotice('');
+    try {
+      const rows=await readRepairHistory(i),field=await readRepairFieldDraft(i);
+      if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){setHistory(rows);setDraft(field);setLoaded(true);}
+    }catch(e){if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(repairErrorMessage(e));}
+  },[task.id,task.projectId]);
+  useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
+  const pending=history.find(c=>!['CONFIRMED','REJECTED'].includes(c.phase));
+  const assessment=history.filter(c=>c.operation==='assessment'&&c.phase==='CONFIRMED').at(-1);
+  const started=history.find(c=>c.operation==='start'&&c.phase==='CONFIRMED');
+  const ready=assessment?.receipt?.data.readiness==='READY';
+  const sourceReady=!!draft?.measurements.length&&!!draft.captures.some(c=>c.purpose!=='AFTER'&&c.verified&&c.upload?.fileId);
+  const run=async(action:'assessment'|'start'|'replay')=>{
+    if(lock.current)return;const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
+    lock.current=true;setBusy(true);setNotice('');
+    try {
+      const command=action==='replay'?pending:action==='start'?await prepareRepairStart(i):await prepareRepairAssessment(i,await readRepairFieldDraft(i));
+      if(!command)throw Error('repair_command_missing');
+      const receipt=await dispatchRepair(i,command.key);
+      if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(receipt.phase==='CONFIRMED'?'Đã lưu receipt máy chủ và đối chiếu ngữ cảnh hạng mục.':'Lệnh chưa được xác nhận; giữ nguyên để đối soát.');
+    }catch(e){if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(repairErrorMessage(e));}
+    finally{
+      lock.current=false;
+      if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){
+        setBusy(false);
+        try{const rows=await readRepairHistory(i);if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setHistory(rows);}catch{/* Keep the error and disable new commands on failed reload. */if(active.current){setLoaded(false);setHistory([]);}}
+        void result.reload();
+      }
+    }
+  };
   return <View>
     <Text style={typography.titleMd}>Ngữ cảnh sửa chữa NORMAL</Text>
     {result.status === 'loading' ? <Text>Đang đọc ngữ cảnh từ máy chủ…</Text> : null}
@@ -326,8 +366,25 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
       <Text>Phương án: {result.repairContext.repairPlan}</Text>
       <Text>Checklist: {result.repairContext.checklistVersion}</Text>
     </> : null}
-    <Text>Chỉ xem ngữ cảnh. Đánh giá, bắt đầu, kết thúc và nộp hồ sơ sửa chữa chưa được mở.</Text>
-    <Button variant="secondary" title="Tải lại ngữ cảnh sửa chữa" loading={result.status === 'loading'} onPress={() => void result.reload()} />
+    <Text>Nguồn: API-080/094, số đo và ảnh từ nháp FIELD của phiên Crew hiện tại.</Text>
+    <Text>Số đo đã lưu: {draft?.measurements.length??0}. Ảnh trước sửa/đo VERIFIED: {draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}.</Text>
+    {!sourceReady?<Text>Cần lưu số đo thực và upload ảnh BEFORE/MEASUREMENT đến VERIFIED trong hồ sơ FIELD. Ảnh AFTER không được đưa vào đánh giá trước sửa.</Text>:null}
+    <Button variant="secondary" title="Số đo / ảnh FIELD" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
+    {assessmentBlock&&!started?<Text>{assessmentBlock}</Text>:null}
+    <Button variant="secondary" title="Gửi đánh giá trước sửa" disabled={busy||!loaded||!sourceReady||!!assessmentBlock||!!pending||(!!history.length&&assessment?.receipt?.data.readiness!=='INCOMPLETE')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('assessment')}/>
+    {history.map(c=><View key={c.key}>
+      <Text>{c.operation==='assessment'?'Đánh giá':'Bắt đầu'}: {c.phase}</Text>
+      {c.receipt?<><Text selectable>Receipt máy chủ: {String(c.receipt.data.id)}</Text><Text>{String(c.receipt.data.readiness??'Receipt execution-start')}</Text>
+        {Array.isArray(c.receipt.data.missingReasons)?c.receipt.data.missingReasons.map(r=><Text key={String(r)}>{String(r)}</Text>):null}</>:null}
+      {c.phase==='REJECTED'?<Text>Máy chủ đã từ chối lệnh HTTP {c.rejection?.status}. Giữ lịch sử để đối soát, không tạo key thay thế.</Text>:null}
+    </View>)}
+    {assessment&&!ready?<Text>Assessment còn INCOMPLETE. Sửa nháp FIELD theo missingReasons rồi chủ động gửi assessment mới; lịch sử cũ được giữ nguyên.</Text>:null}
+    <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||history.some(c=>c.operation==='start')||result.status!=='ready'} onPress={()=>void run('start')}/>
+    {pending?<><Text>Chưa xác nhận được kết quả. Chỉ đối soát/gửi lại đúng lệnh đã lưu.</Text><Button variant="secondary" title="Đối soát / replay lệnh đã lưu" disabled={busy||!loaded} onPress={()=>void run('replay')}/></>:null}
+    {started?<Text>Đã bắt đầu thi công. Đã có receipt BE và ngữ cảnh InProgress khớp phiên bản. Chức năng kết thúc chưa được mở.</Text>:null}
+    <Text>FastTrack, kết thúc và nộp hồ sơ sửa chữa chưa được mở. Không sử dụng màn thi công legacy.</Text>
+    {notice?<Text accessibilityLiveRegion="polite">{notice}</Text>:null}
+    <Button variant="secondary" title="Tải lại ngữ cảnh sửa chữa" disabled={busy} loading={result.status === 'loading'} onPress={() => {void result.reload();void load();}} />
   </View>;
 }
 function CrewWoDetailContent({ task }: { task: OperationalCrewTask }) {
