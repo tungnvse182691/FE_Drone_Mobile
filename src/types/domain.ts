@@ -208,6 +208,9 @@ export interface PendingItem {
 }
 
 export interface OutboxItem {
+  /** Original SQLite lifecycle; status may project an unverified ACK conservatively. */
+  stored_status?: string;
+  ack_verification?: 'UNVERIFIED_LEGACY' | 'NOT_ACKED';
   id: string;
   kind: string;
   data_b64: string;

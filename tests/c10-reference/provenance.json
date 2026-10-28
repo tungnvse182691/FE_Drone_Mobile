@@ -1,0 +1,12 @@
+{
+  "develop": "01cc4725b178199215b02f4ddf7093491a16f2f7",
+  "sha256": {
+    "RoadGuardSystem.DTOs/Offline/OfflineWorkflowDtos.cs": "0ddc9b404a6b330c26c2b2472d0c97456a6969fa32dec81bb7ebe24835b36ab7",
+    "RoadGuardSystem.DTOs/Inspections/FieldInspectionWorkflowDtos.cs": "b49c66eb3f00edef6296ff347e45564769e8a6c3c1094d72850dfc916a48ff1f",
+    "RoadGuardSystem.DTOs/Repairs/RepairWorkflowDtos.cs": "ad2ff7adafd83f731dedcee176a865898aa88d71fa7eacc67550680d0905deb6",
+    "RoadGuardSystem.Services/Implementations/Offline/OfflineWorkflowEngine.cs": "8fc5f0c97c3029a6acc65389553ae5dc9a65d92fc647e1d0d00a1c74ba0f70d9",
+    "RoadGuardSystem.BusinessObjects/Offline/OfflinePackageAuthentication.cs": "b31bb324c6c800a4a044468d602c942bd21727f3cdd3e71773d922ea2ba0759f",
+    "RoadGuardSystem.BusinessObjects/Offline/OfflineCryptoFormat.cs": "b7dd1097b681fd9f58fa05fa7b96086895a3a0fe8b6a8326786176d42fd008cc"
+  },
+  "extraction": "DTO constructors and attributes verbatim (conversion operators omitted); Engine verbatim excluding DescribeHistoricalStart (requires repository rows); Authentication direct digest, Decode, ImportSigningKey and P256 verbatim. No encrypted-package algorithm substituted."
+}

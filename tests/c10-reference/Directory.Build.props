@@ -1,0 +1,1 @@
+<Project><PropertyGroup><BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../.cache/c10-dotnet/obj/</BaseIntermediateOutputPath></PropertyGroup></Project>

@@ -58,31 +58,12 @@ const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
   [LocalState.BLOCKED_CONTRACT]: SyncStatus.INVALID,
   [LocalState.CONFLICT]: SyncStatus.INVALID,
   [LocalState.REJECTED]: SyncStatus.INVALID,
-  [LocalState.ACKED]: SyncStatus.SERVER_CONFIRMED,
+  [LocalState.ACKED]: SyncStatus.QUEUED, // Legacy ACK alone is not a verified receipt.
 };
 
-/** Preserve legacy intent bytes/IDs/keys, including old ACK claims; no synthetic server receipt. */
-export async function quarantineLegacyRepairQueue(db: SQLite.SQLiteDatabase, identity = currentQueueIdentity()): Promise<void> {
+/** Compatibility guard: classification never mutates durable history. No dispatch capability. */
+export async function quarantineLegacyRepairQueue(_db: SQLite.SQLiteDatabase, identity = currentQueueIdentity()): Promise<void> {
   if(!identity || !sameQueueIdentity(identity))throw Error('queue_session_required');
-  await db.withExclusiveTransactionAsync(async tx=>{
-  const rows = await tx.getAllAsync<OutboxItem>(
-    'SELECT id, kind, payload_b64 AS data_b64, local_state AS status FROM offline_outbox WHERE partition_id = ?',identity.partition,
-  );
-  if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
-  for (const row of rows) {
-    let blocked = false;
-    try { blocked = isLegacyRepairQueueEntry(row.kind, JSON.parse(decodeOutboxPayload(row))); }
-    catch { blocked = true; } // Corrupt intent cannot be safely classified or dispatched.
-    if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
-    if (blocked && row.status !== LocalState.BLOCKED_CONTRACT) {
-      await tx.runAsync('UPDATE offline_outbox SET local_state = ?, last_error = ?, updated_at = ? WHERE id = ? AND partition_id = ?',
-        LocalState.BLOCKED_CONTRACT, `Repair legacy hoặc payload không hợp lệ; giữ để đối soát. Trạng thái cũ: ${row.status}`,
-        new Date().toISOString(), row.id, identity.partition);
-      if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
-    }
-  }
-  });
-  if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
 }
 
 /** Legacy classification helper only; it grants no dispatch capability. */
@@ -153,9 +134,9 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
       return outboxRows.map((row) => ({
         id: row.id,
         name: OUTBOX_KIND_LABELS[row.kind] ?? row.kind,
-        meta: row.last_error ? `Lỗi: ${row.last_error}` : queueChecksumLabel(row.checksum_sha256),
+        meta: `${row.stored_status ?? row.status}${row.ack_verification === 'UNVERIFIED_LEGACY' || row.status === LocalState.ACKED ? ' — ACK lịch sử chưa xác minh receipt Backend' : ''}. ${row.last_error ? `Lỗi: ${row.last_error}` : queueChecksumLabel(row.checksum_sha256)}`,
         size: `Lần thử ${row.attempt}/${row.max_attempts}`,
-        status: LOCAL_STATE_TO_SYNC_STATUS[row.status] ?? SyncStatus.QUEUED,
+        status: row.status === LocalState.ACKED ? SyncStatus.QUEUED : LOCAL_STATE_TO_SYNC_STATUS[row.status] ?? SyncStatus.QUEUED,
       }));
     }
     return [];

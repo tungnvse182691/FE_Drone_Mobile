@@ -149,7 +149,7 @@ test('T06A real SQLite quarantine preserves bytes/key/IDs and never claims ACK',
   raw.prepare('INSERT INTO offline_outbox(id,kind,payload_b64,idempotency_key,local_state,last_error,updated_at) VALUES(?,?,?,?,?,?,?)').run('field','FIELD_SUBMISSION',field,'field-key','READY',null,'old');
   await m.quarantineLegacyRepairQueue(port);
   const r=raw.prepare('SELECT * FROM offline_outbox WHERE id=?').get('old');
-  assert.equal(r.local_state,'BLOCKED_CONTRACT');assert.equal(r.payload_b64,body);assert.equal(r.idempotency_key,'old-key');
+  assert.equal(r.local_state,'ACKED');assert.equal(r.updated_at,'old');assert.equal(r.last_error,null);assert.equal(r.payload_b64,body);assert.equal(r.idempotency_key,'old-key');
   assert.equal(raw.prepare('SELECT local_state FROM offline_outbox WHERE id=?').get('field').local_state,'READY');
   assert.throws(()=>m.crewSyncPayload({kind:r.kind,data_b64:r.payload_b64}));
   assert.equal(m.crewSyncPayload({kind:'FIELD_SUBMISSION',data_b64:field}).kind,'INSPECTION_SUBMIT');
@@ -159,7 +159,7 @@ test('T06A malformed durable payload is quarantined, not dispatched or deleted',
   const {raw,port}=sqlite(),m=syncHarness();
   raw.exec('CREATE TABLE offline_outbox(id TEXT PRIMARY KEY, kind TEXT, payload_b64 TEXT, local_state TEXT, last_error TEXT, updated_at TEXT, partition_id TEXT NOT NULL DEFAULT "test-crew")');
   raw.prepare('INSERT INTO offline_outbox(id,kind,payload_b64,local_state,last_error,updated_at) VALUES(?,?,?,?,?,?)').run('corrupt','FIELD_SUBMISSION','AAAA','READY',null,'old');
-  await m.quarantineLegacyRepairQueue(port);assert.equal(raw.prepare('SELECT local_state FROM offline_outbox').get().local_state,'BLOCKED_CONTRACT');
+  await m.quarantineLegacyRepairQueue(port);assert.equal(raw.prepare('SELECT local_state FROM offline_outbox').get().local_state,'READY');assert.equal(raw.prepare('SELECT updated_at FROM offline_outbox').get().updated_at,'old');assert.throws(()=>m.crewSyncPayload({kind:'FIELD_SUBMISSION',data_b64:'AAAA'}));
 });
 test('T06A journal session switch during SQLite write rolls back durable intent', async () => {
   const h=journal(),j=await h.open(),original=h.port.runAsync;

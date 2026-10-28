@@ -53,24 +53,21 @@ export async function enqueue(db:SQLite.SQLiteDatabase,kind:string,payload:strin
 export async function enqueuePayload(db:SQLite.SQLiteDatabase,kind:string,payload:Record<string,unknown>,options:OutboxEnqueueOptions={}):Promise<string> {
   return enqueue(db,kind,JSON.stringify(payload),options);
 }
-/** Never touches local/unproven ownership, other accounts, media, or T06 journals. */
-export async function quarantineQueue(db:SQLite.SQLiteDatabase,identity=requireIdentity()):Promise<void> {
+/** Compatibility guard only. Dispatch is denied independently of stored lifecycle state.
+ * Reads/retries must never rewrite historical state, errors, bytes or timestamps. */
+export async function quarantineQueue(_db:SQLite.SQLiteDatabase,identity=requireIdentity()):Promise<void> {
   guard(identity);
-  await db.withExclusiveTransactionAsync(async tx=>{
-    guard(identity);
-    const rows=await tx.getAllAsync<{id:string;status:string;last_error:string|null}>('SELECT id,local_state AS status,last_error FROM offline_outbox WHERE partition_id = ?',identity.partition);guard(identity);
-    for(const row of rows) {
-      if(row.status===LocalState.BLOCKED_CONTRACT)continue;
-      await tx.runAsync('UPDATE offline_outbox SET local_state = ?, last_error = ?, updated_at = ? WHERE id = ? AND partition_id = ?',
-        LocalState.BLOCKED_CONTRACT,`${QUEUE_CONTRACT_NOTICE} Trạng thái cũ: ${row.status}. ${row.last_error??''}`,new Date().toISOString(),row.id,identity.partition);guard(identity);
-    }
-  });guard(identity);
 }
 export async function readQueue(db:SQLite.SQLiteDatabase,identity=requireIdentity()):Promise<OutboxItem[]> {
   guard(identity);await quarantineQueue(db,identity);guard(identity);
   const rows=await db.getAllAsync<OutboxItem>(`SELECT id,kind,payload_b64 AS data_b64,checksum_sha256,local_state AS status,
     attempt,5 AS max_attempts,last_error,created_at,updated_at,partition_id,task_id,expected_version FROM offline_outbox WHERE partition_id = ? ORDER BY created_at DESC`,identity.partition);
-  guard(identity);return rows;
+  guard(identity);
+  // Legacy wire_command ACKs have no authenticated API-130 batch/manifest provenance.
+  // Preserve durable state; conservative projection also protects the Drone consumer.
+  return rows.map(row=>({...row,stored_status:row.status,
+    ack_verification:row.status===LocalState.ACKED?'UNVERIFIED_LEGACY' as const:'NOT_ACKED' as const,
+    status:row.status===LocalState.ACKED?LocalState.UNKNOWN_OUTCOME:row.status}));
 }
 /** A monotonically ordered reader prevents older reloads replacing newer UI results. */
 export function createQueueReader(identity:QueueIdentity) {
@@ -87,6 +84,8 @@ export async function updateOutboxState(db:SQLite.SQLiteDatabase,id:string,statu
   const i=requireIdentity();await quarantineQueue(db,i);guard(i);
 }
 export async function retry(db:SQLite.SQLiteDatabase,_itemId:string):Promise<void> {await quarantineQueue(db);}
+/** Explicit crash recovery only; never called by reads or blocked retry.
+ * A previously dispatched request may have committed. Never creates ACK. */
 export async function recoverInFlight(db:SQLite.SQLiteDatabase,partitionId?:string):Promise<number> {
   const i=requireIdentity(partitionId);let changes=0;
   await db.withExclusiveTransactionAsync(async tx=>{guard(i);const result=await tx.runAsync('UPDATE offline_outbox SET local_state = ?, updated_at = ? WHERE partition_id = ? AND local_state = ?',
