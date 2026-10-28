@@ -37,6 +37,15 @@ import { parseProblemDetails, type ParsedProblemDetails } from './problemDetails
 import type { CrewFieldTaskCard } from './mock/field-tasks';
 import type { TaskMode } from '../types/enums';
 
+export interface CrewProject { projectId:string; projectCode:string; name:string; status:string }
+/** API-049: Crew coverage is restricted by active task/binding, not all memberships. */
+export async function listCrewProjectsReal(params:{cursor?:string;limit?:number}={}) {
+  const response=await apiClient.get<{items:CrewProject[];nextCursor:string|null;asOf:string}>('/projects',{params});
+  if(!Array.isArray(response.data.items) || response.data.items.some(p=>!isCrewResourceId(p.projectId)) ||
+      (response.data.nextCursor!==null&&typeof response.data.nextCursor!=='string'))throw Error('crew_project_response_invalid');
+  return response.data;
+}
+
 /** UI projection: unknown fields stay absent; never manufacture business facts. */
 export type CrewTask = Omit<CrewFieldTaskCard, 'coordinates' | 'task_mode' | 'defect_type_code'> & {
   projectId: string; version: string; crewId: string; status: string; rawMode: string;

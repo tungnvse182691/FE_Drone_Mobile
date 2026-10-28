@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -9,15 +9,11 @@ import { Chip, type ChipVariant } from '../../src/components/Chip';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Toast } from '../../src/components/Toast';
-import {
-  ackReceivingRequest,
-  getReceivingRequest,
-  isRepairVersionConflict,
-  listReceivingRequests,
-  repairCommandErrorMessage,
-  useIdempotencyKey,
-} from '../../src/hooks/useRepairBootstrap';
-import type { BusinessDutyView } from '../../src/api/mock/tasks';
+import { repairCommandErrorMessage } from '../../src/hooks/useRepairBootstrap';
+import { useAuthStore } from '../../src/store/auth';
+import { currentReceivingIdentity, sameReceivingIdentity, type ReceivingIdentity } from '../../src/api/crewReceivingDraft';
+import { discoverReceivingProjects, listReceiving, readReceiving, acknowledgeReceiving, type ReceivingView as BusinessDutyView } from '../../src/api/crewReceivingWorkflow';
+import type { CrewProject } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /** Nhãn tiếng Việt cho `kind` của BusinessDutyView; kind lạ → nhãn chung. */
@@ -35,6 +31,7 @@ function kindLabel(kind: string | null): string {
 }
 
 const ROLE_LABELS: Record<string, string> = {
+  RepairCrew: 'Đội sửa chữa',
   REPAIR_CREW: 'Đội sửa chữa',
   DRONE_OPERATOR: 'Phi công drone',
   REPORTER: 'Người dân',
@@ -50,6 +47,8 @@ function roleLabel(role: string | null | undefined): string {
 }
 
 const SOURCE_KIND_LABELS: Record<string, string> = {
+  FieldReview: 'Kết quả đo hiện trường',
+  RepairReview: 'Lượt sửa đã nộp',
   REPAIR_ATTEMPT: 'Lượt sửa đã nộp',
   FIELD_SUBMISSION: 'Kết quả đo hiện trường',
   REPAIR_HANDOVER: 'Bàn giao hạng mục sửa chữa',
@@ -85,6 +84,37 @@ function ackStateChip(request: BusinessDutyView): { variant: ChipVariant; label:
 }
 
 export default function CrewReceivingScreen() {
+  useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
+  const identity=currentReceivingIdentity();
+  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Nhận việc" />}><Text>Cần phiên đăng nhập Crew hợp lệ.</Text></SafeAreaScreen>;
+  return <ReceivingProjects key={JSON.stringify(identity)} identity={identity} />;
+}
+function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
+  const [projects,setProjects]=useState<CrewProject[]>([]), [cursor,setCursor]=useState<string|null>(null);
+  const [selected,setSelected]=useState<string|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
+  const sequence=useRef(0),mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;sequence.current++;};},[]);
+  const load=useCallback(async(more=false)=>{
+    const n=++sequence.current;setLoading(true);setError(null);
+    try {const page=await discoverReceivingProjects(identity,more?cursor??undefined:undefined);
+      if(!mounted.current||n!==sequence.current)return;
+      setProjects(old=>Array.from(new Map([...(more?old:[]),...page.items].map(p=>[p.projectId,p])).values()));
+      setCursor(page.nextCursor);if(!more)setSelected(null);
+    }catch(e){if(mounted.current&&n===sequence.current)setError(repairCommandErrorMessage(e));}
+    finally{if(mounted.current&&n===sequence.current)setLoading(false);}
+  },[identity,cursor]);
+  useFocusEffect(useCallback(()=>{void load(false);},[identity]));
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhận việc" />}>
+    <Text style={typography.caption}>Phạm vi: các dự án máy chủ cho phép qua nhiệm vụ/binding hiện hành. Chưa bao phủ toàn bộ membership (BE_DISCOVERY_GAP).</Text>
+    {projects.map(p=><Button key={p.projectId} title={`${p.projectCode} · ${p.name}`} variant={selected===p.projectId?'primary':'secondary'} onPress={()=>setSelected(p.projectId)} />)}
+    {error?<Text accessibilityRole="alert">{error}</Text>:null}
+    {!loading&&!error&&!projects.length?<Text>Không có dự án trong phạm vi được máy chủ trả về.</Text>:null}
+    <Button variant="secondary" title="Tải lại dự án" loading={loading} onPress={()=>void load(false)} />
+    {cursor?<Button variant="secondary" title="Thêm dự án" disabled={loading} onPress={()=>void load(true)} />:null}
+    {selected?<ReceivingRequests key={selected} identity={{...identity,projectId:selected}} />:null}
+  </SafeAreaScreen>;
+}
+function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
   const [step, setStep] = useState<'list' | 'detail'>('list');
   const [items, setItems] = useState<BusinessDutyView[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,78 +122,34 @@ export default function CrewReceivingScreen() {
   const [selected, setSelected] = useState<BusinessDutyView | null>(null);
   const [acking, setAcking] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const nextIdempotencyKey = useIdempotencyKey('API-137');
-
-  const loadList = useCallback(async () => {
-    setLoading(true);
-    setListError(null);
-    try {
-      const result = await listReceivingRequests({ limit: 25 });
-      setItems(result.items);
-    } catch (error) {
-      setListError(repairCommandErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      setStep('list');
-      setSelected(null);
-      void loadList();
-    }, [loadList]),
-  );
-
-  const openDetail = async (requestId: string) => {
-    setLoading(true);
-    try {
-      const detail = await getReceivingRequest(requestId);
-      setSelected(detail);
-      setStep('detail');
-    } catch (error) {
-      setToast(repairCommandErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
+  const [toastType,setToastType]=useState<'error'|'success'>('error');
+  const [cursor,setCursor]=useState<string|null>(null);
+  const sequence=useRef(0),mounted=useRef(true),ackLock=useRef(false);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;sequence.current++;};},[]);
+  const active=()=>mounted.current&&sameReceivingIdentity(identity,currentReceivingIdentity(identity.projectId));
+  const loadList = useCallback(async (more=false) => {
+    const n=++sequence.current;setLoading(true);setListError(null);setStep('list');setSelected(null);
+    try {const result=await listReceiving(identity,{limit:25,after:more?cursor??undefined:undefined});
+      if(!active()||n!==sequence.current)return;
+      setItems(old=>Array.from(new Map([...(more?old:[]),...result.items].map(v=>[v.id,v])).values()));setCursor(result.continuation);
+    }catch(error){if(active()&&n===sequence.current)setListError(repairCommandErrorMessage(error));}
+    finally{if(active()&&n===sequence.current)setLoading(false);}
+  },[identity,cursor]);
+  useEffect(()=>{void loadList();},[identity.projectId]);
+  const openDetail=async(requestId:string)=>{
+    if(ackLock.current)return;
+    const n=++sequence.current;setLoading(true);
+    try{const detail=await readReceiving(identity,requestId);if(active()&&n===sequence.current){setSelected(detail);setStep('detail');}}
+    catch(e){if(active()&&n===sequence.current){setToastType('error');setToast(repairCommandErrorMessage(e));}}
+    finally{if(active()&&n===sequence.current)setLoading(false);}
   };
-
-  /** ACK là bất biến: ACK đầu tiên chốt người nhận, không thay đổi lại được. */
-  const handleAck = async () => {
-    if (!selected || selected.acknowledgmentId || acking) {
-      return;
-    }
-    setAcking(true);
-    try {
-      const acknowledged = await ackReceivingRequest(
-        selected.id,
-        selected.version ?? '',
-        { claimedDeviceAt: new Date().toISOString() },
-        nextIdempotencyKey(),
-      );
-      setSelected(acknowledged);
-      setItems((prev) => prev.map((item) => (item.id === acknowledged.id ? acknowledged : item)));
-      setToast('Đã nhận việc. Người nhận đầu tiên được chốt và không thể thay đổi.');
-    } catch (error) {
-      if (isRepairVersionConflict(error)) {
-        try {
-          const fresh = await getReceivingRequest(selected.id);
-          setSelected(fresh);
-          setItems((prev) => prev.map((item) => (item.id === fresh.id ? fresh : item)));
-        } catch {
-          /* giữ dữ liệu cũ, vẫn báo cho người dùng */
-        }
-        Alert.alert(
-          'Yêu cầu đã thay đổi',
-          'Yêu cầu nhận việc đã được cập nhật trên máy chủ. Vui lòng kiểm tra lại thông tin mới rồi xác nhận.',
-          [{ text: 'Đã hiểu' }],
-        );
-      } else {
-        setToast(repairCommandErrorMessage(error));
-      }
-    } finally {
-      setAcking(false);
-    }
+  const handleAck=async()=>{
+    if(!selected||selected.acknowledgmentId||ackLock.current)return;
+    ackLock.current=true;setAcking(true);setToast(null);
+    try{const result=await acknowledgeReceiving(identity,selected.id);if(active()){
+      setSelected(result);setItems(old=>old.map(v=>v.id===result.id?result:v));setToastType('success');setToast('Máy chủ xác nhận bạn đã nhận việc. Đây không phải phê duyệt hay hoàn thành sửa chữa.');
+    }}catch(e){if(active()){setToastType('error');setToast(repairCommandErrorMessage(e)+' Lệnh được giữ để đối soát; thử lại giữ nguyên khóa và phiên bản.');}}
+    finally{ackLock.current=false;if(active())setAcking(false);}
   };
 
   const renderList = () => {
@@ -202,6 +188,7 @@ export default function CrewReceivingScreen() {
           return (
             <Pressable
               key={request.id}
+              disabled={acking || loading}
               onPress={() => void openDetail(request.id)}
               accessibilityRole="button"
               accessibilityLabel={`${kindLabel(request.kind)} — ${state.label}`}
@@ -305,33 +292,9 @@ export default function CrewReceivingScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaScreen
-        scroll
-        header={
-          step === 'detail' ? (
-            <View style={styles.topBar}>
-              <Pressable
-                onPress={() => {
-                  setStep('list');
-                  setSelected(null);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Quay lại danh sách"
-                hitSlop={8}
-                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-              >
-                <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
-              </Pressable>
-              <Text style={[typography.titleMd, styles.topBarTitle]}>Nhận việc</Text>
-            </View>
-          ) : (
-            <AppHeader subtitle="Nhận việc" />
-          )
-        }
-      >
-        {step === 'list' ? renderList() : renderDetail()}
-      </SafeAreaScreen>
-      {toast ? <Toast type="success" message={toast} /> : null}
+      {step==='detail'?<Pressable disabled={acking} onPress={()=>{sequence.current++;setStep('list');setSelected(null);}} accessibilityRole="button" accessibilityLabel="Quay lại danh sách"><Text style={typography.labelLg}>← Danh sách yêu cầu</Text></Pressable>:null}
+        {step === 'list' ? <>{renderList()}<Button variant="secondary" title="Tải lại yêu cầu" disabled={loading||acking} onPress={()=>void loadList()} />{cursor?<Button variant="secondary" title="Tải thêm yêu cầu" disabled={loading||acking} onPress={()=>void loadList(true)} />:null}</> : renderDetail()}
+      {toast ? <Toast type={toastType} message={toast} /> : null}
     </View>
   );
 }

@@ -18,19 +18,13 @@ import { currentRepairIdentity, sameRepairIdentity, type RepairIdentity } from '
 import { useAuthStore } from '../store/auth';
 import { passwordSessionIdentity } from '../api/authApi';
 import {
-  MOCK_CREW_PROJECT_ID,
-  ackReceivingRequest as ackReceivingRequestMock,
   finishRepairExecution as finishRepairExecutionMock,
   getCrewFieldTaskView,
-  getReceivingRequest as getReceivingRequestMock,
   listCrewFieldSubmissions,
-  listReceivingRequests as listReceivingRequestsMock,
   startRepairExecution as startRepairExecutionMock,
   submitRepairAssessment as submitRepairAssessmentMock,
   submitRepairAttempt as submitRepairAttemptMock,
   supplementRepairAttempt as supplementRepairAttemptMock,
-  type BusinessDutyView,
-  type BusinessRequestAckInput,
   type CrewFieldSubmissionView,
   type CrewFieldTaskViewFact,
   type CrewRepairContext,
@@ -41,7 +35,7 @@ import {
 } from '../api/mock/tasks';
 
 /**
- * Legacy transport retained for receiving compatibility. Repair callbacks remain
+ * Legacy repair transport retained for historical compatibility. Repair callbacks remain
  * disabled in T06-A; bootstrap reads API-080 directly with session validation.
  */
 const USE_MOCK_CREW_REPAIR = false;
@@ -82,11 +76,6 @@ export interface RepairCommandOptions {
 /** Bọc `itemVersion` thành giá trị If-Match đúng wire: `"<base64 rowversion>"`. */
 export function itemIfMatch(itemVersion: string): string {
   return `"${itemVersion}"`;
-}
-
-/** If-Match của API-136/137 là ETag thô (đã có sẵn dạng `W/"n"`), KHÔNG bọc thêm nháy kép. */
-export function receivingIfMatch(version: string): string {
-  return version;
 }
 
 /** Mã lỗi (snake_case) trong envelope problem+json của BE, hoặc null nếu không đọc được. */
@@ -175,17 +164,7 @@ interface CrewRepairTransport {
     input: Record<string, unknown>,
     headers: RepairCommandHeaders,
   ): Promise<RepairExecutionFinishView>;
-  listReceiving(
-    projectId: string,
-    params: { scopeId?: string; after?: string; limit?: number },
-  ): Promise<{ items: BusinessDutyView[]; continuation: string | null }>;
-  getReceiving(projectId: string, requestId: string): Promise<BusinessDutyView>;
-  ackReceiving(
-    projectId: string,
-    requestId: string,
-    input: BusinessRequestAckInput,
-    headers: { 'If-Match': string; 'Idempotency-Key': string },
-  ): Promise<BusinessDutyView>;
+
 }
 
 const mockCrewRepairTransport: CrewRepairTransport = {
@@ -200,10 +179,7 @@ const mockCrewRepairTransport: CrewRepairTransport = {
     startRepairExecutionMock(taskId, input, headers),
   finishExecution: (taskId, _ctx, _projectId, input, headers) =>
     finishRepairExecutionMock(taskId, input, headers),
-  listReceiving: (_projectId, params) => listReceivingRequestsMock(params),
-  getReceiving: (_projectId, requestId) => getReceivingRequestMock(requestId),
-  ackReceiving: (_projectId, requestId, input, headers) =>
-    ackReceivingRequestMock(requestId, input, headers),
+
 };
 
 function repairItemPath(projectId: string, ctx: RepairContext, taskId: string, suffix: string): string {
@@ -275,34 +251,14 @@ const httpCrewRepairTransport: CrewRepairTransport = {
     );
     return res.data as unknown as RepairExecutionFinishView;
   },
-  async listReceiving(projectId, params) {
-    const response = await apiClient.get<{ items: BusinessDutyView[]; continuation: string | null }>(
-      `/projects/${projectId}/receiving-requests`,
-      { params },
-    );
-    return response.data;
-  },
-  async getReceiving(projectId, requestId) {
-    const response = await apiClient.get<BusinessDutyView>(
-      `/projects/${projectId}/receiving-requests/${requestId}`,
-    );
-    return response.data;
-  },
-  async ackReceiving(projectId, requestId, input, headers) {
-    const response = await apiClient.post<BusinessDutyView>(
-      `/projects/${projectId}/receiving-requests/${requestId}/ack`,
-      input,
-      { headers },
-    );
-    return response.data;
-  },
+
 };
 
 export const crewRepairTransport: CrewRepairTransport = USE_MOCK_CREW_REPAIR
   ? mockCrewRepairTransport
   : httpCrewRepairTransport;
 
-export const CREW_REPAIR_PROJECT_ID = MOCK_CREW_PROJECT_ID;
+
 
 /* -------------------------------------------------------------------------- */
 /* C04 — bootstrap + itemVersion                                              */
@@ -438,27 +394,7 @@ export function listRepairSubmissions(taskId: string): Promise<CrewFieldSubmissi
 /* C-11 — yêu cầu nhận việc (API-135/136/137)                                 */
 /* -------------------------------------------------------------------------- */
 
-export function listReceivingRequests(
-  params: { scopeId?: string; after?: string; limit?: number } = {},
-): Promise<{ items: BusinessDutyView[]; continuation: string | null }> {
-  return crewRepairTransport.listReceiving(CREW_REPAIR_PROJECT_ID, params);
-}
-
-export function getReceivingRequest(requestId: string): Promise<BusinessDutyView> {
-  return crewRepairTransport.getReceiving(CREW_REPAIR_PROJECT_ID, requestId);
-}
-
-export function ackReceivingRequest(
-  requestId: string,
-  version: string,
-  input: BusinessRequestAckInput = {},
-  idempotencyKey?: string,
-): Promise<BusinessDutyView> {
-  return crewRepairTransport.ackReceiving(CREW_REPAIR_PROJECT_ID, requestId, input, {
-    'If-Match': receivingIfMatch(version),
-    'Idempotency-Key': idempotencyKey ?? uuidv4(),
-  });
-}
+// Receiving now uses crewReceivingWorkflow with explicit authenticated project identity.
 
 /* -------------------------------------------------------------------------- */
 /* Hook React                                                                  */
