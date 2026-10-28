@@ -46,6 +46,7 @@ function screenHarness(file,options={}){
    if(n==='expo-router')return {router:{replace(){}},useLocalSearchParams:()=>params,usePathname:()=>`/(crew)/${file}`,useFocusEffect:()=>{}};
    if(n==='@tanstack/react-query')return {useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:false,refetch(){}};}};
    if(n.endsWith('/store/auth'))return {useAuthStore:s=>s(state)};
+   if(n.endsWith('/offline/upload-queue'))return {currentQueueIdentity:()=>({actor,role:'REPAIR_CREW',partition:'test-crew',scope:'test-session',environment:'http://fixture/api/v1'})};
    if(n.endsWith('/api/authApi'))return {passwordSessionIdentity:t=>t?JSON.stringify([state.user.id,'sid-'+state.user.id]):null};
    if(n.endsWith('/api/crewApi'))return {...api,getFieldInspectionTaskDetailReal:async()=>({data:options.wireDetail??detail,etag:'"'+detail.version+'"'})};
    if(n==='./tasks')return load('app/(crew)/tasks.tsx');

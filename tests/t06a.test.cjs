@@ -134,7 +134,7 @@ function syncHarness() {
   const a = api();
   return load('app/(crew)/sync.tsx', {
     '../../src/api/crewApi': a,
-    '../../src/offline/upload-queue': { decodeOutboxPayload: row => Buffer.from(row.data_b64,'base64').toString('utf8') },
+    '../../src/offline/upload-queue': { decodeOutboxPayload: row => Buffer.from(row.data_b64,'base64').toString('utf8'), currentQueueIdentity:()=>({partition:'test-crew'}), sameQueueIdentity:i=>i.partition==='test-crew' },
     '../../src/types/enums': load('src/types/enums.ts'),
     'react-native':{StyleSheet:{create:x=>x},Platform:{select:x=>x.default}},
     '../../src/design-tokens':{colors:{},spacing:{},typography:{},radius:{}},
@@ -142,11 +142,11 @@ function syncHarness() {
 }
 test('T06A real SQLite quarantine preserves bytes/key/IDs and never claims ACK', async () => {
   const {raw,port} = sqlite(), m = syncHarness();
-  raw.exec('CREATE TABLE offline_outbox(id TEXT PRIMARY KEY, kind TEXT, payload_b64 TEXT, idempotency_key TEXT, local_state TEXT, last_error TEXT, updated_at TEXT)');
+  raw.exec('CREATE TABLE offline_outbox(id TEXT PRIMARY KEY, kind TEXT, payload_b64 TEXT, idempotency_key TEXT, local_state TEXT, last_error TEXT, updated_at TEXT, partition_id TEXT NOT NULL DEFAULT "test-crew")');
   const body=Buffer.from(JSON.stringify({kind:'REPAIR_SUBMIT',attemptId:'legacy-fake',expectedVersion:'0'})).toString('base64');
-  raw.prepare('INSERT INTO offline_outbox VALUES(?,?,?,?,?,?,?)').run('old','FIELD_SUBMISSION',body,'old-key','ACKED',null,'old');
+  raw.prepare('INSERT INTO offline_outbox(id,kind,payload_b64,idempotency_key,local_state,last_error,updated_at) VALUES(?,?,?,?,?,?,?)').run('old','FIELD_SUBMISSION',body,'old-key','ACKED',null,'old');
   const field=Buffer.from('{"kind":"INSPECTION_SUBMIT"}').toString('base64');
-  raw.prepare('INSERT INTO offline_outbox VALUES(?,?,?,?,?,?,?)').run('field','FIELD_SUBMISSION',field,'field-key','READY',null,'old');
+  raw.prepare('INSERT INTO offline_outbox(id,kind,payload_b64,idempotency_key,local_state,last_error,updated_at) VALUES(?,?,?,?,?,?,?)').run('field','FIELD_SUBMISSION',field,'field-key','READY',null,'old');
   await m.quarantineLegacyRepairQueue(port);
   const r=raw.prepare('SELECT * FROM offline_outbox WHERE id=?').get('old');
   assert.equal(r.local_state,'BLOCKED_CONTRACT');assert.equal(r.payload_b64,body);assert.equal(r.idempotency_key,'old-key');
@@ -157,8 +157,8 @@ test('T06A real SQLite quarantine preserves bytes/key/IDs and never claims ACK',
 });
 test('T06A malformed durable payload is quarantined, not dispatched or deleted', async () => {
   const {raw,port}=sqlite(),m=syncHarness();
-  raw.exec('CREATE TABLE offline_outbox(id TEXT PRIMARY KEY, kind TEXT, payload_b64 TEXT, local_state TEXT, last_error TEXT, updated_at TEXT)');
-  raw.prepare('INSERT INTO offline_outbox VALUES(?,?,?,?,?,?)').run('corrupt','FIELD_SUBMISSION','AAAA','READY',null,'old');
+  raw.exec('CREATE TABLE offline_outbox(id TEXT PRIMARY KEY, kind TEXT, payload_b64 TEXT, local_state TEXT, last_error TEXT, updated_at TEXT, partition_id TEXT NOT NULL DEFAULT "test-crew")');
+  raw.prepare('INSERT INTO offline_outbox(id,kind,payload_b64,local_state,last_error,updated_at) VALUES(?,?,?,?,?,?)').run('corrupt','FIELD_SUBMISSION','AAAA','READY',null,'old');
   await m.quarantineLegacyRepairQueue(port);assert.equal(raw.prepare('SELECT local_state FROM offline_outbox').get().local_state,'BLOCKED_CONTRACT');
 });
 test('T06A journal session switch during SQLite write rolls back durable intent', async () => {

@@ -1,7 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -11,37 +10,12 @@ import { StatusBadge } from '../../src/components/StatusBadge';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Toast } from '../../src/components/Toast';
 import { initDatabase, openDatabase } from '../../src/offline/database';
-import {
-  countByState,
-  decodeOutboxPayload,
-  processQueue,
-  recoverInFlight,
-  retry as retryQueuedItem,
-  type OperationReceipt,
-  type OutboxItem,
-} from '../../src/offline/upload-queue';
-import { apiClient } from '../../src/api/client';
+import { decodeOutboxPayload, currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, QUEUE_CONTRACT_NOTICE, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
 import { isLegacyRepairQueueEntry } from '../../src/api/crewApi';
-import { getDeviceId } from '../../src/constants/device';
-import {
-  SYNC_OUTCOME_TO_LOCAL_STATE,
-  normalizeOfflineOperationKind,
-  toSyncWireKind,
-  type SyncOperation,
-  type SyncResult,
-  isDispatchableSyncOperationKind,
-} from '../../src/types/domain';
+import { useAuthStore } from '../../src/store/auth';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { LocalState, SyncStatus } from '../../src/types/enums';
 
-/**
- * `kind` được phép gửi thật qua `POST /sync/batches` nằm tại
- * `src/types/domain.ts#RUNTIME_SYNC_OPERATION_KINDS`.
- *
- * Map trạng thái server trong `SyncOutcome` sang `LocalState` 09 nằm tại
- * `src/types/domain.ts#SYNC_OUTCOME_TO_LOCAL_STATE` (dùng chung với màn DRONE).
- * DUPLICATE = idempotent replay đã có bản ghi bền vững nên coi như ACK.
- */
 type SyncSegment = 'pending' | 'done';
 
 interface QueueItem {
@@ -88,23 +62,30 @@ const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
 };
 
 /** Preserve legacy intent bytes/IDs/keys, including old ACK claims; no synthetic server receipt. */
-export async function quarantineLegacyRepairQueue(db: SQLite.SQLiteDatabase): Promise<void> {
-  const rows = await db.getAllAsync<OutboxItem>(
-    'SELECT id, kind, payload_b64 AS data_b64, local_state AS status FROM offline_outbox',
+export async function quarantineLegacyRepairQueue(db: SQLite.SQLiteDatabase, identity = currentQueueIdentity()): Promise<void> {
+  if(!identity || !sameQueueIdentity(identity))throw Error('queue_session_required');
+  await db.withExclusiveTransactionAsync(async tx=>{
+  const rows = await tx.getAllAsync<OutboxItem>(
+    'SELECT id, kind, payload_b64 AS data_b64, local_state AS status FROM offline_outbox WHERE partition_id = ?',identity.partition,
   );
+  if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
   for (const row of rows) {
     let blocked = false;
     try { blocked = isLegacyRepairQueueEntry(row.kind, JSON.parse(decodeOutboxPayload(row))); }
     catch { blocked = true; } // Corrupt intent cannot be safely classified or dispatched.
+    if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
     if (blocked && row.status !== LocalState.BLOCKED_CONTRACT) {
-      await db.runAsync('UPDATE offline_outbox SET local_state = ?, last_error = ?, updated_at = ? WHERE id = ?',
+      await tx.runAsync('UPDATE offline_outbox SET local_state = ?, last_error = ?, updated_at = ? WHERE id = ? AND partition_id = ?',
         LocalState.BLOCKED_CONTRACT, `Repair legacy hoặc payload không hợp lệ; giữ để đối soát. Trạng thái cũ: ${row.status}`,
-        new Date().toISOString(), row.id);
+        new Date().toISOString(), row.id, identity.partition);
+      if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
     }
   }
+  });
+  if(!sameQueueIdentity(identity))throw Error('queue_session_changed');
 }
 
-/** Last check immediately before dispatch; row and payload kinds must both be safe. */
+/** Legacy classification helper only; it grants no dispatch capability. */
 export function crewSyncPayload(item: OutboxItem): Record<string, unknown> {
   const payload: unknown = JSON.parse(decodeOutboxPayload(item));
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || isLegacyRepairQueueEntry(item.kind, payload)) {
@@ -114,12 +95,20 @@ export function crewSyncPayload(item: OutboxItem): Record<string, unknown> {
 }
 
 export default function CrewSyncScreen() {
-  const params = useLocalSearchParams<{ id?: string }>();
+  useAuthStore(s=>s.token);useAuthStore(s=>s.user);useAuthStore(s=>s.status);
+  const identity=currentQueueIdentity();
+  if(!identity||identity.role!=='REPAIR_CREW')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" />}><Text>Cần phiên Crew hợp lệ.</Text></SafeAreaScreen>;
+  return <CrewSyncContent key={JSON.stringify(identity)} identity={identity} />;
+}
+function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   const [segment, setSegment] = useState<SyncSegment>('pending');
   const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
+  const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;reader.cancel();};},[reader]);
+  const active=()=>mounted.current&&sameQueueIdentity(identity);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,113 +137,23 @@ export default function CrewSyncScreen() {
   }, []);
 
   const reload = useCallback(async () => {
-    if (!db) {
-      return;
-    }
-    try {
-      await quarantineLegacyRepairQueue(db);
-      await recoverInFlight(db);
-      const rows = await db.getAllAsync<OutboxItem>(
-        `SELECT id, kind, payload_b64 AS data_b64, checksum_sha256, local_state AS status,
-                attempt, '5' AS max_attempts, last_error, created_at, updated_at
-           FROM offline_outbox ORDER BY created_at DESC`,
-      );
-      setOutboxRows(rows);
-    } catch {
-      setToast('Không đọc được hàng đợi đồng bộ cục bộ.');
-    }
-  }, [db]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const activeItemId = useMemo(() => {
-    const invalid = outboxRows.find(
-      (row) => LOCAL_STATE_TO_SYNC_STATUS[row.status] === SyncStatus.INVALID,
-    );
-    return invalid?.id ?? outboxRows[0]?.id ?? null;
-  }, [outboxRows]);
-
-  const syncNow = useCallback(async () => {
-    if (!db) {
-      return;
-    }
-    setSyncing(true);
-    setToast(`Đang đồng bộ ${outboxRows.length} mục trong hàng đợi…`);
-    try {
-      await quarantineLegacyRepairQueue(db);
-      await processQueue(db, async (item) => {
-        const payload = crewSyncPayload(item);
-        // Cột `kind` lưu OfflineOperationKind canonical (Phần 5.3); row cũ có thể giữ
-        // khoá legacy → chuẩn hoá on-read rồi ánh xạ sang kind wire của SyncOperation.
-        const rawKind = payload.kind ?? item.kind;
-        const canonicalKind = normalizeOfflineOperationKind(rawKind);
-        const wireKind = canonicalKind ? toSyncWireKind(canonicalKind) : null;
-        if (!canonicalKind || !wireKind || !isDispatchableSyncOperationKind(wireKind)) {
-          return [
-            {
-              operationId: item.id,
-              localState: LocalState.BLOCKED_CONTRACT,
-              errorCode: 'UNMAPPED_OPERATION_KIND',
-              errorMessage: `Kind "${String(rawKind)}" chưa ánh xạ sang SyncOperation canonical.`,
-            },
-          ];
-        }
-        // `SyncBatch` additionalProperties=false, cần deviceId + operations (1..100).
-        // `REPAIR_SUBMIT` dùng attemptId (không taskId) theo SyncAttemptSubmit.
-        const operation: SyncOperation = {
-          operationId: item.id,
-          kind: wireKind,
-          expectedVersion: (payload.expectedVersion as string) ?? item.expected_version ?? '0',
-          capturedAt: (payload.capturedAt as string) ?? item.created_at,
-          ...(wireKind === 'REPAIR_SUBMIT'
-            ? { attemptId: String(payload.attemptId ?? payload.attempt_id ?? item.id) }
-            : { taskId: String(payload.taskId ?? payload.task_id ?? item.task_id ?? '') }),
-          payload,
-        } as SyncOperation;
-
-        const response = await apiClient.post<SyncResult>(
-          '/sync/batches',
-          { deviceId: getDeviceId(), operations: [operation] },
-          { headers: { 'X-Operation-Id': item.id, 'Idempotency-Key': item.id } },
-        );
-
-        const results = response.data?.results;
-        // `results` thiếu/không phải mảng => envelope không hợp lệ, không ACK.
-        if (!Array.isArray(results) || results.length === 0) {
-          return undefined;
-        }
-
-        return results.map<OperationReceipt>((outcome) => ({
-          operationId: outcome.operationId,
-          localState: SYNC_OUTCOME_TO_LOCAL_STATE[outcome.status],
-          resourceId: outcome.resourceId,
-          resourceVersion: outcome.version,
-          errorCode: outcome.error?.code ?? null,
-          errorMessage: outcome.error?.message ?? null,
-          traceId: outcome.error?.traceId ?? null,
-        }));
-      });
-      await reload();
-      const counts = await countByState(db);
-      setToast(`Đã xử lý hàng đợi. Còn ${counts[LocalState.READY] ?? 0} mục chờ gửi; ${counts[LocalState.BLOCKED_CONTRACT] ?? 0} mục bị khóa để đối soát.`);
-    } catch (error) {
-      await reload();
-      setToast(error instanceof Error ? error.message : 'Đồng bộ thất bại, đã giữ trong hàng đợi.');
-    } finally {
-      // Also covers an old repair row enqueued concurrently with the worker.
-      try { await quarantineLegacyRepairQueue(db); } catch { setToast('Không khóa được dữ liệu legacy. Dừng đồng bộ và đối soát nhật ký.'); }
-      setSyncing(false);
-    }
-  }, [db, outboxRows.length, reload]);
+    if(!db)return;
+    try{const rows=await reader.read(db);if(rows&&active())setOutboxRows(rows);}
+    catch{if(active())setToast('Không đọc được hàng đợi; dữ liệu vẫn được giữ.');}
+  },[db,reader]);
+  useEffect(()=>{void reload();},[reload]);
+  const syncNow=useCallback(async()=>{
+    if(!db||!active())return;setSyncing(true);
+    try{await reload();if(active())setToast(QUEUE_CONTRACT_NOTICE);}
+    finally{if(active())setSyncing(false);}
+  },[db,reload,identity]);
 
   const queueItems = useMemo<QueueItem[]>(() => {
     if (outboxRows.length > 0) {
       return outboxRows.map((row) => ({
         id: row.id,
         name: OUTBOX_KIND_LABELS[row.kind] ?? row.kind,
-        meta: row.last_error ? `Lỗi: ${row.last_error}` : `SHA-256 ${row.checksum_sha256.slice(0, 12)}…`,
+        meta: row.last_error ? `Lỗi: ${row.last_error}` : queueChecksumLabel(row.checksum_sha256),
         size: `Lần thử ${row.attempt}/${row.max_attempts}`,
         status: LOCAL_STATE_TO_SYNC_STATUS[row.status] ?? SyncStatus.QUEUED,
       }));
@@ -282,34 +181,9 @@ export default function CrewSyncScreen() {
 
   
 
-  const refresh = () => {
-    void reload();
-    setToast('Đã làm mới danh sách đồng bộ từ hàng đợi cục bộ.');
-  };
-
-  const retry = async () => {
-    if (!db || !activeItemId) {
-      setToast('Không có mục nào đang lỗi để gửi lại.');
-      return;
-    }
-    setSyncing(true);
-    try {
-      const row = outboxRows.find(item => item.id === activeItemId);
-      if (!row) throw new Error('Không tìm thấy mục cần đối soát.');
-      crewSyncPayload(row); // Repair quarantine cannot be bypassed by the retry button.
-      await retryQueuedItem(db, activeItemId);
-      await reload();
-      setToast('Đã đưa mục bị lỗi về trạng thái chờ gửi lại.');
-    } catch {
-      setToast('Mục chưa được phép gửi lại. Repair legacy được giữ để đối soát.');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const cleanupCache = () => {
-    setToast('Đã dọn dẹp bộ nhớ đệm của các mục đã đồng bộ.');
-  };
+  const refresh=()=>{void reload();};
+  const retry=()=>{if(active())setToast(QUEUE_CONTRACT_NOTICE);};
+  const cleanupCache=()=>{if(active())setToast('Chưa có bằng chứng đối soát để xóa bản sao. Dữ liệu được giữ nguyên.');};
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng Bộ" />}>
@@ -357,18 +231,18 @@ export default function CrewSyncScreen() {
             </Text>
             <View style={styles.networkRow}>
               <MaterialIcons name="wifi" size={14} color={colors.success} />
-              <Text style={[typography.caption, styles.networkText]}>4G/Wi-Fi kết nối</Text>
+              <Text style={[typography.caption, styles.networkText]}>Trạng thái mạng chưa được đo</Text>
             </View>
           </View>
         </View>
         <Text style={[typography.bodyMd, styles.statusDesc]}>
-          Chỉ qua Wi-Fi / 4G khả dụng. Các tác vụ trường hiện trường sẽ được ưu tiên theo thứ tự thực hiện.
+          {QUEUE_CONTRACT_NOTICE} Bản ghi local/không chứng minh được chủ sở hữu được giữ riêng và không hiển thị trong phiên này.
         </Text>
         <View style={styles.heroDivider} />
         <View style={styles.syncBtnWrap}>
           <Button
             variant="primary"
-            title="Đồng bộ ngay"
+            title="Kiểm tra hàng đợi bị khóa"
             loading={syncing}
             disabled={counts.pending === 0}
             onPress={syncNow}
@@ -377,7 +251,7 @@ export default function CrewSyncScreen() {
           />
           {counts.pending === 0 ? (
             <Text style={[typography.caption, styles.syncAllDone]}>
-              Dữ liệu hiện trường đã đồng bộ hoàn toàn với máy chủ.
+              Không có mục trong phân vùng tài khoản này. Không suy ra đã đồng bộ dữ liệu legacy.
             </Text>
           ) : null}
         </View>
@@ -387,7 +261,7 @@ export default function CrewSyncScreen() {
         <>
           <View style={styles.sectionHeader}>
             <Text style={[typography.labelSm, styles.sectionTitle]}>MỤC CẦN TẢI LÊN</Text>
-            <Text style={[typography.caption, styles.sectionHint]}>Tự động khi có mạng</Text>
+            <Text style={[typography.caption, styles.sectionHint]}>Chưa có dispatch ký hợp lệ</Text>
           </View>
 
           {visibleItems.map((item) => (
@@ -426,8 +300,7 @@ export default function CrewSyncScreen() {
               <View style={styles.infoContent}>
                 <Text style={[typography.labelLg, styles.infoTitle]}>Bảo toàn dữ liệu ngoại tuyến</Text>
                 <Text style={[typography.caption, styles.infoDesc]}>
-                  Dữ liệu sửa chữa và hình ảnh nghiệm thu được lưu an toàn tại bộ nhớ thiết bị. Hệ thống sẽ tự động
-                  đồng bộ ngay khi phát hiện kết nối mạng ổn định hoặc khi bấm “Đồng bộ ngay”.
+                  Dữ liệu sửa chữa và hình ảnh nghiệm thu được lưu an toàn tại bộ nhớ thiết bị. Đồng bộ legacy đang khóa; chưa gửi mạng hay nhận xác nhận từ máy chủ.
                 </Text>
               </View>
             </View>
@@ -440,7 +313,7 @@ export default function CrewSyncScreen() {
               </View>
               <View style={styles.cacheContent}>
                 <Text style={[typography.labelLg, styles.cacheTitle]}>Bộ nhớ đệm hiện trường</Text>
-                <Text style={[typography.caption, styles.cacheDesc]}>2.1 GB còn trống trên máy</Text>
+                <Text style={[typography.caption, styles.cacheDesc]}>Chưa đo dung lượng thiết bị</Text>
               </View>
             </View>
             <Pressable accessibilityRole="button" style={({ pressed }) => [styles.cleanupBtn, pressed && styles.cleanupPressed]} onPress={cleanupCache}>
@@ -452,7 +325,7 @@ export default function CrewSyncScreen() {
         <EmptyState
           icon="sync"
           title="Đã đồng bộ xong"
-          message="Toàn bộ dữ liệu hiện trường đã được đồng bộ lên máy chủ."
+          message="Chưa có receipt hợp lệ để xác nhận dữ liệu legacy."
         />
       ) : (
         <EmptyState
@@ -462,7 +335,7 @@ export default function CrewSyncScreen() {
         />
       )}
 
-      {toast ? <Toast type="success" message={toast} /> : null}
+      {toast ? <Toast type="info" message={toast} /> : null}
     </SafeAreaScreen>
   );
 }

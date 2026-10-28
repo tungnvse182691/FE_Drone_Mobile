@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
@@ -14,24 +14,9 @@ const softShadow = Platform.select({
   default: {},
 });
 import { initDatabase, openDatabase } from '../../src/offline/database';
-import {
-  decodeOutboxPayload,
-  getActivePartition,
-  processQueue,
-  recoverInFlight,
-  type OperationReceipt,
-  type OutboxItem,
-} from '../../src/offline/upload-queue';
-import { apiClient } from '../../src/api/client';
-import { getDeviceId } from '../../src/constants/device';
-import { stableUuid } from '../../src/utils/uuid';
+import { decodeOutboxPayload, currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, QUEUE_CONTRACT_NOTICE, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
+import { useAuthStore } from '../../src/store/auth';
 import { LocalState } from '../../src/types/enums';
-import {
-  SYNC_OUTCOME_TO_LOCAL_STATE,
-  isDispatchableSyncOperationKind,
-  type SyncOperation,
-  type SyncResult,
-} from '../../src/types/domain';
 
 /** Map `LocalState` → nhãn tiếng Việt + nhóm hiển thị. Không suy diễn trạng thái từ timer. */
 const STATE_PRESENTATION: Record<
@@ -50,13 +35,6 @@ const STATE_PRESENTATION: Record<
   [LocalState.UNKNOWN_OUTCOME]: { label: 'Chưa rõ kết quả', tone: 'blocked' },
   [LocalState.ACKED]: { label: 'Đã đối soát toàn vẹn', tone: 'done' },
 };
-
-/**
- * Outbox lưp `kind` theo tên thao tác nội bộ (`submit_dataset`, `accept_survey_task`, …),
- * KHÔNG phải `kind` canonical của SyncOperation (`INSPECTION_SUBMIT`, `REPAIR_START`,
- * `REPAIR_SUBMIT`). Kind không nằm trong `RUNTIME_SYNC_OPERATION_KINDS` thì không được gửi —
- * giữ BLOCKED_CONTRACT thay vì ép kiểu để lách schema. Xem `src/types/domain.ts`.
- */
 
 const KIND_ICON: Record<string, 'videocam' | 'photo-library' | 'description'> = {
   submit_dataset: 'videocam',
@@ -92,12 +70,12 @@ function describeItem(row: OutboxItem): SyncItem {
   let meta = `${presentation.label} · lần thử ${row.attempt}`;
   try {
     const payload = JSON.parse(decodeOutboxPayload(row)) as Record<string, unknown>;
-    const name = (payload.videoName ?? payload.name ?? payload.taskId ?? null) as string | null;
-    if (name) {
+    const name = payload.videoName ?? payload.name ?? payload.taskId;
+    if (typeof name === 'string' && name) {
       title = name;
     }
-    const task = (payload.surveyTaskCode ?? payload.taskId ?? null) as string | null;
-    if (task) {
+    const task = payload.surveyTaskCode ?? payload.taskId;
+    if (typeof task === 'string' && task) {
       meta = `${task} · ${presentation.label}`;
     }
     if (row.last_error) {
@@ -113,34 +91,30 @@ function describeItem(row: OutboxItem): SyncItem {
     type: kindToType(row.kind),
     tone: presentation.tone,
     statusText: presentation.label,
-    sha256: row.checksum_sha256,
+    sha256: queueChecksumLabel(row.checksum_sha256),
   };
 }
 
-/** Đọc outbox của partition đang hoạt động — nguồn duy nhất cho UI và thống kê sau sync. */
-async function readOutbox(database: SQLite.SQLiteDatabase): Promise<OutboxItem[]> {
-  return database.getAllAsync<OutboxItem>(
-    `SELECT id, kind, payload_b64 AS data_b64, checksum_sha256, local_state AS status,
-            attempt, '5' AS max_attempts, last_error, created_at, updated_at,
-            partition_id, task_id, expected_version
-       FROM offline_outbox
-      WHERE partition_id = ?
-      ORDER BY created_at DESC`,
-    [getActivePartition()],
-  );
-}
-
 export default function DroneSyncScreen() {
+  useAuthStore(s=>s.token);useAuthStore(s=>s.user);useAuthStore(s=>s.status);
+  const identity=currentQueueIdentity();
+  if(!identity||identity.role!=='DRONE_OPERATOR')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" />}><Text>Cần phiên Operator hợp lệ.</Text></SafeAreaScreen>;
+  return <DroneSyncContent key={JSON.stringify(identity)} identity={identity} />;
+}
+function DroneSyncContent({identity}:{identity:QueueIdentity}) {
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [queueTab, setQueueTab] = useState<'pending' | 'completed'>('pending');
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
   const [syncing, setSyncing] = useState(false);
-  const [purgedCount, setPurgedCount] = useState(0);
+  const purgedCount = 0;
+  const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;reader.cancel();};},[reader]);
+  const active=()=>mounted.current&&sameQueueIdentity(identity);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+
   }, []);
 
   useEffect(() => {
@@ -163,21 +137,12 @@ export default function DroneSyncScreen() {
     };
   }, []);
 
-  const reload = useCallback(async () => {
-    if (!db) {
-      return;
-    }
-    try {
-      await recoverInFlight(db);
-      setOutboxRows(await readOutbox(db));
-    } catch {
-      setToastMsg('Không đọc được hàng đợi đồng bộ cục bộ.');
-    }
-  }, [db]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const reload=useCallback(async()=>{
+    if(!db)return;
+    try{const rows=await reader.read(db);if(rows&&active())setOutboxRows(rows);}
+    catch{if(active())setToastMsg('Không đọc được hàng đợi; dữ liệu vẫn được giữ.');}
+  },[db,reader]);
+  useEffect(()=>{void reload();},[reload]);
 
   const pendingQueue = useMemo(
     () => outboxRows.filter((row) => row.status !== LocalState.ACKED).map(describeItem),
@@ -188,113 +153,13 @@ export default function DroneSyncScreen() {
     [outboxRows],
   );
   const activeItems = queueTab === 'pending' ? pendingQueue : completedQueue;
-  /** Chỉ các mục có kind dispatchable mới đồng bộ được; kind nội bộ giữ BLOCKED_CONTRACT. */
-  const dispatchableRows = useMemo(
-    () => outboxRows.filter((row) => isDispatchableSyncOperationKind(row.kind)),
-    [outboxRows],
-  );
+  const handleSyncAll=useCallback(async()=>{
+    if(!db||!active())return;setSyncing(true);
+    try{await reload();if(active())showToast(QUEUE_CONTRACT_NOTICE);}
+    finally{if(active())setSyncing(false);}
+  },[db,reload,showToast,identity]);
+  const handleSafePurge=()=>{if(active())showToast('Chưa có receipt đối soát hợp lệ. Không xóa bản sao cục bộ.');};
 
-  const handleSyncAll = useCallback(async () => {
-    if (!db) {
-      showToast('Chưa mở được kho dữ liệu cục bộ.');
-      return;
-    }
-    if (outboxRows.length === 0) {
-      showToast('Hàng đợi trống, không có gì để đồng bộ.');
-      return;
-    }
-    setSyncing(true);
-    const dispatchable = outboxRows.filter((row) => isDispatchableSyncOperationKind(row.kind));
-    showToast(`Đang gửi ${dispatchable.length} mục trong hàng đợi…`);
-    try {
-      await processQueue(db, async (item) => {
-        if (!isDispatchableSyncOperationKind(item.kind)) {
-          // Không có kind canonical ⇒ không dựng được SyncOperation hợp lệ. Giữ trong hàng đợi.
-          return [
-            {
-              operationId: item.id,
-              localState: LocalState.BLOCKED_CONTRACT,
-              errorCode: 'UNMAPPED_OPERATION_KIND',
-              errorMessage: `Kind "${item.kind}" chưa ánh xạ sang SyncOperation canonical.`,
-            },
-          ];
-        }
-        const payload = JSON.parse(decodeOutboxPayload(item)) as Record<string, unknown>;
-        // Contract canonical `SyncBatch`: additionalProperties=false, cần deviceId + operations (1..100).
-        const operation: SyncOperation = {
-          operationId: item.id,
-          kind: item.kind,
-          expectedVersion: item.expected_version ?? '0',
-          capturedAt: String(payload.capturedAt ?? item.created_at),
-          ...(item.task_id ? { taskId: item.task_id } : {}),
-          payload,
-        } as SyncOperation;
-        const response = await apiClient.post<SyncResult>(
-          '/sync/batches',
-          { deviceId: getDeviceId(), operations: [operation] },
-          { headers: { 'X-Operation-Id': stableUuid(`sync:${item.id}`) } },
-        );
-        const results = response.data?.results;
-        if (!Array.isArray(results) || results.length === 0) {
-          // Envelope không hợp lệ ⇒ KHÔNG ACK.
-          return undefined;
-        }
-        return results.map<OperationReceipt>((outcome) => ({
-          operationId: outcome.operationId,
-          localState: SYNC_OUTCOME_TO_LOCAL_STATE[outcome.status],
-          resourceId: outcome.resourceId,
-          resourceVersion: outcome.version,
-          errorCode: outcome.error?.code ?? null,
-          errorMessage: outcome.error?.message ?? null,
-          traceId: outcome.error?.traceId ?? null,
-        }));
-      });
-      await reload();
-      // Đếm lại từ DB sau khi reload — `outboxRows` trong closure là snapshot cũ.
-      const fresh = await readOutbox(db);
-      const pending = fresh.filter((row) => row.status !== LocalState.ACKED).length;
-      showToast(
-        pending === 0
-          ? 'Máy chủ đã xác nhận toàn bộ mục trong hàng đợi.'
-          : `Còn ${pending} mục chưa được máy chủ xác nhận.`,
-      );
-    } catch {
-      await reload();
-      showToast('Không gửi được lên máy chủ. Hàng đợi được giữ nguyên để thử lại.');
-    } finally {
-      setSyncing(false);
-    }
-  }, [db, outboxRows, reload, showToast]);
-
-  const handleSafePurge = useCallback(async () => {
-    if (!db) {
-      showToast('Chưa mở được kho dữ liệu cục bộ.');
-      return;
-    }
-    try {
-      // `media_assets.id` và `offline_outbox.id` là hai UUID độc lập — KHÔNG join được
-      // với nhau. Liên kết duy nhất đáng tin là `uri_local` trong payload của mục đã ACK.
-      // Vì vậy chỉ xóa bản sao thuộc partition đang hoạt động mà media_state đã ở
-      // trạng thái kết thúc vòng đời (đã đối soát / đã tải lên xong).
-      const result = await db.runAsync(
-        `DELETE FROM media_assets
-          WHERE partition_id = ?
-            AND media_state IN (?, ?)`,
-        getActivePartition(),
-        'ACKED',
-        'UPLOADED',
-      );
-      const removed = result.changes;
-      setPurgedCount(removed);
-      showToast(
-        removed === 0
-          ? 'Chưa có bản sao nào được giải phóng vì chưa đối soát xong.'
-          : `Đã giải phóng an toàn ${removed} bản sao đã đối soát.`,
-      );
-    } catch {
-      showToast('Không đối soát được bản sao cục bộ.');
-    }
-  }, [db, showToast]);
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ ngoại tuyến" />}>
@@ -347,7 +212,7 @@ export default function DroneSyncScreen() {
             <Text style={[typography.titleMd, styles.summaryCount]}>
               {pendingQueue.length > 0
                 ? `${pendingQueue.length} tệp đang chờ đồng bộ`
-                : 'Đã hoàn tất mọi tệp đồng bộ'}
+                : 'Không có mục trong phân vùng này'}
             </Text>
           </View>
           <Text style={[typography.caption, styles.totalSize]}>
@@ -361,15 +226,15 @@ export default function DroneSyncScreen() {
           variant="primary"
           title={
             syncing
-              ? 'Đang gửi lên máy chủ…'
+              ? 'Đang đọc hàng đợi…'
               : pendingQueue.length > 0
-              ? 'Đồng bộ tất cả ngay'
+              ? 'Kiểm tra hàng đợi bị khóa'
               : outboxRows.length === 0
               ? 'Hàng đợi trống'
               : 'Đã đồng bộ đầy đủ'
           }
           loading={syncing}
-          disabled={dispatchableRows.length === 0 || syncing}
+          disabled={!db || syncing}
           onPress={handleSyncAll}
         />
       </Card>
@@ -380,7 +245,7 @@ export default function DroneSyncScreen() {
           {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'TỆP ĐÃ XÁC NHẬN TOÀN VẸN'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
-          {queueTab === 'pending' ? 'Tự động tải khi có Wi-Fi/4G' : 'Khớp mã băm toàn vẹn'}
+          {queueTab === 'pending' ? 'Chưa có dispatch ký hợp lệ' : 'Chưa có receipt được đối soát'}
         </Text>
       </View>
 
@@ -452,7 +317,7 @@ export default function DroneSyncScreen() {
         </View>
 
         <Text style={[typography.bodyMd, styles.purgeDesc]}>
-          Ứng dụng tự tải tiếp từ điểm đã dừng khi có mạng trở lại. Bản sao trên thẻ SD và bộ nhớ trong chỉ được xoá sau khi máy chủ xác nhận đã nhận đủ dữ liệu và mã băm khớp hoàn toàn.
+          {QUEUE_CONTRACT_NOTICE} Bản ghi local/không rõ chủ sở hữu vẫn được giữ riêng. Chưa xóa bản sao cục bộ.
         </Text>
 
         <Pressable
