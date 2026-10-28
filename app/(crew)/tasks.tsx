@@ -10,7 +10,7 @@ import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
 import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, usePathname } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
@@ -70,6 +70,7 @@ type TaskBoundaryProps = { operational: false; children: (task: CrewTask) => Rea
 function isOperational(task: CrewTask): task is OperationalCrewTask { return !crewTaskActionBlock(task); }
 export function CrewTaskBoundary(props: TaskBoundaryProps) {
   const operational = props.operational !== false;
+  const pathname = usePathname();
   const params = useLocalSearchParams<{ id?: string; projectId?: string }>();
   const inbox = useCrewInbox();
   const id = typeof params.id === 'string' ? params.id : '';
@@ -88,7 +89,8 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
   const { refetch } = query;
   useFocusEffect(useCallback(() => { if (inbox.enabled && validIds) void refetch(); }, [inbox.enabled, validIds, refetch]));
   const task = inbox.enabled && validIds && !query.isError ? query.data : undefined;
-  const blocked = operational && task ? crewTaskActionBlock(task) : null;
+  const executionRoute = /\/(progress|complete|repair-correction)$/.test(pathname);
+  const blocked = operational && executionRoute ? 'Thi công sửa chữa chưa được mở trong T06-A.' : operational && task ? crewTaskActionBlock(task) : null;
   if (!task || blocked) return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ" />}>
     <Text>{blocked ?? (!inbox.enabled ? 'Vui lòng đăng nhập bằng tài khoản Crew.' : !id ? 'Chưa chọn nhiệm vụ.' : !validIds ? 'Chưa xác định được dự án của nhiệm vụ. Chọn nhiệm vụ trong danh sách.' : query.isError ? crewReadError(query.error) : 'Đang tải nhiệm vụ…')}</Text>
     {query.isError ? <Button variant="secondary" title="Thử lại" onPress={() => { void query.refetch(); }} /> : null}

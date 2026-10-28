@@ -21,6 +21,7 @@ import {
   type OutboxItem,
 } from '../../src/offline/upload-queue';
 import { apiClient } from '../../src/api/client';
+import { isLegacyRepairQueueEntry } from '../../src/api/crewApi';
 import { getDeviceId } from '../../src/constants/device';
 import {
   SYNC_OUTCOME_TO_LOCAL_STATE,
@@ -86,6 +87,32 @@ const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
   [LocalState.ACKED]: SyncStatus.SERVER_CONFIRMED,
 };
 
+/** Preserve legacy intent bytes/IDs/keys, including old ACK claims; no synthetic server receipt. */
+export async function quarantineLegacyRepairQueue(db: SQLite.SQLiteDatabase): Promise<void> {
+  const rows = await db.getAllAsync<OutboxItem>(
+    'SELECT id, kind, payload_b64 AS data_b64, local_state AS status FROM offline_outbox',
+  );
+  for (const row of rows) {
+    let blocked = false;
+    try { blocked = isLegacyRepairQueueEntry(row.kind, JSON.parse(decodeOutboxPayload(row))); }
+    catch { blocked = true; } // Corrupt intent cannot be safely classified or dispatched.
+    if (blocked && row.status !== LocalState.BLOCKED_CONTRACT) {
+      await db.runAsync('UPDATE offline_outbox SET local_state = ?, last_error = ?, updated_at = ? WHERE id = ?',
+        LocalState.BLOCKED_CONTRACT, `Repair legacy hoặc payload không hợp lệ; giữ để đối soát. Trạng thái cũ: ${row.status}`,
+        new Date().toISOString(), row.id);
+    }
+  }
+}
+
+/** Last check immediately before dispatch; row and payload kinds must both be safe. */
+export function crewSyncPayload(item: OutboxItem): Record<string, unknown> {
+  const payload: unknown = JSON.parse(decodeOutboxPayload(item));
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || isLegacyRepairQueueEntry(item.kind, payload)) {
+    throw new Error('Repair legacy đang bị khóa; dữ liệu được giữ để đối soát.');
+  }
+  return payload as Record<string, unknown>;
+}
+
 export default function CrewSyncScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
   const [segment, setSegment] = useState<SyncSegment>('pending');
@@ -125,6 +152,7 @@ export default function CrewSyncScreen() {
       return;
     }
     try {
+      await quarantineLegacyRepairQueue(db);
       await recoverInFlight(db);
       const rows = await db.getAllAsync<OutboxItem>(
         `SELECT id, kind, payload_b64 AS data_b64, checksum_sha256, local_state AS status,
@@ -155,8 +183,9 @@ export default function CrewSyncScreen() {
     setSyncing(true);
     setToast(`Đang đồng bộ ${outboxRows.length} mục trong hàng đợi…`);
     try {
+      await quarantineLegacyRepairQueue(db);
       await processQueue(db, async (item) => {
-        const payload = JSON.parse(decodeOutboxPayload(item)) as Record<string, unknown>;
+        const payload = crewSyncPayload(item);
         // Cột `kind` lưu OfflineOperationKind canonical (Phần 5.3); row cũ có thể giữ
         // khoá legacy → chuẩn hoá on-read rồi ánh xạ sang kind wire của SyncOperation.
         const rawKind = payload.kind ?? item.kind;
@@ -209,11 +238,13 @@ export default function CrewSyncScreen() {
       });
       await reload();
       const counts = await countByState(db);
-      setToast(`Đồng bộ xong. Còn ${counts[LocalState.READY] ?? 0} mục chờ gửi.`);
+      setToast(`Đã xử lý hàng đợi. Còn ${counts[LocalState.READY] ?? 0} mục chờ gửi; ${counts[LocalState.BLOCKED_CONTRACT] ?? 0} mục bị khóa để đối soát.`);
     } catch (error) {
       await reload();
       setToast(error instanceof Error ? error.message : 'Đồng bộ thất bại, đã giữ trong hàng đợi.');
     } finally {
+      // Also covers an old repair row enqueued concurrently with the worker.
+      try { await quarantineLegacyRepairQueue(db); } catch { setToast('Không khóa được dữ liệu legacy. Dừng đồng bộ và đối soát nhật ký.'); }
       setSyncing(false);
     }
   }, [db, outboxRows.length, reload]);
@@ -263,11 +294,14 @@ export default function CrewSyncScreen() {
     }
     setSyncing(true);
     try {
+      const row = outboxRows.find(item => item.id === activeItemId);
+      if (!row) throw new Error('Không tìm thấy mục cần đối soát.');
+      crewSyncPayload(row); // Repair quarantine cannot be bypassed by the retry button.
       await retryQueuedItem(db, activeItemId);
       await reload();
       setToast('Đã đưa mục bị lỗi về trạng thái chờ gửi lại.');
     } catch {
-      setToast('Không đưa được mục về hàng đợi chờ.');
+      setToast('Mục chưa được phép gửi lại. Repair legacy được giữ để đối soát.');
     } finally {
       setSyncing(false);
     }

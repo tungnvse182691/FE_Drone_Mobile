@@ -14,6 +14,7 @@ import {
   isRepairVersionConflict,
   repairCommandErrorMessage,
   withFreshItemVersion,
+  useRepairBootstrap,
 } from '../../src/hooks/useRepairBootstrap';
 import {
   applyEligibility,
@@ -286,7 +287,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <Text>WO / tuyến / GPS / loại khuyết tật: Chưa có dữ liệu từ máy chủ.</Text>
         <Text>{crewTaskActionBlock(task)}</Text>
         <Text>Nhận / từ chối / bắt đầu dùng assignment và phiên bản thật; không yêu cầu GPS.</Text>
-        {!task.detail?.repairContext ? <Text>P5-G02: chưa có ngữ cảnh sửa chữa hợp lệ; không mở thao tác sửa chữa.</Text> : <Text>Đã có ngữ cảnh sửa chữa từ BE; chuỗi lệnh sửa chữa chưa thuộc nghiệm thu T04.</Text>}
+        <NormalRepairBootstrap task={task} />
       </Card>
       <Card style={styles.taskActionCard}>
         <Text style={typography.titleMd}>Nhận / từ chối nhiệm vụ</Text>
@@ -307,6 +308,27 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </SafeAreaScreen>
   );
+}
+
+/** Read-only NORMAL capability. Never mounts the legacy repair UI or sends a command. */
+export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
+  const result = useRepairBootstrap(task.id, { projectId: task.projectId });
+  return <View>
+    <Text style={typography.titleMd}>Ngữ cảnh sửa chữa NORMAL</Text>
+    {result.status === 'loading' ? <Text>Đang đọc ngữ cảnh từ máy chủ…</Text> : null}
+    {result.status === 'error' ? <Text>Không xác nhận được ngữ cảnh sửa chữa. Vui lòng tải lại.</Text> : null}
+    {result.status === 'ready' && !result.repairContext ? <Text>Máy chủ chưa cung cấp ngữ cảnh NORMAL đang được giao. FastTrack chưa được mở.</Text> : null}
+    {result.repairContext ? <>
+      <Text selectable>Hạng mục: {result.repairContext.itemId}</Text>
+      <Text selectable>Binding: {result.repairContext.bindingId}</Text>
+      <Text>Trạng thái hạng mục: {result.repairContext.status}</Text>
+      <Text selectable>Phiên bản hạng mục: {result.itemVersion}</Text>
+      <Text>Phương án: {result.repairContext.repairPlan}</Text>
+      <Text>Checklist: {result.repairContext.checklistVersion}</Text>
+    </> : null}
+    <Text>Chỉ xem ngữ cảnh. Đánh giá, bắt đầu, kết thúc và nộp hồ sơ sửa chữa chưa được mở.</Text>
+    <Button variant="secondary" title="Tải lại ngữ cảnh sửa chữa" loading={result.status === 'loading'} onPress={() => void result.reload()} />
+  </View>;
 }
 function CrewWoDetailContent({ task }: { task: OperationalCrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();

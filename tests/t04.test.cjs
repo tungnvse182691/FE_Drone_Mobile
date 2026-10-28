@@ -43,7 +43,7 @@ function screenHarness(file,options={}){
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'..',relative),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,require:n=>{
    if(n==='react')return react;
    if(n==='react-native')return {StyleSheet:{create:o=>o},Platform:{select:o=>o.default},View:'View',Text:'Text',Pressable:'Pressable'};
-   if(n==='expo-router')return {router:{replace(){}},useLocalSearchParams:()=>params,useFocusEffect:()=>{}};
+   if(n==='expo-router')return {router:{replace(){}},useLocalSearchParams:()=>params,usePathname:()=>`/(crew)/${file}`,useFocusEffect:()=>{}};
    if(n==='@tanstack/react-query')return {useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:false,refetch(){}};}};
    if(n.endsWith('/store/auth'))return {useAuthStore:s=>s(state)};
    if(n.endsWith('/api/authApi'))return {passwordSessionIdentity:t=>t?JSON.stringify([state.user.id,'sid-'+state.user.id]):null};

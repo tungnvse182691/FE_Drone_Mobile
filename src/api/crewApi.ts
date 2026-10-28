@@ -12,10 +12,10 @@
  *   API-096 GET  /projects/{projectId}/field-inspection-tasks/{taskId}/submissions/{submissionId}
  *   API-146 GET  /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/eligibility
  *   API-156 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/assessment
- *   API-157 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/execution-start
- *   API-159 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/execution-finish
- *   API-160 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/attempts
- *   API-161 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/attempts/supplements
+ *   API-161 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/execution-start
+ *   API-160 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/execution-finish
+ *   API-157 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/attempts
+ *   API-159 POST /projects/{projectId}/repair-packages/{packageId}/items/{itemId}/tasks/{taskId}/attempts/supplements
  *
  * Crew uploads (khác Reporter):
  *   POST /uploads                                    (tạo session với Purpose BEFORE/AFTER/MEASUREMENT)
@@ -73,6 +73,7 @@ export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: Field
 export function crewTaskIsComplete(task: { status: string }): boolean { return task.status.toUpperCase() === 'COMPLETED'; }
 export function crewTaskActionBlock(task: CrewTask | null): string | null {
   if (!task || !task.projectId || !task.id || !task.version || !task.etag) return 'Chưa có định danh hoặc phiên bản nhiệm vụ hợp lệ.';
+  if (task.rawMode === 'NORMAL' || task.rawMode === 'CONDITIONAL_FT' || task.detail?.repairContext) return 'Thi công sửa chữa chưa được mở; chỉ xem ngữ cảnh từ máy chủ.';
   if (!task.coordinates || !Number.isFinite(task.coordinates.latitude) || !Number.isFinite(task.coordinates.longitude) ||
       Math.abs(task.coordinates.latitude) > 90 || Math.abs(task.coordinates.longitude) > 180) return 'Máy chủ chưa cung cấp tọa độ hiện trường; chưa thể mở thao tác này.';
   if (task.task_mode === 'UNKNOWN' || !task.defect_type_code || !task.wo_code) return 'Chưa đủ dữ liệu tác nghiệp từ máy chủ. Chỉ có thể xem thông tin nhiệm vụ.';
@@ -264,6 +265,34 @@ export interface CrewRepairContext {
   itemVersion: string;
   repairPlan: string;
   checklistVersion: string;
+}
+
+export type NormalRepairCapability = 'bootstrap' | 'assessment' | 'start' | 'finish' | 'attempt' | 'supplement';
+/** SQL Server rowversion is exactly eight bytes, never task/eligibility ETag. */
+export function isRepairItemVersion(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/.test(value);
+}
+/** A valid context is a read capability, not permission to execute a later phase. */
+export function normalRepairBlock(task: FieldTaskViewFact, etag: string, actorId: string,
+  capability: NormalRepairCapability, expected?: CrewRepairContext): string | null {
+  try { validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId); }
+  catch { return 'Định danh, người nhận hoặc phiên bản nhiệm vụ không hợp lệ.'; }
+  if (!isCrewResourceId(task.assignmentId) || !isRepairItemVersion(task.version)) return 'Thiếu assignment hoặc phiên bản nhiệm vụ hợp lệ.';
+  if (task.mode !== 'NORMAL') return 'Chỉ hỗ trợ bootstrap NORMAL; FastTrack chưa được mở.';
+  const ctx = task.repairContext;
+  if (!ctx) return 'Máy chủ chưa cung cấp ngữ cảnh NORMAL đang được giao cho bạn.';
+  if (ctx.mode !== 'NORMAL' || ![ctx.packageId,ctx.itemId,ctx.bindingId].every(isCrewResourceId) ||
+      !isRepairItemVersion(ctx.itemVersion) || !ctx.repairPlan?.trim() || !ctx.checklistVersion?.trim() ||
+      !['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired','Cancelled'].includes(ctx.status)) return 'Ngữ cảnh hạng mục, binding hoặc phiên bản sửa chữa không hợp lệ.';
+  if (expected && ['packageId','itemId','bindingId','itemVersion'].some(k => ctx[k as keyof CrewRepairContext] !== expected[k as keyof CrewRepairContext])) return 'Ngữ cảnh sửa chữa đã thay đổi; cần đối soát lệnh cũ.';
+  return capability === 'bootstrap' ? null : 'T06-A chỉ đọc ngữ cảnh; thao tác thi công chưa được mở.';
+}
+
+/** Inspect both durable row kind and payload kind; a FIELD alias cannot hide repair work. */
+export function isLegacyRepairQueueEntry(kind: unknown, payload: unknown): boolean {
+  const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  return [kind, body.kind].some(value => typeof value === 'string' &&
+    (/^repair(?:_|$)/i.test(value) || /^fast_track/i.test(value)));
 }
 
 /** Chi tiết nhiệm vụ hiện trường từ GET /projects/{projectId}/field-inspection-tasks/{taskId} (API-080). */
@@ -787,7 +816,7 @@ export async function submitRepairAssessmentReal(
 }
 
 /**
- * API-157: POST .../tasks/{taskId}/execution-start
+ * API-161: POST .../tasks/{taskId}/execution-start
  */
 export async function startRepairExecutionReal(
   projectId: string,
@@ -812,7 +841,7 @@ export async function startRepairExecutionReal(
 }
 
 /**
- * API-159: POST .../tasks/{taskId}/execution-finish
+ * API-160: POST .../tasks/{taskId}/execution-finish
  */
 export async function finishRepairExecutionReal(
   projectId: string,
@@ -837,7 +866,7 @@ export async function finishRepairExecutionReal(
 }
 
 /**
- * API-160: POST .../tasks/{taskId}/attempts
+ * API-157: POST .../tasks/{taskId}/attempts
  */
 export async function submitRepairAttemptReal(
   projectId: string,
@@ -862,7 +891,7 @@ export async function submitRepairAttemptReal(
 }
 
 /**
- * API-161: POST .../tasks/{taskId}/attempts/supplements
+ * API-159: POST .../tasks/{taskId}/attempts/supplements
  */
 export async function supplementRepairAttemptReal(
   projectId: string,

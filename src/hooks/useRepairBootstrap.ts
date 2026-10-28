@@ -7,11 +7,16 @@ import {
   finishRepairExecutionReal,
   getFieldInspectionTaskDetailReal,
   isCrewResourceId,
+  normalRepairBlock,
+  validateCrewTaskDetail,
   startRepairExecutionReal,
   submitRepairAssessmentReal,
   submitRepairAttemptReal,
   supplementRepairAttemptReal,
 } from '../api/crewApi';
+import { currentRepairIdentity, sameRepairIdentity, type RepairIdentity } from '../api/crewRepairDraft';
+import { useAuthStore } from '../store/auth';
+import { passwordSessionIdentity } from '../api/authApi';
 import {
   MOCK_CREW_PROJECT_ID,
   ackReceivingRequest as ackReceivingRequestMock,
@@ -36,8 +41,8 @@ import {
 } from '../api/mock/tasks';
 
 /**
- * BE thật đã sẵn sàng kết nối qua RoadGuardBackend.
- * Đổi sang false để httpCrewRepairTransport gọi các API thật (156-161).
+ * Legacy transport retained for receiving compatibility. Repair callbacks remain
+ * disabled in T06-A; bootstrap reads API-080 directly with session validation.
  */
 const USE_MOCK_CREW_REPAIR = false;
 
@@ -45,6 +50,7 @@ const USE_MOCK_CREW_REPAIR = false;
 export type RepairContext = CrewRepairContext;
 
 export interface RepairBootstrap {
+  identity: RepairIdentity;
   taskId: string;
   projectId: string;
   /** Rowversion NGOÀI của task (API-095 dùng giá trị này), KHÔNG dùng cho lệnh sửa chữa. */
@@ -129,7 +135,7 @@ function syntheticError(code: string, status: number, message: string) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Transport: mock (đang bật) hoặc HTTP thật theo hợp đồng 04_API-Contracts.   */
+/* Legacy transport: HTTP selected; repair command entrypoints are locked.     */
 /* -------------------------------------------------------------------------- */
 
 interface CrewRepairTransport {
@@ -308,56 +314,36 @@ export async function readRepairBootstrap(
   projectId?: string,
 ): Promise<RepairBootstrap> {
   if (!isCrewResourceId(projectId) || !isCrewResourceId(taskId)) throw syntheticError('crew_identity_missing', 428, 'Project and task identity are required');
-  const view = await crewRepairTransport.fetchTask(taskId, projectId);
-  if (view.id !== taskId || view.projectId !== projectId || !view.version) throw syntheticError('crew_identity_invalid', 409, 'Task identity or version mismatch');
+  const identity = currentRepairIdentity(projectId, taskId);
+  if (!identity) throw syntheticError('crew_session_required', 401, 'A valid Crew session is required');
+  const response = await getFieldInspectionTaskDetailReal(projectId, taskId);
+  if (!sameRepairIdentity(identity, currentRepairIdentity(projectId, taskId))) throw syntheticError('crew_session_changed', 409, 'Crew session changed during read');
+  const view = response.data;
+  validateCrewTaskDetail(view, response.etag, projectId, taskId, identity.actor);
+  if (view.repairContext) {
+    const reason = normalRepairBlock(view, response.etag, identity.actor, 'bootstrap');
+    if (reason) throw syntheticError('repair_context_invalid', 409, reason);
+  }
   return {
+    identity,
     taskId,
     projectId,
-    taskVersion: view.version,
+    taskVersion: view.version!,
     repairContext: view.repairContext ?? null,
   };
 }
 
 /**
- * C04: đọc lại API-080 NGAY TRƯỚC mỗi lệnh sửa chữa để lấy `itemVersion` mới nhất,
- * gắn `If-Match: "<itemVersion>"` + `Idempotency-Key` ổn định, rồi mới chạy lệnh.
- *
- * Khi gặp 409/412 (version lệch) sẽ đọc lại API-080 để làm mới phiên bản nhưng
- * KHÔNG tự retry — màn hình phải hỏi người dùng có thử lại với phiên bản mới không.
+ * Legacy command entrypoint is locked in T06-A. Later phases must dispatch an
+ * immutable journal record and reconcile unknown outcomes before enabling writes.
  */
 export async function withFreshItemVersion<T>(
   taskId: string,
   command: RepairCommand<T>,
   options: RepairCommandOptions = {},
 ): Promise<T> {
-  const projectId = options.projectId ?? CREW_REPAIR_PROJECT_ID;
-  const bootstrap = await readRepairBootstrap(taskId, projectId);
-
-  if (!bootstrap.repairContext) {
-    throw syntheticError(
-      'repair_anchor_not_ready',
-      409,
-      'Nhiệm vụ chưa có hạng mục sửa chữa khả dụng (chế độ chỉ đo hoặc chưa được phân công).',
-    );
-  }
-
-  const headers: RepairCommandHeaders = {
-    'If-Match': itemIfMatch(bootstrap.repairContext.itemVersion),
-    'Idempotency-Key': options.idempotencyKey ?? uuidv4(),
-  };
-
-  try {
-    return await command({ bootstrap, repairContext: bootstrap.repairContext, headers });
-  } catch (error) {
-    if (isRepairVersionConflict(error)) {
-      try {
-        await readRepairBootstrap(taskId, projectId);
-      } catch {
-        /* giữ nguyên lỗi gốc để UI xử lý */
-      }
-    }
-    throw error;
-  }
+  // Legacy callbacks have no immutable durable command. Never execute them in T06-A.
+  throw syntheticError('repair_execution_not_enabled', 409, 'Thi công sửa chữa chưa được mở.');
 }
 
 /* -------------------------------------------------------------------------- */
@@ -417,8 +403,7 @@ export function finishRepairExecution(
 }
 
 /**
- * C-08 — đính chính một lượt sửa đã gửi (API-159). Đi qua `withFreshItemVersion` nên
- * luôn mang If-Match = itemVersion mới nhất của RepairItem.
+ * C-08 — API-159 legacy supplement remains locked by withFreshItemVersion in T06-A.
  */
 export function supplementRepairAttempt(
   taskId: string,
@@ -492,60 +477,58 @@ export interface UseRepairBootstrapResult {
 
 /**
  * Hook bootstrap cho một nhiệm vụ sửa chữa: đọc API-080, cache `repairContext.itemVersion`
- * và cho phép đọc lại thủ công. Lệnh sửa chữa vẫn phải đi qua `withFreshItemVersion`.
+ * và cho phép đọc lại thủ công. T06-A chưa mở lệnh sửa chữa.
  */
 export function useRepairBootstrap(
   taskId: string,
   options: { projectId?: string } = {},
 ): UseRepairBootstrapResult {
-  const projectId = options.projectId ?? CREW_REPAIR_PROJECT_ID;
+  const projectId = options.projectId ?? '';
+  const token = useAuthStore(s => s.token), user = useAuthStore(s => s.user), authStatus = useAuthStore(s => s.status);
+  const scope = passwordSessionIdentity(token);
+  const identity = currentRepairIdentity(projectId, taskId);
   const [status, setStatus] = useState<RepairBootstrapStatus>('loading');
   const [bootstrap, setBootstrap] = useState<RepairBootstrap | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const sequence = useRef(0);
+  const mounted = useRef(false);
   const load = useCallback(async () => {
+    const request = ++sequence.current;
+    const valid = () => mounted.current && sequence.current === request && !!identity && sameRepairIdentity(identity, currentRepairIdentity(projectId, taskId));
+    setBootstrap(null);
     setStatus('loading');
     setErrorMessage(null);
     try {
       const next = await readRepairBootstrap(taskId, projectId);
+      if (!valid()) return;
       setBootstrap(next);
       setStatus('ready');
     } catch (error) {
+      if (!mounted.current || sequence.current !== request) return;
       setBootstrap(null);
       setErrorMessage(repairCommandErrorMessage(error));
       setStatus('error');
     }
-  }, [taskId, projectId]);
+  }, [taskId, projectId, scope, user, authStatus]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setStatus('loading');
-      setErrorMessage(null);
-      try {
-        const next = await readRepairBootstrap(taskId, projectId);
-        if (!cancelled) {
-          setBootstrap(next);
-          setStatus('ready');
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setBootstrap(null);
-          setErrorMessage(repairCommandErrorMessage(error));
-          setStatus('error');
-        }
-      }
-    })();
+    mounted.current = true;
+    void load();
     return () => {
-      cancelled = true;
+      mounted.current = false;
+      sequence.current++;
     };
-  }, [taskId, projectId]);
+  }, [load]);
+
+  // Hide cached data immediately on actor/sid/environment change, before the next effect.
+  const visible = bootstrap && identity && sameRepairIdentity(bootstrap.identity, identity) ? bootstrap : null;
 
   return {
     status,
-    bootstrap,
-    repairContext: bootstrap?.repairContext ?? null,
-    itemVersion: bootstrap?.repairContext?.itemVersion ?? null,
+    bootstrap: visible,
+    repairContext: visible?.repairContext ?? null,
+    itemVersion: visible?.repairContext?.itemVersion ?? null,
     errorMessage,
     reload: load,
   };
