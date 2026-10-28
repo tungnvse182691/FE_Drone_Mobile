@@ -10,10 +10,13 @@ import {
   isTerminalMediaState,
   uploadedRatio,
   useUploadsStore,
+  UPLOAD_RETENTION_NOTICE,
+  reporterContext,
   type UploadMediaState,
   type UploadQueueItem,
 } from '../../src/store/uploads';
 import { useAuthStore } from '../../src/store/auth';
+import { useReporterDraftScope } from '../../src/store/reporter';
 import {
   REPORTER_CAPTURE,
   REPORTER_REPORT,
@@ -57,8 +60,9 @@ export default function ReporterUploadsScreen() {
   const user = useAuthStore((state) => state.user);
   const partitionId = `reporter-${user?.id ?? 'guest'}`;
 
-  const items = useUploadsStore((state) => state.items);
-  const hydrated = useUploadsStore((state) => state.hydrated);
+  const expectedPartition = reporterContext().partition;
+  const items = useUploadsStore((state) => state.items).filter(item => item.partitionId === expectedPartition);
+  const hydrated = useUploadsStore((state) => state.hydrated && state.partitionId === expectedPartition);
   const watching = useUploadsStore((state) => state.watching);
   const busyItemIds = useUploadsStore((state) => state.busyItemIds);
   const hydrate = useUploadsStore((state) => state.hydrate);
@@ -67,10 +71,11 @@ export default function ReporterUploadsScreen() {
   const removeItem = useUploadsStore((state) => state.removeItem);
   const startWatch = useUploadsStore((state) => state.startWatch);
   const stopWatch = useUploadsStore((state) => state.stopWatch);
+  const scope = useReporterDraftScope();
 
   useEffect(() => {
-    void hydrate(partitionId);
-  }, [hydrate, partitionId]);
+    void hydrate(partitionId).catch(() => { /* A stale partition must never be shown. */ });
+  }, [hydrate, partitionId, scope.key]);
 
   useEffect(() => {
     startWatch();
@@ -133,7 +138,7 @@ export default function ReporterUploadsScreen() {
           ) : null}
           <Pressable
             onPress={() => void removeItem(item.id)}
-            disabled={busy}
+            disabled
             style={({ pressed }) => [styles.action, pressed && styles.pressed]}
             accessibilityRole="button"
             accessibilityLabel={`Xoá ảnh ${item.fileName}`}
@@ -143,6 +148,9 @@ export default function ReporterUploadsScreen() {
             <Text style={[typography.caption, styles.actionText, styles.actionMuted]}>Xoá</Text>
           </Pressable>
         </View>
+        <Text style={[typography.caption, styles.cardMeta]} testID={`uploads-retention-${item.id}`}>
+          {UPLOAD_RETENTION_NOTICE}
+        </Text>
       </View>
     );
   };

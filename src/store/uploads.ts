@@ -480,6 +480,11 @@ async function pollVerification(item: UploadQueueItem, update: ItemUpdater, tran
   return update({ mediaState: 'VERIFYING', serverStatus: metadata.status });
 }
 
+/** No authoritative cancellation/retirement or atomic cross-draft reference proof yet.
+ * Retain ALL durable rows, including apparently local/failed/verified ones. A stale
+ * in-memory state is never sufficient evidence for destructive cleanup. */
+export const UPLOAD_RETENTION_NOTICE = 'Chưa thể xoá ảnh trong hàng đợi: cần giữ tệp và thông tin tải lên để khôi phục, xác minh và đối soát nháp. Ảnh vẫn được giữ trên thiết bị.';
+
 interface UploadsState {
   partitionId: string;
   hydrated: boolean;
@@ -492,7 +497,7 @@ interface UploadsState {
   advanceItem(id: string): Promise<void>;
   advanceAll(): Promise<void>;
   retryItem(id: string): Promise<void>;
-  removeItem(id: string): Promise<void>;
+  removeItem(id: string): Promise<boolean>;
   allVerified(): boolean;
   startWatch(): void;
   stopWatch(): void;
@@ -651,16 +656,12 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
 
   async removeItem(id) {
     const context = reporterContext();
-    const item = get().items.find(item => item.id === id);
-    if (!item || item.partitionId !== context.partition) return;
-    if (get().busyItemIds.includes(id)) {
-      return;
-    }
-    const db = await ledger();
     assertReporterContext(context);
-    await db.runAsync(`DELETE FROM upload_ledger WHERE id = ? AND partition_id = ?`, id, context.partition);
-    assertReporterContext(context);
-    set((state) => ({ items: state.items.filter((item) => item.id !== id) }));
+    // Fail closed at the storage boundary even for direct/stale UI callers, unknown
+    // states, missing memory rows, actor switches and concurrent upload callbacks.
+    // Do not delete bytes, receipts, or references. No hidden cleanup on restart.
+    void id;
+    return false;
   },
 
   allVerified() {

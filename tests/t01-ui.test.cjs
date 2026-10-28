@@ -26,7 +26,7 @@ function mountSupplement(draft) {
       if(name==='expo-router')return {useRouter:()=>({replace(){}}),useLocalSearchParams:()=>({reportId:'fixture-report'})};
       if(name==='expo-camera')return {useCameraPermissions:()=>[{granted:true},async()=>({granted:true})]};
       if(name==='expo-location')return {Accuracy:{Balanced:1},getForegroundPermissionsAsync:async()=>({status:'granted'}),getCurrentPositionAsync:()=>gps.promise};
-      if(name.endsWith('/store/reporter'))return {useReporterStore:store,reporterFailureMessage:()=> 'fixture error'};
+      if(name.endsWith('/store/reporter'))return {useReporterStore:store,useReporterDraftScope:()=>({key:'fixture-scope',capture:()=>()=>true}),reporterFailureMessage:()=> 'fixture error'};
       if(name.endsWith('/store/auth'))return {useAuthStore:auth};
       if(name.endsWith('/api/reporterApi'))return {getOwnReportReal:()=>report.promise};
       if(name.endsWith('/api/uploads'))return {isReporterSession:()=>true};

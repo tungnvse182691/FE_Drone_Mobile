@@ -18,10 +18,12 @@ import { hasUsableCoordinate, isZeroCoordinate } from '../../src/types/position'
 import {
   UPLOAD_STATE_LABELS,
   useUploadsStore,
+  UPLOAD_RETENTION_NOTICE,
   type UploadQueueItem,
 } from '../../src/store/uploads';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_UPLOADS } from '../../src/constants/routes';
+import { useReporterDraftScope } from '../../src/store/reporter';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -62,18 +64,27 @@ export default function ReporterCaptureScreen() {
   const [locationStatus, setLocationStatus] = useState('Đang lấy vị trí...');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scope = useReporterDraftScope();
+  const [dataScope, setDataScope] = useState('');
 
   useEffect(() => {
-    void hydrate(partitionId);
-  }, [hydrate, partitionId]);
+    const isCurrent = scope.capture();
+    setCoordinates(null); setBusy(false); setError(null);
+    void hydrate(partitionId).then(() => { if (isCurrent()) setDataScope(scope.key); })
+      .catch(() => { if (isCurrent()) setError('Chưa tải được hàng đợi. Vui lòng mở lại màn hình.'); });
+  }, [hydrate, partitionId, scope.key]);
 
   const requestLocation = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     setLocationStatus('Đang lấy vị trí...');
     try {
       const current = await Location.getForegroundPermissionsAsync();
+      if (!isCurrent()) return;
       let granted = current.status === 'granted';
       if (!granted) {
         const requested = await Location.requestForegroundPermissionsAsync();
+        if (!isCurrent()) return;
         granted = requested.status === 'granted';
       }
       if (!granted) {
@@ -82,6 +93,7 @@ export default function ReporterCaptureScreen() {
         return;
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (!isCurrent()) return;
       if (isZeroCoordinate(position.coords.latitude, position.coords.longitude)) {
         // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ.
         setCoordinates(null);
@@ -100,6 +112,7 @@ export default function ReporterCaptureScreen() {
         `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`,
       );
     } catch {
+      if (!isCurrent()) return;
       setCoordinates(null);
       setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
     }
@@ -107,9 +120,11 @@ export default function ReporterCaptureScreen() {
 
   useEffect(() => {
     void requestLocation();
-  }, []);
+  }, [scope.key]);
 
   const ingestAsset = async (asset: ImagePicker.ImagePickerAsset) => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     setError(null);
     const fallbackExtension = (asset.mimeType ?? '').includes('png') ? 'png' : 'jpg';
     const fileName = asset.fileName?.trim() || `hien-truong-${Date.now()}.${fallbackExtension}`;
@@ -122,6 +137,7 @@ export default function ReporterCaptureScreen() {
     setBusy(true);
     try {
       const bytes = new Uint8Array(await new File(asset.uri).arrayBuffer());
+      if (!isCurrent()) return;
       if (bytes.byteLength <= 0) {
         setError('Không đọc được nội dung ảnh. Vui lòng chụp lại.');
         return;
@@ -131,6 +147,7 @@ export default function ReporterCaptureScreen() {
         return;
       }
       const checksumSha256 = await sha256HexOfBytes(bytes);
+      if (!isCurrent()) return;
       const usable = hasUsableCoordinate(coordinates?.latitude, coordinates?.longitude);
       await enqueuePhoto({
         uriLocal: asset.uri,
@@ -144,21 +161,26 @@ export default function ReporterCaptureScreen() {
         accuracyMeters: usable ? coordinates?.accuracyMeters ?? null : null,
         partitionId,
       });
+      if (!isCurrent()) return;
       await advanceAll();
     } catch {
+      if (!isCurrent()) return;
       setError('Không xử lý được ảnh đã chọn. Vui lòng thử lại.');
     } finally {
-      setBusy(false);
+      if (isCurrent()) setBusy(false);
     }
   };
 
   const takePhoto = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     setError(null);
     if (items.length >= MAX_PHOTOS) {
       setError(`Chỉ được gửi tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`);
       return;
     }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!isCurrent()) return;
     if (!permission.granted) {
       setError('Cần cấp quyền camera để chụp ảnh hiện trường.');
       return;
@@ -168,18 +190,22 @@ export default function ReporterCaptureScreen() {
       quality: 0.85,
       exif: false,
     });
+    if (!isCurrent()) return;
     if (!result.canceled && result.assets.length > 0) {
       await ingestAsset(result.assets[0]);
     }
   };
 
   const pickFromLibrary = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     setError(null);
     if (items.length >= MAX_PHOTOS) {
       setError(`Chỉ được gửi tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`);
       return;
     }
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!isCurrent()) return;
     if (!permission.granted) {
       setError('Cần cấp quyền truy cập thư viện ảnh để chọn ảnh.');
       return;
@@ -190,6 +216,7 @@ export default function ReporterCaptureScreen() {
       exif: false,
       allowsMultipleSelection: false,
     });
+    if (!isCurrent()) return;
     if (!result.canceled && result.assets.length > 0) {
       await ingestAsset(result.assets[0]);
     }
@@ -229,6 +256,8 @@ export default function ReporterCaptureScreen() {
     );
   };
 
+  if (dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải hàng đợi của phiên hiện tại...</Text>{error ? <Text>{error}</Text> : null}</SafeAreaScreen>;
+
   return (
     <SafeAreaScreen scroll>
       <Text style={[typography.titleLg, styles.title]}>Ảnh hiện trường</Text>
@@ -267,6 +296,7 @@ export default function ReporterCaptureScreen() {
             <Image source={{ uri: item.uriLocal }} style={styles.thumb} />
             <Pressable
               onPress={() => void removeItem(item.id)}
+              disabled
               style={styles.thumbRemove}
               accessibilityRole="button"
               accessibilityLabel={`Xoá ảnh ${item.fileName}`}
@@ -303,6 +333,7 @@ export default function ReporterCaptureScreen() {
           </Pressable>
         ) : null}
       </View>
+      <Text style={typography.caption} testID="capture-retention-notice">{UPLOAD_RETENTION_NOTICE}</Text>
 
       {!hydrated ? (
         <Text style={[typography.caption, styles.loadingText]}>Đang tải hàng đợi ảnh...</Text>

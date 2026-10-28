@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -11,14 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { loginReal, extractProblemCode } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
-import { useReporterStore } from '../../src/store/reporter';
+import { GUEST_DRAFT_NOTICE, useReporterStore } from '../../src/store/reporter';
+import { bareClient } from '../../src/api/client';
 import {
   AUTH_REGISTER,
   REPORTER_HOME,
@@ -31,18 +32,40 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
-  const pendingReport = useReporterStore((state) => state.pendingDraft);
   const router = useRouter();
   const { passwordChanged } = useLocalSearchParams<{ passwordChanged?: string }>();
+  const busy = useRef(false);
+  const active = useRef(true);
+  const generation = useRef(0);
+  useFocusEffect(useCallback(() => {
+    active.current = true;
+    generation.current++;
+    const unsubscribe = useAuthStore.subscribe?.(() => { generation.current++; });
+    return () => { active.current = false; generation.current++; unsubscribe?.(); };
+  }, []));
+  const captureAttempt = () => {
+    const attempt = generation.current;
+    const environment = bareClient.defaults.baseURL;
+    const { token, user, status } = useAuthStore.getState();
+    return () => {
+      const live = useAuthStore.getState();
+      return active.current && generation.current === attempt && bareClient.defaults.baseURL === environment &&
+        live.token === token && live.user?.id === user?.id && live.status === status;
+    };
+  };
 
   const isSubmitDisabled = !phoneOrEmail.trim() || !password.trim();
 
   const handleLogin = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    const isCurrent = captureAttempt();
     setLoading(true);
     setError(null);
     try {
       // Wire: `AuthTokenResponseDto` camelCase trần — map sang `User` domain ở đây.
       const response = await loginReal(phoneOrEmail, password);
+      if (!isCurrent()) return;
       if (!response.user) {
         setError('Máy chủ không trả về thông tin tài khoản. Vui lòng thử lại.');
         return;
@@ -68,7 +91,9 @@ export default function LoginScreen() {
       if (isReporterSession(useAuthStore.getState())) {
         const reporter = useReporterStore.getState();
         reporter.markVerified(loggedUser.phone_or_email);
-        const draft = await reporter.bindPendingDraft();
+        const isLoggedInAttemptCurrent = captureAttempt();
+        const draft = await reporter.restorePendingDraft();
+        if (!isLoggedInAttemptCurrent()) return;
         if (draft) {
           router.replace(draft.targetReportId
             ? { pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } }
@@ -81,6 +106,7 @@ export default function LoginScreen() {
         router.replace(home as any);
       }
     } catch (err: unknown) {
+      if (!isCurrent()) return;
       const code = extractProblemCode(err);
       if (code === 'auth_invalid_credentials') {
         setError('Sai tài khoản hoặc mật khẩu.');
@@ -95,6 +121,7 @@ export default function LoginScreen() {
         setError('Không kết nối được máy chủ. Kiểm tra mạng và thử lại.');
       }
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };
@@ -135,14 +162,14 @@ export default function LoginScreen() {
             {passwordChanged === '1' ? (
               <Text style={[typography.caption, styles.pendingNoticeText]}>Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.</Text>
             ) : null}
-            {pendingReport ? (
+            {(
               <View style={styles.pendingNotice}>
                 <MaterialIcons name="info-outline" size={16} color={colors.info} />
                 <Text style={[typography.caption, styles.pendingNoticeText]}>
-                  Đăng nhập hoặc đăng ký để gửi phản ánh của bạn.
+                  {GUEST_DRAFT_NOTICE}
                 </Text>
               </View>
-            ) : null}
+            )}
             <Text style={[typography.titleMd, styles.cardTitle]}>Đăng nhập tác nghiệp</Text>
 
             <InputField

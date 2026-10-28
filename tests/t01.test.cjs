@@ -8,14 +8,14 @@ const { randomUUID, createHash } = require('node:crypto');
 const root = path.resolve(__dirname, '..');
 
 // Execute the shipped TypeScript with native boundaries replaced (no React Native runtime in Node).
-function harness() {
-  const rows = new Map(), cache = new Map(), calls = [];
+function harness(options = {}) {
+  const rows = options.rows ?? new Map(), cache = new Map(), calls = [];
   const listeners=[]; const client={defaults:{baseURL:'fixture-env'}};
   const jwt=(id,sid='fixture-session')=>'fixture.'+Buffer.from(JSON.stringify({sub:id,sid})).toString('base64url')+'.unsigned';
-  const authHook={getState:()=>auth,subscribe:fn=>listeners.push(fn)};
+  const authHook=Object.assign(selector=>selector(auth),{getState:()=>auth,subscribe:fn=>{listeners.push(fn);return()=>listeners.splice(listeners.indexOf(fn),1);}});
   const changeAuth=next=>{const previous=auth;auth=next;listeners.forEach(fn=>fn(auth,previous));};
   let auth = { status: 'SIGNED_OUT', token: null, user: null };
-  const db = {
+  const db = options.db ?? {
     execAsync: async () => {},
     getAllAsync: async (sql, partition) => sql.includes('PRAGMA') ? [{ name: 'accuracy_meters' }]
       : [...rows.values()].filter(r => r.partition_id === partition),
@@ -55,9 +55,10 @@ function harness() {
     if (cache.has(file)) return cache.get(file).exports;
     const mod = { exports: {} }; cache.set(file, mod);
     const req = name => {
+      if (options.modules?.[name]) return options.modules[name];
       if (name === 'zustand') return { create: init => init ? store(init) : store };
       if (name === 'zustand/middleware') return { persist: init => init };
-      if (name === 'react-native') return { AppState: { currentState: 'active' }, Platform: { select: x => x.default }, StyleSheet: { create: x => x } };
+      if (name === 'react-native') return { AppState: { currentState: 'active', addEventListener: () => ({remove(){}}) }, Platform: { select: x => x.default }, StyleSheet: { create: x => x } };
       if (name === 'expo-file-system') return { File: class { async arrayBuffer() { return Uint8Array.from([1,2,3]).buffer; } } };
       if (name === 'expo-crypto') return { CryptoDigestAlgorithm: { SHA256: 'sha256' }, digest: async (_, bytes) => Uint8Array.from(createHash('sha256').update(bytes).digest()).buffer };
       if (name === 'axios') return { __esModule: true, default: { create: () => ({}) } };
@@ -85,7 +86,9 @@ function harness() {
     if (relative.replaceAll('\\', '/') === 'src/api/uploads.ts') Object.assign(mod.exports.httpUploadTransport, transport);
     return mod.exports;
   }
-  return { load, calls, rows, transport, api, client, changeAuth, jwt, login(role = 'REPORTER', id = 'actor') { changeAuth({ status: 'AUTHENTICATED', token: jwt(id), user: { id, role_code: role, must_change_password: false } }); }, logout() { changeAuth({ status: 'SIGNED_OUT', token: null, user: null }); } };
+  return { load, calls, rows, db, transport, api, client, changeAuth, jwt, getAuth: () => auth,
+    subscribe: fn => { listeners.push(fn); return () => listeners.splice(listeners.indexOf(fn), 1); },
+    login(role = 'REPORTER', id = 'actor') { changeAuth({ status: 'AUTHENTICATED', token: jwt(id), user: { id, role_code: role, must_change_password: false } }); }, logout() { changeAuth({ status: 'SIGNED_OUT', token: null, user: null }); } };
 }
 
 test('restored user without token stays in auth; valid sessions route by role; public draft remains public', () => {

@@ -10,7 +10,7 @@ import {
   resendReporterOtpReal,
   extractProblemCode,
 } from '../../src/api/reporterApi';
-import { useReporterStore } from '../../src/store/reporter';
+import { GUEST_DRAFT_NOTICE, useReporterStore } from '../../src/store/reporter';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { isValidReporterOtp, isReporterSession } from '../../src/api/uploads';
 import { bareClient } from '../../src/api/client';
@@ -59,7 +59,8 @@ export default function OtpVerifyScreen() {
   useFocusEffect(useCallback(() => {
     active.current = true;
     generation.current++;
-    return () => { active.current = false; generation.current++; };
+    const unsubscribe = useAuthStore.subscribe?.(() => { generation.current++; });
+    return () => { active.current = false; generation.current++; unsubscribe?.(); };
   }, [intentId]));
   const captureAttempt = () => {
     const capturedGeneration = generation.current;
@@ -142,7 +143,7 @@ export default function OtpVerifyScreen() {
       if (!isReporterSession(useAuthStore.getState())) return;
       markVerified(sessionEmail);
       const isLoggedInAttemptCurrent = captureAttempt();
-      const draft = await useReporterStore.getState().bindPendingDraft();
+      const draft = await useReporterStore.getState().restorePendingDraft();
       if (!isLoggedInAttemptCurrent()) return;
       router.replace(draft
         ? draft.targetReportId
@@ -199,8 +200,9 @@ export default function OtpVerifyScreen() {
           <View style={styles.titleBlock}>
             <Text style={[typography.titleLg, styles.title]}>Xác thực phản ánh dân sinh</Text>
             <Text style={[typography.caption, styles.subtitle]}>
-              Mã xác thực 6 số đã được gửi về email {email || 'của bạn'}. Vui lòng nhập mã để gửi phản ánh.
+              Mã xác thực 6 số đã được gửi về email {email || 'của bạn'}. Vui lòng nhập mã để xác thực tài khoản.
             </Text>
+            <Text style={[typography.caption, styles.subtitle]} testID="otp-guest-draft-notice">{GUEST_DRAFT_NOTICE}</Text>
           </View>
 
           <Pressable onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="Nhập mã xác thực 6 số">

@@ -9,6 +9,7 @@ import { useUploadsStore, reporterContext, assertReporterContext } from './uploa
 import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, locationSourceFor, strongUploadETag } from '../api/uploads';
 import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '../api/reporterApi';
 import { uuidv4 } from '../utils/uuid';
+import { useEffect, useRef } from 'react';
 
 export interface DraftPhoto {
   uri: string;
@@ -65,16 +66,34 @@ function hasDraftContent(draft: ReporterDraft | null): draft is ReporterDraft {
 async function readPending(context: ReporterContext): Promise<ReporterDraft | null> {
   const db = await draftDb();
   assertReporterContext(context);
-  let draft = await getDraft<ReporterDraft>(db, draftKey(context));
+  const draft = await getDraft<ReporterDraft>(db, draftKey(context));
   assertReporterContext(context);
   if (hasDraftContent(draft)) return provenanceMatches(draft, context) ? draft : null;
-  if (!context.ownerId) return null;
-  // Guest content is adopted explicitly, within the same environment only. Legacy rows remain untouched.
-  const guest = { ...context, ownerId: null, session: null,
-    partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
-  draft = await getDraft<ReporterDraft>(db, draftKey(guest));
-  assertReporterContext(context);
-  return hasDraftContent(draft) && (provenanceMatches(draft, guest) || provenanceMatches(draft, context)) ? draft : null;
+  // Same device/environment is not ownership proof. No guest claim contract exists;
+  // never read or rewrite guest/legacy rows on behalf of an authenticated account.
+  return null;
+}
+
+export const GUEST_DRAFT_NOTICE = 'Nháp khách được giữ riêng trên thiết bị, không tự chuyển vào tài khoản khi đăng nhập hoặc xác thực OTP. Chưa có cơ chế xác minh chủ sở hữu để gửi nháp đó.';
+
+/** Bind screen callbacks to the render that initiated them, including delayed autosaves.
+ * Token refresh may invalidate UI work conservatively; it never moves pending data. */
+export function useReporterDraftScope() {
+  useAuthStore(state => state);
+  const context = reporterContext();
+  const mounted = useRef(true);
+  const generation = useRef(0);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
+  return {
+    key: JSON.stringify(context),
+    capture: () => {
+      const capturedGeneration = generation.current;
+      return () => {
+        if (!mounted.current || capturedGeneration !== generation.current) return false;
+        try { assertReporterContext(context); return true; } catch { return false; }
+      };
+    },
+  };
 }
 
 /** Safe Vietnamese messages; transport/server bodies may contain private implementation details. */
@@ -156,14 +175,6 @@ export const useReporterStore = create<ReporterSessionState>()(
           coords: input.coords, targetReportId: input.targetReportId, ifMatch: input.ifMatch ?? previous?.ifMatch,
           submitRequested: input.submitRequested ?? previous?.submitRequested ?? false,
         };
-        if (previous && !previous.ownerId && context.ownerId) {
-          const guest = { ...context, ownerId: null, session: null,
-            partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
-          const db = await draftDb();
-          assertReporterContext(context);
-          await saveDraft(db, draftKey(guest), 'reporter_pending_v1', draft as unknown as Record<string, unknown>);
-          assertReporterContext(context);
-        }
         await persistDraft(draft, context);
         assertReporterContext(context);
         set({ pendingDraft: draft, pendingDraftId: draft.id });
@@ -178,22 +189,9 @@ export const useReporterStore = create<ReporterSessionState>()(
         const draft = await readPending(context);
         if (!draft) return null;
         assertReporterContext(context);
-        const bound = { ...draft, ownerId: context.ownerId,
-          photos: draft.ownerId ? draft.photos : draft.photos.map(({ itemId: _guestItemId, ...photo }) => photo),
-          provenance: { environment: context.environment, session: context.session } };
-        if (!draft.ownerId) {
-          // Claim same-environment guest row before creating actor row; retain the claim after adoption.
-          const guest = { ...context, ownerId: null, session: null,
-            partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
-          const db = await draftDb();
-          assertReporterContext(context);
-          await saveDraft(db, draftKey(guest), 'reporter_pending_v1', bound as unknown as Record<string, unknown>);
-          assertReporterContext(context);
-        }
-        await persistDraft(bound, context);
-        assertReporterContext(context);
-        set({ pendingDraft: bound, pendingDraftId: bound.id });
-        return bound;
+        // Compatibility entry point: restore an already-owned draft, never assign ownership.
+        set({ pendingDraft: draft, pendingDraftId: draft.id });
+        return draft;
         });
       },
       submitPendingDraft: () => {
@@ -266,16 +264,6 @@ export const useReporterStore = create<ReporterSessionState>()(
           const reportId = found.report.id;
           const db = await draftDb();
           assertOwner();
-          const guest = { ...context, ownerId: null, session: null,
-            partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
-          const claim = await getDraft<ReporterDraft>(db, draftKey(guest));
-          assertOwner();
-          if (claim?.id === draft.id && provenanceMatches(claim, context)) {
-            // Retain bytes/identity as a tombstone before removing the active actor row.
-            await saveDraft(db, draftKey(guest), 'reporter_pending_v1',
-              { ...draft, retired: true } as unknown as Record<string, unknown>);
-            assertOwner();
-          }
           await deleteDraft(db, draftKey(context));
           assertOwner();
           set({ pendingDraft: null, pendingDraftId: null, pendingReport: null });

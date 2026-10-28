@@ -28,7 +28,7 @@ import {
 } from '../../src/api/uploads';
 import { isZeroCoordinate } from '../../src/types/position';
 import { parseProblemDetails } from '../../src/api/problemDetails';
-import { useReporterStore, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
+import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
@@ -88,6 +88,8 @@ export default function ReporterReportSupplementScreen() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const scope = useReporterDraftScope();
+  const [dataScope, setDataScope] = useState('');
 
   useEffect(() => {
     setNotice(null);
@@ -96,13 +98,14 @@ export default function ReporterReportSupplementScreen() {
   // Cố gắng lấy tọa độ thiết bị (không bắt buộc, nếu có thì gắn CAPTURE, không có thì UNKNOWN)
   useEffect(() => {
     let active = true;
-    const actorId = useAuthStore.getState().user?.id;
+    const isCurrent = scope.capture();
     (async () => {
       try {
         const perm = await Location.getForegroundPermissionsAsync();
+        if (!active || !isCurrent()) return;
         if (perm.status === 'granted') {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          if (active && actorId === useAuthStore.getState().user?.id &&
+          if (active && isCurrent() &&
               !useReporterStore.getState().pendingDraft && !submittingRef.current && !completed.current &&
               !isZeroCoordinate(loc.coords.latitude, loc.coords.longitude)) {
             setCoords({
@@ -117,9 +120,15 @@ export default function ReporterReportSupplementScreen() {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [scope.key]);
 
   const loadReport = useCallback(async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    setRestored(false); setReport(null); setExpectedVersion(null); setLoadedAt(null);
+    setDescription(''); setPhotos([]); setCoords(null); setCameraOpen(false);
+    metadata.current = new Map(); completed.current = false; submittingRef.current = false;
+    setPhase('loading'); setDataScope(scope.key);
     if (!reportId || !isReporterSession(useAuthStore.getState())) {
       setPhase('failed');
       setError('Không tìm thấy phản ánh của bạn.');
@@ -128,7 +137,9 @@ export default function ReporterReportSupplementScreen() {
     setError(null);
     try {
       const found = await getOwnReportReal(reportId);
+      if (!isCurrent()) return;
       const draft = await useReporterStore.getState().restorePendingDraft();
+      if (!isCurrent()) return;
       if (draft && draft.targetReportId !== reportId) throw { code: 'draft_locked' };
       setReport(found.report);
       setExpectedVersion(draft?.ifMatch ?? found.etag);
@@ -140,23 +151,27 @@ export default function ReporterReportSupplementScreen() {
       setLoadedAt(new Date().toISOString());
       setPhase('ready');
     } catch (caught) {
+      if (!isCurrent()) return;
       const axErr = caught as AxiosError | undefined;
       const problem = parseProblemDetails(axErr?.response?.data);
       setPhase('failed');
       setError(reporterFailureMessage(caught));
     }
-  }, [reportId, activeEmail]);
+  }, [reportId, activeEmail, scope.key]);
 
   useEffect(() => {
     void loadReport();
   }, [loadReport]);
 
   const handlePickImage = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
         copyToCacheDirectory: true,
       });
+      if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
         metadata.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
@@ -172,8 +187,11 @@ export default function ReporterReportSupplementScreen() {
   };
 
   const handleOpenCam = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     if (!permission?.granted) {
       const res = await requestPermission();
+      if (!isCurrent()) return;
       if (!res.granted) {
         setError('Cần cấp quyền camera để chụp ảnh hiện trường.');
         return;
@@ -184,10 +202,13 @@ export default function ReporterReportSupplementScreen() {
   };
 
   const handleCapture = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     if (!cameraReady || photos.length >= MAX_PHOTOS) {
       return;
     }
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
+    if (!isCurrent()) return;
     if (photo?.uri) {
       setPhotos((current) => [...current, photo.uri].slice(0, MAX_PHOTOS));
       setCameraOpen(false);
@@ -212,14 +233,18 @@ export default function ReporterReportSupplementScreen() {
   });
 
   useEffect(() => {
-    if (!restored || !expectedVersion || completed.current || phase === 'submitting' || phase === 'done') return;
+    if (!restored || dataScope !== scope.key || !expectedVersion || completed.current || phase === 'submitting' || phase === 'done') return;
+    const isCurrent = scope.capture();
     const input = { description: description.trim(), photos: photoInputs(), coords, targetReportId: reportId, ifMatch: expectedVersion };
-    saves.current = saves.current.catch(() => undefined).then(() => useReporterStore.getState().savePendingDraft(input));
-    void saves.current.catch(error => setError(reporterFailureMessage(error)));
-  }, [restored, description, photos, coords, expectedVersion, reportId, phase]);
+    saves.current = saves.current.catch(() => undefined).then(() => {
+      if (isCurrent()) return useReporterStore.getState().savePendingDraft(input);
+    });
+    void saves.current.catch(error => { if (isCurrent()) setError(reporterFailureMessage(error)); });
+  }, [restored, description, photos, coords, expectedVersion, reportId, phase, dataScope, scope.key]);
 
   const submit = async () => {
-    if (submittingRef.current || !restored || !expectedVersion) return;
+    const isCurrent = scope.capture();
+    if (!isCurrent() || dataScope !== scope.key || submittingRef.current || !restored || !expectedVersion) return;
     if (!description.trim() || !photos.length) {
       setError('Vui lòng nhập nội dung và chọn ít nhất một ảnh bổ sung.'); return;
     }
@@ -227,14 +252,18 @@ export default function ReporterReportSupplementScreen() {
     setError(null); setPhase('submitting');
     try {
       await saves.current.catch(() => undefined);
+      if (!isCurrent()) return;
       await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords,
         targetReportId: reportId, ifMatch: expectedVersion, submitRequested: true });
+      if (!isCurrent()) return;
       const id = await useReporterStore.getState().submitPendingDraft();
+      if (!isCurrent()) return;
       completed.current = true;
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: id } });
     } catch (error) {
+      if (!isCurrent()) return;
       setError(reporterFailureMessage(error)); setPhase('ready');
-    } finally { submittingRef.current = false; }
+    } finally { if (isCurrent()) submittingRef.current = false; }
   };
 
   // Frozen commands never silently adopt a fresh ETag or a fresh idempotency key.
@@ -242,6 +271,8 @@ export default function ReporterReportSupplementScreen() {
   const takeLatest = async () => { setError('Cần giải quyết xung đột trước khi tạo một lệnh bổ sung mới; nháp hiện tại được giữ nguyên.'); };
 
   const busy = phase === 'loading' || phase === 'submitting';
+
+  if (dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
 
   return (
     <SafeAreaScreen scroll>

@@ -62,11 +62,12 @@ function screenHarness(relative, initial, methods={}) {
   const hook=selector=>selector(auth);hook.getState=()=>auth;
   const react={createElement:(type,props,...children)=>({type,props:{...props,children}}),
     useState:initial=>{const i=index++;if(!(i in slots))slots[i]=initial;return [slots[i],value=>{slots[i]=typeof value==='function'?value(slots[i]):value;}];},
-    useRef:initial=>{const i=index++;if(!(i in slots))slots[i]={current:initial};return slots[i];},useEffect:()=>{}};
+    useRef:initial=>{const i=index++;if(!(i in slots))slots[i]={current:initial};return slots[i];},useCallback:fn=>fn,useEffect:()=>{}};
   const api={...apiHarness().api,changePasswordReal:async(...a)=>calls.push(['004',...a]),forcedChangePasswordReal:async(...a)=>calls.push(['005',...a]),requestPasswordRecoveryReal:async(...a)=>calls.push(['008',...a]),...methods};
   const native={Platform:{OS:'android',select:o=>o.default},StyleSheet:{create:o=>o},Text:'Text',View:'View',Image:'Image',Pressable:'Pressable'};
   const stubs={react,'react-native':native,'react-native-safe-area-context':{SafeAreaView:'SafeAreaView'},'@expo/vector-icons':{},
-    'expo-router':{useRouter:()=>({replace:p=>navigations.push(p),back:()=>navigations.push('back'),canGoBack:()=>true}),useLocalSearchParams:()=>({})},
+    'expo-router':{useRouter:()=>({replace:p=>navigations.push(p),back:()=>navigations.push('back'),canGoBack:()=>true}),useLocalSearchParams:()=>({}),useFocusEffect:()=>{}},
+    '../../src/api/client':{bareClient:{defaults:{baseURL:'fixture-env'}}},
     '../../src/components/Button':{Button:'Button'},'../../src/components/InputField':{InputField:'InputField'},'../../src/components/SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},
     '../../src/store/auth':{useAuthStore:hook,buildUserFromActor:(actor,email,must)=>({...auth.user,id:actor.id,phone_or_email:email,must_change_password:must})},
     '../../src/store/reporter':{useReporterStore:selector=>selector({pendingDraft:null})},'../../src/api/uploads':{isReporterSession:()=>false},
@@ -74,7 +75,7 @@ function screenHarness(relative, initial, methods={}) {
     '../../src/api/idempotency':{getOrCreateCommandKey:randomUUID,clearCommandKey:()=>{}},'expo-crypto':{randomUUID},'../../src/utils/uuid':{uuidv4:randomUUID},'../../assets/logo_hoanghai.png':0,'../../assets/logo_hoanghai_icon.png':0};
   const screen=load(relative,stubs).default;
   const render=()=>{index=0;tree=screen();};
-  function nodes(node=tree,result=[]){if(!node||typeof node!=='object')return result;result.push(node);for(const child of node.props?.children?.flat(Infinity)??[])nodes(child,result);return result;}
+  function nodes(node=tree,result=[]){if(!node||typeof node!=='object')return result;result.push(node);for(const child of node.props?.children?.flat(Infinity)??[])if(child!=null)nodes(child,result);return result;}
   const input=(label,value)=>{nodes().find(n=>n.type==='InputField'&&n.props.label===label).props.onChangeText(value);render();};
   const press=title=>nodes().find(n=>n.type==='Button'&&n.props.title===title).props.onPress();
   render();return {auth,calls,navigations,render,input,press,nodes};

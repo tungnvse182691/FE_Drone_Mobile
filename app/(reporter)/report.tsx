@@ -24,7 +24,7 @@ import {
   normalizePhotoMediaType,
 } from '../../src/api/uploads';
 import { isZeroCoordinate } from '../../src/types/position';
-import { useReporterStore, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
+import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
@@ -69,7 +69,8 @@ export default function ReporterReportScreen() {
   const photoMeta = useRef<Map<string, DraftPhoto>>(new Map());
   const authenticated = useAuthStore(state => isReporterSession(state));
   const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.request));
-  const actorId = useAuthStore(state => state.user?.id);
+  const scope = useReporterDraftScope();
+  const [dataScope, setDataScope] = useState('');
   const photoInputs = () => photos.map(uri => {
     let photo = photoMeta.current.get(uri);
     if (!photo) {
@@ -82,9 +83,13 @@ export default function ReporterReportScreen() {
 
   useEffect(() => {
     let active = true;
+    const isCurrent = scope.capture();
     setRestored(false);
+    setDescription(''); setPhotos([]); setCoords(null); setCameraOpen(false);
+    setErrors({}); setSubmitError(null); setSubmitting(false);
+    photoMeta.current = new Map(); completed.current = false; submitted.current = false; resumed.current = false;
     void useReporterStore.getState().restorePendingDraft().then(draft => {
-      if (!active) return;
+      if (!active || !isCurrent()) return;
       if (draft?.targetReportId) {
         router.replace({ pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } });
         return;
@@ -97,25 +102,33 @@ export default function ReporterReportScreen() {
         setGpsStatus('Đã khôi phục vị trí của nháp'); setGpsLoading(false);
       } else void requestLocation();
       setRestored(true);
-    }).catch(error => { if (active) setSubmitError(reporterFailureMessage(error)); });
+      setDataScope(scope.key);
+    }).catch(error => { if (active && isCurrent()) setSubmitError(reporterFailureMessage(error)); });
     return () => { active = false; };
-  }, [actorId, authenticated]);
+  }, [scope.key]);
 
   useEffect(() => {
-    if (!restored || submitting || completed.current || (!description.trim() && photos.length === 0 && !useReporterStore.getState().pendingDraft)) return;
+    if (!restored || dataScope !== scope.key || submitting || completed.current || (!description.trim() && photos.length === 0 && !useReporterStore.getState().pendingDraft)) return;
+    const isCurrent = scope.capture();
     const input = { description: description.trim(), photos: photoInputs(), coords };
-    saves.current = saves.current.catch(() => undefined).then(() => useReporterStore.getState().savePendingDraft(input));
-    void saves.current.catch(error => setSubmitError(reporterFailureMessage(error)));
-  }, [restored, description, photos, coords, submitting]);
+    saves.current = saves.current.catch(() => undefined).then(() => {
+      if (isCurrent()) return useReporterStore.getState().savePendingDraft(input);
+    });
+    void saves.current.catch(error => { if (isCurrent()) setSubmitError(reporterFailureMessage(error)); });
+  }, [restored, description, photos, coords, submitting, dataScope, scope.key]);
 
   const requestLocation = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     setGpsLoading(true);
     setGpsStatus('Đang lấy vị trí...');
     try {
       const permissionStatus = await Location.getForegroundPermissionsAsync();
+      if (!isCurrent()) return;
       let granted = permissionStatus.status === 'granted';
       if (!granted) {
         const requested = await Location.requestForegroundPermissionsAsync();
+        if (!isCurrent()) return;
         granted = requested.status === 'granted';
       }
       if (!granted) {
@@ -126,6 +139,7 @@ export default function ReporterReportScreen() {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
+      if (!isCurrent()) return;
       if (isZeroCoordinate(location.coords.latitude, location.coords.longitude)) {
         // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ, chặn gửi.
         setCoords(null);
@@ -145,19 +159,23 @@ export default function ReporterReportScreen() {
       );
       setErrors((current) => ({ ...current, coords: '' }));
     } catch {
+      if (!isCurrent()) return;
       setCoords(null);
       setGpsStatus('Chưa có tọa độ');
     } finally {
-      setGpsLoading(false);
+      if (isCurrent()) setGpsLoading(false);
     }
   };
 
 
   const handleCapture = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     if (!cameraReady || photos.length >= MAX_PHOTOS) {
       return;
     }
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
+    if (!isCurrent()) return;
     if (photo?.uri) {
       setPhotos((current) => [...current, photo.uri].slice(0, MAX_PHOTOS));
       setCameraOpen(false);
@@ -165,11 +183,14 @@ export default function ReporterReportScreen() {
   };
 
   const handlePickImage = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
         copyToCacheDirectory: true,
       });
+      if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
         photoMeta.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
@@ -197,33 +218,40 @@ export default function ReporterReportScreen() {
   };
 
   const handleSubmit = async () => {
-    if (submitted.current || !restored || !validate() || !coords) return;
+    const isCurrent = scope.capture();
+    if (!isCurrent() || dataScope !== scope.key || submitted.current || !restored || !validate() || !coords) return;
     submitted.current = true;
     setSubmitting(true); setSubmitError(null);
     try {
       await saves.current.catch(() => undefined);
+      if (!isCurrent()) return;
       await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
+      if (!isCurrent()) return;
       if (!isReporterSession(useAuthStore.getState())) {
         router.push('/(auth)');
         return;
       }
       const reportId = await useReporterStore.getState().submitPendingDraft();
+      if (!isCurrent()) return;
       completed.current = true;
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId } });
     } catch (error) {
+      if (!isCurrent()) return;
       setSubmitError(reporterFailureMessage(error));
     } finally {
-      submitted.current = false; setSubmitting(false);
+      if (isCurrent()) { submitted.current = false; setSubmitting(false); }
     }
   };
 
   useEffect(() => {
     const draft = useReporterStore.getState().pendingDraft;
-    if (restored && !resumed.current && draft?.submitRequested && isReporterSession(useAuthStore.getState())) {
+    if (restored && dataScope === scope.key && !resumed.current && draft?.submitRequested && isReporterSession(useAuthStore.getState())) {
       resumed.current = true;
       void handleSubmit();
     }
-  }, [restored, authenticated]);
+  }, [restored, authenticated, dataScope, scope.key]);
+
+  if (dataScope !== scope.key) return <SafeAreaView style={styles.safe}><Text>Đang khôi phục nháp của phiên hiện tại...</Text>{submitError ? <Text>{submitError}</Text> : null}</SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
