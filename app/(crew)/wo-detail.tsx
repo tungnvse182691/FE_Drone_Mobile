@@ -35,7 +35,7 @@ import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { randomUUID } from 'expo-crypto';
 import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
-import { createFieldCommand, executeFieldCommand, fieldCommandBlock, validateCrewTaskDetail, type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
+import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal, validateCrewTaskDetail, type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
 import { crewTaskActionBlock, type OperationalCrewTask } from '../../src/api/crewApi';
 import {
   acceptFieldTaskReal,
@@ -255,6 +255,22 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
     } finally { if (currentCrewScope() === scope) setBusy(false); }
   };
   const pending = !!record && (!['confirmed','rejected'].includes(record.phase) || (record.phase === 'rejected' && record.readbackStatus !== 200));
+  const openField = async () => {
+    if (busy || pending || !ready) return;
+    setBusy(true);
+    try {
+      const response = await getFieldInspectionTaskDetailReal(task.projectId,task.id);
+      if(currentCrewScope()!==scope)return;
+      const reason=fieldCapabilityBlock(response.data,response.etag,actor,'review');
+      if(reason)throw new Error(reason);
+      const origin=await getFieldTaskStartOriginReal(task.projectId,task.id);
+      if(currentCrewScope()!==scope)return;
+      if(origin.id!==response.data.firstStartOriginId||origin.taskId!==task.id)throw new Error('First-start không khớp nhiệm vụ.');
+      router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}});
+    }catch(error){if(currentCrewScope()===scope)setNotice((error as Error).message || 'Không xác nhận được điều kiện FIELD.');}
+    finally{if(currentCrewScope()===scope)setBusy(false);}
+  };
+  const fieldBlock = !fresh.detail ? 'Chưa tải dữ liệu nhiệm vụ.' : fieldCapabilityBlock(fresh.detail,fresh.etag??'',actor,'review');
   const blocked = (action: FieldCommandAction) => !ready || busy || pending || !fresh.detail || !!fieldCommandBlock(fresh.detail, fresh.etag ?? '', actor, action);
   return (
     <SafeAreaScreen scroll header={<View style={styles.topBar}><Text style={typography.titleMd}>Chi tiết lệnh công tác</Text></View>}>
@@ -286,7 +302,8 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <Button variant="secondary" title="Dẫn đường" disabled={!fresh.coordinates} onPress={() => {
         if (fresh.coordinates) router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } });
       }} />
-      <Button variant="secondary" title="Tác nghiệp hiện trường" disabled onPress={() => {}} />
+      {fieldBlock ? <Text>{fieldBlock}</Text> : null}
+      <Button variant="secondary" title="Tác nghiệp hiện trường" disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} />
       <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </SafeAreaScreen>
   );

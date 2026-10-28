@@ -7,6 +7,7 @@ import { Button } from './Button';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
 interface ViewFinderProps {
+  disabled?: boolean;
   onCapture: (photo: CameraCapturedPicture) => void;
   defectType: string;
   showGridGuide?: boolean;
@@ -27,7 +28,32 @@ export interface Coords {
   accuracyMeters: number | null;
 }
 
+/** One bounded acquisition. Cleanup suppresses callbacks and further native requests. */
+export function watchCaptureLocation(onCoords: (value: Coords | null) => void,
+  location: Pick<typeof Location, 'getForegroundPermissionsAsync' | 'requestForegroundPermissionsAsync' | 'getCurrentPositionAsync'> = Location,
+  timeoutMs = 12000): () => void {
+  let active = true;
+  const timer = setTimeout(() => { if (active) { active = false; onCoords(null); } }, timeoutMs);
+  void (async () => {
+    try {
+      let permission = await location.getForegroundPermissionsAsync();
+      if (!active) return;
+      if (permission.status !== 'granted') permission = await location.requestForegroundPermissionsAsync();
+      if (!active) return;
+      if (permission.status !== 'granted') { onCoords(null); return; }
+      const result = await location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      if (!active) return;
+      const { latitude, longitude, accuracy } = result.coords;
+      const valid = Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+      onCoords(valid ? { latitude, longitude, accuracyMeters: typeof accuracy === 'number' && Number.isFinite(accuracy) ? accuracy : null } : null);
+    } catch { if (active) onCoords(null); }
+    finally { clearTimeout(timer); active = false; }
+  })();
+  return () => { active = false; clearTimeout(timer); };
+}
+
 export function ViewFinder({
+  disabled = false,
   onCapture,
   defectType,
   showGridGuide,
@@ -44,34 +70,13 @@ export function ViewFinder({
   const [coords, setCoords] = useState<Coords | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [shooting, setShooting] = useState(false);
+  const [captureError, setCaptureError] = useState('');
+  const mounted = useRef(true), captureLock = useRef(false);
   const cameraRef = useRef<CameraView>(null);
+  useEffect(() => { mounted.current=true; return () => { mounted.current=false; }; }, []);
 
   useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      const locationPermission = await Location.getForegroundPermissionsAsync();
-      if (locationPermission.status !== 'granted') {
-        await Location.requestForegroundPermissionsAsync();
-      }
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      if (mounted) {
-        const next = {
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracyMeters:
-            typeof location.coords.accuracy === 'number' && Number.isFinite(location.coords.accuracy)
-              ? location.coords.accuracy
-              : null,
-        };
-        setCoords(next);
-        onCoordsChange?.(next);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
+    return watchCaptureLocation(next => { setCoords(next); onCoordsChange?.(next); });
   }, [onCoordsChange]);
 
   if (!permission) {
@@ -91,17 +96,19 @@ export function ViewFinder({
   }
 
   const handleCapture = async () => {
-    if (!cameraReady || shooting) {
+    if (disabled || !cameraReady || captureLock.current) {
       return;
     }
-    setShooting(true);
+    captureLock.current=true;setShooting(true);setCaptureError('');
     try {
       const photo = await cameraRef.current?.takePictureAsync();
-      if (photo) {
+      if (photo && mounted.current) {
         onCapture(photo);
       }
+    } catch {
+      if (mounted.current) setCaptureError('Không chụp được ảnh. Kiểm tra camera và thử lại.');
     } finally {
-      setShooting(false);
+      captureLock.current=false;if(mounted.current)setShooting(false);
     }
   };
 
@@ -161,12 +168,14 @@ export function ViewFinder({
         )}
 
         {hudItems}
+        {captureError ? <Text accessibilityLiveRegion="polite">{captureError}</Text> : null}
 
         <View style={styles.bottomBar}>
           <View style={styles.bottomSideLeft}>{leftControl ?? null}</View>
           <Pressable
             style={({ pressed }) => [styles.shutter, pressed && styles.shutterPressed]}
             onPress={handleCapture}
+            disabled={disabled || shooting || !cameraReady}
             accessibilityRole="button"
             testID="capture-button"
           >

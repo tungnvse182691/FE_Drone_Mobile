@@ -65,9 +65,11 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
   </View>;
 }
 /** Mount children only after an owner-scoped detail read. A new sid unmounts old task UI. */
-export function CrewTaskBoundary({ children, operational = true }: {
-  children: (task: OperationalCrewTask) => React.ReactNode; operational?: boolean;
-}) {
+type TaskBoundaryProps = { operational: false; children: (task: CrewTask) => React.ReactNode } |
+  { operational?: true; children: (task: OperationalCrewTask) => React.ReactNode };
+function isOperational(task: CrewTask): task is OperationalCrewTask { return !crewTaskActionBlock(task); }
+export function CrewTaskBoundary(props: TaskBoundaryProps) {
+  const operational = props.operational !== false;
   const params = useLocalSearchParams<{ id?: string; projectId?: string }>();
   const inbox = useCrewInbox();
   const id = typeof params.id === 'string' ? params.id : '';
@@ -93,7 +95,7 @@ export function CrewTaskBoundary({ children, operational = true }: {
     {!validIds && id ? <CrewInboxState inbox={inbox} /> : null}
     <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
   </SafeAreaScreen>;
-  return <React.Fragment key={`${inbox.scope}:${projectId}:${id}`}>{children(task as OperationalCrewTask)}</React.Fragment>;
+  return <React.Fragment key={`${inbox.scope}:${projectId}:${id}`}>{props.operational === false ? props.children(task) : isOperational(task) ? props.children(task) : null}</React.Fragment>;
 }
 
 export type TaskModeFilter = 'ALL' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';

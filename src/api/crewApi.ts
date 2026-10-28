@@ -87,6 +87,27 @@ export function fieldCommandBlock(task: FieldTaskViewFact, etag: string, actorId
   if (task.status !== (action === 'start' ? 'Accepted' : 'NewAssigned')) return 'Trạng thái nhiệm vụ không cho phép thao tác này.';
   return null;
 }
+/** FIELD only: presentation metadata, GPS and repair eligibility are independent. */
+export function fieldCapabilityBlock(task: FieldTaskViewFact, etag: string, actorId: string, capability: 'capture' | 'review' | 'submit'): string | null {
+  try { validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId); } catch { return 'Định danh, người nhận hoặc phiên bản nhiệm vụ không hợp lệ.'; }
+  if (!isCrewResourceId(task.assignmentId) || !/^"[A-Za-z0-9+/]{11}="$/.test(etag)) return 'Thiếu assignment hoặc strong ETag hợp lệ.';
+  if (!isCrewResourceId(task.firstStartOriginId)) return 'Cần bắt đầu nhiệm vụ và đọc first-start từ máy chủ.';
+  const states = capability === 'review' ? ['InProgress','SupplementRequired','Submitted','Completed'] : ['InProgress','SupplementRequired'];
+  return states.includes(task.status ?? '') ? null : 'Trạng thái nhiệm vụ chưa cho phép thao tác FIELD này.';
+}
+
+/** API-085/086: private task-scoped evidence; never expose an unauthenticated URL. */
+export interface FieldTaskEvidence {
+  fileId: string; state: string; checksum: string; mediaType: string; sizeBytes: number;
+}
+export async function getFieldEvidenceReal(projectId: string, taskId: string, fileId: string): Promise<FieldTaskEvidence> {
+  const response = await apiClient.get<FieldTaskEvidence>(`/projects/${projectId}/field-inspection-tasks/${taskId}/evidence/${fileId}`);
+  return response.data;
+}
+export async function downloadFieldEvidenceReal(projectId: string, taskId: string, fileId: string): Promise<Uint8Array> {
+  const response = await apiClient.get<ArrayBuffer>(`/projects/${projectId}/field-inspection-tasks/${taskId}/evidence/${fileId}/content`, { responseType: 'arraybuffer' });
+  return new Uint8Array(response.data);
+}
 export interface FieldCommandRecord {
   actorId: string; scope: string; projectId: string; taskId: string; assignmentId: string;
   action: FieldCommandAction; key: string; ifMatch: string; body: FieldTaskActionInput | FieldStartInput;

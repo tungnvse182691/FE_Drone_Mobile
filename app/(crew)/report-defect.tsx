@@ -8,10 +8,7 @@ import { Button } from '../../src/components/Button';
 import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES, defectTypeLabel } from '../../src/constants/defect-types';
-import { getCrewFieldSession } from '../../src/api/mock/crew-inspection';
-import { initDatabase, openDatabase } from '../../src/offline/database';
-import { enqueuePayload } from '../../src/offline/upload-queue';
-import { CrewTaskBoundary, type OperationalCrewTask } from './tasks';
+import { CrewTaskBoundary, type CrewTask } from './tasks';
 
 const DEFECT_TYPES = DEFECT_TYPE_OPTIONS;
 
@@ -22,9 +19,9 @@ const SEVERITY_OPTIONS = [
 ];
 
 export default function CrewReportDefectScreen() {
-  return <CrewTaskBoundary>{task => <CrewReportDefectScreenContent task={task} />}</CrewTaskBoundary>;
+  return <CrewTaskBoundary operational={false}>{task => <CrewReportDefectScreenContent task={task} />}</CrewTaskBoundary>;
 }
-function CrewReportDefectScreenContent({ task }: { task: OperationalCrewTask }) {
+function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
   const [defectType, setDefectType] = useState<string>(DEFECT_TYPE_CODES.POTH_DEEP);
   const [customType, setCustomType] = useState('');
@@ -32,49 +29,8 @@ function CrewReportDefectScreenContent({ task }: { task: OperationalCrewTask }) 
   const [notes, setNotes] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
-  const gpsText = useMemo(() => {
-    const session = getCrewFieldSession();
-    const coords = session?.task_id === task.id ? session.coordinates ?? task.coordinates : task.coordinates;
-    return `${task.chainage} Tuyến ${task.route_code} • ${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`;
-  }, [task.id, task.chainage, task.route_code, task.coordinates]);
-
-  const handleSubmit = async () => {
-    const session = getCrewFieldSession();
-    const coords = session?.task_id === task.id ? session.coordinates ?? task.coordinates : task.coordinates;
-    const customLabel = customType.trim();
-
-    try {
-      const db = openDatabase();
-      await initDatabase(db);
-      // defect_type_code luôn giữ nguyên 1 trong 5 mã canonical (AGENTS.md cấm tạo mã mới).
-      // Chữ nhập tay người dùng chỉ lưu ở defect_type_custom, không tạo mã mới.
-      await enqueuePayload(
-        db,
-        'FIELD_SUBMISSION',
-        {
-          kind: 'FIELD_SUBMISSION',
-          taskId: task.id,
-          work_order_code: task.wo_code,
-          defect_type_code: defectType,
-          defect_type_label: customLabel || defectTypeLabel(defectType),
-          defect_type_custom: customLabel || null,
-          severity,
-          notes: notes.trim(),
-          chainage: task.chainage,
-          route_code: task.route_code,
-          section_name: task.section_name,
-          coordinates: coords,
-          capturedAt: new Date().toISOString(),
-        },
-        { taskId: task.id },
-      );
-      setToast('Đã lưu báo cáo vào hàng đợi đồng bộ');
-    } catch {
-      setToast('Không lưu được báo cáo, vui lòng thử lại');
-      return;
-    }
-    setTimeout(() => router.back(), 1500);
-  };
+  const gpsText = task.coordinates ? `${task.coordinates.latitude.toFixed(5)}, ${task.coordinates.longitude.toFixed(5)} (vị trí nhiệm vụ, không phải GPS quan sát)` : 'Chưa có tọa độ từ máy chủ';
+  const handleSubmit = () => setToast('Báo lỗi phát sinh mới chưa có contract API được xác minh trong T05B. Chưa gửi dữ liệu. Dùng hồ sơ FIELD của nhiệm vụ để gửi kết quả đo kiểm.');
 
   return (
     <SafeAreaScreen
@@ -97,13 +53,13 @@ function CrewReportDefectScreenContent({ task }: { task: OperationalCrewTask }) 
         <View style={styles.bannerRow}>
           <MaterialIcons name="warning" size={16} color={colors.warning} />
           <Text style={[typography.bodyMd, styles.bannerText]}>
-            Lỗi này sẽ được gửi về PM xác minh, không gộp vào {task.wo_code}
+            Chưa mở gửi lỗi phát sinh mới: chưa xác minh contract API. Hồ sơ FIELD của nhiệm vụ dùng luồng riêng.
           </Text>
         </View>
       </Card>
 
       <View style={styles.fieldGroup}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Tọa độ GPS phát hiện tự động</Text>
+        <Text style={[typography.labelLg, styles.fieldLabel]}>Vị trí nhiệm vụ từ máy chủ</Text>
         <View style={styles.gpsField}>
           <MaterialIcons name="location-on" size={16} color={colors.secondary} />
           <Text style={[typography.bodyMd, styles.gpsText]}>{gpsText}</Text>
@@ -166,7 +122,7 @@ function CrewReportDefectScreenContent({ task }: { task: OperationalCrewTask }) 
         <Pressable
           style={({ pressed }) => [styles.photoPlaceholder, pressed && styles.pressed]}
           onPress={() =>
-            router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, mode: 'BEFORE' } })
+            router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, projectId: task.projectId, mode: 'BEFORE' } })
           }
           accessibilityRole="button"
           accessibilityLabel="Chụp ảnh hiện trường có Watermark"
@@ -191,7 +147,8 @@ function CrewReportDefectScreenContent({ task }: { task: OperationalCrewTask }) 
       </View>
 
       <View style={styles.ctaWrap}>
-        <Button variant="primary" title="Gửi báo cáo lỗi phát sinh cho PM" onPress={handleSubmit} />
+        <Button variant="primary" title="Gửi báo cáo lỗi phát sinh cho PM" disabled onPress={handleSubmit} />
+        <Button variant="secondary" title="Mở hồ sơ FIELD của nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})} />
       </View>
 
       {toast ? <Toast type="success" message={toast} /> : null}

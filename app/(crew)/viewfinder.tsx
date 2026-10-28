@@ -1,27 +1,24 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import { ViewFinder, type Coords } from '../../src/components/ViewFinder';
 import { Button } from '../../src/components/Button';
 import { defectTypeLabel } from '../../src/constants/defect-types';
-import {
-  getCrewFieldSession,
-  setAfterCapture,
-  setBeforeCapture,
-} from '../../src/api/mock/crew-inspection';
-import { CrewTaskBoundary, type OperationalCrewTask } from './tasks';
+import { CrewTaskBoundary, useCrewIdentity } from './tasks';
+import { fieldCapabilityBlock, type CrewTask } from '../../src/api/crewApi';
+import { currentFieldContext, openFieldRuntime, loadFieldDraft, captureFieldPhoto, fieldDraftPending, fieldErrorMessage, type FieldDraft } from '../../src/api/crewFieldDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
-type ViewfinderMode = 'before' | 'after' | 'video';
+type ViewfinderMode = 'before' | 'after' | 'measurement';
 
 const MODES: { key: ViewfinderMode; label: string }[] = [
   { key: 'before', label: 'Trước' },
   { key: 'after', label: 'Sau' },
-  { key: 'video', label: 'Video' },
+  { key: 'measurement', label: 'Đo' },
 ];
 
 function pad(value: number): string {
@@ -38,48 +35,48 @@ function formatDateTime(date: Date): string {
 }
 
 export default function CrewViewfinderScreen() {
-  return <CrewTaskBoundary>{task => <CrewViewfinderScreenContent task={task} />}</CrewTaskBoundary>;
+  return <CrewTaskBoundary operational={false}>{task => <CrewViewfinderScreenContent task={task} />}</CrewTaskBoundary>;
 }
-function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
+function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const params = useLocalSearchParams<{ id?: string; mode?: string }>();
   const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';
 
   const [mode, setMode] = useState<ViewfinderMode>(initialMode);
   const [flashOn, setFlashOn] = useState(false);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
-  const [afterUri, setAfterUri] = useState<string | null>(null);
   const [coords, setCoords] = useState<Coords | null>(null);
 
-  const session = getCrewFieldSession();
-  const beforeReady = Boolean(session?.before_local_uri || session?.before_evidence_id);
-  const afterReady = Boolean(afterUri || session?.after_local_uri);
-  const photoCount = (beforeReady ? 1 : 0) + (afterReady ? 1 : 0);
-  const requiredPhotoCount = task.task_mode === 'MEASURE_ONLY' ? 1 : 2;
-
+  const { user, scope } = useCrewIdentity();
+  const [draft, setDraft] = useState<FieldDraft | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [ready, setReady] = useState(false);
+  const activeRef=useRef(false);
+  useFocusEffect(useCallback(() => {
+    let active=true;activeRef.current=true;setReady(false);
+    const context=currentFieldContext(task.projectId,task.id);
+    if (context) void openFieldRuntime(context).then(runtime=>loadFieldDraft(context,runtime)).then(value=>{if(active){setDraft(value);setReady(true);}}).catch(error=>{if(active)setNotice(fieldErrorMessage(error));});
+    return ()=>{active=false;activeRef.current=false;};
+  },[task.id,task.projectId,scope]));
+  const block = !user || !scope || !task.detail ? 'Phiên Crew không hợp lệ.' : fieldCapabilityBlock(task.detail,task.etag??'',user.id,'capture');
+  const beforeReady = !!draft?.captures.some(c=>c.purpose==='BEFORE');
+  const afterReady = !!draft?.captures.some(c=>c.purpose==='AFTER');
+  const photoCount = draft?.captures.length??0;
   const previewDate = new Date();
-  const gpsText = coords
-    ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`
-    : 'Đang lấy GPS…';
-
-  const handleCapture = (photo: CameraCapturedPicture) => {
-    const captureCoords = {
-      latitude: coords?.latitude ?? task.coordinates.latitude,
-      longitude: coords?.longitude ?? task.coordinates.longitude,
-      accuracyMeters: coords?.accuracyMeters ?? null,
-    };
-    const now = new Date();
-    const line = `Lệnh ${task.wo_code.replace('#HH-WO-', '')} • ${defectTypeLabel(task.defect_type_code)} • ${gpsText} • ${formatDateTime(now)}`;
-
-    if (mode === 'before') {
-      setBeforeCapture(photo.uri, line, now.toISOString(), captureCoords);
-      setMode('after');
-      return;
-    }
-    if (mode === 'after') {
-      setAfterCapture(photo.uri, line, captureCoords);
-      setAfterUri(photo.uri);
-    }
+  const gpsText = coords ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : 'Chưa có GPS quan sát';
+  const savePhoto = async (uri: string, mediaType: string, camera: boolean) => {
+    if (!activeRef.current || busy || block || !ready || !draft || draft.command) return;
+    const context=currentFieldContext(task.projectId,task.id);if(!context)return;
+    setBusy(true);
+    try {
+      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,coords,camera);
+      if(!activeRef.current||currentFieldContext(task.projectId,task.id)?.scope!==context.scope)return;
+      setDraft(value);setNotice('Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa upload hoặc gửi hồ sơ.');
+    } catch(error) {if(activeRef.current&&currentFieldContext(task.projectId,task.id)?.scope===context.scope)setNotice(fieldErrorMessage(error));}
+    finally {if(activeRef.current&&currentFieldContext(task.projectId,task.id)?.scope===context.scope)setBusy(false);}
   };
+  const handleCapture = (photo: CameraCapturedPicture) => {void savePhoto(photo.uri,'image/jpeg',true);};
+  if (block) return <SafeAreaView><Text>{block}</Text><Button variant="secondary" title="Quay lại" onPress={()=>router.back()} /></SafeAreaView>;
 
   const watermark = (
     <View style={styles.watermarkCard} pointerEvents="none">
@@ -93,13 +90,13 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="description" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>
-          Lệnh số {task.wo_code.replace('#HH-WO-', '')}
+          {task.wo_code || 'Chưa có mã WO'}
         </Text>
       </View>
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="warning" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>
-          {defectTypeLabel(task.defect_type_code)}
+          {task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'}
         </Text>
       </View>
       <View style={styles.watermarkMeta}>
@@ -121,7 +118,7 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
         </Text>
       </View>
 
-      {task.task_mode !== 'MEASURE_ONLY' ? (
+      {task.detail?.purpose === 'PostRepair' ? (
         <View style={styles.thumb}>
           <MaterialIcons name="image" size={18} color="#64748B" />
           <View style={[styles.thumbCheck, afterReady ? styles.thumbCheckGold : styles.thumbCheckPending]}>
@@ -135,15 +132,15 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
 
       <View style={styles.readyBlock}>
         <Text style={[typography.labelLg, styles.readyCount]}>
-          {photoCount}/{requiredPhotoCount} ảnh
+          {photoCount} ảnh nháp
         </Text>
         <Text
           style={[
             typography.labelLg,
-            photoCount >= requiredPhotoCount ? styles.readyOk : styles.readyWaiting,
+            photoCount > 0 ? styles.readyOk : styles.readyWaiting,
           ]}
         >
-          {photoCount >= requiredPhotoCount ? 'Đủ điều kiện' : 'Còn thiếu ảnh'}
+          {photoCount > 0 ? 'Đã lưu nháp' : 'Chưa có ảnh'}
         </Text>
       </View>
     </View>
@@ -156,15 +153,9 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
         copyToCacheDirectory: true,
       });
       if (!res.canceled && res.assets && res.assets.length > 0) {
-        handleCapture({
-          uri: res.assets[0].uri,
-          width: 1920,
-          height: 1080,
-        } as CameraCapturedPicture);
+        await savePhoto(res.assets[0].uri,res.assets[0].mimeType ?? '',false);
       }
-    } catch {
-      // ignore
-    }
+    } catch { setNotice('Không chọn được ảnh. Vui lòng thử lại.'); }
   };
 
   const galleryButton = (
@@ -190,11 +181,7 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
   );
 
   const handleConfirm = () => {
-    if (mode === 'after' && afterReady) {
-      router.push({ pathname: '/(crew)/complete', params: { id: task.id } });
-      return;
-    }
-    router.back();
+    router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}});
   };
 
   return (
@@ -205,7 +192,7 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
         </Pressable>
 
         <View style={styles.modePills}>
-          {MODES.map((item) => {
+          {MODES.filter(item=>item.key!=='after'||task.detail?.purpose==='PostRepair').map((item) => {
             const active = item.key === mode;
             return (
               <Pressable
@@ -244,9 +231,10 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
 
       <View style={styles.viewport}>
         <ViewFinder
+          disabled={busy||!ready||!!draft?.command}
           onCapture={handleCapture}
           onCoordsChange={setCoords}
-          defectType={defectTypeLabel(task.defect_type_code)}
+          defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'}
           showGridGuide
           showReticle
           flashMode={flashOn ? 'on' : 'off'}
@@ -263,22 +251,22 @@ function CrewViewfinderScreenContent({ task }: { task: OperationalCrewTask }) {
           <View style={styles.sheetTitleRow}>
             <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
             <Text style={[typography.labelLg, styles.sheetTitle]}>
-              Lệnh số {task.wo_code.replace('#HH-WO-', '')}
+              {task.wo_code || 'Chưa có mã WO'}
             </Text>
             <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
             <Text style={[typography.labelLg, styles.sheetSub]}>
-              {defectTypeLabel(task.defect_type_code)} {task.chainage}
+              {task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'} {task.chainage}
             </Text>
           </View>
           <Text style={[typography.caption, styles.sheetFiles]}>
-            {session?.before_source ? 'Đã có ảnh hiện trạng' : 'Chưa có ảnh hiện trạng'}
+            {beforeReady ? 'Đã có ảnh nháp hiện trạng' : 'Chưa có ảnh hiện trạng'}
           </Text>
         </View>
 
-        <Button variant="primary" title="Xác nhận & Lưu" onPress={handleConfirm} />
+        <Button variant="primary" title="Đo kiểm & Hồ sơ FIELD" disabled={busy || !ready} onPress={handleConfirm} />
 
         <Text style={[typography.caption, styles.sheetHint]}>
-          Ảnh được đóng dấu vị trí WGS84, mã lệnh công tác, loại khuyết tật và thời gian thực tại hiện trường.
+          {notice || 'Chỉ lưu tọa độ camera quan sát được. Ảnh thư viện không được gán GPS hoặc thời gian chụp mới.'}
         </Text>
       </View>
     </SafeAreaView>
