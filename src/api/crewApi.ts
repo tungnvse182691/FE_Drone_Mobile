@@ -290,6 +290,11 @@ export function normalRepairBlock(task: FieldTaskViewFact, etag: string, actorId
     if (ctx.status !== 'Assigned' || task.status !== 'InProgress' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục Assigned, nhiệm vụ InProgress và first-start thật trước khi sửa.';
     return null;
   }
+  if (capability === 'finish' || capability === 'attempt') {
+    if (ctx.status !== 'InProgress' || task.status !== (capability === 'attempt' ? 'Submitted' : 'InProgress') ||
+        task.purpose !== 'PostRepair' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục NORMAL InProgress, nhiệm vụ PostRepair và first-start đúng trạng thái.';
+    return null;
+  }
   return 'Kết thúc, nộp và bổ sung sửa chữa chưa được mở.';
 }
 
@@ -875,7 +880,7 @@ export async function finishRepairExecutionReal(
       },
     },
   );
-  return { data: response.data, etag: extractEtagFromResponse(response) };
+  return { data: response.data, etag: repairItemResponseEtag(response) };
 }
 
 /**
@@ -900,7 +905,7 @@ export async function submitRepairAttemptReal(
       },
     },
   );
-  return { data: response.data, etag: extractEtagFromResponse(response) };
+  return { data: response.data, etag: repairItemResponseEtag(response) };
 }
 
 /**

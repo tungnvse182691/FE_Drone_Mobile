@@ -56,6 +56,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const block=!identity.user||!identity.scope||!task.detail?'Phiên Crew không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'submit');
   const captureBlock=!identity.user||!task.detail?'Phiên Crew không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'capture');
   const frozen=!!draft?.command;
+  const normalMeasurement=task.detail?.mode==='NORMAL'&&!draft?.repairClaim;
   const run=async(action:'save'|'upload'|'submit'|'replay'|'new'|'download',fileId?:string)=>{
     if(busyRef.current)return;
     const c=context();if(!c)return;
@@ -91,7 +92,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     <ScrollView contentContainerStyle={styles.content}>
       <Card style={styles.card}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><Chip label={mode.label} variant={mode.variant}/>
         <Text>{task.wo_code||'Chưa có mã WO từ máy chủ'}</Text><Text selectable>{task.id}</Text>
-        <Text>Chỉ gửi kết quả đo kiểm FIELD. Chuỗi sửa chữa chưa được mở.</Text></Card>
+        <Text>{draft?.repairClaim?'Hồ sơ sửa chữa NORMAL: ảnh AFTER và số đo thực. Gửi FIELD chưa phải tiếp nhận sửa chữa hay PM xác nhận.':'Kết quả đo kiểm FIELD.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
       <Button variant="secondary" title="Tải lại hồ sơ / trạng thái" disabled={busy} onPress={()=>void load()}/>
@@ -129,13 +130,15 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {!draft.captures.length?<Text>Chưa có ảnh nháp của phiên và nhiệm vụ này.</Text>:null}
           {draft.captures.map(c=><Text key={c.id}>{c.purpose} • {c.verified?'VERIFIED từ máy chủ':'Chưa VERIFIED'} • {c.coordinates?'Có GPS camera':'Không có GPS quan sát'}</Text>)}
           {captureBlock?<Text>{captureBlock}</Text>:null}
-          <Button variant="secondary" title="Chụp / chọn ảnh FIELD" disabled={busy||frozen||!!captureBlock} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId}})}/>
+          <Button variant="secondary" title="Chụp / chọn ảnh FIELD" disabled={busy||frozen||!!captureBlock} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE'}})}/>
           <Button variant="secondary" title="Upload / kiểm tra VERIFIED" disabled={busy||frozen||!draft.captures.length||!!captureBlock} onPress={()=>void run('upload')}/>
         </Card>
         {block?<Text>{block}</Text>:null}
-        <Button variant="primary" title={latest?'Gửi bổ sung FIELD':'Gửi hồ sơ FIELD'} loading={busy} disabled={busy||frozen||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>
+        {normalMeasurement?<Text>Với NORMAL, lưu số đo và upload ảnh để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ REPAIR_CLAIM sau khi kết thúc thi công; không gửi nhầm lượt MEASUREMENT làm hồ sơ sửa chữa.</Text>:null}
+        <Button variant="primary" title={draft.repairClaim?'Gửi hồ sơ sửa chữa FIELD':latest?'Gửi bổ sung FIELD':'Gửi hồ sơ FIELD'} loading={busy} disabled={busy||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>
         {fieldDraftPending(draft)?<Button variant="secondary" title="Đối soát / gửi lại đúng lệnh đã lưu" disabled={busy} onPress={()=>void run('replay')}/>:null}
-        {draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/>:null}
+        {!draft.repairClaim&&draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/>:null}
+        {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ PM" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
         {draft.result?<Card><Text>{draft.result.readiness}</Text>{(draft.result.missingReasons??[]).map(r=><Text key={r}>{r}</Text>)}</Card>:null}
       </>:null}
       {notice?<Text accessibilityLiveRegion="polite">{notice}</Text>:null}

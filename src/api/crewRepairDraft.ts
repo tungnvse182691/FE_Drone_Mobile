@@ -69,8 +69,9 @@ function decode(payload: string): RepairJournalRecord {
     const row = JSON.parse(payload) as RepairJournalRecord;
     const base = snapshot(row);
     if (row.schema !== 1 || !['PREPARED','PENDING','ACKNOWLEDGED','CONFIRMED','REJECTED'].includes(row.phase)) throw new Error();
-    if (row.receipt && (!isRepairItemVersion(row.receipt.itemVersion) || !isCrewResourceId(row.receipt.data.id) ||
-        row.receipt.data.itemId !== row.identity.itemId || row.receipt.data.taskId !== row.identity.taskId)) throw new Error();
+    if (row.receipt && (!isRepairItemVersion(row.receipt.itemVersion) || row.receipt.data.itemId !== row.identity.itemId ||
+        (row.operation === 'attempt' ? ![row.receipt.data.attemptId,row.receipt.data.linkId,row.receipt.data.submissionId,row.receipt.data.reviewClockId].every(isCrewResourceId) :
+          !isCrewResourceId(row.receipt.data.id) || row.receipt.data.taskId !== row.identity.taskId))) throw new Error();
     if (['ACKNOWLEDGED','CONFIRMED'].includes(row.phase) && !row.receipt) throw new Error();
     if (row.phase === 'REJECTED' && (!row.rejection || ![400,401,403,404,409,412,422,428].includes(row.rejection.status))) throw new Error();
     if (canonical({ ...base, phase: row.phase, ...(row.receipt ? {receipt:row.receipt} : {}),
@@ -88,7 +89,7 @@ function taskPartition(i: RepairIdentity): string {
 function sameTask(a: RepairIdentity, b: RepairIdentity): boolean {
   return (['actor','environment','projectId','taskId'] as const).every(k => a[k] === b[k]);
 }
-/** Storage only. No POST, dispatcher, optimistic receipt or offline replay is enabled in T06-A. */
+/** Durable storage only. Dispatch is explicit and online in crewRepairWorkflow. */
 export async function openRepairJournal(identity: RepairIdentity,
   current: () => RepairIdentity | null = () => currentRepairIdentity(identity.projectId, identity.taskId)) {
   const context = { ...identity };
@@ -134,7 +135,15 @@ export async function openRepairJournal(identity: RepairIdentity,
         if (existing) {
           throw new Error('repair_unresolved_command');
         }
-        if (record.operation === 'start') {
+        if (record.operation === 'finish' || record.operation === 'attempt') {
+          const previous = stored.at(-1);
+          const required = record.operation === 'finish' ? 'start' : 'finish';
+          const receiptId = record.operation === 'finish' ? record.payload.executionStartId : record.payload.executionFinishId;
+          if (!previous || previous.operation !== required || previous.phase !== 'CONFIRMED' ||
+              canonical(previous.identity) !== canonical(record.identity) || previous.receipt?.data.id !== receiptId ||
+              previous.receipt?.itemVersion !== record.itemVersion || stored.some(r => r.operation === record.operation || r.phase === 'REJECTED'))
+            throw new Error('repair_history_requires_reconciliation');
+        } else if (record.operation === 'start') {
           const assessment = stored.find(r => sameRepairIdentity(context,r.identity) && r.operation === 'assessment' &&
             r.phase === 'CONFIRMED' && r.receipt?.data.id === record.payload.assessmentId);
           if (!assessment || assessment.receipt?.data.readiness !== 'READY' ||

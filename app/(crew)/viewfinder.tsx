@@ -51,6 +51,9 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [ready, setReady] = useState(false);
+  const [postRepairCapture,setPostRepairCapture]=useState(false);
+  const normalAfter=mode==='after'&&task.detail?.mode==='NORMAL';
+  const afterBlocked=normalAfter&&(!draft?.repairClaim||!postRepairCapture);
   const activeRef=useRef(false);
   useFocusEffect(useCallback(() => {
     let active=true;activeRef.current=true;setReady(false);
@@ -65,11 +68,11 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const previewDate = new Date();
   const gpsText = coords ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : 'Chưa có GPS quan sát';
   const savePhoto = async (uri: string, mediaType: string, camera: boolean) => {
-    if (!activeRef.current || busy || block || !ready || !draft || draft.command) return;
+    if (!activeRef.current || busy || block || afterBlocked || !ready || !draft || draft.command) return;
     const context=currentFieldContext(task.projectId,task.id);if(!context)return;
     setBusy(true);
     try {
-      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,coords,camera);
+      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,coords,camera,normalAfter&&postRepairCapture);
       if(!activeRef.current||currentFieldContext(task.projectId,task.id)?.scope!==context.scope)return;
       setDraft(value);setNotice('Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa upload hoặc gửi hồ sơ.');
     } catch(error) {if(activeRef.current&&currentFieldContext(task.projectId,task.id)?.scope===context.scope)setNotice(fieldErrorMessage(error));}
@@ -162,6 +165,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Chọn ảnh từ thiết bị"
+      disabled={normalAfter}
       onPress={handlePickGallery}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
@@ -197,7 +201,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
             return (
               <Pressable
                 key={item.key}
-                onPress={() => setMode(item.key)}
+                onPress={() => {setMode(item.key);setPostRepairCapture(false);}}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={[styles.modePill, active && styles.modePillActive]}
@@ -229,9 +233,13 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
         </View>
       </View>
 
+      {normalAfter?<View style={{padding:spacing.sm}}>
+        <Text>{draft?.repairClaim?'Ảnh AFTER phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp AFTER.'}</Text>
+        <Button variant="secondary" title={postRepairCapture?'Đã xác nhận chụp hiện trạng sau sửa':'Tôi xác nhận đang chụp hiện trạng sau sửa'} disabled={!draft?.repairClaim||busy||!!draft.command} onPress={()=>setPostRepairCapture(v=>!v)}/>
+      </View>:null}
       <View style={styles.viewport}>
         <ViewFinder
-          disabled={busy||!ready||!!draft?.command}
+          disabled={busy||!ready||!!draft?.command||afterBlocked}
           onCapture={handleCapture}
           onCoordsChange={setCoords}
           defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'}

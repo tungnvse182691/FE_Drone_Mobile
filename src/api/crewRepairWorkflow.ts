@@ -2,7 +2,7 @@ import { randomUUID } from 'expo-crypto';
 import * as api from './crewApi';
 import { currentRepairIdentity, sameRepairIdentity, openRepairJournal,
   type RepairIdentity, type RepairCommandIdentity, type RepairJournalRecord } from './crewRepairDraft';
-import { openFieldRuntime, loadFieldDraft, type FieldDraft } from './crewFieldDraft';
+import { openFieldRuntime, loadFieldDraft, validateRepairClaimReadback, type FieldDraft } from './crewFieldDraft';
 
 export interface RepairRuntime {
   current: () => RepairIdentity | null;
@@ -10,6 +10,7 @@ export interface RepairRuntime {
   now: () => string;
   api: typeof api;
   journal: (identity: RepairIdentity) => ReturnType<typeof openRepairJournal>;
+  fieldDraft?: () => Promise<FieldDraft>;
 }
 export function repairRuntime(identity: RepairIdentity): RepairRuntime {
   return { current: () => currentRepairIdentity(identity.projectId,identity.taskId), uuid: randomUUID,
@@ -48,11 +49,16 @@ function commandIdentity(i: RepairIdentity,task: api.FieldTaskViewFact): RepairC
   const ctx=task.repairContext!;
   return {...i,packageId:ctx.packageId,itemId:ctx.itemId,bindingId:ctx.bindingId,assignmentId:task.assignmentId!};
 }
-export function validateRepairInput(operation: 'assessment'|'start',body: Record<string,unknown>): void {
-  if(!api.isCrewResourceId(body.originId)||!api.isCrewResourceId(body.fieldFirstStartId)||
+export function validateRepairInput(operation: 'assessment'|'start'|'finish'|'attempt',body: Record<string,unknown>): void {
+  if(operation==='attempt') {
+    if(!api.isCrewResourceId(body.fieldSubmissionId)||!api.isCrewResourceId(body.executionFinishId)||
+      typeof body.expectedContentHash!=='string'||!/^[a-f0-9]{64}$/i.test(body.expectedContentHash))throw Error('repair_input_invalid');
+    return;
+  }
+  if(!api.isCrewResourceId(body.originId)||(operation!=='finish'&&!api.isCrewResourceId(body.fieldFirstStartId))||
     (body.deviceId!=null&&!api.isCrewResourceId(body.deviceId)))throw Error('repair_input_invalid');
-  if(operation==='start') {
-    if(!api.isCrewResourceId(body.assessmentId)||!timestamp(body.claimedAt)||
+  if(operation==='start'||operation==='finish') {
+    if(!api.isCrewResourceId(operation==='start'?body.assessmentId:body.executionStartId)||!timestamp(body.claimedAt)||
       (body.monotonicMilliseconds!=null&&(!Number.isSafeInteger(body.monotonicMilliseconds)||Number(body.monotonicMilliseconds)<0))||
       (body.bootId!=null&&(typeof body.bootId!=='string'||body.bootId.length>200)))throw Error('repair_input_invalid');
     return;
@@ -107,19 +113,75 @@ export async function prepareRepairStart(i: RepairIdentity,r=repairRuntime(i)) {
   validateRepairInput('start',payload);
   return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'start',key:r.uuid(),itemVersion:task.repairContext!.itemVersion,payload}));
 }
+/** Finish is an explicit physical event following a confirmed execution-start receipt. */
+export async function prepareRepairFinish(i: RepairIdentity,r=repairRuntime(i)) {
+  const j=await guarded(i,r,()=>r.journal(i)),history=await readRepairHistory(i,r);
+  const start=history.at(-1);
+  if(start?.operation!=='start'||start.phase!=='CONFIRMED'||!start.receipt)throw Error('repair_start_required');
+  const response=await fresh(i,r,start.identity),task=response.data;
+  const block=r.api.normalRepairBlock(task,response.etag,i.actor,'finish');if(block)throw Error(block);
+  if(task.repairContext!.itemVersion!==start.receipt.itemVersion)throw Error('repair_reconciliation_pending');
+  if(await firstStart(i,r,task)!==start.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
+  const payload={originId:r.uuid(),executionStartId:start.receipt.data.id,claimedAt:r.now(),deviceId:null};
+  validateRepairInput('finish',payload);
+  return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'finish',key:r.uuid(),itemVersion:task.repairContext!.itemVersion,payload}));
+}
+/** Fresh API-096 readback is mandatory, including on exact replay of an unknown intake. */
+async function attemptSource(i: RepairIdentity,r: RepairRuntime,task: api.FieldTaskViewFact,finish: RepairJournalRecord) {
+  const draft=await guarded(i,r,()=>r.fieldDraft?r.fieldDraft():readRepairFieldDraft(i));
+  const claim=draft.repairClaim,cmd=draft.command,ctx=task.repairContext!;
+  if(!sameRepairIdentity(i,draft)||!claim||!cmd||cmd.phase!=='confirmed'||!finish.receipt||
+    cmd.assignmentId!==task.assignmentId||claim.assignmentId!==task.assignmentId||claim.bindingId!==ctx.bindingId||
+    claim.packageId!==ctx.packageId||claim.itemId!==ctx.itemId||claim.itemVersion!==finish.receipt.itemVersion||
+    claim.finishId!==finish.receipt.data.id||claim.executionStartId!==finish.payload.executionStartId||
+    claim.firstStartId!==task.firstStartOriginId||cmd.body.startOriginId!==task.firstStartOriginId||
+    cmd.responseId!==task.latestSubmissionId||draft.result?.id!==cmd.responseId||!api.isCrewResourceId(cmd.responseId))throw Error('repair_claim_required');
+  const read=await guarded(i,r,()=>r.api.getFieldSubmissionDetailReal(i.projectId,i.taskId,cmd.responseId!));
+  validateRepairClaimReadback(read.data,cmd.body);
+  if(read.data.id!==cmd.responseId||read.data.taskId!==i.taskId||read.data.contentHash!==draft.result.contentHash||
+    finish.receipt.data.timeProvenance!=='SERVER_ONLINE'||!timestamp(finish.receipt.data.verifiedOriginalAt)||
+    Date.parse(read.data.serverReceivedAt)<Date.parse(finish.receipt.data.verifiedOriginalAt))throw Error('repair_claim_readback_invalid');
+  const after=(cmd.body.evidence??[]).filter(e=>e.purpose==='AFTER');
+  if(!after.length||after.some(e=>e.attemptChecklist!=='POST_REPAIR_CAPTURE'||!e.capturedAt||
+    !timestamp(finish.receipt!.data.verifiedOriginalAt)||Date.parse(e.capturedAt)<Date.parse(finish.receipt!.data.verifiedOriginalAt as string)))throw Error('repair_after_camera_required');
+  for(const e of cmd.body.evidence??[]) {
+    if(!api.isCrewResourceId(e.fileId))throw Error('repair_verified_evidence_required');
+    const file=await guarded(i,r,()=>r.api.getFieldEvidenceReal(i.projectId,i.taskId,e.fileId!));
+    if(file.fileId!==e.fileId||file.state!=='VERIFIED'||file.checksum!==e.checksumSha256||file.mediaType!==e.mediaType)throw Error('repair_verified_evidence_required');
+  }
+  return {fieldSubmissionId:read.data.id,expectedContentHash:read.data.contentHash,executionFinishId:claim.finishId};
+}
+export async function prepareRepairAttempt(i: RepairIdentity,r=repairRuntime(i)) {
+  const j=await guarded(i,r,()=>r.journal(i)),history=await readRepairHistory(i,r),finish=history.at(-1);
+  if(finish?.operation!=='finish'||finish.phase!=='CONFIRMED'||!finish.receipt)throw Error('repair_finish_required');
+  const response=await fresh(i,r,finish.identity),task=response.data;
+  const block=r.api.normalRepairBlock(task,response.etag,i.actor,'attempt');if(block)throw Error(block);
+  if(ctxVersion(task)!==finish.receipt.itemVersion)throw Error('repair_reconciliation_pending');
+  await firstStart(i,r,task);
+  const payload=await attemptSource(i,r,task,finish);
+  validateRepairInput('attempt',payload);
+  return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'attempt',key:r.uuid(),itemVersion:ctxVersion(task),payload}));
+}
+function ctxVersion(task: api.FieldTaskViewFact) {return task.repairContext!.itemVersion;}
 export function validateRepairReceipt(c: RepairJournalRecord,data: Record<string,unknown>,etag: string) {
   const itemVersion=version(etag);
+  if(c.operation==='attempt') {
+    if(![data.attemptId,data.linkId,data.reviewClockId].every(api.isCrewResourceId)||data.itemId!==c.identity.itemId||
+      data.submissionId!==c.payload.fieldSubmissionId||!timestamp(data.originalReviewDueAt)||!['READY','INCOMPLETE'].includes(String(data.intakeReadiness)))throw Error('repair_receipt_invalid');
+    return {data,itemVersion};
+  }
   if(!api.isCrewResourceId(data.id)||data.itemId!==c.identity.itemId||data.taskId!==c.identity.taskId||
-    data.firstStartId!==c.payload.fieldFirstStartId)throw Error('repair_receipt_invalid');
+    (c.operation!=='finish'&&data.firstStartId!==c.payload.fieldFirstStartId))throw Error('repair_receipt_invalid');
   if(c.operation==='assessment') {
     if(!api.isCrewResourceId(data.sessionId)||data.stage!=='PRE_EXECUTION'||!['READY','INCOMPLETE'].includes(String(data.readiness))||
       !Array.isArray(data.missingReasons)||data.missingReasons.some(v=>typeof v!=='string')||
       (data.readiness==='READY'&&data.missingReasons.length!==0)||!['UNKNOWN','VERIFIED_CHECKLIST'].includes(String(data.locationState))||
       typeof data.contentHash!=='string'||!/^[a-f0-9]{64}$/i.test(data.contentHash))throw Error('repair_receipt_invalid');
-  } else if(c.operation==='start') {
-    if(data.assessmentId!==c.payload.assessmentId||!timestamp(data.claimedAt)||!timestamp(c.payload.claimedAt)||
+  } else if(c.operation==='start'||c.operation==='finish') {
+    if((c.operation==='start'?data.assessmentId!==c.payload.assessmentId:data.executionStartId!==c.payload.executionStartId)||!timestamp(data.claimedAt)||!timestamp(c.payload.claimedAt)||
       Date.parse(data.claimedAt)!==Date.parse(c.payload.claimedAt)||!timestamp(data.serverReceivedAt)||
       (data.verifiedOriginalAt!=null&&!timestamp(data.verifiedOriginalAt))||typeof data.timeProvenance!=='string'||!data.timeProvenance)throw Error('repair_receipt_invalid');
+    if(c.operation==='finish'&&(!api.isCrewResourceId(data.syncClockId)||!timestamp(data.originalSyncDueAt)))throw Error('repair_receipt_invalid');
   } else throw Error('repair_operation_disabled');
   return {data,itemVersion};
 }
@@ -130,36 +192,55 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
   if(locks.has(lock))throw Error('repair_busy');locks.add(lock);
   try {
     const j=await guarded(i,r,()=>r.journal(i));let c=await guarded(i,r,()=>j.read(key));
-    if(!c||!['assessment','start'].includes(c.operation))throw Error('repair_operation_disabled');
+    if(!c||!['assessment','start','finish','attempt'].includes(c.operation))throw Error('repair_operation_disabled');
     if(c.phase==='CONFIRMED') {
       await readRepairHistory(i,r);
       return c;
     }
     if(c.phase==='REJECTED')return c;
     const response=await fresh(i,r,c.identity),task=response.data;
-    if(await firstStart(i,r,task)!==c.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
-    validateRepairInput(c.operation as 'assessment'|'start',c.payload);
+    const first=await firstStart(i,r,task);
+    if(['assessment','start'].includes(c.operation)&&first!==c.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
+    validateRepairInput(c.operation as 'assessment'|'start'|'finish'|'attempt',c.payload);
     if(c.operation==='start') {
       const previous=(await guarded(i,r,()=>j.list())).filter(row=>row.operation==='assessment').at(-1);
       if(!previous?.receipt || previous.phase!=='CONFIRMED' || previous.receipt.data.readiness!=='READY' ||
           previous.receipt.data.id!==c.payload.assessmentId || previous.receipt.itemVersion!==c.itemVersion)throw Error('repair_assessment_required');
       validateRepairReceipt(previous,previous.receipt.data,`"${previous.receipt.itemVersion}"`);
     }
+    if(c.operation==='finish'||c.operation==='attempt') {
+      const history=await guarded(i,r,()=>j.list());
+      const previous=history.find(row=>row.operation===(c!.operation==='finish'?'start':'finish'));
+      if(previous?.phase!=='CONFIRMED'||!previous.receipt||previous.receipt.data.id!==
+        (c.operation==='finish'?c.payload.executionStartId:c.payload.executionFinishId)||
+        previous.receipt.itemVersion!==c.itemVersion)throw Error('repair_history_requires_reconciliation');
+      validateRepairReceipt(previous,previous.receipt.data,`"${previous.receipt.itemVersion}"`);
+      const start=history.find(row=>row.operation==='start');
+      if(start?.payload.fieldFirstStartId!==first)throw Error('repair_first_start_invalid');
+      if(c.operation==='attempt') {
+        const source=await attemptSource(i,r,task,previous);
+        if(Object.entries(source).some(([k,v])=>c!.payload[k]!==v))throw Error('repair_claim_source_changed');
+      }
+    }
     if(c.phase==='PREPARED') {
-      const block=r.api.normalRepairBlock(task,response.etag,i.actor,c.operation as 'assessment'|'start');
+      const block=r.api.normalRepairBlock(task,response.etag,i.actor,c.operation as 'assessment'|'start'|'finish'|'attempt');
       if(block)throw Error(block);
       if(task.repairContext!.itemVersion!==c.itemVersion)throw Error('repair_stale_assessment');
       c=await guarded(i,r,()=>j.transition(key,'PENDING'));
     }
     if(c.phase==='PENDING') {
-      let response: {data: api.RepairAssessmentView|api.RepairExecutionStartView;etag:string};
+      let response: {data: api.RepairAssessmentView|api.RepairExecutionStartView|api.RepairExecutionFinishView|api.RepairAttemptIntakeView;etag:string};
       const command=c;
       try {
-        response=await guarded<{data:api.RepairAssessmentView|api.RepairExecutionStartView;etag:string}>(i,r,()=>command.operation==='assessment'?
+        response=await guarded(i,r,async()=>command.operation==='assessment'?
           r.api.submitRepairAssessmentReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
             command.payload as unknown as api.RepairMeasurementAssessmentInput,command.ifMatch,command.key):
-          r.api.startRepairExecutionReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
-            command.payload as unknown as api.RepairExecutionStartInput,command.ifMatch,command.key));
+          command.operation==='start'?r.api.startRepairExecutionReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
+            command.payload as unknown as api.RepairExecutionStartInput,command.ifMatch,command.key):
+          command.operation==='finish'?r.api.finishRepairExecutionReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
+            command.payload as unknown as api.RepairExecutionFinishInput,command.ifMatch,command.key):
+          r.api.submitRepairAttemptReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
+            command.payload as unknown as api.RepairAttemptSubmitInput,command.ifMatch,command.key));
       } catch(e) {
         guard(i,r);
         const error=e as {response?:{status?:number;data?:{code?:unknown}}};
@@ -176,7 +257,7 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
     if(c.phase==='ACKNOWLEDGED') {
       validateRepairReceipt(c,c.receipt!.data,`"${c.receipt!.itemVersion}"`);
       const read=(await fresh(i,r,c.identity)).data;
-      if(read.repairContext!.itemVersion!==c.receipt!.itemVersion || read.repairContext!.status!==(c.operation==='start'?'InProgress':'Assigned'))throw Error('repair_reconciliation_pending');
+      if(read.repairContext!.itemVersion!==c.receipt!.itemVersion || read.repairContext!.status!==(c.operation==='assessment'?'Assigned':c.operation==='attempt'?'Submitted':'InProgress'))throw Error('repair_reconciliation_pending');
       c=await guarded(i,r,()=>j.transition(key,'CONFIRMED'));
     }
     return c;
@@ -188,11 +269,14 @@ export async function readRepairFieldDraft(i: RepairIdentity) {
 /** Restore receipts only after current actor/binding checks; no POST or invented readback. */
 export async function readRepairHistory(i: RepairIdentity,r=repairRuntime(i)) {
   const j=await guarded(i,r,()=>r.journal(i)),rows=await guarded(i,r,()=>j.list());
+  const latestConfirmed=rows.filter(row=>row.phase==='CONFIRMED').at(-1);
   for(const row of rows) {
     const read=await fresh(i,r,row.identity);
     if(row.receipt)validateRepairReceipt(row,row.receipt.data,`"${row.receipt.itemVersion}"`);
-    if(row.operation==='start'&&row.phase==='CONFIRMED'&&
-      (read.data.repairContext!.status!=='InProgress'||read.data.repairContext!.itemVersion!==row.receipt!.itemVersion))throw Error('repair_reconciliation_pending');
+    // Historical start versions must not invalidate a later finish/intake receipt.
+    // A pending later command may already have committed: preserve it for exact replay.
+    if(row===latestConfirmed&&row.operation!=='assessment'&&rows.at(-1)===row&&
+      (read.data.repairContext!.status!==(row.operation==='attempt'?'Submitted':'InProgress')||read.data.repairContext!.itemVersion!==row.receipt!.itemVersion))throw Error('repair_reconciliation_pending');
   }
   return rows;
 }
@@ -210,6 +294,11 @@ export function repairErrorMessage(e: unknown): string {
     repair_previous_session_unresolved:'Có lệnh chưa rõ kết quả thuộc phiên cũ. Cần đối soát, không gửi bằng phiên mới.',
     repair_history_requires_reconciliation:'Lịch sử sửa chữa cần đối soát trước khi tạo lệnh mới.',
     repair_session_changed:'Phiên Crew đã thay đổi. Đã dừng thao tác và giữ lệnh cũ.',
+    repair_finish_required:'Cần biên nhận kết thúc thi công đã được đối soát trước khi lập và nộp hồ sơ.',
+    repair_start_required:'Cần biên nhận bắt đầu thi công đã được đối soát trước khi kết thúc.',
+    repair_claim_required:'Cần hồ sơ REPAIR_CLAIM gốc, đã xác nhận bằng GET, khớp phiên thi công hiện tại.',
+    repair_claim_readback_invalid:'Hồ sơ đọc lại chưa khớp nguồn, nội dung hoặc thời điểm thi công. Đã khóa tiếp nhận.',
+    repair_reconciliation_pending:'Phiên bản hoặc trạng thái máy chủ chưa khớp biên nhận. Giữ lệnh và đối soát.',
   };
   if(messages[code])return messages[code];
   return 'Chưa xác nhận được kết quả hoặc dữ liệu đầu vào. Lệnh đã lưu được giữ nguyên; tải lại và đối soát trước khi tiếp tục.';

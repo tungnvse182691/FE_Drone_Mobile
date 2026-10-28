@@ -7,6 +7,7 @@ import { apiClient } from './client';
 import { sha256HexOfBytes } from './uploads';
 import * as crew from './crewApi';
 import type { Coords } from '../components/ViewFinder';
+import { openRepairJournal, type RepairJournalRecord } from './crewRepairDraft';
 
 export interface FieldContext { actor: string; scope: string; environment: string; projectId: string; taskId: string }
 export interface FieldCapture {
@@ -17,6 +18,7 @@ export interface FieldCapture {
   completed?: boolean; verified?: boolean;
   partCommands?: Record<number, { key: string; partNumbers: number[] }>;
   retiredPartCommands?: { key: string; partNumbers: number[]; status: number }[];
+  postRepairCapture?: boolean;
 }
 export interface FieldDraft extends FieldContext {
   captures: FieldCapture[]; measurements: crew.FieldMeasurementInput[];
@@ -24,12 +26,15 @@ export interface FieldDraft extends FieldContext {
   command?: { key: string; body: crew.FieldSubmissionInput; ifMatch: string; assignmentId: string;
     phase: 'pending' | 'acknowledged' | 'confirmed' | 'rejected'; responseId?: string; rejectionStatus?: number };
   result?: crew.FieldSubmissionViewFact;
+  repairClaim?: { finishId: string; executionStartId: string; firstStartId: string; finishAt: string;
+    packageId: string; itemId: string; bindingId: string; assignmentId: string; itemVersion: string };
 }
 export interface FieldRuntime {
   current: () => FieldContext | null;
   read: () => Promise<FieldDraft | null>; write: (draft: FieldDraft) => Promise<void>;
   uuid: () => string; bytes: (uri: string) => Promise<Uint8Array>; hash: (bytes: Uint8Array) => Promise<string>;
   wait: () => Promise<void>; api: typeof crew;
+  repairHistory?: () => Promise<RepairJournalRecord[]>;
 }
 export function newFieldDraft(context: FieldContext): FieldDraft {
   return { ...context, captures: [], measurements: [], locationProof: null };
@@ -93,7 +98,7 @@ export async function loadFieldDraft(context: FieldContext, runtime: FieldRuntim
 }
 /** Native bytes closed by arrayBuffer; hash durable temp, rename, then commit its URI in SQLite. */
 export async function captureFieldPhoto(context: FieldContext, uri: string, purpose: FieldCapture['purpose'],
-  mediaType: string, coordinates: Coords | null, camera: boolean): Promise<FieldDraft> {
+  mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false): Promise<FieldDraft> {
   return exclusive(context, async () => {
     const runtime = await openFieldRuntime(context), draft = await loadFieldDraft(context,runtime);
     if (draft.command) throw new Error('field_command_pending');
@@ -101,6 +106,10 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     const reason = crew.fieldCapabilityBlock(detail.data,detail.etag,context.actor,'capture');
     if (reason) throw new Error(reason);
     if (purpose === 'AFTER' && detail.data.purpose !== 'PostRepair') throw new Error('AFTER chỉ hợp lệ với nhiệm vụ PostRepair.');
+    if (purpose==='AFTER'&&detail.data.mode==='NORMAL') {
+      await verifyRepairClaim(draft,detail.data,runtime);
+      if(!camera||!postRepairCapture)throw Error('repair_after_camera_required');
+    }
     const bytes = await guarded(context,runtime,() => runtime.bytes(uri));
     const isJpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
     const isPng = bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((v,i) => bytes[i] === v);
@@ -113,8 +122,46 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     const file = new File(directory,`${id}.${isJpeg ? 'jpg' : 'png'}`); temp.move(file);
     draft.captures.push({ id,uri:file.uri,purpose,mediaType:actualType,checksum,size:bytes.length,
       capturedAt:camera ? new Date().toISOString() : null, coordinates:camera ? coordinates : null,
-      createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[] });
+      createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
     await persist(draft,runtime); return draft;
+  });
+}
+async function claimSource(context: FieldContext,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
+  const history=await guarded(context,runtime,async()=>runtime.repairHistory ? runtime.repairHistory() : (await openRepairJournal(context)).list());
+  const finish=history.at(-1),start=history.find(row=>row.operation==='start');
+  const ctx=task.repairContext;
+  if(!ctx||task.mode!=='NORMAL'||ctx.mode!=='NORMAL'||ctx.status!=='InProgress'||task.purpose!=='PostRepair'||
+    !start?.receipt||!finish?.receipt||start.phase!=='CONFIRMED'||finish.phase!=='CONFIRMED'||finish.operation!=='finish'||
+    history.some(row=>row.phase!=='CONFIRMED')||
+    !sameContext(finish.identity,context)||!sameContext(start.identity,context)||
+    [start,finish].some(row=>row.identity.packageId!==ctx.packageId||row.identity.itemId!==ctx.itemId||
+      row.identity.bindingId!==ctx.bindingId||row.identity.assignmentId!==task.assignmentId)||
+    finish.receipt.itemVersion!==ctx.itemVersion||
+    !crew.isCrewResourceId(finish.receipt.data.id)||!crew.isCrewResourceId(start.receipt.data.id)||
+    finish.payload.executionStartId!==start.receipt.data.id||finish.receipt.data.executionStartId!==start.receipt.data.id||
+    finish.receipt.data.itemId!==ctx.itemId||finish.receipt.data.taskId!==task.id||
+    start.payload.fieldFirstStartId!==task.firstStartOriginId||start.receipt.data.firstStartId!==task.firstStartOriginId||
+    finish.receipt.data.timeProvenance!=='SERVER_ONLINE'||typeof finish.receipt.data.verifiedOriginalAt!=='string'||
+    !Number.isFinite(Date.parse(finish.receipt.data.verifiedOriginalAt)))throw Error('repair_finish_required');
+  return {finishId:finish.receipt.data.id,executionStartId:start.receipt.data.id,firstStartId:task.firstStartOriginId!,
+    finishAt:finish.receipt.data.verifiedOriginalAt,packageId:ctx.packageId,itemId:ctx.itemId,bindingId:ctx.bindingId,
+    assignmentId:task.assignmentId!,itemVersion:ctx.itemVersion};
+}
+async function verifyRepairClaim(draft: FieldDraft,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
+  const source=await claimSource(draft,task,runtime);
+  if(!draft.repairClaim||Object.entries(source).some(([key,value])=>draft.repairClaim![key as keyof typeof source]!==value))throw Error('repair_claim_source_changed');
+  return source;
+}
+/** Explicitly select NORMAL claim while keeping all pre-execution evidence and measurements. */
+export async function prepareFieldRepairClaim(context: FieldContext,runtime?: FieldRuntime): Promise<FieldDraft> {
+  const r=runtime??await openFieldRuntime(context);
+  return exclusive(context,async()=>{
+    const draft=await loadFieldDraft(context,r);
+    if(draft.command)throw Error('field_command_pending');
+    const fresh=await freshTask(draft,r,'capture');
+    if(fresh.data.latestSubmissionId)throw Error('repair_claim_root_required');
+    draft.repairClaim=await claimSource(context,fresh.data,r);
+    await persist(draft,r);return draft;
   });
 }
 async function freshTask(draft: FieldDraft,runtime: FieldRuntime,capability: 'capture'|'review'|'submit') {
@@ -130,6 +177,8 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   const c = draft.captures[index]; if (!c) throw new Error('field_capture_missing');
   const response = await freshTask(draft,runtime,'capture');
   if (c.purpose === 'AFTER' && response.data.purpose !== 'PostRepair') throw new Error('field_after_not_allowed');
+  if(draft.repairClaim)await verifyRepairClaim(draft,response.data,runtime);
+  if(c.purpose==='AFTER'&&response.data.mode==='NORMAL'&&!draft.repairClaim)throw Error('repair_finish_required');
   const bytes = await guarded(draft,runtime,() => runtime.bytes(c.uri));
   if (bytes.length !== c.size || await guarded(draft,runtime,() => runtime.hash(bytes)) !== c.checksum) throw new Error('field_checksum_mismatch');
   if (!c.upload) {
@@ -208,6 +257,7 @@ export async function acknowledgeFieldResult(context: FieldContext): Promise<Fie
   return exclusive(context,async()=>{
     const runtime=await openFieldRuntime(context),draft=await loadFieldDraft(context,runtime);
     if (!draft.command || !['confirmed','rejected'].includes(draft.command.phase)) throw new Error('field_unknown_outcome');
+    if(draft.repairClaim)throw Error('repair_claim_retained_for_intake');
     await freshTask(draft,runtime,'review');
     // Archive the exact terminal command before explicitly preparing another revision.
     const db=openDatabase();await initDatabase(db);
@@ -229,12 +279,24 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
     if (cmd?.phase === 'rejected') throw new Error('field_command_rejected');
     if (!cmd) {
       const fresh = await freshTask(draft,runtime,'submit');
+      if(draft.repairClaim) {
+        const source=await verifyRepairClaim(draft,fresh.data,runtime);
+        if(fresh.data.latestSubmissionId)throw Error('repair_claim_root_required');
+        const after=draft.captures.filter(c=>c.purpose==='AFTER');
+        if(!after.length||after.some(c=>!c.postRepairCapture||!c.capturedAt||!Number.isFinite(Date.parse(c.capturedAt))||
+          Date.parse(c.capturedAt)<Date.parse(source.finishAt)||Date.parse(c.capturedAt)>Date.now()))throw Error('repair_after_camera_required');
+      }
       if (!draft.measurements.length || draft.measurements.some(m=>!m.instrument.trim() || !m.method.trim() ||
         (m.value === null ? m.state!=='UNKNOWN' || !m.unknownReason?.trim() : m.state!=='KNOWN' || !Number.isFinite(m.value) || m.value < 0) ||
         ((m.latitude == null || m.longitude == null) ? !m.locationReason?.trim() :
           !Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) || Math.abs(m.latitude)>90 || Math.abs(m.longitude)>180))) throw new Error('field_measurements_required');
       if (draft.captures.some(c=>!c.verified || !c.upload?.fileId)) throw new Error('field_verified_evidence_required');
       for (const capture of draft.captures) {
+        if(draft.repairClaim) {
+          if(!capture.upload?.id)throw Error('field_verified_evidence_required');
+          const session=await guarded(draft,runtime,()=>runtime.api.getCrewUploadSession(capture.upload!.id));
+          if(session.id!==capture.upload.id||session.fileId!==capture.upload.fileId||session.status!=='VERIFIED')throw Error('field_file_not_verified');
+        }
         const file = await guarded(draft,runtime,()=>runtime.api.getCrewFileMetadata(capture.upload!.fileId));
         if (file.status !== 'VERIFIED' || file.id !== capture.upload!.fileId || file.checksumSha256 !== capture.checksum || file.mediaType !== capture.mediaType || file.sizeBytes !== capture.size) throw new Error('field_file_not_verified');
       }
@@ -254,8 +316,8 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
         originId:runtime.uuid(),startOriginId:fresh.data.firstStartOriginId!,parentSubmissionId:fresh.data.latestSubmissionId??null,
         measurements:JSON.parse(JSON.stringify(draft.measurements)),locationProof:draft.locationProof,
         evidence:[...retained,...draft.captures.map(c=>({captureOriginId:c.id,fileId:c.upload!.fileId,purpose:c.purpose,checksumSha256:c.checksum,
-          mediaType:c.mediaType,capturedAt:c.capturedAt,attemptChecklist:null}))],
-        captureType:'MEASUREMENT',repaired:null,unrepairedReason:null,
+          mediaType:c.mediaType,capturedAt:c.capturedAt,attemptChecklist:draft.repairClaim&&c.purpose==='AFTER'&&c.postRepairCapture?'POST_REPAIR_CAPTURE':null}))],
+        captureType:draft.repairClaim?'REPAIR_CLAIM':'MEASUREMENT',repaired:draft.repairClaim?true:null,unrepairedReason:null,
       };
       cmd = {key:runtime.uuid(),body:JSON.parse(JSON.stringify(body)),ifMatch:fresh.etag,assignmentId:fresh.data.assignmentId!,phase:'pending'};
       draft.command = cmd; await persist(draft,runtime);
@@ -265,6 +327,7 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
       const fresh = await guarded(draft,runtime,()=>runtime.api.getFieldInspectionTaskDetailReal(draft.projectId,draft.taskId));
       runtime.api.validateCrewTaskDetail(fresh.data,fresh.etag,draft.projectId,draft.taskId,draft.actor);
       if (fresh.data.assignmentId !== cmd.assignmentId) throw new Error('field_assignment_changed');
+      if(cmd.body.captureType==='REPAIR_CLAIM')await verifyRepairClaim(draft,fresh.data,runtime);
       try {
         const result = await guarded(draft,runtime,()=>runtime.api.submitFieldTaskReal(draft.projectId,draft.taskId,cmd!.body,cmd!.ifMatch,cmd!.key));
         if (!runtime.api.isCrewResourceId(result.data.id) || result.data.taskId !== draft.taskId) throw new Error('field_submission_identity_invalid');
@@ -281,6 +344,7 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
     const read = await guarded(draft,runtime,()=>runtime.api.getFieldSubmissionDetailReal(draft.projectId,draft.taskId,cmd!.responseId!));
     if (read.data.id !== cmd.responseId || read.data.taskId !== draft.taskId || !read.data.contentHash ||
         (read.data.parentId??null) !== (cmd.body.parentSubmissionId??null)) throw new Error('field_readback_mismatch');
+    if(cmd.body.captureType==='REPAIR_CLAIM')validateRepairClaimReadback(read.data,cmd.body);
     for (const evidence of cmd.body.evidence??[]) if (!(read.data.evidence??[]).some(e=>e.captureOriginId===evidence.captureOriginId && e.fileId===evidence.fileId && e.checksumSha256===evidence.checksumSha256 && e.purpose===evidence.purpose)) throw new Error('field_readback_mismatch');
     for (const measurement of cmd.body.measurements??[]) if (!(read.data.measurements??[]).some(m=>Object.entries(measurement).every(([key,value])=>(m[key as keyof crew.FieldMeasurementInput]??null)===(value??null)))) throw new Error('field_readback_mismatch');
     for (const c of draft.captures) {
@@ -289,8 +353,27 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
     }
     const latest = await guarded(draft,runtime,()=>runtime.api.getFieldInspectionTaskDetailReal(draft.projectId,draft.taskId));
     runtime.api.validateCrewTaskDetail(latest.data,latest.etag,draft.projectId,draft.taskId,draft.actor);
+    if(cmd.body.captureType==='REPAIR_CLAIM'&&(latest.data.assignmentId!==cmd.assignmentId||latest.data.latestSubmissionId!==read.data.id||latest.data.status!=='Submitted'))throw Error('field_readback_mismatch');
+    if(cmd.body.captureType==='REPAIR_CLAIM')await verifyRepairClaim(draft,latest.data,runtime);
     cmd.phase='confirmed';draft.result=read.data;await persist(draft,runtime);return draft;
   });
+}
+/** Only real API-096 root claim is eligible for formal API-157 intake. */
+export function validateRepairClaimReadback(read: crew.FieldSubmissionViewFact,body: crew.FieldSubmissionInput): void {
+  if(!crew.isCrewResourceId(read.id)||read.rootId!==read.id||read.parentId!==null||read.revision!==1||
+    body.captureType!=='REPAIR_CLAIM'||body.repaired!==true||body.unrepairedReason!=null||body.parentSubmissionId!=null||
+    read.captureType!=='REPAIR_CLAIM'||read.repaired!==true||read.unrepairedReason!=null||
+    typeof read.contentHash!=='string'||!/^[a-f0-9]{64}$/i.test(read.contentHash)||
+    !Number.isFinite(Date.parse(read.serverReceivedAt))||!Array.isArray(read.missingReasons)||
+    !['READY','INCOMPLETE'].includes(String(read.readiness)))throw Error('repair_claim_readback_invalid');
+  const norm=(v:unknown)=>JSON.stringify(v??null);
+  if((read.evidence??[]).length!==(body.evidence??[]).length||
+    (body.evidence??[]).some(e=>!(read.evidence??[]).some(actual=>
+      ['captureOriginId','fileId','purpose','checksumSha256','mediaType','attemptChecklist'].every(k=>
+        norm(actual[k as keyof typeof e])===norm(e[k as keyof typeof e]))&&
+      (actual.capturedAt==null?e.capturedAt==null:!!e.capturedAt&&Date.parse(actual.capturedAt)===Date.parse(e.capturedAt))))||
+    (read.measurements??[]).length!==(body.measurements??[]).length||
+    (body.measurements??[]).some(m=>!(read.measurements??[]).some(actual=>Object.entries(m).every(([k,v])=>norm(actual[k as keyof typeof m])===norm(v)))))throw Error('repair_claim_readback_invalid');
 }
 
 export function fieldErrorMessage(error: unknown): string {
@@ -299,6 +382,15 @@ export function fieldErrorMessage(error: unknown): string {
   if (status === 403) return 'Không còn quyền trên nhiệm vụ hoặc bằng chứng này.';
   if (status === 409 || status === 412) return 'Dữ liệu hoặc phiên bản đã thay đổi. Tải lại và đối soát lệnh cũ.';
   const message=(error as Error)?.message;
+  const repairMessages: Record<string,string>={
+    repair_finish_required:'Cần biên nhận kết thúc thi công đã đối soát đúng nhiệm vụ, binding và phiên bản.',
+    repair_claim_root_required:'Nhiệm vụ đã có lượt FIELD trước đó; chưa thể dùng lượt MEASUREMENT hoặc bổ sung làm hồ sơ sửa chữa gốc. Cần đối soát với điều phối.',
+    repair_claim_source_changed:'Nguồn thi công hoặc phiên bản đã thay đổi. Giữ nháp và đối soát trước khi gửi.',
+    repair_after_camera_required:'Cần ảnh AFTER chụp trực tiếp sau thời điểm kết thúc được máy chủ xác nhận và xác nhận hiện trạng sau sửa.',
+    repair_claim_retained_for_intake:'Hồ sơ sửa chữa được giữ cho bước tiếp nhận; không tạo nháp thay thế.',
+    repair_claim_readback_invalid:'Dữ liệu đọc lại chưa khớp hồ sơ sửa chữa gốc. Chưa xác nhận gửi thành công.',
+  };
+  if(repairMessages[message])return repairMessages[message];
   const messages: Record<string,string>={field_previous_session_requires_reconciliation:'Có nháp thuộc phiên đăng nhập cũ. Đã khóa gửi lại để tránh ghi trùng; cần đối soát hồ sơ cũ.',field_session_changed:'Phiên Crew đã thay đổi. Đã dừng thao tác.',field_verified_evidence_required:'Cần ảnh đã VERIFIED thực từ máy chủ trước khi gửi.',field_measurements_required:'Nhập số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS.',field_verification_pending:'Máy chủ đang xác minh ảnh. Tải lại trạng thái; chưa được gửi hồ sơ.',field_command_rejected:'Lệnh đã bị từ chối. Xem lỗi, tải lại rồi xác nhận tạo nháp mới.',field_unknown_outcome_use_reconcile:'Kết quả lệnh cũ chưa xác định. Dùng đối soát hoặc gửi lại đúng lệnh đã lưu.'};
   if (messages[message]) return messages[message];
   if (message && /[À-ỹ]/.test(message)) return message;
