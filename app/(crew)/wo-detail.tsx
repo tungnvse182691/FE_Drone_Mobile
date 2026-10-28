@@ -19,6 +19,7 @@ import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord } f
 import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepareRepairAttempt, dispatchRepair, readRepairFieldDraft, readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
 import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
 import { spacing, typography } from '../../src/design-tokens';
+import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
 
 /** Câu tiếng Việt cho lỗi API-081/091/093 — không lộ mã kỹ thuật lên màn hình. */
 function fieldTaskActionMessage(error: unknown): string {
@@ -184,6 +185,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <RepairContractStatus task={fresh} />
         {fresh.detail?.mode === 'NORMAL' ? <NormalRepairBootstrap task={fresh} /> : null}
       </Card>
+      <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
       <Card style={styles.taskActionCard}>
         <Text style={typography.titleMd}>Nhận / từ chối nhiệm vụ</Text>
         <InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline />

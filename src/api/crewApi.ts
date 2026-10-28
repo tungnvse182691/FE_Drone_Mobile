@@ -58,6 +58,36 @@ export function isCrewResourceId(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
     value !== '00000000-0000-0000-0000-000000000000';
 }
+
+export interface FieldTaskGeometry {
+  schemaVersion: number; taskId: string; projectId: string; routeVersionId: string; segmentSetId: string;
+  layoutRevisionId: string | null; slabId: string | null; mapPublicationId: string | null; crsProfileRevisionId: string | null;
+  route: { spatialSrid: number; wkt: string; profileStatus: string };
+  segments: {id:string;sequence:number;fromOffsetMeters:number|null;toOffsetMeters:number|null;startStationMeters:number|null;endStationMeters:number|null;spatialSrid:number|null;wkt:string|null}[];
+  layout: unknown;
+}
+export interface FieldTaskHistory {
+  assignments: {id:string;assignedToUserId:string;assignedByUserId:string;assignedAt:string;endedAt:string|null;status:string|number;reason:string}[];
+  events: {id:string;assignmentId:string|null;actorId:string;kind:string;reason:string;occurredAt:string;factsJson:string;locationImpactId:string|null;locationImpactDecisionId:string|null}[];
+}
+function fieldReadPath(projectId:string,taskId:string):string {
+  if(!isCrewResourceId(projectId)||!isCrewResourceId(taskId))throw Error('crew_identity_invalid');
+  return `/projects/${projectId}/field-inspection-tasks/${taskId}`;
+}
+/** API-087/088. Caller must additionally verify current assigned task and pinned geometry version. */
+export async function getFieldTaskGeometryReal(projectId:string,taskId:string) {
+  const r=await apiClient.get<FieldTaskGeometry>(fieldReadPath(projectId,taskId)+'/geometry');
+  if(r.data.schemaVersion!==1||r.data.taskId!==taskId||r.data.projectId!==projectId||!Array.isArray(r.data.segments)||
+    typeof r.data.route?.wkt!=='string'||!Number.isInteger(r.data.route.spatialSrid))throw Error('crew_geometry_response_invalid');
+  return {data:r.data,etag:String(r.headers.etag??'')};
+}
+export async function getFieldTaskHistoryReal(projectId:string,taskId:string):Promise<FieldTaskHistory> {
+  const r=await apiClient.get<FieldTaskHistory>(fieldReadPath(projectId,taskId)+'/history');
+  if(!Array.isArray(r.data.assignments)||!Array.isArray(r.data.events)||
+    r.data.assignments.some(a=>!isCrewResourceId(a.id)||!Number.isFinite(Date.parse(a.assignedAt)))||
+    r.data.events.some(e=>!isCrewResourceId(e.id)||typeof e.kind!=='string'||!Number.isFinite(Date.parse(e.occurredAt))))throw Error('crew_history_response_invalid');
+  return r.data;
+}
 export function validateCrewTaskIdentity(item: { id: string; projectId: string; crewId: string; version: string }, actorId: string): void {
   if (!isCrewResourceId(item.id) || !isCrewResourceId(item.projectId) || !isCrewResourceId(item.crewId) ||
       item.crewId.toLowerCase() !== actorId.toLowerCase() || !item.version?.trim()) throw new Error('crew_identity_invalid');

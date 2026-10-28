@@ -15,6 +15,7 @@ import { isLegacyRepairQueueEntry } from '../../src/api/crewApi';
 import { useAuthStore } from '../../src/store/auth';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { LocalState, SyncStatus } from '../../src/types/enums';
+import { CrewOfflinePanel } from '../../src/components/crew/CrewOfflinePanel';
 
 type SyncSegment = 'pending' | 'done';
 
@@ -168,6 +169,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng Bộ" />}>
+      <CrewOfflinePanel identity={identity} />
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
           <MaterialIcons name="sync" size={22} color={colors.primary} />
