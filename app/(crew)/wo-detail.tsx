@@ -181,7 +181,8 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <Text>WO / tuyến / GPS / loại khuyết tật: Chưa có dữ liệu từ máy chủ.</Text>
         <Text>{crewTaskActionBlock(task)}</Text>
         <Text>Nhận / từ chối / bắt đầu dùng assignment và phiên bản thật; không yêu cầu GPS.</Text>
-        <NormalRepairBootstrap task={task} />
+        <RepairContractStatus task={fresh} />
+        {fresh.detail?.mode === 'NORMAL' ? <NormalRepairBootstrap task={fresh} /> : null}
       </Card>
       <Card style={styles.taskActionCard}>
         <Text style={typography.titleMd}>Nhận / từ chối nhiệm vụ</Text>
@@ -202,6 +203,23 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </SafeAreaScreen>
   );
+}
+
+/** Read-only D/E capability status. Never derive repair admission from task state. */
+export function RepairContractStatus({ task }: { task: CrewTask }) {
+  return <View>
+    {task.detail?.mode === 'CONDITIONAL_FT' ? <>
+      <Text style={typography.titleMd}>FastTrack chưa thể khởi tạo</Text>
+      <Text>Máy chủ chưa cung cấp nguồn bootstrap Crew cho FastTrack: package/item, binding và itemVersion hiện tại. Không dùng ngữ cảnh NORMAL thay thế.</Text>
+      <Text>ETag eligibility không phải phiên bản hạng mục. Chưa thể đọc eligibility nếu chưa xác nhận được định danh hạng mục từ nguồn Crew hợp lệ.</Text>
+      <Text>Thi công đang khóa; cần policy, authorization, coverage, first-start, thời hạn và stop conditions được máy chủ xác nhận. eligible=true riêng lẻ không mở quyền thi công.</Text>
+      <Button variant="secondary" title="Thi công FastTrack" disabled onPress={() => {}} />
+    </> : null}
+    <Text>Bổ sung sửa chữa cần quyết định PM và current intake thực. Trạng thái nhiệm vụ không thay thế yêu cầu PM.</Text>
+    <Button variant="secondary" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={() => router.push({
+      pathname: '/(crew)/repair-correction', params: { id: task.id, projectId: task.projectId },
+    })} />
+  </View>;
 }
 
 /** Explicit NORMAL commands only. Legacy repair content remains unmounted. */
