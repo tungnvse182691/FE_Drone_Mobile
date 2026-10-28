@@ -20,3 +20,24 @@ test('C10BC SQLite close/reopen preserves IN_FLIGHT bytes/key and isolates actor
  h.raw.close();fs.unlinkSync(filename);
 });
 test('C10BC journal rejects cyclic proof and rolled back write preserves row count',async()=>{const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),proof={};proof.self=proof;await assert.rejects(j.prepare({...h.intent(),proof}),/invalid/);assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,0);});
+
+test('FINAL real SQLite checkpoints persist partial origins across reopen without modifying command or phase',async()=>{
+ const path=require('node:path'),os=require('node:os'),filename=path.join(os.tmpdir(),'roadfe-checkpoint-'+randomUUID()+'.sqlite');
+ const h=fixture(filename),j=await h.m.openOfflineJournal(h.i,h.db),intent=h.intent();
+ const pending=await j.transition(await j.prepare(intent),'IN_FLIGHT');const unknown=await j.transition(pending,'UNKNOWN_OUTCOME');
+ const fact={originId:randomUUID(),effectId:randomUUID(),canonicalOriginId:randomUUID(),kind:'FIELD_START',serverBatchId:null,state:'COMMITTED',serverReceivedAt:'2026-10-28T00:00:00Z'};
+ const observed=await j.checkpoint(unknown,[fact]);assert.equal(observed.phase,'UNKNOWN_OUTCOME');assert.equal(observed.body,intent.body);assert.equal(observed.key,intent.key);
+ await assert.rejects(j.checkpoint(unknown,[fact]),/cas/);await assert.rejects(j.checkpoint(observed,[{...fact,canonicalOriginId:randomUUID()}]),/conflict/);
+ h.restart();const reopened=await h.m.openOfflineJournal(h.i,h.db),actual=(await reopened.list())[0];assert.equal(JSON.stringify(actual.verifiedItems),JSON.stringify([fact]));
+ const withBatch=await reopened.checkpoint(actual,[{...fact,serverBatchId:randomUUID()}]);await assert.rejects(reopened.checkpoint(withBatch,[fact]),/conflict/);
+ h.switch();await assert.rejects(reopened.checkpoint(withBatch,[fact]),/session/);assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);
+ h.raw.close();fs.unlinkSync(filename);
+});
+test('FINAL corrupt row identity cannot adopt another pending journal record',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),r=await j.prepare(h.intent());
+ h.raw.prepare('UPDATE local_draft SET payload=?').run(JSON.stringify({...r,id:randomUUID()}));await assert.rejects(j.list(),/owner_invalid/);assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);h.raw.close();
+});
+test('FINAL duplicate command key with different identity/body rejects and retains original bytes',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),intent=h.intent();await j.prepare(intent);
+ await assert.rejects(j.prepare({...intent,id:randomUUID(),body:'{"deviceId":"other"}'}),/immutable/);assert.equal((await j.list())[0].body,intent.body);h.raw.close();
+});

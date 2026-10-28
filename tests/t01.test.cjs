@@ -10,6 +10,10 @@ const root = path.resolve(__dirname, '..');
 // Execute the shipped TypeScript with native boundaries replaced (no React Native runtime in Node).
 function harness() {
   const rows = new Map(), cache = new Map(), calls = [];
+  const listeners=[]; const client={defaults:{baseURL:'fixture-env'}};
+  const jwt=(id,sid='fixture-session')=>'fixture.'+Buffer.from(JSON.stringify({sub:id,sid})).toString('base64url')+'.unsigned';
+  const authHook={getState:()=>auth,subscribe:fn=>listeners.push(fn)};
+  const changeAuth=next=>{const previous=auth;auth=next;listeners.forEach(fn=>fn(auth,previous));};
   let auth = { status: 'SIGNED_OUT', token: null, user: null };
   const db = {
     execAsync: async () => {},
@@ -57,8 +61,8 @@ function harness() {
       if (name === 'expo-file-system') return { File: class { async arrayBuffer() { return Uint8Array.from([1,2,3]).buffer; } } };
       if (name === 'expo-crypto') return { CryptoDigestAlgorithm: { SHA256: 'sha256' }, digest: async (_, bytes) => Uint8Array.from(createHash('sha256').update(bytes).digest()).buffer };
       if (name === 'axios') return { __esModule: true, default: { create: () => ({}) } };
-      if (name.endsWith('/auth') && name.includes('store')) return { useAuthStore: { getState: () => auth } };
-      if (name === './auth') return { useAuthStore: { getState: () => auth } };
+      if (name.endsWith('/auth') && name.includes('store')) return { useAuthStore: authHook };
+      if (name === './auth') return { useAuthStore: authHook };
       if (name.endsWith('/database')) return {
         openDatabase: () => db, initDatabase: async () => {},
         saveDraft: async (_, id, kind, payload) => rows.set(id, { payload: JSON.stringify(payload) }),
@@ -68,7 +72,7 @@ function harness() {
       if (name.endsWith('/uuid')) return { uuidv4: randomUUID };
       if (name === './storage') return { appStorage: {} };
       if (name.endsWith('/reporterApi')) return api;
-      if (name === './client') return { apiClient: {} };
+      if (name.endsWith('/client')) return { apiClient: client, bareClient: client };
       if (name === 'react') return { useEffect() {}, useState() {}, default: {} };
       if (name === 'react-native-gesture-handler' || name === 'expo-status-bar' || name === 'expo-font' || name === 'expo-router' || name === '@tanstack/react-query' || name === '@expo-google-fonts/roboto') return { QueryClient: class {} };
       let resolved = path.resolve(path.dirname(file), name);
@@ -81,7 +85,7 @@ function harness() {
     if (relative.replaceAll('\\', '/') === 'src/api/uploads.ts') Object.assign(mod.exports.httpUploadTransport, transport);
     return mod.exports;
   }
-  return { load, calls, rows, transport, api, login(role = 'REPORTER', id = 'actor') { auth = { status: 'AUTHENTICATED', token: 'private', user: { id, role_code: role, must_change_password: false } }; }, logout() { auth = { status: 'SIGNED_OUT', token: null, user: null }; } };
+  return { load, calls, rows, transport, api, client, changeAuth, jwt, login(role = 'REPORTER', id = 'actor') { changeAuth({ status: 'AUTHENTICATED', token: jwt(id), user: { id, role_code: role, must_change_password: false } }); }, logout() { changeAuth({ status: 'SIGNED_OUT', token: null, user: null }); } };
 }
 
 test('restored user without token stays in auth; valid sessions route by role; public draft remains public', () => {

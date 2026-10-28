@@ -11,7 +11,6 @@ interface NativeCrypto {
   publicKeys(binding: string): Promise<{signingPublicKey:string;encryptionPublicKey:string}>;
   signManifest(binding: string, manifest: string): Promise<string>;
   verifyManifest(publicKey: string, manifest: string, signature: string): Promise<boolean>;
-  agreementProof(binding: string, peerPublicKey: string): Promise<string>;
 }
 let native: NativeCrypto | null = null;
 try { native = requireOptionalNativeModule<NativeCrypto>('RoadguardOfflineCrypto'); } catch { /* Expo Go/web: fail closed. */ }

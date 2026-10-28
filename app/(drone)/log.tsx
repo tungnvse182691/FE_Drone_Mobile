@@ -5,6 +5,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { DroneDatasetReadbackPanel } from '../../src/components/drone/DroneDatasetReadbackPanel';
 import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
@@ -97,6 +98,7 @@ function DroneLogContent({ scope }: { scope: string }) {
       <Button title="Kiểm tra trạng thái tệp" variant="secondary" disabled={busy || !uuid(uploadId.trim())} onPress={() => void check('upload')} />
       {uploadText ? <Text style={typography.bodyMd}>{uploadText}</Text> : null}
     </Card>
+    <DroneDatasetReadbackPanel />
     {busy ? <Text>Đang đọc dữ liệu máy chủ…</Text> : null}
     {error ? <Text accessibilityRole="alert">{error}</Text> : null}
   </SafeAreaScreen>;

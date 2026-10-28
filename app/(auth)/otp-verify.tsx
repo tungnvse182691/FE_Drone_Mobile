@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
@@ -13,26 +13,32 @@ import {
 import { useReporterStore } from '../../src/store/reporter';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { isValidReporterOtp, isReporterSession } from '../../src/api/uploads';
+import { bareClient } from '../../src/api/client';
 import { RoleCode } from '../../src/types/enums';
 import { REPORTER_HOME } from '../../src/constants/routes';
 import {
   getOrCreateCommandKey,
-  newCommandKey,
+  clearCommandKey,
 } from '../../src/api/idempotency';
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
+function serverCooldown(value: unknown): number {
+  const seconds = Number(value);
+  return value != null && Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : RESEND_COOLDOWN;
+}
 
 const errorMessages: Record<string, string> = {
-  INTENT_NOT_FOUND: 'Phiên xác thực không còn hợp lệ. Vui lòng gửi lại mã.',
-  OTP_INVALID: 'Mã xác thực không đúng. Vui lòng nhập lại.',
-  EMAIL_INVALID: 'Email không hợp lệ.',
-  DESCRIPTION_REQUIRED: 'Nội dung phản ánh bị trống.',
+  not_found: 'Phiên xác thực không còn hợp lệ. Vui lòng đăng ký lại.',
+  validation_error: 'Mã hoặc điều kiện xác thực chưa hợp lệ. Vui lòng kiểm tra lại.',
+  identity_email_conflict: 'Email này đã có tài khoản. Vui lòng đăng nhập.',
+  duplicate_request: 'Yêu cầu xung đột. Giữ nguyên nội dung để kiểm tra lại.',
+  internal_error: 'Chưa xác nhận kết quả. Vui lòng thử lại với cùng yêu cầu.',
 };
 
 export default function OtpVerifyScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ intentId?: string; email?: string }>();
+  const params = useLocalSearchParams<{ intentId?: string; email?: string; resendAfterSeconds?: string }>();
   const intentId = params.intentId ?? '';
   const email = params.email ?? '';
 
@@ -45,14 +51,35 @@ export default function OtpVerifyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
-  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
+  const [cooldown, setCooldown] = useState(serverCooldown(params.resendAfterSeconds));
   const [activeIntentId, setActiveIntentId] = useState(intentId);
+  const busy = useRef(false);
+  const active = useRef(true);
+  const generation = useRef(0);
+  useFocusEffect(useCallback(() => {
+    active.current = true;
+    generation.current++;
+    return () => { active.current = false; generation.current++; };
+  }, [intentId]));
+  const captureAttempt = () => {
+    const capturedGeneration = generation.current;
+    const environment = bareClient.defaults.baseURL;
+    const { token, user, status } = useAuthStore.getState();
+    const actorId = user?.id;
+    return () => {
+      const live = useAuthStore.getState();
+      return active.current && generation.current === capturedGeneration &&
+        bareClient.defaults.baseURL === environment && live.token === token &&
+        live.user?.id === actorId && live.status === status;
+    };
+  };
+  const cooldownUntil = useRef(Date.now() + serverCooldown(params.resendAfterSeconds) * 1000);
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     setActiveIntentId(intentId);
     if (intentId) {
-      beginOtp();
+      if (!useAuthStore.getState().token) beginOtp();
     }
   }, [intentId, beginOtp]);
 
@@ -60,38 +87,42 @@ export default function OtpVerifyScreen() {
     if (cooldown <= 0) {
       return;
     }
-    const timer = setTimeout(() => setCooldown((value) => value - 1), 1000);
+    const timer = setTimeout(() => setCooldown(Math.max(0, Math.ceil((cooldownUntil.current - Date.now()) / 1000))), 1000);
     return () => clearTimeout(timer);
   }, [cooldown]);
 
   const handleVerify = async () => {
+    if (busy.current) return;
     const finalCode = code;
     if (!isValidReporterOtp(finalCode)) {
       setError(`Vui lòng nhập đủ ${OTP_LENGTH} số của mã xác thực.`);
       return;
     }
     if (!activeIntentId) {
-      setError(errorMessages.INTENT_NOT_FOUND);
+      setError(errorMessages.not_found);
       return;
     }
 
+    busy.current = true;
     setLoading(true);
     setError(null);
     // Key bám theo (intent, mã đang nhập): retry cùng mã → replay; đổi mã → lệnh mới.
-    const verifyScope = `reporter:verify:${activeIntentId}:${finalCode}`;
+    const environment = bareClient.defaults.baseURL;
+    const isCurrent = captureAttempt();
+    const verifyScope = `reporter:verify:${environment}:${activeIntentId}:${finalCode}`;
     try {
       const verified = await verifyReporterOtpReal(
         activeIntentId,
         finalCode,
         getOrCreateCommandKey(verifyScope),
       );
+      if (!isCurrent()) return;
       markOtpVerified();
 
       // API-012 trả `AuthTokenResponseDto`: dựng phiên thật để các màn sau dùng chung auth store.
       const sessionEmail = verified.email || email;
       if (!verified.tokens.user) {
         setError('Máy chủ không trả về thông tin tài khoản. Vui lòng thử lại.');
-        setLoading(false);
         return;
       }
       const sessionUser = buildUserFromActor(
@@ -110,35 +141,49 @@ export default function OtpVerifyScreen() {
       }
       if (!isReporterSession(useAuthStore.getState())) return;
       markVerified(sessionEmail);
+      const isLoggedInAttemptCurrent = captureAttempt();
       const draft = await useReporterStore.getState().bindPendingDraft();
+      if (!isLoggedInAttemptCurrent()) return;
       router.replace(draft
         ? draft.targetReportId
           ? { pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } }
           : '/(reporter)/report'
         : REPORTER_HOME);
     } catch (err) {
+      if (!isCurrent()) return;
       const code = extractProblemCode(err);
       setError(errorMessages[code] ?? 'Không thể xác thực. Vui lòng thử lại.');
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };
 
   const handleResend = async () => {
+    if (busy.current || cooldown > 0 || !activeIntentId) return;
+    busy.current = true;
+    const isCurrent = captureAttempt();
     setResending(true);
     setError(null);
     try {
-      // API-011 gửi lại mã cho CÙNG intent; khoá mới vì đây là lệnh cố ý lặp lại.
-      const resendScope = `reporter:resend:${activeIntentId}`;
-      await resendReporterOtpReal(activeIntentId, newCommandKey(resendScope));
+      // Retain the command until a confirmed response; timeout is not a new resend intent.
+      const environment = bareClient.defaults.baseURL;
+      const resendScope = `reporter:resend:${environment}:${activeIntentId}`;
+      const response = await resendReporterOtpReal(activeIntentId, getOrCreateCommandKey(resendScope));
+      if (!isCurrent()) return;
+      clearCommandKey(resendScope);
       beginOtp();
       setCode('');
-      setCooldown(RESEND_COOLDOWN);
+      const seconds = serverCooldown(response.resendAfterSeconds);
+      cooldownUntil.current = Date.now() + seconds * 1000;
+      setCooldown(seconds);
       inputRef.current?.focus();
     } catch (err) {
+      if (!isCurrent()) return;
       const code = extractProblemCode(err);
       setError(errorMessages[code] ?? 'Không thể gửi lại mã.');
     } finally {
+      busy.current = false;
       setResending(false);
     }
   };

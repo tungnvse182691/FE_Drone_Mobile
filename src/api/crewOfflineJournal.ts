@@ -6,7 +6,8 @@ export type OfflinePhase='PREPARED'|'IN_FLIGHT'|'UNKNOWN_OUTCOME'|'RECEIVED'|'RE
 export interface OfflineIntent {
   id:string;identity:QueueIdentity;projectId:string;path:string;key:string;body:string;proof:Record<string,unknown>;
 }
-export interface OfflineJournalRecord extends OfflineIntent {schema:1;phase:OfflinePhase;receipt?:unknown}
+export interface VerifiedOfflineItem {originId:string;effectId:string;canonicalOriginId:string;kind:string;serverBatchId:string|null;state:string;serverReceivedAt:string}
+export interface OfflineJournalRecord extends OfflineIntent {schema:1;phase:OfflinePhase;receipt?:unknown;verifiedItems?:VerifiedOfflineItem[]}
 const KIND='C10BC_IMMUTABLE_COMMAND_V1';
 const guid=(v:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 function safe(value:unknown,depth=0,seen=new Set<object>()):void {
@@ -32,7 +33,13 @@ function decode(payload:string):OfflineJournalRecord {
   const r=JSON.parse(payload) as OfflineJournalRecord;immutable(r);
   if(r.schema!==1||!['PREPARED','IN_FLIGHT','UNKNOWN_OUTCOME','RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase))throw Error('offline_journal_invalid');
   if(['RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase)&&r.receipt===undefined)throw Error('offline_receipt_missing');
-  if(r.receipt!==undefined)safe(r.receipt);return r;
+  if(r.receipt!==undefined)safe(r.receipt);
+  if(r.verifiedItems!==undefined){
+    if(!Array.isArray(r.verifiedItems)||new Set(r.verifiedItems.map(i=>i.originId)).size!==r.verifiedItems.length||r.verifiedItems.some(i=>
+      !guid(i.originId)||!guid(i.effectId)||!guid(i.canonicalOriginId)||(i.serverBatchId!==null&&!guid(i.serverBatchId))||
+      !['COMMITTED','REPLAYED'].includes(i.state)||!['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION'].includes(i.kind)||!Number.isFinite(Date.parse(i.serverReceivedAt))))throw Error('offline_checkpoint_invalid');
+    safe(r.verifiedItems);
+  }return r;
 }
 function partition(i:QueueIdentity):string {return 'c10bc:'+JSON.stringify([i.environment,i.actor,i.role])+':';}
 /** Additive use of existing table. Never REPLACE, migrate, delete or adopt historical queues. */
@@ -42,11 +49,27 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
   guard();const db=connection??openDatabase();if(!connection)await initDatabase(db);guard();
   const prefix=partition(owner);
   const rows=async(tx:SQLiteDatabase)=>{
-    const r=await tx.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=? AND substr(id,1,?)=? ORDER BY rowid',KIND,prefix.length,prefix);
-    guard();return r.map(x=>{const r=decode(x.payload);if(partition(r.identity)!==prefix)throw Error('offline_owner_invalid');return r;});
+    const r=await tx.getAllAsync<{id:string;payload:string}>('SELECT id,payload FROM local_draft WHERE kind=? AND substr(id,1,?)=? ORDER BY rowid',KIND,prefix.length,prefix);
+    guard();return r.map(x=>{const r=decode(x.payload);if(partition(r.identity)!==prefix||x.id!==prefix+r.id)throw Error('offline_owner_invalid');return r;});
   };
   return {
     async list(){guard();return rows(db);},
+    /** Append authenticated per-origin observations without ACKing the batch or changing its immutable bytes. */
+    async checkpoint(old:OfflineJournalRecord,items:VerifiedOfflineItem[]):Promise<OfflineJournalRecord>{
+      guard();if(!sameQueueIdentity(old.identity,owner))throw Error('offline_session_changed');
+      if(!['IN_FLIGHT','UNKNOWN_OUTCOME','RECEIVED'].includes(old.phase))throw Error('offline_checkpoint_phase');
+      const merged=new Map((old.verifiedItems??[]).map(i=>[i.originId,i]));
+      for(const item of items){const prior=merged.get(item.originId);
+        if(prior&&(prior.effectId!==item.effectId||prior.canonicalOriginId!==item.canonicalOriginId||prior.kind!==item.kind||
+          (prior.serverBatchId!==null&&prior.serverBatchId!==item.serverBatchId)))throw Error('offline_checkpoint_conflict');
+        merged.set(item.originId,item);
+      }
+      const next=decode(JSON.stringify({...old,verifiedItems:[...merged.values()]}));
+      await db.withExclusiveTransactionAsync(async tx=>{
+        guard();const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,JSON.stringify(old));
+        guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');
+      });guard();return next;
+    },
     async prepare(intent:OfflineIntent):Promise<OfflineJournalRecord> {
       guard();const copy=immutable(intent);
       if(!sameQueueIdentity(copy.identity,owner))throw Error('offline_session_changed');

@@ -8,17 +8,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import {
-  getOperatorSurveyTaskDetailReal,
-  listOperatorSurveyTasksReal,
-  uploadOperatorFileReal,
-  submitOperatorDatasetReal,
-  isConcurrencyConflict,
-  FIXTURE_DRONE_DEVICE_ID,
-} from '../../src/api/droneApi';
-import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
-import { parseProblemDetails } from '../../src/api/problemDetails';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
+import { DRONE_DATASET_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -42,80 +32,18 @@ interface UploadConfig {
   gpsAddress: string;
 }
 
-const UPLOAD_CONFIGS: Record<string, UploadConfig> = {
-  '#HH-KS-089': {
-    code: '#HH-KS-089',
-    road: 'Tuyến ĐH.05 - Tân Kiên (Km03+100)',
-    droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
-    defaultVideoName: 'Chưa chọn tệp',
-    defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp',
-    defaultSrtSize: '—',
-    videoSha256: '—',
-    srtSha256: '—',
-    gpsCoord: '10.7412° B, 106.5524° Đ (Sai số RTK ±1.2cm)',
-    gpsAddress: 'Tân Kiên, Huyện Bình Chánh, TP. Hồ Chí Minh',
-  },
-  '#HH-KS-090': {
-    code: '#HH-KS-090',
-    road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km01+200 - Km02+500)',
-    droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
-    defaultVideoName: 'Chưa chọn tệp',
-    defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp',
-    defaultSrtSize: '—',
-    videoSha256: '—',
-    srtSha256: '—',
-    gpsCoord: '10.7333° B, 106.6833° Đ (Sai số RTK ±1.1cm)',
-    gpsAddress: 'Vĩnh Lộc B, Huyện Bình Chánh, TP. Hồ Chí Minh',
-  },
-  '#HH-KS-088': {
-    code: '#HH-KS-088',
-    road: 'Tuyến ĐH.05 - Cầu Bà Lát (Km01+850)',
-    droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
-    defaultVideoName: 'Chưa chọn tệp',
-    defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp',
-    defaultSrtSize: '—',
-    videoSha256: '—',
-    srtSha256: '—',
-    gpsCoord: '10.7833° B, 106.7333° Đ (Sai số RTK ±0.9cm)',
-    gpsAddress: 'Cầu Bà Lát, Bình Chánh, TP. Hồ Chí Minh',
-  },
-  '#HH-KS-087': {
-    code: '#HH-KS-087',
-    road: 'Tuyến ĐH.05 - Ngã ba Tân Kiên (Km03+100)',
-    droneModel: 'M350-HH-02 (DJI Matrice 350 RTK Hoàng Hải)',
-    defaultVideoName: 'Chưa chọn tệp',
-    defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp',
-    defaultSrtSize: '—',
-    videoSha256: '—',
-    srtSha256: '—',
-    gpsCoord: '10.7700° B, 106.7050° Đ (Sai số RTK ±1.4cm)',
-    gpsAddress: 'Ngã ba Tân Kiên, Bình Chánh, TP. Hồ Chí Minh',
-  },
-  '#HH-KS-085': {
-    code: '#HH-KS-085',
-    road: 'Tuyến ĐH.05 - Vĩnh Lộc B (Km02+180)',
-    droneModel: 'Mavic3E-HH-01 (DJI Mavic 3 Enterprise)',
-    defaultVideoName: 'Chưa chọn tệp',
-    defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp',
-    defaultSrtSize: '—',
-    videoSha256: '—',
-    srtSha256: '—',
-    gpsCoord: '10.7400° B, 106.6900° Đ (Sai số RTK ±1.0cm)',
-    gpsAddress: 'Vĩnh Lộc B Km02+180, Bình Chánh, TP. Hồ Chí Minh',
-  },
-};
-
 export default function DroneUploadScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
-  const initialCode = params.code && UPLOAD_CONFIGS[params.code] ? params.code : '#HH-KS-089';
-  const [selectedCode, setSelectedCode] = useState<string>(initialCode);
-
-  const config = UPLOAD_CONFIGS[selectedCode] ?? UPLOAD_CONFIGS['#HH-KS-089'];
+  const config: UploadConfig = {
+    code: params.taskId ?? 'Chưa chọn nhiệm vụ máy chủ',
+    road: 'Phạm vi theo gói công việc máy chủ',
+    droneModel: 'Chưa xác nhận thiết bị bay từ máy chủ',
+    defaultVideoName: 'Chưa chọn tệp', defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp', defaultSrtSize: '—',
+    videoSha256: '—', srtSha256: '—',
+    gpsCoord: 'Chưa đọc tọa độ từ tệp GPS',
+    gpsAddress: 'Vị trí chưa được đối chiếu với gói công việc',
+  };
 
   // File state (Video & SRT)
   const [videoName, setVideoName] = useState('Chưa chọn tệp');
@@ -130,29 +58,19 @@ export default function DroneUploadScreen() {
   const [uploadStep, setUploadStep] = useState<UploadStep>('LOCAL');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [note, setNote] = useState('');
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [statusMsg] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [onlineMode, setOnlineMode] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting] = useState(false);
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [srtUri, setSrtUri] = useState<string | null>(null);
 
   useEffect(() => {
-    if (params.code && UPLOAD_CONFIGS[params.code]) {
-      setSelectedCode(params.code);
-      const c = UPLOAD_CONFIGS[params.code];
-      setVideoName('Chưa chọn tệp');
-      setVideoSize('—');
-      setVideoSha('—');
-      setSrtName('Chưa chọn tệp');
-      setSrtSize('—');
-      setSrtSha('—');
-      setVideoUri(null);
-      setSrtUri(null);
-      setUploadStep('LOCAL');
-      setUploadProgress(0);
-    }
-  }, [params.code]);
+    setVideoName('Chưa chọn tệp'); setVideoSize('—'); setVideoSha('—');
+    setSrtName('Chưa chọn tệp'); setSrtSize('—'); setSrtSha('—');
+    setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
+    setUploadProgress(0); setSubmitError(null);
+  }, [params.taskId]);
 
   // Chọn video 4K RGB từ thẻ nhớ SD
   const handlePickVideo = async () => {
@@ -200,139 +118,10 @@ export default function DroneUploadScreen() {
     }
   };
 
-  /**
-   * Nộp bộ dữ liệu khảo sát — API-229.
-   *
-   * `POST /survey-tasks/{taskId}/datasets` với `Idempotency-Key` + `If-Match`.
-   * `fileId` chỉ tồn tại sau luồng API-233 → API-236 → PUT part → API-235.
-   * Không upload tệp mẫu/demo: bắt buộc chọn tệp thật từ thẻ nhớ.
-   */
-  const handleStartSubmitDataset = async () => {
-    if (!onlineMode) {
-      setSubmitError('Cần kết nối mạng để nộp bộ dữ liệu khảo sát.');
-      return;
-    }
-    if (!videoUri) {
-      setSubmitError('Chưa chọn tệp video 4K RGB từ thẻ nhớ.');
-      return;
-    }
-    if (!srtUri) {
-      setSubmitError('Chưa chọn tệp phụ đề GPS (SRT) đi kèm.');
-      return;
-    }
-
-    setSubmitting(true);
-    setUploadProgress(0);
-    setSubmitError(null);
-    setStatusMsg('Đang xin phiên tải lên từ máy chủ…');
-    const keyScope = `drone:dataset:${selectedCode}`;
-    let failed = false;
-
-    try {
-      setUploadStep('QUEUED');
-
-      let taskIdToFetch = params.taskId;
-      if (!taskIdToFetch || !/^[0-9a-fA-F-]{36}$/.test(taskIdToFetch)) {
-        const taskPage = await listOperatorSurveyTasksReal();
-        const allTasks = taskPage.items;
-        const found = allTasks.find(
-          (t) => t.id === taskIdToFetch || operatorTaskDisplayCode(t.id) === selectedCode,
-        );
-        if (!found) {
-          throw new Error('Không tìm thấy nhiệm vụ khảo sát phù hợp để nộp dữ liệu.');
-        }
-        taskIdToFetch = found.id;
-      }
-      if (!taskIdToFetch) {
-        throw new Error('Không tìm thấy nhiệm vụ khảo sát phù hợp để nộp dữ liệu.');
-      }
-      const fresh = await getOperatorSurveyTaskDetailReal(taskIdToFetch);
-      const task = fresh.data;
-
-      const video = await uploadOperatorFileReal(
-        {
-          uri: videoUri,
-          fileName: videoName,
-          mediaType: 'video/mp4',
-          purpose: 'SURVEY_VIDEO',
-          projectId: task.projectId,
-          targetId: task.id,
-          commandKey: `${keyScope}:video`,
-        },
-        (percent: number) => {
-          setUploadStep('UPLOADING');
-          setUploadProgress(Math.min(99, percent));
-          setStatusMsg(`Đang tải tệp video 4K RGB lên máy chủ: ${Math.min(99, percent)}%`);
-        },
-      );
-      setVideoSha(`${video.checksumSha256.slice(0, 12)}…${video.checksumSha256.slice(-4)} — đã đối chiếu`);
-
-      const srt = await uploadOperatorFileReal({
-        uri: srtUri,
-        fileName: srtName,
-        mediaType: 'application/x-subrip',
-        purpose: 'TELEMETRY',
-        projectId: task.projectId,
-        targetId: task.id,
-        commandKey: `${keyScope}:telemetry`,
-      });
-
-      setSrtSha(`${srt.checksumSha256.slice(0, 12)}…${srt.checksumSha256.slice(-4)} — đã đối chiếu`);
-
-      if (video.status?.toUpperCase() !== 'VERIFIED' || srt.status?.toUpperCase() !== 'VERIFIED') {
-        throw new Error('Tệp chưa được máy chủ xác minh xong, vui lòng thử lại sau.');
-      }
-      setStatusMsg('Đang nộp bộ dữ liệu kèm phạm vi khảo sát…');
-      await submitOperatorDatasetReal(task.id, {
-        videoFileIds: [video.fileId],
-        telemetryFileIds: [srt.fileId],
-        recordedAt: new Date().toISOString(),
-        deviceId: FIXTURE_DRONE_DEVICE_ID,
-        scope: task.scope,
-        pairs: [{ videoFileId: video.fileId, telemetryFileId: srt.fileId, timeOffsetMilliseconds: 0 }],
-      }, fresh.etag, getOrCreateCommandKey(keyScope));
-
-
-
-      clearCommandKey(keyScope);
-      setUploadStep('SERVER_CONFIRMED');
-      setUploadProgress(100);
-      setStatusMsg(
-        'Máy chủ đã nhận bộ dữ liệu. Tệp đang chờ xác minh toàn vẹn — chưa được coi là đã xác minh.',
-      );
-    } catch (error) {
-      failed = true;
-      const response = (
-        error as { response?: { status?: number; data?: { code?: string } } } | undefined
-      )?.response;
-      const code = response?.data?.code;
-
-      if (response?.status === 401) {
-        router.replace('/(auth)');
-        return;
-      }
-      if (error instanceof Error && !response) {
-        setSubmitError(error.message);
-      } else if (response?.status === 503 || code === 'upload_storage_unavailable') {
-        setSubmitError('Máy chủ lưu trữ đang bận. Vui lòng thử lại sau ít phút.');
-      } else if (isConcurrencyConflict(error) || response?.status === 409 || response?.status === 412) {
-        setSubmitError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại nhiệm vụ rồi nộp lại.');
-      } else if (code === 'validation_error' || code === 'survey_validation_failed') {
-        const pd = parseProblemDetails(response?.data);
-        setSubmitError(pd.detail ? `Bộ dữ liệu chưa hợp lệ: ${pd.detail}` : 'Bộ dữ liệu chưa hợp lệ. Kiểm tra lại tệp video và tệp GPS.');
-      } else {
-        setSubmitError('Không nộp được bộ dữ liệu. Vui lòng kiểm tra kết nối rồi thử lại.');
-      }
-      if (response?.status !== 503) {
-        clearCommandKey(keyScope);
-      }
-    } finally {
-      setSubmitting(false);
-      if (failed) {
-        setUploadStep('LOCAL');
-        setUploadProgress(0);
-      }
-    }
+  // Fail closed BEFORE any upload: no server-rooted active aircraft source or
+  // durable immutable retry journal exists for this screen at the pinned BE.
+  const handleStartSubmitDataset = () => {
+    setSubmitError(DRONE_DATASET_BLOCK_REASON);
   };
 
   const handleBack = () => {
@@ -369,46 +158,8 @@ export default function DroneUploadScreen() {
       }
     >
 
-      {/* Task Switcher Chips */}
       <View style={styles.selectorBar}>
-        <Text style={[typography.labelSm, styles.selectorTitle]}>CHỌN NHIỆM VỤ KHẢO SÁT:</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.selectorScroll}
-        >
-          {Object.values(UPLOAD_CONFIGS).map((item) => {
-            const isSelected = item.code === selectedCode;
-            return (
-              <Pressable
-                key={item.code}
-                style={[styles.selectorChip, isSelected && styles.selectorChipActive]}
-                onPress={() => {
-                  setSelectedCode(item.code);
-                  setVideoName(item.defaultVideoName);
-                  setVideoSize(item.defaultVideoSize);
-                  setVideoSha(item.videoSha256);
-                  setSrtName(item.defaultSrtName);
-                  setSrtSize(item.defaultSrtSize);
-                  setSrtSha(item.srtSha256);
-                  setVideoUri(null);
-                  setSrtUri(null);
-                  setUploadStep('LOCAL');
-                  setUploadProgress(0);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.selectorChipText,
-                    isSelected && styles.selectorChipTextActive,
-                  ]}
-                >
-                  {item.code}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+        <Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={() => router.push('/(drone)/requests')} />
       </View>
 
       {/* Target Road Overview Card */}
@@ -418,7 +169,7 @@ export default function DroneUploadScreen() {
             <MaterialIcons name="flight-takeoff" size={20} color={colors.primary} />
           </View>
           <View style={styles.contextTextWrap}>
-            <Text style={[typography.caption, styles.contextLabel]}>MỤC TIÊU KHẢO SÁT (ĐH.05)</Text>
+            <Text style={[typography.caption, styles.contextLabel]}>MỤC TIÊU KHẢO SÁT</Text>
             <Text style={[typography.titleMd, styles.contextTitle]} numberOfLines={1}>{config.road}</Text>
             <Text style={[typography.caption, styles.contextDrone]}>{config.droneModel}</Text>
           </View>
@@ -765,10 +516,11 @@ export default function DroneUploadScreen() {
                 : `Nộp bộ dữ liệu 4K RGB (${config.code})`
             }
             loading={submitting}
-            disabled={submitting}
+            disabled={true}
             onPress={handleStartSubmitDataset}
           />
         )}
+        <Text accessibilityRole="alert" style={typography.caption}>{DRONE_DATASET_BLOCK_REASON}</Text>
         {submitError && <Text style={[typography.caption, styles.statusError]}>{submitError}</Text>}
         {statusMsg && <Text style={[typography.caption, styles.statusMsg]}>{statusMsg}</Text>}
       </View>

@@ -8,7 +8,7 @@ import { uuidv4 } from '../utils/uuid';
 export const SAFETY_MUTATION_ACCEPTANCE_VERIFIED=false;
 export async function prepareSafetyIntent(identity:QueueIdentity,resource:RepairSafetyResource,command:SafetyCommand) {
   crewReadGuard(identity);
-  // API150 lacks Crew current-decision + request-head readback; API154 expects FIELD evidence-LINK IDs, not file IDs.
+  // API150 lacks Crew current-decision + request-head readback; API153 expects FIELD evidence-LINK IDs, not file IDs.
   if(command.kind==='review-request')throw Error('READBACK_GAP');
   if(command.kind==='check')throw Error('BE_EVIDENCE_LINK_SOURCE_GAP');
   const copy=JSON.parse(JSON.stringify(command)) as SafetyCommand,r={...resource};
@@ -20,7 +20,7 @@ export async function prepareSafetyIntent(identity:QueueIdentity,resource:Repair
   return journal.prepare({id:uuidv4(),identity,projectId:r.projectId,path:request.path,key:uuidv4(),body:JSON.stringify(request.body),
     proof:{kind:'safety',resource:r,command:copy,ifMatch:before.etag,versionSource:'SAFETY_MONITORING'}});
 }
-/** API153/155 exact transport. API150/154 stay source-blocked before journaling or POST. */
+/** API154/155 exact transport. API150/153 stay source-blocked before journaling or POST. */
 export async function dispatchSafetyIntent(record:OfflineJournalRecord) {
   crewReadGuard(record.identity);
   if(!SAFETY_MUTATION_ACCEPTANCE_VERIFIED)throw Error('BE_FIXTURE_BLOCKED');

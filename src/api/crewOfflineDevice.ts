@@ -56,9 +56,10 @@ export async function prepareDeviceRevocation(identity:QueueIdentity,projectId:s
   if(typeof reason!=='string'||!reason.trim()||reason.length>2000)throw Error('offline_revocation_reason_required');
   const text=reason,device=await readOfflineResource<DeviceRegistration>(identity,projectId,'devices',registrationId);
   validateDevice(device,identity,registrationId);
+  if(device.projectId!==projectId)throw Error('offline_revocation_source_invalid');
   const j=await openOfflineJournal(identity);return j.prepare({id:uuidv4(),identity,projectId,
     path:offlineProjectPath(projectId)+`/devices/${registrationId}/revoke`,key:uuidv4(),body:JSON.stringify({reason:text}),
-    proof:{kind:'revocation',registrationId,deviceId:device.deviceId}});
+    proof:{kind:'revocation',registrationId,deviceId:device.deviceId,signingPublicKey:device.signingPublicKey,encryptionPublicKey:device.encryptionPublicKey}});
 }
 /** Device/snapshot POST views are provisional until the own GET returns the same server source. */
 export async function reconcileDeviceIntent(record:OfflineJournalRecord) {
@@ -76,6 +77,17 @@ export async function reconcileDeviceIntent(record:OfflineJournalRecord) {
     const actual=await readOfflineResource<SourceSnapshot>(record.identity,record.projectId,'snapshots',receipt.id);
     validateSnapshot(actual,record.identity,{id:receipt.id,taskId:body.taskId,deviceRegistrationId:body.deviceRegistrationId,
       assignmentId:String(record.proof.assignmentId),taskVersion:String(record.proof.taskVersion)});
+    const j=await openOfflineJournal(record.identity);return j.transition(record,'RECONCILED',actual);
+  }
+  if(kind==='revocation'&&record.path===offlineProjectPath(record.projectId)+`/devices/${record.proof.registrationId}/revoke`){
+    const actual=await readOfflineResource<DeviceRegistration>(record.identity,record.projectId,'devices',receipt.id);crewReadGuard(record.identity);
+    const matches=(v:DeviceRegistration)=>v.id===record.proof.registrationId&&v.projectId===record.projectId&&v.actorId===record.identity.actor&&
+      v.role==='RepairCrew'&&v.deviceId===record.proof.deviceId&&isCrewResourceId(v.deviceId)&&
+      typeof record.proof.signingPublicKey==='string'&&!!record.proof.signingPublicKey&&v.signingPublicKey===record.proof.signingPublicKey&&
+      typeof record.proof.encryptionPublicKey==='string'&&!!record.proof.encryptionPublicKey&&v.encryptionPublicKey===record.proof.encryptionPublicKey&&
+      typeof v.revokedAt==='string'&&Number.isFinite(Date.parse(v.revokedAt));
+    // A pre-existing revoked GET alone does not attribute this command. Require its POST receipt too.
+    if(!matches(record.receipt as DeviceRegistration)||!matches(actual)||actual.revokedAt!==(record.receipt as DeviceRegistration).revokedAt)throw Error('offline_revocation_readback_mismatch');
     const j=await openOfflineJournal(record.identity);return j.transition(record,'RECONCILED',actual);
   }
   throw Error('offline_reconciliation_source_not_supported');

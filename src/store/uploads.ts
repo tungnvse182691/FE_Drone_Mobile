@@ -24,6 +24,32 @@ import type {
 } from '../api/uploads';
 import { hasUsableCoordinate } from '../types/position';
 
+import { apiClient } from '../api/client';
+import { passwordSessionIdentity } from '../api/authApi';
+
+let reporterContextEpoch = 0;
+/** Continuity/provenance only; never grants authority. No token is persisted. */
+export function reporterContext() {
+  const auth = useAuthStore.getState();
+  const environment = apiClient.defaults.baseURL ?? '';
+  const ownerId = isReporterSession(auth) ? auth.user!.id : null;
+  const session = ownerId ? passwordSessionIdentity(auth.token) : null;
+  if (ownerId && (!session || JSON.parse(session)[0] !== ownerId)) throw { code: 'auth_unauthorized', status: 401 };
+  return { ownerId, environment, session, epoch: reporterContextEpoch,
+    partition: `reporter-v2:${JSON.stringify([environment, ownerId, session])}` };
+}
+export function assertReporterContext(context: ReturnType<typeof reporterContext>) {
+  const live = reporterContext();
+  if (live.partition !== context.partition || live.epoch !== context.epoch) throw { code: 'auth_unauthorized', status: 401 };
+}
+function requestedPartition(requested?: string) {
+  const context = reporterContext();
+  // Existing capture/upload callers supply actor hints, never a storage provenance.
+  if (requested && requested !== context.partition && requested !== `reporter-${context.ownerId ?? 'guest'}`)
+    throw { code: 'access_forbidden', status: 403 };
+  return context;
+}
+
 /**
  * Hàng đợi upload ảnh private của Reporter (RPT-05/RPT-06).
  *
@@ -484,25 +510,29 @@ function clearWatchTimer(): void {
 }
 
 export const useUploadsStore = create<UploadsState>()((set, get) => ({
-  partitionId: 'reporter-guest',
+  partitionId: '',
   hydrated: false,
   items: [],
   busyItemIds: [],
   watching: false,
 
   setPartition(partitionId) {
-    set({ partitionId, items: [], hydrated: false });
-    void get().hydrate(partitionId);
+    const context = requestedPartition(partitionId);
+    set({ partitionId: context.partition, items: [], hydrated: false });
+    void get().hydrate(context.partition);
   },
 
   async hydrate(partitionId) {
-    const target = partitionId ?? get().partitionId;
+    const context = requestedPartition(partitionId);
+    const target = context.partition;
     set({ partitionId: target, hydrated: false });
     const items = await loadItems(target);
+    assertReporterContext(context);
     if (get().partitionId === target) set({ items, hydrated: true });
   },
 
   async enqueuePhoto(input) {
+    const context = requestedPartition(input.partitionId);
     const now = new Date().toISOString();
     // Toạ độ rác (0,0) hoặc không hợp lệ → bỏ hẳn, ép nguồn UNKNOWN (KHÔNG bịa GPS).
     const usable = hasUsableCoordinate(input.latitude, input.longitude);
@@ -512,7 +542,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
         : null;
     const item: UploadQueueItem = {
       id: uuidv4(),
-      partitionId: input.partitionId ?? get().partitionId,
+      partitionId: context.partition,
       uriLocal: input.uriLocal,
       fileName: input.fileName,
       mediaType: input.mediaType,
@@ -537,7 +567,9 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       createdAt: now,
       updatedAt: now,
     };
+    assertReporterContext(context);
     await persistItem(item);
+    assertReporterContext(context);
     set((state) => ({ items: [...state.items, item] }));
     return item.id;
   },
@@ -545,7 +577,9 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
   async advanceItem(id) {
     const start = get().items.find((item) => item.id === id);
     const auth = useAuthStore.getState();
-    if (!isReporterSession(auth) || !start || start.partitionId !== `reporter-${auth.user?.id}`) return;
+    if (!isReporterSession(auth) || !start) return;
+    const context = reporterContext();
+    if (start.partitionId !== context.partition || get().partitionId !== context.partition) return;
     if (start.mediaState === 'FAILED') {
       return;
     }
@@ -555,20 +589,23 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     set((state) => ({ busyItemIds: [...state.busyItemIds, id] }));
 
     const update: ItemUpdater = async (patch) => {
-      if (!isReporterSession(useAuthStore.getState()) || useAuthStore.getState().user?.id !== auth.user?.id ||
-          get().partitionId !== start.partitionId) throw { code: 'auth_unauthorized', status: 401 };
+      assertReporterContext(context);
+      if (get().partitionId !== start.partitionId) throw { status: 401 };
       const latest = get().items.find((item) => item.id === id) ?? start;
       const next: UploadQueueItem = { ...latest, ...patch, updatedAt: new Date().toISOString() };
       await persistItem(next);
-      if (get().partitionId !== start.partitionId || useAuthStore.getState().user?.id !== auth.user?.id) throw { status: 401 };
+      assertReporterContext(context);
+      if (get().partitionId !== start.partitionId) throw { status: 401 };
       set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
       return next;
     };
 
-    const transport = Object.fromEntries(Object.entries(uploadTransport).map(([name, method]) => [name, (...args: unknown[]) => {
-      const live = useAuthStore.getState();
-      if (!isReporterSession(live) || live.user?.id !== auth.user?.id || get().partitionId !== start.partitionId) throw { status: 401, code: 'auth_unauthorized' };
-      return (method as (...values: unknown[]) => unknown)(...args);
+    const transport = Object.fromEntries(Object.entries(uploadTransport).map(([name, method]) => [name, async (...args: unknown[]) => {
+      assertReporterContext(context);
+      if (get().partitionId !== start.partitionId) throw { status: 401, code: 'auth_unauthorized' };
+      const result = await (method as (...values: unknown[]) => unknown)(...args);
+      assertReporterContext(context);
+      return result;
     }])) as unknown as UploadTransport;
     try {
       let current = start.mediaState === 'VERIFIED' ? await pollVerification(start, update, transport) : await runPipeline(start, update, transport);
@@ -613,11 +650,16 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
   },
 
   async removeItem(id) {
+    const context = reporterContext();
+    const item = get().items.find(item => item.id === id);
+    if (!item || item.partitionId !== context.partition) return;
     if (get().busyItemIds.includes(id)) {
       return;
     }
     const db = await ledger();
-    await db.runAsync(`DELETE FROM upload_ledger WHERE id = ?`, id);
+    assertReporterContext(context);
+    await db.runAsync(`DELETE FROM upload_ledger WHERE id = ? AND partition_id = ?`, id, context.partition);
+    assertReporterContext(context);
     set((state) => ({ items: state.items.filter((item) => item.id !== id) }));
   },
 
@@ -654,9 +696,11 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
 }));
 
 useAuthStore.subscribe?.((state, previous) => {
-  if (state.user?.id !== previous.user?.id || !isReporterSession(state)) {
+  if (state.user?.id !== previous.user?.id || passwordSessionIdentity(state.token) !== passwordSessionIdentity(previous.token) ||
+      isReporterSession(state) !== isReporterSession(previous)) {
+    reporterContextEpoch++;
     useUploadsStore.getState().stopWatch();
-    useUploadsStore.setState({ items: [], hydrated: false, partitionId: `reporter-${state.user?.id ?? 'guest'}` });
+    useUploadsStore.setState({ items: [], hydrated: false, partitionId: '', busyItemIds: [] });
   }
 });
 

@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { getOwnReportReal, downloadReportEvidenceReal } from '../../src/api/reporterApi';
+import { getOwnReportReal, downloadReportEvidenceReal, downloadPublicationEvidenceReal, type OwnReportDto } from '../../src/api/reporterApi';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { useAuthStore } from '../../src/store/auth';
@@ -101,7 +101,7 @@ export default function ReporterReportDetailScreen() {
                     <MaterialIcons name="image" size={16} color={colors.brandGold} />
                     <View style={styles.evidenceText}>
                       <Text style={[typography.bodyMd, styles.metaText]}>Ảnh {index + 1}{item.supplementId ? ' · Bổ sung' : ''}</Text>
-                      <EvidencePreview scope={scope!} reportId={report.id} evidenceId={item.id} />
+                      <EvidencePreview key={`${scope}:${report.id}:${item.id}`} scope={scope!} reportId={report.id} evidenceId={item.id} />
                       <Text style={[typography.caption, styles.metaText]}>
                         {LOCATION_SOURCE_LABELS[item.locationSource ?? 'UNKNOWN'] ??
                           'Chưa có vị trí'}
@@ -152,6 +152,11 @@ export default function ReporterReportDetailScreen() {
                       <Text style={[typography.caption, styles.metaText]}>
                         {formatDate(update.publishedAt)}
                       </Text>
+                      {update.evidenceIds.map(evidenceId => (
+                        <EvidencePreview key={`${scope}:${report.id}:${update.id}:${evidenceId}`}
+                          scope={scope!} reportId={report.id} evidenceId={evidenceId}
+                          publication={{ id: update.id, report }} />
+                      ))}
                     </View>
                   </View>
                 ))}
@@ -175,22 +180,32 @@ export default function ReporterReportDetailScreen() {
   );
 }
 
-function EvidencePreview({ scope, reportId, evidenceId }: { scope: string; reportId: string; evidenceId: string }) {
+function EvidencePreview({ scope, reportId, evidenceId, publication }: {
+  scope: string; reportId: string; evidenceId: string;
+  publication?: { id: string; report: OwnReportDto };
+}) {
   const [requested, setRequested] = useState(false);
   const [imageError, setImageError] = useState(false);
   const query = useQuery({
-    queryKey: ['reporter-private-evidence', scope, reportId, evidenceId],
+    queryKey: publication ? ['reporter-publication-evidence', scope, reportId, publication.id, evidenceId] :
+      ['reporter-private-evidence', scope, reportId, evidenceId],
     enabled: requested, retry: false, gcTime: 0,
-    queryFn: ({ signal }) => downloadReportEvidenceReal(reportId, evidenceId, signal),
+    queryFn: ({ signal }) => publication
+      ? downloadPublicationEvidenceReal(publication.report, publication.id, evidenceId, signal)
+      : downloadReportEvidenceReal(reportId, evidenceId, signal),
   });
+  // Leave no image visible when returning from navigation. Each
+  // new opt-in rechecks the current recipient/source on the server.
+  useFocusEffect(useCallback(() => () => { setRequested(false); setImageError(false); }, []));
+  const label = publication ? 'ảnh được chia sẻ' : 'ảnh riêng tư';
   return <View>
-    <Button variant="secondary" title="Xem ảnh riêng tư" loading={query.isFetching} onPress={() => {
+    <Button variant="secondary" title={publication ? 'Xem ảnh được chia sẻ' : 'Xem ảnh riêng tư'} loading={query.isFetching} onPress={() => {
       setImageError(false);
       if (requested) void query.refetch(); else setRequested(true);
     }} />
-    {requested && (query.isError || imageError) ? <Text style={{ color: colors.error }}>Không tải được ảnh riêng tư. Vui lòng thử lại.</Text> : null}
-    {requested && !query.isError && !imageError && query.data ? <Image source={{ uri: query.data }}
-      style={{ width: '100%', height: 220 }} resizeMode="contain" accessibilityLabel="Ảnh bằng chứng riêng tư"
+    {requested && (query.isError || imageError) ? <Text style={{ color: colors.error }}>Không tải được {label}. Vui lòng thử lại.</Text> : null}
+    {requested && !query.isFetching && !query.isError && !imageError && query.data ? <Image source={{ uri: query.data }}
+      style={{ width: '100%', height: 220 }} resizeMode="contain" accessibilityLabel={publication ? 'Ảnh bằng chứng được chia sẻ cho phản ánh này' : 'Ảnh bằng chứng riêng tư'}
       onError={() => setImageError(true)} /> : null}
   </View>;
 }

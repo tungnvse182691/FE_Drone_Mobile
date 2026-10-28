@@ -5,7 +5,7 @@ import type { CreateReporterReportRequestDto } from '../api/mock/reporter';
 import { openDatabase, initDatabase, saveDraft, getDraft, deleteDraft } from '../offline/database';
 import { File } from 'expo-file-system';
 import { useAuthStore } from './auth';
-import { useUploadsStore } from './uploads';
+import { useUploadsStore, reporterContext, assertReporterContext } from './uploads';
 import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, locationSourceFor, strongUploadETag } from '../api/uploads';
 import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '../api/reporterApi';
 import { uuidv4 } from '../utils/uuid';
@@ -21,6 +21,7 @@ export interface DraftPhoto {
 export interface ReporterDraft {
   id: string;
   ownerId: string | null;
+  provenance: { environment: string; session: string | null };
   commandKey: string;
   description: string;
   photos: DraftPhoto[];
@@ -29,20 +30,26 @@ export interface ReporterDraft {
   ifMatch?: string;
   request?: CreateReporterReportRequestDto;
   resultReportId?: string;
+  retired?: boolean;
   submitRequested: boolean;
 }
 
 type DraftInput = Pick<ReporterDraft, 'description' | 'photos' | 'coords'> &
   Pick<Partial<ReporterDraft>, 'targetReportId' | 'ifMatch' | 'submitRequested'>;
 
-const draftKey = (ownerId: string | null) => `reporter-pending:${ownerId ?? 'guest'}`;
+type ReporterContext = ReturnType<typeof reporterContext>;
+const draftKey = (context: ReporterContext) => `reporter-pending-v2:${context.partition}`;
+const provenanceMatches = (draft: ReporterDraft, context: ReporterContext) => draft.ownerId === context.ownerId &&
+  draft.provenance?.environment === context.environment && draft.provenance?.session === context.session;
 async function draftDb() {
   const db = openDatabase();
   await initDatabase(db);
   return db;
 }
-async function persistDraft(draft: ReporterDraft) {
-  await saveDraft(await draftDb(), draftKey(draft.ownerId), 'reporter_pending_v1', draft as unknown as Record<string, unknown>);
+async function persistDraft(draft: ReporterDraft, context: ReporterContext) {
+  const db = await draftDb();
+  assertReporterContext(context);
+  await saveDraft(db, draftKey(context), 'reporter_pending_v1', draft as unknown as Record<string, unknown>);
 }
 let submission: Promise<string> | null = null;
 let submissionOwner: string | null = null;
@@ -52,22 +59,22 @@ function serializeDraft<T>(action: () => Promise<T>): Promise<T> {
   draftMutation = next;
   return next;
 }
-function ownerNow(): string | null {
-  const auth = useAuthStore.getState();
-  return isReporterSession(auth) ? auth.user!.id : null;
-}
-function assertDraftOwner(owner: string | null) {
-  if (ownerNow() !== owner) throw { code: 'auth_unauthorized', status: 401 };
-}
 function hasDraftContent(draft: ReporterDraft | null): draft is ReporterDraft {
-  return Boolean(draft && (draft.description.trim() || draft.photos.length || draft.request || draft.resultReportId || draft.submitRequested));
+  return Boolean(draft && !draft.retired && (draft.description.trim() || draft.photos.length || draft.request || draft.resultReportId || draft.submitRequested));
 }
-async function readPending(owner: string | null): Promise<ReporterDraft | null> {
+async function readPending(context: ReporterContext): Promise<ReporterDraft | null> {
   const db = await draftDb();
-  let draft = owner ? await getDraft<ReporterDraft>(db, draftKey(owner)) : null;
-  if (!hasDraftContent(draft)) draft = await getDraft<ReporterDraft>(db, draftKey(null));
-  assertDraftOwner(owner);
-  return !hasDraftContent(draft) || (draft.ownerId && draft.ownerId !== owner) ? null : draft;
+  assertReporterContext(context);
+  let draft = await getDraft<ReporterDraft>(db, draftKey(context));
+  assertReporterContext(context);
+  if (hasDraftContent(draft)) return provenanceMatches(draft, context) ? draft : null;
+  if (!context.ownerId) return null;
+  // Guest content is adopted explicitly, within the same environment only. Legacy rows remain untouched.
+  const guest = { ...context, ownerId: null, session: null,
+    partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
+  draft = await getDraft<ReporterDraft>(db, draftKey(guest));
+  assertReporterContext(context);
+  return hasDraftContent(draft) && (provenanceMatches(draft, guest) || provenanceMatches(draft, context)) ? draft : null;
 }
 
 /** Safe Vietnamese messages; transport/server bodies may contain private implementation details. */
@@ -114,19 +121,23 @@ export const useReporterStore = create<ReporterSessionState>()(
       pendingReport: null,
       pendingDraftId: null,
       pendingDraft: null,
-      restorePendingDraft: () => serializeDraft(async () => {
-        const draft = await readPending(ownerNow());
+      restorePendingDraft: () => {
+        const context = reporterContext();
+        return serializeDraft(async () => {
+        const draft = await readPending(context);
+        assertReporterContext(context);
         set({ pendingDraft: draft, pendingDraftId: draft?.id ?? null });
         return draft;
-      }),
+        });
+      },
       savePendingDraft: (input) => {
-        const savingOwner = ownerNow();
+        const context = reporterContext();
         return serializeDraft(async () => {
-        assertDraftOwner(savingOwner);
-        const auth = useAuthStore.getState();
-        const ownerId = isReporterSession(auth) ? auth.user!.id : null;
+        assertReporterContext(context);
+        const ownerId = context.ownerId;
         const current = get().pendingDraft;
-        const previous = hasDraftContent(current) ? current : await readPending(ownerId);
+        const previous = hasDraftContent(current) && provenanceMatches(current, context) ? current : await readPending(context);
+        assertReporterContext(context);
         if (submission) throw { code: 'draft_locked' };
         if (previous?.ownerId && previous.ownerId !== ownerId) throw { code: 'access_forbidden', status: 403 };
         if (previous?.request) {
@@ -139,56 +150,72 @@ export const useReporterStore = create<ReporterSessionState>()(
         if (previous && previous.targetReportId !== input.targetReportId) throw { code: 'draft_locked' };
         const draft: ReporterDraft = {
           id: previous?.id ?? uuidv4(), commandKey: previous?.commandKey ?? uuidv4(), ownerId: previous?.ownerId ?? ownerId,
+          provenance: { environment: context.environment, session: context.session },
           description: input.description, photos: input.photos.map(photo => ({ ...photo,
             itemId: previous?.photos.find(p => p.uri === photo.uri)?.itemId ?? photo.itemId })),
           coords: input.coords, targetReportId: input.targetReportId, ifMatch: input.ifMatch ?? previous?.ifMatch,
           submitRequested: input.submitRequested ?? previous?.submitRequested ?? false,
         };
-        await persistDraft(draft);
-        assertDraftOwner(ownerId);
+        if (previous && !previous.ownerId && context.ownerId) {
+          const guest = { ...context, ownerId: null, session: null,
+            partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
+          const db = await draftDb();
+          assertReporterContext(context);
+          await saveDraft(db, draftKey(guest), 'reporter_pending_v1', draft as unknown as Record<string, unknown>);
+          assertReporterContext(context);
+        }
+        await persistDraft(draft, context);
+        assertReporterContext(context);
         set({ pendingDraft: draft, pendingDraftId: draft.id });
         return draft;
         });
       },
-      bindPendingDraft: () => serializeDraft(async () => {
-        const auth = useAuthStore.getState();
-        if (!isReporterSession(auth)) throw { code: 'auth_unauthorized', status: 401 };
-        const draft = await readPending(auth.user!.id);
+      bindPendingDraft: () => {
+        const context = reporterContext();
+        return serializeDraft(async () => {
+        assertReporterContext(context);
+        if (!context.ownerId) throw { code: 'auth_unauthorized', status: 401 };
+        const draft = await readPending(context);
         if (!draft) return null;
-        if (draft.ownerId && draft.ownerId !== auth.user!.id) throw { code: 'access_forbidden', status: 403 };
-        assertDraftOwner(auth.user!.id);
-        const bound = { ...draft, ownerId: auth.user!.id };
+        assertReporterContext(context);
+        const bound = { ...draft, ownerId: context.ownerId,
+          photos: draft.ownerId ? draft.photos : draft.photos.map(({ itemId: _guestItemId, ...photo }) => photo),
+          provenance: { environment: context.environment, session: context.session } };
         if (!draft.ownerId) {
-          // Claim guest row first. A crash cannot expose an adopted draft to another actor.
-          await saveDraft(await draftDb(), draftKey(null), 'reporter_pending_v1', bound as unknown as Record<string, unknown>);
+          // Claim same-environment guest row before creating actor row; retain the claim after adoption.
+          const guest = { ...context, ownerId: null, session: null,
+            partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
+          const db = await draftDb();
+          assertReporterContext(context);
+          await saveDraft(db, draftKey(guest), 'reporter_pending_v1', bound as unknown as Record<string, unknown>);
+          assertReporterContext(context);
         }
-        await persistDraft(bound);
-        if (!draft.ownerId) await deleteDraft(await draftDb(), draftKey(null));
-        assertDraftOwner(auth.user!.id);
+        await persistDraft(bound, context);
+        assertReporterContext(context);
         set({ pendingDraft: bound, pendingDraftId: bound.id });
         return bound;
-      }),
+        });
+      },
       submitPendingDraft: () => {
-        const caller = ownerNow();
+        const context = reporterContext();
+        const caller = context.ownerId;
         if (!caller) return Promise.reject({ code: 'auth_unauthorized', status: 401 });
-        if (submission) return submissionOwner === caller ? submission : Promise.reject({ status: 401 });
-        submissionOwner = caller;
+        if (submission) return submissionOwner === JSON.stringify(context) ? submission : Promise.reject({ status: 401 });
+        submissionOwner = JSON.stringify(context);
         submission = (async () => {
           const auth = useAuthStore.getState();
           if (!isReporterSession(auth)) throw { code: 'auth_unauthorized', status: 401 };
           let draft = await get().bindPendingDraft();
           if (!draft || draft.photos.length === 0) throw { code: 'validation_error', status: 400 };
-          const ownerId = auth.user!.id;
-          const assertOwner = () => {
-            const live = useAuthStore.getState();
-            if (!isReporterSession(live) || live.user?.id !== ownerId) throw { code: 'auth_unauthorized', status: 401 };
-          };
+          const assertOwner = () => assertReporterContext(context);
+          assertOwner();
           const putDraft = async (next: ReporterDraft) => {
-            assertOwner(); await persistDraft(next); assertOwner(); draft = next;
+            assertOwner(); await persistDraft(next, context); assertOwner(); draft = next;
             set({ pendingDraft: next, pendingDraftId: next.id });
           };
           const queue = useUploadsStore.getState();
-          await queue.hydrate(`reporter-${ownerId}`);
+          await queue.hydrate(context.partition);
+          assertOwner();
           for (let index = 0; index < draft.photos.length && !draft.resultReportId; index++) {
             assertOwner();
             const photo = draft.photos[index];
@@ -197,9 +224,12 @@ export const useReporterStore = create<ReporterSessionState>()(
               let bytes: Uint8Array;
               try { bytes = new Uint8Array(await new File(photo.uri).arrayBuffer()); }
               catch { throw { code: 'local_photo_missing' }; }
+              assertOwner();
               if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) throw { code: 'validation_error', status: 400 };
-              id = await queue.enqueuePhoto({ uriLocal: photo.uri, fileName: photo.fileName, mediaType: photo.mediaType,
-                sizeBytes: bytes.length, checksumSha256: await sha256HexOfBytes(bytes), capturedAt: photo.capturedAt,
+              const checksumSha256 = await sha256HexOfBytes(bytes);
+              assertOwner();
+              id = await queue.enqueuePhoto({ partitionId: context.partition, uriLocal: photo.uri, fileName: photo.fileName, mediaType: photo.mediaType,
+                sizeBytes: bytes.length, checksumSha256, capturedAt: photo.capturedAt,
                 locationSource: locationSourceFor(Boolean(draft.coords)), ...draft.coords });
               await putDraft({ ...draft, photos: draft.photos.map((p, i) => i === index ? { ...p, itemId: id } : p) });
             }
@@ -234,7 +264,19 @@ export const useReporterStore = create<ReporterSessionState>()(
             throw { code: 'source_not_ready' };
           }
           const reportId = found.report.id;
-          await deleteDraft(await draftDb(), draftKey(ownerId));
+          const db = await draftDb();
+          assertOwner();
+          const guest = { ...context, ownerId: null, session: null,
+            partition: `reporter-v2:${JSON.stringify([context.environment, null, null])}` };
+          const claim = await getDraft<ReporterDraft>(db, draftKey(guest));
+          assertOwner();
+          if (claim?.id === draft.id && provenanceMatches(claim, context)) {
+            // Retain bytes/identity as a tombstone before removing the active actor row.
+            await saveDraft(db, draftKey(guest), 'reporter_pending_v1',
+              { ...draft, retired: true } as unknown as Record<string, unknown>);
+            assertOwner();
+          }
+          await deleteDraft(db, draftKey(context));
           assertOwner();
           set({ pendingDraft: null, pendingDraftId: null, pendingReport: null });
           return reportId;
@@ -261,7 +303,7 @@ export const useReporterStore = create<ReporterSessionState>()(
 );
 
 useAuthStore.subscribe?.((state, previous) => {
-  if (state.user?.id !== previous.user?.id || !isReporterSession(state)) {
+  if (state.user?.id !== previous.user?.id || state.token !== previous.token || !isReporterSession(state)) {
     useReporterStore.setState({ pendingDraft: null, pendingDraftId: null, pendingReport: null });
   }
 });

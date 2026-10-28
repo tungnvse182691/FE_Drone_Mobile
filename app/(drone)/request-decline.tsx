@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -12,10 +12,8 @@ import { DRONE_REQUEST_DETAIL, DRONE_REQUESTS } from '../../src/constants/routes
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
 import {
-  declineOperatorSurveyTaskReal,
   getOperatorSurveyTaskDetailReal,
   getOperatorWorkPackageReal,
-  isConcurrencyConflict,
   type SurveyTaskV2ResponseDto,
   type SurveyTaskWorkPackageDto,
 } from '../../src/api/droneApi';
@@ -25,14 +23,14 @@ import {
   operatorTaskStatusLabel,
   operatorTaskTargetBand,
 } from '../../src/api/operator-task-view';
-import { uuidv4 } from '../../src/utils/uuid';
+import { DRONE_TASK_COMMAND_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /**
  * O-04 — Từ chối nhiệm vụ khảo sát (API-230).
  *
- * Quy tắc: đọc lại API-226 NGAY trước khi gửi để lấy phiên bản mới nhất làm If-Match.
- * Lệnh ghi cần Idempotency-Key + If-Match; 409/412 ⇒ đọc lại + hỏi người dùng, KHÔNG tự thử lại.
+ * Lệnh ghi đang khóa đến khi có durable immutable command/recovery.
+ * API-226/API-225 vẫn phục vụ đọc nhiệm vụ và gói công việc.
  * Việc điều phối lại/bổ sung thuộc về PM trên Web — Operator không được gọi.
  */
 
@@ -55,11 +53,6 @@ function operatorErrorCode(error: unknown): string | null {
   return parseProblemDetails(response?.data).code;
 }
 
-function operatorHttpStatus(error: unknown): number | null {
-  const status = (error as { response?: { status?: number } }).response?.status;
-  return typeof status === 'number' ? status : null;
-}
-
 function operatorErrorMessage(error: unknown): string {
   const code = operatorErrorCode(error);
   if (code) {
@@ -78,18 +71,10 @@ export default function DroneRequestDeclineScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [blocked, setBlocked] = useState(false);
-  const [done, setDone] = useState(false);
+  const [submitting] = useState(false);
+  const [blocked] = useState(false);
+  const [done] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-
-  const keyRef = useRef<string | null>(null);
-  const idempotencyKey = useCallback(() => {
-    if (!keyRef.current) {
-      keyRef.current = uuidv4();
-    }
-    return `API-230:${target}:${keyRef.current}`;
-  }, [target]);
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
@@ -116,47 +101,8 @@ export default function DroneRequestDeclineScreen() {
     void loadDetail();
   }, [loadDetail]);
 
-  const canSubmit =
-    Boolean(detail) && reason.trim().length > 0 && !submitting && !blocked && !done;
-
-  const handleSubmit = async () => {
-    if (!detail || !canSubmit) {
-      return;
-    }
-    setSubmitting(true);
-    try {
-      // Đọc lại API-226 ngay trước khi gửi để lấy If-Match mới nhất.
-      const fresh = await getOperatorSurveyTaskDetailReal(detail.id);
-      const result = await declineOperatorSurveyTaskReal(fresh.data.id, reason.trim(), fresh.etag, idempotencyKey());
-      setDetail(result.data);
-      if (result.data.status?.toUpperCase() === 'REJECTED' || result.data.status === 'Rejected') {
-        setDone(true);
-      }
-    } catch (error) {
-      const status = operatorHttpStatus(error);
-      const code = operatorErrorCode(error);
-      if (isConcurrencyConflict(error) || code === 'concurrency_conflict' || code === 'precondition_required' || status === 412) {
-        await loadDetail();
-        Alert.alert(
-          'Nhiệm vụ đã thay đổi',
-          'Phiên bản nhiệm vụ trên máy chủ đã khác bản đang xem. Đã đọc lại bản mới nhất — vui lòng kiểm tra rồi gửi lại nếu vẫn muốn từ chối.',
-          [{ text: 'Đã hiểu' }],
-        );
-      } else if (status === 401) {
-        router.replace('/(auth)');
-      } else if (status === 403) {
-        setBlocked(true);
-        setToast(operatorErrorMessage(error));
-      } else if (status === 404) {
-        setBlocked(true);
-        setToast('Nhiệm vụ không còn tồn tại trên máy chủ. Đã loại khỏi danh sách đang xử lý.');
-      } else {
-        setToast(operatorErrorMessage(error));
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // API-230 stays blocked: changing reason/version must never reuse a sent key.
+  const handleSubmit = () => setToast(DRONE_TASK_COMMAND_BLOCK_REASON);
 
   const renderBody = () => {
     if (loading) {
@@ -280,11 +226,12 @@ export default function DroneRequestDeclineScreen() {
           </View>
         ) : null}
 
+        <Text accessibilityRole="alert" style={typography.caption}>{DRONE_TASK_COMMAND_BLOCK_REASON}</Text>
         <Button
           variant="primary"
           title="Gửi từ chối nhiệm vụ"
           loading={submitting}
-          disabled={!canSubmit}
+          disabled={true}
           onPress={() => void handleSubmit()}
           style={styles.submitButton}
         />

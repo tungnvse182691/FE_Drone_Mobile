@@ -1,10 +1,10 @@
 import type { QueueIdentity } from './upload-queue';
 import { crewReadGuard } from '../api/crewSafetyWorkflow';
-import { openOfflineJournal, type OfflineJournalRecord } from '../api/crewOfflineJournal';
+import { openOfflineJournal, type OfflineJournalRecord, type VerifiedOfflineItem } from '../api/crewOfflineJournal';
 import { canonicalOfflineAttached, canonicalOfflineManifest, describeOfflineOperation, type OfflineRecord, type Sha256 } from '../api/crewOfflineProtocol';
 import { offlineP1363 } from '../api/crewOfflineCrypto';
 import { readOfflineResource, validateDevice, validateSnapshot, validateBatch, offlineProjectPath, requireOfflineNativeAcceptance,
-  type DeviceRegistration, type SourceSnapshot, type OfflineBatchReceipt } from '../api/crewOfflineWorkflow';
+  type DeviceRegistration, type SourceSnapshot, type OfflineBatchReceipt, type OfflineItemReceipt } from '../api/crewOfflineWorkflow';
 import { inspectOfflineDevice, deviceBinding } from '../api/crewOfflineDevice';
 import { offlineNative } from '../../modules/roadguard-offline-crypto';
 import { uuidv4 } from '../utils/uuid';
@@ -60,7 +60,7 @@ export function matchBatchReadback(record:OfflineJournalRecord,readback:OfflineB
     const a=received.items.find(i=>i.originId===d.originId),b=readback.items.find(i=>i.originId===d.originId);
     return !!a&&!!b&&a.kind===d.kind&&b.kind===d.kind&&a.durableAcknowledgment&&b.durableAcknowledgment&&
       ['COMMITTED','REPLAYED'].includes(a.state)&&['COMMITTED','REPLAYED'].includes(b.state)&&
-      a.effectId===d.effectId&&b.effectId===d.effectId&&a.canonicalOriginId===d.originId&&b.canonicalOriginId===d.originId;
+      a.effectId===d.effectId&&b.effectId===d.effectId&&resourceId(a.canonicalOriginId)&&a.canonicalOriginId===b.canonicalOriginId;
   });
 }
 export async function reconcileSignedBatch(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
@@ -68,9 +68,58 @@ export async function reconcileSignedBatch(record:OfflineJournalRecord):Promise<
   if(record.phase!=='RECEIVED'||record.path!==offlineProjectPath(record.projectId)+'/sync'||record.proof.kind!=='signed-field-batch')throw Error('offline_batch_receipt_required');
   const received=record.receipt as OfflineBatchReceipt;validateBatch(received);
   const readback=await readOfflineResource<OfflineBatchReceipt>(record.identity,record.projectId,'batches',received.batchId);
-  // Mixed/stale/conflicted results remain RECEIVED, bytes and evidence retained. No blanket ACK.
-  if(!matchBatchReadback(record,readback))return record;
-  const journal=await openOfflineJournal(record.identity);return journal.transition(record,'RECONCILED',readback);
+  validateBatch(readback);
+  if(readback.batchId!==received.batchId)throw Error('offline_batch_readback_mismatch');
+  const expected=sourceDescriptors(record);
+  if(readback.items.length!==expected.length||received.items.length!==expected.length)throw Error('offline_batch_readback_mismatch');
+  const journal=await openOfflineJournal(record.identity);
+  let next=record,verifiedCount=0;
+  for(const d of expected){
+    const a=received.items.find(i=>i.originId===d.originId),b=readback.items.find(i=>i.originId===d.originId);
+    if(!a||!b||a.kind!==d.kind||b.kind!==d.kind)throw Error('offline_batch_readback_mismatch');
+    // Pending/conflicted items are retained; positive facts require independent authenticated origin GET.
+    if(!durable(a,d)||!durable(b,d))continue;
+    if(a.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
+    const origin=await readOfflineResource<OfflineItemReceipt>(record.identity,record.projectId,'origins',String(d.originId));
+    crewReadGuard(record.identity);
+    if(!durable(origin,d)||origin.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
+    next=await journal.checkpoint(next,[observation(origin,received.batchId)]);verifiedCount++;
+  }
+  // Never ACK the whole batch merely because HTTP200 or one member is durable.
+  return verifiedCount===expected.length?journal.transition(next,'RECONCILED',readback):next;
+}
+const resourceId=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
+function durable(i:OfflineItemReceipt,d:OfflineRecord):boolean {
+  return !!i&&i.originId===d.originId&&i.kind===d.kind&&i.effectId===d.effectId&&resourceId(i.canonicalOriginId)&&
+    i.durableAcknowledgment===true&&['COMMITTED','REPLAYED'].includes(i.state)&&Number.isFinite(Date.parse(i.serverReceivedAt));
+}
+function observation(i:OfflineItemReceipt,serverBatchId:string|null):VerifiedOfflineItem {
+  return {originId:i.originId,effectId:i.effectId!,canonicalOriginId:i.canonicalOriginId!,kind:i.kind,state:i.state,serverReceivedAt:i.serverReceivedAt,serverBatchId};
+}
+/** Journal metadata must describe the immutable payload, not an unrelated route or actor. */
+function sourceDescriptors(r:OfflineJournalRecord):OfflineRecord[]{
+  const expected=r.proof.descriptors as OfflineRecord[],body=JSON.parse(r.body),operations=body.operations;
+  if(!Array.isArray(expected)||!Array.isArray(operations)||expected.length<1||expected.length!==operations.length||
+    new Set(expected.map(d=>d.originId)).size!==expected.length||expected.some(d=>{
+      const o=operations.find((v:OfflineRecord)=>v.originId===d.originId);
+      return !o||o.originalActorId!==r.identity.actor||!resourceId(o.sourceDeviceId)||!resourceId(d.effectId)||
+        !['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION'].includes(String(d.kind))||
+        ['originId','effectId','kind','taskId','assignmentId','snapshotId'].some(k=>d[k]!==o[k]);
+    }))throw Error('offline_origin_source_invalid');
+  return expected;
+}
+/** API123 cannot supply a server batch ID. Preserve UNKNOWN_OUTCOME until exact POST replay yields a receipt. */
+export async function recoverSignedOrigins(record:OfflineJournalRecord):Promise<OfflineJournalRecord>{
+  crewReadGuard(record.identity);
+  if(!['IN_FLIGHT','UNKNOWN_OUTCOME'].includes(record.phase)||record.proof.kind!=='signed-field-batch'||
+    record.path!==offlineProjectPath(record.projectId)+'/sync')throw Error('offline_recovery_source_required');
+  const expected=sourceDescriptors(record),journal=await openOfflineJournal(record.identity);let next=record;
+  for(const d of expected){
+    const actual=await readOfflineResource<OfflineItemReceipt>(record.identity,record.projectId,'origins',String(d.originId));crewReadGuard(record.identity);
+    if(actual.originId!==d.originId||actual.kind!==d.kind||(actual.effectId!==null&&actual.effectId!==d.effectId))throw Error('offline_origin_readback_mismatch');
+    if(durable(actual,d))next=await journal.checkpoint(next,[observation(actual,null)]);
+  }
+  return next;
 }
 /** API129 uses the SERVER batch receipt and only an exact FIELD_START member. */
 export async function prepareStartReconciliation(record:OfflineJournalRecord,originId:string) {
@@ -78,9 +127,29 @@ export async function prepareStartReconciliation(record:OfflineJournalRecord,ori
   const receipt=record.receipt as OfflineBatchReceipt;validateBatch(receipt);
   const descriptors=record.proof.descriptors as OfflineRecord[];
   if(record.path!==offlineProjectPath(record.projectId)+'/sync'||!['RECEIVED','RECONCILED'].includes(record.phase)||
-    !Array.isArray(descriptors)||!descriptors.some(d=>d.originId===originId&&d.kind==='FIELD_START')||
-    !receipt.items.some(i=>i.originId===originId&&i.kind==='FIELD_START'))throw Error('offline_field_start_source_required');
+    !Array.isArray(descriptors)||descriptors.length!==1||descriptors[0].originId!==originId||descriptors[0].kind!=='FIELD_START'||
+    receipt.items.length!==1||receipt.items[0].originId!==originId||receipt.items[0].kind!=='FIELD_START')throw Error('offline_field_start_source_required');
+  sourceDescriptors(record);
   const j=await openOfflineJournal(record.identity);return j.prepare({id:uuidv4(),identity:record.identity,projectId:record.projectId,
     path:offlineProjectPath(record.projectId)+'/starts/reconcile',key:uuidv4(),body:JSON.stringify({batchId:receipt.batchId,originId}),
-    proof:{kind:'start-reconciliation',sourceIntentId:record.id}});
+    proof:{kind:'start-reconciliation',sourceIntentId:record.id,descriptors,serverBatchId:receipt.batchId}});
+}
+
+/** API129 receipt is checked against its already-known server batch and API115/123, including lost responses. */
+export async function reconcileStartIntent(record:OfflineJournalRecord):Promise<OfflineJournalRecord>{
+  crewReadGuard(record.identity);
+  const body=JSON.parse(record.body),descriptors=record.proof.descriptors as OfflineRecord[];
+  if(record.proof.kind!=='start-reconciliation'||record.path!==offlineProjectPath(record.projectId)+'/starts/reconcile'||
+    !['IN_FLIGHT','UNKNOWN_OUTCOME','RECEIVED'].includes(record.phase)||body.batchId!==record.proof.serverBatchId||!resourceId(body.batchId)||
+    !Array.isArray(descriptors)||descriptors.length!==1||descriptors[0].originId!==body.originId||descriptors[0].kind!=='FIELD_START')throw Error('offline_field_start_source_required');
+  const readback=await readOfflineResource<OfflineBatchReceipt>(record.identity,record.projectId,'batches',body.batchId);validateBatch(readback);
+  if(readback.batchId!==body.batchId||readback.items.length!==1)throw Error('offline_batch_readback_mismatch');
+  const item=readback.items[0],d=descriptors[0];
+  if(!durable(item,d))return record;
+  const origin=await readOfflineResource<OfflineItemReceipt>(record.identity,record.projectId,'origins',body.originId);crewReadGuard(record.identity);
+  if(!durable(origin,d)||origin.canonicalOriginId!==item.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
+  if(record.phase==='RECEIVED'&&!matchBatchReadback(record,readback))throw Error('offline_batch_readback_mismatch');
+  const j=await openOfflineJournal(record.identity),observed=await j.checkpoint(record,[observation(origin,body.batchId)]);
+  const received=observed.phase==='RECEIVED'?observed:await j.transition(observed,'RECEIVED',readback);
+  return j.transition(received,'RECONCILED',readback);
 }

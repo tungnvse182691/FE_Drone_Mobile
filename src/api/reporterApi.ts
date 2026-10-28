@@ -13,6 +13,7 @@
  *   API-216 POST /reports                              (apiClient, Idempotency-Key required)
  *   API-217 GET  /reports/{reportId}                   (apiClient)
  *   API-218 GET  /reports/{reportId}/evidence/{evidenceId}/download (private bytes)
+ *   API-210 GET  /reporter-evidence/publications/{publicationId}/reports/{reportId}/evidence/{evidenceId}/content (authenticated recipient bytes)
  *   API-219 POST /reports/{reportId}/supplements       (apiClient, Idempotency-Key + If-Match required)
  *
  * Upload evidence: httpUploadTransport trong src/api/uploads.ts đã đúng paths
@@ -223,6 +224,36 @@ export async function downloadReportEvidenceReal(reportId: string, evidenceId: s
     `/reports/${encodeURIComponent(reportId)}/evidence/${encodeURIComponent(evidenceId)}/download`,
     { responseType: 'arraybuffer', signal },
   );
+  return evidenceImageDataUri(response);
+}
+
+/** API-210 is authenticated, recipient-scoped publication content in current BE.
+ * OwnReport.publicUpdates.id is CasePublication.Id, not a private file ID.
+ * Only a publication/evidence pair returned by the current own-report read may
+ * originate this request; the server rechecks recipient and VERIFIED lineage.
+ */
+export async function downloadPublicationEvidenceReal(
+  report: OwnReportDto,
+  publicationId: string,
+  evidenceId: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const validId = (value: unknown): value is string => typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
+    value !== '00000000-0000-0000-0000-000000000000';
+  if (!validId(report?.id) || !validId(publicationId) || !validId(evidenceId) ||
+    !report.publicUpdates?.some(update => update.id === publicationId && update.evidenceIds?.includes(evidenceId))) {
+    throw new Error('publication_source_unavailable');
+  }
+  const response = await apiClient.get<ArrayBuffer>(
+    `/reporter-evidence/publications/${encodeURIComponent(publicationId)}/reports/${encodeURIComponent(report.id)}/evidence/${encodeURIComponent(evidenceId)}/content`,
+    { responseType: 'arraybuffer', signal, headers: { 'Cache-Control': 'no-store', Pragma: 'no-cache' } },
+  );
+  return evidenceImageDataUri(response);
+}
+
+/** Memory-only preview. Never persist a private/publication URL or image file. */
+function evidenceImageDataUri(response: { status: number; data: ArrayBuffer; headers: Record<string, unknown> }): string {
   const mediaType = String(response.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
   const bytes = new Uint8Array(response.data);
   if (response.status !== 200 || !['image/jpeg', 'image/png'].includes(mediaType) || !bytes.length || bytes.length > 20 * 1024 * 1024) {

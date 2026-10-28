@@ -19,10 +19,8 @@ import { EmptyState } from '../../src/components/EmptyState';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
-  acceptOperatorSurveyTaskReal,
   getOperatorSurveyTaskDetailReal,
   getOperatorWorkPackageReal,
-  isConcurrencyConflict,
   type SurveyTaskV2ResponseDto,
   type SurveyTaskWorkPackageDto,
 } from '../../src/api/droneApi';
@@ -34,7 +32,7 @@ import {
 } from '../../src/api/operator-task-view';
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
+import { DRONE_TASK_COMMAND_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -83,7 +81,7 @@ export default function DroneRequestDetailScreen() {
   const [etag, setEtag] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [accepting, setAccepting] = useState(false);
+  const [accepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const loadTask = useCallback(async () => {
@@ -127,47 +125,8 @@ export default function DroneRequestDetailScreen() {
     });
   };
 
-  /**
-   * Nhận nhiệm vụ khảo sát — API-227.
-   *
-   * `POST /survey-tasks/{taskId}/accept` với `Idempotency-Key` + `If-Match` (ETag) → 200
-   * `SurveyTaskV2ResponseDto` + ETag mới. ETag phải đọc lại ngay trước khi gửi để tránh 412.
-   */
-  const handleAcceptTask = async () => {
-    if (!task) {
-      return;
-    }
-    setAccepting(true);
-    setAcceptError(null);
-    const keyScope = `drone:accept:${task.id}`;
-    try {
-      const fresh = await getOperatorSurveyTaskDetailReal(task.id);
-      setEtag(fresh.etag);
-      const accepted = await acceptOperatorSurveyTaskReal(task.id, fresh.etag, getOrCreateCommandKey(keyScope));
-      clearCommandKey(keyScope);
-      setTask(accepted.data);
-      setEtag(accepted.etag);
-    } catch (error) {
-      clearCommandKey(keyScope);
-      const response = (
-        error as { response?: { status?: number; data?: unknown } } | undefined
-      )?.response;
-      const code = parseProblemDetails(response?.data).code;
-      if (isConcurrencyConflict(error) || response?.status === 412 || code === 'concurrency_conflict') {
-        setAcceptError('Nhiệm vụ vừa thay đổi. Vui lòng mở lại để xem phiên bản mới nhất.');
-        await loadTask();
-      } else if (response?.status === 401) {
-        router.replace('/(auth)');
-      } else if (code === 'survey_invalid_state_transition') {
-        setAcceptError('Nhiệm vụ không còn ở trạng thái chờ tiếp nhận.');
-        await loadTask();
-      } else {
-        setAcceptError(operatorErrorMessage(error));
-      }
-    } finally {
-      setAccepting(false);
-    }
-  };
+  // API-227 remains blocked until immutable durable command/recovery exists.
+  const handleAcceptTask = () => setAcceptError(DRONE_TASK_COMMAND_BLOCK_REASON);
 
 /**
  * Từ chối nhiệm vụ được tách sang màn O-04 (`request-decline`) để gọi đúng contract
@@ -240,7 +199,6 @@ export default function DroneRequestDetailScreen() {
     }
 
     const s = task.status?.toUpperCase();
-    const canAccept = s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED' || task.status === 'NewAssigned';
 
     return (
       <>
@@ -357,14 +315,15 @@ export default function DroneRequestDetailScreen() {
         </Card>
 
         <View style={styles.actionContainer}>
+          <Text accessibilityRole="alert" style={typography.caption}>{DRONE_TASK_COMMAND_BLOCK_REASON}</Text>
           {acceptError ? (
             <Text style={[typography.caption, styles.pendingSyncNote]}>{acceptError}</Text>
           ) : null}
           <Button
             variant="primary"
-            title={canAccept ? `Chấp nhận nhiệm vụ (${displayCode})` : 'Nhiệm vụ đã được tiếp nhận'}
+            title="Tiếp nhận nhiệm vụ đang tạm khóa"
             loading={accepting}
-            disabled={!canAccept}
+            disabled={true}
             onPress={handleAcceptTask}
           />
 

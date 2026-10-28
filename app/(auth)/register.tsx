@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,12 +10,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { registerReporterReal, extractProblemCode } from '../../src/api/reporterApi';
-import { clearCommandKey, getOrCreateCommandKey } from '../../src/api/idempotency';
+import { uuidv4 } from '../../src/utils/uuid';
+import { useAuthStore } from '../../src/store/auth';
+import { bareClient } from '../../src/api/client';
 import { AUTH_OTP_VERIFY } from '../../src/constants/routes';
 
 type ReporterTypeValue = 'CITIZEN' | 'INVESTOR_REPRESENTATIVE';
@@ -36,6 +38,9 @@ const REGISTER_ERRORS: Record<string, string> = {
   internal_error: 'Hệ thống đang bận. Vui lòng thử lại sau ít phút.',
 };
 
+// Memory only: uncertain attempts survive screen remount, never disk/routes/logs.
+let pendingRegistration: { environment: string; key: string; input: Parameters<typeof registerReporterReal>[0] } | null = null;
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ReporterRegisterScreen() {
@@ -46,6 +51,14 @@ export default function ReporterRegisterScreen() {
   const [reporterType, setReporterType] = useState<ReporterTypeValue>('CITIZEN');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const busy = useRef(false);
+  const active = useRef(true);
+  const generation = useRef(0);
+  useFocusEffect(useCallback(() => {
+    active.current = true;
+    generation.current++;
+    return () => { active.current = false; generation.current++; };
+  }, []));
 
   const canSubmit =
     displayName.trim().length >= 2 &&
@@ -53,38 +66,53 @@ export default function ReporterRegisterScreen() {
     password.length >= 8;
 
   const handleRegister = async () => {
+    if (busy.current) return;
     if (!canSubmit) {
       setError('Vui lòng nhập đủ họ tên, email hợp lệ và mật khẩu từ 8 ký tự.');
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const input = { email: normalizedEmail, password, displayName: displayName.trim(), reporterType };
+    const environment = bareClient.defaults.baseURL ?? '';
+    if (pendingRegistration && (pendingRegistration.environment !== environment ||
+        JSON.stringify(pendingRegistration.input) !== JSON.stringify(input))) {
+      setError('Lần đăng ký trước chưa được xác nhận. Giữ nguyên nội dung để thử lại.');
+      return;
+    }
+    const attempt = pendingRegistration ?? { environment, input: Object.freeze(input), key: uuidv4() };
+    pendingRegistration = attempt;
+    const capturedGeneration = generation.current;
+    const { token: capturedToken, status: capturedStatus, user } = useAuthStore.getState();
+    const capturedActor = user?.id;
+    const isCurrent = () => {
+      const live = useAuthStore.getState();
+      return active.current && generation.current === capturedGeneration && bareClient.defaults.baseURL === environment &&
+        live.token === capturedToken && live.status === capturedStatus && live.user?.id === capturedActor;
+    };
+    busy.current = true;
     setLoading(true);
     setError(null);
-    const normalizedEmail = email.trim().toLowerCase();
-    const keyScope = `reporter:register:${normalizedEmail}`;
     try {
-      const intent = await registerReporterReal(
-        {
-          email: normalizedEmail,
-          password,
-          displayName: displayName.trim(),
-          reporterType,
-        },
-        getOrCreateCommandKey(keyScope),
-      );
-      clearCommandKey(keyScope);
+      const intent = await registerReporterReal(attempt.input, attempt.key);
+      if (!isCurrent()) return;
+      pendingRegistration = null;
+      setPassword('');
       router.push({
         pathname: AUTH_OTP_VERIFY,
-        params: { intentId: intent.intentId, email: normalizedEmail },
+        params: { intentId: intent.intentId, email: normalizedEmail, resendAfterSeconds: String(intent.resendAfterSeconds) },
       });
     } catch (err) {
-      clearCommandKey(keyScope);
+      if (!isCurrent()) return;
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status && [400, 404, 409, 422, 429].includes(status)) pendingRegistration = null;
       const code = extractProblemCode(err);
       setError(
         (code && REGISTER_ERRORS[code]) ||
           'Không đăng ký được. Vui lòng kiểm tra kết nối rồi thử lại.',
       );
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };

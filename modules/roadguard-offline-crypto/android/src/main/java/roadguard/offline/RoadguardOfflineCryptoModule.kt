@@ -10,7 +10,6 @@ import java.security.*
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
 import java.util.UUID
-import javax.crypto.KeyAgreement
 import org.json.JSONArray
 
 /** Keys are never exported. Creation is explicit; missing keys never regenerate during signing. */
@@ -99,14 +98,5 @@ class RoadguardOfflineCryptoModule : Module() {
       Base64.getEncoder().encodeToString(StrictP256.sign(store().getKey("$p.sign", null) as PrivateKey, manifest))
     }
     AsyncFunction("verifyManifest") { publicKey: String, manifest: String, signature: String -> StrictP256.verify(publicKey, manifest, signature) }
-    // Diagnostic parity proof only. Raw agreement secret remains native; encrypted handover is locked.
-    AsyncFunction("agreementProof") { binding: String, peerPublicKey: String ->
-      val p = usable(binding); val agreement = KeyAgreement.getInstance("ECDH")
-      agreement.init(store().getKey("$p.agree", null) as PrivateKey)
-      agreement.doPhase(StrictP256.publicKey(peerPublicKey), true)
-      val secret = agreement.generateSecret()
-      try { Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(secret)) }
-      finally { secret.fill(0) }
-    }
   }
 }

@@ -193,6 +193,33 @@ export interface DatasetResponseDto {
   version: string;
 }
 
+/** API-026 returns DatasetDetailView, not the API-229 submission receipt. */
+export interface DatasetDetailViewDto extends DatasetResponseDto {
+  projectId: string;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  recordedAt: string | null;
+  deviceId: string | null;
+  scope: BandScopeDto[];
+  sourceFiles: Array<{ fileId: string; checksumSha256: string; sizeBytes: number; mediaType: string; purpose: string }>;
+  pairs: DatasetPairDto[];
+}
+
+export interface DatasetCoverageResponseDto {
+  datasetId: string;
+  items: Array<{
+    scope: BandScopeDto;
+    positionCoverage: string;
+    qualityCoverage: string;
+    overallCoverage: string;
+    reasons: string[];
+    coverageStatus?: string | null;
+  }>;
+  methodVersion: string;
+  assessmentId?: string | null;
+  version?: string | null;
+}
+
 export interface SubmitDatasetRequestDto {
   videoFileIds: string[];
   telemetryFileIds: string[];
@@ -216,16 +243,6 @@ export interface GeometryPackageWithEtag {
   data: GeometryPackageViewDto;
   etag: string;
 }
-
-/**
- * DEMO-ONLY cho môi trường Candidate3:
- * Thiết bị bay đã đăng ký và đang Active trong cơ sở dữ liệu BE (DroneDeviceSeedStep.cs: RG-DRONE-0001).
- * CHÚ Ý: Backend kiểm tra d.Id == request.DeviceId && d.Status == Active trong bảng DroneDevices.
- * Backend hiện KHÔNG có endpoint công khai nào để truy vấn hay đăng ký DroneDevice cho Operator.
- * Giá trị này chỉ hoạt động khi Backend seed đúng thiết bị này; trên môi trường khác hoặc production
- * mà không có thiết bị tương ứng thì Backend sẽ từ chối với mã lỗi survey_validation_failed.
- */
-export const FIXTURE_DRONE_DEVICE_ID = '5f1e9338-3f89-48f0-9d90-097b4ced4e62';
 
 // =============================================================================
 // HELPERS
@@ -267,6 +284,18 @@ export function isPreconditionRequired(error: unknown): boolean {
 // =============================================================================
 // API CALLS (REAL)
 // =============================================================================
+
+/** API-026: authorized dataset read. Backend checks Operator ownership and project scope. */
+export async function getOperatorDatasetReal(datasetId: string): Promise<{ data: DatasetDetailViewDto; etag: string }> {
+  const res = await apiClient.get<DatasetDetailViewDto>(`/datasets/${encodeURIComponent(datasetId)}`);
+  return { data: res.data, etag: extractEtagFromResponse(res) };
+}
+
+/** API-025: coverage is independent of upload integrity and dataset receipt. */
+export async function getOperatorDatasetCoverageReal(datasetId: string): Promise<DatasetCoverageResponseDto> {
+  const res = await apiClient.get<DatasetCoverageResponseDto>(`/datasets/${encodeURIComponent(datasetId)}/coverage`);
+  return res.data;
+}
 
 /**
  * API-038: GET /api/v1/me/survey-tasks

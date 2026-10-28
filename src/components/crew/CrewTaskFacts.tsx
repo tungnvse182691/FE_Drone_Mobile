@@ -10,10 +10,11 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   const [identity]=useState(currentQueueIdentity);
   const [facts,setFacts]=useState<Awaited<ReturnType<typeof readAssignedFieldFacts>>|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [showGeometry,setShowGeometry]=useState(false);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
-    if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);
+    if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);setShowGeometry(false);
     try {const result=await readAssignedFieldFacts(identity,projectId,taskId);crewReadGuard(identity);if(n===sequence.current)setFacts(result);}
     catch(e) {if(n===sequence.current && sameQueueIdentity(identity)) {
       const status=(e as {response?:{status?:number}})?.response?.status;
@@ -28,7 +29,9 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
     {facts?<View>
       {facts.geometry?<View><Text selectable>Route revision: {facts.geometry.routeVersionId}</Text>
       <Text>CRS: {facts.geometry.route.spatialSrid} — {facts.geometry.route.profileStatus}</Text>
-      <Text selectable>{facts.geometry.route.wkt}</Text>
+      <Text selectable>{facts.geometry.route.wkt.slice(0,showGeometry?12000:300)}{facts.geometry.route.wkt.length>(showGeometry?12000:300)?'…':''}</Text>
+      <Button variant="secondary" title={showGeometry?'Thu gọn hình học':'Xem chi tiết hình học (tối đa 12.000 ký tự)'} onPress={()=>setShowGeometry(v=>!v)} />
+      {showGeometry&&facts.geometry.route.wkt.length>12000?<Text>Bản xem được giới hạn để giữ ứng dụng phản hồi. Dữ liệu nguồn không bị thay đổi.</Text>:null}
       <Text>Đoạn trong snapshot: {facts.geometry.segments.length}</Text></View>:<Text>Hình học chưa sẵn sàng (HTTP 409); lịch sử được đọc riêng.</Text>}
       <Text>Lịch sử phân công: {facts.history.assignments.length}</Text>
       {facts.history.events.length===0?<Text>Chưa có sự kiện.</Text>:facts.history.events.map(e=><Text key={e.id}>{e.occurredAt} — {e.kind}: {e.reason}</Text>)}
