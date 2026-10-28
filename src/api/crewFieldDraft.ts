@@ -7,7 +7,8 @@ import { apiClient } from './client';
 import { sha256HexOfBytes } from './uploads';
 import * as crew from './crewApi';
 import type { Coords } from '../components/ViewFinder';
-import { openRepairJournal, type RepairJournalRecord } from './crewRepairDraft';
+import { type RepairJournalRecord } from './crewRepairDraft';
+import { readRepairHistory } from './crewRepairWorkflow';
 
 export interface FieldContext { actor: string; scope: string; environment: string; projectId: string; taskId: string }
 export interface FieldCapture {
@@ -35,6 +36,7 @@ export interface FieldRuntime {
   uuid: () => string; bytes: (uri: string) => Promise<Uint8Array>; hash: (bytes: Uint8Array) => Promise<string>;
   wait: () => Promise<void>; api: typeof crew;
   repairHistory?: () => Promise<RepairJournalRecord[]>;
+  historicalRead?: (scope:string) => Promise<FieldDraft|null>;
 }
 export function newFieldDraft(context: FieldContext): FieldDraft {
   return { ...context, captures: [], measurements: [], locationProof: null };
@@ -67,20 +69,56 @@ export function currentFieldContext(projectId: string, taskId: string): FieldCon
       !crew.isCrewResourceId(projectId) || !crew.isCrewResourceId(taskId)) return null;
   return { actor: s.user.id, scope, environment: apiClient.defaults.baseURL ?? '', projectId, taskId };
 }
-/** Key partitions actor/environment/task; old-sid unresolved work cannot be replaced after relogin. */
+/** Separate session keys preserve every legacy FIELD row and its media/command. */
 export async function openFieldRuntime(context: FieldContext): Promise<FieldRuntime> {
-  const db = openDatabase(); await initDatabase(db);
+  const current=()=>currentFieldContext(context.projectId,context.taskId);
+  const check=()=>{if(!sameContext(context,current()))throw Error('field_session_changed');};
+  check();const db = openDatabase(); await initDatabase(db);check();
   const key = `t05b:${JSON.stringify([context.environment,context.actor,context.projectId,context.taskId])}`;
+  const scoped=(scope:string)=>key+':'+JSON.stringify(scope);
+  const stored=async()=>{
+    check();const rows=await db.getAllAsync<{id:string;payload:string}>(
+      'SELECT id, payload FROM local_draft WHERE kind = ? AND (id = ? OR substr(id, 1, ?) = ?) ORDER BY rowid',
+      'T05B_FIELD',key,key.length+1,key+':');check();
+    return rows.map(row=>{
+      const draft=decodeFieldDraft(row.payload);
+      if(!sameResource(draft,context)||row.id!==key&&row.id!==scoped(draft.scope))throw Error('field_draft_invalid');
+      return draft;
+    });
+  };
   return {
-    current: () => currentFieldContext(context.projectId, context.taskId),
+    current,
     read: async () => {
-      const row=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ?',key);
-      return row ? decodeFieldDraft(row.payload) : null;
+      const drafts=await stored();check();
+      // Never hide another session's unresolved write behind a new empty draft.
+      if(drafts.some(d=>!sameContext(d,context)&&fieldDraftPending(d)))throw Error('field_previous_session_requires_reconciliation');
+      return drafts.filter(d=>sameContext(d,context)).at(-1)??drafts.at(-1)??null;
     },
-    write: draft => saveDraft(db,key,'T05B_FIELD', { ...draft }), uuid: randomUUID,
+    historicalRead:async scope=>{
+      const drafts=await stored();check();
+      const matches=drafts.filter(d=>d.scope===scope);
+      if(matches.length>1&&JSON.stringify(matches[0])!==JSON.stringify(matches[1]))throw Error('field_draft_invalid');
+      return matches.at(-1)??null;
+    },
+    write: async draft=>{check();if(!sameContext(draft,context))throw Error('field_session_changed');
+      const legacy=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ? AND kind = ?',key,'T05B_FIELD');check();
+      const target=legacy&&sameContext(decodeFieldDraft(legacy.payload),context)?key:scoped(context.scope);
+      await saveDraft(db,target,'T05B_FIELD',{...draft});check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,
   };
+}
+/** Old sid is provenance, never current mutation authority. */
+function sameResource(a:FieldContext,b:FieldContext):boolean {
+  if(!['actor','environment','projectId','taskId'].every(k=>a[k as keyof FieldContext]===b[k as keyof FieldContext]))return false;
+  if(a.scope===b.scope)return true;
+  try{const claims=JSON.parse(a.scope);return Array.isArray(claims)&&claims.length===2&&claims[0]===b.actor&&typeof claims[1]==='string'&&!!claims[1];}catch{return false;}
+}
+export async function readHistoricalFieldDraft(context:FieldContext,scope:string):Promise<FieldDraft> {
+  const runtime=await openFieldRuntime(context);
+  const draft=await guarded(context,runtime,()=>runtime.historicalRead!(scope));
+  if(!draft||draft.scope!==scope||!sameResource(draft,context))throw Error('field_draft_invalid');
+  return draft;
 }
 export function decodeFieldDraft(payload:string): FieldDraft {
   try {
@@ -127,13 +165,13 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
   });
 }
 async function claimSource(context: FieldContext,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
-  const history=await guarded(context,runtime,async()=>runtime.repairHistory ? runtime.repairHistory() : (await openRepairJournal(context)).list());
+  const history=await guarded(context,runtime,async()=>runtime.repairHistory ? runtime.repairHistory() : readRepairHistory(context));
   const finish=history.at(-1),start=history.find(row=>row.operation==='start');
   const ctx=task.repairContext;
   if(!ctx||task.mode!=='NORMAL'||ctx.mode!=='NORMAL'||ctx.status!=='InProgress'||task.purpose!=='PostRepair'||
     !start?.receipt||!finish?.receipt||start.phase!=='CONFIRMED'||finish.phase!=='CONFIRMED'||finish.operation!=='finish'||
     history.some(row=>row.phase!=='CONFIRMED')||
-    !sameContext(finish.identity,context)||!sameContext(start.identity,context)||
+    !sameResource(finish.identity,context)||!sameResource(start.identity,context)||
     [start,finish].some(row=>row.identity.packageId!==ctx.packageId||row.identity.itemId!==ctx.itemId||
       row.identity.bindingId!==ctx.bindingId||row.identity.assignmentId!==task.assignmentId)||
     finish.receipt.itemVersion!==ctx.itemVersion||
@@ -156,7 +194,11 @@ async function verifyRepairClaim(draft: FieldDraft,task: crew.FieldTaskViewFact,
 export async function prepareFieldRepairClaim(context: FieldContext,runtime?: FieldRuntime): Promise<FieldDraft> {
   const r=runtime??await openFieldRuntime(context);
   return exclusive(context,async()=>{
-    const draft=await loadFieldDraft(context,r);
+    const saved=await guarded(context,r,()=>r.read());
+    if(saved&&!sameResource(saved,context))throw Error('field_previous_session_requires_reconciliation');
+    if(saved&&!sameContext(saved,context)&&saved.command)throw Error('field_previous_session_requires_reconciliation');
+    // Explicit claim can create an empty current-session draft, never adopt old photos/measurements.
+    const draft=saved&&sameContext(saved,context)?saved:newFieldDraft(context);
     if(draft.command)throw Error('field_command_pending');
     const fresh=await freshTask(draft,r,'capture');
     if(fresh.data.latestSubmissionId)throw Error('repair_claim_root_required');

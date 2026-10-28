@@ -14,7 +14,18 @@ for(const method of ['login','otp'])test('RPT-01 real '+method+' screen restores
   if(method==='login'){s.input('Email hoặc Số điện thoại','fixture@example.test');s.input('Mật khẩu','synthetic-only');}
   else{s.nodes().find(n=>n.type==='TextInput').props.onChangeText('123456');s.render();}
   await s.press(method==='login'?'Đăng nhập':'Xác nhận OTP');await s.flush();
-  assert.equal(s.h.getAuth().user.id,'B');assert.equal(s.nav.at(-1),'/(reporter)/home');
+  assert.equal(s.h.getAuth().user.id,'B');
+  if(method==='login'){
+    assert.deepEqual(s.nav,[],'login commits session; root owns restore/navigation');
+    const segments=['(auth)'],router={replace:p=>s.nav.push(p)};
+    const auth=Object.assign(f=>f(s.h.getAuth()),{getState:()=>s.h.getAuth()});
+    const root=screen('app/_layout.tsx',{expose:'AuthGuard',exportName:'AuthGuard',props:{children:'Stack'},modules:{
+      '../src/store/auth':{useAuthStore:auth},'../src/store/reporter':s.reporter,'../src/store/uploads':s.uploads,
+      '../src/api/uploads':s.h.load('src/api/uploads.ts'),'expo-router':{useSegments:()=>segments,useRouter:()=>router},
+      '@tanstack/react-query':{QueryClient:class{}},'expo-font':{},'expo-status-bar':{},'@expo-google-fonts/roboto':{},'react-native-gesture-handler':{},'../src/components/Toast':{Toast:'Toast'},
+    }});root.render();await root.flush();root.unmount();
+  }
+  assert.equal(s.nav.at(-1),'/(reporter)/home');
   assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
   assert.equal(JSON.stringify([...s.h.rows]),before);assert.equal(s.h.calls.length,0);
   assert.match(JSON.stringify(s.nodes()),/không tự chuyển/);

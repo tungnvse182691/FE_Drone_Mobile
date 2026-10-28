@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 import { ReactNode, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +19,7 @@ import {
   WEB_ONLY_ROLE_MESSAGE,
 } from '../src/constants/routes';
 import { useReporterStore } from '../src/store/reporter';
+import { reporterContext, assertReporterContext } from '../src/store/uploads';
 import { Toast } from '../src/components/Toast';
 import { hasAuthenticatedSession, type MobileSession } from '../src/api/uploads';
 
@@ -98,10 +99,10 @@ function AuthGuard({ children }: { children: ReactNode }) {
   const token = useAuthStore((state) => state.token);
   const status = useAuthStore((state) => state.status);
   const forcedChangeUsername = useAuthStore((state) => state.forcedChangeUsername);
-  const pending = useReporterStore(state => state.pendingDraft);
   const segments: string[] = useSegments();
   const router = useRouter();
   const [showWebOnlyToast, setShowWebOnlyToast] = useState(false);
+  const [restoreError,setRestoreError]=useState(false),[restoreRetry,setRestoreRetry]=useState(0);
 
   const isWebOnlyRole = !!user && !ROLE_HOMES[user.role_code];
 
@@ -114,18 +115,40 @@ function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const destination = authGuardDestination({ user, token, status }, segments, !!forcedChangeUsername);
+    let cancelled=false;
+    setRestoreError(false);
     if (destination && segments[0] === '(auth)' && user?.role_code === 'REPORTER' &&
-        hasAuthenticatedSession({ user, token, status }) && !user.must_change_password &&
-        pending && (!pending.ownerId || pending.ownerId === user.id)) {
-      router.replace(pending.targetReportId
-        ? { pathname: '/(reporter)/report-supplement', params: { reportId: pending.targetReportId } }
-        : '/(reporter)/report');
+        hasAuthenticatedSession({ user, token, status }) && !user.must_change_password) {
+      // One navigation owner: login commits the session, this guard waits for exact-owned restore.
+      void (async()=>{
+        try {
+          const context=reporterContext();
+          assertReporterContext(context);
+          const draft=await useReporterStore.getState().restorePendingDraft();
+          if(cancelled)return;
+          assertReporterContext(context);
+          const owned=draft?.ownerId===user.id&&draft.provenance?.environment===context.environment&&
+            draft.provenance?.session===context.session&&!draft.retired;
+          router.replace(owned ? (draft.targetReportId
+            ? {pathname:'/(reporter)/report-supplement',params:{reportId:draft.targetReportId}}
+            : '/(reporter)/report') : destination as any);
+        }catch{
+          // Failed restore is not evidence of empty data. Preserve the draft and offer explicit retry.
+          const current=useAuthStore.getState();
+          if(!cancelled&&current.user?.id===user.id&&current.token===token&&current.status===status)setRestoreError(true);
+        }
+      })();
     } else if (destination) router.replace(destination as any);
-  }, [user, token, status, forcedChangeUsername, segments, router, pending]);
+    return ()=>{cancelled=true;};
+  }, [user, token, status, forcedChangeUsername, segments, router, restoreRetry]);
 
   return (
     <View style={styles.guardRoot}>
       {children}
+      {restoreError ? <View accessibilityLiveRegion="polite">
+        <Text>Chưa khôi phục được nháp. Dữ liệu được giữ nguyên; vui lòng thử lại.</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Thử khôi phục nháp" onPress={()=>setRestoreRetry(n=>n+1)}><Text>Thử khôi phục nháp</Text></Pressable>
+      </View> : null}
       {showWebOnlyToast ? <Toast type="warning" message={WEB_ONLY_ROLE_MESSAGE} duration={WEB_ONLY_TOAST_MS} /> : null}
     </View>
   );

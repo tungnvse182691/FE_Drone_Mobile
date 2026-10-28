@@ -91,15 +91,8 @@ export default function LoginScreen() {
       if (isReporterSession(useAuthStore.getState())) {
         const reporter = useReporterStore.getState();
         reporter.markVerified(loggedUser.phone_or_email);
-        const isLoggedInAttemptCurrent = captureAttempt();
-        const draft = await reporter.restorePendingDraft();
-        if (!isLoggedInAttemptCurrent()) return;
-        if (draft) {
-          router.replace(draft.targetReportId
-            ? { pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } }
-            : '/(reporter)/report');
-          return;
-        }
+        // AuthGuard restores only an exact-owned draft before choosing the destination.
+        return;
       }
       const home = ROLE_HOMES[loggedUser.role_code];
       if (home) {

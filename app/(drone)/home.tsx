@@ -70,7 +70,7 @@ export default function DroneHomeScreen() {
         </View>
         <View style={styles.readyBadge}>
           <View style={styles.readyDot} />
-          <Text style={[typography.labelSm, styles.readyText]}>Sẵn sàng bay</Text>
+          <Text style={[typography.labelSm, styles.readyText]}>Chưa xác nhận an toàn</Text>
         </View>
       </View>
 
@@ -94,11 +94,11 @@ export default function DroneHomeScreen() {
         <View style={styles.telemetryStripRow}>
           <View style={styles.telemetryTag}>
             <MaterialIcons name="cloud-queue" size={15} color={colors.secondary} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Thời tiết: An toàn bay</Text>
+            <Text style={[typography.caption, styles.telemetryTagText]}>Thời tiết: Chưa có dữ liệu</Text>
           </View>
           <View style={styles.telemetryTag}>
-            <MaterialIcons name="battery-charging-full" size={15} color={colors.success} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Thiết bị: Sẵn sàng</Text>
+            <MaterialIcons name="battery-unknown" size={15} color={colors.secondary} />
+            <Text style={[typography.caption, styles.telemetryTagText]}>Thiết bị: Chưa có dữ liệu</Text>
           </View>
         </View>
       </Card>
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: colors.success,
+    backgroundColor: colors.secondary,
   },
   readyText: {
     color: colors.secondary,

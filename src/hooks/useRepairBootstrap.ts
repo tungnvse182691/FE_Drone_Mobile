@@ -1,44 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiClient } from '../api/client';
 import { messageFor } from '../api/errorCatalog';
 import { parseProblemDetails } from '../api/problemDetails';
 import { uuidv4 } from '../utils/uuid';
 import {
-  finishRepairExecutionReal,
   getFieldInspectionTaskDetailReal,
   isCrewResourceId,
   normalRepairBlock,
   validateCrewTaskDetail,
-  startRepairExecutionReal,
-  submitRepairAssessmentReal,
-  submitRepairAttemptReal,
-  supplementRepairAttemptReal,
 } from '../api/crewApi';
 import { currentRepairIdentity, sameRepairIdentity, type RepairIdentity } from '../api/crewRepairDraft';
 import { useAuthStore } from '../store/auth';
 import { passwordSessionIdentity } from '../api/authApi';
-import {
-  finishRepairExecution as finishRepairExecutionMock,
-  getCrewFieldTaskView,
-  listCrewFieldSubmissions,
-  startRepairExecution as startRepairExecutionMock,
-  submitRepairAssessment as submitRepairAssessmentMock,
-  submitRepairAttempt as submitRepairAttemptMock,
-  supplementRepairAttempt as supplementRepairAttemptMock,
-  type CrewFieldSubmissionView,
-  type CrewFieldTaskViewFact,
-  type CrewRepairContext,
-  type RepairAssessmentView,
-  type RepairAttemptIntakeView,
-  type RepairExecutionFinishView,
-  type RepairExecutionStartView,
-} from '../api/mock/tasks';
-
-/**
- * Legacy repair transport retained for historical compatibility. Repair callbacks remain
- * disabled in T06-A; bootstrap reads API-080 directly with session validation.
- */
-const USE_MOCK_CREW_REPAIR = false;
+import type { CrewRepairContext, RepairAssessmentView, RepairAttemptIntakeView,
+  RepairExecutionFinishView, RepairExecutionStartView } from '../api/crewApi';
 
 /** Ngữ cảnh sửa chữa đọc từ API-080 (nhánh nullable `repairContext` cho Crew NORMAL). */
 export type RepairContext = CrewRepairContext;
@@ -123,147 +97,6 @@ function syntheticError(code: string, status: number, message: string) {
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/* Legacy transport: HTTP selected; repair command entrypoints are locked.     */
-/* -------------------------------------------------------------------------- */
-
-interface CrewRepairTransport {
-  fetchTask(taskId: string, projectId: string): Promise<CrewFieldTaskViewFact>;
-  supplement(
-    taskId: string,
-    repairContext: RepairContext,
-    projectId: string,
-    input: { fieldSubmissionId: string; expectedContentHash: string },
-    headers: RepairCommandHeaders,
-  ): Promise<RepairAttemptIntakeView>;
-  assess(
-    taskId: string,
-    repairContext: RepairContext,
-    projectId: string,
-    input: Record<string, unknown>,
-    headers: RepairCommandHeaders,
-  ): Promise<RepairAssessmentView>;
-  attempt(
-    taskId: string,
-    repairContext: RepairContext,
-    projectId: string,
-    input: Record<string, unknown>,
-    headers: RepairCommandHeaders,
-  ): Promise<RepairAttemptIntakeView>;
-  startExecution(
-    taskId: string,
-    repairContext: RepairContext,
-    projectId: string,
-    input: Record<string, unknown>,
-    headers: RepairCommandHeaders,
-  ): Promise<RepairExecutionStartView>;
-  finishExecution(
-    taskId: string,
-    repairContext: RepairContext,
-    projectId: string,
-    input: Record<string, unknown>,
-    headers: RepairCommandHeaders,
-  ): Promise<RepairExecutionFinishView>;
-
-}
-
-const mockCrewRepairTransport: CrewRepairTransport = {
-  fetchTask: (taskId) => getCrewFieldTaskView(taskId),
-  supplement: (taskId, _ctx, _projectId, input, headers) =>
-    supplementRepairAttemptMock(taskId, input, headers),
-  assess: (taskId, _ctx, _projectId, input, headers) =>
-    submitRepairAssessmentMock(taskId, input, headers),
-  attempt: (taskId, _ctx, _projectId, input, headers) =>
-    submitRepairAttemptMock(taskId, input, headers),
-  startExecution: (taskId, _ctx, _projectId, input, headers) =>
-    startRepairExecutionMock(taskId, input, headers),
-  finishExecution: (taskId, _ctx, _projectId, input, headers) =>
-    finishRepairExecutionMock(taskId, input, headers),
-
-};
-
-function repairItemPath(projectId: string, ctx: RepairContext, taskId: string, suffix: string): string {
-  return `/projects/${projectId}/repair-packages/${ctx.packageId}/items/${ctx.itemId}/tasks/${taskId}/${suffix}`;
-}
-
-const httpCrewRepairTransport: CrewRepairTransport = {
-  async fetchTask(taskId, projectId) {
-    const res = await getFieldInspectionTaskDetailReal(projectId, taskId);
-    return res.data as unknown as CrewFieldTaskViewFact;
-  },
-  async supplement(taskId, ctx, projectId, input, headers) {
-    const res = await supplementRepairAttemptReal(
-      projectId,
-      ctx.packageId,
-      ctx.itemId,
-      taskId,
-      input,
-      headers['If-Match'],
-      headers['Idempotency-Key'],
-    );
-    return res.data as unknown as RepairAttemptIntakeView;
-  },
-  async assess(taskId, ctx, projectId, input, headers) {
-    const res = await submitRepairAssessmentReal(
-      projectId,
-      ctx.packageId,
-      ctx.itemId,
-      taskId,
-      input as any,
-      headers['If-Match'],
-      headers['Idempotency-Key'],
-    );
-    return res.data as unknown as RepairAssessmentView;
-  },
-  async attempt(taskId, ctx, projectId, input, headers) {
-    const res = await submitRepairAttemptReal(
-      projectId,
-      ctx.packageId,
-      ctx.itemId,
-      taskId,
-      input as any,
-      headers['If-Match'],
-      headers['Idempotency-Key'],
-    );
-    return res.data as unknown as RepairAttemptIntakeView;
-  },
-  async startExecution(taskId, ctx, projectId, input, headers) {
-    const res = await startRepairExecutionReal(
-      projectId,
-      ctx.packageId,
-      ctx.itemId,
-      taskId,
-      input as any,
-      headers['If-Match'],
-      headers['Idempotency-Key'],
-    );
-    return res.data as unknown as RepairExecutionStartView;
-  },
-  async finishExecution(taskId, ctx, projectId, input, headers) {
-    const res = await finishRepairExecutionReal(
-      projectId,
-      ctx.packageId,
-      ctx.itemId,
-      taskId,
-      input as any,
-      headers['If-Match'],
-      headers['Idempotency-Key'],
-    );
-    return res.data as unknown as RepairExecutionFinishView;
-  },
-
-};
-
-export const crewRepairTransport: CrewRepairTransport = USE_MOCK_CREW_REPAIR
-  ? mockCrewRepairTransport
-  : httpCrewRepairTransport;
-
-
-
-/* -------------------------------------------------------------------------- */
-/* C04 — bootstrap + itemVersion                                              */
-/* -------------------------------------------------------------------------- */
-
 /** Đọc API-080 và bóc `repairContext` (itemVersion) tại thời điểm gọi. */
 export async function readRepairBootstrap(
   taskId: string,
@@ -306,88 +139,23 @@ export async function withFreshItemVersion<T>(
 /* C-09 — lệnh thi công sửa chữa (API-156/157/161/160) và C-08 (API-159)      */
 /* -------------------------------------------------------------------------- */
 
-export function submitRepairAssessment(
-  taskId: string,
-  input: Record<string, unknown>,
-  options?: RepairCommandOptions,
-): Promise<RepairAssessmentView> {
-  return withFreshItemVersion(
-    taskId,
-    ({ repairContext, bootstrap, headers }) =>
-      crewRepairTransport.assess(taskId, repairContext, bootstrap.projectId, input, headers),
-    options,
-  );
+export function submitRepairAssessment(taskId: string, input: Record<string, unknown>, options?: RepairCommandOptions): Promise<RepairAssessmentView> {
+  return withFreshItemVersion(taskId, async () => { throw new Error('repair_execution_not_enabled'); }, options);
 }
-
-export function submitRepairAttempt(
-  taskId: string,
-  input: Record<string, unknown>,
-  options?: RepairCommandOptions,
-): Promise<RepairAttemptIntakeView> {
-  return withFreshItemVersion(
-    taskId,
-    ({ repairContext, bootstrap, headers }) =>
-      crewRepairTransport.attempt(taskId, repairContext, bootstrap.projectId, input, headers),
-    options,
-  );
+export function submitRepairAttempt(taskId: string, input: Record<string, unknown>, options?: RepairCommandOptions): Promise<RepairAttemptIntakeView> {
+  return withFreshItemVersion(taskId, async () => { throw new Error('repair_execution_not_enabled'); }, options);
 }
-
-export function startRepairExecution(
-  taskId: string,
-  input: Record<string, unknown>,
-  options?: RepairCommandOptions,
-): Promise<RepairExecutionStartView> {
-  return withFreshItemVersion(
-    taskId,
-    ({ repairContext, bootstrap, headers }) =>
-      crewRepairTransport.startExecution(taskId, repairContext, bootstrap.projectId, input, headers),
-    options,
-  );
+export function startRepairExecution(taskId: string, input: Record<string, unknown>, options?: RepairCommandOptions): Promise<RepairExecutionStartView> {
+  return withFreshItemVersion(taskId, async () => { throw new Error('repair_execution_not_enabled'); }, options);
 }
-
-export function finishRepairExecution(
-  taskId: string,
-  input: Record<string, unknown>,
-  options?: RepairCommandOptions,
-): Promise<RepairExecutionFinishView> {
-  return withFreshItemVersion(
-    taskId,
-    ({ repairContext, bootstrap, headers }) =>
-      crewRepairTransport.finishExecution(taskId, repairContext, bootstrap.projectId, input, headers),
-    options,
-  );
+export function finishRepairExecution(taskId: string, input: Record<string, unknown>, options?: RepairCommandOptions): Promise<RepairExecutionFinishView> {
+  return withFreshItemVersion(taskId, async () => { throw new Error('repair_execution_not_enabled'); }, options);
 }
-
-/**
- * C-08 — API-159 legacy supplement remains locked by withFreshItemVersion in T06-A.
- */
-export function supplementRepairAttempt(
-  taskId: string,
-  input: { fieldSubmissionId: string; expectedContentHash: string },
-  options?: RepairCommandOptions,
-): Promise<RepairAttemptIntakeView> {
-  return withFreshItemVersion(
-    taskId,
-    ({ repairContext, bootstrap, headers }) =>
-      crewRepairTransport.supplement(taskId, repairContext, bootstrap.projectId, input, headers),
-    options,
-  );
+export function supplementRepairAttempt(taskId: string, input: {fieldSubmissionId: string; expectedContentHash: string}, options?: RepairCommandOptions): Promise<RepairAttemptIntakeView> {
+  return withFreshItemVersion(taskId, async () => { throw new Error('repair_execution_not_enabled'); }, options);
 }
-
-/**
- * Danh sách lượt sửa đã gửi để chọn ở C-08.
- *
- * 17_10 KHÔNG có endpoint liệt kê lượt gửi (API-096 chỉ đọc MỘT submission theo id), nên
- * không được tự chế endpoint danh sách. Chế độ mock dùng dữ liệu seed nội bộ; chế độ
- * HTTP thật báo "chưa khả dụng" để Crew chuyển PM thay vì hiển thị dữ liệu giả.
- */
-export function listRepairSubmissions(taskId: string): Promise<CrewFieldSubmissionView[]> {
-  if (USE_MOCK_CREW_REPAIR) {
-    return listCrewFieldSubmissions(taskId);
-  }
-  return Promise.reject(
-    new Error('Máy chủ chưa hỗ trợ danh sách lượt gửi hiện trường. Vui lòng liên hệ PM.'),
-  );
+export function listRepairSubmissions(_taskId: string): Promise<never[]> {
+  return Promise.reject(new Error('Chưa có nguồn danh sách lượt gửi Crew được xác minh.'));
 }
 
 /* -------------------------------------------------------------------------- */

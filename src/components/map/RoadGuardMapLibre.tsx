@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { View, StyleSheet, Text, Pressable, Platform, StyleProp, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { mapMarkers, mapCoordinate, mapScriptJson, mapBridge, mapDocument } from './mapWebViewSafety';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../design-tokens';
 
@@ -35,25 +36,27 @@ export function RoadGuardMapLibre({
   onMarkerPress,
   style,
   interactive = true,
-  offlineBannerText = 'Ngoại tuyến: Sơ đồ tim đường vector (Offline Schematic)',
+  offlineBannerText = 'Bản đồ chưa khả dụng. Chưa có bằng chứng bản đồ ngoại tuyến.',
   controlsTopOffset = spacing.sm,
 }: RoadGuardMapProps) {
   const webViewRef = useRef<WebView>(null);
   const [layerType, setLayerType] = useState<'streets' | 'satellite'>('streets');
   const [loadError, setLoadError] = useState(false);
 
+  const validMarkers=mapMarkers(markers);
   // Generate HTML for MapLibre GL JS (Official WebGL Engine)
   const mapHtml = useMemo(() => {
-    const markersJson = JSON.stringify(markers);
-    const routeJson = JSON.stringify(routeCoordinates);
-    const centerLng = center[0];
-    const centerLat = center[1];
+    const markersJson = mapScriptJson(validMarkers);
+    const routeJson = mapScriptJson(Array.isArray(routeCoordinates)?routeCoordinates.filter(mapCoordinate):[]);
+    const centerLng = mapCoordinate(center)?center[0]:106.5722;
+    const centerLat = mapCoordinate(center)?center[1]:10.7411;
 
     return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://unpkg.com; style-src 'unsafe-inline' https://unpkg.com; img-src https://mt1.google.com data: blob:; connect-src https://mt1.google.com; worker-src blob:; font-src 'none'; base-uri 'none'; form-action 'none';" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -206,8 +209,8 @@ export function RoadGuardMapLibre({
         container: 'map',
         style: '${layerType}' === 'satellite' ? styleSatellite : styleStreet,
         center: [${centerLng}, ${centerLat}],
-        zoom: ${zoom},
-        interactive: ${interactive},
+        zoom: ${Number.isFinite(zoom)?Math.max(0,Math.min(22,zoom)):15},
+        interactive: ${interactive===true},
         attributionControl: false,
         pitch: 35
       });
@@ -253,23 +256,29 @@ export function RoadGuardMapLibre({
         markers.forEach(function(m) {
           var container = document.createElement('div');
           
-          if (m.type === 'vehicle') {
-            container.className = 'custom-vehicle-container';
-            container.innerHTML = '<div class="vehicle-pulse"></div><div class="vehicle-puck"></div>';
-          } else {
-            container.className = 'custom-defect-container';
-            container.innerHTML = 
-              '<div class="custom-defect-pin"><div class="custom-defect-icon">!</div></div>' +
-              '<div class="custom-defect-label">' + (m.label || m.title || 'Vị trí lỗi') + '</div>';
+          function node(tag,cls,text) {
+            var el=document.createElement(tag);el.className=cls;
+            if(text!=null)el.textContent=text;return el;
           }
-
-          var popupContent = '<div style="padding:4px;">' +
-            '<div class="popup-title">' + (m.title || '') + '</div>' +
-            (m.subtitle ? '<div class="popup-sub">' + m.subtitle + '</div>' : '') +
-            '<a class="popup-btn" href="javascript:void(0);" onclick="window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: \\'MARKER_CLICK\\', id: \\'' + m.id + '\\' }))">Xem chi tiết</a>' +
-            '</div>';
-
-          var popup = new maplibregl.Popup({ offset: 25, closeButton: false }).setHTML(popupContent);
+          if (m.type === 'vehicle') {
+            container.className='custom-vehicle-container';
+            container.appendChild(node('div','vehicle-pulse'));
+            container.appendChild(node('div','vehicle-puck'));
+          } else {
+            container.className='custom-defect-container';
+            var pin=node('div','custom-defect-pin');pin.appendChild(node('div','custom-defect-icon','!'));
+            container.appendChild(pin);
+            container.appendChild(node('div','custom-defect-label',m.label||m.title||'Vị trí lỗi'));
+          }
+          var popupContent=node('div','popup');
+          popupContent.appendChild(node('div','popup-title',m.title));
+          if(m.subtitle)popupContent.appendChild(node('div','popup-sub',m.subtitle));
+          var button=node('button','popup-btn','Xem chi tiết');button.type='button';
+          button.addEventListener('click',function(){
+            if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'MARKER_CLICK',id:m.id}));
+          });
+          popupContent.appendChild(button);
+          var popup=new maplibregl.Popup({offset:25,closeButton:false}).setDOMContent(popupContent);
 
           new maplibregl.Marker({ element: container, anchor: m.type === 'vehicle' ? 'center' : 'bottom' })
             .setLngLat(m.coordinate)
@@ -318,12 +327,12 @@ export function RoadGuardMapLibre({
             duration: 700
           });
         } else {
-          window.mapInstance.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${zoom}, pitch: 35, duration: 700 });
+          window.mapInstance.flyTo({ center: [${centerLng}, ${centerLat}], zoom: ${Number.isFinite(zoom)?Math.max(0,Math.min(22,zoom)):15}, pitch: 35, duration: 700 });
         }
       };
     } catch (e) {
       if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR', message: e.message }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'ERROR' }));
       }
     }
   </script>
@@ -333,50 +342,16 @@ export function RoadGuardMapLibre({
   }, [center, zoom, markers, routeCoordinates, layerType, interactive]);
 
   // Handle message from WebView (e.g. marker click)
-  const handleMessage = (event: any) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'MARKER_CLICK' && onMarkerPress) {
-        onMarkerPress(data.id);
-      } else if (data.type === 'ERROR') {
-        setLoadError(true);
-      }
-    } catch {
-      // ignore
-    }
+  const handleMessage = (event: {nativeEvent:{data:string;url:string}}) => {
+    const data=mapBridge(event.nativeEvent.data,event.nativeEvent.url,validMarkers);
+    if(data?.type==='MARKER_CLICK')onMarkerPress?.(data.id);
+    if(data?.type==='ERROR')setLoadError(true);
   };
-
-  // Render Fallback Offline Schematic when WebView fails or offline
   const renderOfflineFallback = () => (
-    <View style={styles.offlineContainer}>
-      <View style={[styles.offlineBanner, { top: controlsTopOffset, right: interactive ? 52 : spacing.sm }]}>
-        <MaterialIcons name="cloud-off" size={14} color={colors.warning} />
-        <Text style={[typography.labelSm, styles.offlineBannerText]}>{offlineBannerText}</Text>
-      </View>
-
-      {/* Schematic vector road map */}
-      <View style={styles.schematicCanvas}>
-        <View style={styles.schematicRoadBg} />
-        <View style={styles.schematicRoadLine} />
-        <View style={styles.schematicRoadDashed} />
-
-        {/* Start / Vehicle Pin */}
-        <View style={styles.schematicVehicle}>
-          <View style={styles.vehicleHalo} />
-          <View style={styles.vehicleDot} />
-          <Text style={[typography.caption, styles.pinLabel]}>Xe thi công</Text>
-        </View>
-
-        {/* Route Line */}
-        <View style={styles.schematicRouteTrack} />
-
-        {/* Destination / Defect Pin */}
-        <View style={styles.schematicDefect}>
-          <MaterialIcons name="warning" size={16} color={colors.surface} />
-          <View style={styles.defectPulse} />
-          <Text style={[typography.caption, styles.defectLabel]}>Cầu Bà Lát · Km01+850</Text>
-        </View>
-      </View>
+    <View style={styles.offlineContainer} accessibilityLabel="Bản đồ chưa khả dụng">
+      <MaterialIcons name="cloud-off" size={24} color={colors.neutral} />
+      <Text style={typography.labelSm}>{offlineBannerText}</Text>
+      <Text>Không có bản đồ ngoại tuyến đã được xác minh.</Text>
     </View>
   );
 
@@ -385,8 +360,14 @@ export function RoadGuardMapLibre({
       {!loadError ? (
         <WebView
           ref={webViewRef}
+          // Intercept ALL URLs: WebView otherwise opens non-whitelisted schemes via Linking.
           originWhitelist={['*']}
-          source={{ html: mapHtml }}
+          onOpenWindow={() => { /* Popups never open an external browser. */ }}
+          onShouldStartLoadWithRequest={request => mapDocument(request.url)}
+          javaScriptCanOpenWindowsAutomatically={false}
+          allowFileAccess={false}
+          mixedContentMode="never"
+          source={{ html: mapHtml, baseUrl: 'about:blank' }}
           style={styles.webview}
           onMessage={handleMessage}
           onError={() => setLoadError(true)}
@@ -419,8 +400,8 @@ export function RoadGuardMapLibre({
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Mô phỏng chế độ ngoại tuyến"
-              onPress={() => setLoadError(prev => !prev)}
+              accessibilityLabel="Thử tải lại bản đồ"
+              onPress={() => setLoadError(false)}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
               <MaterialIcons
@@ -584,105 +565,5 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontSize: 11,
     fontWeight: '600',
-  },
-  schematicCanvas: {
-    width: '100%',
-    height: 160,
-    marginTop: spacing.md,
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  schematicRoadBg: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    height: 50,
-    backgroundColor: '#D1D5DB',
-    borderRadius: radius.md,
-  },
-  schematicRoadLine: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    height: 46,
-    backgroundColor: '#9CA3AF',
-    borderRadius: radius.md,
-  },
-  schematicRoadDashed: {
-    position: 'absolute',
-    left: 25,
-    right: 25,
-    height: 2,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-    borderStyle: 'dashed',
-  },
-  schematicRouteTrack: {
-    position: 'absolute',
-    left: 60,
-    width: 170,
-    height: 6,
-    backgroundColor: colors.primary,
-    borderRadius: radius.sm,
-    zIndex: 2,
-  },
-  schematicVehicle: {
-    position: 'absolute',
-    left: 45,
-    alignItems: 'center',
-    zIndex: 4,
-  },
-  vehicleHalo: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(59, 130, 246, 0.25)',
-    position: 'absolute',
-    top: -4,
-  },
-  vehicleDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.info,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  pinLabel: {
-    marginTop: 4,
-    color: colors.neutral,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  schematicDefect: {
-    position: 'absolute',
-    right: 45,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.error,
-    borderWidth: 2,
-    borderColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 4,
-  },
-  defectPulse: {
-    position: 'absolute',
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1.5,
-    borderColor: colors.error,
-    opacity: 0.5,
-  },
-  defectLabel: {
-    position: 'absolute',
-    top: 36,
-    color: colors.error,
-    fontSize: 10,
-    fontWeight: '700',
-    width: 70,
-    textAlign: 'center',
   },
 });

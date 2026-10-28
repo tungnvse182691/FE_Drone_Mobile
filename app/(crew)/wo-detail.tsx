@@ -229,17 +229,29 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
   const identity=useCrewIdentity();
   const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên Crew hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
-  const [history,setHistory]=useState<RepairJournalRecord[]>([]),[draft,setDraft]=useState<FieldDraft|null>(null);
+  const [storedHistory,setHistory]=useState<RepairJournalRecord[]>([]),[storedDraft,setDraft]=useState<FieldDraft|null>(null);
   const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
+  const [historyIdentity,setHistoryIdentity]=useState<ReturnType<typeof currentRepairIdentity>>(null);
+  const [confirmation,setConfirmation]=useState<{identity:NonNullable<ReturnType<typeof currentRepairIdentity>>;key:string}|null>(null);
+  const live=currentRepairIdentity(task.projectId,task.id);
+  const history=sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)?storedHistory:[];
+  const draft=sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)?storedDraft:null;
   const active=useRef(false),lock=useRef(false);
   const load=useCallback(async()=>{
     const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
-    setLoaded(false);setHistory([]);setDraft(null);setNotice('');
+    setLoaded(false);setBusy(false);setHistory([]);setHistoryIdentity(null);setConfirmation(null);setDraft(null);setNotice('');
     try {
-      const rows=await readRepairHistory(i),field=await readRepairFieldDraft(i);
-      if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){setHistory(rows);setDraft(field);setLoaded(true);}
+      const rows=await readRepairHistory(i);
+      if(!active.current||!sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))return;
+      setHistoryIdentity(i);setHistory(rows);setLoaded(true);
+      try {
+        const field=await readRepairFieldDraft(i);
+        if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setDraft(field);
+      }catch{
+        if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice('Nháp FIELD cũ được giữ riêng để đối soát. Lịch sử repair không bị xóa; không tự nhận nháp phiên cũ.');
+      }
     }catch(e){if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(repairErrorMessage(e));}
-  },[task.id,task.projectId]);
+  },[task.id,task.projectId,identity.scope,identity.user?.id,live?.environment]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
   const pending=history.find(c=>!['CONFIRMED','REJECTED'].includes(c.phase));
   const assessment=history.filter(c=>c.operation==='assessment'&&c.phase==='CONFIRMED').at(-1);
@@ -248,9 +260,11 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
   const intake=history.find(c=>c.operation==='attempt'&&c.phase==='CONFIRMED');
   const rejected=history.some(c=>c.phase==='REJECTED');
   const ready=assessment?.receipt?.data.readiness==='READY';
-  const sourceReady=!!draft?.measurements.length&&!!draft.captures.some(c=>c.purpose!=='AFTER'&&c.verified&&c.upload?.fileId);
+  const sourceReady=!!historyIdentity&&sameRepairIdentity(historyIdentity,live)&&!!draft?.measurements.length&&!!draft.captures.some(c=>c.purpose!=='AFTER'&&c.verified&&c.upload?.fileId);
   const run=async(action:'assessment'|'start'|'finish'|'claim'|'attempt'|'replay')=>{
     if(lock.current)return;const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
+    if(action==='replay'&&(!confirmation||confirmation.key!==pending?.key||!sameRepairIdentity(confirmation.identity,i)))return;
+    setConfirmation(null);
     lock.current=true;setBusy(true);setNotice('');
     try {
       if(action==='claim') {
@@ -267,8 +281,8 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
       lock.current=false;
       if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){
         setBusy(false);
-        try{const rows=await readRepairHistory(i);if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setHistory(rows);}catch{/* Keep the error and disable new commands on failed reload. */if(active.current){setLoaded(false);setHistory([]);}}
-        void result.reload();
+        try{const rows=await readRepairHistory(i);if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setHistory(rows);}catch{/* Keep the error and disable new commands on failed reload. */if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){setLoaded(false);setHistory([]);}}
+        if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))void result.reload();
       }
     }
   };
@@ -299,7 +313,12 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
     </View>)}
     {assessment&&!ready?<Text>Assessment còn INCOMPLETE. Sửa nháp FIELD theo missingReasons rồi chủ động gửi assessment mới; lịch sử cũ được giữ nguyên.</Text>:null}
     <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||history.some(c=>c.operation==='start')||result.status!=='ready'} onPress={()=>void run('start')}/>
-    {pending?<><Text>Chưa xác nhận được kết quả. Chỉ đối soát/gửi lại đúng lệnh đã lưu.</Text><Button variant="secondary" title="Đối soát / replay lệnh đã lưu" disabled={busy||!loaded} onPress={()=>void run('replay')}/></>:null}
+    {pending?<><Text>Chưa xác nhận được kết quả. Chỉ đối soát/gửi lại đúng lệnh đã lưu.</Text><Button variant="secondary" title="Đối soát / replay lệnh đã lưu" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i&&pending)setConfirmation({identity:i,key:pending.key});}}/></>:null}
+    {confirmation&&sameRepairIdentity(confirmation.identity,live)?<View>
+      <Text accessibilityRole="alert">Đối soát có thể POST lại đúng lệnh đã lưu. Nếu máy chủ chưa ghi lệnh, thao tác này có thể thực thi lần đầu. Payload, key và phiên bản gốc được giữ nguyên.</Text>
+      <Button variant="secondary" title="Xác nhận đối soát lệnh gốc" disabled={busy||!loaded} onPress={()=>void run('replay')}/>
+      <Button variant="secondary" title="Hủy đối soát" disabled={busy} onPress={()=>setConfirmation(null)}/>
+    </View>:null}
     {started&&!finished?<Text>Đã bắt đầu thi công. Chỉ bấm kết thúc sau khi hoàn tất thi công thực tế.</Text>:null}
     <Button variant="secondary" title="Kết thúc thi công" disabled={busy||!loaded||!started||!!finished||!!pending||rejected||history.some(c=>c.operation==='finish')||result.status!=='ready'||result.repairContext?.status!=='InProgress'} onPress={()=>void run('finish')}/>
     {finished?<Text>Đã thi công xong theo biên nhận máy chủ. Hồ sơ chưa được PM xác nhận.</Text>:null}

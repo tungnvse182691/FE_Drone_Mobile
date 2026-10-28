@@ -63,11 +63,14 @@ for(const [name,change] of [
 ])test('T06B rejects FIELD source: '+name,async()=>{const h=harness(),d=h.draft();change(d);await assert.rejects(h.workflow.prepareRepairAssessment(h.identity,d,h.runtime));assert.equal(h.posts(),0);});
 test('T06B PRE_EXECUTION excludes AFTER without relabeling the capture',async()=>{const h=harness(),d=h.draft();d.captures.push({...d.captures[0],id:randomUUID(),purpose:'AFTER'});const c=await h.workflow.prepareRepairAssessment(h.identity,d,h.runtime);assert.equal(c.payload.evidence.length,1);assert.equal(d.captures[1].purpose,'AFTER');});
 test('T06B complete/VERIFYING is not verified',async()=>{const h=harness();h.runtime.api.getCrewUploadSession=async()=>({id:ids.upload,fileId:ids.file,status:'VERIFYING'});await assert.rejects(h.workflow.prepareRepairAssessment(h.identity,h.draft(),h.runtime));});
-for(const status of [401,403,409,412,428])test('T06B HTTP '+status+' retains exact rejected command and blocks replacement',async()=>{
+for(const status of [401,403,409,412,428])test('T06B HTTP '+status+' retains exact command and blocks replacement',async()=>{
  const h=harness(),j=await h.runtime.journal(),c=await j.prepare(h.command());h.fail({response:{status,data:{code:'fixture_error'}}});
  await assert.rejects(h.workflow.dispatchRepair(h.identity,c.key,h.runtime));const row=await j.read(c.key);
- assert.equal(row.phase,'REJECTED');assert.equal(row.key,c.key);assert.deepEqual(row.payload,c.payload);assert.equal(row.rejection.status,status);
- await assert.rejects(j.prepare(h.command()));await h.workflow.dispatchRepair(h.identity,c.key,h.runtime);assert.equal(h.posts(),1);
+ assert.equal(row.phase,status===401?'PENDING':'REJECTED');assert.equal(row.key,c.key);assert.deepEqual(row.payload,c.payload);
+ if(status!==401)assert.equal(row.rejection.status,status);
+ await assert.rejects(j.prepare(h.command()));
+ if(status===401){h.fail(null);assert.equal((await h.workflow.dispatchRepair(h.identity,c.key,h.runtime)).phase,'CONFIRMED');assert.deepEqual(h.calls[0],h.calls[1]);assert.equal(h.posts(),2);}
+ else{await h.workflow.dispatchRepair(h.identity,c.key,h.runtime);assert.equal(h.posts(),1);}
 });
 for(const name of ['timeout before commit','timeout after commit'])test('T06B '+name+' survives restart and exact replay',async()=>{
  const h=harness(),j=await h.runtime.journal(),c=await j.prepare(h.command());h.fail(Error('timeout'));

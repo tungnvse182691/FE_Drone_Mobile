@@ -1,5 +1,4 @@
 import type { SurveyTaskV2ResponseDto } from './droneApi';
-import { operatorTaskSeedCode } from './mock/surveys';
 
 /**
  * Lớp hiển thị cho nhiệm vụ khảo sát (O-03/O-04).
@@ -34,18 +33,9 @@ export function operatorTaskStatusLabel(status: string): string {
   return STATUS_LABEL[status] ?? STATUS_LABEL[status?.toUpperCase()] ?? 'Đang cập nhật';
 }
 
-/**
- * Nhãn ngắn để hiển thị: ưu tiên mã đã gắn với nhiệm vụ ở seed/danh sách,
- * sau đó tra theo taskId trong dữ liệu mock; chỉ khi không có mới suy từ taskId.
- * KHÔNG phải mã định danh nghiệp vụ, không gửi máy chủ.
- */
-export function operatorTaskDisplayCode(taskId: string, seedCode?: string | null): string {
-  const known = seedCode?.trim() || operatorTaskSeedCode(taskId);
-  if (known) {
-    return known;
-  }
-  const compact = taskId.replace(/-/g, '').toUpperCase();
-  return `#HH-${compact.slice(0, 8)}`;
+/** Display only; current DTO has no server task code. Never trust a route label as authority. */
+export function operatorTaskDisplayCode(taskId: string, _routeLabel?: string | null): string {
+  return taskId?.slice(0, 8) || 'Chưa có mã';
 }
 
 export interface TaskWithScopeLike {

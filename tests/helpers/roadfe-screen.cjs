@@ -18,6 +18,7 @@ function screen(file, options = {}) {
       return [slots[i], next => { const value=typeof next==='function'?next(slots[i]):next; if(!Object.is(value,slots[i])){slots[i]=value;dirty=true;} }]; },
     useRef: value => { const i=cursor++; if(!(i in slots))slots[i]={current:value}; return slots[i]; },
     useCallback: (fn,deps) => { const i=cursor++; if(!slots[i]||changed(slots[i].deps,deps))slots[i]={deps,fn}; return slots[i].fn; },
+    useMemo: (fn,deps) => { const i=cursor++; if(!slots[i]||changed(slots[i].deps,deps))slots[i]={deps,value:fn()};return slots[i].value; },
     useEffect: (fn,deps) => { const i=cursor++; if(!slots[i]||changed(slots[i].deps,deps)){
       const old=slots[i]; slots[i]={deps,cleanup:old?.cleanup}; effects.push(()=>{old?.cleanup?.(); slots[i].cleanup=fn();}); } },
   };
@@ -47,8 +48,9 @@ function screen(file, options = {}) {
     'expo-file-system':{File:class{async arrayBuffer(){return Uint8Array.from([1,2,3]).buffer;}}},
   };
   const module = {exports:{}};
-  const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
+  const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8')+(options.expose?'\nexport { '+options.expose+' };':''),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,React:react,Date,setTimeout,clearTimeout,Uint8Array,require:name=>{
+    if(options.modules?.[name])return options.modules[name];
     if(modules[name])return modules[name];
     if(name.endsWith('/store/reporter'))return reporter;
     if(name.endsWith('/store/uploads'))return uploads;
@@ -63,7 +65,7 @@ function screen(file, options = {}) {
     if(name.endsWith('.png'))return 0;
     return h.load(path.relative(path.resolve(__dirname,'../..'),path.resolve(path.dirname(path.resolve(__dirname,'../..',file)),name))+'.ts');
   }},{filename:file});
-  const render = () => { if(!alive)throw Error('unmounted');cursor=0;dirty=false;tree=module.exports.default();while(effects.length)effects.shift()(); };
+  const render = () => { if(!alive)throw Error('unmounted');cursor=0;dirty=false;tree=module.exports[options.exportName??'default'](options.props??{});while(effects.length)effects.shift()(); };
   const walk = n => !n?[]:Array.isArray(n)?n.flatMap(walk):typeof n==='object'?[n,...walk(n.props?.children)]:[];
   const nodes = () => walk(tree);
   const flush = async () => { for(let i=0;i<12;i++){await new Promise(r=>setImmediate(r));if(dirty)render();} };

@@ -64,7 +64,9 @@ function screenHarness(file,options={}){
 }
 for(const file of ['report-defect','viewfinder','progress','complete','field-review','repair-correction']){
  test('T04 '+file+' missing task/GPS/project/session never mounts legacy operations',()=>{
-  const h=screenHarness(file);assert.equal(h.tree.type,h.shared.CrewTaskBoundary);
+  const h=screenHarness(file);
+  if(['progress','complete'].includes(file)){assert.equal(h.tree.type,'SafeAreaScreen');assert.equal(h.effects.length,0);assert.match(JSON.stringify(h.tree),/legacy/);}
+  else assert.equal(h.tree.type,h.shared.CrewTaskBoundary);
   h.guard();assert.equal(h.mounted,0); // Valid real DTO has no GPS.
   const absent=screenHarness(file,{noTask:true});absent.guard();assert.equal(absent.mounted,0);
   const missing=screenHarness(file,{params:{projectId:''}});missing.guard();assert.equal(missing.mounted,0);assert.equal(missing.configs.at(-1).enabled,false);
