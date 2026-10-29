@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -22,14 +22,6 @@ export default function DroneProfileScreen() {
   const logout = useAuthStore((state) => state.logout);
 
   const [infoVisible, setInfoVisible] = useState(false);
-  const [cacheSize, setCacheSize] = useState('142 MB');
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 2000);
-  };
-
   const handleLogout = () => {
     logout();
     router.replace('/(auth)');
@@ -37,58 +29,50 @@ export default function DroneProfileScreen() {
 
   return (
     <SafeAreaScreen scroll>
-      {/* Toast Notification */}
-      {toastMsg && (
-        <View style={styles.toast}>
-          <MaterialIcons name="info" size={18} color={colors.surface} />
-          <Text style={styles.toastText}>{toastMsg}</Text>
-        </View>
-      )}
-
       {/* Avatar & Personal Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarCircle}>
           <MaterialIcons name="person" size={44} color={colors.primaryDark} />
-          <View style={styles.verifiedCheck}>
-            <MaterialIcons name="check" size={12} color={colors.surface} />
-          </View>
+
         </View>
 
         <Text style={[typography.titleLg, styles.userName]}>
-          {normalizeName(user?.full_name ?? 'Nguyễn Văn An')}
+          {normalizeName(user?.full_name ?? '') || 'Phi công hiện trường'}
         </Text>
 
         <Text style={[typography.caption, styles.userSub]}>
-          Mã NV: {user?.employee_code ?? 'HH-2089'} • Đội Khảo sát Số 1
+          Mã NV: {user?.employee_code?.trim() || 'Chưa có mã nhân viên'}
         </Text>
 
         <View style={styles.roleChip}>
           <MaterialIcons name="flight-takeoff" size={14} color={colors.primaryDark} />
-          <Text style={styles.roleChipText}>DRONE OPERATOR</Text>
+          <Text style={styles.roleChipText}>Phi công hiện trường</Text>
         </View>
       </View>
 
       {/* 3 Flight Statistics */}
       <Card style={styles.statsCard}>
         <View style={styles.statItem}>
-          <Text style={[typography.headlineLg, styles.statNumber]}>128h</Text>
+          <Text style={[typography.headlineLg, styles.statNumber]}>—</Text>
           <Text style={[typography.caption, styles.statLabel]}>Giờ bay</Text>
         </View>
 
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
-          <Text style={[typography.headlineLg, styles.statNumber]}>45</Text>
+          <Text style={[typography.headlineLg, styles.statNumber]}>—</Text>
           <Text style={[typography.caption, styles.statLabel]}>Nhiệm vụ</Text>
         </View>
 
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
-          <Text style={[typography.headlineLg, styles.statSuccess]}>0</Text>
+          <Text style={[typography.headlineLg, styles.statSuccess]}>—</Text>
           <Text style={[typography.caption, styles.statLabel]}>Sự cố</Text>
         </View>
       </Card>
+
+      <Text style={[typography.caption, styles.versionFootnote]}>Chưa có dữ liệu giờ bay, chuyến bay, sự cố và chứng nhận từ máy chủ.</Text>
 
       {/* Hardware / Devices Card */}
       <Card style={styles.deviceCard}>
@@ -101,13 +85,13 @@ export default function DroneProfileScreen() {
           <View style={styles.deviceRow}>
             <MaterialIcons name="flight-takeoff" size={16} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.deviceName]}>
-              Flycam DJI Matrice 350 RTK (Seri: M350-HH-02)
+              Thiết bị bay: Chưa có dữ liệu phân bổ
             </Text>
           </View>
           <View style={styles.deviceRow}>
             <MaterialIcons name="cell-tower" size={16} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.deviceName]}>
-              Trạm tham chiếu mặt đất D-RTK 2 High-Precision
+              Trạm RTK: Chưa có dữ liệu
             </Text>
           </View>
         </View>
@@ -152,37 +136,18 @@ export default function DroneProfileScreen() {
             <MaterialIcons name="sync" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Cài đặt đồng bộ ngoại tuyến</Text>
           </View>
-          <Text style={[typography.caption, styles.menuSubText]}>Chỉ Wi-Fi</Text>
+          <Text style={[typography.caption, styles.menuSubText]}>Xem hàng đợi</Text>
         </Pressable>
 
         <View style={styles.menuDivider} />
 
-        <Pressable
-          style={styles.menuItem}
-          onPress={() =>
-            Alert.alert(
-              'Dọn dẹp cache',
-              `Xóa toàn bộ dữ liệu tạm (${cacheSize})? Dữ liệu đã đồng bộ không bị ảnh hưởng.`,
-              [
-                { text: 'Hủy', style: 'cancel' },
-                {
-                  text: 'Đồng ý',
-                  onPress: () => {
-                    setCacheSize('0 MB');
-                    showToast('Đã dọn dẹp bộ nhớ cache máy');
-                  },
-                },
-              ],
-            )
-          }
-          accessibilityRole="button"
-        >
+        <View style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
-            <MaterialIcons name="delete" size={18} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Dọn dẹp cache máy</Text>
+            <MaterialIcons name="inventory-2" size={18} color={colors.secondary} />
+            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Dữ liệu trên thiết bị</Text>
           </View>
-          <Text style={[typography.caption, styles.menuSubText]}>{cacheSize}</Text>
-        </Pressable>
+          <Text style={[typography.caption, styles.menuSubText]}>Được giữ để khôi phục</Text>
+        </View>
       </Card>
 
       {/* Logout Action */}
@@ -193,7 +158,7 @@ export default function DroneProfileScreen() {
         </Pressable>
 
         <Text style={[typography.caption, styles.versionFootnote]}>
-          Hoàng Hải Field v2.4.1 (Build 2026.09) • Thiết kế chuẩn hiện trường
+          RoadGuard • Bê tông Hoàng Hải
         </Text>
       </View>
 
@@ -222,31 +187,31 @@ export default function DroneProfileScreen() {
               <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Họ và tên</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>
-                  {normalizeName(user?.full_name ?? 'Nguyễn Văn An')}
+                  {normalizeName(user?.full_name ?? '') || 'Phi công hiện trường'}
                 </Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Mã nhân viên</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>
-                  {user?.employee_code ?? 'HH-2089'}
+                  {user?.employee_code?.trim() || 'Chưa có mã nhân viên'}
                 </Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Đội phụ trách</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>Đội Khảo sát Số 1</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>Chưa có dữ liệu</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Vai trò</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>DRONE OPERATOR</Text>
+                <Text style={[typography.bodyMd, styles.infoValue]}>Phi công hiện trường</Text>
               </View>
 
               <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Thiết bị phân bổ</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>
-                  Flycam DJI Matrice 350 RTK — M350-HH-02
+                  Chưa có dữ liệu phân bổ
                 </Text>
               </View>
             </View>

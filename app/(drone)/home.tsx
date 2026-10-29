@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -21,29 +22,41 @@ const softShadow = Platform.select({
 
 export default function DroneHomeScreen() {
   const user = useAuthStore((state) => state.user);
+  const scope = useOperatorReadScope();
+  const loadedScope = useRef<string | null>(null);
+  const [dataScope, setDataScope] = useState<string | null>(null);
   const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    if (loadedScope.current !== scope.key) setTasks([]);
+    loadedScope.current = scope.key;
+    setDataScope(scope.key);
     setLoading(true);
     setLoadError(null);
     try {
       const page = await listOperatorSurveyTasksReal(null, 50);
+      if (!isCurrent()) return;
       setTasks(page.items || []);
     } catch {
+      if (!isCurrent()) return;
       setLoadError('Không thể tải danh sách nhiệm vụ. Vui lòng kiểm tra kết nối.');
-      setTasks([]);
+
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, []);
+  }, [scope.key, scope.capture]);
 
   useFocusEffect(
     useCallback(() => {
       void fetchTasks();
     }, [fetchTasks]),
   );
+
+  if (!scope.key || dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
   const pendingTasks = tasks.filter((t) => {
     const s = t.status?.toUpperCase();
@@ -82,7 +95,7 @@ export default function DroneHomeScreen() {
           </View>
           <View style={styles.metricContent}>
             <Text style={[typography.headlineLg, styles.metricNumber]}>{tasks.length}</Text>
-            <Text style={[typography.caption, styles.metricDesc]}>nhiệm vụ khảo sát được gán</Text>
+            <Text style={[typography.caption, styles.metricDesc]}>nhiệm vụ trong danh sách đã tải</Text>
             <Text style={[typography.caption, styles.metricSub]}>
               {urgentCount} chờ tiếp nhận • {ongoingCount} đang thực hiện
             </Text>
@@ -107,13 +120,7 @@ export default function DroneHomeScreen() {
       <View style={styles.quickAccessRow}>
         <AnimatedPressable
           style={styles.quickButton}
-          onPress={() => {
-            const firstActive = ongoingTasks[0] || tasks[0];
-            router.push({
-              pathname: '/(drone)/upload',
-              params: firstActive ? { code: operatorTaskDisplayCode(firstActive.id), taskId: firstActive.id } : {},
-            });
-          }}
+          onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
         >
           <MaterialIcons name="sd-card" size={18} color={colors.primaryDark} />
@@ -147,18 +154,19 @@ export default function DroneHomeScreen() {
           accessibilityRole="button"
           style={styles.seeAllPress}
         >
-          <Text style={[typography.caption, styles.seeAll]}>Xem tất cả ({tasks.length})</Text>
+          <Text style={[typography.caption, styles.seeAll]}>Xem danh sách nhiệm vụ</Text>
           <MaterialIcons name="chevron-right" size={16} color={colors.primaryDark} />
         </AnimatedPressable>
       </View>
 
       {/* Tasks List */}
-      {loading ? (
+      {loadError ? <Text accessibilityRole="alert">{loadError} Danh sách đã tải vẫn được giữ trong phiên này.</Text> : null}
+      {loading && tasks.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[typography.caption, styles.loadingText]}>Đang đọc nhiệm vụ khảo sát…</Text>
         </View>
-      ) : loadError ? (
+      ) : loadError && tasks.length === 0 ? (
         <EmptyState
           icon="error-outline"
           title="Không tải được dữ liệu"

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -19,7 +20,7 @@ const softShadow = Platform.select({
   default: {},
 });
 
-type TabKey = 'pending' | 'ongoing' | 'completed';
+type TabKey = 'pending' | 'ongoing' | 'completed' | 'other';
 
 interface SurveyRequestItem {
   id: string;
@@ -38,7 +39,8 @@ function classifyTab(status: string): TabKey {
   const s = status?.toUpperCase();
   if (s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED') return 'pending';
   if (s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS') return 'ongoing';
-  return 'completed';
+  if (s === 'COMPLETED') return 'completed';
+  return 'other';
 }
 
 function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
@@ -63,32 +65,44 @@ function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
 
 export default function DroneRequestsScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('pending');
+  const scope = useOperatorReadScope();
+  const loadedScope = useRef<string | null>(null);
+  const [dataScope, setDataScope] = useState<string | null>(null);
   const [tasks, setTasks] = useState<SurveyRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    if (loadedScope.current !== scope.key) setTasks([]);
+    loadedScope.current = scope.key;
+    setDataScope(scope.key);
     setLoading(true);
     setError(null);
     try {
       const page = await listOperatorSurveyTasksReal(null, 50);
+      if (!isCurrent()) return;
       const mapped = (page.items || []).map(mapDtoToItem);
       setTasks(mapped);
     } catch (err) {
+      if (!isCurrent()) return;
       const data = (err as { response?: { data?: unknown } })?.response?.data;
       const code = parseProblemDetails(data).code;
       setError(code ? messageFor(code) : 'Không thể tải danh sách nhiệm vụ khảo sát.');
-      setTasks([]);
+
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, []);
+  }, [scope.key, scope.capture]);
 
   useFocusEffect(
     useCallback(() => {
       void fetchTasks();
     }, [fetchTasks]),
   );
+
+  if (!scope.key || dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
   const pendingCount = tasks.filter((r) => r.tab === 'pending').length;
   const ongoingCount = tasks.filter((r) => r.tab === 'ongoing').length;
@@ -149,6 +163,8 @@ export default function DroneRequestsScreen() {
         </Pressable>
       </View>
 
+      <Pressable onPress={() => setActiveTab('other')} accessibilityRole="button"><Text style={typography.caption}>Trạng thái khác ({tasks.filter(t => t.tab === 'other').length})</Text></Pressable>
+      <Text style={typography.caption}>Số lượng theo danh sách đã tải, tối đa 50 nhiệm vụ.</Text>
       {/* Header Info Section */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
@@ -161,12 +177,13 @@ export default function DroneRequestsScreen() {
       </View>
 
       {/* Content */}
-      {loading ? (
+      {error ? <Text accessibilityRole="alert">{error} Danh sách đã tải vẫn được giữ trong phiên này.</Text> : null}
+      {loading && tasks.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={[typography.caption, styles.loadingText]}>Đang tải danh sách nhiệm vụ…</Text>
         </View>
-      ) : error ? (
+      ) : error && tasks.length === 0 ? (
         <EmptyState
           icon="error-outline"
           title="Không tải được nhiệm vụ"

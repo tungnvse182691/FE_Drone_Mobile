@@ -14,7 +14,7 @@ const softShadow = Platform.select({
   default: {},
 });
 import { initDatabase, openDatabase } from '../../src/offline/database';
-import { decodeOutboxPayload, currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, QUEUE_CONTRACT_NOTICE, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
+import { currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
 import { useAuthStore } from '../../src/store/auth';
 import { LocalState } from '../../src/types/enums';
 
@@ -27,13 +27,13 @@ const STATE_PRESENTATION: Record<
   [LocalState.WAITING_DEPENDENCIES]: { label: 'Chờ phụ thuộc', tone: 'pending' },
   [LocalState.READY]: { label: 'Sẵn sàng gửi', tone: 'pending' },
   [LocalState.IN_FLIGHT]: { label: 'Đang gửi', tone: 'pending' },
-  [LocalState.PAUSED_RETRY]: { label: 'Tạm hoãn, sẽ thử lại', tone: 'pending' },
+  [LocalState.PAUSED_RETRY]: { label: 'Tạm hoãn, cần kiểm tra', tone: 'pending' },
   [LocalState.AUTH_REQUIRED]: { label: 'Cần đăng nhập lại', tone: 'blocked' },
   [LocalState.BLOCKED_CONTRACT]: { label: 'Thiếu dữ liệu hợp đồng', tone: 'blocked' },
   [LocalState.CONFLICT]: { label: 'Xung đột phiên bản', tone: 'blocked' },
   [LocalState.REJECTED]: { label: 'Máy chủ từ chối', tone: 'blocked' },
   [LocalState.UNKNOWN_OUTCOME]: { label: 'Chưa rõ kết quả', tone: 'blocked' },
-  [LocalState.ACKED]: { label: 'Đã đối soát toàn vẹn', tone: 'done' },
+  [LocalState.ACKED]: { label: 'Đã ghi nhận cục bộ — chưa xác minh biên nhận', tone: 'done' },
 };
 
 const KIND_ICON: Record<string, 'videocam' | 'photo-library' | 'description'> = {
@@ -63,27 +63,11 @@ function kindToType(kind: string): SyncItem['type'] {
 
 function describeItem(row: OutboxItem): SyncItem {
   const presentation = STATE_PRESENTATION[row.status] ?? {
-    label: row.status,
+    label: 'Cần kiểm tra trạng thái',
     tone: 'blocked' as const,
   };
-  let title = row.kind;
-  let meta = `${presentation.label} · lần thử ${row.attempt}`;
-  try {
-    const payload = JSON.parse(decodeOutboxPayload(row)) as Record<string, unknown>;
-    const name = payload.videoName ?? payload.name ?? payload.taskId;
-    if (typeof name === 'string' && name) {
-      title = name;
-    }
-    const task = payload.surveyTaskCode ?? payload.taskId;
-    if (typeof task === 'string' && task) {
-      meta = `${task} · ${presentation.label}`;
-    }
-    if (row.last_error) {
-      meta = `${meta} · ${row.last_error}`;
-    }
-  } catch {
-    meta = `${presentation.label} · payload không đọc được`;
-  }
+  const title = row.kind === 'submit_dataset' ? 'Hồ sơ khảo sát' : 'Bản ghi được lưu trên thiết bị';
+  const meta = `${presentation.label} · ${row.attempt} lần gửi đã ghi nhận`;
   return {
     id: row.id,
     name: title,
@@ -155,7 +139,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
   const activeItems = queueTab === 'pending' ? pendingQueue : completedQueue;
   const handleSyncAll=useCallback(async()=>{
     if(!db||!active())return;setSyncing(true);
-    try{await reload();if(active())showToast(QUEUE_CONTRACT_NOTICE);}
+    try{await reload();if(active())showToast('Đã đọc lại dữ liệu trên thiết bị. Thao tác này không gửi hoặc xác minh biên nhận máy chủ.');}
     finally{if(active())setSyncing(false);}
   },[db,reload,showToast,identity]);
   const handleSafePurge=()=>{if(active())showToast('Chưa có receipt đối soát hợp lệ. Không xóa bản sao cục bộ.');};
@@ -193,7 +177,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             <Text
               style={[styles.toggleBtnText, queueTab === 'completed' && styles.toggleBtnTextActive]}
             >
-              Đã xong ({completedQueue.length})
+              Đã ghi nhận ({completedQueue.length})
             </Text>
           </Pressable>
         </View>
@@ -206,7 +190,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             <View
               style={[
                 styles.pulseDot,
-                pendingQueue.length === 0 && { backgroundColor: colors.success },
+                { backgroundColor: colors.secondary },
               ]}
             />
             <Text style={[typography.titleMd, styles.summaryCount]}>
@@ -218,21 +202,13 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           <Text style={[typography.caption, styles.totalSize]}>
             {pendingQueue.length > 0
               ? `${pendingQueue.length} mục chờ đồng bộ`
-              : `${completedQueue.length} mục đã xác nhận`}
+              : `${completedQueue.length} mục ghi nhận cục bộ`}
           </Text>
         </View>
 
         <Button
           variant="primary"
-          title={
-            syncing
-              ? 'Đang đọc hàng đợi…'
-              : pendingQueue.length > 0
-              ? 'Kiểm tra hàng đợi bị khóa'
-              : outboxRows.length === 0
-              ? 'Hàng đợi trống'
-              : 'Đã đồng bộ đầy đủ'
-          }
+          title={syncing ? 'Đang đọc hàng đợi…' : 'Đọc lại hàng đợi'}
           loading={syncing}
           disabled={!db || syncing}
           onPress={handleSyncAll}
@@ -242,10 +218,10 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       {/* Section Title */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
-          {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'TỆP ĐÃ XÁC NHẬN TOÀN VẸN'}
+          {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'BẢN GHI CỤC BỘ'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
-          {queueTab === 'pending' ? 'Chưa có dispatch ký hợp lệ' : 'Chưa có receipt được đối soát'}
+          {queueTab === 'pending' ? 'Yêu cầu vẫn được giữ trên thiết bị' : 'Chưa xác minh biên nhận máy chủ'}
         </Text>
       </View>
 
@@ -253,7 +229,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       <View style={styles.itemsList}>
         {activeItems.length === 0 ? (
           <Card style={styles.emptyCard}>
-            <MaterialIcons name="check-circle" size={36} color={colors.success} />
+            <MaterialIcons name="inbox" size={36} color={colors.secondary} />
             <Text style={[typography.bodyMd, { color: colors.secondary, marginTop: 6 }]}>
               Không có tệp nào trong danh sách
             </Text>
@@ -291,7 +267,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
                 )}
                 {item.tone === 'done' && (
                   <View style={styles.confirmedPill}>
-                    <MaterialIcons name="verified-user" size={12} color={colors.success} />
+                    <MaterialIcons name="info-outline" size={12} color={colors.secondary} />
                     <Text style={styles.confirmedText}>{item.statusText}</Text>
                   </View>
                 )}
@@ -310,14 +286,14 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       {/* Safe Local Purge Section */}
       <Card style={styles.purgeCard}>
         <View style={styles.purgeHeader}>
-          <MaterialIcons name="verified" size={20} color={colors.success} />
+          <MaterialIcons name="inventory-2" size={20} color={colors.secondary} />
           <Text style={[typography.labelSm, styles.purgeTitle]}>
-            QUY TRÌNH DỌN DẸP BẢN SAO AN TOÀN
+            BẢO TOÀN DỮ LIỆU TRÊN THIẾT BỊ
           </Text>
         </View>
 
         <Text style={[typography.bodyMd, styles.purgeDesc]}>
-          {QUEUE_CONTRACT_NOTICE} Bản ghi local/không rõ chủ sở hữu vẫn được giữ riêng. Chưa xóa bản sao cục bộ.
+          Màn hình chỉ đọc hàng đợi của phiên hiện tại. Trạng thái cục bộ không chứng minh máy chủ đã nhận hồ sơ. Bản nháp, tệp và lịch sử được giữ nguyên.
         </Text>
 
         <Pressable
@@ -326,11 +302,11 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           disabled={purgedCount > 0}
           accessibilityRole="button"
         >
-          <MaterialIcons name="delete" size={16} color={purgedCount > 0 ? colors.secondary : colors.error} />
+          <MaterialIcons name="info-outline" size={16} color={purgedCount > 0 ? colors.secondary : colors.error} />
           <Text style={[typography.labelSm, { color: purgedCount > 0 ? colors.secondary : colors.error }]}>
             {purgedCount > 0
               ? `Đã giải phóng an toàn ${purgedCount} bản sao`
-              : 'Dọn dẹp bản sao an toàn sau đối soát'}
+              : 'Vì sao dữ liệu vẫn được giữ?'}
           </Text>
         </Pressable>
       </Card>

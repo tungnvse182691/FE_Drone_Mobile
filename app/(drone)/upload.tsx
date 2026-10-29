@@ -1,3 +1,4 @@
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useEffect, useState } from 'react';
 
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -34,6 +35,7 @@ interface UploadConfig {
 
 export default function DroneUploadScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
+  const scope = useOperatorReadScope(params.taskId ?? '');
   const config: UploadConfig = {
     code: params.taskId ?? 'Chưa chọn nhiệm vụ máy chủ',
     road: 'Phạm vi theo gói công việc máy chủ',
@@ -65,15 +67,20 @@ export default function DroneUploadScreen() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [srtUri, setSrtUri] = useState<string | null>(null);
 
+  const [previewScope, setPreviewScope] = useState(scope.key);
   useEffect(() => {
+    setPreviewScope(scope.key);
     setVideoName('Chưa chọn tệp'); setVideoSize('—'); setVideoSha('—');
     setSrtName('Chưa chọn tệp'); setSrtSize('—'); setSrtSha('—');
     setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
     setUploadProgress(0); setSubmitError(null);
-  }, [params.taskId]);
+    setNote('');
+  }, [scope.key]);
 
   // Chọn video 4K RGB từ thẻ nhớ SD
   const handlePickVideo = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['video/*', 'video/mp4'],
@@ -81,6 +88,7 @@ export default function DroneUploadScreen() {
       });
 
 
+      if (!isCurrent()) return;
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         setVideoName(file.name);
@@ -91,12 +99,14 @@ export default function DroneUploadScreen() {
         setUploadStep('LOCAL');
       }
     } catch (err) {
-      console.warn('Lỗi chọn tệp video', err);
+      if (isCurrent()) setSubmitError('Không đọc được tệp video. Vui lòng chọn lại.');
     }
   };
 
   // Chọn tệp SRT phụ đề GPS RTK từng khung hình
   const handlePickSrt = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
@@ -104,6 +114,7 @@ export default function DroneUploadScreen() {
       });
 
 
+      if (!isCurrent()) return;
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
         setSrtName(file.name);
@@ -114,7 +125,7 @@ export default function DroneUploadScreen() {
         setUploadStep('LOCAL');
       }
     } catch (err) {
-      console.warn('Lỗi chọn tệp SRT', err);
+      if (isCurrent()) setSubmitError('Không đọc được tệp GPS. Vui lòng chọn lại.');
     }
   };
 
@@ -131,6 +142,8 @@ export default function DroneUploadScreen() {
       router.replace('/(drone)/home');
     }
   };
+
+  if (!scope.key || previewScope !== scope.key) return <SafeAreaScreen><Text>Cần phiên Operator hợp lệ để chọn tệp.</Text></SafeAreaScreen>;
 
   return (
     <SafeAreaScreen
@@ -331,7 +344,7 @@ export default function DroneUploadScreen() {
                 Máy chủ đã xác nhận toàn vẹn dữ liệu
               </Text>
               <Text style={styles.verifiedBannerSub}>
-                Mã bộ dữ liệu #DS-2026-089 · Mã băm đã đối soát khớp 100%
+                Chỉ xác nhận sau khi có kết quả đọc lại từ máy chủ.
               </Text>
             </View>
           </View>
@@ -364,16 +377,16 @@ export default function DroneUploadScreen() {
           <View style={styles.fileDetailsGroup}>
             <Text style={[typography.titleMd, styles.fileNameText]}>{videoName}</Text>
             <Text style={[typography.caption, styles.fileSizeText]}>
-              Dung lượng: <Text style={styles.boldText}>{videoSize}</Text> · Chuẩn 4K 60fps
+              Dung lượng: <Text style={styles.boldText}>{videoSize}</Text> · Chưa kiểm tra thông số video
             </Text>
           </View>
         </View>
 
         {/* Checksum SHA-256 Card */}
         <View style={styles.checksumBox}>
-          <MaterialIcons name="verified-user" size={16} color={colors.success} />
+          <MaterialIcons name="info-outline" size={16} color={colors.secondary} />
           <View style={styles.checksumTextGroup}>
-            <Text style={styles.checksumLabel}>Mã băm toàn vẹn (theo TCVN 10380:2014):</Text>
+            <Text style={styles.checksumLabel}>Mã băm SHA-256:</Text>
             <Text style={styles.checksumHash} numberOfLines={1}>{videoSha}</Text>
           </View>
         </View>
@@ -405,15 +418,15 @@ export default function DroneUploadScreen() {
           <View style={styles.fileDetailsGroup}>
             <Text style={[typography.titleMd, styles.fileNameText]}>{srtName}</Text>
             <Text style={[typography.caption, styles.fileSizeText]}>
-              Dung lượng: <Text style={styles.boldText}>{srtSize}</Text> · Đồng bộ GPS RTK từng khung hình
+              Dung lượng: <Text style={styles.boldText}>{srtSize}</Text> · Chưa kiểm tra dữ liệu GPS
             </Text>
           </View>
         </View>
 
         <View style={styles.checksumBox}>
-          <MaterialIcons name="check-circle" size={16} color={colors.success} />
+          <MaterialIcons name="info-outline" size={16} color={colors.secondary} />
           <View style={styles.checksumTextGroup}>
-            <Text style={styles.checksumLabel}>Mã băm tọa độ RTK:</Text>
+            <Text style={styles.checksumLabel}>Mã băm tệp GPS:</Text>
             <Text style={styles.checksumHash} numberOfLines={1}>{srtSha}</Text>
           </View>
         </View>
@@ -422,13 +435,13 @@ export default function DroneUploadScreen() {
       {/* GPS Location Card */}
       <Card style={styles.gpsCard}>
         <View style={styles.gpsIconBox}>
-          <MaterialIcons name="location-on" size={20} color={colors.success} />
+          <MaterialIcons name="location-searching" size={20} color={colors.secondary} />
         </View>
         <View style={styles.gpsInfo}>
           <View style={styles.gpsTopRow}>
             <Text style={[typography.caption, styles.gpsLabel]}>TỌA ĐỘ GPS KHẢO SÁT</Text>
             <View style={styles.matchedBadge}>
-              <Text style={styles.matchedText}>Khớp trạm RTK</Text>
+              <Text style={styles.matchedText}>Chưa đối chiếu vị trí</Text>
             </View>
           </View>
           <Text style={[typography.bodyMd, styles.gpsCoord]}>
@@ -456,6 +469,7 @@ export default function DroneUploadScreen() {
         />
       </View>
 
+      <Text style={typography.caption}>Tệp đang được chọn để xem trên màn hình; chưa có bản sao lưu bền hoặc yêu cầu tải lên. Lựa chọn mạng bên dưới chưa thay đổi kết nối thiết bị.</Text>
       {/* Network Mode Card */}
       <Card style={styles.networkCard}>
         <View style={styles.networkTitleGroup}>

@@ -1,3 +1,4 @@
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -30,7 +31,7 @@ function formatDateTime(iso: string | null): string {
   }
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
-    return iso;
+    return '—';
   }
   return `${date.toLocaleDateString('vi-VN')} ${date.toLocaleTimeString('vi-VN', {
     hour: '2-digit',
@@ -67,47 +68,62 @@ function operatorErrorMessage(error: unknown): string {
     return messageFor(code);
   }
   const parsed = parseProblemDetails(response?.data);
-  return parsed.detail ?? parsed.title ?? 'Không đọc được gói công việc. Vui lòng thử lại.';
+  return 'Không đọc được gói công việc. Vui lòng thử lại.';
 }
 
 export default function DroneWorkPackageScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
+  const scope = useOperatorReadScope(target);
+  const [dataScope, setDataScope] = useState<string | null>(null);
 
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
   const [geometry, setGeometry] = useState<GeometryPackageViewDto | null>(null);
   const [loading, setLoading] = useState(true);
+  const [geometryError, setGeometryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    setDataScope(scope.key);
+    setWorkPackage(null);
+    setGeometry(null);
     setLoading(true);
     setError(null);
+    setGeometryError(null);
     try {
       const wp = await getOperatorWorkPackageReal(target);
+      if (!isCurrent()) return;
       setWorkPackage(wp.data);
       const ref = wp.data.geometryRefs?.[0];
       if (ref && wp.data.task.projectId) {
+        try {
         const gp = await getOperatorGeometryPackageReal(wp.data.task.projectId, {
           routeVersionId: ref.routeVersionId,
           segmentSetId: ref.segmentSetId,
         });
+        if (!isCurrent()) return;
+        if (gp.data.projectId !== wp.data.task.projectId || gp.data.route.routeVersionId !== ref.routeVersionId || gp.data.segmentSet.id !== ref.segmentSetId || gp.data.segmentSet.routeVersionId !== ref.routeVersionId) throw Error('geometry_source_mismatch');
         setGeometry(gp.data);
+        } catch { if (isCurrent()) setGeometryError('Chưa đọc được hình học đã ghim. Thông tin nhiệm vụ vẫn được giữ.'); }
       }
     } catch (err) {
+      if (!isCurrent()) return;
       setError(operatorErrorMessage(err));
       setWorkPackage(null);
       setGeometry(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [target]);
+  }, [target, scope.key, scope.capture]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const renderBody = () => {
-    if (loading) {
+    if (!scope.key || dataScope !== scope.key || loading) {
       return (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
@@ -129,13 +145,15 @@ export default function DroneWorkPackageScreen() {
     }
 
     const ref = workPackage.geometryRefs[0];
-    const accessPoint = workPackage.accessPoint;
+    const point = workPackage.accessPoint?.point;
+    const accessPoint = point && Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90 && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180 ? workPackage.accessPoint : null;
     const accessSourceLabel = accessPoint
       ? ACCESS_POINT_SOURCE_LABEL[accessPoint.source]
       : undefined;
 
     return (
       <>
+        {geometryError ? <Text accessibilityRole="alert">{geometryError}</Text> : null}
         <View style={styles.notice}>
           <MaterialIcons name="lock-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>

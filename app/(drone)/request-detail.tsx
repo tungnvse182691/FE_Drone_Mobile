@@ -1,3 +1,4 @@
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -59,7 +60,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 function formatCoordinates(longitude: number, latitude: number): string {
-  return `${latitude.toFixed(6)}° B, ${longitude.toFixed(6)}° Đ`;
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
 }
 
 function operatorErrorMessage(error: unknown): string {
@@ -69,12 +70,14 @@ function operatorErrorMessage(error: unknown): string {
     return messageFor(code);
   }
   const parsed = parseProblemDetails(response?.data);
-  return parsed.detail ?? parsed.title ?? 'Không đọc được nhiệm vụ. Vui lòng thử lại.';
+  return 'Không đọc được nhiệm vụ. Vui lòng thử lại.';
 }
 
 export default function DroneRequestDetailScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
+  const scope = useOperatorReadScope(target);
+  const [dataScope, setDataScope] = useState<string | null>(null);
 
   const [task, setTask] = useState<SurveyTaskV2ResponseDto | null>(null);
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
@@ -85,44 +88,52 @@ export default function DroneRequestDetailScreen() {
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const loadTask = useCallback(async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    setDataScope(scope.key);
+    setWorkPackage(null);
+    setTask(null);
     setLoading(true);
     setLoadError(null);
     try {
       const detail = await getOperatorSurveyTaskDetailReal(target);
+      if (!isCurrent()) return;
       setTask(detail.data);
       setEtag(detail.etag);
       try {
         const work = await getOperatorWorkPackageReal(target);
+        if (!isCurrent()) return;
         setWorkPackage(work.data);
       } catch {
+        if (!isCurrent()) return;
         setWorkPackage(null);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       setLoadError(operatorErrorMessage(error));
       setTask(null);
       setEtag(null);
       setWorkPackage(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [target]);
+  }, [target, scope.key, scope.capture]);
 
   useEffect(() => {
     void loadTask();
   }, [loadTask]);
 
-  const displayCode = task ? operatorTaskDisplayCode(task.id, params.code) : 'Nhiệm vụ';
-  const accessPoint = workPackage?.accessPoint ?? null;
+  const displayCode = dataScope === scope.key && scope.key && task ? operatorTaskDisplayCode(task.id, params.code) : 'Nhiệm vụ';
+  const point = workPackage?.accessPoint?.point;
+  const accessPoint = point && Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90 && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180 ? workPackage!.accessPoint : null;
 
   const handleOpenGoogleMaps = () => {
-    if (!accessPoint) {
+    if (!scope.capture()() || !accessPoint) {
       return;
     }
     // US-40, BR-38: Dẫn đường WGS84 tới Điểm tiếp cận cất/hạ cánh (Access Point)
     const url = `https://www.google.com/maps/dir/?api=1&destination=${accessPoint.point.latitude},${accessPoint.point.longitude}`;
-    Linking.openURL(url).catch((err) => {
-      console.warn('Could not open Google Maps', err);
-    });
+    Linking.openURL(url).catch(() => { if (scope.capture()()) setAcceptError('Không mở được ứng dụng bản đồ.'); });
   };
 
   // API-227 remains blocked until immutable durable command/recovery exists.
@@ -133,21 +144,21 @@ export default function DroneRequestDetailScreen() {
  * lệnh từ chối (API-230) với Idempotency-Key + If-Match. Màn này chỉ còn điều hướng.
  */
   const handleOpenDecline = () => {
-    if (!task) {
+    if (!scope.capture()() || dataScope !== scope.key || !task) {
       return;
     }
     router.push(`${DRONE_REQUEST_DECLINE}?taskId=${encodeURIComponent(task.id)}`);
   };
 
   const handleOpenWorkPackage = () => {
-    if (!task) {
+    if (!scope.capture()() || dataScope !== scope.key || !task) {
       return;
     }
     router.push(`${DRONE_WORK_PACKAGE}?taskId=${encodeURIComponent(task.id)}`);
   };
 
   const handleShareTask = async () => {
-    if (!task) {
+    if (!scope.capture()() || dataScope !== scope.key || !task) {
       return;
     }
     const parts = [
@@ -177,7 +188,7 @@ export default function DroneRequestDetailScreen() {
   };
 
   const renderBody = () => {
-    if (loading) {
+    if (!scope.key || dataScope !== scope.key || loading) {
       return (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
@@ -347,7 +358,7 @@ export default function DroneRequestDetailScreen() {
           </Pressable>
 
           <Text style={[typography.caption, styles.syncFootnote]}>
-            Dữ liệu được kiểm tra toàn vẹn bằng mã băm và đồng bộ ngoại tuyến theo TCVN 10380:2014
+            Thông tin nhiệm vụ được đọc từ máy chủ. Tiếp nhận và từ chối sẽ được mở khi có cơ chế lưu lệnh và phục hồi an toàn.
           </Text>
         </View>
       </>

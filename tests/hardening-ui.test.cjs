@@ -9,7 +9,7 @@ test('HARDEN02 mounted Drone home has unknown safety, keeps real list fetch',asy
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
   '../../src/components/Chip':{Chip:'Chip'},'../../src/components/EmptyState':{EmptyState:'EmptyState'},
   '../../src/components/AnimatedPressable':{AnimatedPressable:'AnimatedPressable'},
- }});s.render();await s.flush();assert.equal(reads,1);
+ }});s.h.login('DRONE_OPERATOR','11111111-1111-4111-8111-111111111111');s.render();await s.flush();assert.equal(reads,1);
  assert.doesNotMatch(text(s),/Sẵn sàng bay|Thời tiết: An toàn bay|Thiết bị: Sẵn sàng/);
  assert.match(text(s),/Chưa có dữ liệu/);s.unmount();
 });

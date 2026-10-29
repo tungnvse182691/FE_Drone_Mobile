@@ -7,8 +7,10 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { DroneDatasetReadbackPanel } from '../../src/components/drone/DroneDatasetReadbackPanel';
 import { useAuthStore } from '../../src/store/auth';
+import { apiClient } from '../../src/api/client';
+import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
 import { passwordSessionIdentity } from '../../src/api/authApi';
-import { getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
+import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto, getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const uuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) && s !== '00000000-0000-0000-0000-000000000000';
@@ -22,7 +24,7 @@ export function operatorLogScope(): string | null {
   if (!identity || !uuid(s.user?.id) || JSON.parse(identity)[0] !== s.user.id ||
       s.user.role_code !== 'DRONE_OPERATOR' || s.user.must_change_password ||
       !['AUTHENTICATED', 'REFRESHING'].includes(s.status)) return null;
-  return identity;
+  return JSON.stringify([apiClient?.defaults?.baseURL ?? null, identity]);
 }
 function requireScope(scope: string) {
   if (operatorLogScope() !== scope) throw Error('operator_session_changed');
@@ -49,12 +51,24 @@ export default function DroneLogScreen() {
   return <DroneLogContent key={scope} scope={scope} />;
 }
 function DroneLogContent({ scope }: { scope: string }) {
+  const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
+  const [advanced, setAdvanced] = useState(false);
+  const [listRevision, setListRevision] = useState(0);
   const [taskId, setTaskId] = useState(''), [uploadId, setUploadId] = useState('');
   const [taskText, setTaskText] = useState<string | null>(null), [uploadText, setUploadText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const mounted = useRef(true), lock = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const active = () => mounted.current && operatorLogScope() === scope;
+  useEffect(() => {
+    let cancelled = false;
+    setListError(null);
+    void listOperatorSurveyTasksReal(null, 50).then(page => {
+      if (!cancelled && active()) setTasks(page.items);
+    }).catch(() => { if (!cancelled && active()) setListError('Chưa đọc được danh sách nhiệm vụ.'); });
+    return () => { cancelled = true; };
+  }, [scope, listRevision]);
   const check = async (kind: 'task' | 'upload') => {
     if (lock.current || !active()) return;
     lock.current = true; setBusy(true); setError(null);
@@ -87,6 +101,19 @@ function DroneLogContent({ scope }: { scope: string }) {
       <Text style={typography.caption}>Trạng thái nhiệm vụ và phiên tải lên được đọc riêng bên dưới; không thay thế lịch sử bay hoặc biên nhận nộp bộ dữ liệu.</Text>
     </Card>
     <Card style={styles.card}>
+      <Text style={typography.titleMd}>Nhiệm vụ được giao</Text>
+      <Text style={typography.caption}>Danh sách đã tải, tối đa 50 nhiệm vụ. Chọn để xem trạng thái và phạm vi hiện hành.</Text>
+      {tasks.map(task => <Pressable key={task.id} accessibilityRole="button" onPress={() => { if (active()) router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(task.id)}`); }}>
+        <Text style={typography.labelLg}>{operatorTaskDisplayCode(task.id)}</Text>
+        <Text style={typography.bodyMd}>{operatorTaskStatusLabel(task.status)}</Text>
+      </Pressable>)}
+      {!tasks.length ? <Text>Chưa có nhiệm vụ trong danh sách đã tải.</Text> : null}
+      {listError ? <Text accessibilityRole="alert">{listError}</Text> : null}
+      <Button title="Đọc lại danh sách" variant="secondary" onPress={() => setListRevision(v => v + 1)} />
+    </Card>
+    <Button title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
+    {advanced ? <>
+    <Card style={styles.card}>
       <Text style={typography.titleMd}>Đọc lại nhiệm vụ</Text>
       <TextInput style={styles.input} accessibilityLabel="Mã nhiệm vụ máy chủ" placeholder="UUID nhiệm vụ" value={taskId} editable={!busy} autoCapitalize="none" onChangeText={value => { setTaskId(value); setTaskText(null); setError(null); }} />
       <Button title="Đọc trạng thái nhiệm vụ" variant="secondary" disabled={busy || !uuid(taskId.trim())} onPress={() => void check('task')} />
@@ -99,6 +126,7 @@ function DroneLogContent({ scope }: { scope: string }) {
       {uploadText ? <Text style={typography.bodyMd}>{uploadText}</Text> : null}
     </Card>
     <DroneDatasetReadbackPanel />
+    </> : null}
     {busy ? <Text>Đang đọc dữ liệu máy chủ…</Text> : null}
     {error ? <Text accessibilityRole="alert">{error}</Text> : null}
   </SafeAreaScreen>;

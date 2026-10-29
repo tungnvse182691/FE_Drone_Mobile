@@ -1,3 +1,4 @@
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -59,12 +60,14 @@ function operatorErrorMessage(error: unknown): string {
     return messageFor(code);
   }
   const parsed = parseProblemDetails((error as { response?: { data?: unknown } }).response?.data);
-  return parsed.detail ?? parsed.title ?? 'Không gửi được yêu cầu từ chối. Vui lòng thử lại.';
+  return 'Không đọc được nhiệm vụ. Vui lòng thử lại.';
 }
 
 export default function DroneRequestDeclineScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
+  const scope = useOperatorReadScope(target);
+  const [dataScope, setDataScope] = useState<string | null>(null);
 
   const [detail, setDetail] = useState<SurveyTaskV2ResponseDto | null>(null);
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
@@ -77,25 +80,34 @@ export default function DroneRequestDeclineScreen() {
   const [toast, setToast] = useState<string | null>(null);
 
   const loadDetail = useCallback(async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    setDataScope(scope.key);
+    setWorkPackage(null);
+    setDetail(null);
     setLoading(true);
     setLoadError(null);
     try {
       const { data } = await getOperatorSurveyTaskDetailReal(target);
+      if (!isCurrent()) return;
       setDetail(data);
       try {
         const work = await getOperatorWorkPackageReal(target);
+        if (!isCurrent()) return;
         setWorkPackage(work.data);
       } catch {
+        if (!isCurrent()) return;
         setWorkPackage(null);
       }
     } catch (error) {
+      if (!isCurrent()) return;
       setLoadError(operatorErrorMessage(error));
       setDetail(null);
       setWorkPackage(null);
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [target]);
+  }, [target, scope.key, scope.capture]);
 
   useEffect(() => {
     void loadDetail();
@@ -105,7 +117,7 @@ export default function DroneRequestDeclineScreen() {
   const handleSubmit = () => setToast(DRONE_TASK_COMMAND_BLOCK_REASON);
 
   const renderBody = () => {
-    if (loading) {
+    if (!scope.key || dataScope !== scope.key || loading) {
       return (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
