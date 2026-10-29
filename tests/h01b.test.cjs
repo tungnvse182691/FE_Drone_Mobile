@@ -30,7 +30,7 @@ for(const role of ['crew','drone'])test('H01B '+role+' Sync actual component gua
  const file='app/('+role+')/sync.tsx',screen=load(deps,file);
  h.set({...h.state(),user:{id:h.actor,role_code:'REPORTER'}});const denied=screen.default();assert.match(JSON.stringify(denied),/Cần phiên/);
  h.set({...h.state(),user:{id:h.actor,role_code:role==='crew'?'REPAIR_CREW':'DRONE_OPERATOR'}});const wrapper=screen.default();assert.equal(typeof wrapper.type,'function');
- const tree=wrapper.type(wrapper.props);assert.match(JSON.stringify(tree),/SHA-256 chưa hợp lệ/);
+ const tree=wrapper.type(wrapper.props);assert.match(JSON.stringify(tree),role==='crew'?/Mã kiểm tra dữ liệu chưa hợp lệ/:/SHA-256 chưa hợp lệ/);
  assert.ok(!fs.readFileSync(file,'utf8').includes('/sync/batches'));assert.equal(h.raw.prepare('SELECT COUNT(*) n FROM wire_command').get().n,0);
 });
 

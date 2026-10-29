@@ -9,21 +9,22 @@ import { Chip } from '../../src/components/Chip';
 import { defectTypeLabel } from '../../src/constants/defect-types';
 import { TASK_MODE_CHIP } from './tasks';
 import { CrewTaskBoundary } from './tasks';
-import type { OperationalCrewTask } from '../../src/api/crewApi';
+import type { CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
 
 export default function CrewNavigationScreen() {
-  return <CrewTaskBoundary>{task => <CrewNavigationScreenContent task={task} />}</CrewTaskBoundary>;
+  return <CrewTaskBoundary operational={false}>{task => <CrewNavigationScreenContent task={task} />}</CrewTaskBoundary>;
 }
-function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
+function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
   const params = useLocalSearchParams<{ id?: string }>();
   const modeChip = TASK_MODE_CHIP[task.task_mode];
 
-  const targetLng = task.coordinates.longitude;
-  const targetLat = task.coordinates.latitude;
+  const targetLng = task.coordinates?.longitude;
+  const targetLat = task.coordinates?.latitude;
 
   const openGoogleMaps = () => {
+    if (!task.coordinates) return;
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${targetLat},${targetLng}`).catch(() => {});
   };
 
@@ -98,9 +99,9 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.map}>
-        <RoadGuardMapLibre
+        {task.coordinates ? <RoadGuardMapLibre
           style={StyleSheet.absoluteFill}
-          center={[targetLng, targetLat]}
+          center={[task.coordinates.longitude, task.coordinates.latitude]}
           zoom={16}
           controlsTopOffset={56}
           markers={[
@@ -109,12 +110,16 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
               title: defectTypeLabel(task.defect_type_code),
               label: defectTypeLabel(task.defect_type_code),
               subtitle: `${task.chainage} • Tuyến ${task.route_code} • ${task.section_name}`,
-              coordinate: [targetLng, targetLat],
+              coordinate: [task.coordinates.longitude, task.coordinates.latitude],
               type: 'defect',
             },
           ]}
 
-        />
+        /> : <View style={styles.missingMap}>
+          <MaterialIcons name="location-off" size={48} color={colors.secondary} />
+          <Text style={typography.titleLg}>Chưa có vị trí dẫn đường</Text>
+          <Text style={[typography.bodyMd, { textAlign: 'center', color: colors.secondary }]}>Nhiệm vụ chưa có tọa độ hợp lệ. Bạn vẫn có thể xem thông tin và các thao tác được hỗ trợ.</Text>
+        </View>}
 
         {/* Top Header Bar */}
         <View style={styles.topHeader}>
@@ -123,8 +128,8 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
           </Pressable>
 
           <View style={styles.gpsBadge}>
-            <View style={styles.gpsDot} />
-            <Text style={[typography.caption, styles.gpsText]}>Điểm hiện trường từ máy chủ</Text>
+            <MaterialIcons name="place" size={14} color={colors.secondary} />
+            <Text style={[typography.caption, styles.gpsText]}>{task.coordinates ? 'Tọa độ nhiệm vụ từ máy chủ' : 'Chưa có tọa độ'}</Text>
           </View>
         </View>
       </View>
@@ -163,7 +168,7 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
               <View style={styles.collapsedLeft}>
                 <MaterialIcons name="navigation" size={16} color={colors.brandGold} />
                 <Text style={[typography.labelSm, styles.collapsedTitle]}>
-                  Chưa có khoảng cách • {task.chainage} Tuyến {task.route_code} (BTXM)
+                  {[task.route_code, task.chainage].filter(Boolean).join(' • ') || 'Thông tin nhiệm vụ'}
                 </Text>
               </View>
               <View style={styles.collapsedRight}>
@@ -175,10 +180,10 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
             <View style={styles.distanceRow}>
               <View style={styles.distanceInfo}>
                 <Text style={[typography.titleLg, styles.distanceValue]}>
-                  Chưa có dữ liệu khoảng cách
+                  Vị trí hiện trường
                 </Text>
                 <Text style={[typography.titleMd, styles.roadTag]} numberOfLines={1}>
-                  {task.chainage} Tuyến {task.route_code} ({task.locality})
+                  {[task.chainage, task.route_code, task.locality].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}
                 </Text>
                 <View style={styles.tagRow}>
                   <Chip variant={modeChip.variant} label={modeChip.label} uppercase={false} />
@@ -200,11 +205,11 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
           <View style={styles.addressLeft}>
             <MaterialIcons name="place" size={16} color={colors.error} />
             <Text style={[typography.bodyMd, styles.addressText]}>
-              {task.locality} • {task.defect_location}
+              {[task.locality, task.defect_location].filter(Boolean).join(' • ') || 'Chưa có địa chỉ hiện trường'}
             </Text>
           </View>
           <Text style={[typography.labelSm, styles.coordText]}>
-            {targetLat.toFixed(4)}, {targetLng.toFixed(4)}
+            {task.coordinates ? `${task.coordinates.latitude.toFixed(4)}, ${task.coordinates.longitude.toFixed(4)}` : 'Chưa có GPS'}
           </Text>
         </View>
 
@@ -213,6 +218,7 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
             <Button
               variant="secondary"
               title="Mở Google Maps"
+              disabled={!task.coordinates}
               icon={<MaterialIcons name="directions" size={18} color={colors.neutral} />}
               onPress={openGoogleMaps}
             />
@@ -220,13 +226,13 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
           <View style={styles.actionItem}>
             <Button
               variant="primary"
-              title="Đã đến nơi"
-              onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id } })}
+              title="Xem nhiệm vụ"
+              onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}
             />
           </View>
         </View>
         <Text style={[typography.caption, styles.arrivalHint]}>
-          Đã đến nơi — Tiến hành đo đạc & chụp ảnh hiện trạng
+          Đây là vị trí nhiệm vụ từ máy chủ, không phải GPS quan sát của thiết bị. Mở nhiệm vụ để xem thao tác được phép.
         </Text>
       </Animated.View>
     </SafeAreaView>
@@ -234,6 +240,7 @@ function CrewNavigationScreenContent({ task }: { task: OperationalCrewTask }) {
 }
 
 const styles = StyleSheet.create({
+  missingMap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, paddingBottom: 280, gap: spacing.md },
   container: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,

@@ -62,7 +62,7 @@ test('T06DE task detail offers guarded correction inspection, never a correction
 for(const context of [null,{mode:'NORMAL',itemVersion:'AAAAAAAAB9E='},{mode:'CONDITIONAL_FT',itemVersion:'h4-eligibility-v1-example',eligible:true}])test('T06E FT remains blocked without a supported Crew bootstrap '+JSON.stringify(context),()=>{
  const t=task();t.detail.mode='CONDITIONAL_FT';t.detail.repairContext=context;
  const h=render('app/(crew)/wo-detail.tsx','RepairContractStatus',t);
- assert.match(h.text,/FastTrack/);assert.match(h.text,/itemVersion/);assert.match(h.text,/eligibility.*không phải.*phiên bản hạng mục/);
+ assert.match(h.text,/Sửa nhanh chưa sẵn sàng/);assert.match(h.text,/Chưa có đủ thông tin phân công/);assert.match(h.text,/hệ thống xác nhận đủ điều kiện/);
  assert.equal(h.nodes.find(n=>n.props.title==='Thi công FastTrack').props.disabled,true);
  h.nodes.find(n=>n.props.title==='Thi công FastTrack').props.onPress();
  assert.equal(h.writes.length,0);assert.equal(h.effects.length,0);

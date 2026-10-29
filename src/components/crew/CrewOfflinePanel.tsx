@@ -5,7 +5,6 @@ import { Button } from '../Button';
 import { inspectOfflineDevice, reconcileDeviceIntent } from '../../api/crewOfflineDevice';
 import { reconcileSignedBatch, recoverSignedOrigins, reconcileStartIntent } from '../../offline/crewSignedSync';
 import { openOfflineJournal, type OfflineJournalRecord } from '../../api/crewOfflineJournal';
-import { HANDOVER_GATE } from '../../api/crewOfflineWorkflow';
 import { NATIVE_ACCEPTANCE_VERIFIED } from '../../../modules/roadguard-offline-crypto';
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
 
@@ -13,6 +12,7 @@ import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queu
 export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
   const [probe,setProbe]=useState<Awaited<ReturnType<typeof inspectOfflineDevice>>|null>(null);
   const [records,setRecords]=useState<OfflineJournalRecord[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+  const [showDiagnostics,setShowDiagnostics]=useState(false);
   const sequence=useRef(0),running=useRef(false);
   useEffect(()=>()=>{sequence.current++;},[]);
   const refresh=async()=>{
@@ -20,7 +20,7 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
     try {
       const p=await inspectOfflineDevice(identity),j=await openOfflineJournal(identity),rows=await j.list();
       if(n===sequence.current&&sameQueueIdentity(identity)){setProbe(p);setRecords(rows);}
-    }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Không đọc được năng lực native hoặc journal; dữ liệu được giữ nguyên.');}
+    }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Không đọc được thông tin thiết bị hoặc nhật ký; dữ liệu được giữ nguyên.');}
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   const reconcile=async(record:OfflineJournalRecord)=>{
@@ -38,30 +38,27 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
   };
   if(!sameQueueIdentity(identity))return null;
   return <Card>
-    <Text>Đồng bộ ký — thiết bị và journal</Text>
-    <Text selectable>Tài khoản: {identity.actor}</Text>
-    <Text selectable>Môi trường: {identity.environment}</Text>
-    <Text>{NATIVE_ACCEPTANCE_VERIFIED?'Native đã có bằng chứng nghiệm thu.':'BLOCKED_NATIVE: chưa đủ bằng chứng runtime Android, custody và khôi phục khóa được nghiệm thu.'}</Text>
-    <Button title="Kiểm tra native / đọc journal" variant="secondary" loading={busy} disabled={busy} onPress={()=>void refresh()} />
+    <Text>Đồng bộ an toàn trên thiết bị</Text>
+    <Text>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng kiểm thử thiết bị trong phạm vi được nghiệm thu. Chưa xác nhận dữ liệu đã gửi.':'Chưa đủ bằng chứng kiểm thử trên thiết bị để mở chức năng gửi an toàn.'}</Text>
+    <Button title="Kiểm tra thiết bị / đọc nhật ký" variant="secondary" loading={busy} disabled={busy} onPress={()=>void refresh()} />
     {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
     {probe?<View>
-      <Text>Android API: {probe.capability.apiLevel || 'Chưa đo trên Android'}</Text>
-      <Text selectable>Thiết bị cài đặt: {probe.deviceId??'Chưa có native module'}</Text>
-      <Text>Signing: {probe.capability.securityLevel.signing}; ECDH: {probe.capability.securityLevel.agreement}</Text>
-      <Text>{probe.capability.reason}</Text>
-      {records.length===0?<Text>Chưa có intent trong journal mới của tài khoản này.</Text>:records.map(r=><View key={r.id}><Text>
-        {r.proof.kind as string} — {r.phase==='RECONCILED'?'READBACK_VERIFIED':r.phase} — project {r.projectId} — origin đã xác minh: {r.verifiedItems?.length??0}
-        {r.identity.scope!==identity.scope?' — phiên cũ, giữ nguyên để đối soát':''}
+      <Button title={showDiagnostics?'Ẩn thông tin chẩn đoán':'Thông tin chẩn đoán'} variant="text" onPress={()=>setShowDiagnostics(v=>!v)} />
+      {showDiagnostics ? <View><Text>Phiên bản Android API: {probe.capability.apiLevel || 'Chưa xác định'}</Text><Text>Thông tin chỉ phục vụ kiểm tra thiết bị; không xác nhận đồng bộ thành công.</Text></View> : null}
+      {records.length===0?<Text>Chưa có thao tác trong nhật ký đang theo dõi. Đây không phải xác nhận đã đồng bộ.</Text>:records.map(r=><View key={r.id}><Text>
+        {({RECONCILED:'Đã đối soát kết quả máy chủ',RECEIVED:'Đã nhận phản hồi, cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả, giữ nguyên lệnh',IN_FLIGHT:'Đang xử lý, chưa xác nhận kết quả'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận kết quả'}
+        {r.identity.scope!==identity.scope?' — thao tác phiên trước được giữ để đối soát':''}
+
       </Text>
         {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||
           (['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?
           <Button title="Đối soát bằng GET máy chủ" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)} />:null}
       </View>)}
     </View>:null}
-    <Text>BE_FIXTURE_BLOCKED: chưa có project/assignment riêng và device/snapshot đã được xác minh. Không chuyển hàng đợi legacy thành batch ký.</Text>
+    <Text>Chức năng gửi đang khóa vì chưa đủ dữ liệu nhiệm vụ và thiết bị được xác minh. Các lệnh cũ vẫn được giữ nguyên.</Text>
     <Button title="Đăng ký thiết bị" variant="secondary" disabled onPress={()=>{}} />
-    <Button title="Tạo snapshot nhiệm vụ" variant="secondary" disabled onPress={()=>{}} />
-    <Button title="Gửi batch đã ký" variant="secondary" disabled onPress={()=>{}} />
-    <Text>{HANDOVER_GATE}</Text>
+    <Button title="Tạo bản dữ liệu nhiệm vụ" variant="secondary" disabled onPress={()=>{}} />
+    <Button title="Gửi dữ liệu đã ký" variant="secondary" disabled onPress={()=>{}} />
+    <Text>Chuyển giao thiết bị chưa khả dụng trong phạm vi hiện tại.</Text>
   </Card>;
 }

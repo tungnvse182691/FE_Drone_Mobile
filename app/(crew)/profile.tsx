@@ -43,7 +43,7 @@ const SETTINGS_ROWS = [
   {
     icon: 'sync' as const,
     label: 'Cài đặt đồng bộ',
-    subtitle: 'Tự động qua Wi-Fi • Lưu ngoại tuyến',
+    subtitle: 'Xem hàng đợi và trạng thái xác nhận',
     action: 'sync' as const,
     route: '/(crew)/sync',
   },
@@ -84,13 +84,13 @@ export default function CrewProfileScreen() {
       case 'profile':
         Alert.alert(
           'Thông tin cá nhân',
-          `Họ tên: ${displayName}\nMã nhân viên: ${user?.employee_code ?? 'Chưa có dữ liệu'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Chưa có dữ liệu\nTrạng thái hoạt động: Chưa có dữ liệu`,
+          `Họ tên: ${displayName}\nMã nhân viên: ${user?.employee_code?.trim() || 'Chưa có dữ liệu'}\nVai trò: Kỹ thuật viên sửa chữa\nĐội phụ trách: Chưa có dữ liệu\nTrạng thái hoạt động: Chưa có dữ liệu`,
         );
         return;
       case 'help':
         Alert.alert(
           'Trợ giúp & Hỗ trợ kỹ thuật',
-          'Hotline: 1900 8866\nEmail: hotro@hoanghai.vn',
+          'Chưa có thông tin liên hệ hỗ trợ được cấu hình. Vui lòng liên hệ người quản lý dự án.',
         );
         return;
     }
@@ -108,7 +108,7 @@ export default function CrewProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Đổi ảnh đại diện"
             style={styles.cameraBtn}
-            onPress={() => setToast('Tính năng cập nhật ảnh đại diện sẽ đồng bộ qua tài khoản SSO')}
+            onPress={() => setToast('Chức năng cập nhật ảnh đại diện chưa được hỗ trợ.')}
           >
             <MaterialIcons name="photo-camera" size={16} color={colors.surface} />
           </Pressable>
@@ -116,7 +116,7 @@ export default function CrewProfileScreen() {
 
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
-          Mã NV: {user?.employee_code ?? 'Chưa có dữ liệu'}
+          Mã NV: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
         </Text>
         <Text style={[typography.caption, styles.unit]}>
           Chưa có thông tin đội phụ trách
@@ -125,11 +125,12 @@ export default function CrewProfileScreen() {
 
         <View style={styles.roleChip}>
           <MaterialIcons name="build" size={14} color={colors.brandGold} />
-          <Text style={[typography.labelSm, styles.roleText]}>Thợ đường</Text>
+          <Text style={[typography.labelSm, styles.roleText]}>Kỹ thuật viên sửa chữa</Text>
         </View>
       </View>
 
       <Card style={styles.statsCard}>
+        <Text style={[typography.caption, { color: colors.secondary, marginBottom: spacing.sm }]}>Thống kê trong nhiệm vụ đã tải</Text>
         <View style={styles.statsRow}>
           {PERFORMANCE_STATS.map((stat, idx) => (
             <React.Fragment key={stat.label}>
@@ -182,7 +183,7 @@ export default function CrewProfileScreen() {
       </Pressable>
 
       <Text style={[typography.caption, styles.footer]}>
-        Hoàng Hải Field v2.4.1 (Build 142) • Đội sửa chữa
+        RoadGuard • Bê tông Hoàng Hải
       </Text>
 
       {toast ? <Toast type="info" message={toast} /> : null}

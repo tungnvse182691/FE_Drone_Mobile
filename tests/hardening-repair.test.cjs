@@ -57,7 +57,7 @@ function recoveryUI(){
   '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:h.task.repairContext,reload:async()=>{}})},
   '../../src/api/crewApi':h.api,'../../src/api/crewRepairDraft':journalModule,
   '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>[row],readRepairFieldDraft:async()=>{throw Error('old FIELD retained');},repairErrorMessage:e=>e.message,dispatchRepair:async()=>{posts++;return {...row,phase:'CONFIRMED'};}},
-  '../../src/api/crewFieldDraft':{},'../../src/components/Card':{Card:'Card'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'},
+  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Chip':{Chip:'Chip'},'../../src/api/crewFieldDraft':{},'../../src/components/Card':{Card:'Card'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'},
  }});return {s,posts:()=>posts,switch:()=>current=null};
 }
 test('HARDEN mounted recovery retains history when old FIELD is unavailable; no POST until warning confirmation',async()=>{

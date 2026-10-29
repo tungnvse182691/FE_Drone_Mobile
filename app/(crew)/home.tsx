@@ -7,7 +7,7 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP } from './tasks';
+import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP, crewStatusLabel } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { CREW_RECEIVING } from '../../src/constants/routes';
 import { TaskMode } from '../../src/types/enums';
@@ -39,7 +39,7 @@ const CREW_METRICS: CrewMetric[] = [
     valueColor: colors.success,
     iconColor: '#2F9E44',
     iconBg: '#E9F7EC',
-    subLabel: 'Trạng thái BE trong dữ liệu đã tải',
+    subLabel: 'Trong các nhiệm vụ đã tải',
   },
 ];
 
@@ -54,7 +54,7 @@ export default function CrewHomeScreen() {
   const inbox = useCrewInbox();
   const tasks = inbox.tasks.filter(t => !crewTaskIsComplete(t));
   const displayName = normalizeName(inbox.enabled ? user?.full_name : undefined, 'Chưa có tên tài khoản');
-  const employeeCode = inbox.enabled ? user?.employee_code ?? 'Chưa có mã nhân viên' : 'Chưa đăng nhập';
+  const employeeCode = inbox.enabled ? user?.employee_code?.trim() || 'Chưa có mã nhân viên' : 'Chưa đăng nhập';
 
   return (
     <View style={styles.screen}>
@@ -76,27 +76,17 @@ export default function CrewHomeScreen() {
           <View style={styles.teamHeaderRow}>
             <View style={styles.teamTitleGroup}>
               <MaterialIcons name="engineering" size={18} color={colors.brandGold} />
-              <Text style={[typography.titleMd, styles.teamTitle]}>ĐỘI THI CÔNG</Text>
+              <Text style={[typography.titleMd, styles.teamTitle]}>TÀI KHOẢN HIỆN TRƯỜNG</Text>
             </View>
             <View style={styles.teamStatusPill}>
-              <View style={styles.statusDot} />
-              <Text style={[typography.labelSm, styles.teamStatusText]}>Hiện trường</Text>
+              <MaterialIcons name="engineering" size={14} color={colors.secondary} />
+              <Text style={[typography.labelSm, styles.teamStatusText]}>Crew</Text>
             </View>
           </View>
 
           <View style={styles.teamDivider} />
 
           <View style={styles.teamInfoList}>
-            <View style={styles.teamMemberRow}>
-              <View style={styles.memberRoleCol}>
-                <MaterialIcons name="person" size={15} color={colors.secondary} />
-                <Text style={[typography.caption, styles.memberRoleLabel]}>Đội trưởng:</Text>
-              </View>
-              <Text style={[typography.bodyMd, styles.memberNameText]} numberOfLines={1}>
-                Chưa có dữ liệu đội trưởng
-              </Text>
-            </View>
-
             <View style={styles.teamMemberRow}>
               <View style={styles.memberRoleCol}>
                 <MaterialIcons name="build" size={15} color={colors.secondary} />
@@ -129,7 +119,7 @@ export default function CrewHomeScreen() {
 
         {/* SECTION HEADER: Danh sách việc */}
         <View style={styles.sectionHeader}>
-          <Text style={[typography.titleMd, styles.sectionTitle]}>Công việc cần xử lý</Text>
+          <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ đang theo dõi</Text>
           <Pressable
             onPress={() => router.push('/(crew)/tasks')}
             accessibilityRole="button"
@@ -230,7 +220,7 @@ export default function CrewHomeScreen() {
 
                   {/* Hàng 2: Tiêu đề công việc 16px rõ nét ngoài nắng */}
                   <Text style={[typography.titleMd, styles.taskTitle]} numberOfLines={2}>
-                    {task.title || 'Nhiệm vụ hiện trường'} · {task.id}
+                    {task.title || 'Nhiệm vụ hiện trường'}
                   </Text>
 
                   {/* Hàng 3: Dòng tuyến • trạm • lý trình kèm icon near-me */}
@@ -245,7 +235,7 @@ export default function CrewHomeScreen() {
                   <View style={styles.taskCardFooter}>
                     <View style={styles.footerLeftMeta}>
                       <View style={styles.woCodeBadge}>
-                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || 'Chưa có mã WO'}</Text>
+                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || crewStatusLabel(task.status)}</Text>
                       </View>
                       {task.distance_label ? (
                         <Text style={[typography.caption, styles.distanceText]}>

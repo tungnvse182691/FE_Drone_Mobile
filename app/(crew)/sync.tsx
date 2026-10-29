@@ -10,7 +10,7 @@ import { StatusBadge } from '../../src/components/StatusBadge';
 import { EmptyState } from '../../src/components/EmptyState';
 import { Toast } from '../../src/components/Toast';
 import { initDatabase, openDatabase } from '../../src/offline/database';
-import { decodeOutboxPayload, currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, QUEUE_CONTRACT_NOTICE, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
+import { decodeOutboxPayload, currentQueueIdentity, sameQueueIdentity, createQueueReader, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
 import { isLegacyRepairQueueEntry } from '../../src/api/crewApi';
 import { useAuthStore } from '../../src/store/auth';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -47,6 +47,11 @@ const OUTBOX_KIND_LABELS: Record<string, string> = {
   REPAIR_START: 'Bắt đầu sửa chữa',
   REPAIR_SUBMIT: 'Nộp kết quả sửa chữa',
 };
+
+export function crewQueueStateLabel(state: string): string {
+  const labels: Record<string,string> = { DRAFT:'Bản nháp',WAITING_DEPENDENCIES:'Chờ dữ liệu liên quan',READY:'Chờ xử lý',IN_FLIGHT:'Đang xử lý, chưa xác nhận',PAUSED_RETRY:'Đang tạm dừng',UNKNOWN_OUTCOME:'Chưa rõ kết quả',AUTH_REQUIRED:'Cần xác thực lại',BLOCKED_CONTRACT:'Chưa hỗ trợ gửi',CONFLICT:'Cần đối soát dữ liệu',REJECTED:'Máy chủ từ chối',ACKED:'Phản hồi cũ chưa được đối soát' };
+  return labels[state] ?? 'Chưa xác nhận kết quả';
+}
 
 const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
   [LocalState.DRAFT]: SyncStatus.QUEUED,
@@ -126,7 +131,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   useEffect(()=>{void reload();},[reload]);
   const syncNow=useCallback(async()=>{
     if(!db||!active())return;setSyncing(true);
-    try{await reload();if(active())setToast(QUEUE_CONTRACT_NOTICE);}
+    try{await reload();if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');}
     finally{if(active())setSyncing(false);}
   },[db,reload,identity]);
 
@@ -134,8 +139,8 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
     if (outboxRows.length > 0) {
       return outboxRows.map((row) => ({
         id: row.id,
-        name: OUTBOX_KIND_LABELS[row.kind] ?? row.kind,
-        meta: `${row.stored_status ?? row.status}${row.ack_verification === 'UNVERIFIED_LEGACY' || row.status === LocalState.ACKED ? ' — ACK lịch sử chưa xác minh receipt Backend' : ''}. ${row.last_error ? `Lỗi: ${row.last_error}` : queueChecksumLabel(row.checksum_sha256)}`,
+        name: OUTBOX_KIND_LABELS[row.kind] ?? 'Thao tác đang lưu trên thiết bị',
+        meta: `${crewQueueStateLabel(row.stored_status ?? row.status)}. ${row.last_error ? 'Lần xử lý trước chưa hoàn tất; dữ liệu được giữ để kiểm tra.' : 'Chưa xác nhận hoàn tất trên máy chủ.'} ${typeof row.checksum_sha256 === 'string' && /^[a-f0-9]{64}$/i.test(row.checksum_sha256) ? 'Đã có mã kiểm tra dữ liệu.' : 'Mã kiểm tra dữ liệu chưa hợp lệ.'}`,
         size: `Lần thử ${row.attempt}/${row.max_attempts}`,
         status: row.status === LocalState.ACKED ? SyncStatus.QUEUED : LOCAL_STATE_TO_SYNC_STATUS[row.status] ?? SyncStatus.QUEUED,
       }));
@@ -164,8 +169,8 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   
 
   const refresh=()=>{void reload();};
-  const retry=()=>{if(active())setToast(QUEUE_CONTRACT_NOTICE);};
-  const cleanupCache=()=>{if(active())setToast('Chưa có bằng chứng đối soát để xóa bản sao. Dữ liệu được giữ nguyên.');};
+  const retry=()=>{if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');};
+
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng Bộ" />}>
@@ -203,9 +208,9 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         <View style={styles.statusHero}>
           <View style={styles.heroIcon}>
             <MaterialIcons
-              name={counts.pending === 0 ? 'check-circle' : 'sync'}
+              name="inventory-2"
               size={28}
-              color={counts.pending === 0 ? colors.success : colors.brandGold}
+              color={colors.brandGold}
             />
           </View>
           <View style={styles.heroBody}>
@@ -213,19 +218,19 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
               {counts.pending} mục đang chờ đồng bộ
             </Text>
             <View style={styles.networkRow}>
-              <MaterialIcons name="wifi" size={14} color={colors.success} />
-              <Text style={[typography.caption, styles.networkText]}>Trạng thái mạng chưa được đo</Text>
+              <MaterialIcons name="help-outline" size={14} color={colors.secondary} />
+              <Text style={[typography.caption, styles.networkText]}>Chưa xác định trạng thái kết nối</Text>
             </View>
           </View>
         </View>
         <Text style={[typography.bodyMd, styles.statusDesc]}>
-          {QUEUE_CONTRACT_NOTICE} Bản ghi local/không chứng minh được chủ sở hữu được giữ riêng và không hiển thị trong phiên này.
+          Hàng đợi này chưa được phép gửi. Bản ghi chưa xác minh được quyền sở hữu được giữ riêng, không hiển thị trong phiên này.
         </Text>
         <View style={styles.heroDivider} />
         <View style={styles.syncBtnWrap}>
           <Button
             variant="primary"
-            title="Kiểm tra hàng đợi bị khóa"
+            title="Kiểm tra hàng đợi"
             loading={syncing}
             disabled={counts.pending === 0}
             onPress={syncNow}
@@ -234,7 +239,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
           />
           {counts.pending === 0 ? (
             <Text style={[typography.caption, styles.syncAllDone]}>
-              Không có mục trong phân vùng tài khoản này. Không suy ra đã đồng bộ dữ liệu legacy.
+              Chưa có mục chờ trong tài khoản này. Đây không phải xác nhận đã gửi lên máy chủ.
             </Text>
           ) : null}
         </View>
@@ -244,7 +249,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         <>
           <View style={styles.sectionHeader}>
             <Text style={[typography.labelSm, styles.sectionTitle]}>MỤC CẦN TẢI LÊN</Text>
-            <Text style={[typography.caption, styles.sectionHint]}>Chưa có dispatch ký hợp lệ</Text>
+            <Text style={[typography.caption, styles.sectionHint]}>Chưa xác nhận đã gửi</Text>
           </View>
 
           {visibleItems.map((item) => (
@@ -283,7 +288,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
               <View style={styles.infoContent}>
                 <Text style={[typography.labelLg, styles.infoTitle]}>Bảo toàn dữ liệu ngoại tuyến</Text>
                 <Text style={[typography.caption, styles.infoDesc]}>
-                  Dữ liệu sửa chữa và hình ảnh nghiệm thu được lưu an toàn tại bộ nhớ thiết bị. Đồng bộ legacy đang khóa; chưa gửi mạng hay nhận xác nhận từ máy chủ.
+                  Các bản ghi đang được giữ trên thiết bị để đối soát. Hàng đợi cũ chưa được phép gửi; lưu trên thiết bị không đồng nghĩa máy chủ đã nhận.
                 </Text>
               </View>
             </View>
@@ -299,22 +304,20 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
                 <Text style={[typography.caption, styles.cacheDesc]}>Chưa đo dung lượng thiết bị</Text>
               </View>
             </View>
-            <Pressable accessibilityRole="button" style={({ pressed }) => [styles.cleanupBtn, pressed && styles.cleanupPressed]} onPress={cleanupCache}>
-              <Text style={[typography.labelSm, styles.cleanupText]}>DỌN DẸP</Text>
-            </Pressable>
+
           </Card>
         </>
       ) : counts.done > 0 ? (
         <EmptyState
           icon="sync"
-          title="Đã đồng bộ xong"
-          message="Chưa có receipt hợp lệ để xác nhận dữ liệu legacy."
+          title="Kết quả cần đối soát"
+          message="Chưa có biên nhận hợp lệ để xác nhận dữ liệu cũ."
         />
       ) : (
         <EmptyState
           icon="cloud-off"
           title="Chưa có dữ liệu"
-          message="Chưa có mục nào được đồng bộ lên máy chủ."
+          message="Chưa có mục được xác nhận trong danh sách này. Không suy ra toàn bộ dữ liệu đã đồng bộ."
         />
       )}
 

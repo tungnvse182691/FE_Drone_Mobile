@@ -1,159 +1,47 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
-import { Toast } from '../../src/components/Toast';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { DEFECT_TYPE_OPTIONS, DEFECT_TYPE_CODES, defectTypeLabel } from '../../src/constants/defect-types';
+import { defectTypeLabel } from '../../src/constants/defect-types';
 import { CrewTaskBoundary, type CrewTask } from './tasks';
-
-const DEFECT_TYPES = DEFECT_TYPE_OPTIONS;
-
-const SEVERITY_OPTIONS = [
-  { label: 'Khẩn cấp', color: colors.error, bg: '#FDECEC', border: colors.error },
-  { label: 'Trung bình', color: colors.secondary, bg: colors.surface, border: colors.border },
-  { label: 'Theo dõi', color: colors.secondary, bg: colors.surface, border: colors.border },
-];
 
 export default function CrewReportDefectScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewReportDefectScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
-  const params = useLocalSearchParams<{ id?: string }>();
-  const [defectType, setDefectType] = useState<string>(DEFECT_TYPE_CODES.POTH_DEEP);
-  const [customType, setCustomType] = useState('');
-  const [severity, setSeverity] = useState<string>('Khẩn cấp');
-  const [notes, setNotes] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
-
-  const gpsText = task.coordinates ? `${task.coordinates.latitude.toFixed(5)}, ${task.coordinates.longitude.toFixed(5)} (vị trí nhiệm vụ, không phải GPS quan sát)` : 'Chưa có tọa độ từ máy chủ';
-  const handleSubmit = () => setToast('Báo lỗi phát sinh mới chưa có contract API được xác minh trong T05B. Chưa gửi dữ liệu. Dùng hồ sơ FIELD của nhiệm vụ để gửi kết quả đo kiểm.');
-
-  return (
-    <SafeAreaScreen
-      scroll
-      header={
-        <View style={styles.topBar}>
-          <View style={styles.topBarLeft}>
-            <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-              <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
-            </Pressable>
-            <Text style={[typography.titleMd, styles.topBarTitle]}>Báo lỗi phát sinh mới</Text>
-          </View>
-          <View style={styles.badgeNew}>
-            <Text style={[typography.labelSm, styles.badgeNewText]}>Phát sinh</Text>
-          </View>
-        </View>
-      }
-    >
-      <Card style={styles.banner}>
-        <View style={styles.bannerRow}>
-          <MaterialIcons name="warning" size={16} color={colors.warning} />
-          <Text style={[typography.bodyMd, styles.bannerText]}>
-            Chưa mở gửi lỗi phát sinh mới: chưa xác minh contract API. Hồ sơ FIELD của nhiệm vụ dùng luồng riêng.
-          </Text>
-        </View>
+  return <SafeAreaScreen scroll header={<View style={styles.topBar}><View style={styles.topBarLeft}>
+    <Pressable onPress={()=>router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={styles.backBtn}><MaterialIcons name="arrow-back" size={20} color={colors.neutral}/></Pressable>
+    <Text style={[typography.titleMd,styles.topBarTitle]}>Báo lỗi phát sinh</Text></View></View>}>
+    <Card style={styles.banner}><View style={styles.bannerRow}>
+      <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
+      <Text style={[typography.bodyMd,styles.bannerText]}>Gửi lỗi phát sinh mới chưa khả dụng. Các thông tin dưới đây chỉ để xem; không có báo cáo mới được lưu hoặc gửi.</Text>
+    </View></Card>
+    <View style={styles.fieldGroup}>
+      <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
+      <Card style={{gap:spacing.sm}}>
+        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
+        <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
+        <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude}, ${task.coordinates.longitude}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
       </Card>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Vị trí nhiệm vụ từ máy chủ</Text>
-        <View style={styles.gpsField}>
-          <MaterialIcons name="location-on" size={16} color={colors.secondary} />
-          <Text style={[typography.bodyMd, styles.gpsText]}>{gpsText}</Text>
-        </View>
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Phân loại lỗi</Text>
-        <View style={styles.chipRow}>
-          {DEFECT_TYPES.map((type) => {
-            const active = type.code === defectType;
-            return (
-              <Pressable
-                key={type.code}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setDefectType(type.code)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: active }}
-              >
-                <Text style={[typography.labelSm, active ? styles.chipTextActive : styles.chipText]}>{type.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <TextInput
-          style={styles.customTypeInput}
-          value={customType}
-          onChangeText={setCustomType}
-          placeholder="Nhập tay loại lỗi khác (nếu không thuộc 5 loại trên)..."
-          placeholderTextColor={colors.secondary}
-          accessibilityLabel="Nhập tay loại lỗi khác"
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Mức độ khẩn cấp</Text>
-        <View style={styles.severityRow}>
-          {SEVERITY_OPTIONS.map((opt) => {
-            const active = opt.label === severity;
-            return (
-              <Pressable
-                key={opt.label}
-                style={[
-                  styles.severityChip,
-                  { backgroundColor: active ? opt.bg : colors.surface, borderColor: active ? opt.border : colors.border },
-                ]}
-                onPress={() => setSeverity(opt.label)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: active }}
-              >
-                <Text style={[typography.labelSm, { color: active ? opt.color : colors.secondary }]}>{opt.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Ảnh chụp hiện trường hư hỏng</Text>
-        <Pressable
-          style={({ pressed }) => [styles.photoPlaceholder, pressed && styles.pressed]}
-          onPress={() =>
-            router.push({ pathname: '/(crew)/viewfinder', params: { id: task.id, projectId: task.projectId, mode: 'BEFORE' } })
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Chụp ảnh hiện trường có Watermark"
-        >
-          <MaterialIcons name="photo-camera" size={32} color={colors.primary} />
-          <Text style={[typography.labelSm, styles.photoText]}>Chạm để chụp ảnh có Watermark</Text>
-          <Text style={[typography.caption, styles.photoHint]}>Gắn nhãn vị trí hiện tại</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[typography.labelLg, styles.fieldLabel]}>Ghi chú mô tả hiện trường</Text>
-        <TextInput
-          style={styles.textarea}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          numberOfLines={3}
-          placeholder="Mô tả hiện trạng hư hỏng, ví dụ: nứt dọc mép tấm khoảng 2m..."
-          placeholderTextColor={colors.secondary}
-        />
-      </View>
-
-      <View style={styles.ctaWrap}>
-        <Button variant="primary" title="Gửi báo cáo lỗi phát sinh cho PM" disabled onPress={handleSubmit} />
-        <Button variant="secondary" title="Mở hồ sơ FIELD của nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})} />
-      </View>
-
-      {toast ? <Toast type="success" message={toast} /> : null}
-    </SafeAreaScreen>
-  );
+    </View>
+    <View style={styles.fieldGroup}>
+      <Text style={[typography.labelLg,styles.fieldLabel]}>PHÂN LOẠI LỖI</Text>
+      <Card style={{gap:spacing.sm}}><View style={styles.bannerRow}><MaterialIcons name="category" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,{flex:1}]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text></View><Text style={typography.caption}>Không chọn hoặc tạo phân loại cho lỗi mới tại màn hình này.</Text></Card>
+    </View>
+    <View style={styles.fieldGroup}>
+      <Text style={[typography.labelLg,styles.fieldLabel]}>HÌNH ẢNH HIỆN TRƯỜNG</Text>
+      <View style={styles.photoPlaceholder}><MaterialIcons name="photo-library" size={32} color={colors.secondary}/><Text style={[typography.bodyMd,styles.photoText]}>Chưa hiển thị ảnh cho lỗi phát sinh mới</Text><Text style={[typography.caption,styles.photoHint]}>Xem thao tác ảnh của nhiệm vụ tại màn chi tiết khi đủ điều kiện.</Text></View>
+    </View>
+    <View style={styles.fieldGroup}>
+      <Text style={[typography.labelLg,styles.fieldLabel]}>GHI CHÚ NHIỆM VỤ</Text>
+      <Card><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text><Text style={typography.caption}>Thông tin chỉ đọc từ nhiệm vụ, không phải nháp báo lỗi mới.</Text></Card>
+    </View>
+    <View style={styles.ctaWrap}><Button variant="primary" title="Về chi tiết nhiệm vụ" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/></View>
+  </SafeAreaScreen>;
 }
 
 const styles = StyleSheet.create({
