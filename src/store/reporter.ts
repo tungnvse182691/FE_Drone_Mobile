@@ -2,14 +2,15 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
 import type { CreateReporterReportRequestDto } from '../api/mock/reporter';
-import { openDatabase, initDatabase, saveDraft, getDraft, deleteDraft } from '../offline/database';
+import { openDatabase, initDatabase, saveDraft, getDraft } from '../offline/database';
 import { File } from 'expo-file-system';
 import { useAuthStore } from './auth';
 import { useUploadsStore, reporterContext, assertReporterContext } from './uploads';
-import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, locationSourceFor, strongUploadETag } from '../api/uploads';
+import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, strongUploadETag } from '../api/uploads';
 import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '../api/reporterApi';
 import { uuidv4 } from '../utils/uuid';
 import { useEffect, useRef } from 'react';
+import { buildReportEvidenceLocation, locationSourceFor as sourceFor } from '../types/position';
 
 export interface DraftPhoto {
   uri: string;
@@ -42,10 +43,19 @@ type ReporterContext = ReturnType<typeof reporterContext>;
 const draftKey = (context: ReporterContext) => `reporter-pending-v2:${context.partition}`;
 const provenanceMatches = (draft: ReporterDraft, context: ReporterContext) => draft.ownerId === context.ownerId &&
   draft.provenance?.environment === context.environment && draft.provenance?.session === context.session;
+// Hold the native handle for the store lifetime. Serialize initialization and
+// retry initialization failures on that handle; never delete/recreate the DB.
+let draftDatabase: ReturnType<typeof openDatabase> | undefined;
+let draftInitialization: Promise<ReturnType<typeof openDatabase>> | undefined;
 async function draftDb() {
-  const db = openDatabase();
-  await initDatabase(db);
-  return db;
+  const db = draftDatabase ?? (draftDatabase = openDatabase());
+  if (!draftInitialization) {
+    draftInitialization = initDatabase(db).then(() => db).catch(error => {
+      draftInitialization = undefined;
+      throw error;
+    });
+  }
+  return draftInitialization;
 }
 async function persistDraft(draft: ReporterDraft, context: ReporterContext) {
   const db = await draftDb();
@@ -64,7 +74,10 @@ function hasDraftContent(draft: ReporterDraft | null): draft is ReporterDraft {
   return Boolean(draft && !draft.retired && (draft.description.trim() || draft.photos.length || draft.request || draft.resultReportId || draft.submitRequested));
 }
 async function readPending(context: ReporterContext): Promise<ReporterDraft | null> {
+  let phase = 'storage_open';
+  try {
   const db = await draftDb();
+  phase = 'draft_read';
   assertReporterContext(context);
   const draft = await getDraft<ReporterDraft>(db, draftKey(context));
   assertReporterContext(context);
@@ -72,6 +85,16 @@ async function readPending(context: ReporterContext): Promise<ReporterDraft | nu
   // Same device/environment is not ownership proof. No guest claim contract exists;
   // never read or rewrite guest/legacy rows on behalf of an authenticated account.
   return null;
+  } catch (error) {
+    // Only bounded diagnostic categories. Never log native messages, paths or payloads.
+    const message = error instanceof Error ? error.message : '';
+    const category = /locked|busy/i.test(message) ? 'storage_busy'
+      : /prepareAsync|NullPointerException/i.test(message) ? 'native_statement'
+      : /syntax|no such|column/i.test(message) ? 'storage_structure'
+      : error instanceof SyntaxError ? 'draft_format' : 'storage_read_failed';
+    console.warn(`[Reporter restore] ${phase}/${category}`);
+    throw error;
+  }
 }
 
 export const GUEST_DRAFT_NOTICE = 'Nháp khách được giữ riêng trên thiết bị, không tự chuyển vào tài khoản khi đăng nhập hoặc xác thực OTP. Chưa có cơ chế xác minh chủ sở hữu để gửi nháp đó.';
@@ -226,11 +249,15 @@ export const useReporterStore = create<ReporterSessionState>()(
               if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) throw { code: 'validation_error', status: 400 };
               const checksumSha256 = await sha256HexOfBytes(bytes);
               assertOwner();
+              const location = buildReportEvidenceLocation(draft.coords?.latitude, draft.coords?.longitude, draft.coords?.accuracyMeters);
               id = await queue.enqueuePhoto({ partitionId: context.partition, uriLocal: photo.uri, fileName: photo.fileName, mediaType: photo.mediaType,
                 sizeBytes: bytes.length, checksumSha256, capturedAt: photo.capturedAt,
-                locationSource: locationSourceFor(Boolean(draft.coords)), ...draft.coords });
+                locationSource: sourceFor(Boolean(location)), ...location });
               await putDraft({ ...draft, photos: draft.photos.map((p, i) => i === index ? { ...p, itemId: id } : p) });
             }
+            const linked = useUploadsStore.getState().items.find(p => p.id === id);
+            if (!linked || linked.partitionId !== context.partition || linked.uriLocal !== photo.uri ||
+                linked.fileName !== photo.fileName || linked.mediaType !== photo.mediaType) throw { code: 'access_forbidden', status: 403 };
             await queue.advanceItem(id);
             assertOwner();
             const item = useUploadsStore.getState().items.find(p => p.id === id);
@@ -242,8 +269,9 @@ export const useReporterStore = create<ReporterSessionState>()(
           if (!draft.request) {
             const evidence = draft.photos.map(photo => {
               const item = useUploadsStore.getState().items.find(p => p.id === photo.itemId)!;
+              const location = buildReportEvidenceLocation(item.latitude, item.longitude, item.accuracyMeters);
               return { fileId: item.fileId!, fileVersion: item.verifiedVersion!, capturedAt: item.capturedAt,
-                locationSource: item.locationSource, location: draft!.coords };
+                locationSource: location ? item.locationSource : 'UNKNOWN' as const, ...(location ? { location } : {}) };
             });
             await putDraft({ ...draft, request: { description: draft.description, evidence } });
           }
@@ -264,7 +292,12 @@ export const useReporterStore = create<ReporterSessionState>()(
           const reportId = found.report.id;
           const db = await draftDb();
           assertOwner();
-          await deleteDraft(db, draftKey(context));
+          // Keep the receipt, command, evidence and original key for reconciliation.
+          // Archive before retiring the active pointer; a failed write remains retryable.
+          const retired = { ...draft, retired: true };
+          await saveDraft(db, `reporter-history-v1:${context.partition}:${draft.id}`, 'reporter_pending_v1', retired as unknown as Record<string, unknown>);
+          assertOwner();
+          await persistDraft(retired, context);
           assertOwner();
           set({ pendingDraft: null, pendingDraftId: null, pendingReport: null });
           return reportId;

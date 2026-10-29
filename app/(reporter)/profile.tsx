@@ -172,8 +172,8 @@ export default function ReporterProfileScreen() {
           style={styles.menuItem}
           onPress={() =>
             Alert.alert(
-              'Dự án ĐH.05 Bình Chánh',
-              'Tuyến đường: ĐH.05 (Huyện Bình Chánh, TP. Hồ Chí Minh)\nĐơn vị thi công & bảo hành: Công ty Bê tông Hoàng Hải\nPhạm vi bảo hành: Mặt đường bê tông xi măng, hệ thống thoát nước và an toàn giao thông.',
+              'Thông tin phản ánh',
+              'Thông tin vị trí và trạng thái xử lý được hiển thị theo từng phản ánh. Chưa có thông tin dự án được xác minh cho tài khoản này.',
             )
           }
           accessibilityRole="button"
@@ -182,8 +182,8 @@ export default function ReporterProfileScreen() {
             <MaterialIcons name="info-outline" size={22} color={colors.secondary} />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={[typography.bodyMd, styles.menuLabel]}>Thông tin dự án ĐH.05 Bình Chánh</Text>
-            <Text style={[typography.caption, styles.menuSub]}>Quy mô tuyến đường và phạm vi bảo hành</Text>
+            <Text style={[typography.bodyMd, styles.menuLabel]}>Thông tin phản ánh</Text>
+            <Text style={[typography.caption, styles.menuSub]}>Vị trí và trạng thái theo từng phản ánh</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
         </AnimatedPressable>
@@ -194,8 +194,8 @@ export default function ReporterProfileScreen() {
           style={styles.menuItem}
           onPress={() =>
             Alert.alert(
-              'Tổng đài hỗ trợ dân sinh',
-              'Hotline tiếp nhận sự cố: 1900 8866\nThời gian làm việc: 24/7\nEmail tiếp nhận: phananh@hoanghai.vn',
+              'Hỗ trợ phản ánh',
+              'Chưa có thông tin liên hệ hỗ trợ được xác minh trong ứng dụng. Bạn có thể xem tình trạng phản ánh trong mục Tra cứu.',
             )
           }
           accessibilityRole="button"
@@ -204,8 +204,8 @@ export default function ReporterProfileScreen() {
             <MaterialIcons name="headset-mic" size={22} color={colors.secondary} />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={[typography.bodyMd, styles.menuLabel]}>Tổng đài tiếp nhận sự cố 24/7</Text>
-            <Text style={[typography.caption, styles.menuSub]}>Hotline: 1900 8866 (miễn phí)</Text>
+            <Text style={[typography.bodyMd, styles.menuLabel]}>Hỗ trợ phản ánh</Text>
+            <Text style={[typography.caption, styles.menuSub]}>Chưa có thông tin liên hệ được xác minh</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
         </AnimatedPressable>
@@ -217,7 +217,7 @@ export default function ReporterProfileScreen() {
           onPress={() =>
             Alert.alert(
               'Chính sách quyền riêng tư',
-              'RoadGuard cam kết bảo mật tuyệt đối thông tin người dân phản ánh. Dữ liệu hình ảnh và GPS chỉ phục vụ công tác khảo sát, sửa chữa và không chia sẻ cho bên thứ ba.',
+              'Ảnh và nháp được giữ riêng theo tài khoản và phiên trên thiết bị. Chỉ gửi nội dung bạn có quyền chia sẻ; không đưa thông tin riêng tư không cần thiết vào ảnh hoặc mô tả.',
             )
           }
           accessibilityRole="button"
@@ -227,7 +227,7 @@ export default function ReporterProfileScreen() {
           </View>
           <View style={styles.menuTextWrap}>
             <Text style={[typography.bodyMd, styles.menuLabel]}>Chính sách bảo mật & Quyền riêng tư</Text>
-            <Text style={[typography.caption, styles.menuSub]}>Bảo vệ dữ liệu cá nhân theo quy chuẩn</Text>
+            <Text style={[typography.caption, styles.menuSub]}>Lưu ý khi gửi ảnh và thông tin cá nhân</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
         </AnimatedPressable>

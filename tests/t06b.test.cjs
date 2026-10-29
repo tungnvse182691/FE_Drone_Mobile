@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const {randomUUID}=require('node:crypto');
 const {DatabaseSync}=require('node:sqlite');
-function load(file,deps={}) {const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,console,require:n=>deps[n]??(n==='axios'?require('axios'):new Proxy({},{get:()=>()=>{}}))});return module.exports;}
+function load(file,deps={}) {const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,console,require:n=>deps[n]??(n==='./crewRepairHistory'?load('src/api/crewRepairHistory.ts',deps):n==='axios'?require('axios'):new Proxy({},{get:()=>()=>{}}))});return module.exports;}
 const ids=Object.fromEntries(['actor','projectId','taskId','packageId','itemId','bindingId','assignmentId','first','assessment','start','sample','capture','file','upload'].map(k=>[k,randomUUID()]));
 const version='AAAAAAAAB9E=',next='AAAAAAAAB9I=';
 const measurement=()=>({sampleId:ids.sample,type:'Area',value:2,state:'KNOWN',dimension:'AREA',unit:'M2',instrument:'Measuring tape',method:'Field measurement',locationReason:'GPS denied'});

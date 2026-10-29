@@ -13,7 +13,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
-import type { AxiosError } from 'axios';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
@@ -26,8 +25,7 @@ import {
   isReporterSession,
   normalizePhotoMediaType,
 } from '../../src/api/uploads';
-import { isZeroCoordinate } from '../../src/types/position';
-import { parseProblemDetails } from '../../src/api/problemDetails';
+import { hasUsableCoordinate } from '../../src/types/position';
 import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
@@ -107,7 +105,7 @@ export default function ReporterReportSupplementScreen() {
           const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
           if (active && isCurrent() &&
               !useReporterStore.getState().pendingDraft && !submittingRef.current && !completed.current &&
-              !isZeroCoordinate(loc.coords.latitude, loc.coords.longitude)) {
+              hasUsableCoordinate(loc.coords.latitude, loc.coords.longitude)) {
             setCoords({
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
@@ -150,12 +148,10 @@ export default function ReporterReportSupplementScreen() {
       setRestored(true);
       setLoadedAt(new Date().toISOString());
       setPhase('ready');
-    } catch (caught) {
+    } catch {
       if (!isCurrent()) return;
-      const axErr = caught as AxiosError | undefined;
-      const problem = parseProblemDetails(axErr?.response?.data);
       setPhase('failed');
-      setError(reporterFailureMessage(caught));
+      setError('Chưa đọc được phản ánh hoặc nháp. Dữ liệu cũ vẫn được giữ; thử tải lại khi kết nối sẵn sàng.');
     }
   }, [reportId, activeEmail, scope.key]);
 
@@ -176,19 +172,20 @@ export default function ReporterReportSupplementScreen() {
         const asset = res.assets[0];
         metadata.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
           mediaType: normalizePhotoMediaType(asset.name, asset.mimeType) || '', capturedAt: new Date().toISOString() });
-        setPhotos((current) => [...current, asset.uri].slice(0, MAX_PHOTOS));
+        setPhotos((current) => current.includes(asset.uri) ? current : [...current, asset.uri].slice(0, MAX_PHOTOS));
         if (error) {
           setError(null);
         }
       }
     } catch {
-      // ignore
+      if (isCurrent()) setError('Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
     }
   };
 
   const handleOpenCam = async () => {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
+    try {
     if (!permission?.granted) {
       const res = await requestPermission();
       if (!isCurrent()) return;
@@ -199,6 +196,9 @@ export default function ReporterReportSupplementScreen() {
     }
     setCameraReady(false);
     setCameraOpen(true);
+    } catch {
+      if (isCurrent()) setError('Không mở được camera. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+    }
   };
 
   const handleCapture = async () => {
@@ -207,6 +207,7 @@ export default function ReporterReportSupplementScreen() {
     if (!cameraReady || photos.length >= MAX_PHOTOS) {
       return;
     }
+    try {
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
     if (photo?.uri) {
@@ -215,6 +216,9 @@ export default function ReporterReportSupplementScreen() {
       if (error) {
         setError(null);
       }
+    }
+    } catch {
+      if (isCurrent()) setError('Không chụp được ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
     }
   };
 
@@ -244,7 +248,7 @@ export default function ReporterReportSupplementScreen() {
 
   const submit = async () => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || dataScope !== scope.key || submittingRef.current || !restored || !expectedVersion) return;
+    if (!isCurrent() || dataScope !== scope.key || submittingRef.current || phase === 'conflict' || !restored || !expectedVersion) return;
     if (!description.trim() || !photos.length) {
       setError('Vui lòng nhập nội dung và chọn ít nhất một ảnh bổ sung.'); return;
     }
@@ -262,13 +266,26 @@ export default function ReporterReportSupplementScreen() {
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: id } });
     } catch (error) {
       if (!isCurrent()) return;
-      setError(reporterFailureMessage(error)); setPhase('ready');
+      const status = (error as { status?: number; response?: { status?: number } })?.response?.status ?? (error as { status?: number })?.status;
+      setError(reporterFailureMessage(error)); setPhase(status === 412 || status === 409 ? 'conflict' : 'ready');
     } finally { if (isCurrent()) submittingRef.current = false; }
   };
 
   // Frozen commands never silently adopt a fresh ETag or a fresh idempotency key.
-  const keepMine = () => { setPhase('ready'); setNotice('Giữ nguyên nháp và điều kiện của lần gửi trước.'); };
-  const takeLatest = async () => { setError('Cần giải quyết xung đột trước khi tạo một lệnh bổ sung mới; nháp hiện tại được giữ nguyên.'); };
+  const keepMine = () => { setNotice('Nháp, phiên bản và khóa lệnh được giữ nguyên. Chưa tạo hoặc gửi lệnh mới.'); };
+  const takeLatest = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    setError(null);
+    try {
+      const found = await getOwnReportReal(reportId);
+      if (!isCurrent()) return;
+      setReport(found.report); setLoadedAt(new Date().toISOString());
+      setNotice('Đã đọc bản mới nhất để xem xét. Nội dung, If-Match và khóa lệnh cũ vẫn được giữ; chưa thể gửi nội dung khác bằng lệnh này.');
+    } catch {
+      if (isCurrent()) setError('Chưa đọc được bản mới nhất. Nháp và lệnh cũ được giữ nguyên; có thể thử tải lại.');
+    }
+  };
 
   const busy = phase === 'loading' || phase === 'submitting';
 
@@ -281,6 +298,7 @@ export default function ReporterReportSupplementScreen() {
         Gửi thêm thông tin cho phản ánh đã tạo. Nếu phản ánh đã thay đổi ở nơi khác, hệ thống sẽ cảnh
         báo xung đột phiên bản.
       </Text>
+      {phase === 'failed' ? <Button title="Thử tải lại" variant="secondary" onPress={() => void loadReport()} /> : null}
 
       {phase === 'failed' && pendingDraft && pendingDraft.targetReportId !== reportId ? (
         <View>
@@ -396,7 +414,7 @@ export default function ReporterReportSupplementScreen() {
             title="Gửi bổ sung"
             onPress={() => void submit()}
             loading={phase === 'submitting'}
-            disabled={!description.trim() || photos.length === 0 || busy}
+            disabled={!description.trim() || photos.length === 0 || busy || phase === 'conflict'}
           />
         </>
       ) : null}

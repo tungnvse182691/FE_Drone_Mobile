@@ -62,11 +62,11 @@ export default function ReporterHomeScreen() {
         <View style={styles.bannerRow}>
           <MaterialIcons name="campaign" size={28} color={colors.primaryDark} />
           <Text style={[typography.titleMd, styles.bannerTitle]}>
-            Hệ thống tiếp nhận phản ánh hư hại đường bê tông ĐH.05 Bình Chánh
+            Phản ánh hiện trạng hư hại đường bê tông
           </Text>
         </View>
         <Text style={[typography.caption, styles.bannerBody]}>
-          Phản ánh của bạn sẽ được Ban Quản lý dự án tiếp nhận, khảo sát và phản hồi kết quả xử lý.
+          Gửi ảnh và mô tả hiện trạng. Theo dõi tình trạng tiếp nhận và xử lý qua dữ liệu phản hồi từ hệ thống.
         </Text>
       </Card>
 

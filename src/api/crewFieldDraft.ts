@@ -8,7 +8,7 @@ import { sha256HexOfBytes } from './uploads';
 import * as crew from './crewApi';
 import type { Coords } from '../components/ViewFinder';
 import { type RepairJournalRecord } from './crewRepairDraft';
-import { readRepairHistory } from './crewRepairWorkflow';
+import { readRepairHistory } from './crewRepairHistory';
 
 export interface FieldContext { actor: string; scope: string; environment: string; projectId: string; taskId: string }
 export interface FieldCapture {

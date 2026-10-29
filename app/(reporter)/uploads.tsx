@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,7 +20,6 @@ import { useReporterDraftScope } from '../../src/store/reporter';
 import {
   REPORTER_CAPTURE,
   REPORTER_REPORT,
-  REPORTER_REPORT_SUPPLEMENT,
 } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
@@ -67,20 +66,21 @@ export default function ReporterUploadsScreen() {
   const busyItemIds = useUploadsStore((state) => state.busyItemIds);
   const hydrate = useUploadsStore((state) => state.hydrate);
   const advanceAll = useUploadsStore((state) => state.advanceAll);
-  const retryItem = useUploadsStore((state) => state.retryItem);
   const removeItem = useUploadsStore((state) => state.removeItem);
-  const startWatch = useUploadsStore((state) => state.startWatch);
   const stopWatch = useUploadsStore((state) => state.stopWatch);
   const scope = useReporterDraftScope();
+  const [hydrateFailed, setHydrateFailed] = useState(false);
+  const [hydrateAttempt, setHydrateAttempt] = useState(0);
+  const [dataScope, setDataScope] = useState('');
 
   useEffect(() => {
-    void hydrate(partitionId).catch(() => { /* A stale partition must never be shown. */ });
-  }, [hydrate, partitionId, scope.key]);
-
-  useEffect(() => {
-    startWatch();
-    return () => stopWatch();
-  }, [startWatch, stopWatch]);
+    let active = true;
+    const isCurrent = scope.capture();
+    setHydrateFailed(false); setDataScope('');
+    void hydrate(partitionId).then(() => { if (active && isCurrent()) setDataScope(scope.key); })
+      .catch(() => { if (active && isCurrent()) setHydrateFailed(true); });
+    return () => { active = false; stopWatch(); };
+  }, [hydrate, partitionId, scope.key, hydrateAttempt, stopWatch]);
 
   const pending = items.filter((item) => !isTerminalMediaState(item.mediaState)).length;
   const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED').length;
@@ -125,15 +125,14 @@ export default function ReporterUploadsScreen() {
         <View style={styles.actions}>
           {item.mediaState === 'FAILED' ? (
             <Pressable
-              onPress={() => void retryItem(item.id).then(() => advanceAll())}
-              disabled={busy}
+              disabled
               style={({ pressed }) => [styles.action, pressed && styles.pressed]}
               accessibilityRole="button"
-              accessibilityLabel={`Tải lại ảnh ${item.fileName}`}
+              accessibilityLabel="Chưa thể tải lại; cần xử lý hoặc đối soát"
               testID={`uploads-retry-${item.id}`}
             >
               <MaterialIcons name="refresh" size={16} color={colors.brandGold} />
-              <Text style={[typography.caption, styles.actionText]}>Tải lại</Text>
+              <Text style={[typography.caption, styles.actionMuted]}>Chưa thể tải lại; cần xử lý/đối soát</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -155,13 +154,18 @@ export default function ReporterUploadsScreen() {
     );
   };
 
+  if (dataScope !== scope.key) return <SafeAreaScreen>
+    <Text>{hydrateFailed ? 'Chưa tải được hàng đợi. Ảnh và dữ liệu tải lên vẫn được giữ.' : 'Đang tải hàng đợi...'}</Text>
+    {hydrateFailed ? <Button variant="primary" title="Thử tải lại" onPress={() => setHydrateAttempt(value => value + 1)} /> : null}
+    <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
+  </SafeAreaScreen>;
   return (
     <SafeAreaScreen scroll>
       <Text style={[typography.titleLg, styles.title]}>Hàng đợi xác minh ảnh</Text>
       <Text style={[typography.caption, styles.subtitle]}>
         {watching
           ? `Đang theo dõi ${pending} ảnh chờ xử lý · đã xác minh ${verifiedCount}/${items.length}`
-          : 'Tạm dừng theo dõi khi ứng dụng ở nền.'}
+          : 'Chưa tự gửi lại lệnh. Bấm kiểm tra để tiếp tục và đối soát với cùng thông tin tải lên.'}
       </Text>
 
       <View style={styles.gateCard}>
@@ -207,8 +211,8 @@ export default function ReporterUploadsScreen() {
         />
         <Button
           variant="text"
-          title="Tạo phản ánh bổ sung"
-          onPress={() => router.push(REPORTER_REPORT_SUPPLEMENT)}
+          title="Chọn phản ánh cần bổ sung"
+          onPress={() => router.push('/(reporter)/track')}
         />
       </View>
     </SafeAreaScreen>

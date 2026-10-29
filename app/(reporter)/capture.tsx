@@ -14,10 +14,10 @@ import {
   normalizePhotoMediaType,
   sha256HexOfBytes,
 } from '../../src/api/uploads';
-import { hasUsableCoordinate, isZeroCoordinate } from '../../src/types/position';
+import { hasUsableCoordinate } from '../../src/types/position';
 import {
   UPLOAD_STATE_LABELS,
-  useUploadsStore,
+  useUploadsStore, reporterContext,
   UPLOAD_RETENTION_NOTICE,
   type UploadQueueItem,
 } from '../../src/store/uploads';
@@ -53,11 +53,11 @@ export default function ReporterCaptureScreen() {
   const user = useAuthStore((state) => state.user);
   const partitionId = `reporter-${user?.id ?? 'guest'}`;
 
-  const items = useUploadsStore((state) => state.items);
-  const hydrated = useUploadsStore((state) => state.hydrated);
+  const items = useUploadsStore((state) => state.items).filter(item => item.partitionId === reporterContext().partition);
+  const hydrated = useUploadsStore(state => state.hydrated && state.partitionId === reporterContext().partition);
   const hydrate = useUploadsStore((state) => state.hydrate);
   const enqueuePhoto = useUploadsStore((state) => state.enqueuePhoto);
-  const advanceAll = useUploadsStore((state) => state.advanceAll);
+  const advanceItem = useUploadsStore((state) => state.advanceItem);
   const removeItem = useUploadsStore((state) => state.removeItem);
 
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
@@ -66,13 +66,17 @@ export default function ReporterCaptureScreen() {
   const [error, setError] = useState<string | null>(null);
   const scope = useReporterDraftScope();
   const [dataScope, setDataScope] = useState('');
+  const [hydrateAttempt, setHydrateAttempt] = useState(0);
+  const [hydrateFailed, setHydrateFailed] = useState(false);
 
   useEffect(() => {
     const isCurrent = scope.capture();
-    setCoordinates(null); setBusy(false); setError(null);
-    void hydrate(partitionId).then(() => { if (isCurrent()) setDataScope(scope.key); })
-      .catch(() => { if (isCurrent()) setError('Chưa tải được hàng đợi. Vui lòng mở lại màn hình.'); });
-  }, [hydrate, partitionId, scope.key]);
+    let active = true;
+    setCoordinates(null); setBusy(false); setError(null); setDataScope(''); setHydrateFailed(false);
+    void hydrate(partitionId).then(() => { if (active && isCurrent()) setDataScope(scope.key); })
+      .catch(() => { if (active && isCurrent()) setHydrateFailed(true); });
+    return () => { active = false; };
+  }, [hydrate, partitionId, scope.key, hydrateAttempt]);
 
   const requestLocation = async () => {
     const isCurrent = scope.capture();
@@ -94,7 +98,7 @@ export default function ReporterCaptureScreen() {
       }
       const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       if (!isCurrent()) return;
-      if (isZeroCoordinate(position.coords.latitude, position.coords.longitude)) {
+      if (!hasUsableCoordinate(position.coords.latitude, position.coords.longitude)) {
         // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ.
         setCoordinates(null);
         setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
@@ -149,7 +153,7 @@ export default function ReporterCaptureScreen() {
       const checksumSha256 = await sha256HexOfBytes(bytes);
       if (!isCurrent()) return;
       const usable = hasUsableCoordinate(coordinates?.latitude, coordinates?.longitude);
-      await enqueuePhoto({
+      const itemId = await enqueuePhoto({
         uriLocal: asset.uri,
         fileName,
         mediaType,
@@ -162,7 +166,7 @@ export default function ReporterCaptureScreen() {
         partitionId,
       });
       if (!isCurrent()) return;
-      await advanceAll();
+      await advanceItem(itemId);
     } catch {
       if (!isCurrent()) return;
       setError('Không xử lý được ảnh đã chọn. Vui lòng thử lại.');
@@ -179,6 +183,7 @@ export default function ReporterCaptureScreen() {
       setError(`Chỉ được gửi tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`);
       return;
     }
+    try {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!isCurrent()) return;
     if (!permission.granted) {
@@ -194,6 +199,9 @@ export default function ReporterCaptureScreen() {
     if (!result.canceled && result.assets.length > 0) {
       await ingestAsset(result.assets[0]);
     }
+    } catch {
+      if (isCurrent()) setError('Không mở được camera. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+    }
   };
 
   const pickFromLibrary = async () => {
@@ -204,6 +212,7 @@ export default function ReporterCaptureScreen() {
       setError(`Chỉ được gửi tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`);
       return;
     }
+    try {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!isCurrent()) return;
     if (!permission.granted) {
@@ -219,6 +228,9 @@ export default function ReporterCaptureScreen() {
     if (!isCurrent()) return;
     if (!result.canceled && result.assets.length > 0) {
       await ingestAsset(result.assets[0]);
+    }
+    } catch {
+      if (isCurrent()) setError('Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
     }
   };
 
@@ -256,7 +268,11 @@ export default function ReporterCaptureScreen() {
     );
   };
 
-  if (dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải hàng đợi của phiên hiện tại...</Text>{error ? <Text>{error}</Text> : null}</SafeAreaScreen>;
+  if (dataScope !== scope.key) return <SafeAreaScreen>
+    <Text>{hydrateFailed ? 'Chưa tải được hàng đợi. Ảnh và dữ liệu tải lên vẫn được giữ.' : 'Đang tải hàng đợi của phiên hiện tại...'}</Text>
+    {hydrateFailed ? <Button variant="primary" title="Thử tải lại" onPress={() => setHydrateAttempt(value => value + 1)} /> : null}
+    <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
+  </SafeAreaScreen>;
 
   return (
     <SafeAreaScreen scroll>
