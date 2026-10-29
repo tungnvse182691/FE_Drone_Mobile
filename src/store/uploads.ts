@@ -144,8 +144,9 @@ export function uploadedRatio(item: UploadQueueItem): number {
   if (parts.length === 0) {
     return 0;
   }
-  const done = parts.filter((part) => Boolean(item.partETags[String(part.partNumber)])).length;
-  return done / parts.length;
+  const done = parts.filter((part) => Boolean(item.partETags[String(part.partNumber)]))
+    .reduce((bytes, part) => bytes + part.end - part.start, 0);
+  return done / item.sizeBytes;
 }
 
 const UPLOAD_LEDGER_DDL = `
@@ -474,10 +475,10 @@ async function pollVerification(item: UploadQueueItem, update: ItemUpdater, tran
       mediaState: 'FAILED',
       serverStatus: metadata.status,
       lastErrorCode: 'upload_validation_failed',
-      lastErrorMessage: 'Máy chủ từ chối tệp sau khi xác minh. Vui lòng tải lại ảnh.',
+      lastErrorMessage: 'Máy chủ từ chối tệp sau khi xác minh. Hãy chọn ảnh thay thế; ảnh và lần tải cũ vẫn được giữ.',
     });
   }
-  return update({ mediaState: 'VERIFYING', serverStatus: metadata.status });
+  return update({ mediaState: item.mediaState === 'FAILED' ? 'FAILED' : 'VERIFYING', serverStatus: metadata.status });
 }
 
 /** No authoritative cancellation/retirement or atomic cross-draft reference proof yet.
@@ -494,8 +495,8 @@ interface UploadsState {
   setPartition(partitionId: string): void;
   hydrate(partitionId?: string): Promise<void>;
   enqueuePhoto(input: EnqueuePhotoInput): Promise<string>;
-  advanceItem(id: string): Promise<void>;
-  advanceAll(): Promise<void>;
+  advanceItem(id: string, mode?: 'explicit' | 'observe'): Promise<void>;
+  advanceAll(mode?: 'explicit' | 'observe'): Promise<void>;
   retryItem(id: string): Promise<void>;
   removeItem(id: string): Promise<boolean>;
   allVerified(): boolean;
@@ -579,15 +580,16 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     return item.id;
   },
 
-  async advanceItem(id) {
+  async advanceItem(id, mode = 'explicit') {
     const start = get().items.find((item) => item.id === id);
     const auth = useAuthStore.getState();
     if (!isReporterSession(auth) || !start) return;
     const context = reporterContext();
     if (start.partitionId !== context.partition || get().partitionId !== context.partition) return;
-    if (start.mediaState === 'FAILED') {
+    if (start.mediaState === 'FAILED' && mode !== 'observe') {
       return;
     }
+    if (mode === 'observe' && !start.fileId) return;
     if (get().busyItemIds.includes(id)) {
       return;
     }
@@ -613,8 +615,11 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       return result;
     }])) as unknown as UploadTransport;
     try {
-      let current = start.mediaState === 'VERIFIED' ? await pollVerification(start, update, transport) : await runPipeline(start, update, transport);
-      if (current.mediaState === 'COMPLETE_REQUESTED' || current.mediaState === 'VERIFYING') {
+      // Foreground observation and FAILED reconciliation are GET-only. In particular,
+      // a timeout must not cause the watcher to replay a mutation without user intent.
+      let current = mode === 'observe' || start.mediaState === 'VERIFIED'
+        ? await pollVerification(start, update, transport) : await runPipeline(start, update, transport);
+      if (mode === 'explicit' && (current.mediaState === 'COMPLETE_REQUESTED' || current.mediaState === 'VERIFYING')) {
         await pollVerification(current, update, transport);
       }
     } catch (error) {
@@ -636,22 +641,23 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     }
   },
 
-  async advanceAll() {
+  async advanceAll(mode = 'explicit') {
     const ids = get()
       .items.filter((item) => !isTerminalMediaState(item.mediaState))
       .map((item) => item.id);
     for (const id of ids) {
-      await get().advanceItem(id);
+      await get().advanceItem(id, mode);
     }
   },
 
   async retryItem(id) {
     const current = get().items.find((item) => item.id === id);
-    if (!current || current.mediaState !== 'FAILED') {
+    if (!current) {
       return;
     }
-    // A terminal rejection needs explicit correction. Retain its diagnostic and command.
-    return;
+    // Never reset FAILED to LOCAL_READY or clear its identity/version/ETags. A
+    // server-verified matching file can recover; other rejections need new evidence.
+    await get().advanceItem(id, current.mediaState === 'FAILED' ? 'observe' : 'explicit');
   },
 
   async removeItem(id) {
@@ -711,7 +717,7 @@ async function watchTick(): Promise<void> {
   if (!store.watching) {
     return;
   }
-  await store.advanceAll();
+  await store.advanceAll('observe');
 
   const latest = useUploadsStore.getState();
   const hasPending = latest.items.some((item) => !isTerminalMediaState(item.mediaState));

@@ -66,6 +66,7 @@ export default function ReporterUploadsScreen() {
   const busyItemIds = useUploadsStore((state) => state.busyItemIds);
   const hydrate = useUploadsStore((state) => state.hydrate);
   const advanceAll = useUploadsStore((state) => state.advanceAll);
+  const retryItem = useUploadsStore(state => state.retryItem);
   const removeItem = useUploadsStore((state) => state.removeItem);
   const stopWatch = useUploadsStore((state) => state.stopWatch);
   const scope = useReporterDraftScope();
@@ -84,7 +85,7 @@ export default function ReporterUploadsScreen() {
 
   const pending = items.filter((item) => !isTerminalMediaState(item.mediaState)).length;
   const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED').length;
-  const canSubmit = items.length > 0 && verifiedCount === items.length;
+  const canSubmit = verifiedCount > 0;
 
   const renderRow = (item: UploadQueueItem) => {
     const busy = busyItemIds.includes(item.id);
@@ -123,16 +124,17 @@ export default function ReporterUploadsScreen() {
         </View>
 
         <View style={styles.actions}>
-          {item.mediaState === 'FAILED' ? (
+          {item.mediaState === 'FAILED' || item.lastErrorCode ? (
             <Pressable
-              disabled
+              disabled={busy}
+              onPress={() => { if (scope.capture()()) void retryItem(item.id); }}
               style={({ pressed }) => [styles.action, pressed && styles.pressed]}
               accessibilityRole="button"
-              accessibilityLabel="Chưa thể tải lại; cần xử lý hoặc đối soát"
+              accessibilityLabel="Kiểm tra lại kết quả tải ảnh"
               testID={`uploads-retry-${item.id}`}
             >
               <MaterialIcons name="refresh" size={16} color={colors.brandGold} />
-              <Text style={[typography.caption, styles.actionMuted]}>Chưa thể tải lại; cần xử lý/đối soát</Text>
+              <Text style={[typography.caption, styles.actionMuted]}>{busy ? 'Đang kiểm tra...' : item.mediaState === 'FAILED' ? 'Đọc lại kết quả' : 'Gửi lại cùng lệnh'}</Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -170,10 +172,10 @@ export default function ReporterUploadsScreen() {
 
       <View style={styles.gateCard}>
         <Text style={[typography.labelLg, styles.gateTitle]}>
-          Chỉ gửi phản ánh khi mọi ảnh đã xác minh
+          Chọn ảnh đã xác minh để gửi phản ánh
         </Text>
         <Text style={[typography.caption, styles.gateText]}>
-          Máy chủ đã nhận tệp, nhưng tệp chỉ được ghi vào phản ánh khi đã xác minh xong.
+          Ảnh tải lỗi vẫn được giữ để đối soát. Bạn có thể thêm ảnh mới, rồi chọn ảnh đã xác minh trong form; không tự thay ảnh của lệnh đang chờ kết quả.
         </Text>
       </View>
 
@@ -190,7 +192,7 @@ export default function ReporterUploadsScreen() {
       <View style={styles.list}>{items.map(renderRow)}</View>
 
       <View style={styles.footer}>
-        <Button variant="primary" title="Thêm ảnh hiện trường" onPress={() => router.push(REPORTER_CAPTURE)} />
+        <Button variant="secondary" title="Thêm hoặc thay ảnh hiện trường" onPress={() => router.push(REPORTER_CAPTURE)} />
         <Button
           variant="secondary"
           title="Kiểm tra lại ngay"
@@ -201,7 +203,7 @@ export default function ReporterUploadsScreen() {
           variant="primary"
           title={
             canSubmit
-              ? 'Gửi phản ánh'
+              ? 'Chọn ảnh để lập phản ánh'
               : items.length === 0
                 ? 'Chưa có ảnh nào để xác minh'
                 : `Đã xác minh ${verifiedCount}/${items.length} ảnh`

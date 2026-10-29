@@ -31,8 +31,6 @@ const softShadow = Platform.select({
   default: {},
 });
 
-/** RPT-05: tối đa 3 ảnh hiện trường cho mỗi phản ánh. */
-const MAX_PHOTOS = 3;
 
 interface Coordinates {
   latitude: number;
@@ -179,10 +177,6 @@ export default function ReporterCaptureScreen() {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
     setError(null);
-    if (items.length >= MAX_PHOTOS) {
-      setError(`Chỉ được gửi tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`);
-      return;
-    }
     try {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!isCurrent()) return;
@@ -208,10 +202,6 @@ export default function ReporterCaptureScreen() {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
     setError(null);
-    if (items.length >= MAX_PHOTOS) {
-      setError(`Chỉ được gửi tối đa ${MAX_PHOTOS} ảnh cho mỗi phản ánh.`);
-      return;
-    }
     try {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!isCurrent()) return;
@@ -235,7 +225,7 @@ export default function ReporterCaptureScreen() {
   };
 
   const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED').length;
-  const canSubmit = items.length > 0 && verifiedCount === items.length;
+  const canSubmit = verifiedCount > 0;
 
   const renderState = (item: UploadQueueItem) => {
     if (item.mediaState === 'VERIFIED') {
@@ -279,7 +269,7 @@ export default function ReporterCaptureScreen() {
       <Text style={[typography.titleLg, styles.title]}>Ảnh hiện trường</Text>
       <Text style={[typography.caption, styles.subtitle]}>
         Ảnh được tải lên dưới dạng tệp riêng tư và được kiểm tra tính toàn vẹn. Chỉ gửi phản ánh được
-        khi mọi ảnh đã xác minh xong.
+        khi ảnh được chọn đã xác minh xong. Tối đa 3 ảnh cho mỗi phản ánh; ảnh cũ được giữ riêng.
       </Text>
 
       <View style={styles.locationCard}>
@@ -304,7 +294,7 @@ export default function ReporterCaptureScreen() {
       </View>
 
       <Text style={[typography.labelLg, styles.label]}>
-        Ảnh đã chọn ({items.length}/{MAX_PHOTOS})
+        Ảnh được lưu trong phiên ({items.length})
       </Text>
       <View style={styles.grid}>
         {items.map((item) => (
@@ -322,7 +312,7 @@ export default function ReporterCaptureScreen() {
             </Pressable>
           </View>
         ))}
-        {items.length < MAX_PHOTOS ? (
+        {(
           <Pressable
             onPress={() => void takePhoto()}
             disabled={busy}
@@ -334,8 +324,8 @@ export default function ReporterCaptureScreen() {
             <MaterialIcons name="photo-camera" size={24} color={colors.brandGold} />
             <Text style={[typography.caption, styles.addText]}>Chụp ảnh</Text>
           </Pressable>
-        ) : null}
-        {items.length < MAX_PHOTOS ? (
+        )}
+        {(
           <Pressable
             onPress={() => void pickFromLibrary()}
             disabled={busy}
@@ -347,7 +337,7 @@ export default function ReporterCaptureScreen() {
             <MaterialIcons name="photo-library" size={24} color={colors.primary} />
             <Text style={[typography.caption, styles.addText]}>Thư viện</Text>
           </Pressable>
-        ) : null}
+        )}
       </View>
       <Text style={typography.caption} testID="capture-retention-notice">{UPLOAD_RETENTION_NOTICE}</Text>
 
@@ -386,7 +376,7 @@ export default function ReporterCaptureScreen() {
           variant="primary"
           title={
             canSubmit
-              ? 'Tiếp tục gửi phản ánh'
+              ? 'Chọn ảnh để lập phản ánh'
               : items.length === 0
                 ? 'Chưa chọn ảnh nào'
                 : `Đang xác minh ${verifiedCount}/${items.length} ảnh`
