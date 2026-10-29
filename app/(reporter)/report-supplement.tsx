@@ -91,7 +91,7 @@ export default function ReporterReportSupplementScreen() {
 
   useEffect(() => {
     setNotice(null);
-  }, [phase]);
+  }, [scope.key]);
 
   // Cố gắng lấy tọa độ thiết bị (không bắt buộc, nếu có thì gắn CAPTURE, không có thì UNKNOWN)
   useEffect(() => {
@@ -147,7 +147,7 @@ export default function ReporterReportSupplementScreen() {
       setCoords(draft?.coords ?? null);
       setRestored(true);
       setLoadedAt(new Date().toISOString());
-      setPhase('ready');
+      setPhase(draft?.commandOutcome === 'REJECTED' ? 'conflict' : 'ready');
     } catch {
       if (!isCurrent()) return;
       setPhase('failed');
@@ -287,6 +287,20 @@ export default function ReporterReportSupplementScreen() {
     }
   };
 
+  const renewCommand = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent() || submittingRef.current || phase !== 'conflict') return;
+    submittingRef.current = true; setError(null);
+    try {
+      const next = await useReporterStore.getState().renewSupplementDraft();
+      if (!isCurrent()) return;
+      setExpectedVersion(next.ifMatch ?? null); setPhase('ready');
+      setNotice('Đã lưu bản bổ sung mới để bạn xem lại. Lệnh và ảnh cũ được giữ nguyên trong lịch sử; chưa gửi lên máy chủ.');
+    } catch {
+      if (isCurrent()) setError('Chưa đủ bằng chứng để tạo lệnh mới. Nháp và lệnh cũ vẫn được giữ; cần đối soát kết quả trước.');
+    } finally { if (isCurrent()) submittingRef.current = false; }
+  };
+
   const busy = phase === 'loading' || phase === 'submitting';
 
   if (dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
@@ -335,13 +349,18 @@ export default function ReporterReportSupplementScreen() {
             </Text>
           </View>
           <Text style={[typography.caption, styles.conflictText]}>
-            Phản ánh đã được cập nhật ở nơi khác. Chọn giữ nội dung bạn đang soạn, hoặc tải bản mới
-            nhất trước khi gửi.
+            Chưa gửi lại nội dung khác. Đọc bản mới nhất để xem xét; nháp và lệnh cũ luôn được giữ.
           </Text>
           <View style={styles.conflictActions}>
             <Button variant="secondary" title="Giữ bản của tôi" onPress={keepMine} />
             <Button variant="text" title="Tải bản mới nhất" onPress={() => void takeLatest()} />
+            {pendingDraft?.commandOutcome === 'REJECTED' ? <Button variant="secondary"
+              title="Tạo bản bổ sung mới để xem lại" onPress={() => void renewCommand()} /> : null}
           </View>
+          <Text style={[typography.caption, styles.conflictText]}>
+            Chỉ tạo bản mới sau khi máy chủ từ chối lần gửi đầu và dữ liệu hiện hành chứng minh chưa có ảnh của lệnh đó.
+            Kết quả chưa rõ hoặc xung đột khóa lệnh cần đối soát; không tự đổi khóa hay phiên bản.
+          </Text>
         </View>
       ) : null}
 

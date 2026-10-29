@@ -32,6 +32,8 @@ export interface ReporterDraft {
   ifMatch?: string;
   request?: CreateReporterReportRequestDto;
   resultReportId?: string;
+  commandOutcome?: 'PREPARED' | 'UNKNOWN_OUTCOME' | 'REJECTED';
+  rejection?: { status: 412; code: 'concurrency_conflict' };
   retired?: boolean;
   submitRequested: boolean;
 }
@@ -148,6 +150,7 @@ interface ReporterSessionState {
   savePendingDraft: (input: DraftInput) => Promise<ReporterDraft>;
   bindPendingDraft: () => Promise<ReporterDraft | null>;
   submitPendingDraft: () => Promise<string>;
+  renewSupplementDraft: () => Promise<ReporterDraft>;
   setEmail: (email: string) => void;
   markVerified: (email: string) => void;
   setPendingReport: (report: CreateReporterReportRequestDto | null, draftId?: string) => void;
@@ -217,6 +220,39 @@ export const useReporterStore = create<ReporterSessionState>()(
         return draft;
         });
       },
+      renewSupplementDraft: () => {
+        const context = reporterContext();
+        return serializeDraft(async () => {
+          assertReporterContext(context);
+          if (!context.ownerId || submission) throw { code: 'draft_locked' };
+          const old = await readPending(context);
+          assertReporterContext(context);
+          if (!old?.targetReportId || !old.request || old.resultReportId || old.commandOutcome !== 'REJECTED' ||
+              old.rejection?.status !== 412 || old.rejection.code !== 'concurrency_conflict') throw { code: 'draft_locked' };
+          const found = await getOwnReportReal(old.targetReportId);
+          assertReporterContext(context);
+          // Conservative append-only readback: any matching evidence may belong to
+          // this command. Do not mint a second command when that lineage is ambiguous.
+          if (found.report.id !== old.targetReportId || !found.etag || !Array.isArray(found.report.evidence) ||
+              !old.request.evidence?.length || old.request.evidence.some(expected =>
+                found.report.evidence.some(actual => actual.fileId === expected.fileId && actual.fileVersion === expected.fileVersion)))
+            throw { code: 'draft_locked' };
+          const version = strongUploadETag(found.etag);
+          if (version === strongUploadETag(old.ifMatch ?? '')) throw { code: 'draft_locked' };
+          const db = await draftDb();
+          assertReporterContext(context);
+          await saveDraft(db, `reporter-history-v1:${context.partition}:${old.id}`, 'reporter_pending_v1',
+            { ...old, retired: true } as unknown as Record<string, unknown>);
+          assertReporterContext(context);
+          const next: ReporterDraft = { id: uuidv4(), commandKey: uuidv4(), ownerId: old.ownerId,
+            provenance: { ...old.provenance }, description: old.description, photos: old.photos.map(p => ({ ...p })),
+            coords: old.coords, targetReportId: old.targetReportId, ifMatch: version, submitRequested: false };
+          await persistDraft(next, context);
+          assertReporterContext(context);
+          set({ pendingDraft: next, pendingDraftId: next.id });
+          return next;
+        });
+      },
       submitPendingDraft: () => {
         const context = reporterContext();
         const caller = context.ownerId;
@@ -228,6 +264,7 @@ export const useReporterStore = create<ReporterSessionState>()(
           if (!isReporterSession(auth)) throw { code: 'auth_unauthorized', status: 401 };
           let draft = await get().bindPendingDraft();
           if (!draft || draft.photos.length === 0) throw { code: 'validation_error', status: 400 };
+          if (draft.commandOutcome === 'REJECTED') throw { status: 412, code: 'concurrency_conflict' };
           const assertOwner = () => assertReporterContext(context);
           assertOwner();
           const putDraft = async (next: ReporterDraft) => {
@@ -273,13 +310,28 @@ export const useReporterStore = create<ReporterSessionState>()(
               return { fileId: item.fileId!, fileVersion: item.verifiedVersion!, capturedAt: item.capturedAt,
                 locationSource: location ? item.locationSource : 'UNKNOWN' as const, ...(location ? { location } : {}) };
             });
-            await putDraft({ ...draft, request: { description: draft.description, evidence } });
+            await putDraft({ ...draft, request: { description: draft.description, evidence },
+              ...(draft.targetReportId ? { commandOutcome: 'PREPARED' as const } : {}) });
           }
           assertOwner();
           if (!draft.resultReportId) {
-            const result = draft.targetReportId
-              ? await submitReportSupplementReal(draft.targetReportId, draft.request!, draft.commandKey, strongUploadETag(draft.ifMatch ?? ''))
-              : await submitReportReal(draft.request!, draft.commandKey);
+            const firstDispatch = draft.commandOutcome === 'PREPARED';
+            if (draft.targetReportId) await putDraft({ ...draft, commandOutcome: 'UNKNOWN_OUTCOME' });
+            let result;
+            try {
+              result = draft.targetReportId
+                ? await submitReportSupplementReal(draft.targetReportId, draft.request!, draft.commandKey, strongUploadETag(draft.ifMatch ?? ''))
+                : await submitReportReal(draft.request!, draft.commandKey);
+            } catch (error) {
+              assertOwner();
+              const e = error as { status?: number; code?: string; response?: { status?: number; data?: { code?: string } } };
+              // Only an observed first-dispatch, declared precondition rejection
+              // proves no earlier unknown attempt exists. Legacy/timeout replay stays unknown.
+              if (draft.targetReportId && firstDispatch && (e.response?.status ?? e.status) === 412 &&
+                  (e.response?.data?.code ?? e.code) === 'concurrency_conflict')
+                await putDraft({ ...draft, commandOutcome: 'REJECTED', rejection: { status: 412, code: 'concurrency_conflict' } });
+              throw error;
+            }
             await putDraft({ ...draft, resultReportId: result.report.id });
           }
           assertOwner();
