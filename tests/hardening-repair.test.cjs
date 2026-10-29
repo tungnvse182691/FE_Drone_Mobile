@@ -44,7 +44,7 @@ for(const [name,change] of [
  ['project',h=>h.runtime.current=()=>({...h.identity,projectId:ids.first})],['task',h=>h.runtime.current=()=>({...h.identity,taskId:ids.first})],['logout/role',h=>h.runtime.current=()=>null],
  ['binding',h=>h.task.repairContext.bindingId=ids.first],['assignment revoked',h=>h.task.assignmentId=null],['owner revoked',h=>h.task.assignedToUserId=ids.first]
 ])test('HARDEN relogin recovery rejects '+name,async()=>{const h=fixture(),j=await h.runtime.journal(),c=await j.prepare(h.command()),i=relogin(h);change(h);await assert.rejects(h.workflow.readRepairHistory(i,h.runtime));await assert.rejects(h.workflow.dispatchRepair(i,c.key,h.runtime));assert.equal(h.posts(),0);});
-for(const status of [403,409,412])test('HARDEN old sid rejection '+status+' retains original bytes',async()=>{const h=fixture(),j=await h.runtime.journal(),c=await j.prepare(h.command());const bytes=h.raw.prepare('SELECT payload FROM local_draft').get().payload;const i=relogin(h);h.fail({response:{status}});await assert.rejects(h.workflow.dispatchRepair(i,c.key,h.runtime));assert.equal((await h.workflow.readRepairHistory(i,h.runtime))[0].phase,'REJECTED');assert.equal(h.raw.prepare('SELECT payload FROM local_draft WHERE kind=?').get('T06A_REPAIR_COMMAND').payload,bytes);});
+for(const status of [403,409,412])test('HARDEN old sid rejection '+status+' retains original bytes',async()=>{const h=fixture(),j=await h.runtime.journal(),c=await j.prepare(h.command());const bytes=h.raw.prepare('SELECT payload FROM local_draft').get().payload;const i=relogin(h);h.fail({response:{status}});await assert.rejects(h.workflow.dispatchRepair(i,c.key,h.runtime));assert.equal((await h.workflow.readRepairHistory(i,h.runtime))[0].phase,status===403?'REJECTED':'PENDING');assert.equal(h.raw.prepare('SELECT payload FROM local_draft WHERE kind=?').get('T06A_REPAIR_COMMAND').payload,bytes);});
 test('HARDEN old sid double tap and late logout response preserve pending recovery',async()=>{const h=fixture(),j=await h.runtime.journal(),c=await j.prepare(h.command()),i=relogin(h);let release;const wait=new Promise(r=>release=r),send=h.runtime.api.submitRepairAssessmentReal;h.runtime.api.submitRepairAssessmentReal=async(...a)=>{await wait;const r=await send(...a);h.runtime.current=()=>null;return r;};const first=h.workflow.dispatchRepair(i,c.key,h.runtime);await assert.rejects(h.workflow.dispatchRepair(i,c.key,h.runtime),/repair_busy/);release();await assert.rejects(first);h.runtime.current=()=>i;assert.equal((await h.workflow.readRepairHistory(i,h.runtime))[0].phase,'PENDING');assert.equal(h.posts(),1);});
 test('HARDEN corrupt recovery overlay is not accepted as receipt',async()=>{const h=fixture(),j=await h.runtime.journal(),c=await j.prepare(h.command()),i=relogin(h);await h.workflow.dispatchRepair(i,c.key,h.runtime);h.raw.prepare('UPDATE local_draft SET payload=? WHERE kind=?').run('{}','HARDEN02_REPAIR_RECOVERY');await assert.rejects(h.workflow.readRepairHistory(i,h.runtime),/repair_journal_invalid/);});
 const {screen}=require('./helpers/roadfe-screen.cjs');
@@ -62,14 +62,14 @@ function recoveryUI(){
 }
 test('HARDEN mounted recovery retains history when old FIELD is unavailable; no POST until warning confirmation',async()=>{
  const f=recoveryUI();f.s.render();await f.s.flush();assert.equal(f.posts(),0);
- assert.ok(f.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Đối soát / replay lệnh đã lưu'));
- f.s.press('Đối soát / replay lệnh đã lưu');f.s.render();assert.equal(f.posts(),0);
+ assert.ok(f.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Đối soát / gửi lại lệnh đã lưu'));
+ f.s.press('Đối soát / gửi lại lệnh đã lưu');f.s.render();assert.equal(f.posts(),0);
  assert.ok(JSON.stringify(f.s.nodes()).includes('thực thi lần đầu'));
  const confirm=f.s.nodes().find(n=>n.type==='Button'&&n.props.title==='Xác nhận đối soát lệnh gốc').props.onPress;
  confirm();confirm();await f.s.flush();assert.equal(f.posts(),1);f.s.unmount();
 });
 test('HARDEN account switch after replay warning hides prior history and cannot dispatch',async()=>{
- const f=recoveryUI();f.s.render();await f.s.flush();f.s.press('Đối soát / replay lệnh đã lưu');f.s.render();
+ const f=recoveryUI();f.s.render();await f.s.flush();f.s.press('Đối soát / gửi lại lệnh đã lưu');f.s.render();
  const confirm=f.s.nodes().find(n=>n.type==='Button'&&n.props.title==='Xác nhận đối soát lệnh gốc').props.onPress;
  f.switch();f.s.render();await confirm();assert.equal(f.posts(),0);assert.ok(!f.s.nodes().some(n=>n.props?.title==='Xác nhận đối soát lệnh gốc'));f.s.unmount();
 });

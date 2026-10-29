@@ -15,7 +15,7 @@ export default function CrewReportDefectScreen() {
 function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
   return <SafeAreaScreen scroll header={<View style={styles.topBar}><View style={styles.topBarLeft}>
     <Pressable onPress={()=>router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={styles.backBtn}><MaterialIcons name="arrow-back" size={20} color={colors.neutral}/></Pressable>
-    <Text style={[typography.titleMd,styles.topBarTitle]}>Báo lỗi phát sinh</Text></View></View>}>
+    <Text style={[typography.titleMd,styles.topBarTitle]}>Thông tin báo lỗi</Text></View></View>}>
     <Card style={styles.banner}><View style={styles.bannerRow}>
       <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
       <Text style={[typography.bodyMd,styles.bannerText]}>Gửi lỗi phát sinh mới chưa khả dụng. Các thông tin dưới đây chỉ để xem; không có báo cáo mới được lưu hoặc gửi.</Text>
@@ -23,9 +23,9 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
       <Card style={{gap:spacing.sm}}>
-        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
+        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text>{task.wo_code || 'Chưa có mã WO'}</Text>
         <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
-        <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude}, ${task.coordinates.longitude}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
+        <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude.toFixed(6)}, ${task.coordinates.longitude.toFixed(6)}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
       </Card>
     </View>
     <View style={styles.fieldGroup}>

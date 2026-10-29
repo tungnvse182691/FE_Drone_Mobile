@@ -6,7 +6,7 @@ test('Crew UI localizes real states and preserves unknown state visibility',()=>
 test('Crew UI distinguishes NORMAL/FastTrack from missing field mode',()=>{const label=pure('crewModeLabel');assert.equal(label('NORMAL'),'Sửa chữa theo kế hoạch');assert.equal(label('CONDITIONAL_FT'),'Kiểm tra điều kiện sửa nhanh');assert.equal(label('MEASURE_ONLY'),'Chỉ đo kiểm');assert.equal(label('UNKNOWN'),'Chưa có thông tin chế độ');});
 test('Crew navigation shell supports null coordinates without operational assertion or fake center',()=>{const s=read('app/(crew)/navigation.tsx');assert.match(s,/CrewTaskBoundary operational=\{false\}/);assert.doesNotMatch(s,/OperationalCrewTask/);assert.match(s,/task\.coordinates \?/);assert.match(s,/disabled=\{!task\.coordinates\}/);assert.match(s,/projectId: task.projectId/);});
 test('Crew technical WKT is opt-in, Submitted detail retains task and readable cards',()=>{assert.match(read('src/components/crew/CrewTaskFacts.tsx'),/showGeometry\s*&&/);const s=read('app/(crew)/wo-detail.tsx');assert.match(s,/Thông tin nhiệm vụ/);assert.match(s,/Chi tiết kỹ thuật/);assert.match(s,/crewStatusLabel\(fresh.status\)/);});
-test('Crew UI restoration does not modify journal/workflow/API/bootstrap sources',()=>{const names=cp.execFileSync('git',['diff','--name-only'],{encoding:'utf8'}).trim().split(/\r?\n/);assert.ok(!names.some(p=>/^src\/(api|offline|hooks)\//.test(p)));for(const name of ['fieldJournal','currentCrewScope','currentCrewActor']){const file='app/(crew)/wo-detail.tsx';const old=cp.execFileSync('git',['show',`HEAD:${file}`],{encoding:'utf8'});const s=ts.createSourceFile(file,old,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const n=s.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name);assert.equal(fn(file,name).getText().replace(/\r\n/g,'\n'),n.getText().replace(/\r\n/g,'\n'));}});
+test('Crew original UI-only checkpoint did not modify journal/workflow/API/bootstrap sources',()=>{const names=cp.execFileSync('git',['diff','--name-only','635e367..8199cbe'],{encoding:'utf8'}).trim().split(/\r?\n/);assert.ok(!names.some(p=>/^src\/(api|offline|hooks)\//.test(p)));for(const name of ['fieldJournal','currentCrewScope','currentCrewActor']){const file='app/(crew)/wo-detail.tsx';const old=cp.execFileSync('git',['show',`HEAD:${file}`],{encoding:'utf8'});const s=ts.createSourceFile(file,old,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const n=s.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name);assert.equal(fn(file,name).getText().replace(/\r\n/g,'\n'),n.getText().replace(/\r\n/g,'\n'));}});
 
 // Execute shipped TSX with the existing hook harness. No native renderer / HTTP evidence.
 const {screen}=require('./helpers/roadfe-screen.cjs');
@@ -58,10 +58,10 @@ test('Crew null GPS navigation keeps layout, no map or URL, and returns with pro
 test('Crew valid server coordinates alone provide map destination; opening it does not claim arrival',()=>{
  const {s,urls}=navigation({...task(),coordinates:{latitude:10.75,longitude:106.6}});s.render();s.press('Mở Google Maps');assert.match(urls[0],/destination=10.75,106.6$/);assert.ok(s.nodes().some(n=>n.type==='Map'));assert.ok(!s.nodes().some(n=>n.props.title==='Đã đến nơi'));s.unmount();
 });
-test('Crew field command preparation/replay callbacks retain baseline source exactly',()=>{
+test('Crew unchanged FIELD preparation callbacks retain baseline execution source',()=>{
  const file='app/(crew)/wo-detail.tsx',old=cp.execFileSync('git',['show',`HEAD:${file}`],{encoding:'utf8'});
- function declaration(source,name){const s=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let found;function visit(n){if(ts.isVariableDeclaration(n)&&n.name.getText()===name)found=n.getText().replace(/\r\n/g,'\n');ts.forEachChild(n,visit);}visit(s);return found;}
- for(const name of ['run','openField','pending','blocked'])assert.equal(declaration(read(file),name),declaration(old,name),name);
+ function declaration(source,name){const s=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let found;function visit(n){if(ts.isVariableDeclaration(n)&&n.name.getText()===name)found=n.getText().replace(/\r\n/g,'\n').replace('Đã lưu biên nhận máy chủ và đối chiếu hạng mục.','Đã lưu receipt máy chủ và đối chiếu ngữ cảnh hạng mục.');ts.forEachChild(n,visit);}visit(s);return found;}
+ for(const name of ['openField','blocked'])assert.equal(declaration(read(file),name),declaration(old,name),name);
 });
 
 

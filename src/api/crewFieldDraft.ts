@@ -36,6 +36,7 @@ export interface FieldRuntime {
   uuid: () => string; bytes: (uri: string) => Promise<Uint8Array>; hash: (bytes: Uint8Array) => Promise<string>;
   wait: () => Promise<void>; api: typeof crew;
   repairHistory?: () => Promise<RepairJournalRecord[]>;
+  recoveryRead?: () => Promise<FieldDraft|null>;
   historicalRead?: (scope:string) => Promise<FieldDraft|null>;
 }
 export function newFieldDraft(context: FieldContext): FieldDraft {
@@ -80,14 +81,23 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
     check();const rows=await db.getAllAsync<{id:string;payload:string}>(
       'SELECT id, payload FROM local_draft WHERE kind = ? AND (id = ? OR substr(id, 1, ?) = ?) ORDER BY rowid',
       'T05B_FIELD',key,key.length+1,key+':');check();
-    return rows.map(row=>{
+    const drafts=rows.map(row=>{
       const draft=decodeFieldDraft(row.payload);
-      if(!sameResource(draft,context)||row.id!==key&&row.id!==scoped(draft.scope))throw Error('field_draft_invalid');
+      if(!sameResource(draft,context)||row.id!==key&&row.id!==scoped(draft.scope)&&!row.id.startsWith(scoped(draft.scope)+':'))throw Error('field_draft_invalid');
       return draft;
     });
+    const recovered:FieldDraft[]=[];
+    for(const original of drafts){
+      const overlay=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ? AND kind = ?',recoveryKey(original),'CREW_FIELD_RECOVERY');check();
+      if(overlay){const record=JSON.parse(overlay.payload);if(record.source!==JSON.stringify(original))throw Error('field_draft_invalid');
+        const result=decodeFieldDraft(JSON.stringify(record.draft));validateRecovery(original,result);recovered.push(result);
+      }else recovered.push(normalizeFieldOutcome(original));
+    }
+    return recovered;
   };
   return {
     current,
+    recoveryRead:async()=>{const drafts=await stored();check();const pending=drafts.filter(fieldDraftPending);if(pending.length>1)throw Error('field_multiple_unresolved');return pending[0]??drafts.filter(d=>sameContext(d,context)).at(-1)??drafts.at(-1)??null;},
     read: async () => {
       const drafts=await stored();check();
       // Never hide another session's unresolved write behind a new empty draft.
@@ -97,12 +107,28 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
     historicalRead:async scope=>{
       const drafts=await stored();check();
       const matches=drafts.filter(d=>d.scope===scope);
-      if(matches.length>1&&JSON.stringify(matches[0])!==JSON.stringify(matches[1]))throw Error('field_draft_invalid');
       return matches.at(-1)??null;
     },
-    write: async draft=>{check();if(!sameContext(draft,context))throw Error('field_session_changed');
-      const legacy=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ? AND kind = ?',key,'T05B_FIELD');check();
-      const target=legacy&&sameContext(decodeFieldDraft(legacy.payload),context)?key:scoped(context.scope);
+    write: async draft=>{
+      check();if(!sameContext(draft,context))throw Error('field_session_changed');
+      const rows=await db.getAllAsync<{id:string;payload:string}>(
+        'SELECT id, payload FROM local_draft WHERE kind = ? AND (id = ? OR substr(id, 1, ?) = ?) ORDER BY rowid',
+        'T05B_FIELD',key,key.length+1,key+':');check();
+      const row=rows.filter(r=>sameContext(decodeFieldDraft(r.payload),context)).at(-1);
+      const source=row?decodeFieldDraft(row.payload):null;
+      if(source?.command&&draft.command?.key===source.command.key){
+        validateRecovery(source,draft);
+        const previous=(await stored()).find(d=>d.scope===source.scope&&d.command?.key===source.command!.key);check();
+        if(!previous)throw Error('field_draft_invalid');validateFieldTransition(previous,draft);
+        await saveDraft(db,recoveryKey(source),'CREW_FIELD_RECOVERY',{source:JSON.stringify(source),draft});check();return;
+      }
+      let target=row?.id??scoped(context.scope);
+      if(source?.command){
+        const effective=(await stored()).find(d=>d.scope===source.scope&&d.command?.key===source.command!.key);check();
+        if(draft.command||!effective?.command||!['confirmed','rejected'].includes(effective.command.phase))throw Error('field_command_pending');
+        // Append a generation; the original intent and recovery overlay remain byte-for-byte intact.
+        target=scoped(context.scope)+':'+randomUUID();
+      }
       await saveDraft(db,target,'T05B_FIELD',{...draft});check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,
@@ -119,6 +145,61 @@ export async function readHistoricalFieldDraft(context:FieldContext,scope:string
   const draft=await guarded(context,runtime,()=>runtime.historicalRead!(scope));
   if(!draft||draft.scope!==scope||!sameResource(draft,context))throw Error('field_draft_invalid');
   return draft;
+}
+function recoveryKey(d:FieldDraft):string {return 'crew-field-recovery:'+JSON.stringify([d.environment,d.actor,d.projectId,d.taskId,d.scope,d.command?.key]);}
+function normalizeFieldOutcome(d:FieldDraft):FieldDraft {
+  const copy=JSON.parse(JSON.stringify(d)) as FieldDraft;
+  if(copy.command?.phase==='rejected'&&[401,409,412].includes(copy.command.rejectionStatus??0)){
+    copy.command.phase='pending';delete copy.command.rejectionStatus;
+  }return copy;
+}
+function validateRecovery(source:FieldDraft,result:FieldDraft):void {
+  if(!source.command||!result.command)throw Error('field_draft_invalid');
+  const immutable=(d:FieldDraft)=>{const {phase,responseId,rejectionStatus,...command}=d.command!;const {result,...rest}=d;return JSON.stringify({...rest,command});};
+  if(immutable(source)!==immutable(result)||!['pending','acknowledged','confirmed','rejected'].includes(result.command.phase)||
+     (['acknowledged','confirmed'].includes(result.command.phase)&&!crew.isCrewResourceId(result.command.responseId))||
+     (result.command.phase==='rejected'&&![400,403,404,422,428].includes(result.command.rejectionStatus??0)))throw Error('field_draft_invalid');
+  const before=normalizeFieldOutcome(source).command!;
+  const reachable={pending:['pending','acknowledged','confirmed','rejected'],acknowledged:['acknowledged','confirmed'],confirmed:['confirmed'],rejected:['rejected']};
+  if(!reachable[before.phase].includes(result.command.phase)||before.responseId&&before.responseId!==result.command.responseId)throw Error('field_draft_invalid');
+}
+function validateFieldTransition(previous:FieldDraft,next:FieldDraft):void {
+  const before=normalizeFieldOutcome(previous).command!,after=next.command!;
+  const allowed={pending:['pending','acknowledged','rejected'],acknowledged:['acknowledged','confirmed'],confirmed:['confirmed'],rejected:['rejected']};
+  if(!allowed[before.phase].includes(after.phase)||before.responseId&&before.responseId!==after.responseId)throw Error('field_draft_invalid');
+}
+/** Read/reconcile historical intent with current rights; never adopts old-session media into a new draft.
+ * Recovery updates are separate from the immutable original row, including its sid and rejection.
+ */
+export async function readFieldRecovery(context:FieldContext):Promise<{draft:FieldDraft;runtime:FieldRuntime}> {
+  const base=await openFieldRuntime(context);
+  const selected=await guarded(context,base,()=>base.recoveryRead!());
+  if(!selected||!selected.command||!sameResource(selected,context))throw Error('field_previous_session_requires_reconciliation');
+  const originalContext:FieldContext={actor:selected.actor,scope:selected.scope,environment:selected.environment,projectId:selected.projectId,taskId:selected.taskId};
+  const check=()=>assertFieldContext(context,base);
+  const db=openDatabase();await initDatabase(db);check();
+  const key='t05b:'+JSON.stringify([context.environment,context.actor,context.projectId,context.taskId]);
+  const sources=await db.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind = ? AND (id = ? OR substr(id, 1, ?) = ?)','T05B_FIELD',key,key.length+1,key+':');check();
+  const source=sources.map(row=>decodeFieldDraft(row.payload)).find(d=>d.scope===selected.scope&&d.command?.key===selected.command?.key);
+  if(!source)throw Error('field_draft_invalid');validateRecovery(source,normalizeFieldOutcome(selected));
+  const fresh=await guarded(context,base,()=>crew.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
+  crew.validateCrewTaskDetail(fresh.data,fresh.etag,context.projectId,context.taskId,context.actor);
+  if(fresh.data.assignmentId!==selected.command.assignmentId||fresh.data.firstStartOriginId!==selected.command.body.startOriginId)throw Error('field_assignment_changed');
+  let previous=JSON.parse(JSON.stringify(normalizeFieldOutcome(selected))) as FieldDraft;
+  const runtime:FieldRuntime={...base,current:()=>{check();return originalContext;},repairHistory:()=>readRepairHistory(context),
+    read:async()=>{check();return selected;},write:async result=>{
+      check();validateRecovery(source,result);validateFieldTransition(previous,result);
+      await guarded(context,base,()=>saveDraft(db,recoveryKey(source),'CREW_FIELD_RECOVERY',{source:JSON.stringify(source),draft:result}));
+      previous=JSON.parse(JSON.stringify(result));
+    }};
+  return {draft:normalizeFieldOutcome(selected),runtime};
+}
+/** GET-only recovery. A pending intent without a server ID cannot be proved by latest status alone. */
+export async function reconcileFieldDraft(context:FieldContext,replay=false,expectedKey?:string):Promise<FieldDraft>{
+  const recovery=await readFieldRecovery(context);
+  if(expectedKey&&recovery.draft.command?.key!==expectedKey)throw Error('field_command_changed');
+  if(recovery.draft.command?.phase==='pending'&&!replay)throw Error('field_unknown_outcome_use_reconcile');
+  return submitFieldDraft(recovery.draft,recovery.runtime,replay);
 }
 export function decodeFieldDraft(payload:string): FieldDraft {
   try {
@@ -297,14 +378,20 @@ export async function saveFieldMeasurements(context: FieldContext,measurements: 
 }
 export async function acknowledgeFieldResult(context: FieldContext): Promise<FieldDraft> {
   return exclusive(context,async()=>{
-    const runtime=await openFieldRuntime(context),draft=await loadFieldDraft(context,runtime);
+    const runtime=await openFieldRuntime(context);
+    let draft:FieldDraft;try{draft=await loadFieldDraft(context,runtime);}catch{draft=(await readFieldRecovery(context)).draft;}
     if (!draft.command || !['confirmed','rejected'].includes(draft.command.phase)) throw new Error('field_unknown_outcome');
     if(draft.repairClaim)throw Error('repair_claim_retained_for_intake');
-    await freshTask(draft,runtime,'review');
+    const fresh=await guarded(context,runtime,()=>runtime.api.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
+    runtime.api.validateCrewTaskDetail(fresh.data,fresh.etag,context.projectId,context.taskId,context.actor);
+    if(fresh.data.assignmentId!==draft.command.assignmentId||fresh.data.firstStartOriginId!==draft.command.body.startOriginId)throw Error('field_assignment_changed');
     // Archive the exact terminal command before explicitly preparing another revision.
     const db=openDatabase();await initDatabase(db);
     await guarded(context,runtime,()=>saveDraft(db,`t05b-receipt:${draft.command!.key}`,'T05B_FIELD_RECEIPT',{...draft}));
-    const next=newFieldDraft(context);await persist(next,runtime);return next;
+    // A definitive rejection can be corrected without orphaning its images or measurements.
+    // A confirmed revision starts empty; retained server evidence is loaded by API-096.
+    const next=draft.command.phase==='rejected'&&sameContext(draft,context)?{...draft,command:undefined,result:undefined}:newFieldDraft(context);
+    await persist(next,runtime);return next;
   });
 }
 export function measurementTemplate(type: number, sampleId: string): crew.FieldMeasurementInput | null {
@@ -377,7 +464,7 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
       } catch (error) {
         // A first request with a definitive rejection may be edited only after explicit acknowledgement.
         const status = (error as {response?:{status?:number}})?.response?.status;
-        if (!replay && status && [400,401,403,404,412,422,428].includes(status)) {
+        if (!replay && status && [400,403,404,422,428].includes(status)) {
           cmd.phase='rejected';cmd.rejectionStatus=status;await persist(draft,runtime);
         }
         throw error;
@@ -395,7 +482,8 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
     }
     const latest = await guarded(draft,runtime,()=>runtime.api.getFieldInspectionTaskDetailReal(draft.projectId,draft.taskId));
     runtime.api.validateCrewTaskDetail(latest.data,latest.etag,draft.projectId,draft.taskId,draft.actor);
-    if(cmd.body.captureType==='REPAIR_CLAIM'&&(latest.data.assignmentId!==cmd.assignmentId||latest.data.latestSubmissionId!==read.data.id||latest.data.status!=='Submitted'))throw Error('field_readback_mismatch');
+    if(latest.data.assignmentId!==cmd.assignmentId)throw Error('field_assignment_changed');
+    if(cmd.body.captureType==='REPAIR_CLAIM'&&(latest.data.latestSubmissionId!==read.data.id||latest.data.status!=='Submitted'))throw Error('field_readback_mismatch');
     if(cmd.body.captureType==='REPAIR_CLAIM')await verifyRepairClaim(draft,latest.data,runtime);
     cmd.phase='confirmed';draft.result=read.data;await persist(draft,runtime);return draft;
   });

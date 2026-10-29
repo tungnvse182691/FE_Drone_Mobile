@@ -231,11 +231,12 @@ export default function CrewHomeScreen() {
                     </Text>
                   </View>
 
+                  {!task.projectId || !task.version ? <Text style={typography.caption}>Chưa đủ thông tin dự án hoặc phiên bản để mở nhiệm vụ. Hãy tải lại danh sách.</Text> : null}
                   {/* Hàng 4: Footer thẻ với mã WO nhỏ + khoảng cách + chevron */}
                   <View style={styles.taskCardFooter}>
                     <View style={styles.footerLeftMeta}>
                       <View style={styles.woCodeBadge}>
-                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || crewStatusLabel(task.status)}</Text>
+                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || 'Chưa có mã WO'}</Text>
                       </View>
                       {task.distance_label ? (
                         <Text style={[typography.caption, styles.distanceText]}>

@@ -54,11 +54,12 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const [postRepairCapture,setPostRepairCapture]=useState(false);
   const normalAfter=mode==='after'&&task.detail?.mode==='NORMAL';
   const afterBlocked=normalAfter&&(!draft?.repairClaim||!postRepairCapture);
-  const activeRef=useRef(false);
+  const activeRef=useRef(false),savingRef=useRef(false),pickerRef=useRef(false);
+  const matches=(c:ReturnType<typeof currentFieldContext>)=>!!c&&JSON.stringify(currentFieldContext(task.projectId,task.id))===JSON.stringify(c);
   useFocusEffect(useCallback(() => {
     let active=true;activeRef.current=true;setReady(false);
     const context=currentFieldContext(task.projectId,task.id);
-    if (context) void openFieldRuntime(context).then(runtime=>loadFieldDraft(context,runtime)).then(value=>{if(active){setDraft(value);setReady(true);}}).catch(error=>{if(active)setNotice(fieldErrorMessage(error));});
+    if (context) void openFieldRuntime(context).then(runtime=>loadFieldDraft(context,runtime)).then(value=>{if(active&&matches(context)){setDraft(value);setReady(true);}}).catch(error=>{if(active&&matches(context))setNotice(fieldErrorMessage(error));});
     return ()=>{active=false;activeRef.current=false;};
   },[task.id,task.projectId,scope]));
   const block = !user || !scope || !task.detail ? 'Phiên Crew không hợp lệ.' : fieldCapabilityBlock(task.detail,task.etag??'',user.id,'capture');
@@ -68,17 +69,18 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const previewDate = new Date();
   const gpsText = coords ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : 'Chưa có GPS quan sát';
   const savePhoto = async (uri: string, mediaType: string, camera: boolean) => {
-    if (!activeRef.current || busy || block || afterBlocked || !ready || !draft || draft.command) return;
+    if (!activeRef.current || savingRef.current || busy || block || afterBlocked || !ready || !draft || draft.command) return;
     const context=currentFieldContext(task.projectId,task.id);if(!context)return;
-    setBusy(true);
+    savingRef.current=true;setBusy(true);
     try {
       const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,coords,camera,normalAfter&&postRepairCapture);
-      if(!activeRef.current||currentFieldContext(task.projectId,task.id)?.scope!==context.scope)return;
+      if(!activeRef.current||!matches(context))return;
       setDraft(value);setNotice('Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa upload hoặc gửi hồ sơ.');
-    } catch(error) {if(activeRef.current&&currentFieldContext(task.projectId,task.id)?.scope===context.scope)setNotice(fieldErrorMessage(error));}
-    finally {if(activeRef.current&&currentFieldContext(task.projectId,task.id)?.scope===context.scope)setBusy(false);}
+    } catch(error) {if(activeRef.current&&matches(context))setNotice(fieldErrorMessage(error));}
+    finally {savingRef.current=false;if(activeRef.current&&matches(context))setBusy(false);}
   };
-  const handleCapture = (photo: CameraCapturedPicture) => {void savePhoto(photo.uri,'image/jpeg',true);};
+  const renderedContext=currentFieldContext(task.projectId,task.id);
+  const handleCapture = (photo: CameraCapturedPicture) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true);};
   if (block) return <SafeAreaView><Text>{block}</Text><Button variant="secondary" title="Quay lại" onPress={()=>router.back()} /></SafeAreaView>;
 
   const watermark = (
@@ -150,22 +152,25 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   );
 
   const handlePickGallery = async () => {
+    if(pickerRef.current||savingRef.current||busy||!ready||normalAfter||draft?.command)return;
+    const pickedContext=currentFieldContext(task.projectId,task.id),pickedMode=mode;
+    if(!pickedContext)return;pickerRef.current=true;
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
         copyToCacheDirectory: true,
       });
-      if (!res.canceled && res.assets && res.assets.length > 0) {
+      if (activeRef.current && matches(pickedContext) && mode===pickedMode && !res.canceled && res.assets && res.assets.length > 0) {
         await savePhoto(res.assets[0].uri,res.assets[0].mimeType ?? '',false);
       }
-    } catch { setNotice('Không chọn được ảnh. Vui lòng thử lại.'); }
+    } catch { if(activeRef.current&&matches(pickedContext))setNotice('Không chọn được ảnh. Vui lòng thử lại.'); } finally {pickerRef.current=false;}
   };
 
   const galleryButton = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Chọn ảnh từ thiết bị"
-      disabled={normalAfter}
+      disabled={normalAfter||busy||!ready||!!draft?.command}
       onPress={handlePickGallery}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
@@ -189,7 +194,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <MaterialIcons name="close" size={20} color={colors.surface} />
@@ -201,7 +206,8 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
             return (
               <Pressable
                 key={item.key}
-                onPress={() => {setMode(item.key);setPostRepairCapture(false);}}
+                disabled={busy||pickerRef.current}
+                onPress={() => {if(savingRef.current||pickerRef.current)return;setMode(item.key);setPostRepairCapture(false);}}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 style={[styles.modePill, active && styles.modePillActive]}
@@ -234,9 +240,10 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       </View>
 
       {normalAfter?<View style={{padding:spacing.sm}}>
-        <Text>{draft?.repairClaim?'Ảnh AFTER phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp AFTER.'}</Text>
+        <Text style={{color:colors.surface}}>{draft?.repairClaim?'Ảnh AFTER phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp AFTER.'}</Text>
         <Button variant="secondary" title={postRepairCapture?'Đã xác nhận chụp hiện trạng sau sửa':'Tôi xác nhận đang chụp hiện trạng sau sửa'} disabled={!draft?.repairClaim||busy||!!draft.command} onPress={()=>setPostRepairCapture(v=>!v)}/>
       </View>:null}
+      {!ready?<Button variant="secondary" title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.replace({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
       <View style={styles.viewport}>
         <ViewFinder
           disabled={busy||!ready||!!draft?.command||afterBlocked}

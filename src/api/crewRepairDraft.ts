@@ -20,9 +20,13 @@ export interface RepairJournalRecord extends RepairIntent {
   schema: 1; phase: 'PREPARED' | 'PENDING' | 'ACKNOWLEDGED' | 'CONFIRMED' | 'REJECTED'; ifMatch: string;
   receipt?: { data: Record<string, unknown>; itemVersion: string };
   rejection?: { status: number; code: string | null };
+  /** Effective view only; never serialized into the original command. */
+  rejectionResolved?: boolean;
 }
 const KIND = 'T06A_REPAIR_COMMAND';
 const RECOVERY_KIND = 'HARDEN02_REPAIR_RECOVERY';
+const REJECTION_PROOF = 'CREW_REPAIR_REJECTION_PROOF';
+const REJECTION_RESOLUTION = 'CREW_REPAIR_REJECTION_RESOLUTION';
 function sameBinding(a: RepairCommandIdentity,b: RepairCommandIdentity): boolean {
   return sameTask(a,b) && (['packageId','itemId','bindingId','assignmentId'] as const).every(k=>a[k]===b[k]);
 }
@@ -133,14 +137,25 @@ export async function openRepairJournal(identity: RepairIdentity,
           return recovered;
         }catch{throw Error('repair_journal_invalid');}
       }
-      // A historical authentication failure says nothing definitive about a write.
-      if(original.phase==='REJECTED'&&original.rejection?.status===401){
+      // Historical authentication/concurrency errors do not prove that the intent was never committed.
+      if(original.phase==='REJECTED'&&[401,409,412].includes(original.rejection?.status??0)){
         const {rejection: _rejection,...rest}=original;return {...rest,phase:'PENDING' as const};
       }
       return original;
     });
     if(overlays.some(o=>!source.some(row=>journalKey(row)+':recovery'===o.id)))throw Error('repair_journal_invalid');
-    return result;
+    const resolutions=await connection.getAllAsync<{id:string;payload:string}>(
+      'SELECT id, payload FROM local_draft WHERE kind = ? AND substr(id, 1, ?) = ?', REJECTION_RESOLUTION,prefix.length,prefix);
+    guard();
+    return result.map(row=>{
+      const candidates=resolutions.filter(o=>o.id.startsWith(journalKey(row)+':resolved:'));
+      const resolution=candidates.map(o=>JSON.parse(o.payload)).find(value=>sameRepairIdentity(value.current,context)||
+        value.successor&&source.some(next=>canonical(snapshot(next))===canonical(value.successor)));
+      if(!resolution)return row;
+      if(row.phase!=='REJECTED'||resolution.source!==canonical(row)||!sameTask(resolution.current,context))throw Error('repair_journal_invalid');
+      if(resolution.successor&&(!sameBinding(row.identity,resolution.successor.identity)||row.itemVersion!==resolution.successor.itemVersion||row.operation!==resolution.successor.operation))throw Error('repair_journal_invalid');
+      return {...row,rejectionResolved:true};
+    });
   };
   return {
     /** Workflow must validate current assignment/binding before exposing these rows. Never dispatches. */
@@ -160,8 +175,12 @@ export async function openRepairJournal(identity: RepairIdentity,
       guard(); const record = snapshot(intent);
       if (!sameRepairIdentity(context, record.identity)) throw new Error('repair_session_changed');
       await db.withExclusiveTransactionAsync(async transaction => {
-        guard(); const stored = await rows(transaction); guard();
-        const identical = stored.find(r => r.key === record.key);
+        guard(); const all = await rows(transaction); guard();
+        const stored=all.filter(r=>!r.rejectionResolved);
+        // A resolution authorizes only this binding and the freshly checked item version.
+        const resolved=all.at(-1)?.rejectionResolved?all.at(-1):undefined;
+        if(resolved&&(!sameBinding(resolved.identity,record.identity)||resolved.itemVersion!==record.itemVersion||resolved.operation!==record.operation))throw Error('repair_history_requires_reconciliation');
+        const identical = all.find(r => r.key === record.key);
         if (identical) {
           if (canonical(snapshot(identical)) !== canonical(record)) throw new Error('repair_unresolved_command');
           return;
@@ -197,13 +216,36 @@ export async function openRepairJournal(identity: RepairIdentity,
         const now = new Date().toISOString();
         await transaction.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
           journalKey(record), KIND, canonical(record), now, now);
+        if(resolved){
+          const id=journalKey(resolved)+':resolved:'+context.scope;
+          const value=(await transaction.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ? AND kind = ?',id,REJECTION_RESOLUTION))[0];
+          if(!value)throw Error('repair_rejection_resolution_blocked');
+          await transaction.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?',
+            canonical({...JSON.parse(value.payload),successor:record}),now,id,REJECTION_RESOLUTION);
+        }
         guard(); // Throw rolls back if the account changes while SQLite is writing.
       });
       guard();
       return record;
     },
+    /** Separate explicit resolution; original rejected command, receipt and media remain untouched. */
+    async resolveRejection(key: string, expected: RepairCommandIdentity, itemVersion: string) {
+      guard();
+      await db.withExclusiveTransactionAsync(async transaction=>{
+        const all=await rows(transaction);guard();const row=all.find(c=>c.key===key);
+        if(!row||row.phase!=='REJECTED'||!sameBinding(row.identity,expected)||row.itemVersion!==itemVersion||
+          all.some(c=>!['CONFIRMED','REJECTED'].includes(c.phase))||all.at(-1)?.key!==key)throw Error('repair_rejection_resolution_blocked');
+        const {rejectionResolved:_resolved,...original}=row;
+        const proof=(await transaction.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ? AND kind = ?',journalKey(row)+':proof',REJECTION_PROOF))[0];guard();
+        if(!proof||JSON.parse(proof.payload).source!==canonical(original)||JSON.parse(proof.payload).basis!=='FIRST_DISPATCH_DEFINITIVE_RESPONSE')throw Error('repair_rejection_proof_missing');
+        const now=new Date().toISOString();
+        await transaction.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at',
+          journalKey(row)+':resolved:'+context.scope,REJECTION_RESOLUTION,canonical({source:canonical(original),current:context}),now,now);
+        guard();
+      });guard();
+    },
     async transition(key: string, phase: RepairJournalRecord['phase'],
-      evidence?: Pick<RepairJournalRecord,'receipt'|'rejection'>): Promise<RepairJournalRecord> {
+      evidence?: Pick<RepairJournalRecord,'receipt'|'rejection'>, firstDispatchRejection = false): Promise<RepairJournalRecord> {
       guard(); let updated: RepairJournalRecord | undefined;
       await db.withExclusiveTransactionAsync(async transaction => {
         guard(); const stored = await rows(transaction); guard();
@@ -215,7 +257,7 @@ export async function openRepairJournal(identity: RepairIdentity,
         updated = decode(canonical({...row,...evidence,phase}));
         const source=(await originals(transaction)).find(r=>r.key===key);guard();
         if(!source)throw Error('repair_command_missing');
-        if(!sameRepairIdentity(context,source.identity) || source.phase==='REJECTED'&&source.rejection?.status===401){
+        if(!sameRepairIdentity(context,source.identity) || source.phase==='REJECTED'&&[401,409,412].includes(source.rejection?.status??0)){
           // Exclusive transaction serializes overlay transitions; historical command bytes stay intact.
           const now=new Date().toISOString();
           await transaction.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, updated_at=excluded.updated_at',
@@ -223,6 +265,12 @@ export async function openRepairJournal(identity: RepairIdentity,
         }else{
           await transaction.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?',
             canonical(updated),new Date().toISOString(),journalKey(row),KIND);
+        }
+        if(firstDispatchRejection){
+          if(phase!=='REJECTED'||row.phase!=='PENDING'||!updated.rejection||![400,403,404,422,428].includes(updated.rejection.status))throw Error('repair_rejection_proof_invalid');
+          const now=new Date().toISOString();
+          await transaction.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+            journalKey(updated)+':proof',REJECTION_PROOF,canonical({source:canonical(updated),basis:'FIRST_DISPATCH_DEFINITIVE_RESPONSE'}),now,now);
         }
         guard();
       });

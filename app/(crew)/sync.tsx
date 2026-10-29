@@ -30,7 +30,7 @@ interface QueueItem {
 
 const SEGMENT_LABELS: Record<SyncSegment, string> = {
   pending: 'Đang chờ',
-  done: 'Đã đồng bộ',
+  done: 'Đã xác nhận',
 };
 
 const OUTBOX_KIND_LABELS: Record<string, string> = {
@@ -230,7 +230,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         <View style={styles.syncBtnWrap}>
           <Button
             variant="primary"
-            title="Kiểm tra hàng đợi"
+            title="Chỉ kiểm tra hàng đợi — không gửi"
             loading={syncing}
             disabled={counts.pending === 0}
             onPress={syncNow}

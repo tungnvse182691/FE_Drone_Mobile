@@ -69,7 +69,7 @@ function formatDateTime(iso: string | null): string {
   }
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
-    return iso;
+    return 'Chưa có thời điểm hợp lệ';
   }
   return `${date.toLocaleDateString('vi-VN')} ${date.toLocaleTimeString('vi-VN', {
     hour: '2-digit',
@@ -105,7 +105,7 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
   },[identity,cursor]);
   useFocusEffect(useCallback(()=>{void load(false);},[identity]));
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhận việc" />}>
-    <Text style={typography.caption}>Phạm vi: các dự án máy chủ cho phép qua nhiệm vụ/binding hiện hành. Chưa bao phủ toàn bộ membership (BE_DISCOVERY_GAP).</Text>
+    <Text style={typography.caption}>Chỉ hiển thị yêu cầu trong các dự án mà hệ thống xác nhận quyền hiện tại. Danh sách có thể chưa bao phủ tất cả dự án của bạn.</Text>
     {projects.map(p=><Button key={p.projectId} title={`${p.projectCode} · ${p.name}`} variant={selected===p.projectId?'primary':'secondary'} onPress={()=>setSelected(p.projectId)} />)}
     {error?<Text accessibilityRole="alert">{error}</Text>:null}
     {!loading&&!error&&!projects.length?<Text>Không có dự án trong phạm vi được máy chủ trả về.</Text>:null}

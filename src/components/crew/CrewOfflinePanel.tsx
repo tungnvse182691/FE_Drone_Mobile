@@ -45,7 +45,7 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
     {probe?<View>
       <Button title={showDiagnostics?'Ẩn thông tin chẩn đoán':'Thông tin chẩn đoán'} variant="text" onPress={()=>setShowDiagnostics(v=>!v)} />
       {showDiagnostics ? <View><Text>Phiên bản Android API: {probe.capability.apiLevel || 'Chưa xác định'}</Text><Text>Thông tin chỉ phục vụ kiểm tra thiết bị; không xác nhận đồng bộ thành công.</Text></View> : null}
-      {records.length===0?<Text>Chưa có thao tác trong nhật ký đang theo dõi. Đây không phải xác nhận đã đồng bộ.</Text>:records.map(r=><View key={r.id}><Text>
+      {records.length===0?<Text>Chưa có thao tác trong nhật ký đang theo dõi. Đây không phải xác nhận đã đồng bộ.</Text>:records.map(r=><View key={r.id}><Text>Dự án {r.projectId.slice(0,8)}… · {({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác thiết bị'}</Text><Text>
         {({RECONCILED:'Đã đối soát kết quả máy chủ',RECEIVED:'Đã nhận phản hồi, cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả, giữ nguyên lệnh',IN_FLIGHT:'Đang xử lý, chưa xác nhận kết quả'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận kết quả'}
         {r.identity.scope!==identity.scope?' — thao tác phiên trước được giữ để đối soát':''}
 

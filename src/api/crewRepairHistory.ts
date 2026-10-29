@@ -62,7 +62,7 @@ export function validateRepairReceipt(c: RepairJournalRecord,data: Record<string
   return {data,itemVersion};
 }
 /** Restore receipts only after current actor/binding checks; no POST or invented readback. */
-export async function readRepairHistory(i: RepairIdentity,r=repairRuntime(i)) {
+export async function readRepairHistory(i: RepairIdentity,r=repairRuntime(i),includeResolved=false) {
   await fresh(i,r);
   const j=await guarded(i,r,()=>r.journal(i)),rows=await guarded(i,r,()=>j.history());
   const latestConfirmed=rows.filter(row=>row.phase==='CONFIRMED').at(-1);
@@ -74,5 +74,5 @@ export async function readRepairHistory(i: RepairIdentity,r=repairRuntime(i)) {
     if(row===latestConfirmed&&row.operation!=='assessment'&&rows.at(-1)===row&&
       (read.data.repairContext!.status!==(row.operation==='attempt'?'Submitted':'InProgress')||read.data.repairContext!.itemVersion!==row.receipt!.itemVersion))throw Error('repair_reconciliation_pending');
   }
-  return rows;
+  return includeResolved?rows:rows.filter(row=>!row.rejectionResolved);
 }

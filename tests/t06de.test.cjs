@@ -15,6 +15,7 @@ function render(file,exportName,task){
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,
  {module,exports:module.exports,require:n=>{
   if(n==='react')return React;
+  if(n==='./tasks')return require('./helpers/crew-ui-labels.cjs');
   if(n==='react-native')return {View:'View',Text:'Text',StyleSheet:{create:x=>x}};
   if(n==='expo-router')return {router:{push:r=>routes.push(r),replace:r=>routes.push(r)}};
   // Any accidental mutation/storage call fails this read-only screen test.
@@ -34,8 +35,8 @@ test('T06D correction deep link uses the real read boundary without GPS/WO opera
 for(const state of ['AWAITING_PM_REVIEW','Submitted','SupplementRequired','Completed'])test('T06D '+state+' never substitutes for PM SUPPLEMENT proof',()=>{
  const t=task();t.status=state;t.detail.status=state;
  const h=render('app/(crew)/repair-correction.tsx','CorrectionReadOnly',t);
- assert.match(h.text,/chưa cung cấp.*quyết định PM/);assert.match(h.text,/current intake/);
- const submit=h.nodes.find(n=>n.props.title==='Gửi bổ sung sửa chữa');assert.equal(submit.props.disabled,true);submit.props.onPress();
+ assert.match(h.text,/Chưa có yêu cầu bổ sung.*được xác minh/);assert.match(h.text,/chưa có nội dung yêu cầu|Chưa có nội dung yêu cầu/);
+ assert.equal(h.nodes.some(n=>n.props.title==='Gửi bổ sung sửa chữa'),false);
  assert.equal(h.effects.length,0);assert.equal(h.writes.length,0);assert.equal(h.routes.length,0);
 });
 test('T06D correction read-only navigation preserves project/task and never enters repair execution',()=>{

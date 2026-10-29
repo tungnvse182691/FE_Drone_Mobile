@@ -8,10 +8,10 @@ const ids=Object.fromEntries(['actor','projectId','taskId','packageId','itemId',
 const version='AAAAAAAAB9E=',next='AAAAAAAAB9I=';
 const measurement=()=>({sampleId:ids.sample,type:'Area',value:2,state:'KNOWN',dimension:'AREA',unit:'M2',instrument:'Measuring tape',method:'Field measurement',locationReason:'GPS denied'});
 const evidence=()=>({captureOriginId:ids.capture,fileId:ids.file,purpose:'BEFORE',checksumSha256:'a'.repeat(64),mediaType:'image/jpeg',capturedAt:null});
-function harness(){
+function harness(options={}){
  const identity={actor:ids.actor,scope:JSON.stringify([ids.actor,'A']),environment:'http://fixture/api/v1',projectId:ids.projectId,taskId:ids.taskId};
  let current=identity,posts=0,fail=null,saveFail=false;
- const raw=new DatabaseSync(':memory:');raw.exec('CREATE TABLE local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
+ let raw=new DatabaseSync(options.file??':memory:');raw.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
  const port={getAllAsync:async(s,...a)=>raw.prepare(s).all(...a),runAsync:async(s,...a)=>{if(saveFail&&s.startsWith('UPDATE'))throw Error('disk');return raw.prepare(s).run(...a);},withExclusiveTransactionAsync:async f=>{raw.exec('BEGIN');try{await f(port);raw.exec('COMMIT');}catch(e){raw.exec('ROLLBACK');throw e;}}};
  const api=load('src/api/crewApi.ts');
  const journal=load('src/api/crewRepairDraft.ts',{'./crewApi':api,'../offline/database':{openDatabase:()=>port,initDatabase:async()=>{}},'./authApi':{},'./client':{}});
@@ -28,7 +28,7 @@ function harness(){
  const workflow=load('src/api/crewRepairWorkflow.ts',{'./crewApi':runtime.api,'./crewRepairDraft':journal,'expo-crypto':{randomUUID}});
  const command=()=>({identity:{...identity,packageId:ids.packageId,itemId:ids.itemId,bindingId:ids.bindingId,assignmentId:ids.assignmentId},key:randomUUID(),operation:'assessment',itemVersion:version,payload:{originId:randomUUID(),fieldFirstStartId:ids.first,measurements:[measurement()],evidence:[evidence()]}});
  const draft=()=>({...identity,measurements:[measurement()],locationProof:null,captures:[{id:ids.capture,uri:'file:///fixture.jpg',purpose:'BEFORE',verified:true,upload:{id:ids.upload,fileId:ids.file},checksum:'a'.repeat(64),mediaType:'image/jpeg',size:12,capturedAt:null}]});
- return {identity,raw,port,api,runtime,workflow,task,command,draft,calls,posts:()=>posts,switch:()=>current={...identity,scope:JSON.stringify([ids.actor,'B'])},fail:e=>fail=e,saveFail:v=>saveFail=v};
+ return {identity,get raw(){return raw;},reopen:()=>{raw.close();raw=new DatabaseSync(options.file);},port,api,runtime,workflow,task,command,draft,calls,posts:()=>posts,switch:()=>current={...identity,scope:JSON.stringify([ids.actor,'B'])},fail:e=>fail=e,saveFail:v=>saveFail=v};
 }
 test('T06B journal records history and allows start only after confirmed READY assessment',async()=>{
  const h=harness(),j=await h.runtime.journal(),c=h.command();await j.prepare(c);
@@ -66,10 +66,10 @@ test('T06B complete/VERIFYING is not verified',async()=>{const h=harness();h.run
 for(const status of [401,403,409,412,428])test('T06B HTTP '+status+' retains exact command and blocks replacement',async()=>{
  const h=harness(),j=await h.runtime.journal(),c=await j.prepare(h.command());h.fail({response:{status,data:{code:'fixture_error'}}});
  await assert.rejects(h.workflow.dispatchRepair(h.identity,c.key,h.runtime));const row=await j.read(c.key);
- assert.equal(row.phase,status===401?'PENDING':'REJECTED');assert.equal(row.key,c.key);assert.deepEqual(row.payload,c.payload);
- if(status!==401)assert.equal(row.rejection.status,status);
+ assert.equal(row.phase,[401,409,412].includes(status)?'PENDING':'REJECTED');assert.equal(row.key,c.key);assert.deepEqual(row.payload,c.payload);
+ if(![401,409,412].includes(status))assert.equal(row.rejection.status,status);
  await assert.rejects(j.prepare(h.command()));
- if(status===401){h.fail(null);assert.equal((await h.workflow.dispatchRepair(h.identity,c.key,h.runtime)).phase,'CONFIRMED');assert.deepEqual(h.calls[0],h.calls[1]);assert.equal(h.posts(),2);}
+ if([401,409,412].includes(status)){h.fail(null);assert.equal((await h.workflow.dispatchRepair(h.identity,c.key,h.runtime)).phase,'CONFIRMED');assert.deepEqual(h.calls[0],h.calls[1]);assert.equal(h.posts(),2);}
  else{await h.workflow.dispatchRepair(h.identity,c.key,h.runtime);assert.equal(h.posts(),1);}
 });
 for(const name of ['timeout before commit','timeout after commit'])test('T06B '+name+' survives restart and exact replay',async()=>{

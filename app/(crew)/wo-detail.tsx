@@ -1,3 +1,7 @@
+import { useRepairBootstrap } from '../../src/hooks/useRepairBootstrap';
+import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
+import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepareRepairAttempt, dispatchRepair, resolveRepairRejection, readRepairFieldDraft, readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
+import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -8,7 +12,6 @@ import { Chip } from '../../src/components/Chip';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
-import { useRepairBootstrap } from '../../src/hooks/useRepairBootstrap';
 import { CrewTaskBoundary, useCrewIdentity, crewStatusLabel, crewModeLabel } from './tasks';
 import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
@@ -18,9 +21,6 @@ import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabi
   validateCrewTaskDetail, normalRepairBlock, getFieldInspectionTaskDetailReal,
   isConcurrencyConflict, isPreconditionRequired, newIdempotencyKey,
   type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
-import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
-import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepareRepairAttempt, dispatchRepair, readRepairFieldDraft, readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
-import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
 
@@ -219,6 +219,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
       </Card>
       <Card style={styles.taskActionCard}>
+      <Button variant="text" title="Thông tin / hướng dẫn báo lỗi" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
       <View style={styles.sectionHeading}><MaterialIcons name="explore" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Tại hiện trường</Text></View>
       {!fresh.coordinates ? <Text style={styles.hint}>Dẫn đường chưa khả dụng vì chưa có tọa độ nhiệm vụ.</Text> : null}
       <Button variant="secondary" title="Dẫn đường" disabled={!fresh.coordinates} onPress={() => {
@@ -229,6 +230,8 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       </Card>
       <Card style={styles.taskActionCard}>
         <RepairContractStatus task={fresh} />
+        <Button variant="secondary" title="Theo dõi thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})} />
+        <Button variant="secondary" title="Hồ sơ hoàn tất thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})} />
         {fresh.detail?.mode === 'NORMAL' ? <NormalRepairBootstrap task={fresh} /> : null}
       </Card>
       <Card style={styles.taskActionCard}>
@@ -260,7 +263,7 @@ export function RepairContractStatus({ task }: { task: CrewTask }) {
 }
 
 /** Explicit NORMAL commands only. Legacy repair content remains unmounted. */
-export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
+export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; stage?:'all'|'progress'|'closeout' }) {
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
   const identity=useCrewIdentity();
   const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên Crew hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
@@ -268,7 +271,7 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
   const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
   const [showRepairTechnical,setShowRepairTechnical]=useState(false);
   const [historyIdentity,setHistoryIdentity]=useState<ReturnType<typeof currentRepairIdentity>>(null);
-  const [confirmation,setConfirmation]=useState<{identity:NonNullable<ReturnType<typeof currentRepairIdentity>>;key:string}|null>(null);
+  const [confirmation,setConfirmation]=useState<{identity:NonNullable<ReturnType<typeof currentRepairIdentity>>;key:string;kind?:'resolve'}|null>(null);
   const live=currentRepairIdentity(task.projectId,task.id);
   const history=sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)?storedHistory:[];
   const draft=sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)?storedDraft:null;
@@ -277,7 +280,7 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
     const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
     setLoaded(false);setBusy(false);setHistory([]);setHistoryIdentity(null);setConfirmation(null);setDraft(null);setNotice('');
     try {
-      const rows=await readRepairHistory(i);
+      const rows=await readRepairHistory(i,undefined,true);
       if(!active.current||!sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))return;
       setHistoryIdentity(i);setHistory(rows);setLoaded(true);
       try {
@@ -294,15 +297,19 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
   const started=history.find(c=>c.operation==='start'&&c.phase==='CONFIRMED');
   const finished=history.find(c=>c.operation==='finish'&&c.phase==='CONFIRMED');
   const intake=history.find(c=>c.operation==='attempt'&&c.phase==='CONFIRMED');
-  const rejected=history.some(c=>c.phase==='REJECTED');
+  const activeHistory=history.filter(c=>!c.rejectionResolved);
+  const rejectedCommand=activeHistory.find(c=>c.phase==='REJECTED');
+  const rejected=!!rejectedCommand;
   const ready=assessment?.receipt?.data.readiness==='READY';
   const sourceReady=!!historyIdentity&&sameRepairIdentity(historyIdentity,live)&&!!draft?.measurements.length&&!!draft.captures.some(c=>c.purpose!=='AFTER'&&c.verified&&c.upload?.fileId);
-  const run=async(action:'assessment'|'start'|'finish'|'claim'|'attempt'|'replay')=>{
+  const run=async(action:'assessment'|'start'|'finish'|'claim'|'attempt'|'replay'|'resolve')=>{
     if(lock.current)return;const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
     if(action==='replay'&&(!confirmation||confirmation.key!==pending?.key||!sameRepairIdentity(confirmation.identity,i)))return;
+    if(action==='resolve'&&(!confirmation||confirmation.kind!=='resolve'||confirmation.key!==rejectedCommand?.key||!sameRepairIdentity(confirmation.identity,i)))return;
     setConfirmation(null);
     lock.current=true;setBusy(true);setNotice('');
     try {
+      if(action==='resolve'){await resolveRepairRejection(i,rejectedCommand!.key);if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice('Đã đối chiếu điều kiện và ghi nhận xác nhận của bạn. Có thể chuẩn bị lại thao tác phù hợp; lệnh cũ được giữ nguyên.');return;}
       if(action==='claim') {
         const field=await prepareFieldRepairClaim(i);
         if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){setDraft(field);router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:'AFTER'}});}
@@ -311,19 +318,25 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
       const command=action==='replay'?pending:action==='start'?await prepareRepairStart(i):action==='finish'?await prepareRepairFinish(i):action==='attempt'?await prepareRepairAttempt(i):await prepareRepairAssessment(i,await readRepairFieldDraft(i));
       if(!command)throw Error('repair_command_missing');
       const receipt=await dispatchRepair(i,command.key);
-      if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(receipt.phase==='CONFIRMED'?'Đã lưu receipt máy chủ và đối chiếu ngữ cảnh hạng mục.':'Lệnh chưa được xác nhận; giữ nguyên để đối soát.');
+      if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(receipt.phase==='CONFIRMED'?'Đã lưu biên nhận máy chủ và đối chiếu hạng mục.':'Lệnh chưa được xác nhận; giữ nguyên để đối soát.');
     }catch(e){if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(repairErrorMessage(e));}
     finally{
       lock.current=false;
       if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){
         setBusy(false);
-        try{const rows=await readRepairHistory(i);if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setHistory(rows);}catch{/* Keep the error and disable new commands on failed reload. */if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){setLoaded(false);setHistory([]);}}
+        try{const rows=await readRepairHistory(i,undefined,true);if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setHistory(rows);}catch{/* Keep the error and disable new commands on failed reload. */if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id))){setLoaded(false);setHistory([]);}}
         if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))void result.reload();
       }
     }
   };
   return <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-    <Text style={typography.titleMd}>Sửa chữa theo kế hoạch</Text>
+    <Text style={typography.titleMd}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':'Sửa chữa theo kế hoạch'}</Text>
+    <View style={styles.taskActionCard}>
+      <Text>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
+      <Text>{started?'✓ Đã đối soát bắt đầu thi công':'Bắt đầu thi công: chờ xác nhận'}</Text>
+      <Text>{finished?'✓ Đã đối soát kết thúc thi công':'Kết thúc thi công: chờ xác nhận'}</Text>
+      <Text>{intake?'✓ Đã tiếp nhận hồ sơ, chờ quản lý đánh giá':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
+    </View>
     {result.status === 'loading' ? <Text>Đang đọc ngữ cảnh từ máy chủ…</Text> : null}
     {result.status === 'error' ? <Text>Không xác nhận được ngữ cảnh sửa chữa. Vui lòng tải lại.</Text> : null}
     {result.status === 'ready' && !result.repairContext ? <Text>Chưa có hạng mục sửa chữa được liên kết hợp lệ với nhiệm vụ này. Các thao tác sửa chữa chưa khả dụng.</Text> : null}
@@ -338,37 +351,52 @@ export function NormalRepairBootstrap({ task }: { task: CrewTask }) {
       </View> : null}
     </> : null}
 
-    <Text>Số đo đã lưu: {draft?.measurements.length??0}. Ảnh trước sửa/đo VERIFIED: {draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}.</Text>
-    {!sourceReady?<Text>Cần lưu số đo thực và upload ảnh BEFORE/MEASUREMENT đến VERIFIED trong hồ sơ FIELD. Ảnh AFTER không được đưa vào đánh giá trước sửa.</Text>:null}
+    {stage!=='closeout'?<>
+    <Text>Số đo đã lưu: {draft?.measurements.length??0}. Ảnh trước sửa/đo đã xác minh: {draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}.</Text>
+    {!sourceReady?<Text>Cần lưu số đo thực và tải ảnh hiện trạng hoặc đo kiểm để máy chủ xác minh. Ảnh sau sửa không được dùng cho đánh giá trước sửa.</Text>:null}
     <Button variant="secondary" title="Số đo / ảnh FIELD" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
     {assessmentBlock&&!started?<Text>{assessmentBlock}</Text>:null}
-    <Button variant="secondary" title="Gửi đánh giá trước sửa" disabled={busy||!loaded||!sourceReady||!!assessmentBlock||!!pending||(!!history.length&&assessment?.receipt?.data.readiness!=='INCOMPLETE')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('assessment')}/>
+    <Button variant="secondary" title="Gửi đánh giá trước sửa" disabled={busy||!loaded||!sourceReady||!!assessmentBlock||!!pending||(!!activeHistory.length&&assessment?.receipt?.data.readiness!=='INCOMPLETE')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('assessment')}/>
+    </>:null}
     {history.map(c=><View key={c.key}>
       <Text style={styles.body}>{{assessment:'Đánh giá',start:'Bắt đầu',finish:'Kết thúc thi công',attempt:'Nộp hồ sơ',supplement:'Bổ sung'}[c.operation]}: {{PREPARED:'Đã lưu lệnh',PENDING:'Đang chờ xác nhận',IN_FLIGHT:'Đang gửi',UNKNOWN_OUTCOME:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã ghi nhận',CONFIRMED:'Đã đối soát',REJECTED:'Bị từ chối'}[c.phase] ?? 'Cần đối soát'}</Text>
-      {c.receipt?<><Text style={styles.hint}>Biên nhận máy chủ đã lưu.</Text>{showRepairTechnical ? <Text selectable style={styles.hint}>Mã biên nhận: {String(c.receipt.data.id??c.receipt.data.attemptId)}</Text> : null}<Text>{String(c.receipt.data.readiness??c.receipt.data.intakeReadiness??'Biên nhận thi công')}</Text>
-        {Array.isArray(c.receipt.data.missingReasons)?c.receipt.data.missingReasons.map(r=><Text key={String(r)}>{String(r)}</Text>):null}</>:null}
-      {c.phase==='REJECTED'?<Text>Máy chủ đã từ chối lệnh HTTP {c.rejection?.status}. Giữ lịch sử để đối soát, không tạo key thay thế.</Text>:null}
+      {c.receipt?<><Text style={styles.hint}>Biên nhận máy chủ đã lưu.</Text>{showRepairTechnical ? <Text selectable style={styles.hint}>Mã biên nhận: {String(c.receipt.data.id??c.receipt.data.attemptId)}</Text> : null}<Text>{(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='READY'?'Đủ thông tin theo máy chủ':(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='INCOMPLETE'?'Còn thiếu thông tin':'Đã ghi nhận mốc thi công'}</Text>
+        {showRepairTechnical&&Array.isArray(c.receipt.data.missingReasons)?c.receipt.data.missingReasons.map(r=><Text key={String(r)}>{String(r)}</Text>):null}</>:null}
+      {c.phase==='REJECTED'&&c.rejectionResolved?<Text>Đã giải quyết bằng chứng từ chối; lệnh gốc được giữ trong lịch sử.</Text>:null}
+      {c.phase==='REJECTED'&&!c.rejectionResolved?<Text>Máy chủ đã từ chối thao tác. Lịch sử được giữ nguyên; cần kiểm tra quyền và điều kiện trước khi tiếp tục.</Text>:null}
     </View>)}
-    {assessment&&!ready?<Text>Assessment còn INCOMPLETE. Sửa nháp FIELD theo missingReasons rồi chủ động gửi assessment mới; lịch sử cũ được giữ nguyên.</Text>:null}
-    <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||history.some(c=>c.operation==='start')||result.status!=='ready'} onPress={()=>void run('start')}/>
-    {pending?<><Text>Chưa xác nhận được kết quả. Chỉ đối soát/gửi lại đúng lệnh đã lưu.</Text><Button variant="secondary" title="Đối soát / replay lệnh đã lưu" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i&&pending)setConfirmation({identity:i,key:pending.key});}}/></>:null}
+    {stage!=='closeout'?<>
+    {assessment&&!ready?<Text>Đánh giá còn thiếu thông tin. Bổ sung số đo hoặc ảnh trong hồ sơ hiện trường rồi chủ động gửi đánh giá mới; lịch sử cũ được giữ nguyên.</Text>:null}
+    <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||activeHistory.some(c=>c.operation==='start')||result.status!=='ready'} onPress={()=>void run('start')}/>
+    </>:null}
+    {rejectedCommand?<View><Text>Thao tác bị từ chối. Cần đọc lại điều kiện hiện hành và xác nhận giải quyết lệnh cũ trước khi chuẩn bị lệnh mới. Lệnh chưa rõ kết quả không dùng cách này.</Text><Button variant="secondary" title="Kiểm tra để chuẩn bị lại thao tác bị từ chối" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i)setConfirmation({identity:i,key:rejectedCommand.key,kind:'resolve'});}}/></View>:null}
+    {pending?<><Text>Chưa xác nhận được kết quả. Chỉ đối soát/gửi lại đúng lệnh đã lưu.</Text><Button variant="secondary" title="Đối soát / gửi lại lệnh đã lưu" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i&&pending)setConfirmation({identity:i,key:pending.key});}}/></>:null}
     {confirmation&&sameRepairIdentity(confirmation.identity,live)?<View>
-      <Text accessibilityRole="alert">Đối soát có thể POST lại đúng lệnh đã lưu. Nếu máy chủ chưa ghi lệnh, thao tác này có thể thực thi lần đầu. Payload, key và phiên bản gốc được giữ nguyên.</Text>
+      {confirmation.kind==='resolve'?<><Text accessibilityRole="alert">Xác nhận kiểm tra bằng chứng từ chối ở lần gửi đầu, quyền, liên kết và phiên bản hiện tại. Thao tác này không gửi lệnh sửa chữa; lịch sử cũ được giữ nguyên.</Text><Button variant="secondary" title="Xác nhận giải quyết lệnh bị từ chối" disabled={busy||!loaded} onPress={()=>void run('resolve')}/></>:<>
+      <Text accessibilityRole="alert">Đối soát có thể gửi lại đúng lệnh đã lưu. Nếu máy chủ chưa ghi lệnh, thao tác này có thể thực thi lần đầu. Nội dung, khóa chống trùng và phiên bản gốc được giữ nguyên.</Text>
       <Button variant="secondary" title="Xác nhận đối soát lệnh gốc" disabled={busy||!loaded} onPress={()=>void run('replay')}/>
+      </>}
       <Button variant="secondary" title="Hủy đối soát" disabled={busy} onPress={()=>setConfirmation(null)}/>
     </View>:null}
+    {stage!=='closeout'?<>
     {started&&!finished?<Text>Đã bắt đầu thi công. Chỉ bấm kết thúc sau khi hoàn tất thi công thực tế.</Text>:null}
-    <Button variant="secondary" title="Kết thúc thi công" disabled={busy||!loaded||!started||!!finished||!!pending||rejected||history.some(c=>c.operation==='finish')||result.status!=='ready'||result.repairContext?.status!=='InProgress'} onPress={()=>void run('finish')}/>
+    <Button variant="secondary" title="Kết thúc thi công" disabled={busy||!loaded||!started||!!finished||!!pending||rejected||activeHistory.some(c=>c.operation==='finish')||result.status!=='ready'||result.repairContext?.status!=='InProgress'} onPress={()=>void run('finish')}/>
+    </>:null}
+    {stage!=='progress'?<>
     {finished?<Text>Đã thi công xong theo biên nhận máy chủ. Hồ sơ chưa được PM xác nhận.</Text>:null}
     <Button variant="secondary" title="Chụp AFTER / lập hồ sơ sửa chữa" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||!!draft?.command} onPress={()=>void run('claim')}/>
     {draft?.repairClaim?<Button variant="secondary" title="Xem hồ sơ sửa chữa đã lưu" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
     <Button variant="secondary" title="Nộp hồ sơ chờ PM đánh giá" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||draft?.command?.phase!=='confirmed'||!draft?.repairClaim} onPress={()=>void run('attempt')}/>
     {intake?<Text>Đã gửi hồ sơ vào tiếp nhận. Đang chờ PM đánh giá; chưa được PM xác nhận.</Text>:null}
     <Text>Gửi hồ sơ không đồng nghĩa đã được nghiệm thu. Theo dõi kết quả đánh giá của người quản lý.</Text>
+    </>:null}
+    {stage==='progress'&&finished?<Button variant="secondary" title="Mở hồ sơ sau thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
+    {stage==='closeout'&&!finished?<Button variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {notice?<Text accessibilityLiveRegion="polite">{notice}</Text>:null}
     <Button variant="secondary" title="Tải lại ngữ cảnh sửa chữa" disabled={busy} loading={result.status === 'loading'} onPress={() => {void result.reload();void load();}} />
   </View>;
 }
+
 const styles = StyleSheet.create({
   topBar: { padding: spacing.md },
   card: { marginBottom: spacing.md, gap: spacing.md, borderWidth: 1, borderColor: colors.border },

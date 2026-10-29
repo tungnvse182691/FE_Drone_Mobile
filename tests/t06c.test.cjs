@@ -55,7 +55,7 @@ for(const status of [401,403,409,412,428])test('T06C finish rejection '+status+'
  const h=await started(),c=await h.workflow.prepareRepairFinish(h.identity,h.runtime);
  h.runtime.api.finishRepairExecutionReal=async()=>{throw {response:{status}};};
  await assert.rejects(h.workflow.dispatchRepair(h.identity,c.key,h.runtime));
- assert.equal((await (await h.runtime.journal()).read(c.key)).phase,status===401?'PENDING':'REJECTED');
+ assert.equal((await (await h.runtime.journal()).read(c.key)).phase,[401,409,412].includes(status)?'PENDING':'REJECTED');
  await assert.rejects(h.workflow.prepareRepairFinish(h.identity,h.runtime));
 });
 test('T06C finish stale version and wrong start receipt fail closed',async()=>{
@@ -164,7 +164,7 @@ for(const [label,change] of [
 for(const status of [401,403,409,412,428])test('T06C attempt rejection '+status+' keeps command',async()=>{
  const h=await finishedForIntake(),c=await h.workflow.prepareRepairAttempt(h.identity,h.runtime);
  h.runtime.api.submitRepairAttemptReal=async()=>{throw {response:{status}};};await assert.rejects(h.workflow.dispatchRepair(h.identity,c.key,h.runtime));
- assert.equal((await (await h.runtime.journal()).read(c.key)).phase,status===401?'PENDING':'REJECTED');await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime));
+ assert.equal((await (await h.runtime.journal()).read(c.key)).phase,[401,409,412].includes(status)?'PENDING':'REJECTED');await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime));
 });
 for(const state of ['timeout before','timeout after','ACK disk'])test('T06C attempt '+state+' exact replay after restart',async()=>{
  const h=await finishedForIntake(),c=await h.workflow.prepareRepairAttempt(h.identity,h.runtime),send=h.runtime.api.submitRepairAttemptReal;let original;

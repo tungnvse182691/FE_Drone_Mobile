@@ -12,11 +12,11 @@ test('HARDEN explicit claim from confirmed old-session repair uses new empty FIE
 });
 const path=require('node:path'),{DatabaseSync}=require('node:sqlite');
 const folder=fs.mkdtempSync(path.resolve('.cache/harden02-field-'));
-function durableField(context){
+function durableField(context,api={}){
  const file=path.join(folder,require('node:crypto').randomUUID()+'.db');let current={...context},db=new DatabaseSync(file);
  db.exec('CREATE TABLE local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
  const port={getAllAsync:async(s,...a)=>db.prepare(s).all(...a),getFirstAsync:async(s,...a)=>db.prepare(s).get(...a)};
- const m=sandbox.fixtures.load('src/api/crewFieldDraft.ts',{'../store/auth':{useAuthStore:{getState:()=>({token:current.scope,user:{id:current.actor,role_code:'REPAIR_CREW'},status:'AUTHENTICATED'})}},'./authApi':{passwordSessionIdentity:t=>t},'./client':{apiClient:{defaults:{baseURL:context.environment}}},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&x.length===36},'../offline/database':{openDatabase:()=>port,initDatabase:async()=>{},saveDraft:async(_,id,kind,d)=>db.prepare('INSERT INTO local_draft(id,kind,payload) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(id,kind,JSON.stringify(d))}});
+ const m=sandbox.fixtures.load('src/api/crewFieldDraft.ts',{'../store/auth':{useAuthStore:{getState:()=>({token:current.scope,user:{id:current.actor,role_code:'REPAIR_CREW'},status:'AUTHENTICATED'})}},'./authApi':{passwordSessionIdentity:t=>t},'./client':{apiClient:{defaults:{baseURL:context.environment}}},'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&x.length===36,...api},'../offline/database':{openDatabase:()=>port,initDatabase:async()=>{},saveDraft:async(_,id,kind,d)=>db.prepare('INSERT INTO local_draft(id,kind,payload) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(id,kind,JSON.stringify(d))}});
  return {m,set:c=>current=c,rows:()=>db.prepare('SELECT * FROM local_draft ORDER BY rowid').all(),seed:d=>db.prepare('INSERT INTO local_draft(id,kind,payload) VALUES(?,?,?)').run('t05b:'+JSON.stringify([d.environment,d.actor,d.projectId,d.taskId]),'T05B_FIELD',JSON.stringify(d)),reopen:()=>{db.close();db=new DatabaseSync(file);},close:()=>db.close()};
 }
 test('HARDEN disk FIELD preserves legacy bytes; historical read never adopts old photo into current draft',async()=>{

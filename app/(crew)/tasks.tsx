@@ -137,14 +137,14 @@ export type TaskModeFilter = 'ALL' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
 
 export const TASK_MODE_FILTERS: { key: TaskModeFilter; label: string }[] = [
   { key: 'ALL', label: 'Tất cả' },
-  { key: 'INSPECT_AND_REPAIR', label: 'Đo & Sửa nhanh' },
-  { key: 'MEASURE_ONLY', label: 'Chỉ đo đợt' },
+  { key: 'INSPECT_AND_REPAIR', label: 'Đo kiểm, xét điều kiện sửa' },
+  { key: 'MEASURE_ONLY', label: 'Chỉ đo kiểm' },
 ];
 
 export const TASK_MODE_CHIP: Record<TaskMode | 'UNKNOWN', { variant: ChipVariant; label: string }> = {
   UNKNOWN: { variant: 'status-pending', label: 'Chưa xác định chế độ' },
-  INSPECT_AND_REPAIR: { variant: 'fast-track', label: 'Đo & Sửa nhanh' },
-  MEASURE_ONLY: { variant: 'measure-only', label: 'Chỉ đo đợt' },
+  INSPECT_AND_REPAIR: { variant: 'fast-track', label: 'Đo kiểm, xét điều kiện sửa' },
+  MEASURE_ONLY: { variant: 'measure-only', label: 'Chỉ đo kiểm' },
   INSPECT_ONLY: { variant: 'status-pending', label: 'Chỉ kiểm tra' },
 };
 
@@ -295,7 +295,7 @@ export default function CrewTasksScreen() {
 
                   <View style={styles.taskFooter}>
                     <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || crewModeLabel(task.rawMode)}</Text>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || 'Chưa có mã WO'}</Text>
                     </View>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>

@@ -13,11 +13,13 @@ test('HARDEN02 mounted Drone home has unknown safety, keeps real list fetch',asy
  assert.doesNotMatch(text(s),/Sẵn sàng bay|Thời tiết: An toàn bay|Thiết bị: Sẵn sàng/);
  assert.match(text(s),/Chưa có dữ liệu/);s.unmount();
 });
-for(const route of ['progress','complete'])test('HARDEN02 locked '+route+' has no dormant mutations or mock dependencies',()=>{
+for(const route of ['progress','complete'])test('HARDEN02 '+route+' uses one guarded NORMAL panel without dormant legacy mutations',()=>{
  const code=fs.readFileSync('app/(crew)/'+route+'.tsx','utf8');
  assert.doesNotMatch(code,/startRepairExecutionReal|finishRepairExecutionReal|submitRepairAttemptReal|stableUuid|api\/mock|enqueue\(/);
- const s=screen('app/(crew)/'+route+'.tsx',{modules:{'./tasks':{CrewTaskBoundary:'Boundary'}}});s.render();
- assert.match(text(s),/khóa|chưa được mở/);assert.equal(s.h.calls.length,0);s.unmount();
+ const s=screen('app/(crew)/'+route+'.tsx',{modules:{'./tasks':{...require('./helpers/crew-ui-labels.cjs'),CrewTaskBoundary:'Boundary'},'expo-router':{router:{}},'../../src/components/AppHeader':{AppHeader:'Header'},'../../src/components/Card':{Card:'Card'},'../../src/components/crew/NormalRepairPanel':{NormalRepairPanel:'Panel'}}});s.render();
+ const boundary=s.nodes().find(n=>n.type==='Boundary');assert.equal(boundary.props.operational,false);
+ const tree=boundary.props.children[0]({id:'task',projectId:'project',status:'Assigned',detail:{mode:'NORMAL'}});
+ assert.equal(JSON.stringify(tree).split('\"type\":\"Panel\"').length-1,1);assert.equal(s.h.calls.length,0);s.unmount();
 });
 test('HARDEN02 live task labels never load seed or invented HH prefix',()=>{
  const {harness}=require('./helpers/roadfe-screen.cjs'),h=harness();

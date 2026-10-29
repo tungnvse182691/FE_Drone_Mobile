@@ -64,7 +64,7 @@ export async function prepareRepairAssessment(i: RepairIdentity,draft: FieldDraf
   return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'assessment',key:r.uuid(),itemVersion:task.repairContext!.itemVersion,payload}));
 }
 export async function prepareRepairStart(i: RepairIdentity,r=repairRuntime(i)) {
-  const j=await guarded(i,r,()=>r.journal(i)),history=await guarded(i,r,()=>j.history());
+  const j=await guarded(i,r,()=>r.journal(i)),history=await guarded(i,r,()=>j.history()).then(rows=>rows.filter(row=>!row.rejectionResolved));
   if(history.some(c=>!['CONFIRMED','REJECTED'].includes(c.phase)))throw Error('repair_unresolved_command');
   const assessment=history.filter(c=>c.operation==='assessment').at(-1);
   if(assessment?.phase!=='CONFIRMED'||assessment.receipt?.data.readiness!=='READY')throw Error('repair_assessment_required');
@@ -147,13 +147,13 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
     if(['assessment','start'].includes(c.operation)&&first!==c.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
     validateRepairInput(c.operation as 'assessment'|'start'|'finish'|'attempt',c.payload);
     if(c.operation==='start') {
-      const previous=(await guarded(i,r,()=>j.history())).filter(row=>row.operation==='assessment').at(-1);
+      const previous=(await guarded(i,r,()=>j.history())).filter(row=>!row.rejectionResolved&&row.operation==='assessment').at(-1);
       if(!previous?.receipt || previous.phase!=='CONFIRMED' || previous.receipt.data.readiness!=='READY' ||
           previous.receipt.data.id!==c.payload.assessmentId || previous.receipt.itemVersion!==c.itemVersion)throw Error('repair_assessment_required');
       validateRepairReceipt(previous,previous.receipt.data,`"${previous.receipt.itemVersion}"`);
     }
     if(c.operation==='finish'||c.operation==='attempt') {
-      const history=await guarded(i,r,()=>j.history());
+      const history=(await guarded(i,r,()=>j.history())).filter(row=>!row.rejectionResolved);
       const previous=history.find(row=>row.operation===(c!.operation==='finish'?'start':'finish'));
       if(previous?.phase!=='CONFIRMED'||!previous.receipt||previous.receipt.data.id!==
         (c.operation==='finish'?c.payload.executionStartId:c.payload.executionFinishId)||
@@ -166,6 +166,7 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
         if(Object.entries(source).some(([k,v])=>c!.payload[k]!==v))throw Error('repair_claim_source_changed');
       }
     }
+    const firstDispatch=c.phase==='PREPARED';
     if(c.phase==='PREPARED') {
       const block=r.api.normalRepairBlock(task,response.etag,i.actor,c.operation as 'assessment'|'start'|'finish'|'attempt');
       if(block)throw Error(block);
@@ -189,9 +190,10 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
         guard(i,r);
         const error=e as {response?:{status?:number;data?:{code?:unknown}}};
         const status=error.response?.status;
-        if(status&&[400,403,404,409,412,422,428].includes(status)) {
+        // A replay rejection only describes this request, not an earlier unknown outcome.
+        if(firstDispatch&&status&&[400,403,404,422,428].includes(status)) {
           const code=error.response?.data?.code;
-          await guarded(i,r,()=>j.transition(key,'REJECTED',{rejection:{status,code:typeof code==='string'?code.slice(0,200):null}}));
+          await guarded(i,r,()=>j.transition(key,'REJECTED',{rejection:{status,code:typeof code==='string'?code.slice(0,200):null}},true));
         }
         throw e;
       }
@@ -207,15 +209,38 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
     return c;
   } finally {locks.delete(lock);}
 }
+/** Explicit user confirmation resolves a proved first-dispatch rejection; never sends HTTP mutation. */
+export async function resolveRepairRejection(i: RepairIdentity,key: string,r=repairRuntime(i)) {
+  const history=await readRepairHistory(i,r,true),command=history.find(c=>c.key===key);
+  if(!command||command.phase!=='REJECTED'||history.at(-1)?.key!==key||
+    history.some(c=>!['CONFIRMED','REJECTED'].includes(c.phase)))throw Error('repair_rejection_resolution_blocked');
+  const response=await fresh(i,r,command.identity),task=response.data;
+  const block=r.api.normalRepairBlock(task,response.etag,i.actor,command.operation as 'assessment'|'start'|'finish'|'attempt');
+  if(block)throw Error(block);
+  if(task.repairContext!.itemVersion!==command.itemVersion)throw Error('repair_reconciliation_pending');
+  const first=await firstStart(i,r,task);
+  if(['assessment','start'].includes(command.operation)&&first!==command.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
+  const prior=history.filter(c=>c.key!==key&&!c.rejectionResolved);
+  if(prior.some(c=>c.phase!=='CONFIRMED'))throw Error('repair_history_requires_reconciliation');
+  if(command.operation!=='assessment'){
+    const previous=prior.at(-1),required=command.operation==='start'?'assessment':command.operation==='finish'?'start':'finish';
+    const id=command.operation==='start'?command.payload.assessmentId:command.operation==='finish'?command.payload.executionStartId:command.payload.executionFinishId;
+    if(previous?.operation!==required||!previous.receipt||previous.receipt.data.id!==id||previous.receipt.itemVersion!==command.itemVersion)throw Error('repair_history_requires_reconciliation');
+  }
+  const j=await guarded(i,r,()=>r.journal(i));
+  await guarded(i,r,()=>j.resolveRejection(key,commandIdentity(i,task),task.repairContext!.itemVersion));
+}
 export async function readRepairFieldDraft(i: RepairIdentity) {
   const runtime=await openFieldRuntime(i);return loadFieldDraft(i,runtime);
 }
 export function repairErrorMessage(e: unknown): string {
   const status=(e as {response?:{status?:number}})?.response?.status;
   if(status===401||status===403)return 'Phiên hoặc quyền Crew không còn hợp lệ. Lệnh được giữ để đối soát.';
-  if(status===409||status===412||status===428)return 'Máy chủ từ chối phiên bản hoặc điều kiện lệnh. Không đổi key để gửi lại.';
+  if(status===409||status===412||status===428)return 'Chưa xác nhận kết quả do phiên bản hoặc điều kiện lệnh. Giữ nguyên lệnh và khóa gửi mới; đối soát lệnh gốc.';
   const code=e instanceof Error?e.message:'';
   const messages: Record<string,string>={
+    repair_rejection_proof_missing:'Chưa có bằng chứng lệnh cũ bị từ chối ở lần gửi đầu. Cần nguồn đối soát máy chủ cho khóa lệnh này; tiếp tục giữ khóa tạo mới.',
+    repair_rejection_resolution_blocked:'Chưa đủ bằng chứng giải quyết lệnh bị từ chối. Giữ nguyên lịch sử và khóa tạo lệnh mới.',
     repair_measurements_required:'Cần số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS quan sát.',
     repair_verified_evidence_required:'Cần ảnh BEFORE/MEASUREMENT đúng nháp Crew và VERIFIED từ máy chủ, khớp checksum.',
     repair_first_start_invalid:'First-start không khớp nhiệm vụ hoặc assignment hiện tại. Đã khóa lệnh.',
