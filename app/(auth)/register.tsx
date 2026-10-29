@@ -57,7 +57,8 @@ export default function ReporterRegisterScreen() {
   useFocusEffect(useCallback(() => {
     active.current = true;
     generation.current++;
-    return () => { active.current = false; generation.current++; };
+    const unsubscribe = useAuthStore.subscribe?.(() => { generation.current++; });
+    return () => { active.current = false; generation.current++; unsubscribe?.(); };
   }, []));
 
   const canSubmit =

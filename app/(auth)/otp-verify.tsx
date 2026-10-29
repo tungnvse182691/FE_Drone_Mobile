@@ -79,10 +79,15 @@ export default function OtpVerifyScreen() {
 
   useEffect(() => {
     setActiveIntentId(intentId);
+    setCode('');
+    setError(null);
+    const seconds = serverCooldown(params.resendAfterSeconds);
+    cooldownUntil.current = Date.now() + seconds * 1000;
+    setCooldown(seconds);
     if (intentId) {
       if (!useAuthStore.getState().token) beginOtp();
     }
-  }, [intentId, beginOtp]);
+  }, [intentId, params.resendAfterSeconds, beginOtp]);
 
   useEffect(() => {
     if (cooldown <= 0) {
@@ -181,6 +186,17 @@ export default function OtpVerifyScreen() {
       inputRef.current?.focus();
     } catch (err) {
       if (!isCurrent()) return;
+      const response = (err as { status?: number; response?: { status?: number; headers?: Record<string, unknown> } }).response;
+      if ((response?.status ?? (err as { status?: number }).status) === 429) {
+        const value = response?.headers?.['retry-after'];
+        const date = typeof value === 'string' ? Date.parse(value) : NaN;
+        const seconds = value != null && Number.isFinite(Number(value))
+          ? serverCooldown(value) : Number.isFinite(date) ? Math.max(0, Math.ceil((date - Date.now()) / 1000)) : RESEND_COOLDOWN;
+        cooldownUntil.current = Date.now() + seconds * 1000;
+        setCooldown(seconds);
+        setError('Đã có quá nhiều yêu cầu. Vui lòng chờ rồi thử lại.');
+        return;
+      }
       const code = extractProblemCode(err);
       setError(errorMessages[code] ?? 'Không thể gửi lại mã.');
     } finally {
@@ -200,7 +216,7 @@ export default function OtpVerifyScreen() {
           <View style={styles.titleBlock}>
             <Text style={[typography.titleLg, styles.title]}>Xác thực phản ánh dân sinh</Text>
             <Text style={[typography.caption, styles.subtitle]}>
-              Mã xác thực 6 số đã được gửi về email {email || 'của bạn'}. Vui lòng nhập mã để xác thực tài khoản.
+              Kiểm tra email {email || 'của bạn'} để lấy mã xác thực 6 số. Nếu mã hết hạn, hãy yêu cầu gửi lại khi hết thời gian chờ.
             </Text>
             <Text style={[typography.caption, styles.subtitle]} testID="otp-guest-draft-notice">{GUEST_DRAFT_NOTICE}</Text>
           </View>
