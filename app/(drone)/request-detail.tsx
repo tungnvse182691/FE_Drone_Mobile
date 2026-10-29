@@ -33,7 +33,7 @@ import {
 } from '../../src/api/operator-task-view';
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
-import { DRONE_TASK_COMMAND_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
+import { DroneTaskCommandPanel } from '../../src/components/drone/DroneTaskCommandPanel';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -84,7 +84,6 @@ export default function DroneRequestDetailScreen() {
   const [etag, setEtag] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [accepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const loadTask = useCallback(async () => {
@@ -135,9 +134,6 @@ export default function DroneRequestDetailScreen() {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${accessPoint.point.latitude},${accessPoint.point.longitude}`;
     Linking.openURL(url).catch(() => { if (scope.capture()()) setAcceptError('Không mở được ứng dụng bản đồ.'); });
   };
-
-  // API-227 remains blocked until immutable durable command/recovery exists.
-  const handleAcceptTask = () => setAcceptError(DRONE_TASK_COMMAND_BLOCK_REASON);
 
 /**
  * Từ chối nhiệm vụ được tách sang màn O-04 (`request-decline`) để gọi đúng contract
@@ -220,7 +216,7 @@ export default function DroneRequestDetailScreen() {
               <Text style={[typography.titleLg, styles.roadTitle]}>Nhiệm vụ khảo sát</Text>
             </View>
             <Chip
-              variant={task.status === 'Rejected' ? 'rejected' : 'status-pending'}
+              variant={task.status === 'REJECTED' ? 'rejected' : 'status-pending'}
               label={operatorTaskStatusLabel(task.status)}
               uppercase={false}
             />
@@ -326,18 +322,6 @@ export default function DroneRequestDetailScreen() {
         </Card>
 
         <View style={styles.actionContainer}>
-          <Text accessibilityRole="alert" style={typography.caption}>{DRONE_TASK_COMMAND_BLOCK_REASON}</Text>
-          {acceptError ? (
-            <Text style={[typography.caption, styles.pendingSyncNote]}>{acceptError}</Text>
-          ) : null}
-          <Button
-            variant="primary"
-            title="Tiếp nhận nhiệm vụ đang tạm khóa"
-            loading={accepting}
-            disabled={true}
-            onPress={handleAcceptTask}
-          />
-
           <Button
             variant="secondary"
             title="Xem gói công việc (chỉ đọc)"
@@ -358,7 +342,7 @@ export default function DroneRequestDetailScreen() {
           </Pressable>
 
           <Text style={[typography.caption, styles.syncFootnote]}>
-            Thông tin nhiệm vụ được đọc từ máy chủ. Tiếp nhận và từ chối sẽ được mở khi có cơ chế lưu lệnh và phục hồi an toàn.
+            Thông tin nhiệm vụ được đọc từ máy chủ. Lệnh tiếp nhận hoặc từ chối được lưu trước khi bạn xác nhận gửi.
           </Text>
         </View>
       </>
@@ -396,6 +380,8 @@ export default function DroneRequestDetailScreen() {
       }
     >
       {renderBody()}
+      {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
+      {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept" /> : null}
     </SafeAreaScreen>
   );
 }

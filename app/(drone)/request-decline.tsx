@@ -1,6 +1,6 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -8,7 +8,6 @@ import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
-import { Toast } from '../../src/components/Toast';
 import { DRONE_REQUEST_DETAIL, DRONE_REQUESTS } from '../../src/constants/routes';
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
@@ -24,13 +23,13 @@ import {
   operatorTaskStatusLabel,
   operatorTaskTargetBand,
 } from '../../src/api/operator-task-view';
-import { DRONE_TASK_COMMAND_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
+import { DroneTaskCommandPanel } from '../../src/components/drone/DroneTaskCommandPanel';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /**
  * O-04 — Từ chối nhiệm vụ khảo sát (API-230).
  *
- * Lệnh ghi đang khóa đến khi có durable immutable command/recovery.
+ * Lệnh ghi đi qua journal bất biến và xác nhận gửi riêng.
  * API-226/API-225 vẫn phục vụ đọc nhiệm vụ và gói công việc.
  * Việc điều phối lại/bổ sung thuộc về PM trên Web — Operator không được gọi.
  */
@@ -73,12 +72,6 @@ export default function DroneRequestDeclineScreen() {
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [reason, setReason] = useState('');
-  const [submitting] = useState(false);
-  const [blocked] = useState(false);
-  const [done] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-
   const loadDetail = useCallback(async () => {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
@@ -113,8 +106,9 @@ export default function DroneRequestDeclineScreen() {
     void loadDetail();
   }, [loadDetail]);
 
-  // API-230 stays blocked: changing reason/version must never reuse a sent key.
-  const handleSubmit = () => setToast(DRONE_TASK_COMMAND_BLOCK_REASON);
+  const point = workPackage?.accessPoint?.point;
+  const accessPoint = point && Number.isFinite(point.latitude) && Math.abs(point.latitude)<=90 &&
+    Number.isFinite(point.longitude) && Math.abs(point.longitude)<=180 ? point : null;
 
   const renderBody = () => {
     if (!scope.key || dataScope !== scope.key || loading) {
@@ -140,34 +134,13 @@ export default function DroneRequestDeclineScreen() {
       );
     }
 
-    if (done) {
-      return (
-        <Card style={styles.card}>
-          <View style={styles.doneHeader}>
-            <MaterialIcons name="check-circle" size={22} color={colors.success} />
-            <Text style={[typography.titleMd, styles.doneTitle]}>Đã gửi từ chối</Text>
-          </View>
-          <Text style={[typography.bodyMd, styles.doneText]}>
-            Máy chủ đã ghi nhận từ chối cho nhiệm vụ {operatorTaskDisplayCode(detail.id)}. PM sẽ
-            xem xét điều phối lại chuyến bay; bạn không cần thao tác thêm.
-          </Text>
-          <Button
-            variant="primary"
-            title="Về danh sách nhiệm vụ"
-            onPress={() => router.replace(DRONE_REQUESTS)}
-            style={styles.submitButton}
-          />
-        </Card>
-      );
-    }
 
     return (
       <>
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            Từ chối nhiệm vụ. Lý do từ chối được gửi tới PM để điều phối lại. Gửi lại nhiều lần
-            cũng không tạo yêu cầu trùng.
+            Từ chối nhiệm vụ. Lý do từ chối được gửi tới PM để điều phối lại. Chỉ gửi sau khi bạn xác nhận; gửi lại giữ nguyên yêu cầu đã lưu.
           </Text>
         </View>
 
@@ -177,7 +150,7 @@ export default function DroneRequestDeclineScreen() {
               {operatorTaskDisplayCode(detail.id)}
             </Text>
             <Chip
-              variant={detail.status === 'Rejected' ? 'rejected' : 'status-pending'}
+              variant={detail.status === 'REJECTED' ? 'rejected' : 'status-pending'}
               label={operatorTaskStatusLabel(detail.status)}
               uppercase={false}
             />
@@ -205,48 +178,13 @@ export default function DroneRequestDeclineScreen() {
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Điểm tiếp cận</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {workPackage?.accessPoint
-                ? `${workPackage.accessPoint.point.latitude.toFixed(6)}, ${workPackage.accessPoint.point.longitude.toFixed(6)}`
+              {accessPoint
+                ? `${accessPoint.latitude.toFixed(6)}, ${accessPoint.longitude.toFixed(6)}`
                 : 'Máy chủ chưa công bố'}
             </Text>
           </View>
         </Card>
 
-        <Text style={[typography.labelSm, styles.sectionTitle]}>LÝ DO TỪ CHỐI</Text>
-        <Card style={styles.card}>
-          <TextInput
-            style={styles.input}
-            value={reason}
-            onChangeText={setReason}
-            placeholder="Ví dụ: thời tiết không đảm bảo an toàn bay, đề nghị đổi khung giờ…"
-            placeholderTextColor={colors.secondary}
-            multiline
-            editable={!blocked}
-            accessibilityLabel="Lý do từ chối nhiệm vụ"
-          />
-          <Text style={[typography.caption, styles.helper]}>
-            Bắt buộc, tối thiểu 1 ký tự. Lý do được gửi tới PM để điều phối lại.
-          </Text>
-        </Card>
-
-        {blocked ? (
-          <View style={styles.warnNotice}>
-            <MaterialIcons name="lock" size={16} color={colors.warning} />
-            <Text style={[typography.caption, styles.warnText]}>
-              Không thể gửi từ chối cho nhiệm vụ này. Liên hệ PM/quản trị nếu cần hỗ trợ.
-            </Text>
-          </View>
-        ) : null}
-
-        <Text accessibilityRole="alert" style={typography.caption}>{DRONE_TASK_COMMAND_BLOCK_REASON}</Text>
-        <Button
-          variant="primary"
-          title="Gửi từ chối nhiệm vụ"
-          loading={submitting}
-          disabled={true}
-          onPress={() => void handleSubmit()}
-          style={styles.submitButton}
-        />
         <Button
           variant="text"
           title="Quay lại chi tiết nhiệm vụ"
@@ -283,8 +221,8 @@ export default function DroneRequestDeclineScreen() {
         }
       >
         {renderBody()}
+        {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="decline" /> : null}
       </SafeAreaScreen>
-      {toast ? <Toast type="error" message={toast} /> : null}
     </View>
   );
 }

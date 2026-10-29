@@ -17,6 +17,7 @@ import { initDatabase, openDatabase } from '../../src/offline/database';
 import { currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
 import { useAuthStore } from '../../src/store/auth';
 import { LocalState } from '../../src/types/enums';
+import { DroneTaskRecoveryList } from '../../src/components/drone/DroneTaskCommandPanel';
 
 /** Map `LocalState` → nhãn tiếng Việt + nhóm hiển thị. Không suy diễn trạng thái từ timer. */
 const STATE_PRESENTATION: Record<
@@ -147,6 +148,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ ngoại tuyến" />}>
+      <DroneTaskRecoveryList />
       {/* Toast Notification */}
       {toastMsg && (
         <View style={styles.toast}>

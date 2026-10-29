@@ -39,16 +39,16 @@ test('Drone production upload has no fixture device or unjournalled dispatch',()
   assert.ok(!screen.includes('await submitOperatorDatasetReal('));
   assert.match(screen,/DRONE_DATASET_BLOCK_REASON/);
 });
-test('Drone accept/decline have no unjournalled task mutation and show blocker',()=>{
+test('Drone accept/decline use shared durable panel without direct mutation',()=>{
   for(const [file,transport] of [['request-detail.tsx','acceptOperatorSurveyTaskReal'],['request-decline.tsx','declineOperatorSurveyTaskReal']]) {
     const source=fs.readFileSync(`app/(drone)/${file}`,'utf8');
     assert.ok(!source.includes(`await ${transport}(`));
-    assert.match(source,/DRONE_TASK_COMMAND_BLOCK_REASON/);
-    assert.match(source,/disabled=\{true\}/);
+    assert.match(source,/DroneTaskCommandPanel key=\{scope.key\} taskId=\{target\}/);
+    assert.doesNotMatch(source,/apiClient\.post|handleAcceptTask|handleSubmit/);
   }
 });
 test('Drone blocked production action handlers cannot call upload/dataset/accept/decline transport',async()=>{
-  for(const [file,handler] of [['request-detail.tsx','handleAcceptTask'],['request-decline.tsx','handleSubmit'],['upload.tsx','handleStartSubmitDataset']]) {
+  for(const [file,handler] of [['upload.tsx','handleStartSubmitDataset']]) {
     const source=fs.readFileSync(`app/(drone)/${file}`,'utf8');
     const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let expression;
     const visit=node=>{if(ts.isVariableDeclaration(node)&&node.name.getText(ast)===handler)expression=node.initializer.getText(ast);ts.forEachChild(node,visit);};visit(ast);assert.ok(expression);

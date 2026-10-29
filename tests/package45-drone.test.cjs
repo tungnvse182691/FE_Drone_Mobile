@@ -9,6 +9,7 @@ function drone(file,api={},extra={}) {
     '../../src/components/Chip':component('Chip'),'../../src/components/EmptyState':component('EmptyState'),
     '../../src/components/AnimatedPressable':component('AnimatedPressable'), '../../src/components/Toast':component('Toast'),
     '../../src/components/drone/DroneDatasetReadbackPanel':component('DroneDatasetReadbackPanel'),
+    '../../src/components/drone/DroneTaskCommandPanel':component('DroneTaskCommandPanel'),
     '../../src/api/droneApi':api,...extra.modules,
   }}); s.h.login('DRONE_OPERATOR',id(1)); return s;
 }
@@ -62,5 +63,12 @@ test('Drone read survives refresh status changes in same sid but not actor bounc
   if(bounce) assert.doesNotMatch(JSON.stringify(s.nodes()),/00000002/);
   else assert.match(JSON.stringify(s.nodes()),/00000002/);
   s.unmount();
+ }
+});
+
+test('Drone task recovery remains reachable even when current detail GET is forbidden',async()=>{
+ for(const file of ['request-detail','request-decline']) {
+  const s=drone(file,{getOperatorSurveyTaskDetailReal:async()=>{throw {response:{status:403}};}},{params:{taskId:id(2)}});
+  s.render();await s.flush();assert.ok(s.nodes().some(n=>n.type==='DroneTaskCommandPanel'&&n.props.taskId===id(2)));s.unmount();
  }
 });
