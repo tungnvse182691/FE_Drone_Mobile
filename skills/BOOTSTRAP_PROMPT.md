@@ -11,7 +11,7 @@
 **Các quy tắc canonical chỉ override tài liệu lịch sử; không đè owner/governance/current BE/evidence.**
 - **Thương hiệu:** Công ty TNHH Xây dựng Bê tông Hoàng Hải (`com.hoanghai.roadguard`, email nội bộ `@hoanghai.vn`). **Ghi chú:** 17_10 **KHÔNG định nghĩa** tiền tố `HH-` — không tự chế prefix.
 - **Quy tắc Logo:** Splash/Loading = `assets/logo_hoanghai.png` (có tên công ty); Màn trong/Header/Icon = `assets/logo_hoanghai_icon.png` (chỉ xe bồn, không chữ).
-- **Phân định Nền tảng:** Mobile app dành riêng cho **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`. Web Dashboard dành cho `PROJECT_MANAGER` và `SUPERVISOR` (màn hình PM/Supervisor cũ chuyển vào `archive/web-screens/`).
+- **Phân định Nền tảng:** Mobile app dành riêng cho **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`. Web Dashboard dành cho `PROJECT_MANAGER` và `SUPERVISOR`. Màn hình PM/Supervisor Mobile cũ đã gỡ khỏi `main` ngày 30/10/2026; khi cần chỉ tham khảo Git history commit `8df1740`, không tái tạo vào app Mobile.
 - **Hợp đồng Kỹ thuật Frontend (04_API-Contracts):** Áp dụng nghiêm ngặt `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` — **241 operations / 223 paths / 357 schemas / 47 controllers tại snapshot Phase2C 15/10/2026 (`36c3a1d273f17dd29b816136ae0182a821fd79e4`)** (operation ID `API-001` → `API-241`); types/schema tại `docs/specs/04_API-Contracts/03_DTO-and-Schema-Reference.md`.
 - **Nghiệp vụ Fast Track (US-33, BR-05/08/11..18/25):** 
   - `TaskMode`: `INSPECT_AND_REPAIR` vs `MEASURE_ONLY`.
@@ -77,10 +77,8 @@ FE_AppMobile/
       track.tsx                          # M-REP-03: Theo dõi trạng thái phản ánh của chính mình (17_10 KHÔNG có tra cứu công khai)
       feedback.tsx                       # M-REP-04: Đánh giá chất lượng nghiệm thu (1–5 sao + nhận xét)
 
-  archive/                               # Kho lưu trữ màn hình quản lý (chuyển giao cho Web Dashboard)
-    web-screens/
-      pm/                                # 14 màn hình Project Manager cũ
-      sup/                               # 7 màn hình Supervisor cũ
+  # Không còn thư mục archive/web-screens trên nhánh main. Màn PM/Supervisor Mobile cũ
+  # chỉ tồn tại trong Git history tại commit 8df1740 (tham khảo, không phải source đang chạy).
 
   src/
     types/
