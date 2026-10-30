@@ -3,9 +3,14 @@ import type { SQLiteBindValue } from 'expo-sqlite';
 import type { FastTrackPolicyVersion, RepairWorkOrder } from '../types/domain';
 
 const DB_NAME = 'roadguard.db';
+let database: SQLite.SQLiteDatabase | undefined;
+const initialization = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
 
 export function openDatabase(): SQLite.SQLiteDatabase {
-  return SQLite.openDatabaseSync(DB_NAME);
+  // Android's cached native handle may have been released by another JS wrapper.
+  // Own one dedicated connection per runtime, still opening the original database file.
+  // Callers borrow it: do not close/recreate it on navigation or account changes.
+  return database ??= SQLite.openDatabaseSync(DB_NAME, { useNewConnection: true });
 }
 
 const DDL = `
@@ -155,7 +160,19 @@ const COLUMN_MIGRATIONS: Array<{ table: string; column: string; definition: stri
   { table: 'offline_outbox', column: 'expected_version', definition: 'TEXT' },
 ];
 
-export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
+export function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
+  const pending = initialization.get(db);
+  if (pending) return pending;
+  const attempt = initializeDatabase(db).catch(error => {
+    // A failed initialization must fail closed, but a later explicit read can retry.
+    initialization.delete(db);
+    throw error;
+  });
+  initialization.set(db, attempt);
+  return attempt;
+}
+
+async function initializeDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(DDL);
   for (const migration of COLUMN_MIGRATIONS) {
     const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${migration.table})`);
