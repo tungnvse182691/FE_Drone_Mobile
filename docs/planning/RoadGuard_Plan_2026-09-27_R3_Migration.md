@@ -1,5 +1,7 @@
 # RoadGuard FE_AppMobile — Kế Hoạch & Bộ Prompt Chuyển Đổi R3 (27/09/2026 / 27_9_V2)
 
+> **LƯU Ý LỊCH SỬ (30/10/2026):** Đây là kế hoạch/prompt R3 cũ, không phải hướng dẫn thao tác hiện hành. `archive/web-screens/` được tạo trong đợt R3 nhưng đã gỡ khỏi `main` theo quyết định chủ dự án. Không tái tạo thư mục này khi làm FE Mobile; nếu cần đối chiếu màn PM/Supervisor cũ, tra commit `8df1740` trong Git history. Phân quyền và API hiện hành phải theo `AGENTS.md` và Backend được pin.
+
 > **Mục tiêu:** Cập nhật dự án `FE_AppMobile` theo đúng bộ tài liệu đặc tả chuẩn R3 V2 ban hành ngày 27/09/2026 (bổ sung bộ hợp đồng kỹ thuật chuyên sâu `09_Frontend`):
 > 1. Thu gọn phạm vi Mobile App xuống đúng **3 vai trò hiện trường**: `REPAIR_CREW`, `DRONE_OPERATOR`, `REPORTER`.
 > 2. Di chuyển các màn hình `PROJECT_MANAGER` và `SUPERVISOR` sang thư mục lưu trữ `archive/web-screens/` để phục vụ Web Dashboard riêng biệt.

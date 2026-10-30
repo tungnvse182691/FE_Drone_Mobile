@@ -19,7 +19,7 @@
      2. `DRONE_OPERATOR` (`(drone)`): Phi công điều khiển drone khảo sát (8 màn hình O-01 → O-08).
      3. `REPORTER` (`(reporter)`): Người dân phản ánh & Đại diện Ban QLDA (10 màn hình RPT-01 → RPT-10; đăng ký **email + password + OTP** theo `docs/specs/06_Mobile-Expo/Reporter/02_Authentication-OTP-and-Session.md`: API-010 → API-012/011 → API-002; bộ 17_10 KHÔNG định nghĩa mã tra cứu công khai/tracking).
    - **Role wire → route group adapter:** wire backend dùng `UserRoleCode.DroneOperator` / `UserRoleCode.RepairCrew` (xem `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`), app dùng `RoleCode.DRONE_OPERATOR` / `RoleCode.REPAIR_CREW` tại `src/types/enums.ts` — cần lớp adapter map wire→local; route group giữ nguyên.
-   - **Web Dashboard:** Phục vụ 2 vai trò quản lý: `PROJECT_MANAGER` (PM) và `SUPERVISOR` (Giám sát viên). Các màn hình PM và Supervisor cũ trên mobile được chuyển lưu trữ tại `archive/web-screens/` nhằm tập trung cho 3 vai trò hiện trường.
+   - **Web Dashboard:** Phục vụ 2 vai trò quản lý: `PROJECT_MANAGER` (PM) và `SUPERVISOR` (Giám sát viên). Các màn hình PM và Supervisor cũ không thuộc runtime Mobile; thư mục `archive/web-screens/` đã được gỡ khỏi nhánh hiện hành ngày 30/10/2026. Nếu cần tham khảo bản cũ cho Web Dashboard, tra cứu Git history tại commit `8df1740` (không coi đó là contract hiện hành).
 4. **Cơ chế Nghiệp vụ Fast Track & Task Mode (US-33, BR-05, BR-08, BR-11..18, BR-25):**
    - **Chế độ công việc (`TaskMode`):** tên enum/giá trị trên wire PHẢI verify lại trong `docs/specs/04_API-Contracts/02_Full-API-Catalog.md` và DTO liên quan — không suy diễn từ tài liệu cũ.
      - `INSPECT_AND_REPAIR`: Đo kiểm và được phép sửa nhanh nếu đủ điều kiện.
