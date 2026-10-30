@@ -89,9 +89,19 @@ test('Drone journal and shared panel runtime import graph has no cycle',()=>{
   }).filter(Boolean);edges.set(file,deps);deps.forEach(visit);
  }
  visit(path.resolve('src/components/drone/DroneTaskCommandPanel.tsx'));
+  for (const file of ['app/(drone)/log.tsx','app/(drone)/sync.tsx','app/(drone)/upload.tsx','src/components/drone/DroneDatasetReadbackPanel.tsx']) visit(path.resolve(file));
  const done=new Set(),stack=new Set();
  function dfs(file){assert.ok(!stack.has(file),'runtime cycle at '+file);if(done.has(file))return;stack.add(file);(edges.get(file)||[]).forEach(dfs);stack.delete(file);done.add(file);}
  edges.forEach((_,file)=>dfs(file));
+});
+
+test('Drone command panel can reopen failed storage without dispatch or losing saved command',async()=>{
+ let opens=0,sends=0;
+ const s=screen('src/components/drone/DroneTaskCommandPanel.tsx',{exportName:'DroneTaskCommandPanel',props:{taskId:id(2),operation:'accept'},modules:{
+ '../../api/droneTaskJournal':{openDroneTaskJournal:async()=>{if(++opens===1)throw Error('storage');return {close(){},read:async()=>({command:{key:id(9),operation:'accept',payload:{}},phase:'UNKNOWN_OUTCOME'}),dispatch:async()=>sends++};}},
+ '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Button':{Button:'Button'},'../Card':{Card:'Card'},'../../design-tokens':{typography:{},spacing:{},colors:{}}
+ }});
+ s.render();await s.flush();await s.press('Thử mở lại lịch sử yêu cầu');await s.flush();assert.equal(opens,2);assert.equal(sends,0);assert.ok(s.nodes().some(n=>n.type==='Button'&&n.props.title==='Xác nhận gửi lệnh đã lưu'));s.unmount();
 });
 
 test('Drone HTTP failures never issue a new key or infer success from a task GET',async()=>{

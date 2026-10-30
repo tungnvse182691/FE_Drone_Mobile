@@ -6,6 +6,8 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { DroneDatasetReadbackPanel } from '../../src/components/drone/DroneDatasetReadbackPanel';
+import { DroneTaskRecoveryList } from '../../src/components/drone/DroneTaskCommandPanel';
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import { useAuthStore } from '../../src/store/auth';
 import { apiClient } from '../../src/api/client';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
@@ -33,8 +35,12 @@ function requireScope(scope: string) {
 export async function readOperatorLogResource(scope: string, kind: 'task' | 'upload', id: string) {
   requireScope(scope);
   if (!uuid(id)) throw Error('invalid_id');
+  let invalidated = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (operatorLogScope() !== scope) invalidated = true; });
+  try {
   const result = kind === 'upload' ? await getOperatorUploadSessionReal(id)
     : (await getOperatorSurveyTaskDetailReal(id)).data;
+  if (invalidated) throw Error('operator_session_changed');
   requireScope(scope);
   if (!result || result.id !== id || typeof result.status !== 'string' || !result.status.trim())
     throw Error('readback_identity_or_status_missing');
@@ -43,6 +49,7 @@ export async function readOperatorLogResource(scope: string, kind: 'task' | 'upl
       throw Error('task_owner_or_identity_mismatch');
   } else if (!('fileId' in result) || !uuid(result.fileId)) throw Error('readback_identity_missing');
   return result;
+  } finally { unsubscribe(); }
 }
 export default function DroneLogScreen() {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
@@ -51,6 +58,7 @@ export default function DroneLogScreen() {
   return <DroneLogContent key={scope} scope={scope} />;
 }
 function DroneLogContent({ scope }: { scope: string }) {
+  const readScope = useOperatorReadScope('log');
   const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
   const [listError, setListError] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
@@ -63,31 +71,33 @@ function DroneLogContent({ scope }: { scope: string }) {
   const active = () => mounted.current && operatorLogScope() === scope;
   useEffect(() => {
     let cancelled = false;
+    const isCurrent = readScope.capture();
     setListError(null);
     void listOperatorSurveyTasksReal(null, 50).then(page => {
-      if (!cancelled && active()) setTasks(page.items);
-    }).catch(() => { if (!cancelled && active()) setListError('Chưa đọc được danh sách nhiệm vụ.'); });
+      if (!cancelled && active() && isCurrent()) setTasks(page.items);
+    }).catch(() => { if (!cancelled && active() && isCurrent()) setListError('Chưa đọc được danh sách nhiệm vụ.'); });
     return () => { cancelled = true; };
-  }, [scope, listRevision]);
+  }, [scope, listRevision, readScope.capture]);
   const check = async (kind: 'task' | 'upload') => {
-    if (lock.current || !active()) return;
+    const isCurrent = readScope.capture();
+    if (lock.current || !active() || !isCurrent()) return;
     lock.current = true; setBusy(true); setError(null);
     const id = (kind === 'task' ? taskId : uploadId).trim();
     if (kind === 'task') setTaskText(null); else setUploadText(null);
     try {
       const result = await readOperatorLogResource(scope, kind, id);
-      if (!active()) return;
+      if (!active() || !isCurrent()) return;
       if (kind === 'upload') {
         // A server upload status is not a flight receipt, dataset acceptance or repair completion.
         setUploadText(`Phiên ${result.id}: ${STATUS_LABELS[result.status.toLowerCase()] ?? 'Trạng thái chưa được hỗ trợ'}`);
       } else setTaskText(`Nhiệm vụ ${result.id}: ${result.status}`);
     } catch (e) {
-      if (!active()) return;
+      if (!active() || !isCurrent()) return;
       const status = (e as { response?: { status?: number } }).response?.status;
       setError(status === 401 ? 'Phiên hết hạn. Vui lòng đăng nhập lại.' : status === 403 ? 'Bạn không có quyền đọc dữ liệu này.' : status === 404 ? 'Không tìm thấy dữ liệu.' : 'Chưa đọc được dữ liệu. Kiểm tra mã định danh, kết nối và thử lại.');
     } finally {
       lock.current = false;
-      if (active()) setBusy(false);
+      if (active() && isCurrent()) setBusy(false);
     }
   };
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhật ký" />}>
@@ -95,6 +105,7 @@ function DroneLogContent({ scope }: { scope: string }) {
       <Pressable onPress={() => router.push('/(drone)/requests')} accessibilityRole="button"><Text style={typography.labelSm}>Yêu cầu mới</Text></Pressable>
       <Text style={[typography.labelSm, styles.active]}>Nhật ký chuyến bay</Text>
     </View>
+    <DroneTaskRecoveryList />
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Lịch sử chuyến bay</Text>
       <Text style={typography.bodyMd}>Chưa có nguồn lịch sử chuyến bay từ máy chủ. Không có dữ liệu để hiển thị.</Text>

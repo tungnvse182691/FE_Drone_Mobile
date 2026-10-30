@@ -17,6 +17,7 @@ export function DroneTaskCommandPanel({taskId, operation}: {taskId: string; oper
   const [ready,setReady] = useState(false), [busy,setBusy] = useState(false), [reason,setReason] = useState('');
   const [error,setError] = useState<string | null>(null), [current,setCurrent] = useState<string | null>(null);
   const [canPrepare,setCanPrepare] = useState(false);
+  const [revision,setRevision] = useState(0);
   const lock = useRef(false);
   const [dataScope,setDataScope] = useState<string | null>(null);
   useEffect(() => {
@@ -35,10 +36,10 @@ export function DroneTaskCommandPanel({taskId, operation}: {taskId: string; oper
             if (!cancelled && isCurrent()) {setCurrent(operatorTaskStatusLabel(task.status));setCanPrepare(['NEW_ASSIGNED','REASSIGNED'].includes(task.status));}
           } catch { if(!cancelled&&isCurrent())setError('Chưa đọc được phân công hiện hành. Hãy đọc lại trạng thái trước khi chuẩn bị lệnh.'); }
         }
-      } catch { opened?.close(); if (!cancelled && isCurrent()) setError('Không đọc được lịch sử yêu cầu. Dữ liệu vẫn được giữ; hãy mở lại màn hình.'); }
+      } catch { opened?.close(); if (!cancelled && isCurrent()) setError('Không đọc được lịch sử yêu cầu. Dữ liệu vẫn được giữ; có thể thử mở lại.'); }
     })();
     return () => { cancelled=true; opened?.close(); };
-  }, [taskId,scope.key,scope.capture]);
+  }, [taskId,scope.key,scope.capture,revision]);
   const run = async (action: 'prepare' | 'dispatch' | 'read') => {
     const isCurrent=scope.capture();
     if (dataScope !== scope.key || !runtime || !ready || lock.current || !isCurrent()) return;
@@ -85,6 +86,7 @@ export function DroneTaskCommandPanel({taskId, operation}: {taskId: string; oper
     <Button variant="secondary" title="Đọc trạng thái nhiệm vụ hiện hành" disabled={busy||!ready} onPress={()=>void run('read')} />
     {current?<Text>Trạng thái hiện hành: {current}</Text>:null}
     {error?<View accessibilityRole="alert"><Text>{error}</Text></View>:null}
+    {!ready&&error?<Button variant="secondary" title="Thử mở lại lịch sử yêu cầu" onPress={()=>{if(scope.capture()())setRevision(v=>v+1);}} />:null}
   </Card>;
 }
 

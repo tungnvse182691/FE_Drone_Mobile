@@ -34,3 +34,12 @@ test('Drone sync reports read errors without success and can reopen storage afte
  await button().props.onPress();await s.flush();assert.ok(opens>=2);assert.ok(reads>0);assert.match(JSON.stringify(s.nodes()),/Không đọc được/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã đọc lại dữ liệu/);
  failRead=false;await button().props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes()),/Đã đọc lại dữ liệu/);s.unmount();
 });
+
+test('Drone log rejects a late list after actor leaves and returns to the same session',async()=>{
+ let sessionIdentity; const d=deferred(),props={scope:''},s=drone('log',{listOperatorSurveyTasksReal:()=>d.promise},{exportName:'DroneLogContent',expose:'DroneLogContent',props,modules:{'../../src/api/authApi':{passwordSessionIdentity:t=>sessionIdentity(t)}}});
+ // Use the actual exported scope from the running auth fixture.
+ sessionIdentity=s.h.load('src/api/authApi.ts').passwordSessionIdentity;const current=s.h.getAuth();props.scope=JSON.stringify([null,sessionIdentity(current.token)]);
+ s.render();s.h.login('DRONE_OPERATOR',id(9));s.h.changeAuth(current);
+ d.resolve({items:[{id:id(2),status:'ACCEPTED'}]});await s.flush();
+ assert.ok(!s.nodes().some(n=>n.type==='Pressable'&&JSON.stringify(n).includes('00000002')));s.unmount();
+});
