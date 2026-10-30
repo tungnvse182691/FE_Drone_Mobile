@@ -69,6 +69,7 @@ export default function DroneUploadScreen() {
   const [srtUri, setSrtUri] = useState<string | null>(null);
   const [savedFiles, setSavedFiles] = useState<(DroneLocalFile & {availability: string})[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [copying, setCopying] = useState(false);
   const picking = useRef(false);
 
   const refreshFiles = async () => {
@@ -95,7 +96,7 @@ export default function DroneUploadScreen() {
   };
   const restoreFile = async (key: string) => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || !params.taskId) return;
+    if (!isCurrent() || !params.taskId || picking.current) return;
     let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
     try {
       runtime = await openDroneLocalFiles(params.taskId);
@@ -117,7 +118,7 @@ export default function DroneUploadScreen() {
     setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
     setUploadProgress(0); setSubmitError(null);
     setNote('');
-    setSavedFiles([]); setFileError(null);
+    setSavedFiles([]); setFileError(null); setCopying(false);
     void refreshFiles();
   }, [scope.key]);
 
@@ -126,7 +127,7 @@ export default function DroneUploadScreen() {
     const isCurrent = scope.capture();
     if (!isCurrent() || picking.current) return;
     if (!params.taskId) { setSubmitError('Chọn nhiệm vụ máy chủ trước khi lưu tệp.'); return; }
-    picking.current = true;
+    picking.current = true; setCopying(true);
     let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -142,7 +143,7 @@ export default function DroneUploadScreen() {
         selectFile(file); setSubmitError(null);
       }
     } catch { if (isCurrent()) setSubmitError('Không lưu được tệp đầy đủ. Lựa chọn trước và lịch sử vẫn được giữ; kiểm tra dung lượng rồi chọn lại MP4/SRT.'); }
-    finally { runtime?.close(); picking.current = false; if (isCurrent()) await refreshFiles(); }
+    finally { runtime?.close(); picking.current = false; if (isCurrent()) {setCopying(false);await refreshFiles();} }
   };
   const handlePickVideo = () => pickFile('VIDEO');
   const handlePickSrt = () => pickFile('TELEMETRY');
@@ -194,10 +195,12 @@ export default function DroneUploadScreen() {
       </View>
       <Card>
         <Text style={typography.titleMd}>Tệp đã lưu cho nhiệm vụ</Text>
+        {copying && <Text accessibilityRole="alert">Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text>}
+        <Text style={typography.caption}>MP4 tối đa 8 GiB; SRT tối đa 10 MiB theo giới hạn máy chủ đã đối chiếu.</Text>
         <Text style={typography.caption}>Cùng tài khoản và máy chủ. Tệp từ phiên cũ cần chọn lại chủ động; chưa tính mã băm, chưa tải lên, chưa được máy chủ xác minh.</Text>
         {savedFiles.map(file => <View key={file.key}>
           <Text>{file.name} · {file.availability === 'LOCAL_UNHASHED' ? 'Bản sao trên thiết bị' : file.availability === 'INCOMPLETE' ? 'Bản sao chưa đầy đủ' : 'Không tìm thấy tệp trên thiết bị'}</Text>
-          <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={file.availability !== 'LOCAL_UNHASHED'} onPress={() => restoreFile(file.key)} />
+          <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={copying || file.availability !== 'LOCAL_UNHASHED'} onPress={() => restoreFile(file.key)} />
         </View>)}
         {!savedFiles.length && <Text>Chưa có tệp đã lưu trong phạm vi này.</Text>}
         {fileError && <Text accessibilityRole="alert">{fileError}</Text>}
@@ -392,6 +395,7 @@ export default function DroneUploadScreen() {
           <Pressable
             style={styles.pickFileBtn}
             onPress={handlePickVideo}
+            disabled={copying}
             accessibilityRole="button"
           >
             <MaterialIcons name="folder-open" size={14} color={colors.neutral} />
@@ -433,6 +437,7 @@ export default function DroneUploadScreen() {
           <Pressable
             style={styles.pickFileBtn}
             onPress={handlePickSrt}
+            disabled={copying}
             accessibilityRole="button"
           >
             <MaterialIcons name="folder-open" size={14} color={colors.neutral} />

@@ -8,7 +8,7 @@ test('Drone upload preserves picker bytes before displaying selection and reopen
   '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[saved],preserve:async()=>{writes++;return d.promise;},close(){}})}}});
  s.render();await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/retained.mp4/);
  const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp SD'))).props.onPress();
- await s.flush();assert.equal(writes,1);assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/new.mp4/);
+ await s.flush();assert.equal(writes,1);assert.match(JSON.stringify(s.nodes()),/Đang chọn hoặc sao lưu tệp/);assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/new.mp4/);
  d.resolve({...saved,name:'new.mp4'});await pending;await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/new.mp4/);
  await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/retained.mp4/);s.unmount();
 });

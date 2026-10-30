@@ -58,7 +58,9 @@ export async function openDroneLocalFiles(taskId: string) {
       if (!['VIDEO','TELEMETRY'].includes(kind) || !/^(file|content):\/\//.test(asset.uri) ||
         !asset.name || !(kind === 'VIDEO' ? /\.mp4$/i : /\.srt$/i).test(asset.name)) throw Error('drone_file_invalid');
       const source = new File(asset.uri), size = source.size;
-      if (!source.exists || !Number.isSafeInteger(size) || size <= 0 || size > 34359738368 ||
+      // UploadAdmissionPolicy at BE 01cc4725: per-file limits, not the dataset total.
+      const maximum = kind === 'VIDEO' ? 8 * 1024 ** 3 : 10 * 1024 ** 2;
+      if (!source.exists || !Number.isSafeInteger(size) || size <= 0 || size > maximum ||
         (asset.size !== undefined && asset.size !== size)) throw Error('drone_file_size_invalid');
       const current = await getOperatorSurveyTaskDetailReal(taskId); guard();
       const t = current.data;

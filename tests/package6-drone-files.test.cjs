@@ -4,19 +4,19 @@ const {DatabaseSync}=require('node:sqlite'),{randomUUID}=require('node:crypto');
 const {pathToFileURL,fileURLToPath}=require('node:url');
 const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 function fixture(){
- const root=fs.mkdtempSync(path.resolve('.cache/drone-files-')),dbPath=path.join(root,'draft.db');let disk;
+ const root=fs.mkdtempSync(path.resolve('.cache/drone-files-')),dbPath=path.join(root,'draft.db');let disk,sourceSize;
  const reopen=()=>{disk?.close();disk=new DatabaseSync(dbPath);disk.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');};reopen();
  const db={runAsync:async(sql,...args)=>disk.prepare(sql).run(...args),getAllAsync:async(sql,...args)=>disk.prepare(sql).all(...args)};
  const listeners=new Set();let actor=id(1),sid='A',env='https://fixture.test',copy=async(from,to)=>fs.copyFileSync(from,to,fs.constants.COPYFILE_EXCL);
  const docs=pathToFileURL(root+path.sep).href;
- class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}}
+ class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}}
  class Directory extends File {create(){fs.mkdirSync(fileURLToPath(this.uri),{recursive:true});}}
  const task={id:id(2),projectId:id(3),operatorId:actor,version:'AAAAAAAAAAE='};
  const deps={'expo-file-system':{File,Directory,Paths:{document:{uri:docs}}},'expo-crypto':{randomUUID},'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../store/auth':{useAuthStore:{getState:()=>({token:sid,status:'AUTHENTICATED',user:{id:actor,role_code:'DRONE_OPERATOR'}}),subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([actor,sid])},'./client':{apiClient:{defaults:{get baseURL(){return env;}}}},'./droneApi':{getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:`"${task.version}"`})}};
  const mod={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneLocalFiles.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date});
  const source=path.join(root,'source.mp4');fs.writeFileSync(source,Buffer.from([1,2,3,4]));
- return {api:mod.exports,reopen,task,source,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners};
+ return {api:mod.exports,reopen,task,source,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n};
 }
 test('Drone private copy and immutable ownership survive restart/relogin without upload or fake checksum',async()=>{
  const f=fixture(),r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',f.asset);r.close();
@@ -45,3 +45,5 @@ test('Drone rejects wrong task ownership, unsafe URI and invalid/changed source 
  for(const asset of [{...f.asset,uri:'https://external.test/file.mp4'},{...f.asset,size:5},{...f.asset,name:'not-video.txt'}])await assert.rejects(r.preserve('VIDEO',asset));
  assert.equal(f.rows().length,0);f.task.operatorId=id(8);await assert.rejects(r.preserve('VIDEO',f.asset));assert.equal(f.rows().length,0);r.close();
 });
+
+test('Drone local preservation rejects files above pinned per-purpose BE limits before writing metadata',async()=>{for(const [kind,name,size] of [['VIDEO','large.mp4',8*1024**3+1],['TELEMETRY','large.srt',10*1024**2+1]]){const f=fixture(),r=await f.api.openDroneLocalFiles(id(2));f.sourceSize(size);let copied=0;f.copy(async()=>{copied++;throw Error('must not copy');});await assert.rejects(r.preserve(kind,{...f.asset,name,size}));assert.equal(f.rows().length,0);assert.equal(copied,0);r.close();}});
