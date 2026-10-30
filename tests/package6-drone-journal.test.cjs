@@ -123,3 +123,20 @@ test('Drone panel locks double confirmation while original POST is unresolved',a
  s.render();await s.flush();const first=s.press('Xác nhận gửi lệnh đã lưu');await s.press('Xác nhận gửi lệnh đã lưu');assert.equal(sends,1);
  d.resolve();await first;await s.flush();s.unmount();
 });
+
+test('Drone separate runtimes cannot replay while the original transport is still running',async()=>{
+ const f=fixture(),first=await f.api.openDroneTaskJournal(id(2)),c=await first.prepare('accept');
+ const second=await f.api.openDroneTaskJournal(id(2)),d=deferred();let started;
+ const sending=new Promise(resolve=>{started=resolve;});
+ f.send(async()=>{if(f.posts.length > 1) throw Error('duplicate_transport');started();return d.promise;});
+ const pending=first.dispatch(c.key,true);await sending;
+ // Closing a screen must not release a still-running transport lock.
+ first.close();
+ await assert.rejects(second.dispatch(c.key,true),/drone_command_busy/);
+ assert.equal(f.posts.length,1);
+ d.resolve({data:{...f.task,status:'ACCEPTED',version:'AAAAAAAAAAI='},headers:{etag:'"AAAAAAAAAAI="'}});
+ await assert.rejects(pending,/drone_session_changed/);
+ assert.equal((await second.read()).phase,'UNKNOWN_OUTCOME');
+ f.send(async()=>({data:{...f.task,status:'ACCEPTED',version:'AAAAAAAAAAI='},headers:{etag:'"AAAAAAAAAAI="'}}));
+ await second.dispatch(c.key,true);assert.equal(f.posts.length,2);assert.deepEqual(f.posts[0],f.posts[1]);second.close();
+});

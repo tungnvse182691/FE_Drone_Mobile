@@ -10,6 +10,9 @@ type Command = { schema: 1; environment: string; actor: string; session: string;
   key: string; operation: Operation; version: string; payload: Record<string, string>; source: SurveyTaskV2ResponseDto };
 type Outcome = { phase: 'PREPARED' | 'UNKNOWN_OUTCOME' | 'RECEIPT'; receipt?: { data: SurveyTaskV2ResponseDto; etag: string } };
 const KIND = 'DRONE_TASK_COMMAND', STATE = 'DRONE_TASK_OUTCOME';
+// A task may be open in detail, decline and recovery screens at once. Keep the
+// lock until transport settles, even if its originating screen/session closes.
+const activeCommands = new Set<string>();
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) && v !== '00000000-0000-0000-0000-000000000000';
 const version = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/.test(v);
 function identity() {
@@ -28,7 +31,7 @@ function validateTask(task: SurveyTaskV2ResponseDto, actor: string, taskId: stri
 export async function openDroneTaskJournal(taskId: string) {
   const owner = identity();
   if (!owner || !uuid(taskId)) throw Error('drone_session_invalid');
-  let closed = false, invalidated = false, busy = false;
+  let closed = false, invalidated = false;
   const unsubscribe = useAuthStore.subscribe(() => { if (JSON.stringify(identity()) !== JSON.stringify(owner)) invalidated = true; });
   const guard = () => { if (closed || invalidated || JSON.stringify(identity()) !== JSON.stringify(owner)) throw Error('drone_session_changed'); };
   const close = () => { closed = true; unsubscribe(); };
@@ -69,8 +72,8 @@ export async function openDroneTaskJournal(taskId: string) {
     return { command, ...outcome };
   };
   const exclusive = async <T,>(fn: () => Promise<T>): Promise<T> => {
-    guard(); if (busy) throw Error('drone_command_busy'); busy = true;
-    try { return await fn(); } finally { busy = false; }
+    guard(); if (activeCommands.has(prefix)) throw Error('drone_command_busy'); activeCommands.add(prefix);
+    try { return await fn(); } finally { activeCommands.delete(prefix); }
   };
   return { close, read,
     readCurrent: async () => {

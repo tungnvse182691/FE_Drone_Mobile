@@ -6,6 +6,7 @@ const ts = require('typescript');
 const id = n => `${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 function harness() {
   let identity = 'session-A', actor = id(1), role = 'DRONE_OPERATOR', environment = 'test-A';
+  const listeners = new Set();
   const calls = [];
   const scope = {routeVersionId:id(5),segmentSetId:id(6),segmentIds:[id(7)],targetBand:'SURFACE'};
   const task = {id:id(2),operatorId:actor,projectId:id(3),scope:[scope],version:'task-version',status:'SUBMITTED'};
@@ -16,8 +17,8 @@ function harness() {
   const load = () => {
     const module = {exports:{}};
     vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneDatasetWorkflow.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module,exports:module.exports,require:name=>{
-      if(name === './client') return {get API_BASE_URL(){return environment;}};
-      if(name === '../store/auth') return {useAuthStore:{getState:()=>({token:identity,status:'AUTHENTICATED',user:{id:actor,role_code:role}})}};
+      if(name === './client') return {API_BASE_URL:'configured-default',apiClient:{defaults:{get baseURL(){return environment;}}}};
+      if(name === '../store/auth') return {useAuthStore:{getState:()=>({token:identity,status:'AUTHENTICATED',user:{id:actor,role_code:role}}),subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}}};
       if(name === './authApi') return {passwordSessionIdentity:t=>t ? JSON.stringify([actor,t]) : null};
       if(name === './droneApi') return {
         getOperatorSurveyTaskDetailReal:async()=>{calls.push('task');return respond('task');},
@@ -29,8 +30,15 @@ function harness() {
     Object.assign(api,module.exports);
   };
   load();
-  return {api,calls,task,dataset,coverage,respond:f=>respond=f,switchSession:()=>{identity='session-B';},switchEnvironment:()=>{environment='test-B';},wrongRole:()=>{role='REPAIR_CREW';}};
+  return {api,calls,task,dataset,coverage,respond:f=>respond=f,switchSession:()=>{identity='session-B';listeners.forEach(f=>f());},bounce:()=>{identity='session-B';listeners.forEach(f=>f());identity='session-A';listeners.forEach(f=>f());},switchEnvironment:()=>{environment='test-B';},wrongRole:()=>{role='REPAIR_CREW';},listeners};
 }
+
+test('Drone readback invalidates an ABA session bounce and releases its subscription',async()=>{
+ const h=harness(),scope=h.api.operatorDatasetScope();
+ h.respond(async kind=>{if(kind==='dataset'){h.bounce();return {data:h.dataset,etag:'"dataset-version"'};}return kind==='task'?{data:h.task,etag:'"task-version"'}:h.coverage;});
+ await assert.rejects(h.api.readOperatorDatasetReadback(scope,id(4)),/operator_session_changed/);
+ assert.deepEqual(h.calls,['dataset']);assert.equal(h.listeners.size,0);
+});
 test('Drone production upload has no fixture device or unjournalled dispatch',()=>{
   const screen=fs.readFileSync('app/(drone)/upload.tsx','utf8');
   assert.ok(!screen.includes('FIXTURE_DRONE_DEVICE_ID'));
@@ -61,6 +69,13 @@ test('Drone dataset read validates source and returns independent coverage statu
   const h=harness(); const result=await h.api.readOperatorDatasetReadback(h.api.operatorDatasetScope(),id(4));
   assert.equal(result.dataset.id,id(4));assert.equal(result.coverage.items[0].overallCoverage,'PASS');
   assert.deepEqual(h.calls,['dataset','task','coverage','dataset']);
+});
+
+test('Drone dataset can cover an authorized subset of the task while coverage must match the dataset',async()=>{
+ const h=harness();h.task.scope=[{...h.task.scope[0],segmentIds:[id(7),id(10)]}];
+ assert.equal((await h.api.readOperatorDatasetReadback(h.api.operatorDatasetScope(),id(4))).dataset.id,id(4));
+ h.dataset.scope=[{...h.dataset.scope[0],segmentIds:[id(99)]}];
+ await assert.rejects(h.api.readOperatorDatasetReadback(h.api.operatorDatasetScope(),id(4)),/dataset_task_mismatch/);
 });
 test('Drone wrong role, missing session and invalid dataset cannot dispatch',async()=>{
   const h=harness(),scope=h.api.operatorDatasetScope();

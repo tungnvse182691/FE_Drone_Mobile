@@ -1,5 +1,5 @@
 import { useAuthStore } from '../store/auth';
-import { API_BASE_URL } from './client';
+import { apiClient } from './client';
 import { passwordSessionIdentity } from './authApi';
 import { getOperatorDatasetReal, getOperatorDatasetCoverageReal, getOperatorSurveyTaskDetailReal, type BandScopeDto } from './droneApi';
 
@@ -19,7 +19,7 @@ export function operatorDatasetScope(): string | null {
   if (!identity || !isDroneResourceId(state.user?.id) || JSON.parse(identity)[0] !== state.user.id ||
       state.user.role_code !== 'DRONE_OPERATOR' || state.user.must_change_password ||
       !['AUTHENTICATED', 'REFRESHING'].includes(state.status)) return null;
-  return JSON.stringify([API_BASE_URL, identity]);
+  return JSON.stringify([apiClient.defaults.baseURL, identity]);
 }
 
 function requireScope(scope: string) {
@@ -42,8 +42,12 @@ function scopeKeys(scopes: BandScopeDto[]): string[] {
 export async function readOperatorDatasetReadback(scope: string, datasetId: string) {
   requireScope(scope);
   if (!isDroneResourceId(datasetId)) throw Error('invalid_dataset_id');
+  let invalidated = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (operatorDatasetScope() !== scope) invalidated = true; });
+  const guard = () => { if (invalidated) throw Error('operator_session_changed'); requireScope(scope); };
+  try {
   const first = await getOperatorDatasetReal(datasetId);
-  requireScope(scope);
+  guard();
   const dataset = first.data;
   const actorId = useAuthStore.getState().user?.id;
   if (!dataset || dataset.id !== datasetId || !isDroneResourceId(dataset.surveyTaskId) ||
@@ -52,21 +56,22 @@ export async function readOperatorDatasetReadback(scope: string, datasetId: stri
       !text(dataset.integrityStatus) || !text(dataset.telemetryStatus)) throw Error('dataset_source_mismatch');
   const pins = scopeKeys(dataset.scope);
   const task = await getOperatorSurveyTaskDetailReal(dataset.surveyTaskId);
-  requireScope(scope);
+  guard();
   if (task.data?.id !== dataset.surveyTaskId || task.data.operatorId !== actorId ||
       task.data.projectId !== dataset.projectId || !text(task.data.version) || task.etag !== `"${task.data.version}"` ||
-      JSON.stringify(scopeKeys(task.data.scope)) !== JSON.stringify(pins)) throw Error('dataset_task_mismatch');
+      !pins.every(pin => scopeKeys(task.data.scope).includes(pin))) throw Error('dataset_task_mismatch');
   const coverage = await getOperatorDatasetCoverageReal(datasetId);
-  requireScope(scope);
+  guard();
   if (!coverage || coverage.datasetId !== datasetId || !text(coverage.methodVersion) ||
       !Array.isArray(coverage.items) || !coverage.items.length ||
       coverage.items.some(item => !item || !text(item.positionCoverage) || !text(item.qualityCoverage) ||
         !text(item.overallCoverage) || !Array.isArray(item.reasons) || !item.reasons.every(text)) ||
       JSON.stringify(scopeKeys(coverage.items.map(item => item.scope))) !== JSON.stringify(pins)) throw Error('coverage_source_mismatch');
   const final = await getOperatorDatasetReal(datasetId);
-  requireScope(scope);
+  guard();
   if (final.data?.id !== datasetId || final.data.version !== dataset.version || final.etag !== first.etag ||
       final.data.projectId !== dataset.projectId || final.data.surveyTaskId !== dataset.surveyTaskId ||
       final.data.submittedBy !== actorId || JSON.stringify(scopeKeys(final.data.scope)) !== JSON.stringify(pins)) throw Error('dataset_source_changed');
   return { dataset, coverage };
+  } finally { unsubscribe(); }
 }
