@@ -27,6 +27,7 @@ for(const role of ['crew','drone'])test('H01B '+role+' Sync actual component gua
  const h=harness(),row={id:randomUUID(),kind:'FIELD_SUBMISSION',status:'BLOCKED_CONTRACT',checksum_sha256:null,attempt:0,max_attempts:5,last_error:null,data_b64:Buffer.from('{"name":{}}').toString('base64')};
  const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:v=>[Array.isArray(v)?[row]:v,()=>{}],useRef:v=>({current:v}),useMemo:f=>f(),useCallback:f=>f,useEffect:()=>{}};
  const deps={'react':React,'react-native':{StyleSheet:{create:x=>x},Platform:{select:x=>x.default}},'../../src/design-tokens':{colors:{},typography:{},spacing:{},radius:{}},'../../src/store/auth':{useAuthStore:fn=>fn(h.state())},'../../src/offline/upload-queue':h.q,'../../src/types/enums':{LocalState:{BLOCKED_CONTRACT:'BLOCKED_CONTRACT',ACKED:'ACKED'},SyncStatus:{INVALID:'INVALID'}}};
+ deps['../../src/hooks/useOperatorReadScope']={useOperatorReadScope:()=>({key:'fixture',capture:()=>()=>true})};
  const file='app/('+role+')/sync.tsx',screen=load(deps,file);
  h.set({...h.state(),user:{id:h.actor,role_code:'REPORTER'}});const denied=screen.default();assert.match(JSON.stringify(denied),/Cần phiên/);
  h.set({...h.state(),user:{id:h.actor,role_code:role==='crew'?'REPAIR_CREW':'DRONE_OPERATOR'}});const wrapper=screen.default();assert.equal(typeof wrapper.type,'function');

@@ -18,6 +18,7 @@ import { currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecks
 import { useAuthStore } from '../../src/store/auth';
 import { LocalState } from '../../src/types/enums';
 import { DroneTaskRecoveryList } from '../../src/components/drone/DroneTaskCommandPanel';
+import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 
 /** Map `LocalState` → nhãn tiếng Việt + nhóm hiển thị. Không suy diễn trạng thái từ timer. */
 const STATE_PRESENTATION: Record<
@@ -34,7 +35,7 @@ const STATE_PRESENTATION: Record<
   [LocalState.CONFLICT]: { label: 'Xung đột phiên bản', tone: 'blocked' },
   [LocalState.REJECTED]: { label: 'Máy chủ từ chối', tone: 'blocked' },
   [LocalState.UNKNOWN_OUTCOME]: { label: 'Chưa rõ kết quả', tone: 'blocked' },
-  [LocalState.ACKED]: { label: 'Đã ghi nhận cục bộ — chưa xác minh biên nhận', tone: 'done' },
+  [LocalState.ACKED]: { label: 'Đã ghi nhận cục bộ — chưa xác minh biên nhận', tone: 'pending' },
 };
 
 const KIND_ICON: Record<string, 'videocam' | 'photo-library' | 'description'> = {
@@ -87,6 +88,7 @@ export default function DroneSyncScreen() {
   return <DroneSyncContent key={JSON.stringify(identity)} identity={identity} />;
 }
 function DroneSyncContent({identity}:{identity:QueueIdentity}) {
+  const scope = useOperatorReadScope();
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [queueTab, setQueueTab] = useState<'pending' | 'completed'>('pending');
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
@@ -104,15 +106,16 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
   useEffect(() => {
     let cancelled = false;
+    const isCurrent = scope.capture();
     void (async () => {
       try {
         const database = openDatabase();
         await initDatabase(database);
-        if (!cancelled) {
+        if (!cancelled && isCurrent()) {
           setDb(database);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && isCurrent()) {
           setToastMsg('Không mở được kho dữ liệu cục bộ.');
         }
       }
@@ -122,12 +125,14 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
     };
   }, []);
 
-  const reload=useCallback(async()=>{
-    if(!db)return;
-    try{const rows=await reader.read(db);if(rows&&active())setOutboxRows(rows);}
-    catch{if(active())setToastMsg('Không đọc được hàng đợi; dữ liệu vẫn được giữ.');}
-  },[db,reader]);
-  useEffect(()=>{void reload();},[reload]);
+  const reload=useCallback(async(database:SQLite.SQLiteDatabase|null=db)=>{
+    const isCurrent=scope.capture();
+    if(!database||!isCurrent())return false;
+    try{const rows=await reader.read(database);if(rows&&active()&&isCurrent()){setOutboxRows(rows);return true;}}
+    catch{if(active()&&isCurrent())setToastMsg('Không đọc được hàng đợi; dữ liệu vẫn được giữ.');}
+    return false;
+  },[db,reader,scope.capture]);
+  useEffect(()=>{if(db)void reload();},[reload,db]);
 
   const pendingQueue = useMemo(
     () => outboxRows.filter((row) => row.status !== LocalState.ACKED).map(describeItem),
@@ -139,10 +144,16 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
   );
   const activeItems = queueTab === 'pending' ? pendingQueue : completedQueue;
   const handleSyncAll=useCallback(async()=>{
-    if(!db||!active())return;setSyncing(true);
-    try{await reload();if(active())showToast('Đã đọc lại dữ liệu trên thiết bị. Thao tác này không gửi hoặc xác minh biên nhận máy chủ.');}
-    finally{if(active())setSyncing(false);}
-  },[db,reload,showToast,identity]);
+    const isCurrent=scope.capture();
+    if(syncing||!active()||!isCurrent())return;setSyncing(true);
+    try{
+      let database=db;
+      if(!database){database=openDatabase();await initDatabase(database);if(!isCurrent())return;setDb(database);}
+      const read=await reload(database);
+      if(read&&active()&&isCurrent())showToast('Đã đọc lại dữ liệu trên thiết bị. Thao tác này không gửi hoặc xác minh biên nhận máy chủ.');
+    }catch{if(active()&&isCurrent())setToastMsg('Không mở được kho dữ liệu cục bộ. Có thể thử đọc lại; dữ liệu vẫn được giữ.');}
+    finally{if(active()&&isCurrent())setSyncing(false);}
+  },[db,reload,showToast,identity,syncing,scope.capture]);
   const handleSafePurge=()=>{if(active())showToast('Chưa có receipt đối soát hợp lệ. Không xóa bản sao cục bộ.');};
 
 
@@ -212,7 +223,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           variant="primary"
           title={syncing ? 'Đang đọc hàng đợi…' : 'Đọc lại hàng đợi'}
           loading={syncing}
-          disabled={!db || syncing}
+          disabled={syncing}
           onPress={handleSyncAll}
         />
       </Card>

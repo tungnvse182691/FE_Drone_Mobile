@@ -1,5 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -10,6 +10,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DRONE_DATASET_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
+import { openDroneLocalFiles, type DroneLocalFile } from '../../src/api/droneLocalFiles';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -66,6 +67,47 @@ export default function DroneUploadScreen() {
   const [submitting] = useState(false);
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [srtUri, setSrtUri] = useState<string | null>(null);
+  const [savedFiles, setSavedFiles] = useState<(DroneLocalFile & {availability: string})[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const picking = useRef(false);
+
+  const refreshFiles = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent() || !params.taskId) return;
+    let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
+    try {
+      runtime = await openDroneLocalFiles(params.taskId);
+      if (!isCurrent()) return;
+      const files = await runtime.list();
+      if (isCurrent()) { setSavedFiles(files); setFileError(null); }
+    } catch { if (isCurrent()) setFileError('Không đọc được tệp đã lưu. Dữ liệu cũ vẫn được giữ.'); }
+    finally { runtime?.close(); }
+  };
+  const selectFile = (file: DroneLocalFile) => {
+    if (file.kind === 'VIDEO') {
+      setVideoName(file.name); setVideoUri(file.uri); setVideoSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
+      setVideoSha('Đã lưu trên thiết bị · chưa tính mã băm');
+    } else {
+      setSrtName(file.name); setSrtUri(file.uri); setSrtSize(`${Math.max(1, Math.round(file.size / 1024))} KB`);
+      setSrtSha('Đã lưu trên thiết bị · chưa tính mã băm');
+    }
+    setUploadStep('LOCAL');
+  };
+  const restoreFile = async (key: string) => {
+    const isCurrent = scope.capture();
+    if (!isCurrent() || !params.taskId) return;
+    let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
+    try {
+      runtime = await openDroneLocalFiles(params.taskId);
+      if (!isCurrent()) return;
+      const files = await runtime.list();
+      if (!isCurrent()) return;
+      const file = files.find(f => f.key === key);
+      if (!file || file.availability !== 'LOCAL_UNHASHED') throw Error('file_unavailable');
+      selectFile(file); setSubmitError(null);
+    } catch { if (isCurrent()) setSubmitError('Tệp không còn đầy đủ. Giữ lịch sử và chọn lại tệp nguồn.'); }
+    finally { runtime?.close(); }
+  };
 
   const [previewScope, setPreviewScope] = useState(scope.key);
   useEffect(() => {
@@ -75,59 +117,35 @@ export default function DroneUploadScreen() {
     setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
     setUploadProgress(0); setSubmitError(null);
     setNote('');
+    setSavedFiles([]); setFileError(null);
+    void refreshFiles();
   }, [scope.key]);
 
   // Chọn video 4K RGB từ thẻ nhớ SD
-  const handlePickVideo = async () => {
+  const pickFile = async (kind: 'VIDEO' | 'TELEMETRY') => {
     const isCurrent = scope.capture();
-    if (!isCurrent()) return;
+    if (!isCurrent() || picking.current) return;
+    if (!params.taskId) { setSubmitError('Chọn nhiệm vụ máy chủ trước khi lưu tệp.'); return; }
+    picking.current = true;
+    let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['video/*', 'video/mp4'],
+        type: kind === 'VIDEO' ? ['video/*', 'video/mp4'] : '*/*',
         copyToCacheDirectory: false,
       });
-
-
       if (!isCurrent()) return;
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        setVideoName(file.name);
-        setVideoUri(file.uri);
-        const sizeMb = file.size ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : '—';
-        setVideoSize(sizeMb);
-        setVideoSha('Chưa đối chiếu — sẽ tính mã băm khi nộp');
-        setUploadStep('LOCAL');
+        runtime = await openDroneLocalFiles(params.taskId);
+        if (!isCurrent()) return;
+        const file = await runtime.preserve(kind,result.assets[0]);
+        if (!isCurrent()) return;
+        selectFile(file); setSubmitError(null);
       }
-    } catch (err) {
-      if (isCurrent()) setSubmitError('Không đọc được tệp video. Vui lòng chọn lại.');
-    }
+    } catch { if (isCurrent()) setSubmitError('Không lưu được tệp đầy đủ. Lựa chọn trước và lịch sử vẫn được giữ; kiểm tra dung lượng rồi chọn lại MP4/SRT.'); }
+    finally { runtime?.close(); picking.current = false; if (isCurrent()) await refreshFiles(); }
   };
-
-  // Chọn tệp SRT phụ đề GPS RTK từng khung hình
-  const handlePickSrt = async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: false,
-      });
-
-
-      if (!isCurrent()) return;
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        setSrtName(file.name);
-        setSrtUri(file.uri);
-        // Không bịa dung lượng/checksum khi tệp không cung cấp — hiển thị "—" cho tới khi có.
-        setSrtSize(file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : '—');
-        setSrtSha('Chưa đối chiếu — sẽ tính mã băm khi nộp');
-        setUploadStep('LOCAL');
-      }
-    } catch (err) {
-      if (isCurrent()) setSubmitError('Không đọc được tệp GPS. Vui lòng chọn lại.');
-    }
-  };
+  const handlePickVideo = () => pickFile('VIDEO');
+  const handlePickSrt = () => pickFile('TELEMETRY');
 
   // Fail closed BEFORE any upload: no server-rooted active aircraft source or
   // durable immutable retry journal exists for this screen at the pinned BE.
@@ -174,6 +192,17 @@ export default function DroneUploadScreen() {
       <View style={styles.selectorBar}>
         <Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={() => router.push('/(drone)/requests')} />
       </View>
+      <Card>
+        <Text style={typography.titleMd}>Tệp đã lưu cho nhiệm vụ</Text>
+        <Text style={typography.caption}>Cùng tài khoản và máy chủ. Tệp từ phiên cũ cần chọn lại chủ động; chưa tính mã băm, chưa tải lên, chưa được máy chủ xác minh.</Text>
+        {savedFiles.map(file => <View key={file.key}>
+          <Text>{file.name} · {file.availability === 'LOCAL_UNHASHED' ? 'Bản sao trên thiết bị' : file.availability === 'INCOMPLETE' ? 'Bản sao chưa đầy đủ' : 'Không tìm thấy tệp trên thiết bị'}</Text>
+          <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={file.availability !== 'LOCAL_UNHASHED'} onPress={() => restoreFile(file.key)} />
+        </View>)}
+        {!savedFiles.length && <Text>Chưa có tệp đã lưu trong phạm vi này.</Text>}
+        {fileError && <Text accessibilityRole="alert">{fileError}</Text>}
+        <Button title="Đọc lại tệp đã lưu" variant="secondary" onPress={refreshFiles} />
+      </Card>
 
       {/* Target Road Overview Card */}
       <Card style={styles.contextCard}>
@@ -375,7 +404,7 @@ export default function DroneUploadScreen() {
             <MaterialIcons name="movie" size={24} color={colors.primary} />
           </View>
           <View style={styles.fileDetailsGroup}>
-            <Text style={[typography.titleMd, styles.fileNameText]}>{videoName}</Text>
+            <Text testID="selected-video" style={[typography.titleMd, styles.fileNameText]}>{videoName}</Text>
             <Text style={[typography.caption, styles.fileSizeText]}>
               Dung lượng: <Text style={styles.boldText}>{videoSize}</Text> · Chưa kiểm tra thông số video
             </Text>
@@ -469,7 +498,7 @@ export default function DroneUploadScreen() {
         />
       </View>
 
-      <Text style={typography.caption}>Tệp đang được chọn để xem trên màn hình; chưa có bản sao lưu bền hoặc yêu cầu tải lên. Lựa chọn mạng bên dưới chưa thay đổi kết nối thiết bị.</Text>
+      <Text style={typography.caption}>Tệp chọn thành công có bản sao riêng trên thiết bị; chưa checksum, chưa tải lên. Ghi chú chỉ nằm trên màn hình. Lựa chọn mạng bên dưới chưa thay đổi kết nối thiết bị.</Text>
       {/* Network Mode Card */}
       <Card style={styles.networkCard}>
         <View style={styles.networkTitleGroup}>
