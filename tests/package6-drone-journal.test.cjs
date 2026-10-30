@@ -150,3 +150,52 @@ test('Drone separate runtimes cannot replay while the original transport is stil
  f.send(async()=>({data:{...f.task,status:'ACCEPTED',version:'AAAAAAAAAAI='},headers:{etag:'"AAAAAAAAAAI="'}}));
  await second.dispatch(c.key,true);assert.equal(f.posts.length,2);assert.deepEqual(f.posts[0],f.posts[1]);second.close();
 });
+
+test('Reassigned task readback cannot supersede PREPARED, UNKNOWN or RECEIPT after disk reopen and relogin',async()=>{
+ for(const phase of ['PREPARED','UNKNOWN_OUTCOME','RECEIPT']){
+  const f=fixture(),first=await f.api.openDroneTaskJournal(id(2)),command=await first.prepare('accept');
+  if(phase==='UNKNOWN_OUTCOME'){
+   f.send(async()=>{throw Error('timeout after possible commit');});
+   await assert.rejects(first.dispatch(command.key,true));
+  }else if(phase==='RECEIPT')await first.dispatch(command.key,true);
+  assert.equal((await first.read()).phase,phase);
+  const retained=f.rows();first.close();f.reopen();f.change({token:'sid-new'});
+  Object.assign(f.task,{status:'REASSIGNED',version:'AAAAAAAAAAM='});
+  const next=await f.api.openDroneTaskJournal(id(2)),postCount=f.posts.length;
+  assert.equal((await next.readCurrent()).status,'REASSIGNED');
+  assert.equal((await next.read()).phase,phase,'latest GET is not an outcome proof');
+  await assert.rejects(next.prepare('accept'),/drone_previous_command_requires_review/);
+  await assert.rejects(next.prepare('decline','New assignment'),/drone_previous_command_requires_review/);
+  assert.deepEqual(f.rows(),retained,'original command, session, version and receipt remain intact');
+  assert.equal(f.posts.length,postCount,'read/reopen/prepare never dispatches');next.close();
+ }
+});
+
+test('Assignment to another operator cannot transfer or acknowledge the original command',async()=>{
+ const f=fixture(),first=await f.api.openDroneTaskJournal(id(2)),command=await first.prepare('accept');
+ f.send(async()=>{throw Error('timeout');});await assert.rejects(first.dispatch(command.key,true));
+ const retained=f.rows();Object.assign(f.task,{operatorId:id(8),status:'REASSIGNED',version:'AAAAAAAAAAM='});
+ await assert.rejects(first.readCurrent(),/drone_task_source_invalid/);
+ assert.equal((await first.read()).phase,'UNKNOWN_OUTCOME');first.close();f.reopen();
+ f.change({user:{id:id(8),role_code:'DRONE_OPERATOR'},token:'sid-operator-B'});
+ const other=await f.api.openDroneTaskJournal(id(2));
+ assert.equal(await other.read(),null);assert.equal((await f.api.listDroneTaskCommands()).length,0);
+ await assert.rejects(other.dispatch(command.key,true),/drone_command_not_dispatchable/);
+ assert.deepEqual(f.rows(),retained);assert.equal(f.posts.length,1);other.close();
+ f.change({user:{id:id(1),role_code:'DRONE_OPERATOR'},token:'sid-operator-A-new'});
+ const original=await f.api.openDroneTaskJournal(id(2));assert.equal((await original.read()).command.key,command.key);
+ assert.equal((await original.read()).phase,'UNKNOWN_OUTCOME');assert.deepEqual(f.rows(),retained);original.close();
+});
+
+test('Fresh task journal accepts only actionable assigned states with valid source',async()=>{
+ for(const status of ['NEW_ASSIGNED','REASSIGNED','ACCEPTED','REJECTED','CANCELLED']){
+  const f=fixture();f.task.status=status;const runtime=await f.api.openDroneTaskJournal(id(2));
+  if(['NEW_ASSIGNED','REASSIGNED'].includes(status)){
+   const command=await runtime.prepare('accept');assert.equal(command.source.status,status);
+   assert.equal((await runtime.read()).phase,'PREPARED');
+  }else{
+   await assert.rejects(runtime.prepare('accept'),/drone_task_not_actionable/);assert.equal(f.rows().length,0);
+  }
+  assert.equal(f.posts.length,0);runtime.close();
+ }
+});
