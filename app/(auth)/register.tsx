@@ -81,6 +81,7 @@ export default function ReporterRegisterScreen() {
       setError('Lần đăng ký trước chưa được xác nhận. Giữ nguyên nội dung để thử lại.');
       return;
     }
+    const firstDispatch = pendingRegistration === null;
     const attempt = pendingRegistration ?? { environment, input: Object.freeze(input), key: uuidv4() };
     pendingRegistration = attempt;
     const capturedGeneration = generation.current;
@@ -106,10 +107,17 @@ export default function ReporterRegisterScreen() {
     } catch (err) {
       if (!isCurrent()) return;
       const status = (err as { response?: { status?: number } }).response?.status;
-      if (status && [400, 404, 409, 422, 429].includes(status)) pendingRegistration = null;
       const code = extractProblemCode(err);
+      // A replay error cannot resolve an earlier timeout. In particular Candidate3
+      // can return validation_error after finding an already persisted intent.
+      const definitivelyRejected = firstDispatch &&
+        ((status === 400 && code === 'validation_error') ||
+         (status === 409 && code === 'identity_email_conflict'));
+      if (definitivelyRejected) pendingRegistration = null;
       setError(
-        (code && REGISTER_ERRORS[code]) ||
+        !definitivelyRejected
+          ? 'Kết quả đăng ký chưa được xác nhận. Đã giữ yêu cầu trong phiên ứng dụng này; giữ nguyên thông tin khi thử lại. Không đăng ký lại sau khi đóng ứng dụng nếu chưa đối soát kết quả.'
+          : (code && REGISTER_ERRORS[code]) ||
           'Không đăng ký được. Vui lòng kiểm tra kết nối rồi thử lại.',
       );
     } finally {
