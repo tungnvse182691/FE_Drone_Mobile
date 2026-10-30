@@ -49,7 +49,11 @@ test('RPT old restore completion cannot show private draft after account switch'
 test('RPT supplement 412 exposes GET review without rebasing command',async()=>{
  let reads=0;const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>{reads++;return {report:{id:'fixture-report',description:'server',createdAt:'2026-10-29',evidence:[]},etag:'"v2"'};}},pick:async()=>({canceled:false,assets:[{uri:'a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.h.login();s.render();await s.flush();s.input('Nội dung bổ sung','Nội dung bổ sung');await s.tap('pick-photo');await s.flush();
- s.reporter.useReporterStore.getState().submitPendingDraft=async()=>{throw {response:{status:412}};};await s.press('Gửi bổ sung');await s.flush();assert.match(text(s),/Phát hiện xung đột/);
+ // Use the real journal/store: a bare status thrown above persistence is not
+ // evidence that a first dispatch was definitively rejected by the server.
+ s.h.api.submitReportSupplementReal=async()=>{throw {response:{status:412,data:{code:'concurrency_conflict'}}};};
+ await s.press('Gửi bổ sung');await s.flush();assert.match(text(s),/Phát hiện xung đột/);
+ assert.equal(s.reporter.useReporterStore.getState().pendingDraft.commandOutcome,'REJECTED');
  const before=JSON.stringify(s.reporter.useReporterStore.getState().pendingDraft);await s.press('Tải bản mới nhất');await s.flush();assert.equal(reads,2);assert.equal(JSON.stringify(s.reporter.useReporterStore.getState().pendingDraft),before);
 });
 
@@ -62,8 +66,11 @@ for(const page of ['report','report-supplement'])test(`RPT ${page} picker except
 test('RPT supplement conflict blocks handler replay until a supported reconciliation decision',async()=>{
  const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.h.login();s.render();await s.flush();s.input('Nội dung bổ sung','Thông tin bổ sung');await s.tap('pick-photo');await s.flush();
- let posts=0;s.reporter.useReporterStore.getState().submitPendingDraft=async()=>{posts++;throw {status:412};};
+ let posts=0;s.h.api.submitReportSupplementReal=async()=>{posts++;throw {status:412,code:'concurrency_conflict'};};
  await s.press('Gửi bổ sung');await s.flush();await s.press('Gửi bổ sung');await s.flush();assert.equal(posts,1);
+ const command=s.reporter.useReporterStore.getState().pendingDraft;
+ assert.equal(command.commandOutcome,'REJECTED');assert.equal(command.rejection.code,'concurrency_conflict');
+ assert.ok(command.request,'first dispatch is recorded before the rejection');
 });
 
 for(const coords of [null,{latitude:0,longitude:0,accuracyMeters:1},{latitude:100,longitude:106,accuracyMeters:1}])test(`RPT wire UNKNOWN omits invalid/absent GPS ${JSON.stringify(coords)}`,async()=>{
