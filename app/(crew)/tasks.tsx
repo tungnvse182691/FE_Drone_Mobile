@@ -310,7 +310,7 @@ export default function CrewTasksScreen() {
                             task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
                           ]}
                         >
-                          {task.due_label}
+                          {crewDateTime(task.due_label)}
                         </Text>
                       </View>
                     ) : (

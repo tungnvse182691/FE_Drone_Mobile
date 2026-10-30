@@ -12,7 +12,7 @@ import { Chip } from '../../src/components/Chip';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
-import { CrewTaskBoundary, useCrewIdentity, crewStatusLabel, crewModeLabel } from './tasks';
+import { CrewTaskBoundary, useCrewIdentity, crewStatusLabel, crewModeLabel, crewDateTime } from './tasks';
 import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { randomUUID } from 'expo-crypto';
@@ -25,11 +25,16 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
 
 /** Câu tiếng Việt cho lỗi API-081/091/093 — không lộ mã kỹ thuật lên màn hình. */
-function fieldTaskActionMessage(error: unknown): string {
+function fieldTaskActionMessage(error: unknown, phase: 'journal' | 'read' | 'reconcile' | 'send' | 'replay' = 'send'): string {
   const errorResponse = (
     error as { response?: { status?: number; data?: { code?: string } } } | undefined
   )?.response;
   const code = errorResponse?.data?.code;
+  const context = phase === 'journal' ? 'Không đọc được nhật ký lệnh.' : phase === 'read' ? 'Không đọc được dữ liệu nhiệm vụ.' :
+    phase === 'reconcile' ? 'Không đối soát được lệnh đã lưu.' : 'Không gửi/xác nhận được thao tác.';
+  if (code === 'idempotency_key_reused') {
+    return context + ' Khóa lệnh đã được sử dụng. Giữ nguyên lệnh cũ để đối soát.';
+  }
   if (
     code === 'concurrency_conflict' ||
     code === 'precondition_required' ||
@@ -38,18 +43,16 @@ function fieldTaskActionMessage(error: unknown): string {
     isConcurrencyConflict(error) ||
     isPreconditionRequired(error)
   ) {
-    return 'Nhiệm vụ vừa thay đổi trên máy chủ (phiên bản không khớp). Vui lòng tải lại rồi thử lại.';
+    return context + ' Nhiệm vụ hoặc điều kiện phiên bản đã thay đổi. Vui lòng tải lại để kiểm tra.';
   }
-  if (code === 'idempotency_key_reused') {
-    return 'Thao tác này đã được gửi trước đó. Vui lòng tải lại nhiệm vụ.';
-  }
+  if (errorResponse?.status === 401) return context + ' Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
   if (errorResponse?.status === 403) {
-    return 'Bạn không còn được giao xử lý nhiệm vụ này.';
+    return context + ' Bạn không có quyền hoặc không còn được giao xử lý nhiệm vụ này.';
   }
   if (errorResponse?.status === 404) {
-    return 'Nhiệm vụ không còn tồn tại hoặc đã được điều phối lại.';
+    return context + ' Nhiệm vụ không còn tồn tại hoặc đã được điều phối lại.';
   }
-  return 'Không gửi được thao tác. Vui lòng kiểm tra kết nối rồi thử lại.';
+  return context + ' Dữ liệu đã lưu được giữ nguyên. Vui lòng kiểm tra lại trước khi tiếp tục.';
 }
 
 export default function CrewWoDetailScreen() {
@@ -124,6 +127,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
   const run = async (action?: FieldCommandAction, replay = false) => {
     if ((!ready && !!action) || busy || !scope || currentCrewScope() !== scope) return;
     setBusy(true);setNotice('');
+    let phase: 'journal' | 'read' | 'reconcile' | 'send' | 'replay' = 'journal';
     try {
       const journal = await fieldJournal(actor, task.projectId, task.id);
       if (currentCrewScope() !== scope) return;
@@ -135,6 +139,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         reason: action === 'accept' ? 'Nhận nhiệm vụ hiện trường' : reason, key: newIdempotencyKey(),
         originId: action === 'start' ? randomUUID() : undefined, claimedAt: new Date().toISOString() }) : saved;
       if (!command) {
+        phase = 'read';
         const response = await getFieldInspectionTaskDetailReal(task.projectId, task.id);
         if (currentCrewScope() !== scope) return;
         validateCrewTaskDetail(response.data, response.etag, task.projectId, task.id, actor);
@@ -143,6 +148,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         setReady(true);
         return;
       }
+      phase = action ? 'send' : replay ? 'replay' : 'reconcile';
       const result = await executeFieldCommand(command, { ...journal, currentScope: currentCrewScope, currentActor: currentCrewActor }, !!action || replay);
       apply(result);
       if (currentCrewScope() === scope) setReady(true);
@@ -150,7 +156,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       if (currentCrewScope() === scope) {
         // Reload the persisted immutable intent even when POST has an unknown outcome.
         try { const saved = await (await fieldJournal(actor, task.projectId, task.id)).read(); if (currentCrewScope() === scope) setRecord(saved); } catch { setReady(false); }
-        setNotice(fieldTaskActionMessage(error) + ' Không tạo lệnh mới khi kết quả cũ chưa rõ; dùng đối soát hoặc gửi lại đúng lệnh cũ.');
+        setNotice(fieldTaskActionMessage(error, phase) + ' Không tạo lệnh mới khi kết quả cũ chưa rõ; dùng đối soát hoặc gửi lại đúng lệnh cũ.');
       }
     } finally { if (currentCrewScope() === scope) setBusy(false); }
   };
@@ -184,7 +190,9 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
   };
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Chi tiết nhiệm vụ" />}>
-      <Button variant="text" title="Quay lại danh sách" icon={<MaterialIcons name="arrow-back" size={18} color={colors.secondary} />} onPress={() => router.replace('/(crew)/tasks')} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại danh sách" testID="crew-detail-back" style={styles.backRow} onPress={() => router.replace('/(crew)/tasks')}>
+        <MaterialIcons name="arrow-back" size={20} color={colors.secondary} /><Text style={[typography.labelLg, { color: colors.secondary }]}>Quay lại danh sách</Text>
+      </Pressable>
       <Card style={[styles.card, styles.hero]}>
         <View style={styles.sectionHeading}><View style={styles.iconBox}><MaterialIcons name="assignment" size={26} color={colors.brandGold} /></View>
           <View style={styles.flex}><Text style={styles.eyebrow}>CÔNG VIỆC ĐƯỢC GIAO</Text><Text style={typography.titleLg}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
@@ -195,7 +203,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <Card style={styles.card}>
         <View style={styles.sectionHeading}><MaterialIcons name="description" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Thông tin nhiệm vụ</Text></View>
         <Text style={styles.body}>{fresh.detail?.instructions || fresh.description || 'Chưa có hướng dẫn bổ sung cho nhiệm vụ này.'}</Text>
-        <View style={styles.factRow}><MaterialIcons name="event" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành</Text><Text style={styles.body}>{fresh.due_label || 'Chưa có thời hạn'}</Text></View></View>
+        <View style={styles.factRow}><MaterialIcons name="event" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
         {fresh.wo_code ? <Text style={styles.body}>Lệnh công tác: {fresh.wo_code}</Text> : null}
         <View style={styles.factRow}><MaterialIcons name="place" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Vị trí hiện trường</Text><Text style={styles.body}>{[fresh.route_code, fresh.section_name, fresh.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text>
           <Text style={styles.hint}>{fresh.coordinates ? `${fresh.coordinates.latitude}, ${fresh.coordinates.longitude}` : 'Chưa có tọa độ để dẫn đường. Bạn vẫn có thể xem nhiệm vụ.'}</Text></View></View>
@@ -398,6 +406,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
 }
 
 const styles = StyleSheet.create({
+  backRow: { alignSelf: 'flex-start', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.sm },
   topBar: { padding: spacing.md },
   card: { marginBottom: spacing.md, gap: spacing.md, borderWidth: 1, borderColor: colors.border },
   hero: { borderLeftWidth: 4, borderLeftColor: colors.primary },

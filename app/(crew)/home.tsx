@@ -7,7 +7,7 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP, crewStatusLabel } from './tasks';
+import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP, crewStatusLabel, crewDateTime } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { CREW_RECEIVING } from '../../src/constants/routes';
 import { TaskMode } from '../../src/types/enums';
@@ -212,7 +212,7 @@ export default function CrewHomeScreen() {
                             task.due_urgency === 'urgent' && styles.dueTextUrgent,
                           ]}
                         >
-                          {task.due_label}
+                          {crewDateTime(task.due_label)}
                         </Text>
                       </View>
                     ) : null}
