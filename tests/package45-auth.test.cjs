@@ -1,6 +1,17 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {screen, deferred} = require('./helpers/roadfe-screen.cjs');
+test('default Login omits guest draft notice and keeps a scrollable narrow layout', async () => {
+  const s=screen('app/(auth)/index.tsx'); s.render(); await s.flush();
+  const nodes=s.nodes();
+  assert.doesNotMatch(JSON.stringify(nodes),/không tự chuyển|Nháp khách/);
+  assert.match(JSON.stringify(nodes),/Đăng nhập tác nghiệp/);
+  const scroll=nodes.find(n=>n.type==='ScrollView');
+  assert.equal(scroll.props.contentContainerStyle.justifyContent,'flex-start');
+  assert.equal(scroll.props.contentContainerStyle.width,'100%');
+  assert.ok(scroll.props.contentContainerStyle.maxWidth<=480);
+  s.unmount();
+});
 test('OTP new intent resets old code and uses the new server cooldown', async () => {
   const params={intentId:'first',email:'fixture@example.test',resendAfterSeconds:'0'};
   const s=screen('app/(auth)/otp-verify.tsx',{params}); s.render(); await s.flush();

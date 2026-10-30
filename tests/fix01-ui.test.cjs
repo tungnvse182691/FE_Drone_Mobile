@@ -28,7 +28,8 @@ for(const method of ['login','otp'])test('RPT-01 real '+method+' screen restores
   assert.equal(s.nav.at(-1),'/(reporter)/home');
   assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
   assert.equal(JSON.stringify([...s.h.rows]),before);assert.equal(s.h.calls.length,0);
-  assert.match(JSON.stringify(s.nodes()),/không tự chuyển/);
+  if(method==='otp')assert.match(JSON.stringify(s.nodes()),/không tự chuyển/);
+  else assert.doesNotMatch(JSON.stringify(s.nodes()),/không tự chuyển/);
   s.unmount();
 });
 

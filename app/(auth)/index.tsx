@@ -18,7 +18,7 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { loginReal, extractProblemCode } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
-import { GUEST_DRAFT_NOTICE, useReporterStore } from '../../src/store/reporter';
+import { useReporterStore } from '../../src/store/reporter';
 import { bareClient } from '../../src/api/client';
 import {
   AUTH_REGISTER,
@@ -155,14 +155,6 @@ export default function LoginScreen() {
             {passwordChanged === '1' ? (
               <Text style={[typography.caption, styles.pendingNoticeText]}>Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.</Text>
             ) : null}
-            {(
-              <View style={styles.pendingNotice}>
-                <MaterialIcons name="info-outline" size={16} color={colors.info} />
-                <Text style={[typography.caption, styles.pendingNoticeText]}>
-                  {GUEST_DRAFT_NOTICE}
-                </Text>
-              </View>
-            )}
             <Text style={[typography.titleMd, styles.cardTitle]}>Đăng nhập tác nghiệp</Text>
 
             <InputField
@@ -172,7 +164,7 @@ export default function LoginScreen() {
                 setPhoneOrEmail(text);
                 if (error) setError(null);
               }}
-              placeholder="Nhập email @hoanghai.vn hoặc SĐT..."
+              placeholder="Nhập email hoặc số điện thoại"
             />
             <InputField
               label="Mật khẩu"
@@ -227,7 +219,7 @@ export default function LoginScreen() {
                   Cổng phản ánh dân sinh
                 </Text>
                 <Text style={[typography.caption, styles.reporterCardSubtitle]}>
-                  Không cần tài khoản · Xác thực OTP qua email
+                  Tìm hiểu cách phản ánh hư hại đường bộ
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={22} color={colors.brandGold} />
@@ -280,17 +272,20 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: spacing.xl,
+    justifyContent: 'flex-start',
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.lg,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   logoCircle: {
-    width: 120,
-    height: 120,
+    width: 96,
+    height: 96,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -309,8 +304,8 @@ const styles = StyleSheet.create({
     }),
   },
   logoImage: {
-    width: 104,
-    height: 104,
+    width: 84,
+    height: 84,
   },
   brandTitle: {
     fontFamily: 'Sansation',
@@ -331,12 +326,13 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.secondary,
     textAlign: 'center',
-    paddingHorizontal: 24,
+    width: '100%',
+    paddingHorizontal: spacing.xs,
   },
   loginCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: 20,
+    padding: spacing.md,
     marginBottom: spacing.md,
     ...Platform.select({
       ios: {
@@ -354,15 +350,10 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     marginBottom: spacing.sm,
   },
-  pendingNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
   pendingNoticeText: {
     color: colors.info,
-    flex: 1,
+    flexShrink: 1,
+    marginBottom: spacing.sm,
   },
   errorBox: {
     flexDirection: 'row',
@@ -453,7 +444,7 @@ const styles = StyleSheet.create({
   reporterCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -475,6 +466,7 @@ const styles = StyleSheet.create({
   },
   reporterCardText: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   reporterCardTitle: {
