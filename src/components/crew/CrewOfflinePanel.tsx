@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { inspectOfflineDevice, reconcileDeviceIntent } from '../../api/crewOfflineDevice';
@@ -37,9 +38,9 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   if(!sameQueueIdentity(identity))return null;
-  return <Card>
-    <Text>Đồng bộ an toàn trên thiết bị</Text>
-    <Text>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng kiểm thử thiết bị trong phạm vi được nghiệm thu. Chưa xác nhận dữ liệu đã gửi.':'Chưa đủ bằng chứng kiểm thử trên thiết bị để mở chức năng gửi an toàn.'}</Text>
+  return <Card style={styles.panel}>
+    <Text style={typography.titleMd}>Đồng bộ an toàn trên thiết bị</Text>
+    <Text style={styles.description}>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng kiểm thử thiết bị trong phạm vi được nghiệm thu. Chưa xác nhận dữ liệu đã gửi.':'Chưa đủ bằng chứng kiểm thử trên thiết bị để mở chức năng gửi an toàn.'}</Text>
     <Button title="Kiểm tra thiết bị / đọc nhật ký" variant="secondary" loading={busy} disabled={busy} onPress={()=>void refresh()} />
     {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
     {probe?<View>
@@ -55,10 +56,17 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
           <Button title="Đối soát bằng GET máy chủ" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)} />:null}
       </View>)}
     </View>:null}
-    <Text>Chức năng gửi đang khóa vì chưa đủ dữ liệu nhiệm vụ và thiết bị được xác minh. Các lệnh cũ vẫn được giữ nguyên.</Text>
-    <Button title="Đăng ký thiết bị" variant="secondary" disabled onPress={()=>{}} />
-    <Button title="Tạo bản dữ liệu nhiệm vụ" variant="secondary" disabled onPress={()=>{}} />
-    <Button title="Gửi dữ liệu đã ký" variant="secondary" disabled onPress={()=>{}} />
-    <Text>Chuyển giao thiết bị chưa khả dụng trong phạm vi hiện tại.</Text>
+    <View style={styles.capabilities}>
+      <Text style={typography.labelLg}>Chức năng chưa khả dụng</Text>
+      <Text style={styles.description}>Chưa đủ dữ liệu nhiệm vụ và thiết bị được xác minh. Các lệnh cũ vẫn được giữ nguyên.</Text>
+      {['Đăng ký thiết bị', 'Tạo bản dữ liệu nhiệm vụ', 'Gửi dữ liệu đã ký'].map(label => <Text key={label} style={styles.description}>• {label}: chưa mở</Text>)}
+      <Text style={styles.description}>Chuyển giao thiết bị chưa khả dụng trong phạm vi hiện tại.</Text>
+    </View>
   </Card>;
 }
+
+const styles = StyleSheet.create({
+  panel: { gap: spacing.sm, marginBottom: spacing.md },
+  description: { ...typography.caption, color: colors.secondary },
+  capabilities: { gap: spacing.xs, borderTopWidth: 1, borderColor: colors.border, paddingTop: spacing.sm },
+});

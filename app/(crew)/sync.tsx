@@ -174,7 +174,6 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng Bộ" />}>
-      <CrewOfflinePanel identity={identity} />
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
           <MaterialIcons name="sync" size={22} color={colors.primary} />
@@ -245,6 +244,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         </View>
       </Card>
 
+      <CrewOfflinePanel identity={identity} />
       {segment === 'pending' ? (
         <>
           <View style={styles.sectionHeader}>
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   networkText: {
-    color: colors.success,
+    color: colors.secondary,
   },
   statusDesc: {
     color: colors.secondary,

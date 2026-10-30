@@ -7,7 +7,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Toast } from '../../src/components/Toast';
-import { useCrewInbox, CrewInboxState } from './tasks';
+import { useCrewInbox } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
@@ -98,7 +98,6 @@ export default function CrewProfileScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ Sơ" />}>
-      <CrewInboxState inbox={inbox} />
       <View style={styles.profileHeader}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
@@ -131,6 +130,11 @@ export default function CrewProfileScreen() {
 
       <Card style={styles.statsCard}>
         <Text style={[typography.caption, { color: colors.secondary, marginBottom: spacing.sm }]}>Thống kê trong nhiệm vụ đã tải</Text>
+        <Text style={[typography.caption, { color: colors.secondary, marginBottom: spacing.sm }]}>Không phải toàn bộ lịch sử.</Text>
+        {inbox.error ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: colors.secondary }]}>{inbox.error}</Text> :
+          inbox.query.isPending && inbox.enabled ? <Text style={typography.bodyMd}>Đang tải thống kê…</Text> :
+          !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
+        {inbox.query.hasNextPage && !inbox.error ? <Text style={[typography.caption, { color: colors.secondary }]}>Còn nhiệm vụ chưa tải; các số dưới đây chỉ tính phần đã tải.</Text> : null}
         <View style={styles.statsRow}>
           {PERFORMANCE_STATS.map((stat, idx) => (
             <React.Fragment key={stat.label}>
@@ -144,6 +148,9 @@ export default function CrewProfileScreen() {
             </React.Fragment>
           ))}
         </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={{ minHeight: 48, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={[typography.labelLg, { color: colors.secondary }]}>{inbox.query.isFetching ? 'Đang tải…' : 'Tải lại thống kê'}</Text>
+        </Pressable>
       </Card>
 
       <Text style={[typography.labelSm, styles.sectionLabel]}>CÀI ĐẶT HỆ THỐNG</Text>
