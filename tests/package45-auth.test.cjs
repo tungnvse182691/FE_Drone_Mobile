@@ -1,15 +1,21 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {screen, deferred} = require('./helpers/roadfe-screen.cjs');
-test('default Login omits guest draft notice and keeps a scrollable narrow layout', async () => {
+test('default Login omits guest draft notice and preserves approved centered layout', async () => {
   const s=screen('app/(auth)/index.tsx'); s.render(); await s.flush();
   const nodes=s.nodes();
   assert.doesNotMatch(JSON.stringify(nodes),/không tự chuyển|Nháp khách/);
   assert.match(JSON.stringify(nodes),/Đăng nhập tác nghiệp/);
   const scroll=nodes.find(n=>n.type==='ScrollView');
-  assert.equal(scroll.props.contentContainerStyle.justifyContent,'flex-start');
-  assert.equal(scroll.props.contentContainerStyle.width,'100%');
-  assert.ok(scroll.props.contentContainerStyle.maxWidth<=480);
+  assert.equal(scroll.props.contentContainerStyle.justifyContent,'center');
+  assert.equal(scroll.props.contentContainerStyle.paddingHorizontal,20);
+  const image=nodes.find(n=>n.type==='Image');
+  assert.equal(image.props.style.width,104);
+  assert.equal(image.props.style.height,104);
+  const logo=nodes.find(n=>n.type==='View'&&n.props.style?.width===120);
+  assert.equal(logo.props.style.height,120);
+  assert.ok(nodes.some(n=>n.type==='InputField'&&n.props.placeholder==='Nhập email @hoanghai.vn hoặc SĐT...'));
+  assert.match(JSON.stringify(nodes),/Không cần tài khoản · Xác thực OTP qua email/);
   s.unmount();
 });
 test('OTP new intent resets old code and uses the new server cooldown', async () => {

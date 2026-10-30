@@ -164,7 +164,7 @@ export default function LoginScreen() {
                 setPhoneOrEmail(text);
                 if (error) setError(null);
               }}
-              placeholder="Nhập email hoặc số điện thoại"
+              placeholder="Nhập email @hoanghai.vn hoặc SĐT..."
             />
             <InputField
               label="Mật khẩu"
@@ -219,7 +219,7 @@ export default function LoginScreen() {
                   Cổng phản ánh dân sinh
                 </Text>
                 <Text style={[typography.caption, styles.reporterCardSubtitle]}>
-                  Tìm hiểu cách phản ánh hư hại đường bộ
+                  Không cần tài khoản · Xác thực OTP qua email
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={22} color={colors.brandGold} />
@@ -272,20 +272,17 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'flex-start',
-    width: '100%',
-    maxWidth: 480,
-    alignSelf: 'center',
-    paddingHorizontal: spacing.screenMargin,
-    paddingVertical: spacing.lg,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   logoCircle: {
-    width: 96,
-    height: 96,
+    width: 120,
+    height: 120,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -304,8 +301,8 @@ const styles = StyleSheet.create({
     }),
   },
   logoImage: {
-    width: 84,
-    height: 84,
+    width: 104,
+    height: 104,
   },
   brandTitle: {
     fontFamily: 'Sansation',
@@ -326,13 +323,12 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.secondary,
     textAlign: 'center',
-    width: '100%',
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: 24,
   },
   loginCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: spacing.md,
+    padding: 20,
     marginBottom: spacing.md,
     ...Platform.select({
       ios: {
@@ -444,7 +440,7 @@ const styles = StyleSheet.create({
   reporterCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -466,7 +462,6 @@ const styles = StyleSheet.create({
   },
   reporterCardText: {
     flex: 1,
-    minWidth: 0,
     gap: 2,
   },
   reporterCardTitle: {
