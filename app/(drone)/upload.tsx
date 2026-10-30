@@ -63,7 +63,6 @@ export default function DroneUploadScreen() {
   const [note, setNote] = useState('');
   const [statusMsg] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [onlineMode, setOnlineMode] = useState(true);
   const [submitting] = useState(false);
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [srtUri, setSrtUri] = useState<string | null>(null);
@@ -71,6 +70,11 @@ export default function DroneUploadScreen() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [copying, setCopying] = useState(false);
   const picking = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const refreshFiles = async () => {
     const isCurrent = scope.capture();
@@ -118,7 +122,9 @@ export default function DroneUploadScreen() {
     setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
     setUploadProgress(0); setSubmitError(null);
     setNote('');
-    setSavedFiles([]); setFileError(null); setCopying(false);
+    setSavedFiles([]); setFileError(null);
+    // Copy ownership outlives scope changes. Keep its generic busy indicator;
+    // the old continuation must never publish its file into the new scope.
     void refreshFiles();
   }, [scope.key]);
 
@@ -143,7 +149,11 @@ export default function DroneUploadScreen() {
         selectFile(file); setSubmitError(null);
       }
     } catch { if (isCurrent()) setSubmitError('Không lưu được tệp đầy đủ. Lựa chọn trước và lịch sử vẫn được giữ; kiểm tra dung lượng rồi chọn lại MP4/SRT.'); }
-    finally { runtime?.close(); picking.current = false; if (isCurrent()) {setCopying(false);await refreshFiles();} }
+    finally {
+      runtime?.close(); picking.current = false;
+      if (mounted.current) setCopying(false);
+      if (isCurrent()) await refreshFiles();
+    }
   };
   const handlePickVideo = () => pickFile('VIDEO');
   const handlePickSrt = () => pickFile('TELEMETRY');
@@ -503,41 +513,14 @@ export default function DroneUploadScreen() {
         />
       </View>
 
-      <Text style={typography.caption}>Tệp chọn thành công có bản sao riêng trên thiết bị; chưa checksum, chưa tải lên. Ghi chú chỉ nằm trên màn hình. Lựa chọn mạng bên dưới chưa thay đổi kết nối thiết bị.</Text>
-      {/* Network Mode Card */}
+      <Text style={typography.caption}>Tệp chọn thành công có bản sao riêng trên thiết bị; chưa checksum, chưa tải lên. Ghi chú chỉ nằm trên màn hình.</Text>
+      {/* No connection probe or sync transport is enabled on this screen. */}
       <Card style={styles.networkCard}>
         <View style={styles.networkTitleGroup}>
-          <MaterialIcons name="wifi" size={18} color={colors.primary} />
-          <Text style={[typography.labelSm, styles.networkTitle]}>
-            CHẾ ĐỘ ĐỒNG BỘ NGOẠI TUYẾN
-          </Text>
+          <MaterialIcons name="sd-storage" size={18} color={colors.secondary} />
+          <Text style={[typography.labelSm, styles.networkTitle]}>LƯU TỆP TRÊN THIẾT BỊ</Text>
         </View>
-
-        <View style={styles.networkToggleRow}>
-          <Pressable
-            style={[styles.toggleBtn, onlineMode && styles.toggleBtnActive]}
-            onPress={() => setOnlineMode(true)}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: onlineMode }}
-          >
-            <View style={[styles.networkDot, { backgroundColor: colors.success }]} />
-            <Text style={[styles.toggleText, onlineMode && styles.toggleTextActive]}>
-              Trực tuyến (Wi-Fi/4G)
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.toggleBtn, !onlineMode && styles.toggleBtnActive]}
-            onPress={() => setOnlineMode(false)}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: !onlineMode }}
-          >
-            <View style={[styles.networkDot, { backgroundColor: colors.warning }]} />
-            <Text style={[styles.toggleText, !onlineMode && styles.toggleTextActive]}>
-              Ngoại tuyến
-            </Text>
-          </Pressable>
-        </View>
+        <Text style={typography.caption}>Chưa xác minh kết nối mạng. Lưu bản sao không bật đồng bộ hoặc tải tệp lên máy chủ.</Text>
       </Card>
 
       {/* Action CTA Section */}

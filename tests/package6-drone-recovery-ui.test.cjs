@@ -2,6 +2,33 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {drone,id}=require('./package45-drone.test.cjs');
 const {deferred}=require('./helpers/roadfe-screen.cjs');
 const saved={key:id(8),kind:'VIDEO',name:'retained.mp4',size:4,uri:'file:///private/retained.mp4',availability:'LOCAL_UNHASHED'};
+for(const change of ['task','session','actor','environment','logout-relogin'])test('Drone copy stays visibly busy across '+change+' until old preservation settles',async()=>{
+ const d=deferred(),params={taskId:id(2)};let copies=0,picks=0;
+ const s=drone('upload',{}, {params,pick:async()=>{picks++;return {canceled:false,assets:[{name:'private-old.mp4',uri:'file:///source.mp4',size:4}]};},modules:{
+ '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[],preserve:()=>{copies++;return copies===1?d.promise:Promise.resolve(saved);},close(){}})}}});
+ const picker=()=>s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp SD')));
+ s.render();await s.flush();const pending=picker().props.onPress();await s.flush();assert.equal(copies,1);
+ const auth=s.h.getAuth();
+ if(change==='task')params.taskId=id(9);
+ else if(change==='environment')s.h.client.defaults.baseURL='https://other.example.test';
+ else if(change==='session')s.h.changeAuth({...auth,token:s.h.jwt(id(1),'next-session')});
+ else if(change==='actor')s.h.login('DRONE_OPERATOR',id(9));
+ else {s.h.logout();s.render();await s.flush();s.h.changeAuth(auth);}
+ s.render();await s.flush();
+ assert.match(JSON.stringify(s.nodes()),/Đang chọn hoặc sao lưu tệp/);
+ assert.equal(picker().props.disabled,true);
+ await picker().props.onPress();assert.equal(picks,1,'old operation still owns lock');
+ d.resolve({...saved,name:'private-old.mp4'});await pending;await s.flush();
+ assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/private-old.mp4/);
+ assert.equal(picker().props.disabled,false);
+ await picker().props.onPress();await s.flush();assert.equal(picks,2);s.unmount();
+});
+test('Drone upload presents local preservation without a fake online/offline switch',async()=>{
+ const s=drone('upload');s.render();await s.flush();
+ assert.ok(!s.nodes().some(n=>n.props?.accessibilityRole==='radio'));
+ assert.doesNotMatch(JSON.stringify(s.nodes()),/CHẾ ĐỘ ĐỒNG BỘ NGOẠI TUYẾN|Trực tuyến \(Wi-Fi\/4G\)/);
+ assert.match(JSON.stringify(s.nodes()),/Chưa xác minh kết nối mạng/);s.unmount();
+});
 test('Drone upload preserves picker bytes before displaying selection and reopens retained files explicitly',async()=>{
  let writes=0;const d=deferred();
  const s=drone('upload',{}, {params:{taskId:id(2)},pick:async()=>({canceled:false,assets:[{name:'new.mp4',uri:'file:///source.mp4',size:4}]}),modules:{
