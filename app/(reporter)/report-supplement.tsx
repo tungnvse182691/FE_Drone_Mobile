@@ -62,6 +62,9 @@ export default function ReporterReportSupplementScreen() {
   const activeEmail = useAuthStore(state => isReporterSession(state) ? state.user?.phone_or_email : undefined);
   const pendingDraft = useReporterStore(state => state.pendingDraft);
   const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.request));
+  const provenRejection = pendingDraft?.commandOutcome === 'REJECTED' &&
+    pendingDraft.rejection?.status === 412 && pendingDraft.rejection.code === 'concurrency_conflict';
+  const needsReconciliation = Boolean(pendingDraft?.request && !provenRejection);
   const [restored, setRestored] = useState(false);
   const saves = useRef<Promise<unknown>>(Promise.resolve());
   const completed = useRef(false);
@@ -266,8 +269,15 @@ export default function ReporterReportSupplementScreen() {
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: id } });
     } catch (error) {
       if (!isCurrent()) return;
-      const status = (error as { status?: number; response?: { status?: number } })?.response?.status ?? (error as { status?: number })?.status;
-      setError(reporterFailureMessage(error)); setPhase(status === 412 || status === 409 ? 'conflict' : 'ready');
+      const saved = useReporterStore.getState().pendingDraft;
+      const rejected = saved?.commandOutcome === 'REJECTED' &&
+        saved.rejection?.status === 412 && saved.rejection.code === 'concurrency_conflict';
+      setError(saved?.request && !rejected
+        ? saved.resultReportId
+          ? 'Đã nhận phản hồi gửi; chưa xác nhận dữ liệu đọc lại. Đã giữ lệnh và ảnh để đối soát.'
+          : 'Kết quả gửi chưa được xác nhận. Đã giữ lệnh và ảnh; chỉ kiểm tra lại với cùng lệnh, không tạo lệnh mới.'
+        : reporterFailureMessage(error));
+      setPhase(rejected ? 'conflict' : 'ready');
     } finally { if (isCurrent()) submittingRef.current = false; }
   };
 
@@ -281,7 +291,7 @@ export default function ReporterReportSupplementScreen() {
       const found = await getOwnReportReal(reportId);
       if (!isCurrent()) return;
       setReport(found.report); setLoadedAt(new Date().toISOString());
-      setNotice('Đã đọc bản mới nhất để xem xét. Nội dung, If-Match và khóa lệnh cũ vẫn được giữ; chưa thể gửi nội dung khác bằng lệnh này.');
+      setNotice('Đã đọc bản mới nhất để xem xét; dữ liệu này không xác nhận kết quả lệnh. Nội dung, phiên bản và khóa lệnh cũ vẫn được giữ; chưa thể gửi nội dung khác bằng lệnh này.');
     } catch {
       if (isCurrent()) setError('Chưa đọc được bản mới nhất. Nháp và lệnh cũ được giữ nguyên; có thể thử tải lại.');
     }
@@ -340,21 +350,24 @@ export default function ReporterReportSupplementScreen() {
         </View>
       ) : null}
 
-      {phase === 'conflict' ? (
+      {phase === 'conflict' || (restored && needsReconciliation) ? (
         <View style={styles.conflictCard}>
           <View style={styles.conflictHeader}>
             <MaterialIcons name="sync-problem" size={18} color={colors.warning} />
             <Text style={[typography.labelLg, styles.conflictTitle]}>
-              Phát hiện xung đột phiên bản
+              {provenRejection ? 'Phát hiện xung đột phiên bản'
+                : pendingDraft?.resultReportId ? 'Đang kiểm tra phản hồi gửi' : 'Kết quả gửi chưa được xác nhận'}
             </Text>
           </View>
           <Text style={[typography.caption, styles.conflictText]}>
-            Chưa gửi lại nội dung khác. Đọc bản mới nhất để xem xét; nháp và lệnh cũ luôn được giữ.
+            {provenRejection
+              ? 'Máy chủ đã từ chối lần gửi đầu do phiên bản thay đổi. Cần đọc lại trước khi xem xét tạo bản mới.'
+              : 'Đã giữ lệnh và ảnh để đối soát. Đọc bản mới nhất không chứng minh lệnh cũ đã hoàn tất; không tạo lệnh mới.'}
           </Text>
           <View style={styles.conflictActions}>
             <Button variant="secondary" title="Giữ bản của tôi" onPress={keepMine} />
             <Button variant="text" title="Tải bản mới nhất" onPress={() => void takeLatest()} />
-            {pendingDraft?.commandOutcome === 'REJECTED' ? <Button variant="secondary"
+            {provenRejection ? <Button variant="secondary"
               title="Tạo bản bổ sung mới để xem lại" onPress={() => void renewCommand()} /> : null}
           </View>
           <Text style={[typography.caption, styles.conflictText]}>

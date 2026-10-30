@@ -332,12 +332,18 @@ export const useReporterStore = create<ReporterSessionState>()(
                 await putDraft({ ...draft, commandOutcome: 'REJECTED', rejection: { status: 412, code: 'concurrency_conflict' } });
               throw error;
             }
+            if (draft.targetReportId && result.report.id !== draft.targetReportId) {
+              // A response for another report cannot acknowledge this supplement.
+              // Retain the original request/key as unknown for exact reconciliation.
+              throw { code: 'source_not_ready' };
+            }
             await putDraft({ ...draft, resultReportId: result.report.id });
           }
           assertOwner();
           const found = await getOwnReportReal(draft.resultReportId!);
           assertOwner();
-          if (found.report.id !== draft.resultReportId || !draft.request!.evidence?.every(expected =>
+          if ((draft.targetReportId && draft.resultReportId !== draft.targetReportId) ||
+            found.report.id !== draft.resultReportId || !draft.request!.evidence?.every(expected =>
             found.report.evidence.some(actual => actual.fileId === expected.fileId && actual.fileVersion === expected.fileVersion))) {
             throw { code: 'source_not_ready' };
           }
