@@ -48,6 +48,7 @@ export default function ReporterReportScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const captureInFlight = useRef(false);
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -190,9 +191,10 @@ export default function ReporterReportScreen() {
   const handleCapture = async () => {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
-    if (!cameraReady || photos.length >= MAX_PHOTOS) {
+    if (!cameraReady || captureInFlight.current || photos.length >= MAX_PHOTOS) {
       return;
     }
+    captureInFlight.current = true;
     try {
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
@@ -202,6 +204,8 @@ export default function ReporterReportScreen() {
     }
     } catch {
       if (isCurrent()) setSubmitError('Không chụp được ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+    } finally {
+      captureInFlight.current = false;
     }
   };
 
@@ -427,6 +431,7 @@ export default function ReporterReportScreen() {
       <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
         <View style={styles.cameraModal}>
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" onCameraReady={() => setCameraReady(true)} />
+          <SafeAreaView testID="camera-controls" style={styles.cameraControls} edges={['top', 'bottom']}>
           <View style={styles.cameraTopBar}>
             <Pressable
               onPress={() => setCameraOpen(false)}
@@ -441,7 +446,7 @@ export default function ReporterReportScreen() {
             </Text>
             <View style={styles.cameraClose} />
           </View>
-          <View style={styles.cameraFooter}>
+          <View testID="camera-footer" style={styles.cameraFooter}>
             <Pressable
               onPress={handleCapture}
               disabled={!cameraReady}
@@ -453,6 +458,7 @@ export default function ReporterReportScreen() {
               <MaterialIcons name="camera" size={28} color={colors.onPrimary} />
             </Pressable>
           </View>
+          </SafeAreaView>
         </View>
       </Modal>
     </SafeAreaView>
@@ -524,18 +530,19 @@ const styles = StyleSheet.create({
   submitWrapper: { gap: spacing.sm, marginTop: spacing.sm },
   submitHint: { color: colors.secondary, textAlign: 'center' },
   cameraModal: { flex: 1, backgroundColor: colors.neutral },
+  cameraControls: { flex: 1 },
   cameraTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.md,
     paddingBottom: spacing.md,
     backgroundColor: 'rgba(26, 29, 32, 0.7)',
   },
-  cameraClose: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  cameraClose: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   cameraTitle: { color: colors.onPrimary },
-  cameraFooter: { alignItems: 'center', paddingBottom: spacing.xl, paddingTop: spacing.lg },
+  cameraFooter: { marginTop: 'auto', alignItems: 'center', paddingBottom: spacing.xl, paddingTop: spacing.lg },
   shutter: {
     width: 64,
     height: 64,
