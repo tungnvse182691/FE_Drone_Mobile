@@ -199,7 +199,7 @@ function EvidencePreview({ scope, reportId, evidenceId, publication }: {
   useFocusEffect(useCallback(() => () => { setRequested(false); setImageError(false); }, []));
   const label = publication ? 'ảnh được chia sẻ' : 'ảnh riêng tư';
   return <View>
-    <Button variant="secondary" title={publication ? 'Xem ảnh được chia sẻ' : 'Xem ảnh riêng tư'} loading={query.isFetching} onPress={() => {
+    <Button variant="secondary" title={publication ? 'Xem ảnh được chia sẻ' : 'Xem ảnh đính kèm'} loading={query.isFetching} onPress={() => {
       setImageError(false);
       if (requested) void query.refetch(); else setRequested(true);
     }} />

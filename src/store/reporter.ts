@@ -1,3 +1,4 @@
+import { reportDescriptionError } from '../api/reporterValidation';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
@@ -46,7 +47,10 @@ type DraftInput = Pick<ReporterDraft, 'description' | 'photos' | 'coords'> &
   Pick<Partial<ReporterDraft>, 'targetReportId' | 'ifMatch' | 'submitRequested'>;
 
 type ReporterContext = ReturnType<typeof reporterContext>;
-const draftKey = (context: ReporterContext) => `reporter-pending-v2:${context.partition}`;
+const draftKey = (context: ReporterContext) => `reporter-pending-v3:${context.partition}`;
+export function isStartedReporterCommand(draft: ReporterDraft): boolean {
+  return Boolean(draft.submitRequested || draft.request || draft.resultReportId || draft.commandOutcome || draft.photos.some(photo => photo.itemId));
+}
 const provenanceMatches = (draft: ReporterDraft, context: ReporterContext) => draft.ownerId === context.ownerId &&
   draft.provenance?.environment === context.environment && draft.provenance?.session === context.session;
 // Hold the native handle for the store lifetime. Serialize initialization and
@@ -85,7 +89,7 @@ async function readPending(context: ReporterContext): Promise<ReporterDraft | nu
   const db = await draftDb();
   phase = 'draft_read';
   assertReporterContext(context);
-  const draft = await getDraft<ReporterDraft>(db, draftKey(context));
+  const draft = await getDraft<ReporterDraft>(db, draftKey(context)) ?? await getDraft<ReporterDraft>(db, `reporter-pending-v2:${context.partition}`);
   assertReporterContext(context);
   if (hasDraftContent(draft)) return provenanceMatches(draft, context) ? draft : null;
   // Same device/environment is not ownership proof. No guest claim contract exists;
@@ -115,6 +119,7 @@ export function useReporterDraftScope() {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
   return {
     key: JSON.stringify(context),
+    invalidate: () => { generation.current++; },
     capture: () => {
       const capturedGeneration = generation.current;
       return () => {
@@ -158,6 +163,7 @@ interface ReporterSessionState {
   pendingDraftId: string | null;
   pendingDraft: ReporterDraft | null;
   restorePendingDraft: () => Promise<ReporterDraft | null>;
+  restoreStartedCommand: () => Promise<ReporterDraft | null>;
   savePendingDraft: (input: DraftInput) => Promise<ReporterDraft>;
   bindPendingDraft: () => Promise<ReporterDraft | null>;
   submitPendingDraft: () => Promise<string>;
@@ -186,17 +192,34 @@ export const useReporterStore = create<ReporterSessionState>()(
         return draft;
         });
       },
+      restoreStartedCommand: async () => {
+        const draft = await get().restorePendingDraft();
+        if (draft && !isStartedReporterCommand(draft)) {
+          set({ pendingDraft: null, pendingDraftId: null });
+          return null;
+        }
+        return draft;
+      },
       savePendingDraft: (input) => {
         const context = reporterContext();
         return serializeDraft(async () => {
         assertReporterContext(context);
         const ownerId = context.ownerId;
         const current = get().pendingDraft;
-        const previous = hasDraftContent(current) && provenanceMatches(current, context) ? current : await readPending(context);
+        let previous = hasDraftContent(current) && provenanceMatches(current, context) ? current : await readPending(context);
         assertReporterContext(context);
         if (submission) throw { code: 'draft_locked' };
         if (previous?.ownerId && previous.ownerId !== ownerId) throw { code: 'access_forbidden', status: 403 };
-        if (previous?.request) {
+        if (input.submitRequested && reportDescriptionError(input.description)) throw { code: 'validation_error', status: 400 };
+        // Preserve legacy unsent rows byte-for-byte before using the active pointer.
+        if (input.submitRequested && previous && !isStartedReporterCommand(previous)) {
+          const db = await draftDb();
+          assertReporterContext(context);
+          await saveDraft(db, `reporter-unstarted-history-v1:${context.partition}:${previous.id}`, 'reporter_pending_v1', previous as unknown as Record<string, unknown>);
+          assertReporterContext(context);
+          previous = null;
+        }
+        if (previous?.request || (previous && isStartedReporterCommand(previous))) {
           const same = previous.targetReportId === input.targetReportId &&
             JSON.stringify(previous.coords) === JSON.stringify(input.coords) && previous.description === input.description &&
             previous.photos.map(p => p.uri).join('\n') === input.photos.map(p => p.uri).join('\n');
@@ -257,7 +280,7 @@ export const useReporterStore = create<ReporterSessionState>()(
           assertReporterContext(context);
           const next: ReporterDraft = { id: uuidv4(), commandKey: uuidv4(), ownerId: old.ownerId,
             provenance: { ...old.provenance }, description: old.description, photos: old.photos.map(p => ({ ...p })),
-            coords: old.coords, targetReportId: old.targetReportId, ifMatch: version, submitRequested: false };
+            coords: old.coords, targetReportId: old.targetReportId, ifMatch: version, submitRequested: true };
           await persistDraft(next, context);
           assertReporterContext(context);
           set({ pendingDraft: next, pendingDraftId: next.id });
@@ -275,6 +298,7 @@ export const useReporterStore = create<ReporterSessionState>()(
           if (!isReporterSession(auth)) throw { code: 'auth_unauthorized', status: 401 };
           let draft = await get().bindPendingDraft();
           if (!draft || draft.photos.length === 0) throw { code: 'validation_error', status: 400 };
+          if (reportDescriptionError(draft.request?.description ?? draft.description)) throw { code: 'validation_error', status: 400 };
           if (draft.commandOutcome === 'REJECTED') throw { status: 412, code: 'concurrency_conflict' };
           const assertOwner = () => assertReporterContext(context);
           assertOwner();

@@ -88,8 +88,9 @@ function screenHarness(file,overrides={}){
     const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
     vm.runInNewContext(js,{module,exports:module.exports,require:name=>{
       if(name in stubs)return stubs[name];
+      if(name.endsWith('/store/reporterRecovery'))return {listHistoricalReporterCommands:async()=>[],checkHistoricalReporterCommand:async()=>({status:'BE_RECEIPT_REQUIRED'})};
       if(name.endsWith('/store/auth'))return {useAuthStore:auth};
-      if(name.endsWith('/store/reporter'))return {useReporterStore:selector=>selector({clearSession(){}})};
+      if(name.endsWith('/store/reporter'))return {useReporterStore:selector=>selector({clearSession(){}}),useReporterDraftScope:()=>({key:'scope',capture:()=>()=>true})};
       if(name.endsWith('/api/authApi'))return {passwordSessionIdentity:token=>token?JSON.stringify(JSON.parse(Buffer.from(token.split('.')[1],'base64url'))):null,fetchProfile:async()=>overrides.wireProfile??profile};
       if(name.endsWith('/api/uploads'))return {isReporterSession:s=>s.user?.role_code==='REPORTER'&&!!s.token&&['AUTHENTICATED','REFRESHING'].includes(s.status)};
       if(name.endsWith('/api/reporterApi'))return {reporterReportsOptions:scope=>({queryKey:['reporter-reports',scope]}),reportItemsFromPages:pages=>pages?.flatMap(p=>p.items)??[],canShowReportPages:q=>!q.isError||(q.isFetchNextPageError&&q.error?.response?.status===503),getOwnReportReal(){},downloadReportEvidenceReal(){}};
@@ -133,7 +134,7 @@ test('T03 image preview is opt-in, uses only memory data URI and shows errors',(
   const h=screenHarness('app/(reporter)/report-detail.tsx');
   h.render(h.module.EvidencePreview,{scope:'a/s1',reportId:'r',evidenceId:'e'});
   assert.equal(h.configs[0].enabled,false);assert.ok(!h.nodes().some(n=>n?.type==='Image'));
-  h.nodes().find(n=>n?.props?.title==='Xem ảnh riêng tư').props.onPress();
+  h.nodes().find(n=>n?.props?.title==='Xem ảnh đính kèm').props.onPress();
   h.render(h.module.EvidencePreview,{scope:'a/s1',reportId:'r',evidenceId:'e'});
   assert.equal(h.configs[0].enabled,true);assert.equal(h.nodes().find(n=>n?.type==='Image').props.source.uri,'data:image/png;base64,fixture');
 });

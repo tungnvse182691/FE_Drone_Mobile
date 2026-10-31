@@ -22,7 +22,9 @@ function screen(file, options = {}) {
     useEffect: (fn,deps) => { const i=cursor++; if(!slots[i]||changed(slots[i].deps,deps)){
       const old=slots[i]; slots[i]={deps,cleanup:old?.cleanup}; effects.push(()=>{old?.cleanup?.(); slots[i].cleanup=fn();}); } },
   };
-  const h = harness({rows:options.rows, modules:{react}});
+  let mediaRuntime;
+  const h = harness({rows:options.rows, modules:{react, 'expo-file-system':{File:class{constructor(uri){this.uri=uri;}async arrayBuffer(){return (mediaRuntime?.files.get(this.uri)??Uint8Array.from([1,2,3])).buffer;}}}}});
+  h.transport.getFileMetadata=async()=>{h.calls.push(['metadata']);const row=[...h.rows.values()].find(r=>r.uri_local&&mediaRuntime?.files.has(r.uri_local));const bytes=row?mediaRuntime.files.get(row.uri_local):Uint8Array.from([1,2,3]);return {id:'file',status:'VERIFIED',version:'fv',checksumSha256:require('node:crypto').createHash('sha256').update(bytes).digest('hex'),sizeBytes:bytes.length};};
   const authMethods = {
     login: (user,pair) => h.changeAuth({status:'AUTHENTICATED',user,token:pair.accessToken}),
     beginOtp: () => h.changeAuth({...h.getAuth(),status:'OTP_PENDING'}),
@@ -53,7 +55,7 @@ function screen(file, options = {}) {
   vm.runInNewContext(code,{module,exports:module.exports,React:react,Date,setTimeout,clearTimeout,Uint8Array,require:name=>{
     if(options.modules?.[name])return options.modules[name];
     if(modules[name])return modules[name];
-    if(name.endsWith('/api/reporterLocalMedia'))return (localMedia??=require('./reporter-media.cjs').mediaRuntime({autoSources:true}).load());
+    if(name.endsWith('/api/reporterLocalMedia'))return (localMedia??=(mediaRuntime=require('./reporter-media.cjs').mediaRuntime({autoSources:true})).load());
     if(name.endsWith('/store/reporter'))return reporter;
     if(name.endsWith('/store/uploads'))return uploads;
     if(name.endsWith('/store/auth'))return{useAuthStore:auth,buildUserFromActor:(actor,email,must)=>({...actor,role_code:actor.role_code??'REPORTER',phone_or_email:email,must_change_password:!!must})};

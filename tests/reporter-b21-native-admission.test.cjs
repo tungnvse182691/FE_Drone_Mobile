@@ -13,7 +13,8 @@ test('B2.1 actual library handler reads granted content URI rather than inaccess
   }, modules:{'../../src/api/reporterLocalMedia':r.load()}});
   s.render(); await s.flush(); await s.tap('pick-photo'); await s.flush();
   assert.equal(options.copyToCacheDirectory,false);
-  const photo=s.reporter.useReporterStore.getState().pendingDraft?.photos[0];
+  const photo=s.slots.filter(slot=>slot?.current?.values).flatMap(slot=>[...slot.current.values()]).find(p=>p?.uri?.includes('/documents/reporter-photos-v1/'));
+  assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
   assert.ok(photo?.uri.includes('/documents/reporter-photos-v1/'));
   assert.deepEqual(r.files.get(photo.uri),png); assert.equal(s.h.calls.length,0); s.unmount();
 });

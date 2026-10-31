@@ -1,4 +1,6 @@
-import React, { useCallback } from 'react';
+import { listHistoricalReporterCommands, checkHistoricalReporterCommand, type HistoricalReporterCommand } from '../../src/store/reporterRecovery';
+import { useReporterDraftScope } from '../../src/store/reporter';
+import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -32,6 +34,35 @@ export default function ReporterHomeScreen() {
   useFocusEffect(useCallback(() => { if (enabled) void refetch(); }, [enabled, refetch]));
   const reports = enabled && canShowReportPages(query) ? reportItemsFromPages(query.data?.pages) : [];
   const activeEmail = enabled ? user?.phone_or_email : null;
+
+  const recoveryScope = useReporterDraftScope();
+  const [history, setHistory] = useState<{ scope: string; rows: HistoricalReporterCommand[] } | null>(null);
+  const [historyMessage, setHistoryMessage] = useState('');
+  const [checking, setChecking] = useState(false);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const current = recoveryScope.capture();
+    setHistory(null); setHistoryMessage(''); setChecking(false);
+    if (enabled) void listHistoricalReporterCommands().then(rows => {
+      if (active && current()) setHistory({ scope: recoveryScope.key, rows });
+    }).catch(() => {
+      if (active && current()) setHistoryMessage('Chưa kiểm tra được lệnh của phiên trước. Dữ liệu cũ vẫn được giữ.');
+    });
+    return () => { active = false; };
+  }, [enabled, recoveryScope.key]));
+  const inspect = async (id: string) => {
+    if (checking || history?.scope !== recoveryScope.key) return;
+    const current = recoveryScope.capture();
+    setChecking(true);
+    try {
+      const result = await checkHistoricalReporterCommand(id);
+      if (current()) setHistoryMessage(result.resourceReadable
+        ? 'Đã đọc được phản ánh theo quyền hiện tại. Chưa có xác nhận riêng cho lệnh này từ máy chủ; chưa xác nhận hoàn tất và không tự gửi lại.'
+        : 'Chưa có mã phản ánh để đối soát. Cần xác nhận lệnh từ máy chủ; lệnh và ảnh vẫn được giữ, không tự gửi lại.');
+    } catch {
+      if (current()) setHistoryMessage('Chưa đối soát được lệnh theo quyền hiện tại. Lệnh và ảnh vẫn được giữ.');
+    } finally { if (current()) setChecking(false); }
+  };
 
   return (
     <SafeAreaScreen
@@ -87,6 +118,13 @@ export default function ReporterHomeScreen() {
         />
       </View>
 
+      {enabled && history?.scope === recoveryScope.key && history.rows.length ? <Card>
+        <Text style={typography.titleMd}>Lệnh gửi trước cần kiểm tra</Text>
+        {history.rows.map((command, index) => <Button key={command.id} variant="secondary"
+          title={`Kiểm tra lệnh ${command.kind === 'supplement' ? 'bổ sung' : 'phản ánh'} ${index + 1}`}
+          disabled={checking} onPress={() => void inspect(command.id)} />)}
+      </Card> : null}
+      {enabled && historyMessage ? <Text style={typography.caption}>{historyMessage}</Text> : null}
       <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây của bạn</Text>
 
       {enabled ? <Button variant="secondary" title="Làm mới" loading={query.isFetching && !query.isFetchingNextPage} onPress={() => void query.refetch()} /> : null}
@@ -97,7 +135,7 @@ export default function ReporterHomeScreen() {
           <View style={styles.hintRow}>
             <MaterialIcons name="mail-outline" size={20} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.hintText]}>
-              Bạn có thể tạo nháp trước; vui lòng đăng nhập để xem các phản ánh đã gửi.
+              Nội dung chưa gửi không được lưu. Vui lòng đăng nhập để gửi và xem các phản ánh của bạn.
             </Text>
           </View>
         </Card>

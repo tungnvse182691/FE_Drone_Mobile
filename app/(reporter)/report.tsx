@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { reportDescriptionError } from '../../src/api/reporterValidation';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -10,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -37,7 +38,6 @@ const softShadow = Platform.select({
 });
 
 const MAX_PHOTOS = 3;
-const MIN_DESCRIPTION = 10;
 interface Coords {
   latitude: number;
   longitude: number;
@@ -72,12 +72,11 @@ export default function ReporterReportScreen() {
   const [restored, setRestored] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
   const [restoreAttempt, setRestoreAttempt] = useState(0);
-  const saves = useRef<Promise<unknown>>(Promise.resolve());
   const completed = useRef(false);
   const submitted = useRef(false);
   const photoMeta = useRef<Map<string, DraftPhoto>>(new Map());
   const queueItems = useUploadsStore(state => state.items);
-  const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.request));
+  const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.submitRequested || state.pendingDraft?.request || state.pendingDraft?.photos.some(photo => photo.itemId)));
   const scope = useReporterDraftScope();
   const [dataScope, setDataScope] = useState('');
   const photoInputs = () => photos.map(uri => {
@@ -90,7 +89,7 @@ export default function ReporterReportScreen() {
     return photo;
   });
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let active = true;
     const isCurrent = scope.capture();
     setRestored(false);
@@ -98,7 +97,7 @@ export default function ReporterReportScreen() {
     setDescription(''); updatePhotos(() => []); setCoords(null); setCameraOpen(false);
     setErrors({}); setSubmitError(null); setSubmitting(false);
     photoMeta.current = new Map(); completed.current = false; submitted.current = false;
-    void useReporterStore.getState().restorePendingDraft().then(draft => {
+    void useReporterStore.getState().restoreStartedCommand().then(draft => {
       if (!active || !isCurrent()) return;
       if (draft?.targetReportId) {
         router.replace({ pathname: '/(reporter)/report-supplement', params: { reportId: draft.targetReportId } });
@@ -110,7 +109,7 @@ export default function ReporterReportScreen() {
       const validCoords = hasUsableCoordinate(draft?.coords?.latitude, draft?.coords?.longitude) ? draft!.coords : null;
       setCoords(validCoords);
       if (validCoords || draft?.request) {
-        setGpsStatus(validCoords ? 'Đã khôi phục vị trí của nháp' : 'Nháp chưa có tọa độ'); setGpsLoading(false);
+        setGpsStatus(validCoords ? 'Đã khôi phục vị trí của lệnh đang gửi' : 'Lệnh chưa có tọa độ'); setGpsLoading(false);
       } else void requestLocation();
       setRestored(true);
       setDataScope(scope.key);
@@ -119,18 +118,10 @@ export default function ReporterReportScreen() {
     void useUploadsStore.getState().hydrate().catch(() => {
       if (active && isCurrent()) setSubmitError('Chưa đọc được ảnh trong hàng đợi. Nháp và ảnh vẫn được giữ; mở hàng đợi để thử tải lại.');
     });
-    return () => { active = false; };
-  }, [scope.key, restoreAttempt]);
+    return () => { active = false; scope.invalidate(); };
+  }, [scope.key, restoreAttempt]));
 
-  useEffect(() => {
-    if (!restored || dataScope !== scope.key || submitting || completed.current || (!description.trim() && photos.length === 0 && !useReporterStore.getState().pendingDraft)) return;
-    const isCurrent = scope.capture();
-    const input = { description: description.trim(), photos: photoInputs(), coords };
-    saves.current = saves.current.catch(() => undefined).then(() => {
-      if (isCurrent()) return useReporterStore.getState().savePendingDraft(input);
-    });
-    void saves.current.catch(error => { if (isCurrent()) setSubmitError(reporterFailureMessage(error)); });
-  }, [restored, description, photos, coords, submitting, dataScope, scope.key]);
+
 
   const requestLocation = async () => {
     const isCurrent = scope.capture();
@@ -190,7 +181,7 @@ export default function ReporterReportScreen() {
       const result = await requestPermission();
       if (isCurrent() && !result.granted) setSubmitError('Cần cấp quyền camera để chụp ảnh hiện trường.');
     } catch {
-      if (isCurrent()) setSubmitError('Không mở được camera. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+      if (isCurrent()) setSubmitError('Không mở được camera. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     }
   };
 
@@ -214,7 +205,7 @@ export default function ReporterReportScreen() {
       setCameraOpen(false);
     }
     } catch (error) {
-      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không chụp được ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không chụp được ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     } finally {
       captureInFlight.current = false;
     }
@@ -245,7 +236,7 @@ export default function ReporterReportScreen() {
         updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
       }
     } catch (error) {
-      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     } finally {
       captureInFlight.current = false;
     }
@@ -253,9 +244,8 @@ export default function ReporterReportScreen() {
 
   const validate = () => {
     const next: Record<string, string> = {};
-    if (description.trim().length < MIN_DESCRIPTION) {
-      next.description = `Mô tả tối thiểu ${MIN_DESCRIPTION} ký tự để đội nghiệp vụ xác định vị trí.`;
-    }
+    const descriptionError = reportDescriptionError(description);
+    if (descriptionError) next.description = descriptionError;
     if (photos.length === 0) {
       next.photos = 'Vui lòng chụp hoặc chọn ít nhất một ảnh hiện trường.';
     }
@@ -267,17 +257,16 @@ export default function ReporterReportScreen() {
     const isCurrent = scope.capture();
     if (captureInFlight.current) return;
     if (!isCurrent() || dataScope !== scope.key || submitted.current || !restored || !validate()) return;
-    submitted.current = true;
-    setSubmitting(true); setSubmitError(null);
-    try {
-      await saves.current.catch(() => undefined);
-      if (!isCurrent()) return;
-      await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
-      if (!isCurrent()) return;
       if (!isReporterSession(useAuthStore.getState())) {
         router.push('/(auth)');
         return;
       }
+    submitted.current = true;
+    setSubmitting(true); setSubmitError(null);
+    try {
+      if (!isCurrent()) return;
+      await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
+      if (!isCurrent()) return;
       const reportId = await useReporterStore.getState().submitPendingDraft();
       if (!isCurrent()) return;
       completed.current = true;
@@ -291,7 +280,7 @@ export default function ReporterReportScreen() {
   };
 
   if (dataScope !== scope.key) return <SafeAreaView style={styles.safe}>
-    <Text>{restoreFailed ? 'Chưa khôi phục được nháp. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào.' : 'Đang khôi phục nháp của phiên hiện tại...'}</Text>
+    <Text>{restoreFailed ? 'Chưa đọc được lệnh đang gửi. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào.' : 'Đang kiểm tra lệnh đang gửi của phiên hiện tại...'}</Text>
     {restoreFailed ? <Button variant="primary" title="Thử khôi phục lại" onPress={() => setRestoreAttempt(value => value + 1)} /> : null}
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace(REPORTER_HOME)} />
   </SafeAreaView>;
@@ -346,7 +335,7 @@ export default function ReporterReportScreen() {
             Ảnh hiện trường ({photos.length}/{MAX_PHOTOS})
           </Text>
           {!draftLocked && candidates.length > 0 ? <View>
-            <Text style={typography.caption}>Chọn rõ ảnh đã xác minh của phiên hiện tại để gắn vào nháp này.</Text>
+            <Text style={typography.caption}>Chọn rõ ảnh đã xác minh của phiên hiện tại để gắn vào phản ánh này.</Text>
             {candidates.map((item, index) => <View key={item.id}><Image source={{ uri: item.uriLocal }} style={styles.photo} /><Text style={typography.caption}>{item.fileName}</Text><Button variant="secondary" key={item.id} title={`Chọn ảnh đã xác minh ${index + 1}`}
               disabled={submitting || photos.length >= MAX_PHOTOS}
               onPress={() => {

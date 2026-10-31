@@ -4,7 +4,7 @@ function guardFixture(){
  const done=deferred(),nav=[],user={id:'reporter-A',role_code:'REPORTER',must_change_password:false};
  let state={user,token:'jwt-A',status:'AUTHENTICATED'},context={ownerId:user.id,session:'session-A',environment:'env-A'};
  const segments=['(auth)'];const router={replace:p=>nav.push(p)},auth=Object.assign(f=>f(state),{getState:()=>state});
- const store=Object.assign(f=>f({pendingDraft:null}),{getState:()=>({restorePendingDraft:()=>done.promise})});
+ const store=Object.assign(f=>f({pendingDraft:null}),{getState:()=>({restoreStartedCommand:()=>done.promise})});
  const props={children:'Stack remains mounted'};
  const s=screen('app/_layout.tsx',{expose:'AuthGuard',exportName:'AuthGuard',props,modules:{
   '../src/store/auth':{useAuthStore:auth},'../src/store/reporter':{useReporterStore:store},

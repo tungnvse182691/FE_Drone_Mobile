@@ -33,7 +33,7 @@ for (const [status, code, outcome] of [
 for (const failure of [{ status: 409, code: 'source_not_ready' }, { status: 412, code: 'concurrency_conflict' }, { code: 'ERR_NETWORK' }])
 test(`A3 restored unknown and ${failure.code} UI never claim definitive rejection or unsent command`, async () => {
   const read = async () => ({ report: { id: 'fixture-report', evidence: [{ fileId: 'file', fileVersion: 'fv' }], createdAt: '2026-10-30' }, etag: '"v1"' });
-  const s = screen('app/(reporter)/report-supplement.tsx', { api: { getOwnReportReal: read }, pick: async () => ({ canceled: false, assets: [{ uri: 'a.jpg', name: 'a.jpg', mimeType: 'image/jpeg' }] }) });
+  const s = screen('app/(reporter)/report-supplement.tsx', { api: { getOwnReportReal: read }, pick: async () => ({ canceled: false, assets: [{ uri: 'content://test-provider/a.jpg', name: 'a.jpg', mimeType: 'image/jpeg' }] }) });
   s.h.login(); let sends = 0;
   s.h.api.submitReportSupplementReal = async () => { sends++; throw { code: 'ERR_NETWORK' }; };
   s.render(); await s.flush(); s.input('Nội dung bổ sung', 'Supplement fixture'); await s.tap('pick-photo'); await s.flush();

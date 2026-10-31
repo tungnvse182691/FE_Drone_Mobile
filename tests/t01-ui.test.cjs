@@ -11,7 +11,7 @@ const settle=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r))
 // This is hook logic coverage, not React rendering or Android acceptance.
 function mountSupplement(draft) {
   const gps=deferred(),report=deferred(),effects=[],states=[];
-  const state={pendingDraft:null,restorePendingDraft:async()=>{state.pendingDraft=draft;return draft;}};
+  const state={pendingDraft:null,restoreStartedCommand:async()=>{state.pendingDraft=draft;return draft;}};
   const store=selector=>selector(state);store.getState=()=>state;
   const authState={user:{id:'fixture',phone_or_email:'fixture@example.test'},token:'fixture',status:'AUTHENTICATED'};
   const auth=selector=>selector(authState);auth.getState=()=>authState;
@@ -23,7 +23,7 @@ function mountSupplement(draft) {
     vm.runInNewContext(code,{module,exports:module.exports,require:name=>{
       if(name==='react')return react;
       if(name==='react-native')return {Platform:{select:o=>o.default},StyleSheet:{create:o=>o}};
-      if(name==='expo-router')return {useRouter:()=>({replace(){}}),useLocalSearchParams:()=>({reportId:'fixture-report'})};
+      if(name==='expo-router')return {useFocusEffect:callback=>effects.push(callback),useRouter:()=>({replace(){}}),useLocalSearchParams:()=>({reportId:'fixture-report'})};
       if(name==='expo-camera')return {useCameraPermissions:()=>[{granted:true},async()=>({granted:true})]};
       if(name==='expo-location')return {Accuracy:{Balanced:1},getForegroundPermissionsAsync:async()=>({status:'granted'}),getCurrentPositionAsync:()=>gps.promise};
       if(name.endsWith('/store/reporter'))return {useReporterStore:store,useReporterDraftScope:()=>({key:'fixture-scope',capture:()=>()=>true}),reporterFailureMessage:()=> 'fixture error'};

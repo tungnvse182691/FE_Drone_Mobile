@@ -54,7 +54,7 @@ test('rejection recovery requires matching report, absent sent evidence and stab
 });
 test('supplement UI explicitly renews a proven rejection without sending the new command', async () => {
   const read = async () => ({ report: { id: 'fixture-report', evidence: [], createdAt: '2026-10-29' }, etag: '"v2"' });
-  const s = screen('app/(reporter)/report-supplement.tsx', { api: { getOwnReportReal: read }, pick: async () => ({ canceled: false, assets: [{ uri: 'a.jpg', name: 'a.jpg', mimeType: 'image/jpeg' }] }) });
+  const s = screen('app/(reporter)/report-supplement.tsx', { api: { getOwnReportReal: read }, pick: async () => ({ canceled: false, assets: [{ uri: 'content://test-provider/a.jpg', name: 'a.jpg', mimeType: 'image/jpeg' }] }) });
   s.h.login(); let posts = 0;
   s.h.api.submitReportSupplementReal = async () => { posts++; throw { status: 412, code: 'concurrency_conflict' }; };
   s.h.api.getOwnReportReal = async () => ({ ...await read(), etag: '"v3"' });

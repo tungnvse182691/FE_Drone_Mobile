@@ -1,3 +1,5 @@
+import { preserveReporterPhoto } from '../../src/api/reporterLocalMedia';
+import { reportDescriptionError } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
@@ -9,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
@@ -61,12 +63,11 @@ export default function ReporterReportSupplementScreen() {
 
   const activeEmail = useAuthStore(state => isReporterSession(state) ? state.user?.phone_or_email : undefined);
   const pendingDraft = useReporterStore(state => state.pendingDraft);
-  const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.request));
+  const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.submitRequested || state.pendingDraft?.request || state.pendingDraft?.photos.some(photo => photo.itemId)));
   const provenRejection = pendingDraft?.commandOutcome === 'REJECTED' &&
     pendingDraft.rejection?.status === 412 && pendingDraft.rejection.code === 'concurrency_conflict';
   const needsReconciliation = Boolean(pendingDraft?.request && !provenRejection);
   const [restored, setRestored] = useState(false);
-  const saves = useRef<Promise<unknown>>(Promise.resolve());
   const completed = useRef(false);
   const submittingRef = useRef(false);
   const metadata = useRef<Map<string, DraftPhoto>>(new Map());
@@ -139,7 +140,7 @@ export default function ReporterReportSupplementScreen() {
     try {
       const found = await getOwnReportReal(reportId);
       if (!isCurrent()) return;
-      const draft = await useReporterStore.getState().restorePendingDraft();
+      const draft = await useReporterStore.getState().restoreStartedCommand();
       if (!isCurrent()) return;
       if (draft && draft.targetReportId !== reportId) throw { code: 'draft_locked' };
       setReport(found.report);
@@ -154,13 +155,14 @@ export default function ReporterReportSupplementScreen() {
     } catch {
       if (!isCurrent()) return;
       setPhase('failed');
-      setError('Chưa đọc được phản ánh hoặc nháp. Dữ liệu cũ vẫn được giữ; thử tải lại khi kết nối sẵn sàng.');
+      setError('Chưa đọc được phản ánh hoặc lệnh đang gửi. Dữ liệu cũ vẫn được giữ; thử tải lại khi kết nối sẵn sàng.');
     }
   }, [reportId, activeEmail, scope.key]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void loadReport();
-  }, [loadReport]);
+    return () => scope.invalidate();
+  }, [loadReport]));
 
   const handlePickImage = async () => {
     const isCurrent = scope.capture();
@@ -168,20 +170,22 @@ export default function ReporterReportSupplementScreen() {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
-        copyToCacheDirectory: true,
+        copyToCacheDirectory: false,
       });
       if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
-        metadata.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
-          mediaType: normalizePhotoMediaType(asset.name, asset.mimeType) || '', capturedAt: new Date().toISOString() });
-        setPhotos((current) => current.includes(asset.uri) ? current : [...current, asset.uri].slice(0, MAX_PHOTOS));
+        const saved = await preserveReporterPhoto({ uri: asset.uri, fileName: asset.name, mediaType: asset.mimeType, capturedAt: new Date().toISOString() }, isCurrent);
+        if (!isCurrent()) return;
+        if ([...metadata.current.values()].some(photo => photo.checksumSha256 === saved.checksumSha256)) return;
+        metadata.current.set(saved.uri, saved);
+        setPhotos(current => current.includes(saved.uri) ? current : [...current, saved.uri].slice(0, MAX_PHOTOS));
         if (error) {
           setError(null);
         }
       }
     } catch {
-      if (isCurrent()) setError('Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+      if (isCurrent()) setError('Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     }
   };
 
@@ -200,7 +204,7 @@ export default function ReporterReportSupplementScreen() {
     setCameraReady(false);
     setCameraOpen(true);
     } catch {
-      if (isCurrent()) setError('Không mở được camera. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+      if (isCurrent()) setError('Không mở được camera. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     }
   };
 
@@ -214,14 +218,17 @@ export default function ReporterReportSupplementScreen() {
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
     if (photo?.uri) {
-      setPhotos((current) => [...current, photo.uri].slice(0, MAX_PHOTOS));
+      const saved = await preserveReporterPhoto({ uri: photo.uri, fileName: photo.uri.split('/').pop() ?? '', mediaType: 'image/jpeg', capturedAt: new Date().toISOString() }, isCurrent);
+      if (!isCurrent()) return;
+      metadata.current.set(saved.uri, saved);
+      setPhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
       setCameraOpen(false);
       if (error) {
         setError(null);
       }
     }
     } catch {
-      if (isCurrent()) setError('Không chụp được ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+      if (isCurrent()) setError('Không chụp được ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     }
   };
 
@@ -239,26 +246,19 @@ export default function ReporterReportSupplementScreen() {
     return photo;
   });
 
-  useEffect(() => {
-    if (!restored || dataScope !== scope.key || !expectedVersion || completed.current || phase === 'submitting' || phase === 'done') return;
-    const isCurrent = scope.capture();
-    const input = { description: description.trim(), photos: photoInputs(), coords, targetReportId: reportId, ifMatch: expectedVersion };
-    saves.current = saves.current.catch(() => undefined).then(() => {
-      if (isCurrent()) return useReporterStore.getState().savePendingDraft(input);
-    });
-    void saves.current.catch(error => { if (isCurrent()) setError(reporterFailureMessage(error)); });
-  }, [restored, description, photos, coords, expectedVersion, reportId, phase, dataScope, scope.key]);
+
 
   const submit = async () => {
     const isCurrent = scope.capture();
     if (!isCurrent() || dataScope !== scope.key || submittingRef.current || phase === 'conflict' || !restored || !expectedVersion) return;
-    if (!description.trim() || !photos.length) {
+    const descriptionError = reportDescriptionError(description);
+    if (descriptionError) { setError(descriptionError); return; }
+    if (!photos.length) {
       setError('Vui lòng nhập nội dung và chọn ít nhất một ảnh bổ sung.'); return;
     }
     submittingRef.current = true;
     setError(null); setPhase('submitting');
     try {
-      await saves.current.catch(() => undefined);
       if (!isCurrent()) return;
       await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords,
         targetReportId: reportId, ifMatch: expectedVersion, submitRequested: true });
@@ -326,8 +326,8 @@ export default function ReporterReportSupplementScreen() {
 
       {phase === 'failed' && pendingDraft && pendingDraft.targetReportId !== reportId ? (
         <View>
-          <Text style={typography.caption}>Bạn đang có nháp khác chưa gửi. Hãy mở lại nháp để tiếp tục.</Text>
-          <Button variant="secondary" title="Mở nháp đang lưu" onPress={() => router.replace('/(reporter)/report')} />
+          <Text style={typography.caption}>Bạn có lệnh gửi khác cần kiểm tra. Hãy mở lại lệnh để tiếp tục.</Text>
+          <Button variant="secondary" title="Mở lệnh đang gửi" onPress={() => router.replace('/(reporter)/report')} />
         </View>
       ) : null}
 

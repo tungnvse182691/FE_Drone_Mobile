@@ -6,13 +6,13 @@ const text=s=>JSON.stringify(s.nodes());
 test('RPT restore failure is actionable, retry reads only and empty restore opens form',async()=>{
  const s=screen(report);let count=0;
  s.reporter.useReporterStore.getState().restorePendingDraft=async()=>{if(!count++)throw Error('private detail');return null;};
- s.render();await s.flush();assert.match(text(s),/Chưa khôi phục được nháp/);assert.doesNotMatch(text(s),/private detail/);
+ s.render();await s.flush();assert.match(text(s),/Chưa đọc được lệnh đang gửi/);assert.doesNotMatch(text(s),/private detail/);
  await s.press('Thử khôi phục lại');await s.flush();assert.match(text(s),/reporter-description/);assert.equal(s.h.calls.length,0);
 });
-test('RPT optional denied GPS permits explicit guest save/login with photo',async()=>{
+test('RPT optional denied GPS permits guest login without form persistence with photo',async()=>{
  const s=screen(report,{pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.render();await s.flush();s.input('Mô tả hiện trạng','Hiện trạng hư hại mặt đường');await s.tap('pick-photo');await s.flush();
- await s.press('Gửi phản ánh');await s.flush();assert.deepEqual(s.nav,['/(auth)']);assert.equal(s.reporter.useReporterStore.getState().pendingDraft.coords,null);
+ await s.press('Gửi phản ánh');await s.flush();assert.deepEqual(s.nav,['/(auth)']);assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);assert.equal(s.h.rows.size,0);
 });
 test('RPT restore never automatically replays frozen uncertain command',async()=>{
  const s=screen(report);s.h.login();const st=s.reporter.useReporterStore.getState();
@@ -34,13 +34,13 @@ for(const file of ['capture','uploads'])test(`RPT ${file} hydrate failure has re
  const s=screen(`app/(reporter)/${file}.tsx`);let count=0;s.uploads.useUploadsStore.getState().hydrate=async()=>{if(!count++)throw Error('private');};
  s.render();await s.flush();assert.match(text(s),/Chưa tải được hàng đợi/);await s.press('Thử tải lại');await s.flush();assert.equal(count,2);assert.equal(s.h.calls.length,0);
 });
-test('RPT queue selection is explicit VERIFIED owned and persisted without creating upload',async()=>{
+test('RPT queue selection is explicit VERIFIED owned and held in form without creating upload',async()=>{
  const s=screen(report);s.h.login();const q=s.uploads.useUploadsStore.getState();const id=await q.enqueuePhoto({uriLocal:'a.jpg',fileName:'a.jpg',mediaType:'image/jpeg',sizeBytes:3,checksumSha256:'a'.repeat(64)});
  s.uploads.useUploadsStore.setState({items:s.uploads.useUploadsStore.getState().items.map(i=>({...i,mediaState:'VERIFIED',fileId:'file',verifiedVersion:'fv'}))});
  // Hydration must preserve real ledger, so also update its stored verification values.
  const row=s.h.rows.get(id);row.media_state='VERIFIED';row.file_id='file';row.verified_version='fv';
  s.render();await s.flush();assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
- await s.press('Chọn ảnh đã xác minh 1');await s.flush();assert.equal(s.reporter.useReporterStore.getState().pendingDraft.photos[0].itemId,id);assert.equal(s.h.calls.length,0);
+ await s.press('Chọn ảnh đã xác minh 1');await s.flush();assert.ok(s.nodes().some(n=>n.type==='Image'&&n.props.source?.uri==='a.jpg'));assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);assert.equal(s.h.calls.length,0);
 });
 test('RPT old restore completion cannot show private draft after account switch',async()=>{
  const s=screen(report);s.h.login();const d=deferred();let first=true;s.reporter.useReporterStore.getState().restorePendingDraft=()=>first?(first=false,d.promise):Promise.resolve(null);
@@ -122,7 +122,7 @@ test('RPT unknown POST survives store restart with identical body/key and no aut
 
 for(const page of ['report','report-supplement'])test(`RPT ${page} duplicate local URI binds only one photo`,async()=>{
  const s=screen(`app/(reporter)/${page}.tsx`,{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
- s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();await s.tap('pick-photo');await s.flush();assert.equal(s.reporter.useReporterStore.getState().pendingDraft.photos.length,1);
+ s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();await s.tap('pick-photo');await s.flush();assert.equal(s.nodes().filter(n=>n.type==='Image'&&n.props.source?.uri).length,1);assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
 });
 for(const page of ['report','report-supplement'])test(`RPT ${page} camera permission exception is safely shown`,async()=>{
  const s=screen(`app/(reporter)/${page}.tsx`,{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},modules:{'expo-camera':{CameraView:'CameraView',useCameraPermissions:()=>[{granted:false},async()=>{throw Error('private native error');}]}}});

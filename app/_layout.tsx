@@ -124,7 +124,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
         try {
           const context=reporterContext();
           assertReporterContext(context);
-          const draft=await useReporterStore.getState().restorePendingDraft();
+          const draft=await useReporterStore.getState().restoreStartedCommand();
           if(cancelled)return;
           assertReporterContext(context);
           const owned=draft?.ownerId===user.id&&draft.provenance?.environment===context.environment&&
