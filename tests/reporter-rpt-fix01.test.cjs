@@ -10,7 +10,7 @@ test('RPT restore failure is actionable, retry reads only and empty restore open
  await s.press('Thử khôi phục lại');await s.flush();assert.match(text(s),/reporter-description/);assert.equal(s.h.calls.length,0);
 });
 test('RPT optional denied GPS permits explicit guest save/login with photo',async()=>{
- const s=screen(report,{pick:async()=>({canceled:false,assets:[{uri:'cache://a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
+ const s=screen(report,{pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.render();await s.flush();s.input('Mô tả hiện trạng','Hiện trạng hư hại mặt đường');await s.tap('pick-photo');await s.flush();
  await s.press('Gửi phản ánh');await s.flush();assert.deepEqual(s.nav,['/(auth)']);assert.equal(s.reporter.useReporterStore.getState().pendingDraft.coords,null);
 });
@@ -47,7 +47,7 @@ test('RPT old restore completion cannot show private draft after account switch'
  s.render();s.h.login('REPORTER','B');s.render();await s.flush();d.resolve({description:'PRIVATE_A',photos:[],coords:null});await s.flush();assert.doesNotMatch(text(s),/PRIVATE_A/);
 });
 test('RPT supplement 412 exposes GET review without rebasing command',async()=>{
- let reads=0;const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>{reads++;return {report:{id:'fixture-report',description:'server',createdAt:'2026-10-29',evidence:[]},etag:'"v2"'};}},pick:async()=>({canceled:false,assets:[{uri:'a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
+ let reads=0;const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>{reads++;return {report:{id:'fixture-report',description:'server',createdAt:'2026-10-29',evidence:[]},etag:'"v2"'};}},pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.h.login();s.render();await s.flush();s.input('Nội dung bổ sung','Nội dung bổ sung');await s.tap('pick-photo');await s.flush();
  // Use the real journal/store: a bare status thrown above persistence is not
  // evidence that a first dispatch was definitively rejected by the server.
@@ -64,7 +64,7 @@ for(const page of ['report','report-supplement'])test(`RPT ${page} picker except
 });
 
 test('RPT supplement conflict blocks handler replay until a supported reconciliation decision',async()=>{
- const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
+ const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.h.login();s.render();await s.flush();s.input('Nội dung bổ sung','Thông tin bổ sung');await s.tap('pick-photo');await s.flush();
  let posts=0;s.h.api.submitReportSupplementReal=async()=>{posts++;throw {status:412,code:'concurrency_conflict'};};
  await s.press('Gửi bổ sung');await s.flush();await s.press('Gửi bổ sung');await s.flush();assert.equal(posts,1);
@@ -121,7 +121,7 @@ test('RPT unknown POST survives store restart with identical body/key and no aut
 });
 
 for(const page of ['report','report-supplement'])test(`RPT ${page} duplicate local URI binds only one photo`,async()=>{
- const s=screen(`app/(reporter)/${page}.tsx`,{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
+ const s=screen(`app/(reporter)/${page}.tsx`,{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})});
  s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();await s.tap('pick-photo');await s.flush();assert.equal(s.reporter.useReporterStore.getState().pendingDraft.photos.length,1);
 });
 for(const page of ['report','report-supplement'])test(`RPT ${page} camera permission exception is safely shown`,async()=>{

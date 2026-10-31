@@ -8,6 +8,7 @@ function mediaRuntime(options={}) {
  class File {
   constructor(...parts){this.uri=parts.map(uriOf).join('/');if(options.autoSources&&!this.uri.includes('private/documents')&&!files.has(this.uri))files.set(this.uri,/\.png$/i.test(this.uri)?png:jpeg);}
   get exists(){return files.has(this.uri);}
+  info(){return {exists:this.exists,size:this.size};}
   get size(){return options.size??files.get(this.uri)?.length??0;}
   async bytes(){events.push('read');if(options.read)await options.read();if(options.fail==='read')throw Error('private native path');return files.get(this.uri)?.slice()??Promise.reject(Error('missing'));}
   async arrayBuffer(){return (await this.bytes()).buffer;}

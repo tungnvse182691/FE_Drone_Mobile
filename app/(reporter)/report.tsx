@@ -229,7 +229,10 @@ export default function ReporterReportScreen() {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
-        copyToCacheDirectory: true,
+        // Android grants access to the selected content URI. In Expo Go the
+        // picker's host-global cache copy can fall outside FileSystem's scope.
+        // Admission below reads and verifies it into our private storage now.
+        copyToCacheDirectory: false,
       });
       if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {

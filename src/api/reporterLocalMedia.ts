@@ -15,8 +15,11 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
   let phase = 'read';
   try {
     guard();
+    if (!/^(file|content):\/\//i.test(source.uri)) throw failure('photo_uri_invalid');
     const file = new File(source.uri);
-    if (!file.exists) throw failure('photo_source_missing');
+    // exists=false also means denied read permission on Android. info() checks
+    // that permission before reporting absence; never infer deletion from exists.
+    if (!file.exists && !file.info().exists) throw failure('photo_source_missing');
     const size = file.size;
     if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_PHOTO_BYTES) throw failure('photo_size_invalid');
     const bytes = await file.bytes(); guard();
@@ -41,7 +44,7 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     const copyHash = await sha256HexOfBytes(copied); guard();
     if (copied.length !== size || copyHash !== checksumSha256) throw failure('photo_copy_mismatch');
     phase = 'move';
-    partial.move(final); guard();
+    await partial.move(final); guard();
     phase = 'read';
     if (!final.exists || final.size !== size) throw failure('photo_copy_mismatch');
     const finalBytes = await final.bytes(); guard();
@@ -55,6 +58,11 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     guard();
     const code = (error as { code?: string })?.code;
     if (code?.startsWith('photo_')) throw error;
+    if (phase === 'read') {
+      const message = (error as { message?: string })?.message ?? '';
+      if (/permission|access.*denied|not.*allowed|EACCES/i.test(`${code ?? ''} ${message}`))
+        throw failure('photo_permission_denied');
+    }
     throw failure(`photo_${phase}_failed`);
   }
 }
@@ -65,6 +73,8 @@ export function reporterPhotoFailureMessage(error: unknown): string | null {
     case 'photo_size_invalid': return 'Ảnh phải có dữ liệu và không vượt quá 20 MiB. Nháp và ảnh cũ vẫn được giữ.';
     case 'photo_type_invalid': return 'Chỉ nhận ảnh JPEG hoặc PNG có nội dung và định dạng tệp khớp nhau. Nháp và ảnh cũ vẫn được giữ.';
     case 'photo_source_missing': return 'Ảnh vừa chọn không còn truy cập được. Nháp và ảnh cũ vẫn được giữ.';
+    case 'photo_uri_invalid': return 'Địa chỉ ảnh vừa chọn không hợp lệ. Nháp và ảnh cũ vẫn được giữ.';
+    case 'photo_permission_denied': return 'Chưa có quyền đọc ảnh vừa chọn. Vui lòng chọn lại qua thư viện; nháp và ảnh cũ vẫn được giữ.';
     case 'photo_read_failed': return 'Không đọc được ảnh trên thiết bị. Nháp và ảnh cũ vẫn được giữ; vui lòng kiểm tra quyền truy cập.';
     case 'photo_write_failed': case 'photo_move_failed': case 'photo_copy_mismatch':
       return 'Chưa lưu được bản ảnh bền vững trên thiết bị. Nháp và ảnh cũ vẫn được giữ; vui lòng thử chọn hoặc chụp lại.';
