@@ -13,6 +13,8 @@ import {
   planUploadParts,
   sha256HexOfBytes,
   uploadErrorCode,
+  uploadFailureMessage,
+  UPLOAD_FAILURE_STAGES,
   isReporterSession,
 } from '../api/uploads';
 import { useAuthStore } from './auth';
@@ -21,6 +23,7 @@ import type {
   LocationSource,
   UploadPartUrlResponseDto,
   UploadTransport,
+  UploadFailureStage,
 } from '../api/uploads';
 import { hasUsableCoordinate } from '../types/position';
 
@@ -107,6 +110,8 @@ export interface UploadQueueItem {
   attempt: number;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+  lastErrorStage?: UploadFailureStage;
+  lastErrorStatus?: number;
   locationSource: LocationSource;
   latitude: number | null;
   longitude: number | null;
@@ -245,6 +250,14 @@ function toMediaState(raw: string): UploadMediaState {
 }
 
 function mapRow(row: UploadLedgerRow): UploadQueueItem {
+  // Additive diagnostic envelope in the existing text column. Legacy rows remain
+  // readable and untouched; this is not a schema or command migration.
+  let diagnostic: { stage?: UploadFailureStage; status?: number; message: string | null } = { message: row.last_error_message };
+  try {
+    const value = JSON.parse(row.last_error_message ?? 'null');
+    if (value?.schema === 'upload-diagnostic-v1' && UPLOAD_FAILURE_STAGES.includes(value.stage) && typeof value.message === 'string')
+      diagnostic = { stage: value.stage, status: Number.isInteger(value.status) ? value.status : undefined, message: value.message };
+  } catch { /* Historical human-readable message. */ }
   return {
     id: row.id,
     partitionId: row.partition_id,
@@ -263,7 +276,9 @@ function mapRow(row: UploadLedgerRow): UploadQueueItem {
     verifiedVersion: row.verified_version,
     attempt: row.attempt,
     lastErrorCode: row.last_error_code,
-    lastErrorMessage: row.last_error_message,
+    lastErrorMessage: diagnostic.message,
+    lastErrorStage: diagnostic.stage,
+    lastErrorStatus: diagnostic.status,
     locationSource: row.location_source as LocationSource,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -300,7 +315,8 @@ async function persistItem(item: UploadQueueItem): Promise<void> {
     item.verifiedVersion,
     item.attempt,
     item.lastErrorCode,
-    item.lastErrorMessage,
+    item.lastErrorCode && item.lastErrorStage ? JSON.stringify({ schema: 'upload-diagnostic-v1',
+      stage: item.lastErrorStage, status: item.lastErrorStatus, message: item.lastErrorMessage }) : item.lastErrorMessage,
     item.locationSource,
     item.latitude,
     item.longitude,
@@ -468,6 +484,8 @@ async function pollVerification(item: UploadQueueItem, update: ItemUpdater, tran
       verifiedVersion: metadata.version,
       lastErrorCode: null,
       lastErrorMessage: null,
+      lastErrorStage: undefined,
+      lastErrorStatus: undefined,
     });
   }
   if (status === 'FAILED') {
@@ -476,6 +494,8 @@ async function pollVerification(item: UploadQueueItem, update: ItemUpdater, tran
       serverStatus: metadata.status,
       lastErrorCode: 'upload_validation_failed',
       lastErrorMessage: 'Máy chủ từ chối tệp sau khi xác minh. Hãy chọn ảnh thay thế; ảnh và lần tải cũ vẫn được giữ.',
+      lastErrorStage: 'upload_verify',
+      lastErrorStatus: undefined,
     });
   }
   return update({ mediaState: item.mediaState === 'FAILED' ? 'FAILED' : 'VERIFYING', serverStatus: metadata.status });
@@ -595,12 +615,16 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     }
     set((state) => ({ busyItemIds: [...state.busyItemIds, id] }));
 
+    let stage: UploadFailureStage = 'local_read';
     const update: ItemUpdater = async (patch) => {
       assertReporterContext(context);
       if (get().partitionId !== start.partitionId) throw { status: 401 };
       const latest = get().items.find((item) => item.id === id) ?? start;
       const next: UploadQueueItem = { ...latest, ...patch, updatedAt: new Date().toISOString() };
+      const previousStage = stage;
+      stage = 'local_persist';
       await persistItem(next);
+      stage = previousStage;
       assertReporterContext(context);
       if (get().partitionId !== start.partitionId) throw { status: 401 };
       set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
@@ -610,6 +634,8 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     const transport = Object.fromEntries(Object.entries(uploadTransport).map(([name, method]) => [name, async (...args: unknown[]) => {
       assertReporterContext(context);
       if (get().partitionId !== start.partitionId) throw { status: 401, code: 'auth_unauthorized' };
+      stage = ({ createSession: 'upload_create', getSession: 'upload_session', requestPartUrls: 'upload_part_urls',
+        putPart: 'upload_put', completeUpload: 'upload_complete', getFileMetadata: 'upload_verify' } as Record<string, UploadFailureStage>)[name];
       const result = await (method as (...values: unknown[]) => unknown)(...args);
       assertReporterContext(context);
       return result;
@@ -629,12 +655,9 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
         mediaState: status && [400, 403, 409, 412, 422, 428].includes(status) ? 'FAILED' : latest.mediaState,
         attempt: start.attempt + 1,
         lastErrorCode: uploadErrorCode(error) ?? 'upload_validation_failed',
-        lastErrorMessage:
-          status === 401 ? 'Vui lòng đăng nhập lại để tiếp tục tải ảnh.' :
-          status === 412 ? 'Phiên tải đã thay đổi. Cần kiểm tra phiên bản trước khi gửi lại.' :
-          status === 403 ? 'Tài khoản không có quyền tải ảnh này.' :
-          status === 428 ? 'Thiếu điều kiện gửi. Nháp được giữ nguyên.' :
-          'Chưa xác nhận kết quả tải ảnh. Thử lại để kiểm tra, giữ nguyên phiên và khóa lệnh.',
+        lastErrorStage: stage,
+        lastErrorStatus: status,
+        lastErrorMessage: uploadFailureMessage(uploadErrorCode(error), status, stage),
       }).catch(() => undefined);
     } finally {
       set((state) => ({ busyItemIds: state.busyItemIds.filter((itemId) => itemId !== id) }));

@@ -27,6 +27,7 @@ import { hasUsableCoordinate } from '../../src/types/position';
 import { useUploadsStore, reporterContext } from '../../src/store/uploads';
 import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
+import { preserveReporterPhoto, reporterPhotoFailureMessage } from '../../src/api/reporterLocalMedia';
 import { REPORTER_REPORT_DETAIL, REPORTER_HOME } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
@@ -53,6 +54,11 @@ export default function ReporterReportScreen() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
+  const selectedPhotos = useRef<string[]>([]);
+  const updatePhotos = (next: (current: string[]) => string[]) => {
+    selectedPhotos.current = next(selectedPhotos.current);
+    setPhotos(selectedPhotos.current);
+  };
 
   const [description, setDescription] = useState('');
   const [coords, setCoords] = useState<Coords | null>(null);
@@ -89,7 +95,7 @@ export default function ReporterReportScreen() {
     const isCurrent = scope.capture();
     setRestored(false);
     setRestoreFailed(false); setDataScope('');
-    setDescription(''); setPhotos([]); setCoords(null); setCameraOpen(false);
+    setDescription(''); updatePhotos(() => []); setCoords(null); setCameraOpen(false);
     setErrors({}); setSubmitError(null); setSubmitting(false);
     photoMeta.current = new Map(); completed.current = false; submitted.current = false;
     void useReporterStore.getState().restorePendingDraft().then(draft => {
@@ -99,7 +105,7 @@ export default function ReporterReportScreen() {
         return;
       }
       setDescription(draft?.description ?? '');
-      setPhotos(draft?.photos.map(p => p.uri) ?? []);
+      updatePhotos(() => draft?.photos.map(p => p.uri) ?? []);
       photoMeta.current = new Map(draft?.photos.map(p => [p.uri, p]) ?? []);
       const validCoords = hasUsableCoordinate(draft?.coords?.latitude, draft?.coords?.longitude) ? draft!.coords : null;
       setCoords(validCoords);
@@ -190,20 +196,25 @@ export default function ReporterReportScreen() {
 
   const handleCapture = async () => {
     const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    if (!cameraReady || captureInFlight.current || photos.length >= MAX_PHOTOS) {
+    if (!isCurrent() || submitting || submitted.current || draftLocked || !restored || dataScope !== scope.key) return;
+    if (!cameraReady || captureInFlight.current || selectedPhotos.current.length >= MAX_PHOTOS) {
       return;
     }
     captureInFlight.current = true;
+    const capturedAt = new Date().toISOString();
     try {
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
     if (photo?.uri) {
-      setPhotos((current) => [...current, photo.uri].slice(0, MAX_PHOTOS));
+      const saved = await preserveReporterPhoto({ uri: photo.uri, fileName: photo.uri.split('/').pop() ?? '',
+        mediaType: 'image/jpeg', capturedAt }, isCurrent);
+      if (!isCurrent()) return;
+      photoMeta.current.set(saved.uri, saved);
+      updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
       setCameraOpen(false);
     }
-    } catch {
-      if (isCurrent()) setSubmitError('Không chụp được ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+    } catch (error) {
+      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không chụp được ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
     } finally {
       captureInFlight.current = false;
     }
@@ -211,7 +222,10 @@ export default function ReporterReportScreen() {
 
   const handlePickImage = async () => {
     const isCurrent = scope.capture();
-    if (!isCurrent()) return;
+    if (!isCurrent() || submitting || submitted.current || draftLocked || !restored || dataScope !== scope.key ||
+        captureInFlight.current || selectedPhotos.current.length >= MAX_PHOTOS) return;
+    captureInFlight.current = true;
+    const capturedAt = new Date().toISOString();
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
@@ -220,12 +234,17 @@ export default function ReporterReportScreen() {
       if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
-        photoMeta.current.set(asset.uri, { uri: asset.uri, fileName: asset.name,
-          mediaType: normalizePhotoMediaType(asset.name, asset.mimeType) || '', capturedAt: new Date().toISOString() });
-        setPhotos((current) => current.includes(asset.uri) ? current : [...current, asset.uri].slice(0, MAX_PHOTOS));
+        const saved = await preserveReporterPhoto({ uri: asset.uri, fileName: asset.name,
+          mediaType: asset.mimeType, capturedAt }, isCurrent);
+        if (!isCurrent()) return;
+        if (selectedPhotos.current.some(uri => uri === asset.uri || photoMeta.current.get(uri)?.checksumSha256 === saved.checksumSha256)) return;
+        photoMeta.current.set(saved.uri, saved);
+        updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
       }
-    } catch {
-      if (isCurrent()) setSubmitError('Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+    } catch (error) {
+      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
+    } finally {
+      captureInFlight.current = false;
     }
   };
 
@@ -243,6 +262,7 @@ export default function ReporterReportScreen() {
 
   const handleSubmit = async () => {
     const isCurrent = scope.capture();
+    if (captureInFlight.current) return;
     if (!isCurrent() || dataScope !== scope.key || submitted.current || !restored || !validate()) return;
     submitted.current = true;
     setSubmitting(true); setSubmitError(null);
@@ -329,7 +349,7 @@ export default function ReporterReportScreen() {
               onPress={() => {
                 if (!scope.capture()() || submitting || draftLocked || photos.length >= MAX_PHOTOS) return;
                 photoMeta.current.set(item.uriLocal, { uri: item.uriLocal, fileName: item.fileName, mediaType: item.mediaType, capturedAt: item.capturedAt, itemId: item.id });
-                setPhotos(current => current.includes(item.uriLocal) ? current : [...current, item.uriLocal].slice(0, MAX_PHOTOS));
+                updatePhotos(current => current.includes(item.uriLocal) ? current : [...current, item.uriLocal].slice(0, MAX_PHOTOS));
               }} /></View>)}
           </View> : null}
           <View style={styles.photoGrid} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
@@ -337,7 +357,7 @@ export default function ReporterReportScreen() {
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} />
                 <Pressable
-                  onPress={() => setPhotos((current) => current.filter((_, i) => i !== index))}
+                  onPress={() => updatePhotos((current) => current.filter((_, i) => i !== index))}
                   style={styles.photoRemove}
                   accessibilityRole="button"
                   accessibilityLabel={`Xoá ảnh ${index + 1}`}

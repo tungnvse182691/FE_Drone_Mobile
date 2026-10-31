@@ -12,5 +12,5 @@ test('B1 capture serializes double tap and retains one local photo without POST'
  const s=screen('app/(reporter)/report.tsx');s.render();await s.flush();const d=deferred();let calls=0;
  const camera=s.nodes().find(n=>n.type==='CameraView');camera.props.ref.current={takePictureAsync:()=>{calls++;return d.promise;}};camera.props.onCameraReady();s.render();
  const tap=s.nodes().find(n=>n.props?.testID==='camera-shutter').props.onPress;const a=tap(),b=tap();assert.equal(calls,1);d.resolve({uri:'sandbox-camera.jpg'});await Promise.all([a,b]);await s.flush();
- assert.equal(s.nodes().filter(n=>n.type==='Image'&&n.props.source?.uri==='sandbox-camera.jpg').length,1);assert.equal(s.h.calls.length,0);s.unmount();
+ assert.equal(s.nodes().filter(n=>n.type==='Image'&&n.props.source?.uri?.includes('/documents/reporter-photos-v1/')).length,1);assert.equal(s.h.calls.length,0);s.unmount();
 });

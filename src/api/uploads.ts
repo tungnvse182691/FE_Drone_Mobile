@@ -289,11 +289,32 @@ export function uploadErrorCode(error: unknown): string | null {
     return null;
   }
   const carrier = error as { code?: unknown; response?: { data?: unknown } };
+  const parsed = parseProblemDetails(carrier.response?.data);
+  if (parsed?.code) return parsed.code;
   if (typeof carrier.code === 'string') {
     return carrier.code;
   }
-  const parsed = parseProblemDetails(carrier.response?.data);
-  return parsed ? parsed.code : null;
+  return null;
+}
+
+export const UPLOAD_FAILURE_STAGES = ['local_read', 'local_persist', 'upload_create', 'upload_session',
+  'upload_part_urls', 'upload_put', 'upload_complete', 'upload_verify'] as const;
+export type UploadFailureStage = typeof UPLOAD_FAILURE_STAGES[number];
+export function uploadFailureMessage(code: string | null, status: number | undefined, stage?: UploadFailureStage): string {
+  if (status === 401) return 'Vui lòng đăng nhập lại để tiếp tục tải ảnh.';
+  if (status === 403) return 'Tài khoản không có quyền tải ảnh này.';
+  if (status === 412) return 'Phiên tải đã thay đổi. Cần kiểm tra phiên bản trước khi gửi lại.';
+  if (status === 428) return 'Thiếu điều kiện gửi. Nháp được giữ nguyên.';
+  if (status === 409) return 'Lần tải ảnh xung đột với dữ liệu máy chủ. Nháp và khóa lệnh được giữ nguyên.';
+  if (stage === 'local_read') return 'Không đọc được ảnh trên thiết bị. Nháp và thông tin tải ảnh vẫn được giữ; chưa xác định ảnh có bị mất hay không.';
+  if (stage === 'local_persist') return 'Chưa lưu được trạng thái tải ảnh. Nháp và ảnh vẫn được giữ; cần kiểm tra trước khi tiếp tục.';
+  if (code === 'ERR_NETWORK' && stage === 'upload_put') return 'Không kết nối được dịch vụ lưu ảnh. Ảnh chưa xác minh; nháp vẫn được giữ. Hãy kiểm tra kết nối/trạng thái tải ảnh trước khi thử lại.';
+  if (stage === 'upload_create') return 'Chưa xác nhận phiên tải ảnh. Nháp vẫn được giữ; cần kiểm tra với cùng khóa lệnh.';
+  if (stage === 'upload_part_urls') return 'Chưa lấy được đường tải ảnh. Nháp và phiên tải vẫn được giữ.';
+  if (stage === 'upload_complete') return 'Chưa xác nhận kết quả hoàn tất tải ảnh. Giữ nguyên phiên, checksum và khóa lệnh để đối soát.';
+  if (stage === 'upload_verify' && code === 'upload_validation_failed') return 'Máy chủ từ chối tệp sau khi xác minh. Ảnh và lần tải cũ vẫn được giữ; cần chọn ảnh thay thế hợp lệ.';
+  if (stage === 'upload_verify' || stage === 'upload_session') return 'Chưa đọc được trạng thái xác minh ảnh. Nháp và thông tin tải ảnh vẫn được giữ.';
+  return 'Chưa xác nhận kết quả tải ảnh. Thử lại để kiểm tra, giữ nguyên phiên và khóa lệnh.';
 }
 
 export function uploadErrorMessage(error: unknown): string | null {

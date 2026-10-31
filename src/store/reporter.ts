@@ -6,7 +6,8 @@ import { openDatabase, initDatabase, saveDraft, getDraft } from '../offline/data
 import { File } from 'expo-file-system';
 import { useAuthStore } from './auth';
 import { useUploadsStore, reporterContext, assertReporterContext } from './uploads';
-import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, strongUploadETag } from '../api/uploads';
+import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, strongUploadETag, uploadFailureMessage, UPLOAD_FAILURE_STAGES, type UploadFailureStage } from '../api/uploads';
+import { reporterPhotoFailureMessage } from '../api/reporterLocalMedia';
 import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '../api/reporterApi';
 import { uuidv4 } from '../utils/uuid';
 import { useEffect, useRef } from 'react';
@@ -18,6 +19,9 @@ export interface DraftPhoto {
   mediaType: string;
   capturedAt: string;
   itemId?: string;
+  /** Admission proof for NEW durable selections; never backfilled onto historical media. */
+  sizeBytes?: number;
+  checksumSha256?: string;
 }
 
 export interface ReporterDraft {
@@ -123,13 +127,20 @@ export function useReporterDraftScope() {
 
 /** Safe Vietnamese messages; transport/server bodies may contain private implementation details. */
 export function reporterFailureMessage(error: unknown): string {
-  const e = error as { code?: string; status?: number; response?: { status?: number; data?: { code?: string } } };
+  const e = error as { code?: string; stage?: string; status?: number; response?: { status?: number; data?: { code?: string } } };
   const status = e.response?.status ?? e.status;
   const code = e.response?.data?.code ?? e.code;
   if (status === 401 || code === 'auth_unauthorized') return 'Vui lòng đăng nhập lại. Nháp và ảnh vẫn được giữ.';
   if (status === 403 || code === 'access_forbidden') return 'Tài khoản không có quyền gửi nháp này.';
   if (status === 412 || code === 'concurrency_conflict') return 'Phiên bản đã thay đổi. Nháp được giữ nguyên; cần kiểm tra trước khi gửi lại.';
   if (status === 428) return 'Thiếu điều kiện gửi. Nháp được giữ nguyên.';
+  const admission = reporterPhotoFailureMessage(error);
+  if (admission) return admission;
+  if (UPLOAD_FAILURE_STAGES.includes(e.stage as UploadFailureStage)) return uploadFailureMessage(code ?? null, status, e.stage as UploadFailureStage);
+  if (e.stage === 'readback') return 'Chưa đối soát được kết quả đã gửi. Nháp, ảnh và khóa lệnh vẫn được giữ; chưa xác nhận hoàn tất.';
+  if (code === 'local_photo_read_failed') return 'Không đọc được ảnh cục bộ. Chưa xác định nguyên nhân; nháp và ảnh vẫn được giữ.';
+  if ((e.stage === 'submitReport' || e.stage === 'submitSupplement') && code === 'source_not_ready')
+    return 'Chưa xác nhận kết quả gửi. Nháp và khóa lệnh được giữ nguyên để đối soát.';
   if (code === 'source_not_ready') return 'Ảnh đang chờ xác minh. Chưa gửi phản ánh; bấm gửi lại để kiểm tra.';
   if (code === 'local_photo_missing') return 'Không đọc được ảnh cục bộ. Nháp vẫn còn; vui lòng chọn lại ảnh.';
   if (code === 'draft_locked') return 'Lần gửi trước chưa được xác nhận. Giữ nguyên nội dung và bấm gửi lại để kiểm tra.';
@@ -280,12 +291,22 @@ export const useReporterStore = create<ReporterSessionState>()(
             let id = photo.itemId;
             if (!id) {
               let bytes: Uint8Array;
-              try { bytes = new Uint8Array(await new File(photo.uri).arrayBuffer()); }
-              catch { throw { code: 'local_photo_missing' }; }
+              try {
+                const file = new File(photo.uri);
+                if (file.exists === false) throw { code: 'local_photo_missing', stage: 'local_read' };
+                if (typeof file.size === 'number' && (file.size <= 0 || file.size > MAX_PHOTO_BYTES)) throw { code: 'validation_error', status: 400, stage: 'local_read' };
+                bytes = new Uint8Array(await file.arrayBuffer());
+              } catch (error) {
+                assertOwner();
+                if ((error as { stage?: string })?.stage === 'local_read') throw error;
+                throw { code: 'local_photo_read_failed', stage: 'local_read' };
+              }
               assertOwner();
               if (!bytes.length || bytes.length > MAX_PHOTO_BYTES) throw { code: 'validation_error', status: 400 };
               const checksumSha256 = await sha256HexOfBytes(bytes);
               assertOwner();
+              if ((photo.checksumSha256 && photo.checksumSha256 !== checksumSha256) ||
+                  (photo.sizeBytes !== undefined && photo.sizeBytes !== bytes.length)) throw { code: 'upload_bytes_changed', stage: 'local_read' };
               const location = buildReportEvidenceLocation(draft.coords?.latitude, draft.coords?.longitude, draft.coords?.accuracyMeters);
               id = await queue.enqueuePhoto({ partitionId: context.partition, uriLocal: photo.uri, fileName: photo.fileName, mediaType: photo.mediaType,
                 sizeBytes: bytes.length, checksumSha256, capturedAt: photo.capturedAt,
@@ -299,7 +320,7 @@ export const useReporterStore = create<ReporterSessionState>()(
             assertOwner();
             const item = useUploadsStore.getState().items.find(p => p.id === id);
             if (!item || item.mediaState !== 'VERIFIED' || !item.fileId || !item.verifiedVersion || item.lastErrorCode) {
-              if (item?.lastErrorCode) throw { code: item.lastErrorCode };
+              if (item?.lastErrorCode) throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
               throw { code: 'source_not_ready' };
             }
           }
@@ -330,22 +351,24 @@ export const useReporterStore = create<ReporterSessionState>()(
               if (draft.targetReportId && firstDispatch && (e.response?.status ?? e.status) === 412 &&
                   (e.response?.data?.code ?? e.code) === 'concurrency_conflict')
                 await putDraft({ ...draft, commandOutcome: 'REJECTED', rejection: { status: 412, code: 'concurrency_conflict' } });
-              throw error;
+              throw { ...(error as object), stage: draft.targetReportId ? 'submitSupplement' : 'submitReport' };
             }
             if (draft.targetReportId && result.report.id !== draft.targetReportId) {
               // A response for another report cannot acknowledge this supplement.
               // Retain the original request/key as unknown for exact reconciliation.
-              throw { code: 'source_not_ready' };
+              throw { code: 'source_not_ready', stage: 'submitSupplement' };
             }
             await putDraft({ ...draft, resultReportId: result.report.id });
           }
           assertOwner();
-          const found = await getOwnReportReal(draft.resultReportId!);
+          let found;
+          try { found = await getOwnReportReal(draft.resultReportId!); }
+          catch (error) { assertOwner(); throw { ...(error as object), stage: 'readback' }; }
           assertOwner();
           if ((draft.targetReportId && draft.resultReportId !== draft.targetReportId) ||
             found.report.id !== draft.resultReportId || !draft.request!.evidence?.every(expected =>
             found.report.evidence.some(actual => actual.fileId === expected.fileId && actual.fileVersion === expected.fileVersion))) {
-            throw { code: 'source_not_ready' };
+            throw { code: 'source_not_ready', stage: 'readback' };
           }
           const reportId = found.report.id;
           const db = await draftDb();

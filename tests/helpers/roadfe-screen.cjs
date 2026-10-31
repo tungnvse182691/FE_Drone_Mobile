@@ -48,10 +48,12 @@ function screen(file, options = {}) {
     'expo-file-system':{File:class{async arrayBuffer(){return Uint8Array.from([1,2,3]).buffer;}}},
   };
   const module = {exports:{}};
+  let localMedia;
   const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8')+(options.expose?'\nexport { '+options.expose+' };':''),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,React:react,Date,setTimeout,clearTimeout,Uint8Array,require:name=>{
     if(options.modules?.[name])return options.modules[name];
     if(modules[name])return modules[name];
+    if(name.endsWith('/api/reporterLocalMedia'))return (localMedia??=require('./reporter-media.cjs').mediaRuntime({autoSources:true}).load());
     if(name.endsWith('/store/reporter'))return reporter;
     if(name.endsWith('/store/uploads'))return uploads;
     if(name.endsWith('/store/auth'))return{useAuthStore:auth,buildUserFromActor:(actor,email,must)=>({...actor,role_code:actor.role_code??'REPORTER',phone_or_email:email,must_change_password:!!must})};
