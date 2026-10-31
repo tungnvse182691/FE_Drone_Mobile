@@ -116,7 +116,7 @@ export default function ReporterReportScreen() {
     }).catch(() => { if (active && isCurrent()) setRestoreFailed(true); });
     // Loading candidates only reads the existing owner/session ledger; it never dispatches.
     void useUploadsStore.getState().hydrate().catch(() => {
-      if (active && isCurrent()) setSubmitError('Chưa đọc được ảnh trong hàng đợi. Nháp và ảnh vẫn được giữ; mở hàng đợi để thử tải lại.');
+      if (active && isCurrent()) setSubmitError('Chưa đọc được ảnh trong hàng đợi. Lệnh đã bắt đầu gửi và ảnh vẫn được giữ; mở hàng đợi để thử tải lại.');
     });
     return () => { active = false; scope.invalidate(); };
   }, [scope.key, restoreAttempt]));

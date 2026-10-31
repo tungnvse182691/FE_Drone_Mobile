@@ -217,7 +217,7 @@ export default function ReporterProfileScreen() {
           onPress={() =>
             Alert.alert(
               'Chính sách quyền riêng tư',
-              'Ảnh và nháp được giữ riêng theo tài khoản và phiên trên thiết bị. Chỉ gửi nội dung bạn có quyền chia sẻ; không đưa thông tin riêng tư không cần thiết vào ảnh hoặc mô tả.',
+              'Form chưa bấm Gửi không được tự lưu hoặc khôi phục. Lệnh đã bắt đầu gửi và ảnh liên quan được giữ để đối soát theo tài khoản và phiên. Chỉ gửi nội dung bạn có quyền chia sẻ; không đưa thông tin riêng tư không cần thiết vào ảnh hoặc mô tả.',
             )
           }
           accessibilityRole="button"

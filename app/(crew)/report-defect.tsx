@@ -15,15 +15,15 @@ export default function CrewReportDefectScreen() {
 function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
   return <SafeAreaScreen scroll header={<View style={styles.topBar}><View style={styles.topBarLeft}>
     <Pressable onPress={()=>router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={styles.backBtn}><MaterialIcons name="arrow-back" size={20} color={colors.neutral}/></Pressable>
-    <Text style={[typography.titleMd,styles.topBarTitle]}>Thông tin báo lỗi</Text></View></View>}>
+    <Text style={[typography.titleMd,styles.topBarTitle]}>Khuyết tật thuộc nhiệm vụ</Text></View></View>}>
     <Card style={styles.banner}><View style={styles.bannerRow}>
       <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
-      <Text style={[typography.bodyMd,styles.bannerText]}>Gửi lỗi phát sinh mới chưa khả dụng. Các thông tin dưới đây chỉ để xem; không có báo cáo mới được lưu hoặc gửi.</Text>
+      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin chỉ đọc từ nhiệm vụ được giao. Crew không tạo khuyết tật mới tại màn hình này.</Text>
     </View></Card>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
       <Card style={{gap:spacing.sm}}>
-        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text>{task.wo_code || 'Chưa có mã WO'}</Text>
+        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text style={typography.bodyMd}>{task.wo_code || 'Chưa có mã WO'}</Text>
         <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
         <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude.toFixed(6)}, ${task.coordinates.longitude.toFixed(6)}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
       </Card>
@@ -34,11 +34,11 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>HÌNH ẢNH HIỆN TRƯỜNG</Text>
-      <View style={styles.photoPlaceholder}><MaterialIcons name="photo-library" size={32} color={colors.secondary}/><Text style={[typography.bodyMd,styles.photoText]}>Chưa hiển thị ảnh cho lỗi phát sinh mới</Text><Text style={[typography.caption,styles.photoHint]}>Xem thao tác ảnh của nhiệm vụ tại màn chi tiết khi đủ điều kiện.</Text></View>
+      <View style={styles.photoPlaceholder}><MaterialIcons name="photo-library" size={32} color={colors.onPrimary}/><Text style={[typography.bodyMd,styles.photoText]}>Xem ảnh trong hồ sơ nhiệm vụ</Text><Text style={[typography.caption,styles.photoHint]}>Xem thao tác ảnh của nhiệm vụ tại màn chi tiết khi đủ điều kiện.</Text></View>
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>GHI CHÚ NHIỆM VỤ</Text>
-      <Card><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text><Text style={typography.caption}>Thông tin chỉ đọc từ nhiệm vụ, không phải nháp báo lỗi mới.</Text></Card>
+      <Card><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text><Text style={typography.caption}>Nội dung được đọc từ nhiệm vụ được giao.</Text></Card>
     </View>
     <View style={styles.ctaWrap}><Button variant="primary" title="Về chi tiết nhiệm vụ" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/></View>
   </SafeAreaScreen>;
@@ -56,6 +56,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   topBarLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -74,6 +75,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   topBarTitle: {
+    flex: 1,
     color: colors.neutral,
   },
   badgeNew: {
@@ -176,7 +178,7 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
   },
   photoHint: {
-    color: colors.secondary,
+    color: colors.onPrimary,
   },
   textarea: {
     backgroundColor: colors.surface,

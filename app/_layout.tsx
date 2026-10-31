@@ -146,8 +146,8 @@ function AuthGuard({ children }: { children: ReactNode }) {
     <View style={styles.guardRoot}>
       {children}
       {restoreError ? <View accessibilityLiveRegion="polite">
-        <Text>Chưa khôi phục được nháp. Dữ liệu được giữ nguyên; vui lòng thử lại.</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Thử khôi phục nháp" onPress={()=>setRestoreRetry(n=>n+1)}><Text>Thử khôi phục nháp</Text></Pressable>
+        <Text>Chưa khôi phục được lệnh đang gửi. Dữ liệu được giữ nguyên; vui lòng thử lại.</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Thử khôi phục lệnh đang gửi" onPress={()=>setRestoreRetry(n=>n+1)}><Text>Thử khôi phục lệnh đang gửi</Text></Pressable>
       </View> : null}
       {showWebOnlyToast ? <Toast type="warning" message={WEB_ONLY_ROLE_MESSAGE} duration={WEB_ONLY_TOAST_MS} /> : null}
     </View>

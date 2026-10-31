@@ -15,7 +15,7 @@ test('default Login omits guest draft notice and preserves approved centered lay
   const logo=nodes.find(n=>n.type==='View'&&n.props.style?.width===120);
   assert.equal(logo.props.style.height,120);
   assert.ok(nodes.some(n=>n.type==='InputField'&&n.props.placeholder==='Nhập email @hoanghai.vn hoặc SĐT...'));
-  assert.match(JSON.stringify(nodes),/Không cần tài khoản · Xác thực OTP qua email/);
+  assert.match(JSON.stringify(nodes),/Xem cổng phản ánh · Đăng nhập để gửi/);
   s.unmount();
 });
 test('OTP new intent resets old code and uses the new server cooldown', async () => {

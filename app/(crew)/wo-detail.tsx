@@ -227,7 +227,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
       </Card>
       <Card style={styles.taskActionCard}>
-      <Button variant="text" title="Thông tin / hướng dẫn báo lỗi" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
+      <Button variant="text" title="Khuyết tật thuộc nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
       <View style={styles.sectionHeading}><MaterialIcons name="explore" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Tại hiện trường</Text></View>
       {!fresh.coordinates ? <Text style={styles.hint}>Dẫn đường chưa khả dụng vì chưa có tọa độ nhiệm vụ.</Text> : null}
       <Button variant="secondary" title="Dẫn đường" disabled={!fresh.coordinates} onPress={() => {
@@ -339,12 +339,18 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
   };
   return <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
     <Text style={typography.titleMd}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':'Sửa chữa theo kế hoạch'}</Text>
-    <View style={styles.taskActionCard}>
-      <Text>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
-      <Text>{started?'✓ Đã đối soát bắt đầu thi công':'Bắt đầu thi công: chờ xác nhận'}</Text>
-      <Text>{finished?'✓ Đã đối soát kết thúc thi công':'Kết thúc thi công: chờ xác nhận'}</Text>
-      <Text>{intake?'✓ Đã tiếp nhận hồ sơ, chờ quản lý đánh giá':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
-    </View>
+    <Card style={styles.card}>
+      <Text style={typography.labelLg}>MỐC XỬ LÝ ĐÃ ĐỐI SOÁT</Text>
+      <Text style={styles.body}>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
+      <Text style={styles.body}>{started?'✓ Đã đối soát bắt đầu thi công':'Bắt đầu thi công: chờ xác nhận'}</Text>
+      <Text style={styles.body}>{finished?'✓ Đã đối soát kết thúc thi công':'Kết thúc thi công: chờ xác nhận'}</Text>
+      <Text style={styles.body}>{intake?'✓ Đã tiếp nhận hồ sơ, chờ quản lý đánh giá':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
+      <Text style={styles.hint}>Biên nhận đã đối soát không thay cho kết quả nghiệm thu của PM.</Text>
+    </Card>
+    {stage==='closeout'?<>
+      <RepairFieldSummary draft={draft}/>
+      <Button variant="secondary" title="Xem số đo và ảnh trong hồ sơ hiện trường" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
+    </>:null}
     {result.status === 'loading' ? <Text>Đang đọc ngữ cảnh từ máy chủ…</Text> : null}
     {result.status === 'error' ? <Text>Không xác nhận được ngữ cảnh sửa chữa. Vui lòng tải lại.</Text> : null}
     {result.status === 'ready' && !result.repairContext ? <Text>Chưa có hạng mục sửa chữa được liên kết hợp lệ với nhiệm vụ này. Các thao tác sửa chữa chưa khả dụng.</Text> : null}
@@ -402,6 +408,27 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {stage==='closeout'&&!finished?<Button variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {notice?<Text accessibilityLiveRegion="polite">{notice}</Text>:null}
     <Button variant="secondary" title="Tải lại ngữ cảnh sửa chữa" disabled={busy} loading={result.status === 'loading'} onPress={() => {void result.reload();void load();}} />
+  </View>;
+}
+
+/** Read-only summary of the already scoped FIELD source; never a readiness gate. */
+export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
+  const before=draft?.captures.filter(c=>c.purpose==='BEFORE'&&c.verified&&c.upload?.fileId).length??0;
+  const after=draft?.captures.filter(c=>c.purpose==='AFTER'&&c.verified&&c.upload?.fileId).length??0;
+  return <View style={{gap:spacing.md}}>
+    <Card style={styles.card}>
+      <Text style={typography.titleMd}>Số đo hiện trường</Text>
+      <Text style={styles.hint}>Nguồn: hồ sơ FIELD trên thiết bị của nhiệm vụ hiện tại; chưa thay cho hồ sơ được máy chủ tiếp nhận.</Text>
+      {draft?.measurements.length?draft.measurements.map(m=><View key={m.sampleId}>
+        <Text style={styles.body}>{m.dimension==='AREA'?'Diện tích hư hại':m.type==='SlabFaultingHeight'?'Độ chênh tấm':m.type==='ShoulderErosionExtent'?'Kích thước xói lở':m.dimension==='DEPTH'?'Độ sâu thực tế':'Số đo hiện trường'}: {m.state==='KNOWN'&&typeof m.value==='number'&&Number.isFinite(m.value)&&m.unit?`${m.value} ${m.unit}`:m.unknownReason||'Chưa có giá trị và đơn vị được xác nhận'}</Text>
+      </View>):<Text style={styles.body}>Chưa có số đo trong hồ sơ FIELD hiện tại.</Text>}
+    </Card>
+    <Card style={styles.card}>
+      <Text style={typography.titleMd}>Ảnh trước và sau sửa</Text>
+      <Text style={styles.body}>{`Trước sửa: ${before} ảnh đã xác minh`}</Text>
+      <Text style={styles.body}>{`Sau sửa: ${after} ảnh đã xác minh`}</Text>
+      <Text style={styles.hint}>Số lượng từ hồ sơ trên thiết bị. Xem ảnh đính kèm đã gửi tại hồ sơ hiện trường; máy chủ kiểm tra quyền trước khi tải. Ảnh trước sửa có thể thuộc lượt hồ sơ trước.</Text>
+    </Card>
   </View>;
 }
 

@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
@@ -282,7 +283,7 @@ export default function ReporterReportSupplementScreen() {
   };
 
   // Frozen commands never silently adopt a fresh ETag or a fresh idempotency key.
-  const keepMine = () => { setNotice('Nháp, phiên bản và khóa lệnh được giữ nguyên. Chưa tạo hoặc gửi lệnh mới.'); };
+  const keepMine = () => { setNotice('Nội dung lệnh, phiên bản và khóa chống trùng được giữ nguyên. Chưa tạo hoặc gửi lệnh mới.'); };
   const takeLatest = async () => {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
@@ -293,7 +294,7 @@ export default function ReporterReportSupplementScreen() {
       setReport(found.report); setLoadedAt(new Date().toISOString());
       setNotice('Đã đọc bản mới nhất để xem xét; dữ liệu này không xác nhận kết quả lệnh. Nội dung, phiên bản và khóa lệnh cũ vẫn được giữ; chưa thể gửi nội dung khác bằng lệnh này.');
     } catch {
-      if (isCurrent()) setError('Chưa đọc được bản mới nhất. Nháp và lệnh cũ được giữ nguyên; có thể thử tải lại.');
+      if (isCurrent()) setError('Chưa đọc được bản mới nhất. Nội dung và lệnh cũ được giữ nguyên; có thể thử tải lại.');
     }
   };
 
@@ -307,7 +308,7 @@ export default function ReporterReportSupplementScreen() {
       setExpectedVersion(next.ifMatch ?? null); setPhase('ready');
       setNotice('Đã lưu bản bổ sung mới để bạn xem lại. Lệnh và ảnh cũ được giữ nguyên trong lịch sử; chưa gửi lên máy chủ.');
     } catch {
-      if (isCurrent()) setError('Chưa đủ bằng chứng để tạo lệnh mới. Nháp và lệnh cũ vẫn được giữ; cần đối soát kết quả trước.');
+      if (isCurrent()) setError('Chưa đủ bằng chứng để tạo lệnh mới. Nội dung và lệnh cũ vẫn được giữ; cần đối soát kết quả trước.');
     } finally { if (isCurrent()) submittingRef.current = false; }
   };
 
@@ -494,6 +495,7 @@ export default function ReporterReportSupplementScreen() {
             facing="back"
             onCameraReady={() => setCameraReady(true)}
           />
+          <SafeAreaView testID="camera-controls" style={styles.cameraControls} edges={['top', 'bottom']}>
           <View style={styles.cameraTopBar}>
             <Pressable
               onPress={() => setCameraOpen(false)}
@@ -508,7 +510,7 @@ export default function ReporterReportSupplementScreen() {
             </Text>
             <View style={styles.cameraClose} />
           </View>
-          <View style={styles.cameraFooter}>
+          <View testID="camera-footer" style={styles.cameraFooter}>
             <Pressable
               onPress={() => void handleCapture()}
               disabled={!cameraReady}
@@ -520,6 +522,7 @@ export default function ReporterReportSupplementScreen() {
               <MaterialIcons name="camera" size={28} color={colors.onPrimary} />
             </Pressable>
           </View>
+          </SafeAreaView>
         </View>
       </Modal>
     </SafeAreaScreen>
@@ -589,18 +592,19 @@ const styles = StyleSheet.create({
   errorText: { color: colors.error, flex: 1 },
   busyText: { color: colors.secondary, marginTop: spacing.sm },
   cameraModal: { flex: 1, backgroundColor: colors.neutral },
+  cameraControls: { flex: 1 },
   cameraTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xl,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
     backgroundColor: 'rgba(26, 29, 32, 0.7)',
   },
-  cameraClose: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  cameraClose: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   cameraTitle: { color: colors.onPrimary },
-  cameraFooter: { alignItems: 'center', paddingBottom: spacing.xl, paddingTop: spacing.lg },
+  cameraFooter: { marginTop: 'auto', alignItems: 'center', paddingBottom: spacing.xl, paddingTop: spacing.lg },
   shutter: {
     width: 64,
     height: 64,

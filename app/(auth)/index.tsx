@@ -215,7 +215,7 @@ export default function LoginScreen() {
               style={styles.submitButton}
             />
 
-            <Button variant="secondary" title="Quên mật khẩu?" disabled={loading} onPress={() => setRecoveryOpen(true)} />
+            <Button variant="secondary" title="Quên mật khẩu?" style={{ marginTop: spacing.sm }} disabled={loading} onPress={() => setRecoveryOpen(true)} />
             {isSubmitDisabled ? (
               <Text style={[typography.caption, styles.disabledReason]}>
                 Vui lòng nhập tài khoản và mật khẩu để tiếp tục
@@ -242,7 +242,7 @@ export default function LoginScreen() {
                   Cổng phản ánh dân sinh
                 </Text>
                 <Text style={[typography.caption, styles.reporterCardSubtitle]}>
-                  Không cần tài khoản · Xác thực OTP qua email
+                  Xem cổng phản ánh · Đăng nhập để gửi
                 </Text>
               </View>
               <MaterialIcons name="chevron-right" size={22} color={colors.brandGold} />
@@ -263,7 +263,9 @@ export default function LoginScreen() {
       </KeyboardAvoidingView>
       <Modal visible={recoveryOpen} transparent animationType="fade" onRequestClose={() => setRecoveryOpen(false)}>
         <SafeAreaView style={styles.safe}>
-          <View style={styles.loginCard}>
+          <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView contentContainerStyle={styles.recoveryContent} keyboardShouldPersistTaps="handled">
+          <View style={[styles.loginCard, styles.recoveryCard]}>
             <Text style={typography.titleMd}>Quên mật khẩu</Text>
             <InputField label="Email khôi phục" value={recoveryEmail} onChangeText={text => { if (!recoveryLocked) setRecoveryEmail(text); }} autoCapitalize="none" keyboardType="email-address" />
             <Text style={typography.bodyMd}>{recoveryMessage}</Text>
@@ -274,6 +276,8 @@ export default function LoginScreen() {
             }} /> : null}
             <Button variant="secondary" title="Đóng" onPress={() => setRecoveryOpen(false)} />
           </View>
+          </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -308,6 +312,12 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  recoveryContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.lg,
+  },
+  recoveryCard: { gap: spacing.sm },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
