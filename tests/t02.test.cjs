@@ -70,7 +70,7 @@ function screenHarness(relative, initial, methods={}) {
     '../../src/api/client':{bareClient:{defaults:{baseURL:'fixture-env'}}},
     '../../src/components/Button':{Button:'Button'},'../../src/components/InputField':{InputField:'InputField'},'../../src/components/SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},
     '../../src/store/auth':{useAuthStore:hook,buildUserFromActor:(actor,email,must)=>({...auth.user,id:actor.id,phone_or_email:email,must_change_password:must})},
-    '../../src/store/reporter':{useReporterStore:selector=>selector({pendingDraft:null})},'../../src/api/uploads':{isReporterSession:()=>false},
+    '../../src/store/reporter':{useReporterStore:selector=>selector({pendingDraft:null})},'../../src/api/uploads':{isReporterSession:s=>!!s.token&&s.user?.role_code==='REPORTER'&&!s.user.must_change_password&&['AUTHENTICATED','REFRESHING'].includes(s.status)},
     '../../src/api/authApi':api,'../../src/api/mock/auth':{changePassword:async()=>calls.push(['mock']),forcedChangePassword:async()=>calls.push(['mock']),requestPasswordRecovery:async()=>calls.push(['mock'])},
     '../../src/api/idempotency':{getOrCreateCommandKey:randomUUID,clearCommandKey:()=>{}},'expo-crypto':{randomUUID},'../../src/utils/uuid':{uuidv4:randomUUID},'../../assets/logo_hoanghai.png':0,'../../assets/logo_hoanghai_icon.png':0};
   const screen=load(relative,stubs).default;

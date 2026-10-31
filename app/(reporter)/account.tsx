@@ -9,7 +9,9 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { RoleCode } from '../../src/types/enums';
 import { requestPasswordRecoveryReal } from '../../src/api/authApi';
+import { isReporterSession } from '../../src/api/uploads';
 import {
+  AUTH_REGISTER,
   AUTH_FORCE_CHANGE_PASSWORD,
   REPORTER_PROFILE,
 } from '../../src/constants/routes';
@@ -31,7 +33,10 @@ const ROLE_LABELS: Record<RoleCode, string> = {
 export default function ReporterAccountScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const status = useAuthStore((state) => state.status);
   const logout = useAuthStore((state) => state.logout);
+  const reporterSession = isReporterSession({ user, token, status });
 
   const [recoveryEmail, setRecoveryEmail] = useState(user?.phone_or_email ?? '');
   const [recoveryBusy, setRecoveryBusy] = useState(false);
@@ -43,6 +48,8 @@ export default function ReporterAccountScreen() {
   const roleLabel = user ? ROLE_LABELS[user.role_code] ?? 'Người dùng' : 'Khách';
 
   const sendRecovery = async () => {
+    const live = useAuthStore.getState();
+    if (!reporterSession || !isReporterSession(live) || live.token !== token || live.user?.id !== user?.id) return;
     if (recoveryLock.current || recoveryUncertain) return;
     setNotice(null);
     setError(null);
@@ -71,6 +78,20 @@ export default function ReporterAccountScreen() {
     logout();
     router.replace('/(auth)');
   };
+
+  if (!reporterSession) return (
+    <SafeAreaScreen scroll>
+      <Text style={[typography.titleLg, styles.title]}>Tài khoản</Text>
+      <View style={styles.card}>
+        <Text style={typography.labelLg}>Khách</Text>
+        <Text style={[typography.caption, styles.sectionText]}>
+          Đăng nhập để sử dụng hồ sơ phản ánh và các chức năng bảo mật tài khoản.
+        </Text>
+        <Button variant="primary" title="Đăng nhập" onPress={() => router.push('/(auth)')} />
+        <Button variant="secondary" title="Đăng ký" onPress={() => router.push(AUTH_REGISTER)} />
+      </View>
+    </SafeAreaScreen>
+  );
 
   return (
     <SafeAreaScreen scroll>

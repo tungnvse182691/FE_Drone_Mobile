@@ -18,6 +18,7 @@ export interface NavTab {
 interface BottomNavProps {
   tabs: NavTab[];
   activeRoute: string;
+  onNavigate?: (route: string) => void;
 }
 
 function matchLength(tab: NavTab, activeRoute: string) {
@@ -28,7 +29,7 @@ function matchLength(tab: NavTab, activeRoute: string) {
   );
 }
 
-export function BottomNav({ tabs, activeRoute }: BottomNavProps) {
+export function BottomNav({ tabs, activeRoute, onNavigate }: BottomNavProps) {
   const matchLengths = tabs.map((tab) => matchLength(tab, activeRoute));
   const longestMatch = Math.max(...matchLengths);
   const activeIndex = longestMatch < 0 ? -1 : matchLengths.indexOf(longestMatch);
@@ -44,7 +45,7 @@ export function BottomNav({ tabs, activeRoute }: BottomNavProps) {
             style={styles.tab}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
-            onPress={() => router.push(tab.route)}
+            onPress={() => onNavigate ? onNavigate(tab.route) : router.push(tab.route)}
           >
             <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
             <Text style={[typography.labelSm, { color: iconColor }]}>

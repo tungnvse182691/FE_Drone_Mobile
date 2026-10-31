@@ -10,7 +10,7 @@ import {
   resendReporterOtpReal,
   extractProblemCode,
 } from '../../src/api/reporterApi';
-import { GUEST_DRAFT_NOTICE, useReporterStore } from '../../src/store/reporter';
+import { useReporterStore } from '../../src/store/reporter';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { isValidReporterOtp, isReporterSession } from '../../src/api/uploads';
 import { bareClient } from '../../src/api/client';
@@ -218,7 +218,6 @@ export default function OtpVerifyScreen() {
             <Text style={[typography.caption, styles.subtitle]}>
               Kiểm tra email {email || 'của bạn'} để lấy mã xác thực 6 số. Nếu mã hết hạn, hãy yêu cầu gửi lại khi hết thời gian chờ.
             </Text>
-            <Text style={[typography.caption, styles.subtitle]} testID="otp-guest-draft-notice">{GUEST_DRAFT_NOTICE}</Text>
           </View>
 
           <Pressable onPress={() => inputRef.current?.focus()} accessibilityRole="button" accessibilityLabel="Nhập mã xác thực 6 số">

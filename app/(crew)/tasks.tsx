@@ -161,10 +161,8 @@ export default function CrewTasksScreen() {
     { key: 'done', label: 'Hoàn thành', count: doneTasks.length },
   ];
 
-  const list =
-    segment === 'active'
-      ? activeTasks.filter((task) => modeFilter === 'ALL' || task.task_mode === modeFilter)
-      : doneTasks;
+  const list = (segment === 'active' ? activeTasks : doneTasks)
+    .filter((task) => modeFilter === 'ALL' || task.task_mode === modeFilter);
 
   return (
     <View style={styles.screen}>
@@ -194,8 +192,7 @@ export default function CrewTasksScreen() {
           })}
         </View>
 
-        {segment === 'active' ? (
-          <View style={styles.modeFilters}>
+        <View style={styles.modeFilters}>
             {TASK_MODE_FILTERS.map((filter) => {
               const active = filter.key === modeFilter;
               return (
@@ -217,8 +214,7 @@ export default function CrewTasksScreen() {
                 </Pressable>
               );
             })}
-          </View>
-        ) : null}
+        </View>
 
         {loadError && list.length === 0 ? (
           <EmptyState

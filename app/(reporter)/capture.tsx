@@ -56,7 +56,6 @@ export default function ReporterCaptureScreen() {
   const hydrate = useUploadsStore((state) => state.hydrate);
   const enqueuePhoto = useUploadsStore((state) => state.enqueuePhoto);
   const advanceItem = useUploadsStore((state) => state.advanceItem);
-  const removeItem = useUploadsStore((state) => state.removeItem);
 
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
   const [locationStatus, setLocationStatus] = useState('Đang lấy vị trí...');
@@ -300,16 +299,6 @@ export default function ReporterCaptureScreen() {
         {items.map((item) => (
           <View key={item.id} style={styles.thumbWrapper}>
             <Image source={{ uri: item.uriLocal }} style={styles.thumb} />
-            <Pressable
-              onPress={() => void removeItem(item.id)}
-              disabled
-              style={styles.thumbRemove}
-              accessibilityRole="button"
-              accessibilityLabel={`Xoá ảnh ${item.fileName}`}
-              testID={`capture-remove-${item.id}`}
-            >
-              <MaterialIcons name="close" size={16} color={colors.onPrimary} />
-            </Pressable>
           </View>
         ))}
         {(

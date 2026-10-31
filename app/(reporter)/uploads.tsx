@@ -67,7 +67,6 @@ export default function ReporterUploadsScreen() {
   const hydrate = useUploadsStore((state) => state.hydrate);
   const advanceAll = useUploadsStore((state) => state.advanceAll);
   const retryItem = useUploadsStore(state => state.retryItem);
-  const removeItem = useUploadsStore((state) => state.removeItem);
   const stopWatch = useUploadsStore((state) => state.stopWatch);
   const scope = useReporterDraftScope();
   const [hydrateFailed, setHydrateFailed] = useState(false);
@@ -137,17 +136,6 @@ export default function ReporterUploadsScreen() {
               <Text style={[typography.caption, styles.actionMuted]}>{busy ? 'Đang kiểm tra...' : item.mediaState === 'FAILED' ? 'Đọc lại kết quả' : 'Gửi lại cùng lệnh'}</Text>
             </Pressable>
           ) : null}
-          <Pressable
-            onPress={() => void removeItem(item.id)}
-            disabled
-            style={({ pressed }) => [styles.action, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`Xoá ảnh ${item.fileName}`}
-            testID={`uploads-remove-${item.id}`}
-          >
-            <MaterialIcons name="delete-outline" size={16} color={colors.secondary} />
-            <Text style={[typography.caption, styles.actionText, styles.actionMuted]}>Xoá</Text>
-          </Pressable>
         </View>
         <Text style={[typography.caption, styles.cardMeta]} testID={`uploads-retention-${item.id}`}>
           {UPLOAD_RETENTION_NOTICE}

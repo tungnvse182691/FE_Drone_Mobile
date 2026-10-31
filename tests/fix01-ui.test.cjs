@@ -28,8 +28,7 @@ for(const method of ['login','otp'])test('RPT-01 real '+method+' screen restores
   assert.equal(s.nav.at(-1),'/(reporter)/home');
   assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
   assert.equal(JSON.stringify([...s.h.rows]),before);assert.equal(s.h.calls.length,0);
-  if(method==='otp')assert.match(JSON.stringify(s.nodes()),/không tự chuyển/);
-  else assert.doesNotMatch(JSON.stringify(s.nodes()),/không tự chuyển/);
+  assert.doesNotMatch(JSON.stringify(s.nodes()),/không tự chuyển/);
   if(method==='login'){
     assert.equal(s.nodes().find(n=>n.type==='Image').props.style.width,104);
     assert.equal(s.nodes().find(n=>n.type==='ScrollView').props.contentContainerStyle.justifyContent,'center');
@@ -90,14 +89,14 @@ for(const file of ['report','report-supplement'])for(const change of ['actor','e
   if(change!=='unmount'){s.render();await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes()),/late-private/);s.unmount();}
 });
 
-test('RPT-02 queue delete control is disabled with explanation and direct handler retains row',async()=>{
+test('RPT-02 queue omits delete control with explanation and store retains row',async()=>{
   const s=screen('app/(reporter)/uploads.tsx');s.h.login();
   const queue=s.uploads.useUploadsStore;await queue.getState().hydrate();
   const id=await queue.getState().enqueuePhoto({uriLocal:'cache://fixture.jpg',fileName:'fixture.jpg',mediaType:'image/jpeg',sizeBytes:3,checksumSha256:'fixture-checksum'});
   s.render();await s.flush();
   const button=s.nodes().find(n=>n.props?.testID===`uploads-remove-${id}`);
-  assert.equal(button.props.disabled,true);assert.match(JSON.stringify(s.nodes()),/khôi phục, xác minh và đối soát/);
-  const before=JSON.stringify(s.h.rows.get(id));await button.props.onPress();assert.equal(JSON.stringify(s.h.rows.get(id)),before);
+  assert.equal(button,undefined);assert.match(JSON.stringify(s.nodes()),/khôi phục, xác minh và đối soát/);
+  const before=JSON.stringify(s.h.rows.get(id));await queue.getState().removeItem(id);assert.equal(JSON.stringify(s.h.rows.get(id)),before);
   s.unmount();
 });
 
