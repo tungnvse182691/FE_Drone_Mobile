@@ -63,6 +63,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/api/authApi'))return{loginReal:options.login??(async()=>{throw Error('fixture not configured');}),extractProblemCode:e=>e?.code??'unknown'};
     if(name.endsWith('/api/reporterApi'))return{...h.api,...options.api,extractProblemCode:e=>e?.code??'unknown'};
     if(name.endsWith('/api/idempotency'))return{getOrCreateCommandKey:()=> 'fixture-command-key',clearCommandKey(){}};
+    if(name.endsWith('/components/ReporterHeader'))return{ReporterHeader:'ReporterHeader'};
     if(name.endsWith('/components/Button'))return{Button:'Button'};
     if(name.endsWith('/components/InputField'))return{InputField:'InputField'};
     if(name.endsWith('/components/SafeAreaScreen'))return{SafeAreaScreen:'SafeAreaScreen'};

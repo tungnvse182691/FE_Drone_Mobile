@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -41,12 +42,12 @@ export default function ReporterTrackScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ReporterHeader title="Phản ánh của tôi" />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[typography.titleLg, styles.title]}>Phản ánh của tôi</Text>
         <Text style={[typography.caption, styles.subtitle]}>
           Danh sách phản ánh đã gửi bằng email {activeEmail ?? 'chưa xác thực'}.
         </Text>
@@ -132,7 +133,6 @@ function formatDate(iso: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.sm },
-  title: { color: colors.brandGold },
   subtitle: { color: colors.secondary, marginBottom: spacing.sm },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   error: { color: colors.error, flex: 1 },

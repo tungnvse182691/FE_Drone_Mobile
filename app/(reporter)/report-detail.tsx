@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Image, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -53,12 +54,12 @@ export default function ReporterReportDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ReporterHeader title="Chi tiết phản ánh" />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[typography.titleLg, styles.title]}>Chi tiết phản ánh</Text>
         {reportId ? (
           <Text style={[typography.labelLg, styles.reportCode]}>{reporterReportCode(reportId)}</Text>
         ) : null}
@@ -227,7 +228,6 @@ function formatDate(iso: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.md },
-  title: { color: colors.brandGold },
   reportCode: { color: colors.secondary },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   error: { color: colors.error, flex: 1 },

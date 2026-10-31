@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -80,8 +81,7 @@ export default function ReporterAccountScreen() {
   };
 
   if (!reporterSession) return (
-    <SafeAreaScreen scroll>
-      <Text style={[typography.titleLg, styles.title]}>Tài khoản</Text>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Tài khoản" />}>
       <View style={styles.card}>
         <Text style={typography.labelLg}>Khách</Text>
         <Text style={[typography.caption, styles.sectionText]}>
@@ -94,8 +94,7 @@ export default function ReporterAccountScreen() {
   );
 
   return (
-    <SafeAreaScreen scroll>
-      <Text style={[typography.titleLg, styles.title]}>Tài khoản</Text>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Tài khoản" />}>
       <Text style={[typography.caption, styles.subtitle]}>
         Thông tin phiên đăng nhập và bảo mật tài khoản phản ánh.
       </Text>
@@ -190,7 +189,6 @@ export default function ReporterAccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { color: colors.brandGold },
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   card: {
     backgroundColor: colors.surface,

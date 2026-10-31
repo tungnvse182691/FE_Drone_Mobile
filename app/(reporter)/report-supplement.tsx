@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import { preserveReporterPhoto } from '../../src/api/reporterLocalMedia';
 import { reportDescriptionError } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -314,11 +315,10 @@ export default function ReporterReportSupplementScreen() {
 
   const busy = phase === 'loading' || phase === 'submitting';
 
-  if (dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Bổ sung thông tin phản ánh" />}><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
 
   return (
-    <SafeAreaScreen scroll>
-      <Text style={[typography.titleLg, styles.title]}>Bổ sung thông tin phản ánh</Text>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Bổ sung thông tin phản ánh" />}>
       <Text style={[typography.caption, styles.subtitle]}>
         Gửi thêm thông tin cho phản ánh đã tạo. Nếu phản ánh đã thay đổi ở nơi khác, hệ thống sẽ cảnh
         báo xung đột phiên bản.
@@ -530,7 +530,6 @@ export default function ReporterReportSupplementScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { color: colors.brandGold },
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   card: {
     backgroundColor: colors.surface,

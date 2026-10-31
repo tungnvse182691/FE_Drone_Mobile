@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -144,14 +145,13 @@ export default function ReporterUploadsScreen() {
     );
   };
 
-  if (dataScope !== scope.key) return <SafeAreaScreen>
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Hàng đợi xác minh ảnh" />}>
     <Text>{hydrateFailed ? 'Chưa tải được hàng đợi. Ảnh và dữ liệu tải lên vẫn được giữ.' : 'Đang tải hàng đợi...'}</Text>
     {hydrateFailed ? <Button variant="primary" title="Thử tải lại" onPress={() => setHydrateAttempt(value => value + 1)} /> : null}
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
   </SafeAreaScreen>;
   return (
-    <SafeAreaScreen scroll>
-      <Text style={[typography.titleLg, styles.title]}>Hàng đợi xác minh ảnh</Text>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Hàng đợi xác minh ảnh" />}>
       <Text style={[typography.caption, styles.subtitle]}>
         {watching
           ? `Đang theo dõi ${pending} ảnh chờ xử lý · đã xác minh ${verifiedCount}/${items.length}`
@@ -210,7 +210,6 @@ export default function ReporterUploadsScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { color: colors.brandGold },
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   gateCard: {
     backgroundColor: colors.surfaceAlt,

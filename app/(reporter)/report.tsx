@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import { reportDescriptionError } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -280,6 +281,7 @@ export default function ReporterReportScreen() {
   };
 
   if (dataScope !== scope.key) return <SafeAreaView style={styles.safe}>
+    <ReporterHeader title="Gửi phản ánh khuyết tật" />
     <Text>{restoreFailed ? 'Chưa đọc được lệnh đang gửi. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào.' : 'Đang kiểm tra lệnh đang gửi của phiên hiện tại...'}</Text>
     {restoreFailed ? <Button variant="primary" title="Thử khôi phục lại" onPress={() => setRestoreAttempt(value => value + 1)} /> : null}
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace(REPORTER_HOME)} />
@@ -290,6 +292,7 @@ export default function ReporterReportScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ReporterHeader title="Gửi phản ánh khuyết tật" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -299,7 +302,6 @@ export default function ReporterReportScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[typography.titleLg, styles.title]}>Gửi phản ánh khuyết tật</Text>
           <Text style={[typography.caption, styles.subtitle]}>
             Mô tả hiện trạng hư hại để Ban Quản lý dự án khảo sát và xử lý.
           </Text>
@@ -481,7 +483,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   flex: { flex: 1 },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl },
-  title: { color: colors.brandGold },
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   label: { color: colors.secondary, marginBottom: spacing.sm },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },

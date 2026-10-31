@@ -68,6 +68,7 @@ function screenHarness(relative, initial, methods={}) {
   const stubs={react,'react-native':native,'react-native-safe-area-context':{SafeAreaView:'SafeAreaView'},'@expo/vector-icons':{},
     'expo-router':{useRouter:()=>({replace:p=>navigations.push(p),back:()=>navigations.push('back'),canGoBack:()=>true}),useLocalSearchParams:()=>({}),useFocusEffect:()=>{}},
     '../../src/api/client':{bareClient:{defaults:{baseURL:'fixture-env'}}},
+    '../../src/components/ReporterHeader':{ReporterHeader:'ReporterHeader'},
     '../../src/components/Button':{Button:'Button'},'../../src/components/InputField':{InputField:'InputField'},'../../src/components/SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},
     '../../src/store/auth':{useAuthStore:hook,buildUserFromActor:(actor,email,must)=>({...auth.user,id:actor.id,phone_or_email:email,must_change_password:must})},
     '../../src/store/reporter':{useReporterStore:selector=>selector({pendingDraft:null})},'../../src/api/uploads':{isReporterSession:s=>!!s.token&&s.user?.role_code==='REPORTER'&&!s.user.must_change_password&&['AUTHENTICATED','REFRESHING'].includes(s.status)},

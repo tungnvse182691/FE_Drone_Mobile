@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
@@ -85,7 +86,7 @@ export default function ReporterProfileScreen() {
   const displayName = profile ? normalizeName(profile.displayName) : 'Chưa tải hồ sơ';
 
   return (
-    <SafeAreaScreen scroll>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Hồ sơ cá nhân" />}>
       <View style={styles.profileHeader}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>

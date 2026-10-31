@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,6 +14,7 @@ export default function ReporterFeedbackScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+      <ReporterHeader title="Đánh giá phản ánh" />
       <View style={styles.centered}>
         <Card style={styles.card}>
           <MaterialIcons name="construction" size={48} color={colors.brandGold} />

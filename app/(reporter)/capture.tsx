@@ -1,3 +1,4 @@
+import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useEffect, useState } from 'react';
 import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -257,15 +258,14 @@ export default function ReporterCaptureScreen() {
     );
   };
 
-  if (dataScope !== scope.key) return <SafeAreaScreen>
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Ảnh hiện trường" />}>
     <Text>{hydrateFailed ? 'Chưa tải được hàng đợi. Ảnh và dữ liệu tải lên vẫn được giữ.' : 'Đang tải hàng đợi của phiên hiện tại...'}</Text>
     {hydrateFailed ? <Button variant="primary" title="Thử tải lại" onPress={() => setHydrateAttempt(value => value + 1)} /> : null}
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
   </SafeAreaScreen>;
 
   return (
-    <SafeAreaScreen scroll>
-      <Text style={[typography.titleLg, styles.title]}>Ảnh hiện trường</Text>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Ảnh hiện trường" />}>
       <Text style={[typography.caption, styles.subtitle]}>
         Ảnh được tải lên dưới dạng tệp riêng tư và được kiểm tra tính toàn vẹn. Chỉ gửi phản ánh được
         khi ảnh được chọn đã xác minh xong. Tối đa 3 ảnh cho mỗi phản ánh; ảnh cũ được giữ riêng.
@@ -384,7 +384,6 @@ export default function ReporterCaptureScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: { color: colors.brandGold },
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   locationCard: {
     backgroundColor: colors.surface,
