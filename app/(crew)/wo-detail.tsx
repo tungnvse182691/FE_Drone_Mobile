@@ -198,7 +198,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
           <View style={styles.flex}><Text style={styles.eyebrow}>CÔNG VIỆC ĐƯỢC GIAO</Text><Text style={typography.titleLg}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
         <View style={styles.chips}><Chip variant={fresh.status.toUpperCase() === 'COMPLETED' ? 'approved' : 'status-pending'} label={crewStatusLabel(fresh.status)} uppercase={false} /></View>
         <Text style={styles.body}>{crewModeLabel(fresh.rawMode)}</Text>
-        {fresh.status.toUpperCase() === 'SUBMITTED' ? <Text style={styles.hint}>Kết quả đã được gửi. Theo dõi phản hồi và yêu cầu bổ sung của nhiệm vụ.</Text> : null}
+        {fresh.status.toUpperCase() === 'SUBMITTED' ? <Text style={styles.hint}>Đã gửi hồ sơ hiện trường (FIELD). Đây chưa phải xác nhận hoàn tất sửa chữa hay nghiệm thu của PM. Theo dõi phản hồi và yêu cầu bổ sung của nhiệm vụ.</Text> : null}
       </Card>
       <Card style={styles.card}>
         <View style={styles.sectionHeading}><MaterialIcons name="description" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Thông tin nhiệm vụ</Text></View>
@@ -381,7 +381,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     </View>)}
     {stage!=='closeout'?<>
     {assessment&&!ready?<Text>Đánh giá còn thiếu thông tin. Bổ sung số đo hoặc ảnh trong hồ sơ hiện trường rồi chủ động gửi đánh giá mới; lịch sử cũ được giữ nguyên.</Text>:null}
-    <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||activeHistory.some(c=>c.operation==='start')||result.status!=='ready'} onPress={()=>void run('start')}/>
+    <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||activeHistory.some(c=>c.operation==='start')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('start')}/>
     </>:null}
     {rejectedCommand?<View><Text>Thao tác bị từ chối. Cần đọc lại điều kiện hiện hành và xác nhận giải quyết lệnh cũ trước khi chuẩn bị lệnh mới. Lệnh chưa rõ kết quả không dùng cách này.</Text><Button variant="secondary" title="Kiểm tra để chuẩn bị lại thao tác bị từ chối" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i)setConfirmation({identity:i,key:rejectedCommand.key,kind:'resolve'});}}/></View>:null}
     {pending?<><Text>Chưa xác nhận được kết quả. Chỉ đối soát/gửi lại đúng lệnh đã lưu.</Text><Button variant="secondary" title="Đối soát / gửi lại lệnh đã lưu" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i&&pending)setConfirmation({identity:i,key:pending.key});}}/></>:null}

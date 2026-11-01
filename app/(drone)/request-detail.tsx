@@ -1,5 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -85,6 +85,24 @@ export default function DroneRequestDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
+  const [workError, setWorkError] = useState<string | null>(null);
+  const [workLoading, setWorkLoading] = useState(false);
+  const workSerial = useRef(0);
+  const loadWorkPackage = useCallback(async () => {
+    const isCurrent = scope.capture(), request = ++workSerial.current;
+    if (!isCurrent()) return;
+    setWorkLoading(true); setWorkError(null); setWorkPackage(null);
+    try {
+      const work = await getOperatorWorkPackageReal(target);
+      if (isCurrent() && request === workSerial.current) setWorkPackage(work.data);
+    } catch (error) {
+      if (!isCurrent() || request !== workSerial.current) return;
+      const status = (error as {response?: {status?: number}}).response?.status;
+      setWorkError(status === 401 ? 'Phiên hết hạn. Vui lòng đăng nhập lại.' :
+        status === 403 ? 'Bạn không có quyền đọc gói công việc này.' :
+        status === 404 ? 'Không tìm thấy gói công việc.' : 'Chưa đọc được gói công việc. Kiểm tra kết nối và thử lại.');
+    } finally { if (isCurrent() && request === workSerial.current) setWorkLoading(false); }
+  }, [target, scope.key, scope.capture]);
 
   const loadTask = useCallback(async () => {
     const isCurrent = scope.capture();
@@ -99,14 +117,7 @@ export default function DroneRequestDetailScreen() {
       if (!isCurrent()) return;
       setTask(detail.data);
       setEtag(detail.etag);
-      try {
-        const work = await getOperatorWorkPackageReal(target);
-        if (!isCurrent()) return;
-        setWorkPackage(work.data);
-      } catch {
-        if (!isCurrent()) return;
-        setWorkPackage(null);
-      }
+      await loadWorkPackage();
     } catch (error) {
       if (!isCurrent()) return;
       setLoadError(operatorErrorMessage(error));
@@ -116,7 +127,7 @@ export default function DroneRequestDetailScreen() {
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [target, scope.key, scope.capture]);
+  }, [target, scope.key, scope.capture, loadWorkPackage]);
 
   useEffect(() => {
     void loadTask();
@@ -281,7 +292,10 @@ export default function DroneRequestDetailScreen() {
             </View>
           </View>
 
-          {accessPoint ? (
+          {workLoading ? <Text>Đang đọc gói công việc…</Text> : workError ? <View>
+            <Text accessibilityRole="alert">{workError}</Text>
+            <Button title="Thử lại gói công việc" variant="secondary" onPress={() => void loadWorkPackage()} />
+          </View> : accessPoint ? (
             <>
               <View style={styles.accessPointBody}>
                 <View style={styles.accessPointDetailRow}>
@@ -315,7 +329,7 @@ export default function DroneRequestDetailScreen() {
           ) : (
             <View style={styles.accessPointBody}>
               <Text style={[typography.caption, styles.accessPointDesc]}>
-                Máy chủ chưa công bố điểm tiếp cận cho nhiệm vụ này. Liên hệ PM nếu cần bổ sung.
+                {workPackage?.accessPoint ? 'Tọa độ điểm tiếp cận không hợp lệ. Không thể mở dẫn đường; vui lòng liên hệ PM.' : 'Máy chủ chưa công bố điểm tiếp cận cho nhiệm vụ này. Liên hệ PM nếu cần bổ sung.'}
               </Text>
             </View>
           )}

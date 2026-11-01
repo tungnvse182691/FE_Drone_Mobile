@@ -1,7 +1,8 @@
-import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
+import { Button } from '../../src/components/Button';
+import React, { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -9,10 +10,8 @@ import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
+import { type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
-import { parseProblemDetails } from '../../src/api/problemDetails';
-import { messageFor } from '../../src/api/errorCatalog';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -65,44 +64,11 @@ function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
 
 export default function DroneRequestsScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('pending');
-  const scope = useOperatorReadScope();
-  const loadedScope = useRef<string | null>(null);
-  const [dataScope, setDataScope] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<SurveyRequestItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchTasks = useCallback(async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    if (loadedScope.current !== scope.key) setTasks([]);
-    loadedScope.current = scope.key;
-    setDataScope(scope.key);
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await listOperatorSurveyTasksReal(null, 50);
-      if (!isCurrent()) return;
-      const mapped = (page.items || []).map(mapDtoToItem);
-      setTasks(mapped);
-    } catch (err) {
-      if (!isCurrent()) return;
-      const data = (err as { response?: { data?: unknown } })?.response?.data;
-      const code = parseProblemDetails(data).code;
-      setError(code ? messageFor(code) : 'Không thể tải danh sách nhiệm vụ khảo sát.');
-
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  }, [scope.key, scope.capture]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void fetchTasks();
-    }, [fetchTasks]),
-  );
-
-  if (!scope.key || dataScope !== scope.key) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
+  const pages = useOperatorTaskPages();
+  const { loading, error } = pages;
+  const tasks = pages.tasks.map(mapDtoToItem);
+  const fetchTasks = pages.refresh;
+  if (!pages.ready) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
   const pendingCount = tasks.filter((r) => r.tab === 'pending').length;
   const ongoingCount = tasks.filter((r) => r.tab === 'ongoing').length;
@@ -111,7 +77,7 @@ export default function DroneRequestsScreen() {
   const filteredRequests = tasks.filter((item) => item.tab === activeTab);
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" />}>
       {/* Top Segmented Tabs: Yêu cầu mới ({pendingCount}) | Nhật ký */}
       <View style={styles.topTabContainer}>
         <Pressable style={[styles.topTabItem, styles.topTabItemActive]} accessibilityRole="button">
@@ -164,7 +130,7 @@ export default function DroneRequestsScreen() {
       </View>
 
       <Pressable onPress={() => setActiveTab('other')} accessibilityRole="button"><Text style={typography.caption}>Trạng thái khác ({tasks.filter(t => t.tab === 'other').length})</Text></Pressable>
-      <Text style={typography.caption}>Số lượng theo danh sách đã tải, tối đa 50 nhiệm vụ.</Text>
+      <Text style={typography.caption}>Số lượng theo danh sách đã tải; các bộ lọc áp dụng trên những trang đã tải.</Text>
       {/* Header Info Section */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
@@ -274,6 +240,7 @@ export default function DroneRequestsScreen() {
           })}
         </View>
       )}
+      {pages.nextCursor ? <Button title={error ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={loading} loading={loading} onPress={() => void pages.loadMore()} /> : !loading && !error ? <Text style={typography.caption}>Đã tải hết danh sách nhiệm vụ.</Text> : null}
     </SafeAreaScreen>
   );
 }

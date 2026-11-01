@@ -30,7 +30,7 @@ type TaskSegment = 'active' | 'done';
 export function crewStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     NEWASSIGNED: 'Chờ nhận nhiệm vụ', ASSIGNED: 'Chờ nhận nhiệm vụ', ACCEPTED: 'Đã nhận nhiệm vụ', INPROGRESS: 'Đang thực hiện',
-    STARTED: 'Đang thực hiện', SUBMITTED: 'Đã gửi kết quả', SUPPLEMENTREQUIRED: 'Cần bổ sung',
+    STARTED: 'Đang thực hiện', SUBMITTED: 'Đã gửi hồ sơ hiện trường (FIELD)', SUPPLEMENTREQUIRED: 'Cần bổ sung',
     COMPLETED: 'Hoàn thành', REJECTED: 'Đã từ chối', CANCELLED: 'Đã hủy',
   };
   return labels[status.toUpperCase()] ?? 'Trạng thái chưa được hỗ trợ';
@@ -250,7 +250,7 @@ export default function CrewTasksScreen() {
                       {crewTaskIsComplete(task) ? (
                         <Chip variant="approved" label="Hoàn thành" />
                       ) : (task.status.toUpperCase() === 'SUBMITTED') ? (
-                        <Chip variant="status-pending" label="Đã gửi kết quả" uppercase={false} />
+                        <Chip variant="status-pending" label={crewStatusLabel(task.status)} uppercase={false} />
                       ) : (task.status.toUpperCase() === 'SUPPLEMENTREQUIRED') ? (
                         <Chip variant="status-pending" label="Cần bổ sung" uppercase={false} />
                       ) : (['ASSIGNED', 'NEWASSIGNED'].includes(task.status.toUpperCase())) ? (

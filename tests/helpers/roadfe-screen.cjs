@@ -50,9 +50,11 @@ function screen(file, options = {}) {
     'expo-file-system':{File:class{async arrayBuffer(){return Uint8Array.from([1,2,3]).buffer;}}},
   };
   const module = {exports:{}};
+  const factoryModules = {};
   let localMedia;
   const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8')+(options.expose?'\nexport { '+options.expose+' };':''),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,React:react,Date,setTimeout,clearTimeout,Uint8Array,require:name=>{
+    if(options.moduleFactories?.[name])return factoryModules[name]??=(options.moduleFactories[name]({react,modules}));
     if(options.modules?.[name])return options.modules[name];
     if(modules[name])return modules[name];
     if(name.endsWith('/api/reporterLocalMedia'))return (localMedia??=(mediaRuntime=require('./reporter-media.cjs').mediaRuntime({autoSources:true})).load());

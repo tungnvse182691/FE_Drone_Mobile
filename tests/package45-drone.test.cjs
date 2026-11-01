@@ -4,7 +4,12 @@ const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 const task={id:id(2),projectId:id(3),operatorId:id(1),scope:[],status:'NEW_ASSIGNED',version:'v1'};
 function drone(file,api={},extra={}) {
   const component=name=>({[name]:name});
-  const s=screen(`app/(drone)/${file}.tsx`,{...extra,modules:{
+  let s;
+  s=screen(`app/(drone)/${file}.tsx`,{...extra,moduleFactories:{'../../src/hooks/useOperatorTaskPages':({react,modules})=>{
+    const mod={exports:{}};
+    require('node:vm').runInNewContext(require('typescript').transpileModule(require('node:fs').readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='../api/droneApi'?api:{useOperatorReadScope:(...a)=>s.h.load('src/hooks/useOperatorReadScope.ts').useOperatorReadScope(...a)}});
+    return mod.exports;
+  },...extra.moduleFactories},modules:{
     '../../src/components/AppHeader':component('AppHeader'), '../../src/components/Card':component('Card'),
     '../../src/components/Chip':component('Chip'),'../../src/components/EmptyState':component('EmptyState'),
     '../../src/components/AnimatedPressable':component('AnimatedPressable'), '../../src/components/Toast':component('Toast'),

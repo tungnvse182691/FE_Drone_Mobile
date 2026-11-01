@@ -9,6 +9,8 @@ import { isDroneResourceId, operatorDatasetScope, readOperatorDatasetReadback } 
 const label = (value: string) => ({ PASS: 'Đạt', FAIL: 'Chưa đạt', UNKNOWN: 'Chưa xác định',
   VERIFIED: 'Đã xác minh tệp', PRESENT: 'Có dữ liệu', MISSING: 'Thiếu dữ liệu' }[value] ?? 'Chưa có nhãn trạng thái');
 type Readback = Awaited<ReturnType<typeof readOperatorDatasetReadback>>;
+// Dataset integrity is independent of upload VERIFIED and coverage PASS.
+const integrityLabel = (value: string) => ({ PASSED: 'Đạt kiểm tra toàn vẹn', FAIL: 'Chưa đạt', UNKNOWN: 'Chưa xác định' }[value] ?? 'Chưa có nhãn trạng thái');
 
 export function DroneDatasetReadbackPanel() {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
@@ -50,7 +52,7 @@ function DatasetContent({ scope }: { scope: string }) {
     {error ? <Text accessibilityRole="alert">{error}</Text> : null}
     {result ? <View style={{ gap: spacing.sm }}>
       <Text style={typography.bodyMd}>Bộ dữ liệu: {result.dataset.id}</Text>
-      <Text style={typography.bodyMd}>Toàn vẹn tệp: {label(result.dataset.integrityStatus)}</Text>
+      <Text style={typography.bodyMd}>Toàn vẹn tệp: {integrityLabel(result.dataset.integrityStatus)}</Text>
       <Text style={typography.bodyMd}>Dữ liệu GPS: {label(result.dataset.telemetryStatus)}</Text>
       {result.coverage.items.slice(0, 20).map((item, index) => <Text key={JSON.stringify(item.scope)} style={typography.bodyMd}>
         Phạm vi {index + 1}: {label(item.overallCoverage)} · Vị trí: {label(item.positionCoverage)} · Chất lượng: {label(item.qualityCoverage)}

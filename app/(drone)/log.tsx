@@ -1,3 +1,4 @@
+import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
@@ -12,7 +13,7 @@ import { useAuthStore } from '../../src/store/auth';
 import { apiClient } from '../../src/api/client';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
 import { passwordSessionIdentity } from '../../src/api/authApi';
-import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto, getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
+import { getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 const uuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s) && s !== '00000000-0000-0000-0000-000000000000';
@@ -59,25 +60,15 @@ export default function DroneLogScreen() {
 }
 function DroneLogContent({ scope }: { scope: string }) {
   const readScope = useOperatorReadScope('log');
-  const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
-  const [listError, setListError] = useState<string | null>(null);
+  const pages = useOperatorTaskPages();
+  const { tasks, error: listError } = pages;
   const [advanced, setAdvanced] = useState(false);
-  const [listRevision, setListRevision] = useState(0);
   const [taskId, setTaskId] = useState(''), [uploadId, setUploadId] = useState('');
   const [taskText, setTaskText] = useState<string | null>(null), [uploadText, setUploadText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const mounted = useRef(true), lock = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const active = () => mounted.current && operatorLogScope() === scope;
-  useEffect(() => {
-    let cancelled = false;
-    const isCurrent = readScope.capture();
-    setListError(null);
-    void listOperatorSurveyTasksReal(null, 50).then(page => {
-      if (!cancelled && active() && isCurrent()) setTasks(page.items);
-    }).catch(() => { if (!cancelled && active() && isCurrent()) setListError('Chưa đọc được danh sách nhiệm vụ.'); });
-    return () => { cancelled = true; };
-  }, [scope, listRevision, readScope.capture]);
   const check = async (kind: 'task' | 'upload') => {
     const isCurrent = readScope.capture();
     if (lock.current || !active() || !isCurrent()) return;
@@ -113,14 +104,15 @@ function DroneLogContent({ scope }: { scope: string }) {
     </Card>
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Nhiệm vụ được giao</Text>
-      <Text style={typography.caption}>Danh sách đã tải, tối đa 50 nhiệm vụ. Chọn để xem trạng thái và phạm vi hiện hành.</Text>
+      <Text style={typography.caption}>Danh sách nhiệm vụ đã tải. Chọn để xem trạng thái và phạm vi hiện hành.</Text>
       {tasks.map(task => <Pressable key={task.id} accessibilityRole="button" onPress={() => { if (active()) router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(task.id)}`); }}>
         <Text style={typography.labelLg}>{operatorTaskDisplayCode(task.id)}</Text>
         <Text style={typography.bodyMd}>{operatorTaskStatusLabel(task.status)}</Text>
       </Pressable>)}
       {!tasks.length ? <Text>Chưa có nhiệm vụ trong danh sách đã tải.</Text> : null}
       {listError ? <Text accessibilityRole="alert">{listError}</Text> : null}
-      <Button title="Đọc lại danh sách" variant="secondary" onPress={() => setListRevision(v => v + 1)} />
+      {pages.nextCursor ? <Button title={listError ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.loadMore()} /> : !pages.loading && !listError ? <Text>Đã tải hết danh sách nhiệm vụ.</Text> : null}
+      <Button title="Đọc lại danh sách" variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.refresh()} />
     </Card>
     <Button title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
     {advanced ? <>

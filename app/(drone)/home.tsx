@@ -9,6 +9,7 @@ import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
+import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
@@ -28,9 +29,12 @@ export default function DroneHomeScreen() {
   const [tasks, setTasks] = useState<SurveyTaskV2ResponseDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const requestSerial = useRef(0);
 
   const fetchTasks = useCallback(async () => {
-    const isCurrent = scope.capture();
+    const inScope = scope.capture(), request = ++requestSerial.current;
+    const isCurrent = () => inScope() && request === requestSerial.current;
     if (!isCurrent()) return;
     if (loadedScope.current !== scope.key) setTasks([]);
     loadedScope.current = scope.key;
@@ -40,7 +44,8 @@ export default function DroneHomeScreen() {
     try {
       const page = await listOperatorSurveyTasksReal(null, 50);
       if (!isCurrent()) return;
-      setTasks(page.items || []);
+      setTasks([...new Map((page.items || []).map(item => [item.id.toLowerCase(), item])).values()]);
+      setHasMore(!!page.nextCursor);
     } catch {
       if (!isCurrent()) return;
       setLoadError('Không thể tải danh sách nhiệm vụ. Vui lòng kiểm tra kết nối.');
@@ -53,6 +58,7 @@ export default function DroneHomeScreen() {
   useFocusEffect(
     useCallback(() => {
       void fetchTasks();
+      return () => { requestSerial.current++; };
     }, [fetchTasks]),
   );
 
@@ -96,6 +102,7 @@ export default function DroneHomeScreen() {
           <View style={styles.metricContent}>
             <Text style={[typography.headlineLg, styles.metricNumber]}>{tasks.length}</Text>
             <Text style={[typography.caption, styles.metricDesc]}>nhiệm vụ trong danh sách đã tải</Text>
+            {hasMore ? <Text style={typography.caption}>Chỉ hiển thị trang đầu, chưa phải toàn bộ nhiệm vụ.</Text> : null}
             <Text style={[typography.caption, styles.metricSub]}>
               {urgentCount} chờ tiếp nhận • {ongoingCount} đang thực hiện
             </Text>
@@ -115,6 +122,8 @@ export default function DroneHomeScreen() {
           </View>
         </View>
       </Card>
+
+      {hasMore ? <Button title="Xem tiếp nhiệm vụ" variant="secondary" onPress={() => router.push('/(drone)/requests')} /> : null}
 
       {/* Quick Access Actions */}
       <View style={styles.quickAccessRow}>

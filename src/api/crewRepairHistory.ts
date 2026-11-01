@@ -65,14 +65,18 @@ export function validateRepairReceipt(c: RepairJournalRecord,data: Record<string
 export async function readRepairHistory(i: RepairIdentity,r=repairRuntime(i),includeResolved=false) {
   await fresh(i,r);
   const j=await guarded(i,r,()=>r.journal(i)),rows=await guarded(i,r,()=>j.history());
-  const latestConfirmed=rows.filter(row=>row.phase==='CONFIRMED').at(-1);
   for(const row of rows) {
     const read=await fresh(i,r,row.identity);
     if(row.receipt)validateRepairReceipt(row,row.receipt.data,`"${row.receipt.itemVersion}"`);
-    // Historical start versions must not invalidate a later finish/intake receipt.
-    // A pending later command may already have committed: preserve it for exact replay.
-    if(row===latestConfirmed&&row.operation!=='assessment'&&rows.at(-1)===row&&
-      (read.data.repairContext!.status!==(row.operation==='attempt'?'Submitted':'InProgress')||read.data.repairContext!.itemVersion!==row.receipt!.itemVersion))throw Error('repair_reconciliation_pending');
+    // CONFIRMED receipts are immutable history, not current item concurrency tokens.
+    // Keep current actor/assignment/binding checks above. New commands and unresolved
+    // outcomes still use fresh versions and exact receipt reconciliation in dispatch.
+    if(row.phase==='CONFIRMED') {
+      const states=row.operation==='assessment'?['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired']:
+        row.operation==='attempt'?['Submitted','Reviewed','Confirmed','CorrectionRequired']:
+        ['InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired'];
+      if(!row.receipt||!states.includes(read.data.repairContext!.status))throw Error('repair_reconciliation_pending');
+    }
   }
   return includeResolved?rows:rows.filter(row=>!row.rejectionResolved);
 }

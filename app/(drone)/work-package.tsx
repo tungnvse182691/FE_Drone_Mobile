@@ -189,11 +189,11 @@ export default function DroneWorkPackageScreen() {
                 </View>
               ) : null}
               <View style={styles.infoRow}>
-                <Text style={[typography.caption, styles.infoLabel]}>Bán kính an toàn</Text>
+                <Text style={[typography.caption, styles.infoLabel]}>Độ chính xác vị trí</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>
-                  {accessPoint.accuracyMeters != null
-                    ? `${accessPoint.accuracyMeters}m`
-                    : 'Theo quy định an toàn hiện trường'}
+                  {typeof accessPoint.accuracyMeters === 'number' && Number.isFinite(accessPoint.accuracyMeters) && accessPoint.accuracyMeters >= 0
+                    ? `${accessPoint.accuracyMeters} m`
+                    : 'Chưa có dữ liệu độ chính xác'}
                 </Text>
               </View>
             </>
