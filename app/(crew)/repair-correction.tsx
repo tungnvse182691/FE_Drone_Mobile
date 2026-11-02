@@ -1,12 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import type { CrewTask } from '../../src/api/crewApi';
-import { typography } from '../../src/design-tokens';
+import { colors, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskBoundary,crewStatusLabel,useCrewIdentity } from './tasks';
 
 import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord, type RepairIdentity } from '../../src/api/crewRepairDraft';
@@ -20,8 +20,10 @@ export default function CrewRepairCorrectionScreen() {
 }
 
 export function CorrectionReadOnly({ task }: { task: CrewTask }) {
-  return <SafeAreaScreen scroll header={<AppHeader subtitle="Bổ sung hồ sơ sửa chữa" />}>
-    <Card>
+  const [technical, setTechnical] = useState(false);
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Bổ sung hồ sơ sửa chữa" showBack onBack={()=>router.back()} />}>
+    <View style={{gap:spacing.md}}>
+    <Card style={{gap:spacing.sm}}>
       <Text style={typography.titleMd}>Chưa thể xác minh yêu cầu bổ sung sửa chữa</Text>
       <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
       <Text>{task.wo_code||'Chưa có mã công việc'}</Text>
@@ -29,7 +31,10 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
       <Text>Chưa có yêu cầu bổ sung từ người quản lý được xác minh cho hồ sơ sửa chữa này.</Text>
       <Text>Trạng thái đã gửi hoặc chờ đánh giá không có nghĩa là người quản lý yêu cầu bổ sung. Chưa có nội dung yêu cầu và lượt hồ sơ cần sửa.</Text>
       <Text>Gửi bổ sung đang khóa đến khi xác minh được yêu cầu quản lý, hồ sơ liên quan và phiên bản hạng mục.</Text>
-      <Text>Phụ thuộc nguồn Backend: API đọc lịch sử RepairItem hiện chỉ cho quản lý; chưa có nguồn Crew xác minh yêu cầu bổ sung và lượt tiếp nhận liên quan.</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={{minHeight:48,justifyContent:'center'}}>
+        <Text style={[typography.labelLg,{color:colors.secondary}]}>Chi tiết kỹ thuật</Text>
+      </Pressable>
+      {technical?<Text style={typography.caption}>Phụ thuộc nguồn Backend: API đọc lịch sử RepairItem hiện chỉ cho quản lý; chưa có nguồn Crew xác minh yêu cầu bổ sung và lượt tiếp nhận liên quan.</Text>:null}
       <CrewRepairReceiptHistory task={task}/>
       <Text>Nháp, bằng chứng và nhật ký lệnh đã lưu được giữ nguyên. Màn này không tạo hoặc gửi lệnh bổ sung, không xác nhận quản lý đã nghiệm thu.</Text>
     </Card>
@@ -37,6 +42,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
       pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId },
     })} />
     <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
+    </View>
   </SafeAreaScreen>;
 }
 
@@ -58,7 +64,7 @@ export function CrewRepairReceiptHistory({task}:{task:CrewTask}) {
   const rows=saved&&sameRepairIdentity(saved.identity,live)?saved.rows:null;
   const operation={assessment:'Đánh giá trước sửa',start:'Bắt đầu thi công',finish:'Kết thúc thi công',attempt:'Tiếp nhận hồ sơ',supplement:'Bổ sung hồ sơ'};
   const phase={PREPARED:'Đã lưu, chưa xác nhận gửi',PENDING:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã lưu biên nhận, chờ đối soát',CONFIRMED:'Đã đối soát biên nhận',REJECTED:'Bị từ chối'};
-  return <View>
+  return <View style={{gap:spacing.sm}}>
     <Text style={typography.titleMd}>Lịch sử biên nhận trên thiết bị</Text>
     <Text>Đối chiếu quyền và liên kết nhiệm vụ hiện tại trước khi hiển thị. Đây không phải kết quả đánh giá của quản lý dự án.</Text>
     {busy?<Text>Đang kiểm tra lịch sử…</Text>:null}

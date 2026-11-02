@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   segments: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    minHeight: 56,
     gap: spacing.xs,
     padding: 4,
     marginBottom: spacing.md,
@@ -345,7 +345,9 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    height: '100%',
+    minHeight: 48,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -357,6 +359,8 @@ const styles = StyleSheet.create({
   },
   segmentLabel: {
     color: colors.secondary,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   segmentLabelActive: {
     color: colors.onPrimary,
@@ -385,7 +389,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   modeFilter: {
-    height: 36,
+    minHeight: 48,
+    maxWidth: '100%',
+    paddingVertical: spacing.sm,
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
@@ -429,10 +435,11 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: radius.xl,
   },
   taskList: {
-    paddingBottom: 140,
+    paddingBottom: spacing.lg,
   },
   taskHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
@@ -486,6 +493,7 @@ const styles = StyleSheet.create({
   },
   taskFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.sm,
@@ -494,6 +502,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   woChip: {
+    maxWidth: '100%',
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: radius.full,
@@ -502,7 +511,9 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   duePill: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -516,6 +527,7 @@ const styles = StyleSheet.create({
   },
   taskDue: {
     color: colors.secondary,
+    flexShrink: 1,
   },
   taskDueUrgent: {
     color: colors.error,

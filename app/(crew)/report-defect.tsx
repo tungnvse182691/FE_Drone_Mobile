@@ -1,8 +1,9 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
+import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -13,9 +14,7 @@ export default function CrewReportDefectScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewReportDefectScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
-  return <SafeAreaScreen scroll header={<View style={styles.topBar}><View style={styles.topBarLeft}>
-    <Pressable onPress={()=>router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={styles.backBtn}><MaterialIcons name="arrow-back" size={20} color={colors.neutral}/></Pressable>
-    <Text style={[typography.titleMd,styles.topBarTitle]}>Khuyết tật thuộc nhiệm vụ</Text></View></View>}>
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Khuyết tật nhiệm vụ" showBack onBack={()=>router.back()} />}>
     <Card style={styles.banner}><View style={styles.bannerRow}>
       <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
       <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin chỉ đọc từ nhiệm vụ được giao. Đội sửa chữa không tạo khuyết tật mới tại màn hình này.</Text>
@@ -34,7 +33,7 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>HÌNH ẢNH HIỆN TRƯỜNG</Text>
-      <View style={styles.photoPlaceholder}><MaterialIcons name="photo-library" size={32} color={colors.onPrimary}/><Text style={[typography.bodyMd,styles.photoText]}>Xem ảnh trong hồ sơ nhiệm vụ</Text><Text style={[typography.caption,styles.photoHint]}>Xem thao tác ảnh của nhiệm vụ tại màn chi tiết khi đủ điều kiện.</Text></View>
+      <View style={styles.photoPlaceholder}><MaterialIcons name="photo-library" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,styles.photoText]}>Xem ảnh trong hồ sơ nhiệm vụ</Text><Text style={[typography.caption,styles.photoHint]}>Xem thao tác ảnh của nhiệm vụ tại màn chi tiết khi đủ điều kiện.</Text></View>
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>GHI CHÚ NHIỆM VỤ</Text>
@@ -164,21 +163,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   photoPlaceholder: {
-    height: 120,
+    padding: spacing.md,
     borderRadius: radius.xl,
-    backgroundColor: colors.neutral,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.primary,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
   },
   photoText: {
-    color: colors.onPrimary,
+    color: colors.secondary,
+    textAlign: 'center',
   },
   photoHint: {
-    color: colors.onPrimary,
+    color: colors.secondary,
+    textAlign: 'center',
   },
   textarea: {
     backgroundColor: colors.surface,

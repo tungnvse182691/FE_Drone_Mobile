@@ -100,8 +100,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   };
   const update=(index:number,change:Partial<FieldMeasurementInput>)=>{if(busy||frozen)return;setMeasurements(values=>values.map((v,i)=>i===index?{...v,...change}:v));};
   const mode=TASK_MODE_CHIP[task.task_mode];
-  return <SafeAreaScreen scroll>
-    <AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />}>
     <View style={styles.content}>
       <Card style={styles.card}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><Chip label={mode.label} variant={mode.variant}/>
         <Text>{task.wo_code||'Chưa có mã công việc từ máy chủ'}</Text>
@@ -176,6 +175,7 @@ const styles = StyleSheet.create({
   },
   card: {
     marginBottom: spacing.md,
+    gap: spacing.sm,
   },
   summaryHeader: {
     flexDirection: 'row',
@@ -192,6 +192,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   sectionTitle: {
+    ...typography.titleMd,
     color: colors.neutral,
     marginBottom: spacing.sm,
   },

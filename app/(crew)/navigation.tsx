@@ -123,7 +123,7 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
 
         {/* Top Header Bar */}
         <View style={styles.topHeader}>
-          <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
             <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </Pressable>
 
@@ -263,8 +263,8 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   floatingBack: {
-    width: 40,
-    height: 40,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -383,6 +383,7 @@ const styles = StyleSheet.create({
   },
   tagRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: 6,
@@ -414,6 +415,8 @@ const styles = StyleSheet.create({
   },
   addressBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.surfaceAlt,

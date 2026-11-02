@@ -179,7 +179,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
           <MaterialIcons name="sync" size={22} color={colors.primary} />
           <Text style={[typography.titleLg, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
         </View>
-        <Pressable accessibilityRole="button" style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
           <MaterialIcons name="refresh" size={20} color={colors.secondary} />
         </Pressable>
       </View>
@@ -334,16 +334,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   titleGroup: {
+    flex: 1,
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
   pageTitle: {
     color: colors.neutral,
+    flexShrink: 1,
   },
   iconBtn: {
-    width: 32,
-    height: 32,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -353,7 +356,7 @@ const styles = StyleSheet.create({
   },
   segments: {
     flexDirection: 'row',
-    height: 50,
+    minHeight: 56,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     borderWidth: 1,
@@ -375,7 +378,8 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    height: '100%',
+    minHeight: 48,
+    padding: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -386,9 +390,13 @@ const styles = StyleSheet.create({
   },
   segmentLabel: {
     color: colors.secondary,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   segmentLabelActive: {
     color: colors.onPrimary,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   statusCard: {
     borderRadius: radius.xl,
@@ -462,6 +470,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
@@ -489,6 +499,7 @@ const styles = StyleSheet.create({
   },
   itemTop: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
@@ -509,8 +520,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   retryBtn: {
-    width: 28,
-    height: 28,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',

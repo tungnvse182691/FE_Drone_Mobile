@@ -292,7 +292,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
 
   return (
     <View style={styles.screen}>
-      {step==='detail'?<Pressable disabled={acking} onPress={()=>{sequence.current++;setStep('list');setSelected(null);}} accessibilityRole="button" accessibilityLabel="Quay lại danh sách"><Text style={typography.labelLg}>← Danh sách yêu cầu</Text></Pressable>:null}
+      {step==='detail'?<Pressable disabled={acking} onPress={()=>{sequence.current++;setStep('list');setSelected(null);}} accessibilityRole="button" accessibilityLabel="Quay lại danh sách" style={{minHeight:48,justifyContent:'center'}}><Text style={typography.labelLg}>← Danh sách yêu cầu</Text></Pressable>:null}
         {step === 'list' ? <>{renderList()}<Button variant="secondary" title="Tải lại yêu cầu" disabled={loading||acking} onPress={()=>void loadList()} />{cursor?<Button variant="secondary" title="Tải thêm yêu cầu" disabled={loading||acking} onPress={()=>void loadList(true)} />:null}</> : renderDetail()}
       {toast ? <Toast type={toastType} message={toast} /> : null}
     </View>
@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   list: {
-    paddingBottom: 120,
+    paddingBottom: spacing.lg,
   },
   rowCard: {
     marginBottom: spacing.md,
@@ -321,6 +321,7 @@ const styles = StyleSheet.create({
   },
   rowHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
@@ -354,6 +355,7 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
@@ -398,8 +400,8 @@ const styles = StyleSheet.create({
     color: colors.neutral,
   },
   backButton: {
-    width: 34,
-    height: 34,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,

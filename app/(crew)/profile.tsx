@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -6,7 +6,6 @@ import { useAuthStore } from '../../src/store/auth';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
-import { Toast } from '../../src/components/Toast';
 import { useCrewInbox } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -66,7 +65,6 @@ export default function CrewProfileScreen() {
   const completed = inbox.tasks.filter(crewTaskIsComplete).length;
   const displayName = normalizeName(inbox.enabled ? user?.full_name : undefined, 'Chưa có tên tài khoản');
   const logout = useAuthStore((state) => state.logout);
-  const [toast, setToast] = useState<string | null>(null);
 
   const handleLogout = () => {
     logout();
@@ -107,12 +105,14 @@ export default function CrewProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Đổi ảnh đại diện"
             style={styles.cameraBtn}
-            onPress={() => setToast('Chức năng cập nhật ảnh đại diện chưa được hỗ trợ.')}
+            disabled
+            accessibilityState={{ disabled: true }}
           >
             <MaterialIcons name="photo-camera" size={16} color={colors.surface} />
           </Pressable>
         </View>
 
+        <Text style={[typography.caption, styles.unit]}>Ảnh đại diện chưa hỗ trợ cập nhật</Text>
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
           Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
@@ -193,7 +193,6 @@ export default function CrewProfileScreen() {
         RoadGuard • Bê tông Hoàng Hải
       </Text>
 
-      {toast ? <Toast type="info" message={toast} /> : null}
     </SafeAreaScreen>
   );
 }
@@ -224,7 +223,8 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: radius.full,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.secondary,
+    opacity: 0.6,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -366,6 +366,6 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     textAlign: 'center',
     marginTop: spacing.md,
-    marginBottom: 96,
+    marginBottom: spacing.md,
   },
 });

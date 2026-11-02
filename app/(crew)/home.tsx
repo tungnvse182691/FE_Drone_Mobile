@@ -447,14 +447,18 @@ const styles = StyleSheet.create({
   /* Section Header */
   sectionHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
   },
   sectionTitle: {
     color: colors.neutral,
+    flexShrink: 1,
   },
   seeAllWrap: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
@@ -536,6 +540,8 @@ const styles = StyleSheet.create({
   },
   taskCardHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
@@ -605,6 +611,8 @@ const styles = StyleSheet.create({
   },
   taskCardFooter: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: spacing.xs,
@@ -613,10 +621,12 @@ const styles = StyleSheet.create({
   },
   footerLeftMeta: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
-    gap: 6,
   },
   woCodeBadge: {
+    maxWidth: '100%',
     backgroundColor: colors.surfaceAlt,
     paddingVertical: 2,
     paddingHorizontal: 6,
