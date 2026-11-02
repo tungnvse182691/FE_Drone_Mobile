@@ -143,6 +143,8 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.decorCircleTop} pointerEvents="none" />
+      <View style={styles.decorCircleBottom} pointerEvents="none" />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -168,12 +170,12 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* Card trắng chứa form đăng nhập - bo 20, bóng nhẹ, tiêu đề Đăng nhập tác nghiệp */}
+          {/* Form giữ nguyên Auth API; Card tách nhẹ khỏi nền. */}
           <View style={styles.loginCard}>
             {passwordChanged === '1' ? (
               <Text style={[typography.caption, styles.pendingNoticeText]}>Đã đổi mật khẩu. Vui lòng đăng nhập lại bằng mật khẩu mới.</Text>
             ) : null}
-            <Text style={[typography.titleMd, styles.cardTitle]}>Đăng nhập tác nghiệp</Text>
+            <Text accessibilityRole="header" style={[typography.titleMd, styles.cardTitle]}>Đăng nhập</Text>
 
             <InputField
               label="Email hoặc Số điện thoại"
@@ -184,6 +186,7 @@ export default function LoginScreen() {
               }}
               placeholder="Email hoặc SĐT"
               keyboardType="email-address"
+              autoCapitalize="none"
               autoCorrect={false}
             />
             <InputField
@@ -259,13 +262,13 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      <Modal visible={recoveryOpen} transparent animationType="fade" onRequestClose={() => setRecoveryOpen(false)}>
+      <Modal visible={recoveryOpen} statusBarTranslucent animationType="fade" onRequestClose={() => setRecoveryOpen(false)}>
         <SafeAreaView style={styles.safe}>
-          <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={styles.recoveryContent} keyboardShouldPersistTaps="handled">
           <View style={[styles.loginCard, styles.recoveryCard]}>
             <Text style={typography.titleMd}>Quên mật khẩu</Text>
-            <InputField label="Email khôi phục" value={recoveryEmail} onChangeText={text => { if (!recoveryLocked) setRecoveryEmail(text); }} autoCapitalize="none" keyboardType="email-address" />
+            <InputField label="Email khôi phục" value={recoveryEmail} onChangeText={text => { if (!recoveryLocked) setRecoveryEmail(text); }} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
             <Text style={typography.bodyMd}>{recoveryMessage}</Text>
             <Button variant="primary" title="Gửi yêu cầu khôi phục" onPress={requestRecovery} disabled={recoveryLocked} />
             {recoveryLocked ? <Button variant="secondary" title="Chủ động gửi yêu cầu khác" onPress={() => {
@@ -285,7 +288,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -312,12 +315,18 @@ const styles = StyleSheet.create({
   },
   recoveryContent: {
     flexGrow: 1,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
     paddingHorizontal: spacing.screenMargin,
     paddingVertical: spacing.lg,
   },
   recoveryCard: { gap: spacing.sm },
   scrollContent: {
     flexGrow: 1,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
     justifyContent: 'flex-start',
     paddingHorizontal: 20,
     paddingVertical: spacing.md,
@@ -376,8 +385,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     paddingVertical: 20,
-    paddingHorizontal: 0,
+    paddingHorizontal: 16,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.neutral,
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: { elevation: 2 },
+    }),
   },
   cardTitle: {
     color: colors.neutral,
@@ -409,64 +429,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
   },
-  demoSection: {
-    marginBottom: spacing.lg,
-  },
-  demoToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  demoToggleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  demoToggleText: {
-    color: colors.secondary,
-  },
-  demoBox: {
-    marginTop: spacing.xs,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: 16,
-    backgroundColor: colors.surface,
-    gap: spacing.sm,
-  },
-  demoHint: {
-    color: colors.secondary,
-    textAlign: 'center',
-  },
-  quickTestRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  quickTestChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    minHeight: 40,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickTestChipPressed: {
-    backgroundColor: colors.surface,
-    borderColor: colors.brandGold,
-  },
-  quickTestChipText: {
-    color: colors.neutral,
-    fontWeight: '500',
-  },
   reporterSection: {
     gap: spacing.sm,
   },
@@ -482,6 +444,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
     padding: spacing.cardPadding,
   },
   reporterCardPressed: {
@@ -506,6 +470,8 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   registerLink: {
+    minHeight: 48,
+    justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: spacing.sm,
   },

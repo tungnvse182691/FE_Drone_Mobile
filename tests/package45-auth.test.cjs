@@ -5,7 +5,8 @@ test('default Login omits guest draft notice and uses the responsive mobile layo
   const s=screen('app/(auth)/index.tsx'); s.render(); await s.flush();
   const nodes=s.nodes();
   assert.doesNotMatch(JSON.stringify(nodes),/không tự chuyển|Nháp khách/);
-  assert.match(JSON.stringify(nodes),/Đăng nhập tác nghiệp/);
+  assert.doesNotMatch(JSON.stringify(nodes),/Đăng nhập tác nghiệp/);
+  assert.ok(nodes.some(n=>n.type==='Text'&&n.props.children.includes('Đăng nhập')));
   const scroll=nodes.find(n=>n.type==='ScrollView');
   assert.equal(scroll.props.contentContainerStyle.justifyContent,'flex-start');
   assert.equal(scroll.props.contentContainerStyle.paddingHorizontal,20);
