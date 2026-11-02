@@ -87,6 +87,24 @@ function currentCrewActor(): string | null {
   return currentCrewScope() ? useAuthStore.getState().user?.id ?? null : null;
 }
 
+/** Presentation only: existing command/capability guards remain the authority. */
+export function crewDetailPresentation(status: string | null | undefined, commandBlock: (action: FieldCommandAction) => string | null, reviewBlock: string | null) {
+  const states: Record<string, { summary: string; commands: FieldCommandAction[]; fieldLabel?: string }> = {
+    NewAssigned: { summary: 'Nhiệm vụ mới được giao. Kiểm tra hướng dẫn trước khi nhận hoặc từ chối.', commands: ['accept', 'reject'] },
+    Accepted: { summary: 'Bạn đã nhận nhiệm vụ. Bắt đầu khi sẵn sàng đo kiểm tại hiện trường.', commands: ['start'] },
+    InProgress: { summary: 'Đang đo kiểm. Tiếp tục ghi nhận số đo và bằng chứng hiện trường.', commands: [], fieldLabel: 'Tác nghiệp hiện trường' },
+    Submitted: { summary: 'Đã gửi hồ sơ hiện trường (FIELD), chưa phải xác nhận hoàn tất sửa chữa. Xem hồ sơ và theo dõi phản hồi.', commands: [], fieldLabel: 'Xem hồ sơ đã gửi' },
+    SupplementRequired: { summary: 'Nhiệm vụ cần bổ sung hồ sơ. Xem yêu cầu và kiểm tra điều kiện trước khi bổ sung.', commands: [], fieldLabel: 'Xem hồ sơ cần bổ sung' },
+    Completed: { summary: 'Nhiệm vụ đo kiểm đã hoàn thành. Có thể xem kết quả và lịch sử xử lý.', commands: [], fieldLabel: 'Xem kết quả đo kiểm' },
+    Rejected: { summary: 'Nhiệm vụ đã bị từ chối. Xem thông tin và lịch sử xử lý.', commands: [] },
+    Cancelled: { summary: 'Nhiệm vụ đã hủy. Thông tin và lịch sử được giữ để tra cứu.', commands: [] },
+  };
+  const state = states[status ?? ''];
+  return { summary: state?.summary ?? 'Chưa xác nhận được trạng thái nhiệm vụ. Tải lại để kiểm tra; chưa thể thao tác.',
+    commands: (state?.commands ?? []).filter(action => !commandBlock(action)),
+    fieldLabel: state?.fieldLabel && !reviewBlock ? state.fieldLabel : null };
+}
+
 function CrewFieldActions({ task }: { task: CrewTask }) {
   const identity = useCrewIdentity();
   const [fresh, setFresh] = useState(task);
@@ -178,16 +196,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
   };
   const fieldBlock = !fresh.detail ? 'Chưa tải dữ liệu nhiệm vụ.' : fieldCapabilityBlock(fresh.detail,fresh.etag??'',actor,'review');
   const blocked = (action: FieldCommandAction) => !ready || busy || pending || !fresh.detail || !!fieldCommandBlock(fresh.detail, fresh.etag ?? '', actor, action);
-  const actionReason = (action: FieldCommandAction) => {
-    if (!ready) return 'Đang kiểm tra nhật ký thao tác. Chọn tải lại nếu chưa hoàn tất.';
-    if (busy) return 'Đang xử lý thao tác. Vui lòng chờ kết quả.';
-    if (pending) return 'Cần đối soát lệnh đã lưu trước khi thực hiện thao tác mới.';
-    if (!fresh.detail) return 'Chưa tải đủ thông tin nhiệm vụ.';
-    const block = fieldCommandBlock(fresh.detail, fresh.etag ?? '', actor, action);
-    if (block) return block;
-    if (action === 'reject' && (!reason.trim() || reason.trim().length > 2000)) return 'Nhập lý do từ chối từ 1 đến 2000 ký tự.';
-    return action === 'accept' ? 'Có thể nhận nhiệm vụ.' : action === 'reject' ? 'Có thể từ chối nhiệm vụ với lý do đã nhập.' : 'Có thể bắt đầu nhiệm vụ.';
-  };
+  const presentation = crewDetailPresentation(fresh.status, action => !fresh.detail ? 'Chưa có dữ liệu' : fieldCommandBlock(fresh.detail, fresh.etag ?? '', actor, action), fieldBlock);
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Chi tiết nhiệm vụ" />}>
       <Pressable accessibilityRole="button" accessibilityLabel="Quay lại danh sách" testID="crew-detail-back" style={styles.backRow} onPress={() => router.replace('/(crew)/tasks')}>
@@ -196,52 +205,45 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <Card style={[styles.card, styles.hero]}>
         <View style={styles.sectionHeading}><View style={styles.iconBox}><MaterialIcons name="assignment" size={26} color={colors.brandGold} /></View>
           <View style={styles.flex}><Text style={styles.eyebrow}>CÔNG VIỆC ĐƯỢC GIAO</Text><Text style={typography.titleLg}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
-        <View style={styles.chips}><Chip variant={fresh.status.toUpperCase() === 'COMPLETED' ? 'approved' : 'status-pending'} label={crewStatusLabel(fresh.status)} uppercase={false} /></View>
-        <Text style={styles.body}>{crewModeLabel(fresh.rawMode)}</Text>
-        {fresh.status.toUpperCase() === 'SUBMITTED' ? <Text style={styles.hint}>Đã gửi hồ sơ hiện trường (FIELD). Đây chưa phải xác nhận hoàn tất sửa chữa hay nghiệm thu của PM. Theo dõi phản hồi và yêu cầu bổ sung của nhiệm vụ.</Text> : null}
+        <View style={styles.chips}><Chip variant={fresh.status === 'Completed' ? 'approved' : 'status-pending'} label={crewStatusLabel(fresh.status)} uppercase={false} /></View>
+        <View style={styles.chips}><Chip variant="measure-only" label={crewModeLabel(fresh.rawMode)} uppercase={false} /></View>
+        {fresh.due_label ? <Text style={styles.hint}>Hạn: {crewDateTime(fresh.due_label)}</Text> : null}
+      </Card>
+      <Card style={styles.taskActionCard}>
+        <Text style={typography.titleMd}>Tình trạng hiện tại</Text>
+        <Text style={styles.body}>{presentation.summary}</Text>
+        {fresh.detail?.latestSubmissionId ? <Text style={styles.hint}>Có hồ sơ đã gửi. Nội dung và mức độ đầy đủ được xác nhận riêng khi mở hồ sơ.</Text> : null}
+        {!ready ? <Text style={styles.hint}>Đang kiểm tra nhật ký thao tác. Nếu chưa hoàn tất, chọn tải lại / đối soát.</Text> : null}
+        {busy ? <Text style={styles.hint}>Đang xử lý thao tác. Vui lòng chờ kết quả.</Text> : null}
+        {pending ? <Text accessibilityRole="alert" style={styles.body}>Còn thao tác chưa đối soát xong. Giữ nguyên lệnh và kiểm tra kết quả trước khi thao tác tiếp.</Text> : null}
+        {presentation.commands.includes('accept') ? <Button variant="primary" title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} /> : null}
+        {presentation.commands.includes('reject') ? <>
+          {!blocked('reject') && <InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline />}
+          <Button variant="secondary" title="Từ chối nhiệm vụ" disabled={blocked('reject') || !reason.trim() || reason.trim().length > 2000} onPress={() => void run('reject')} />
+        </> : null}
+        {presentation.commands.includes('start') ? <Button variant="primary" title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} /> : null}
+        {presentation.fieldLabel ? <Button variant="primary" title={presentation.fieldLabel} disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} /> : null}
+        {!presentation.commands.length && !presentation.fieldLabel && fieldBlock ? <Text style={styles.hint}>Thao tác hiện trường chưa khả dụng với trạng thái hoặc điều kiện hiện tại.</Text> : null}
+        {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
+        <Button variant="text" title="Tải lại / đối soát" disabled={busy} onPress={() => void run()} />
+        {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
       </Card>
       <Card style={styles.card}>
-        <View style={styles.sectionHeading}><MaterialIcons name="description" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Thông tin nhiệm vụ</Text></View>
-        <Text style={styles.body}>{fresh.detail?.instructions || fresh.description || 'Chưa có hướng dẫn bổ sung cho nhiệm vụ này.'}</Text>
+        <Text style={typography.titleMd}>Thông tin nhiệm vụ</Text>
+        <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Hướng dẫn</Text><Text style={styles.body}>{fresh.detail?.instructions || fresh.description || 'Chưa có hướng dẫn bổ sung cho nhiệm vụ này.'}</Text></View></View>
         <View style={styles.factRow}><MaterialIcons name="event" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
         {fresh.wo_code ? <Text style={styles.body}>Lệnh công tác: {fresh.wo_code}</Text> : null}
         <View style={styles.factRow}><MaterialIcons name="place" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Vị trí hiện trường</Text><Text style={styles.body}>{[fresh.route_code, fresh.section_name, fresh.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text>
           <Text style={styles.hint}>{fresh.coordinates ? `${fresh.coordinates.latitude}, ${fresh.coordinates.longitude}` : 'Chưa có tọa độ để dẫn đường. Bạn vẫn có thể xem nhiệm vụ.'}</Text></View></View>
+        {fresh.coordinates ? <Button variant="secondary" title="Dẫn đường" onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } })} /> : null}
       </Card>
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
       <Card style={styles.taskActionCard}>
-        <View style={styles.sectionHeading}><MaterialIcons name="assignment-turned-in" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Thao tác nhiệm vụ</Text></View>
-        <Text style={styles.hint}>Các nút chỉ khả dụng khi nhiệm vụ và quyền được giao đáp ứng điều kiện.</Text>
-        {!ready ? <Text style={styles.hint}>Đang kiểm tra nhật ký thao tác. Nếu chưa tải được, chọn tải lại / đối soát bên dưới.</Text> : null}
-        {pending ? <Text style={styles.hint}>Còn thao tác chưa đối soát xong. Giữ nguyên lệnh và kiểm tra kết quả trước khi thao tác tiếp.</Text> : null}
-        <Text style={styles.hint}>Nhận nhiệm vụ: {actionReason('accept')}</Text>
-        <Text style={styles.hint}>Từ chối nhiệm vụ: {actionReason('reject')}</Text>
-        {!blocked('reject') && <InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline />}
-        <Button variant="secondary" title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} />
-        <Button variant="secondary" title="Từ chối nhiệm vụ" disabled={blocked('reject') || !reason.trim() || reason.trim().length > 2000} onPress={() => void run('reject')} />
-        <Text style={styles.hint}>Bắt đầu nhiệm vụ: {actionReason('start')}</Text>
-        <Button variant="secondary" title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} />
-        {notice ? <Text accessibilityLiveRegion="polite">{notice}</Text> : null}
-
-        <Button variant="secondary" title="Tải lại / đối soát" disabled={busy} onPress={() => void run()} />
-        {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
+        <Text style={typography.titleMd}>Hồ sơ liên quan</Text>
+        <Button variant="text" title="Khuyết tật thuộc nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
       </Card>
-      <Card style={styles.taskActionCard}>
-      <Button variant="text" title="Khuyết tật thuộc nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
-      <View style={styles.sectionHeading}><MaterialIcons name="explore" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Tại hiện trường</Text></View>
-      {!fresh.coordinates ? <Text style={styles.hint}>Dẫn đường chưa khả dụng vì chưa có tọa độ nhiệm vụ.</Text> : null}
-      <Button variant="secondary" title="Dẫn đường" disabled={!fresh.coordinates} onPress={() => {
-        if (fresh.coordinates) router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } });
-      }} />
-      {fieldBlock ? <Text>{fieldBlock}</Text> : null}
-      <Button variant="primary" title="Tác nghiệp hiện trường" disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} />
-      </Card>
-      <Card style={styles.taskActionCard}>
-        <RepairContractStatus task={fresh} />
-        <Button variant="secondary" title="Theo dõi thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})} />
-        <Button variant="secondary" title="Hồ sơ hoàn tất thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})} />
-        {fresh.detail?.mode === 'NORMAL' ? <NormalRepairBootstrap task={fresh} /> : null}
-      </Card>
+      {fresh.detail?.mode === 'NORMAL' ? <Card style={styles.taskActionCard}><NormalRepairBootstrap task={fresh} stage="overview" /></Card> : null}
+      {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={styles.taskActionCard}><Text style={typography.titleMd}>Sửa chữa nhanh, có điều kiện</Text><Text style={styles.hint}>Chưa có đủ nguồn phân công hạng mục để xác nhận quyền thi công. Chế độ nhiệm vụ không tự cấp quyền sửa chữa.</Text></Card> : null}
       <Card style={styles.taskActionCard}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
           <MaterialIcons name="info-outline" size={20} color={colors.secondary} /><Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
@@ -271,7 +273,7 @@ export function RepairContractStatus({ task }: { task: CrewTask }) {
 }
 
 /** Explicit NORMAL commands only. Legacy repair content remains unmounted. */
-export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; stage?:'all'|'progress'|'closeout' }) {
+export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; stage?:'all'|'progress'|'closeout'|'overview' }) {
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
   const identity=useCrewIdentity();
   const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên Crew hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
@@ -339,14 +341,20 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
   };
   return <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
     <Text style={typography.titleMd}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':'Sửa chữa theo kế hoạch'}</Text>
-    <Card style={styles.card}>
+    {stage!=='overview'?<Card style={styles.card}>
       <Text style={typography.labelLg}>MỐC XỬ LÝ ĐÃ ĐỐI SOÁT</Text>
       <Text style={styles.body}>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
       <Text style={styles.body}>{started?'✓ Đã đối soát bắt đầu thi công':'Bắt đầu thi công: chờ xác nhận'}</Text>
       <Text style={styles.body}>{finished?'✓ Đã đối soát kết thúc thi công':'Kết thúc thi công: chờ xác nhận'}</Text>
       <Text style={styles.body}>{intake?'✓ Đã tiếp nhận hồ sơ, chờ quản lý đánh giá':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
       <Text style={styles.hint}>Biên nhận đã đối soát không thay cho kết quả nghiệm thu của PM.</Text>
-    </Card>
+    </Card>:null}
+    {stage==='overview' && result.repairContext ? <>
+      <Text style={styles.hint}>Luồng thi công riêng, theo ngữ cảnh và quyền đã được máy chủ xác nhận.</Text>
+      <Button variant="secondary" title="Theo dõi thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})} />
+      <Button variant="secondary" title="Hồ sơ hoàn tất thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})} />
+      <Button variant="text" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={()=>router.push({pathname:'/(crew)/repair-correction',params:{id:task.id,projectId:task.projectId}})} />
+    </> : null}
     {stage==='closeout'?<>
       <RepairFieldSummary draft={draft}/>
       <Button variant="secondary" title="Xem số đo và ảnh trong hồ sơ hiện trường" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
@@ -365,7 +373,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       </View> : null}
     </> : null}
 
-    {stage!=='closeout'?<>
+    {stage!=='closeout'&&stage!=='overview'?<>
     <Text>Số đo đã lưu: {draft?.measurements.length??0}. Ảnh trước sửa/đo đã xác minh: {draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}.</Text>
     {!sourceReady?<Text>Cần lưu số đo thực và tải ảnh hiện trạng hoặc đo kiểm để máy chủ xác minh. Ảnh sau sửa không được dùng cho đánh giá trước sửa.</Text>:null}
     <Button variant="secondary" title="Số đo / ảnh FIELD" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
@@ -379,7 +387,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       {c.phase==='REJECTED'&&c.rejectionResolved?<Text>Đã giải quyết bằng chứng từ chối; lệnh gốc được giữ trong lịch sử.</Text>:null}
       {c.phase==='REJECTED'&&!c.rejectionResolved?<Text>Máy chủ đã từ chối thao tác. Lịch sử được giữ nguyên; cần kiểm tra quyền và điều kiện trước khi tiếp tục.</Text>:null}
     </View>)}
-    {stage!=='closeout'?<>
+    {stage!=='closeout'&&stage!=='overview'?<>
     {assessment&&!ready?<Text>Đánh giá còn thiếu thông tin. Bổ sung số đo hoặc ảnh trong hồ sơ hiện trường rồi chủ động gửi đánh giá mới; lịch sử cũ được giữ nguyên.</Text>:null}
     <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||activeHistory.some(c=>c.operation==='start')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('start')}/>
     </>:null}
@@ -392,11 +400,11 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       </>}
       <Button variant="secondary" title="Hủy đối soát" disabled={busy} onPress={()=>setConfirmation(null)}/>
     </View>:null}
-    {stage!=='closeout'?<>
+    {stage!=='closeout'&&stage!=='overview'?<>
     {started&&!finished?<Text>Đã bắt đầu thi công. Chỉ bấm kết thúc sau khi hoàn tất thi công thực tế.</Text>:null}
     <Button variant="secondary" title="Kết thúc thi công" disabled={busy||!loaded||!started||!!finished||!!pending||rejected||activeHistory.some(c=>c.operation==='finish')||result.status!=='ready'||result.repairContext?.status!=='InProgress'} onPress={()=>void run('finish')}/>
     </>:null}
-    {stage!=='progress'?<>
+    {stage!=='progress'&&stage!=='overview'?<>
     {finished?<Text>Đã thi công xong theo biên nhận máy chủ. Hồ sơ chưa được PM xác nhận.</Text>:null}
     <Button variant="secondary" title="Chụp AFTER / lập hồ sơ sửa chữa" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||!!draft?.command} onPress={()=>void run('claim')}/>
     {draft?.repairClaim?<Button variant="secondary" title="Xem hồ sơ sửa chữa đã lưu" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
@@ -437,9 +445,9 @@ const styles = StyleSheet.create({
   topBar: { padding: spacing.md },
   card: { marginBottom: spacing.md, gap: spacing.md, borderWidth: 1, borderColor: colors.border },
   hero: { borderLeftWidth: 4, borderLeftColor: colors.primary },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionHeading: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconBox: { padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
-  flex: { flex: 1 },
+  flex: { flex: 1, minWidth: 0 },
   eyebrow: { ...typography.labelSm, color: colors.secondary, marginBottom: spacing.xs },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   body: { ...typography.bodyMd, color: colors.neutral },

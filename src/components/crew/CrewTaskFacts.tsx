@@ -24,11 +24,12 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   const [facts,setFacts]=useState<Awaited<ReturnType<typeof readAssignedFieldFacts>>|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showGeometry,setShowGeometry]=useState(false);
+  const [showFacts,setShowFacts]=useState(false);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
     if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);setShowGeometry(false);
-    try {const result=await readAssignedFieldFacts(identity,projectId,taskId);crewReadGuard(identity);if(n===sequence.current)setFacts(result);}
+    try {const result=await readAssignedFieldFacts(identity,projectId,taskId);crewReadGuard(identity);if(n===sequence.current){setFacts(result);setShowFacts(true);}}
     catch(e) {if(n===sequence.current && sameQueueIdentity(identity)) {
       const status=(e as {response?:{status?:number}})?.response?.status;
       setError(status===401?'Phiên đã hết hạn.':status===403?'Không có quyền đọc nhiệm vụ.':status===404?'Nguồn không còn tồn tại.':status===409?'Nguồn hình học chưa sẵn sàng hoặc phiên bản đã đổi.':'Không đọc được dữ liệu. Tải lại để thử lại.');
@@ -36,11 +37,12 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   };
   try {if(!identity)return null;crewReadGuard(identity);}catch{return null;}
   return <Card style={styles.card}>
-    <View style={styles.heading}><MaterialIcons name="map" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Vị trí & lịch sử nhiệm vụ</Text></View>
+    <View style={styles.heading}><MaterialIcons name="map" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Hồ sơ và lịch sử</Text></View>
     <Text style={styles.hint}>Tra cứu dữ liệu tuyến đường và các mốc xử lý đã được ghi nhận.</Text>
     <Button variant="secondary" title={facts ? 'Tải lại vị trí / lịch sử' : 'Xem vị trí / lịch sử'} disabled={busy} loading={busy} onPress={()=>void read()} />
     {error?<Text style={styles.message} accessibilityLiveRegion="polite">{error}</Text>:null}
-    {facts?<View style={styles.group}>
+    {facts ? <Button variant="text" title={showFacts ? 'Thu gọn lịch sử' : 'Xem lịch sử đã tải'} onPress={()=>setShowFacts(v=>!v)} /> : null}
+    {facts&&showFacts?<View style={styles.group}>
       {facts.geometry?<View style={styles.group}>
         <Text style={typography.bodyMd}>Đã có dữ liệu tuyến đường • {facts.geometry.segments.length} phân đoạn</Text>
         {showGeometry && <View style={styles.group}><Text selectable style={styles.hint}>Phiên bản tuyến: {facts.geometry.routeVersionId}</Text>
@@ -57,16 +59,12 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
         <MaterialIcons name="history" size={18} color={colors.secondary}/><View style={{flex:1}}><Text style={typography.bodyMd}>{crewEventLabel(e.kind)}</Text><Text style={styles.hint}>{crewHistoryTime(e.occurredAt)} (giờ Việt Nam)</Text>{showGeometry ? <Text selectable style={styles.hint}>Mã sự kiện: {e.id} · Loại nguồn: {e.kind} · Nội dung nguồn: {e.reason || 'Chưa có'}</Text> : null}</View>
       </View>)}
     </View>:null}
-    <View style={styles.unavailable}><Text style={typography.labelLg}>Các chức năng chưa sẵn sàng</Text>
-      <Text style={styles.hint}>Yêu cầu xem xét lại và biện pháp an toàn chưa có đủ nguồn dữ liệu để thao tác.</Text>
-      <Button variant="secondary" title="Yêu cầu xem xét lại" disabled onPress={()=>{}} />
-      <Button variant="secondary" title="Biện pháp an toàn" disabled onPress={()=>{}} />
-    </View>
+
   </Card>;
 }
 const styles=StyleSheet.create({
   card:{gap:spacing.md,marginBottom:spacing.md,borderWidth:1,borderColor:colors.border},
-  heading:{flexDirection:'row',alignItems:'center',gap:spacing.sm},
+  heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
   message:{padding:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
   event:{flexDirection:'row',gap:spacing.sm,borderLeftWidth:2,borderLeftColor:colors.border,paddingLeft:spacing.sm},

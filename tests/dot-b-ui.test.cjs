@@ -32,7 +32,7 @@ function fieldScreen(failRead=false){
  return {s,nav,record,original,get dispatches(){return dispatches;},get reads(){return reads;}};
 }
 test('B3 mounted safe-read errors keep immutable intent and fail closed without dispatch',async()=>{
- const f=fieldScreen(true);f.s.render();await f.s.flush();await f.s.press('Tải lại / đối soát');await f.s.flush();assert.match(text(f.s),/Không đọc được nhật ký/);assert.equal(f.dispatches,0);assert.equal(JSON.stringify(f.record),f.original);assert.equal(f.s.nodes().find(n=>n.props.title==='Nhận nhiệm vụ').props.disabled,true);f.s.unmount();
+ const f=fieldScreen(true);f.s.render();await f.s.flush();await f.s.press('Tải lại / đối soát');await f.s.flush();assert.match(text(f.s),/Không đọc được nhật ký/);assert.equal(f.dispatches,0);assert.equal(JSON.stringify(f.record),f.original);assert.equal(f.s.nodes().some(n=>n.props.title==='Nhận nhiệm vụ'),false);f.s.unmount();
 });
 test('B3 reconciliation timeout preserves key and B6 local back replaces tasks route',async()=>{
  const f=fieldScreen();f.s.render();await f.s.flush();await f.s.press('Tải lại / đối soát');await f.s.flush();assert.match(text(f.s),/Không đối soát/);assert.equal(f.dispatches,0);assert.equal(JSON.stringify(f.record),f.original);

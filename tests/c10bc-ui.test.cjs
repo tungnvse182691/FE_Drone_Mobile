@@ -7,11 +7,11 @@ function mount(file,name,deps,props){let cursor=0,first=true;const slots=[],effe
  const nodes=(tree)=>!tree?[]:Array.isArray(tree)?tree.flatMap(nodes):typeof tree==='object'?[tree,...tree.children.flatMap(nodes)]:[];
  return {render,nodes,unmount:()=>cleanups.forEach(f=>f?.())};
 }
-test('C10BC mounted detail reads real facts; blocked actions remain disabled, no POST on mount',async()=>{
+test('C10BC mounted detail reads real facts; unavailable actions are not offered, no POST on mount',async()=>{
  let reads=0;const i={actor:'synthetic',scope:'A'},facts={geometry:null,geometryUnavailable:true,history:{events:[],assignments:[]}};
  const h=mount('src/components/crew/CrewTaskFacts.tsx','CrewTaskFacts',{'../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>i,crewReadGuard:()=>{},readAssignedFieldFacts:async()=>{reads++;return facts;},CREW_REVIEW_GATE:'READBACK_GAP',CREW_SAFETY_GATE:'BE_DISCOVERY_GAP'},'../../offline/upload-queue':{sameQueueIdentity:()=>true}},{projectId:'project',taskId:'task'});
  let tree=h.render();assert.equal(reads,0);h.nodes(tree).find(n=>n.props.title==='Xem vị trí / lịch sử').props.onPress();await wait();tree=h.render();assert.equal(reads,1);
- assert.equal(h.nodes(tree).filter(n=>n.type==='Button'&&n.props.disabled===true).length,2);assert.match(JSON.stringify(tree),/Chưa có sự kiện/);h.unmount();
+ assert.equal(h.nodes(tree).some(n=>['Yêu cầu xem xét lại','Biện pháp an toàn'].includes(n.props.title)),false);assert.match(JSON.stringify(tree),/Chưa có sự kiện/);h.unmount();
 });
 test('C10BC mounted sync hides stale identity and ignores late probe after unmount',async()=>{
  let active=true,resolve,reads=0;const pending=new Promise(r=>resolve=r),i={actor:'actor',scope:'A',environment:'fixture'};

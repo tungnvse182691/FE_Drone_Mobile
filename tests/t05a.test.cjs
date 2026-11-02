@@ -112,12 +112,12 @@ function uiHarness(){
  function render(){cursor=0;ec=0;cc=0;return component({task})}
  function nodes(tree){return !tree||typeof tree!=='object'?[]:[tree,...[tree.props?.children].flat(Infinity).flatMap(nodes)]}
  function button(tree,title){const b=nodes(tree).find(x=>x.type==='Button'&&x.props.title===title);assert.ok(b,title);return b.props}
- return {...h,auth,render,button,async settle(){for(const f of effects.splice(0))f();await new Promise(r=>setImmediate(r));},task};
+ return {...h,auth,render,button,nodes,async settle(){for(const f of effects.splice(0))f();await new Promise(r=>setImmediate(r));},task};
 }
 test('T05A real UI enables accept without GPS and keeps GPS/repair locked',async()=>{
  const h=uiHarness();assert.equal(h.button(h.render(),'Nhận nhiệm vụ').disabled,true);await h.settle();const tree=h.render();
- assert.equal(h.button(tree,'Nhận nhiệm vụ').disabled,false);assert.equal(h.button(tree,'Bắt đầu nhiệm vụ').disabled,true);
- assert.equal(h.button(tree,'Dẫn đường').disabled,true);assert.equal(h.button(tree,'Tác nghiệp hiện trường').disabled,true);
+ assert.equal(h.button(tree,'Nhận nhiệm vụ').disabled,false);assert.equal(h.nodes(tree).some(n=>n.props?.title==='Bắt đầu nhiệm vụ'),false);
+ for(const title of ['Dẫn đường','Tác nghiệp hiện trường'])assert.equal(h.nodes(tree).some(n=>n.props?.title===title),false);
  await h.button(tree,'Nhận nhiệm vụ').onPress();await h.settle();assert.equal(h.calls.filter(x=>x[0]==='POST').length,1);
  assert.equal(h.button(h.render(),'Bắt đầu nhiệm vụ').disabled,false);
 });

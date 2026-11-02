@@ -32,7 +32,7 @@ function detailScreen(t){const nav=[];const s=screen('app/(crew)/wo-detail.tsx',
 const textNodes=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).filter(v=>typeof v==='string'||typeof v==='number').join('')).join('\n');
 test('Crew Submitted detail renders instructions with null GPS, hidden technical IDs and no commands',async()=>{
  const {s}=detailScreen(task());s.render();await s.flush();assert.match(textNodes(s),/Thông tin nhiệm vụ|Đo kiểm vị trí được giao/);assert.doesNotMatch(textNodes(s),new RegExp(taskId));
- const buttons=s.nodes().filter(n=>n.type==='Button');assert.equal(buttons.find(n=>n.props.title==='Dẫn đường').props.disabled,true);assert.equal(buttons.find(n=>n.props.title==='Nhận nhiệm vụ').props.disabled,true);
+ const buttons=s.nodes().filter(n=>n.type==='Button');for(const title of ['Dẫn đường','Nhận nhiệm vụ','Từ chối nhiệm vụ','Bắt đầu nhiệm vụ'])assert.equal(buttons.some(n=>n.props.title===title),false);
  assert.equal(s.h.calls.length,0);const toggle=s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityState?.expanded===false);toggle.props.onPress();s.render();assert.match(textNodes(s),new RegExp(taskId));s.unmount();
 });
 for(const [status,expected] of [[401,/đăng nhập/],[403,/quyền/],[409,/thay đổi/],[412,/thay đổi/]])test(`Crew read ${status} remains actionable without granting capability`,()=>{
@@ -79,9 +79,9 @@ test('Crew inbox renders loading, empty and HTTP failures with safe retry and cu
 
 
 test('Patch11 actual detail action reasons track loading, busy, pending and retain rejection text',()=>{
- const {s}=detailScreen(task('NewAssigned'));s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Nhận nhiệm vụ: Đang kiểm tra/);
+ const {s}=detailScreen(task('NewAssigned'));s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Đang kiểm tra nhật ký/);
  s.slots[2]=true;s.render();const input=s.nodes().find(n=>n.type==='InputField');assert.ok(input);input.props.onChangeText('Lý do đã nhập');s.render();assert.equal(s.nodes().find(n=>n.type==='InputField').props.value,'Lý do đã nhập');
- s.slots[3]=true;s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Từ chối nhiệm vụ: Đang xử lý/);
- s.slots[3]=false;s.slots[1]={phase:'pending',scope:'fixture-scope'};s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Bắt đầu nhiệm vụ: Cần đối soát/);
+ s.slots[3]=true;s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Đang xử lý thao tác/);
+ s.slots[3]=false;s.slots[1]={phase:'pending',scope:'fixture-scope'};s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Còn thao tác chưa đối soát/);
  s.slots[1]=null;s.render();assert.equal(s.nodes().find(n=>n.type==='InputField').props.value,'Lý do đã nhập');assert.equal(s.h.calls.length,0);s.unmount();
 });
