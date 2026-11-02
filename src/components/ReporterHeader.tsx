@@ -18,12 +18,12 @@ export function ReporterHeader({ title }: { title: string }) {
 
 const styles = StyleSheet.create({
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm + spacing.xs,
     backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
-    paddingHorizontal: spacing.screenMargin, paddingVertical: spacing.md,
+    paddingHorizontal: spacing.screenMargin + spacing.xs, paddingVertical: spacing.sm + spacing.xs,
   },
   logo: { width: 40, height: 40 },
-  textBlock: { flex: 1 },
-  brand: { color: colors.brandGold },
+  textBlock: { flex: 1, gap: spacing.xs },
+  brand: { color: colors.brandGold, letterSpacing: 0.6 },
   title: { color: colors.secondary },
 });

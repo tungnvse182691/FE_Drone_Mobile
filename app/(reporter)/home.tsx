@@ -169,9 +169,6 @@ export default function ReporterHomeScreen() {
                   </Text>
                   <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
                 </View>
-                <Text style={[typography.caption, styles.reportDescription]} numberOfLines={2}>
-                  {report.description?.trim() || 'Chưa có mô tả'}
-                </Text>
                 <View style={styles.reportFooter}>
                   <MaterialIcons name="photo-library" size={12} color={colors.secondary} />
                   <Text style={[typography.caption, styles.reportDate]}>
@@ -353,12 +350,6 @@ const styles = StyleSheet.create({
   },
   reportCode: {
     color: colors.brandGold,
-  },
-  reportRoute: {
-    color: colors.onSurface,
-  },
-  reportDescription: {
-    color: colors.secondary,
   },
   reportFooter: {
     flexDirection: 'row',

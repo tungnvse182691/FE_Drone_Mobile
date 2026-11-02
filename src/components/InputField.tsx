@@ -11,12 +11,15 @@ interface InputFieldProps {
   secureTextEntry?: boolean;
   keyboardType?: KeyboardTypeOptions;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  autoCorrect?: boolean;
   multiline?: boolean;
   numberOfLines?: number;
   autoFocus?: boolean;
   testID?: string;
   unit?: string;
   minHeight?: number;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
 export function InputField({
@@ -28,12 +31,15 @@ export function InputField({
   secureTextEntry,
   keyboardType,
   autoCapitalize,
+  autoCorrect,
   multiline,
   numberOfLines,
   autoFocus,
   testID,
   unit,
   minHeight,
+  onFocus,
+  onBlur,
 }: InputFieldProps) {
   return (
     <View style={styles.container}>
@@ -56,12 +62,15 @@ export function InputField({
           placeholderTextColor={colors.secondary}
           secureTextEntry={secureTextEntry}
           keyboardType={keyboardType}
+          autoCorrect={autoCorrect}
           autoCapitalize={autoCapitalize ?? (secureTextEntry ? 'none' : 'none')}
           multiline={multiline}
           numberOfLines={numberOfLines ?? (multiline ? 4 : undefined)}
           textAlignVertical={multiline ? 'top' : 'center'}
           autoFocus={autoFocus}
           testID={testID}
+          onFocus={onFocus}
+          onBlur={onBlur}
         />
         {unit ? <Text style={[typography.labelSm, styles.unit]}>{unit}</Text> : null}
       </View>

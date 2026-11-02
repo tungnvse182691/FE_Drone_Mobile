@@ -335,11 +335,11 @@ export default function ReporterCaptureScreen() {
       ) : null}
 
       <View style={styles.list}>
-        {items.map((item) => (
+        {items.map((item, index) => (
           <View key={`row-${item.id}`} style={styles.row}>
             <View style={styles.rowHeader}>
               <Text style={[typography.labelLg, styles.rowTitle]} numberOfLines={1}>
-                {item.fileName}
+                Ảnh {index + 1}
               </Text>
               <Text style={[typography.caption, styles.rowSize]}>{formatBytes(item.sizeBytes)}</Text>
             </View>

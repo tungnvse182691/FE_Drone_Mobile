@@ -62,6 +62,29 @@ for(const status of [401,403,404,409,412,503])test('T03 private read error '+sta
 });
 
 // Execute production screen logic with deterministic UI/query boundaries. Not native rendering.
+test('Reporter summary lists omit free text; detail retains the submitted description',()=>{
+ for(const file of ['home','track']){
+ const home=screenHarness(`app/(reporter)/${file}.tsx`);
+ assert.ok(!home.nodes().includes('real report'));
+ assert.ok(home.nodes().includes(' ảnh hiện trường'));
+ }
+ const detail=screenHarness('app/(reporter)/report-detail.tsx');
+ assert.ok(detail.nodes().includes('real report'));
+});
+test('Reporter profile does not display raw server account status codes',()=>{
+ const s=screenHarness('app/(reporter)/profile.tsx',{profile:{data:{userId:'a',displayName:'Test',email:'qa@example.test',status:'INTERNAL_STATUS'}}});s.render();
+ const visible=s.nodes().filter(n=>n.type==='Text').map(n=>JSON.stringify(n.props.children)).join(' ');
+ assert.doesNotMatch(visible,/INTERNAL_STATUS/);assert.match(visible,/Tài khoản chưa ở trạng thái hoạt động/);
+});
+
+test('Reporter lists and detail do not present generated report ID codes to residents',()=>{
+ for(const file of ['home','track','report-detail']){
+  const s=screenHarness(`app/(reporter)/${file}.tsx`);s.render();
+  const visible=s.nodes().filter(n=>n.type==='Text'||n.props?.accessibilityLabel).map(n=>JSON.stringify(n.type==='Text'?n.props.children:n.props.accessibilityLabel)).join(' ');
+  assert.doesNotMatch(visible,/REPORT-r/);
+ }
+});
+
 function screenHarness(file,overrides={}){
   let slots=[],index=0,tree;const focus=[],configs=[],actions=[];
   const jwt='fixture.'+Buffer.from(JSON.stringify({sub:'a',sid:'s1'})).toString('base64url')+'.signature';
@@ -156,5 +179,6 @@ test('T03 next-page transport error retains partial data; auth and changed-sessi
 for(const file of ['home','track','profile'])test('T03 '+file+' keeps loaded reports/counters on transient load-more failure',()=>{
   const h=screenHarness('app/(reporter)/'+file+'.tsx',{result:{isError:true,isFetchNextPageError:true,error:{response:{status:503}},hasNextPage:true}});
   const text=h.nodes().filter(n=>typeof n==='string').join(' ');assert.match(text,/đã tải/);
-  if(file!=='profile')assert.ok(h.nodes().includes('real report'));else assert.ok(!h.nodes().includes('—'));
+  if(file!=='profile')assert.ok(h.nodes().includes(' ảnh hiện trường'));
+  else assert.ok(!h.nodes().includes('—'));
 });

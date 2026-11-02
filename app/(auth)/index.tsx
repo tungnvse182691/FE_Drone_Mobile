@@ -143,10 +143,6 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Nền trang trí 2 mảng tròn vàng gold rất nhạt, pointerEvents none */}
-      <View style={styles.decorCircleTop} pointerEvents="none" />
-      <View style={styles.decorCircleBottom} pointerEvents="none" />
-
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -186,7 +182,9 @@ export default function LoginScreen() {
                 setPhoneOrEmail(text);
                 if (error) setError(null);
               }}
-              placeholder="Nhập email @hoanghai.vn hoặc SĐT..."
+              placeholder="Email hoặc SĐT"
+              keyboardType="email-address"
+              autoCorrect={false}
             />
             <InputField
               label="Mật khẩu"
@@ -215,7 +213,7 @@ export default function LoginScreen() {
               style={styles.submitButton}
             />
 
-            <Button variant="secondary" title="Quên mật khẩu?" style={{ marginTop: spacing.sm }} disabled={loading} onPress={() => setRecoveryOpen(true)} />
+            <Button variant="text" title="Quên mật khẩu?" style={{ marginTop: spacing.sm }} disabled={loading} onPress={() => setRecoveryOpen(true)} />
             {isSubmitDisabled ? (
               <Text style={[typography.caption, styles.disabledReason]}>
                 Vui lòng nhập tài khoản và mật khẩu để tiếp tục
@@ -287,7 +285,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -320,17 +318,17 @@ const styles = StyleSheet.create({
   recoveryCard: { gap: spacing.sm },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 20,
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.md,
   },
   header: {
     alignItems: 'center',
     marginBottom: spacing.lg,
   },
   logoCircle: {
-    width: 120,
-    height: 120,
+    width: 72,
+    height: 72,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -349,12 +347,13 @@ const styles = StyleSheet.create({
     }),
   },
   logoImage: {
-    width: 104,
-    height: 104,
+    width: 64,
+    height: 64,
   },
   brandTitle: {
     fontFamily: 'Sansation',
     fontSize: 27,
+    lineHeight: 38,
     fontWeight: '500',
     letterSpacing: 3,
     color: colors.brandGold,
@@ -371,24 +370,14 @@ const styles = StyleSheet.create({
   subtitle: {
     color: colors.secondary,
     textAlign: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 8,
   },
   loginCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 0,
     marginBottom: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
   },
   cardTitle: {
     color: colors.neutral,
@@ -493,8 +482,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
     padding: spacing.cardPadding,
   },
   reporterCardPressed: {

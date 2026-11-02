@@ -14,7 +14,6 @@ import { isReporterSession } from '../../src/api/uploads';
 import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
-import { reporterReportCode } from '../../src/api/report-display-code';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -79,22 +78,16 @@ export default function ReporterTrackScreen() {
                 router.push({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: report.id } })
               }
               accessibilityRole="button"
-              accessibilityLabel={`Xem chi tiết phản ánh ${reporterReportCode(report.id)} gửi lúc ${formatDate(report.createdAt)}`}
+              accessibilityLabel={`Xem chi tiết phản ánh gửi lúc ${formatDate(report.createdAt)}`}
             >
               <Card style={styles.reportCard}>
                 <View style={styles.reportHeader}>
                   <MaterialIcons name="description" size={18} color={colors.brandGold} />
-                  <Text style={[typography.labelLg, styles.reportCode]}>
-                    {reporterReportCode(report.id)}
-                  </Text>
                   <Text style={[typography.titleMd, styles.reportDate]}>
                     {formatDate(report.createdAt)}
                   </Text>
                   <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
                 </View>
-                <Text style={[typography.bodyMd, styles.reportDescription]} numberOfLines={2}>
-                  {report.description?.trim() || 'Chưa có mô tả'}
-                </Text>
                 <View style={styles.metaRow}>
                   <MaterialIcons name="photo-library" size={14} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
@@ -147,9 +140,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  reportCode: { color: colors.brandGold },
   reportDate: { color: colors.secondary, flex: 1 },
-  reportDescription: { color: colors.secondary },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   metaText: { color: colors.secondary },
 });

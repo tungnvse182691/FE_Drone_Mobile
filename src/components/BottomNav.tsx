@@ -47,9 +47,11 @@ export function BottomNav({ tabs, activeRoute, onNavigate }: BottomNavProps) {
             accessibilityState={{ selected: isActive }}
             onPress={() => onNavigate ? onNavigate(tab.route) : router.push(tab.route)}
           >
-            <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
-            <Text style={[typography.labelSm, { color: iconColor }]}>
-              {tab.label.toUpperCase()}
+            <View style={[styles.iconContainer, isActive && styles.activeIcon]}>
+              <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
+            </View>
+            <Text style={[typography.labelSm, styles.label, { color: iconColor }]}>
+              {tab.label}
             </Text>
           </Pressable>
         );
@@ -61,13 +63,22 @@ export function BottomNav({ tabs, activeRoute, onNavigate }: BottomNavProps) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    height: 64,
+    minHeight: 64,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   tab: {
     flex: 1,
+    minHeight: 48,
+    paddingHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
   },
+  label: { textAlign: 'center', flexShrink: 1 },
+  iconContainer: { width: 44, minHeight: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+  activeIcon: { backgroundColor: `${colors.primary}18` },
 });

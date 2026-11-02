@@ -40,6 +40,7 @@ test('RPT queue selection is explicit VERIFIED owned and held in form without cr
  // Hydration must preserve real ledger, so also update its stored verification values.
  const row=s.h.rows.get(id);row.media_state='VERIFIED';row.file_id='file';row.verified_version='fv';
  s.render();await s.flush();assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
+ await s.tap('toggle-verified-photos');await s.flush();
  await s.press('Chọn ảnh đã xác minh 1');await s.flush();assert.ok(s.nodes().some(n=>n.type==='Image'&&n.props.source?.uri==='a.jpg'));assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);assert.equal(s.h.calls.length,0);
 });
 test('RPT old restore completion cannot show private draft after account switch',async()=>{

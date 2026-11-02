@@ -412,7 +412,9 @@ export default function ReporterReportSupplementScreen() {
                   accessibilityLabel={`Xoá ảnh ${index + 1}`}
                   testID={`remove-photo-${index}`}
                 >
-                  <MaterialIcons name="close" size={16} color={colors.onPrimary} />
+                  <View style={styles.photoRemoveBadge}>
+                    <MaterialIcons name="close" size={16} color={colors.secondary} />
+                  </View>
                 </Pressable>
               </View>
             ))}
@@ -562,15 +564,15 @@ const styles = StyleSheet.create({
   photo: { width: 88, height: 88, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   photoRemove: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: radius.full,
-    backgroundColor: colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
+    top: 0,
+    right: 0,
+    width: 48,
+    height: 48,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    padding: 4,
   },
+  photoRemoveBadge: { width: 24, height: 24, borderRadius: radius.full, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   photoAdd: {
     width: 88,
     height: 88,

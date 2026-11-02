@@ -13,7 +13,6 @@ import { passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_SUPPLEMENT } from '../../src/constants/routes';
-import { reporterReportCode } from '../../src/api/report-display-code';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -60,10 +59,6 @@ export default function ReporterReportDetailScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         showsVerticalScrollIndicator={false}
       >
-        {reportId ? (
-          <Text style={[typography.labelLg, styles.reportCode]}>{reporterReportCode(reportId)}</Text>
-        ) : null}
-
         <Button variant="secondary" title="Làm mới" loading={loading} disabled={!enabled} onPress={load} />
         {enabled && query.isPending ? <Text>Đang tải phản ánh…</Text> : null}
         {error ? (
@@ -187,6 +182,7 @@ function EvidencePreview({ scope, reportId, evidenceId, publication }: {
 }) {
   const [requested, setRequested] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const query = useQuery({
     queryKey: publication ? ['reporter-publication-evidence', scope, reportId, publication.id, evidenceId] :
       ['reporter-private-evidence', scope, reportId, evidenceId],
@@ -197,17 +193,21 @@ function EvidencePreview({ scope, reportId, evidenceId, publication }: {
   });
   // Leave no image visible when returning from navigation. Each
   // new opt-in rechecks the current recipient/source on the server.
-  useFocusEffect(useCallback(() => () => { setRequested(false); setImageError(false); }, []));
+  useFocusEffect(useCallback(() => () => { setRequested(false); setImageError(false); setImageLoaded(false); }, []));
   const label = publication ? 'ảnh được chia sẻ' : 'ảnh riêng tư';
   return <View>
     <Button variant="secondary" title={publication ? 'Xem ảnh được chia sẻ' : 'Xem ảnh đính kèm'} loading={query.isFetching} onPress={() => {
-      setImageError(false);
+      setImageError(false); setImageLoaded(false);
       if (requested) void query.refetch(); else setRequested(true);
     }} />
-    {requested && (query.isError || imageError) ? <Text style={{ color: colors.error }}>Không tải được {label}. Vui lòng thử lại.</Text> : null}
-    {requested && !query.isFetching && !query.isError && !imageError && query.data ? <Image source={{ uri: query.data }}
-      style={{ width: '100%', height: 220 }} resizeMode="contain" accessibilityLabel={publication ? 'Ảnh bằng chứng được chia sẻ cho phản ánh này' : 'Ảnh bằng chứng riêng tư'}
-      onError={() => setImageError(true)} /> : null}
+    {requested ? <View testID="evidence-preview-frame" style={styles.previewFrame}>
+      {query.isError || imageError ? <Text accessibilityLiveRegion="polite" style={styles.previewError}>Không tải được {label}. Vui lòng thử lại.</Text> : <>
+        {!query.isFetching && query.data ? <Image source={{ uri: query.data }}
+          style={styles.previewImage} resizeMode="contain" accessibilityLabel={publication ? 'Ảnh bằng chứng được chia sẻ cho phản ánh này' : 'Ảnh bằng chứng riêng tư'}
+          onLoad={() => setImageLoaded(true)} onError={() => setImageError(true)} /> : null}
+        {query.isFetching || !imageLoaded ? <Text accessibilityLiveRegion="polite" style={styles.previewLoading}>Đang tải ảnh…</Text> : null}
+      </>}
+    </View> : null}
   </View>;
 }
 
@@ -238,4 +238,8 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.onSurface },
   evidenceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   evidenceText: { flex: 1, gap: 2 },
+  previewFrame: { height: 220, backgroundColor: colors.surfaceAlt, borderRadius: radius.md, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+  previewImage: { width: '100%', height: 220 },
+  previewLoading: { position: 'absolute', color: colors.secondary, backgroundColor: colors.surfaceAlt, padding: spacing.sm },
+  previewError: { color: colors.error, padding: spacing.md, textAlign: 'center' },
 });

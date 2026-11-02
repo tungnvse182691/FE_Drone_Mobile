@@ -87,7 +87,7 @@ export default function ReporterUploadsScreen() {
   const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED').length;
   const canSubmit = verifiedCount > 0;
 
-  const renderRow = (item: UploadQueueItem) => {
+  const renderRow = (item: UploadQueueItem, index: number) => {
     const busy = busyItemIds.includes(item.id);
     const ratio = Math.round(uploadedRatio(item) * 100);
     return (
@@ -95,7 +95,7 @@ export default function ReporterUploadsScreen() {
         <View style={styles.cardHeader}>
           <MaterialIcons name={stateIcon(item.mediaState)} size={18} color={stateColor(item.mediaState)} />
           <Text style={[typography.labelLg, styles.cardTitle]} numberOfLines={1}>
-            {item.fileName}
+            Ảnh {index + 1}
           </Text>
           <Text style={[typography.caption, styles.cardMeta]}>
             {(item.sizeBytes / (1024 * 1024)).toFixed(1)} MB

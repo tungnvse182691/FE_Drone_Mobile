@@ -50,11 +50,18 @@ export default function ReporterReportScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const descriptionTop = useRef(0);
+  const descriptionFocused = useRef(false);
+  const revealDescription = () => {
+    if (descriptionFocused.current) scrollRef.current?.scrollTo({ y: Math.max(0, descriptionTop.current - spacing.md), animated: true });
+  };
   const captureInFlight = useRef(false);
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [showVerifiedPhotos, setShowVerifiedPhotos] = useState(false);
   const selectedPhotos = useRef<string[]>([]);
   const updatePhotos = (next: (current: string[]) => string[]) => {
     selectedPhotos.current = next(selectedPhotos.current);
@@ -95,7 +102,7 @@ export default function ReporterReportScreen() {
     const isCurrent = scope.capture();
     setRestored(false);
     setRestoreFailed(false); setDataScope('');
-    setDescription(''); updatePhotos(() => []); setCoords(null); setCameraOpen(false);
+    setDescription(''); updatePhotos(() => []); setCoords(null); setCameraOpen(false); setShowVerifiedPhotos(false);
     setErrors({}); setSubmitError(null); setSubmitting(false);
     photoMeta.current = new Map(); completed.current = false; submitted.current = false;
     void useReporterStore.getState().restoreStartedCommand().then(draft => {
@@ -292,60 +299,22 @@ export default function ReporterReportScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ReporterHeader title="Gửi phản ánh khuyết tật" />
+      <ReporterHeader title="Gửi phản ánh" />
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollRef}
+          onLayout={revealDescription}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={[typography.caption, styles.subtitle]}>
-            Mô tả hiện trạng hư hại để Ban Quản lý dự án khảo sát và xử lý.
-          </Text>
-
-          <View style={styles.gpsCard}>
-            <View style={styles.gpsRow}>
-              <MaterialIcons
-                name={coords ? 'my-location' : 'location-off'}
-                size={16}
-                color={coords ? colors.success : colors.error}
-              />
-              <Text style={[typography.caption, styles.gpsText]}>{gpsStatus}</Text>
-              <Pressable
-                onPress={requestLocation}
-                disabled={gpsLoading || submitting || draftLocked}
-                style={({ pressed }) => [styles.gpsRetry, pressed && styles.photoAddPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Lấy lại vị trí"
-                testID="retry-location"
-              >
-                <MaterialIcons name="refresh" size={16} color={colors.brandGold} />
-                <Text style={[typography.caption, styles.gpsRetryText]}>
-                  {gpsLoading ? 'Đang lấy' : 'Thử lại'}
-                </Text>
-              </Pressable>
-            </View>
-            {errors.coords ? (
-              <Text style={[typography.caption, styles.error]}>{errors.coords}</Text>
-            ) : null}
+          <View style={styles.sectionHeading}>
+            <Text style={[typography.titleMd, styles.label]}>Ảnh hiện trường</Text>
+            <Text style={[typography.caption, styles.muted]}>Tối đa {MAX_PHOTOS} ảnh · {photos.length}/{MAX_PHOTOS}</Text>
           </View>
-
-          <Text style={[typography.labelLg, styles.label]}>
-            Ảnh hiện trường ({photos.length}/{MAX_PHOTOS})
-          </Text>
-          {!draftLocked && candidates.length > 0 ? <View>
-            <Text style={typography.caption}>Chọn rõ ảnh đã xác minh của phiên hiện tại để gắn vào phản ánh này.</Text>
-            {candidates.map((item, index) => <View key={item.id}><Image source={{ uri: item.uriLocal }} style={styles.photo} /><Text style={typography.caption}>{item.fileName}</Text><Button variant="secondary" key={item.id} title={`Chọn ảnh đã xác minh ${index + 1}`}
-              disabled={submitting || photos.length >= MAX_PHOTOS}
-              onPress={() => {
-                if (!scope.capture()() || submitting || draftLocked || photos.length >= MAX_PHOTOS) return;
-                photoMeta.current.set(item.uriLocal, { uri: item.uriLocal, fileName: item.fileName, mediaType: item.mediaType, capturedAt: item.capturedAt, itemId: item.id });
-                updatePhotos(current => current.includes(item.uriLocal) ? current : [...current, item.uriLocal].slice(0, MAX_PHOTOS));
-              }} /></View>)}
-          </View> : null}
           <View style={styles.photoGrid} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
@@ -357,7 +326,9 @@ export default function ReporterReportScreen() {
                   accessibilityLabel={`Xoá ảnh ${index + 1}`}
                   testID={`remove-photo-${index}`}
                 >
-                  <MaterialIcons name="close" size={16} color={colors.onPrimary} />
+                  <View style={styles.photoRemoveBadge}>
+                    <MaterialIcons name="close" size={16} color={colors.secondary} />
+                  </View>
                 </Pressable>
               </View>
             ))}
@@ -373,7 +344,7 @@ export default function ReporterReportScreen() {
                 accessibilityLabel="Chụp ảnh hiện trường"
                 testID="add-photo"
               >
-                <MaterialIcons name="photo-camera" size={24} color={colors.brandGold} />
+                <MaterialIcons name="photo-camera" size={24} color={colors.secondary} />
                 <Text style={[typography.caption, styles.photoAddText]}>Chụp ảnh</Text>
               </Pressable>
             ) : null}
@@ -385,11 +356,28 @@ export default function ReporterReportScreen() {
                 accessibilityLabel="Chọn ảnh từ thư viện"
                 testID="pick-photo"
               >
-                <MaterialIcons name="photo-library" size={24} color={colors.primary} />
-                <Text style={[typography.caption, styles.photoAddText]}>Thư viện</Text>
+                <MaterialIcons name="photo-library" size={24} color={colors.secondary} />
+                <Text style={[typography.caption, styles.photoAddText]}>Chọn ảnh</Text>
               </Pressable>
             ) : null}
           </View>
+          {!draftLocked && candidates.length > 0 ? <View style={styles.reuseSection}>
+            <Pressable testID="toggle-verified-photos" accessibilityRole="button" accessibilityState={{ expanded: showVerifiedPhotos }}
+              disabled={submitting} style={styles.reuseToggle} onPress={() => setShowVerifiedPhotos(value => !value)}>
+              <Text style={[typography.caption, styles.muted]}>Dùng ảnh đã xác minh</Text>
+              <MaterialIcons name={showVerifiedPhotos ? 'expand-less' : 'chevron-right'} size={20} color={colors.secondary} />
+            </Pressable>
+            {showVerifiedPhotos ? candidates.map((item, index) => <View testID={`verified-photo-${index}`} key={item.id} style={styles.candidateRow}>
+              <Image source={{ uri: item.uriLocal }} style={styles.candidatePhoto} accessibilityLabel={`Ảnh đã xác minh ${index + 1}`} />
+              <View style={styles.candidateAction}><Button variant="secondary" title={`Chọn ảnh đã xác minh ${index + 1}`}
+                disabled={submitting || photos.length >= MAX_PHOTOS}
+                onPress={() => {
+                  if (!scope.capture()() || submitting || draftLocked || photos.length >= MAX_PHOTOS) return;
+                  photoMeta.current.set(item.uriLocal, { uri: item.uriLocal, fileName: item.fileName, mediaType: item.mediaType, capturedAt: item.capturedAt, itemId: item.id });
+                  updatePhotos(current => current.includes(item.uriLocal) ? current : [...current, item.uriLocal].slice(0, MAX_PHOTOS));
+                }} /></View>
+            </View>) : null}
+          </View> : null}
           {errors.photos ? (
             <Text style={[typography.caption, styles.error]}>{errors.photos}</Text>
           ) : null}
@@ -402,7 +390,9 @@ export default function ReporterReportScreen() {
             </View>
           ) : null}
 
-          <View pointerEvents={submitting || draftLocked ? "none" : "auto"}>
+          <View testID="description-section"
+            onLayout={event => { descriptionTop.current = event.nativeEvent.layout.y; }}
+            pointerEvents={submitting || draftLocked ? "none" : "auto"}>
           <InputField
             label="Mô tả hiện trạng"
             value={description}
@@ -410,13 +400,30 @@ export default function ReporterReportScreen() {
               setDescription(text);
               setErrors((current) => ({ ...current, description: '' }));
             }}
-            placeholder="Mô tả vị trí, mức độ hư hại, thời gian quan sát được..."
+            placeholder="Đường hư hại như thế nào?"
+            onFocus={() => { descriptionFocused.current = true; revealDescription(); }}
+            onBlur={() => { descriptionFocused.current = false; }}
             error={errors.description}
             multiline
             testID="reporter-description"
           />
+          <Text style={[typography.caption, styles.fieldHint]}>1–1.000 ký tự · {description.trim().length}/1.000</Text>
           </View>
-          {draftLocked ? <Text style={typography.caption}>Đang giữ nguyên nội dung lần gửi trước. Bấm gửi lại để kiểm tra kết quả.</Text> : null}
+          <View style={styles.gpsCard}>
+            <Text style={typography.labelLg}>Vị trí (không bắt buộc)</Text>
+            <View style={styles.gpsRow}>
+              <MaterialIcons name={coords ? 'my-location' : 'location-off'} size={20} color={colors.secondary} />
+              <Text style={[typography.caption, styles.gpsText]}>{coords ? 'Đã lấy vị trí' : gpsStatus}</Text>
+              <Pressable onPress={requestLocation} disabled={gpsLoading || submitting || draftLocked}
+                style={styles.gpsRetry} accessibilityRole="button" accessibilityLabel="Lấy lại vị trí" testID="retry-location">
+                <MaterialIcons name="refresh" size={20} color={colors.secondary} />
+                <Text style={typography.caption}>{gpsLoading ? 'Đang lấy' : 'Lấy lại'}</Text>
+              </Pressable>
+            </View>
+            {!coords && !gpsLoading ? <Text style={typography.caption}>Bạn vẫn có thể gửi khi chưa có vị trí.</Text> : null}
+            {errors.coords ? <Text style={[typography.caption, styles.error]}>{errors.coords}</Text> : null}
+          </View>
+          {draftLocked && !submitting && !submitError ? <Text style={typography.caption}>Đang giữ nguyên nội dung lần gửi trước. Bấm gửi lại để kiểm tra kết quả.</Text> : null}
 
           {submitError ? (
             <View style={styles.errorRow}>
@@ -429,15 +436,17 @@ export default function ReporterReportScreen() {
             <Button
               variant="primary"
               title="Gửi phản ánh"
+              style={styles.submitButton}
               onPress={handleSubmit}
               loading={submitting}
               disabled={!restored || submitting}
             />
-            <Text style={[typography.caption, styles.submitHint]}>
-              {isReporterSession(useAuthStore.getState())
-                ? 'Phản ánh sẽ được gửi trực tiếp đến Ban Quản lý dự án để tiếp nhận và khảo sát.'
-                : 'Đăng nhập hoặc đăng ký để gửi phản ánh của bạn.'}
-            </Text>
+            {!submitError ? <Text accessibilityLiveRegion="polite" style={[typography.caption, styles.submitHint]}>
+              {submitting ? 'Đang xử lý ảnh và gửi phản ánh…' :
+              isReporterSession(useAuthStore.getState())
+                ? ''
+                : 'Đăng nhập để gửi phản ánh.'}
+            </Text> : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -480,11 +489,19 @@ export default function ReporterReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.surfaceAlt },
+  safe: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  content: { padding: spacing.screenMargin, paddingBottom: spacing.xl },
+  content: { padding: spacing.screenMargin + spacing.xs, paddingBottom: spacing.lg },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
+  muted: { color: colors.secondary },
+  reuseSection: { marginBottom: spacing.md },
+  reuseToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  candidateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
+  candidatePhoto: { width: 56, height: 56, borderRadius: radius.md },
+  candidateAction: { flex: 1 },
+  submitButton: { minHeight: 52, borderRadius: radius.lg },
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
-  label: { color: colors.secondary, marginBottom: spacing.sm },
+  label: { color: colors.onSurface },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   chip: {
     borderRadius: radius.full,
@@ -499,49 +516,52 @@ const styles = StyleSheet.create({
   chipText: { color: colors.secondary },
   chipTextSelected: { color: colors.onPrimary },
   gpsCard: {
-    backgroundColor: colors.surface,
-    padding: spacing.cardPadding,
-    borderRadius: radius.xl,
-    ...softShadow,
+    borderTopWidth: 1,
+    borderColor: colors.border,
+    paddingTop: spacing.md,
+    borderBottomWidth: 1,
+    paddingBottom: spacing.md,
     gap: spacing.xs,
     marginBottom: spacing.lg,
   },
   gpsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   gpsText: { color: colors.secondary, flex: 1 },
-  gpsRetry: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  gpsRetry: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48, paddingHorizontal: spacing.sm },
   gpsRetryText: { color: colors.brandGold },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   photoWrapper: { position: 'relative' },
-  photo: { width: 88, height: 88, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  photo: { width: 88, height: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   photoRemove: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: radius.full,
-    backgroundColor: colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
+    top: 0,
+    right: 0,
+    width: 48,
+    height: 48,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    padding: 4,
   },
+  photoRemoveBadge: { width: 24, height: 24, borderRadius: radius.full, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   photoAdd: {
-    width: 88,
+    flexGrow: 1,
+    flexBasis: 120,
     height: 88,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.brandGold,
+    backgroundColor: colors.surfaceAlt,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: spacing.sm,
   },
   photoAddPressed: { backgroundColor: colors.surfaceAlt },
-  photoAddText: { color: colors.brandGold },
+  photoAddText: { color: colors.secondary },
   permissionRow: { gap: spacing.sm, marginBottom: spacing.md },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
   error: { color: colors.error, flex: 1 },
   submitWrapper: { gap: spacing.sm, marginTop: spacing.sm },
   submitHint: { color: colors.secondary, textAlign: 'center' },
+  fieldHint: { color: colors.secondary, marginBottom: spacing.md },
   cameraModal: { flex: 1, backgroundColor: colors.neutral },
   cameraControls: { flex: 1 },
   cameraTopBar: {

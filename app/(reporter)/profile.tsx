@@ -103,7 +103,7 @@ export default function ReporterProfileScreen() {
         <View style={styles.statusPill}>
           <View style={[styles.statusDot, isActive ? styles.statusDotGreen : styles.statusDotYellow]} />
           <Text style={[typography.caption, isActive ? styles.statusTextGreen : styles.statusTextYellow]}>
-            {profile ? (profile.status === 'ACTIVE' ? 'Tài khoản đang hoạt động' : 'Trạng thái: ' + profile.status) : 'Chưa xác nhận trạng thái tài khoản'}
+            {profile ? (profile.status === 'ACTIVE' ? 'Tài khoản đang hoạt động' : 'Tài khoản chưa ở trạng thái hoạt động') : 'Chưa xác nhận trạng thái tài khoản'}
           </Text>
         </View>
       </View>

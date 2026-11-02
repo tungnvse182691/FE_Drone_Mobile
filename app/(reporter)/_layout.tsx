@@ -1,6 +1,7 @@
 import React from 'react';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { Alert, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav, NavTab } from '../../src/components/BottomNav';
 import { useAuthStore } from '../../src/store/auth';
 import { isReporterSession } from '../../src/api/uploads';
@@ -84,7 +85,9 @@ export default function ReporterLayout() {
       <View style={styles.stackArea}>
         <Stack screenOptions={{ headerShown: false }} />
       </View>
-      <BottomNav tabs={TABS} activeRoute={activeRoute} onNavigate={navigate} />
+      <SafeAreaView edges={['bottom']}>
+        <BottomNav tabs={TABS} activeRoute={activeRoute} onNavigate={navigate} />
+      </SafeAreaView>
     </View>
   );
 }
