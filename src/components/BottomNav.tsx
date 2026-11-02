@@ -12,6 +12,8 @@ export interface NavTab {
   iconFamily?: 'material';
   label: string;
   route: string;
+  activeRoutes?: string[];
+  /** Legacy name used by Crew/Drone. Entries are exact routes, not prefixes. */
   activePrefixes?: string[];
 }
 
@@ -21,18 +23,9 @@ interface BottomNavProps {
   onNavigate?: (route: string) => void;
 }
 
-function matchLength(tab: NavTab, activeRoute: string) {
-  const prefixes = tab.activePrefixes ?? [tab.route];
-  return prefixes.reduce(
-    (best, prefix) => (activeRoute.startsWith(prefix) ? Math.max(best, prefix.length) : best),
-    -1,
-  );
-}
-
 export function BottomNav({ tabs, activeRoute, onNavigate }: BottomNavProps) {
-  const matchLengths = tabs.map((tab) => matchLength(tab, activeRoute));
-  const longestMatch = Math.max(...matchLengths);
-  const activeIndex = longestMatch < 0 ? -1 : matchLengths.indexOf(longestMatch);
+  const activeIndex = tabs.findIndex(tab =>
+    (tab.activeRoutes ?? tab.activePrefixes ?? [tab.route]).includes(activeRoute));
 
   return (
     <View style={styles.container}>

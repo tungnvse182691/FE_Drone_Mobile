@@ -13,6 +13,7 @@ import {
   REPORTER_HOME,
   REPORTER_PROFILE,
   REPORTER_REPORT,
+  REPORTER_REPORT_DETAIL,
   REPORTER_REPORT_SUPPLEMENT,
   REPORTER_TRACK,
   REPORTER_UPLOADS,
@@ -25,28 +26,28 @@ const TABS: NavTab[] = [
     route: REPORTER_REPORT,
     icon: 'add-circle',
     iconFamily: 'material',
-    activePrefixes: [REPORTER_REPORT, REPORTER_REPORT_SUPPLEMENT],
+    activeRoutes: [REPORTER_REPORT],
   },
   {
     label: 'Ảnh',
     route: REPORTER_UPLOADS,
     icon: 'photo-library',
     iconFamily: 'material',
-    activePrefixes: [REPORTER_UPLOADS, REPORTER_CAPTURE],
+    activeRoutes: [REPORTER_UPLOADS, REPORTER_CAPTURE],
   },
   {
     label: 'Tra cứu',
     route: REPORTER_TRACK,
     icon: 'search',
     iconFamily: 'material',
-    activePrefixes: [REPORTER_TRACK, REPORTER_FEEDBACK],
+    activeRoutes: [REPORTER_TRACK, REPORTER_REPORT_DETAIL, REPORTER_REPORT_SUPPLEMENT, REPORTER_FEEDBACK],
   },
   {
     label: 'Tài khoản',
     route: REPORTER_ACCOUNT,
     icon: 'person',
     iconFamily: 'material',
-    activePrefixes: [REPORTER_ACCOUNT, REPORTER_PROFILE],
+    activeRoutes: [REPORTER_ACCOUNT, REPORTER_PROFILE],
   },
 ];
 
@@ -74,11 +75,11 @@ export default function ReporterLayout() {
     }
     router.push(route);
   };
-  const prefix = `/${PUBLIC_ROUTE_GROUP}`;
-  const normalizedPath = pathname === '/' ? '' : pathname;
-  const activeRoute = normalizedPath.startsWith(prefix)
-    ? normalizedPath
-    : `${prefix}${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
+  // usePathname omits route groups in normal navigation. Match the group
+  // segment exactly when supplied; tab selection uses complete routes only.
+  const segments = pathname.split('/').filter(Boolean);
+  const activeRoute = `/${(segments[0] === PUBLIC_ROUTE_GROUP
+    ? segments : [PUBLIC_ROUTE_GROUP, ...segments]).join('/')}`;
 
   return (
     <View style={styles.container}>
