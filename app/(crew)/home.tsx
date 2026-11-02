@@ -326,15 +326,19 @@ const styles = StyleSheet.create({
   },
   teamHeaderRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   teamTitleGroup: {
     flexDirection: 'row',
+    flexShrink: 1,
     alignItems: 'center',
     gap: spacing.xs,
   },
   teamTitle: {
+    flexShrink: 1,
     color: colors.brandGold,
     letterSpacing: 0.3,
   },
