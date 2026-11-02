@@ -1,5 +1,6 @@
 import { Stack, usePathname } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from '../../src/components/BottomNav';
 
 const CREW_TABS = [
@@ -16,6 +17,7 @@ const CREW_TABS = [
       '/(crew)/progress',
       '/(crew)/report-defect',
       '/(crew)/viewfinder',
+      '/(crew)/field-review',
       '/(crew)/complete',
       '/(crew)/repair-correction',
       '/(crew)/receiving',
@@ -37,7 +39,9 @@ export default function CrewLayout() {
       <View style={styles.stackArea}>
         <Stack screenOptions={{ headerShown: false }} />
       </View>
-      <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} />
+      <SafeAreaView edges={['bottom']}>
+        <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} />
+      </SafeAreaView>
     </View>
   );
 }
