@@ -36,7 +36,7 @@ function screen(file, options = {}) {
   const reporter = h.load('src/store/reporter.ts');
   const uploads = h.load('src/store/uploads.ts');
   const native = {Platform:{OS:'android',select:o=>o.default},StyleSheet:{create:o=>o}};
-  for(const name of ['Text','View','Image','Pressable','TextInput','Modal','ScrollView','KeyboardAvoidingView'])native[name]=name;
+  for(const name of ['Text','View','Image','Pressable','TextInput','Modal','ScrollView','KeyboardAvoidingView','ActivityIndicator'])native[name]=name;
   const gps = options.gps ?? {getForegroundPermissionsAsync:async()=>({status:'denied'}),requestForegroundPermissionsAsync:async()=>({status:'denied'}),Accuracy:{High:1,Balanced:1}};
   const modules = {
     react, 'react-native':native,

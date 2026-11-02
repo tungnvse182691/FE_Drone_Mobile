@@ -2,6 +2,7 @@ import { ReporterHeader } from '../../src/components/ReporterHeader';
 import { reportDescriptionError } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -289,12 +290,60 @@ export default function ReporterReportScreen() {
     }
   };
 
-  if (dataScope !== scope.key) return <SafeAreaView style={styles.safe}>
-    <ReporterHeader title="Gửi phản ánh khuyết tật" />
-    <Text>{restoreFailed ? 'Chưa đọc được lệnh đang gửi. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào.' : 'Đang kiểm tra lệnh đang gửi của phiên hiện tại...'}</Text>
-    {restoreFailed ? <Button variant="primary" title="Thử khôi phục lại" onPress={() => setRestoreAttempt(value => value + 1)} /> : null}
-    <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace(REPORTER_HOME)} />
-  </SafeAreaView>;
+  if (dataScope !== scope.key) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
+        <ReporterHeader title="Gửi phản ánh" />
+        <ScrollView
+          contentContainerStyle={styles.recoveryScroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.recoveryCard}>
+            {restoreFailed ? (
+              <View style={styles.recoveryIconCircle}>
+                <MaterialIcons name="error-outline" size={32} color={colors.warning} />
+              </View>
+            ) : (
+              <ActivityIndicator size="large" color={colors.primary} style={styles.recoverySpinner} />
+            )}
+
+            <View style={styles.recoveryTextGroup}>
+              <Text style={[typography.titleMd, styles.recoveryTitle]}>
+                {restoreFailed ? 'Chưa khôi phục được lệnh' : 'Đang khôi phục dữ liệu'}
+              </Text>
+              <Text
+                style={[typography.bodyMd, styles.recoveryMessage]}
+                accessibilityRole={restoreFailed ? 'alert' : 'text'}
+                accessibilityLiveRegion="polite"
+              >
+                {restoreFailed
+                  ? 'Chưa đọc được lệnh đang gửi. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào.'
+                  : 'Đang kiểm tra lệnh đang gửi của phiên hiện tại...'}
+              </Text>
+            </View>
+
+            <View style={styles.recoveryActions}>
+              {restoreFailed ? (
+                <Button
+                  variant="primary"
+                  title="Thử khôi phục lại"
+                  onPress={() => setRestoreAttempt((value) => value + 1)}
+                  style={styles.recoveryButton}
+                />
+              ) : null}
+              <Button
+                variant="secondary"
+                title="Về trang chủ"
+                onPress={() => router.replace(REPORTER_HOME)}
+                style={styles.recoveryButton}
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   const candidates = queueItems.filter(item => item.partitionId === reporterContext().partition &&
     item.mediaState === 'VERIFIED' && item.fileId && item.verifiedVersion && !item.lastErrorCode && !photos.includes(item.uriLocal));
@@ -487,6 +536,57 @@ export default function ReporterReportScreen() {
 }
 
 const styles = StyleSheet.create({
+  recoveryScroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.screenMargin,
+    paddingBottom: spacing.xl,
+  },
+  recoveryCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  recoveryIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recoverySpinner: {
+    marginVertical: spacing.xs,
+  },
+  recoveryTextGroup: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: '100%',
+  },
+  recoveryTitle: {
+    color: colors.neutral,
+    textAlign: 'center',
+  },
+  recoveryMessage: {
+    color: colors.secondary,
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  recoveryActions: {
+    width: '100%',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  recoveryButton: {
+    minHeight: 48,
+    width: '100%',
+  },
   progress: { padding: spacing.md, color: colors.secondary, backgroundColor: colors.surfaceAlt },
   safe: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
