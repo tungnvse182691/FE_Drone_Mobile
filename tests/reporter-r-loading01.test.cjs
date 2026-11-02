@@ -65,7 +65,8 @@ test('R-LOADING-01 failed recovery renders warning card, safe Vietnamese explana
 
   // Must show safe error message without technical details
   const text = allText(s);
-  assert.match(text, /Chưa đọc được lệnh đang gửi\. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào\./);
+  assert.match(text, /Chưa thể kiểm tra lệnh đang gửi\. Kết quả gửi hiện chưa được xác nhận\. Vui lòng thử khôi phục lại; ứng dụng sẽ không tự gửi lại yêu cầu\./);
+  assert.doesNotMatch(text, /Dữ liệu vẫn được giữ trên thiết bị|chưa gửi yêu cầu nào/);
   assert.doesNotMatch(text, /malformed|uuid-xyz-1234|database disk image/);
 
   // Must have both Retry and Home CTAs

@@ -318,7 +318,7 @@ export default function ReporterReportScreen() {
                 accessibilityLiveRegion="polite"
               >
                 {restoreFailed
-                  ? 'Chưa đọc được lệnh đang gửi. Dữ liệu vẫn được giữ trên thiết bị; chưa gửi yêu cầu nào.'
+                  ? 'Chưa thể kiểm tra lệnh đang gửi. Kết quả gửi hiện chưa được xác nhận. Vui lòng thử khôi phục lại; ứng dụng sẽ không tự gửi lại yêu cầu.'
                   : 'Đang kiểm tra lệnh đang gửi của phiên hiện tại...'}
               </Text>
             </View>

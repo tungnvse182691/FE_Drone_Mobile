@@ -158,7 +158,7 @@ test('D02 GET readback with un-correlated evidence rejects with source_not_ready
  assert.equal(store.getState().pendingDraft.commandKey,key);
  assert.notEqual(store.getState().pendingDraft,null,'Must not mark as finished without correlation');
 });
-test('D02 cold restart restores frozen draft without auto-dispatching POST mutation',async()=>{
+test('D02 synthetic store re-read restores frozen draft without auto-dispatching POST mutation (native cold restart NOT_RUN)',async()=>{
  const {h,store}=setup();
  await store.getState().savePendingDraft(input);const key=store.getState().pendingDraft.commandKey;
  const newStore=h.load('src/store/reporter.ts').useReporterStore;

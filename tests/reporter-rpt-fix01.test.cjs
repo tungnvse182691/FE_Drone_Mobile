@@ -6,7 +6,7 @@ const text=s=>JSON.stringify(s.nodes());
 test('RPT restore failure is actionable, retry reads only and empty restore opens form',async()=>{
  const s=screen(report);let count=0;
  s.reporter.useReporterStore.getState().restorePendingDraft=async()=>{if(!count++)throw Error('private detail');return null;};
- s.render();await s.flush();assert.match(text(s),/Chưa đọc được lệnh đang gửi/);assert.doesNotMatch(text(s),/private detail/);
+ s.render();await s.flush();assert.match(text(s),/Chưa thể kiểm tra lệnh đang gửi/);assert.doesNotMatch(text(s),/private detail/);
  await s.press('Thử khôi phục lại');await s.flush();assert.match(text(s),/reporter-description/);assert.equal(s.h.calls.length,0);
 });
 test('RPT optional denied GPS permits guest login without form persistence with photo',async()=>{
