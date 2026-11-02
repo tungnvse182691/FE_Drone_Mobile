@@ -76,7 +76,7 @@ export async function quarantineLegacyRepairQueue(_db: SQLite.SQLiteDatabase, id
 export function crewSyncPayload(item: OutboxItem): Record<string, unknown> {
   const payload: unknown = JSON.parse(decodeOutboxPayload(item));
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || isLegacyRepairQueueEntry(item.kind, payload)) {
-    throw new Error('Repair legacy đang bị khóa; dữ liệu được giữ để đối soát.');
+    throw new Error('Lệnh sửa chữa cũ đang bị khóa; dữ liệu được giữ để đối soát.');
   }
   return payload as Record<string, unknown>;
 }
@@ -84,7 +84,7 @@ export function crewSyncPayload(item: OutboxItem): Record<string, unknown> {
 export default function CrewSyncScreen() {
   useAuthStore(s=>s.token);useAuthStore(s=>s.user);useAuthStore(s=>s.status);
   const identity=currentQueueIdentity();
-  if(!identity||identity.role!=='REPAIR_CREW')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" />}><Text>Cần phiên Crew hợp lệ.</Text></SafeAreaScreen>;
+  if(!identity||identity.role!=='REPAIR_CREW')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" />}><Text>Cần phiên đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
   return <CrewSyncContent key={JSON.stringify(identity)} identity={identity} />;
 }
 function CrewSyncContent({identity}:{identity:QueueIdentity}) {
@@ -173,7 +173,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng Bộ" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ" />}>
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
           <MaterialIcons name="sync" size={22} color={colors.primary} />

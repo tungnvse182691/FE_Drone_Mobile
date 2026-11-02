@@ -13,7 +13,7 @@ export default function CrewRepairCompleteScreen(){
  <Card style={styles.summary}>
  <Text style={styles.eyebrow}>TỔNG QUAN NHIỆM VỤ</Text>
  <Text style={typography.titleLg}>{task.title||'Nhiệm vụ hiện trường'}</Text>
- <Text style={styles.body}>{task.wo_code||'Chưa có mã WO'}</Text>
+ <Text style={styles.body}>{task.wo_code||'Chưa có mã công việc'}</Text>
  <Text style={styles.body}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ')||'Chưa có thông tin tuyến đường'}</Text>
  <Text style={styles.body}>{crewStatusLabel(task.status)}</Text>
  <Text style={styles.hint}>Thi công xong, gửi hồ sơ và được quản lý xác nhận là các bước riêng biệt.</Text>

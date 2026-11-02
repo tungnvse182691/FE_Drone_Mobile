@@ -30,14 +30,14 @@ type TaskSegment = 'active' | 'done';
 export function crewStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     NEWASSIGNED: 'Chờ nhận nhiệm vụ', ASSIGNED: 'Chờ nhận nhiệm vụ', ACCEPTED: 'Đã nhận nhiệm vụ', INPROGRESS: 'Đang thực hiện',
-    STARTED: 'Đang thực hiện', SUBMITTED: 'Đã gửi hồ sơ hiện trường (FIELD)', SUPPLEMENTREQUIRED: 'Cần bổ sung',
-    COMPLETED: 'Hoàn thành', REJECTED: 'Đã từ chối', CANCELLED: 'Đã hủy',
+    STARTED: 'Đang thực hiện', SUBMITTED: 'Đã gửi hồ sơ', SUPPLEMENTREQUIRED: 'Cần bổ sung',
+    COMPLETED: 'Hoàn thành nhiệm vụ', REJECTED: 'Đã từ chối', CANCELLED: 'Đã hủy',
   };
   return labels[status.toUpperCase()] ?? 'Trạng thái chưa được hỗ trợ';
 }
 export function crewModeLabel(mode: string): string {
-  const labels: Record<string, string> = { NORMAL: 'Sửa chữa theo kế hoạch', CONDITIONAL_FT: 'Kiểm tra điều kiện sửa nhanh',
-    MEASURE_ONLY: 'Chỉ đo kiểm', INSPECT_ONLY: 'Chỉ kiểm tra', INSPECT_AND_REPAIR: 'Đo kiểm và xem xét sửa nhanh' };
+  const labels: Record<string, string> = { NORMAL: 'Sửa chữa theo kế hoạch', CONDITIONAL_FT: 'Sửa chữa nhanh có điều kiện',
+    MEASURE_ONLY: 'Chỉ đo kiểm', INSPECT_ONLY: 'Chỉ kiểm tra', INSPECT_AND_REPAIR: 'Đo kiểm và xem xét sửa chữa' };
   return labels[mode] ?? 'Chưa có thông tin chế độ';
 }
 
@@ -78,7 +78,7 @@ export function useCrewInbox() {
     if (!item.crewId || item.crewId.toLowerCase() !== identity.user!.id.toLowerCase()) { foreign = true; continue; }
     if (isCrewResourceId(item.id) && !items.has(item.id)) items.set(item.id, crewTaskFromWire(item));
   }
-  const error = !identity.enabled ? 'Vui lòng đăng nhập bằng tài khoản Crew.' : foreign ? 'Dữ liệu phân công không khớp tài khoản hiện tại.' : query.isError ? crewReadError(query.error) : null;
+  const error = !identity.enabled ? 'Vui lòng đăng nhập bằng tài khoản đội sửa chữa.' : foreign ? 'Dữ liệu phân công không khớp tài khoản hiện tại.' : query.isError ? crewReadError(query.error) : null;
   const stale = !!(transient && !foreign && items.size && identity.enabled);
   return { ...identity, environment, query, error, stale, tasks: (!identity.enabled || foreign || (query.isError && !transient)) ? [] : [...items.values()] };
 }
@@ -125,7 +125,7 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
   const executionRoute = /\/(progress|complete|repair-correction)$/.test(pathname);
   const blocked = operational && executionRoute ? 'Chức năng thi công này chưa sẵn sàng. Xem các thao tác được hỗ trợ tại chi tiết nhiệm vụ.' : operational && task ? crewTaskActionBlock(task) : null;
   if (!task || blocked) return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ" />}>
-    <Card style={{ gap: spacing.md, marginBottom: spacing.md }}><MaterialIcons name="assignment" size={32} color={colors.brandGold} /><Text style={typography.titleMd}>Thông tin nhiệm vụ</Text><Text style={typography.bodyMd}>{blocked ?? (!inbox.enabled ? 'Vui lòng đăng nhập bằng tài khoản Crew.' : !id ? 'Chưa chọn nhiệm vụ.' : !validIds ? 'Chưa xác định được dự án của nhiệm vụ. Chọn nhiệm vụ trong danh sách.' : query.isError ? crewReadError(query.error) : 'Đang tải nhiệm vụ…')}</Text></Card>
+    <Card style={{ gap: spacing.md, marginBottom: spacing.md }}><MaterialIcons name="assignment" size={32} color={colors.brandGold} /><Text style={typography.titleMd}>Thông tin nhiệm vụ</Text><Text style={typography.bodyMd}>{blocked ?? (!inbox.enabled ? 'Vui lòng đăng nhập bằng tài khoản đội sửa chữa.' : !id ? 'Chưa chọn nhiệm vụ.' : !validIds ? 'Chưa xác định được dự án của nhiệm vụ. Chọn nhiệm vụ trong danh sách.' : query.isError ? crewReadError(query.error) : 'Đang tải nhiệm vụ…')}</Text></Card>
     {query.isError ? <Button variant="secondary" title="Thử lại" onPress={() => { void query.refetch(); }} /> : null}
     {!validIds && id ? <CrewInboxState inbox={inbox} /> : null}
     <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
@@ -137,13 +137,13 @@ export type TaskModeFilter = 'ALL' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
 
 export const TASK_MODE_FILTERS: { key: TaskModeFilter; label: string }[] = [
   { key: 'ALL', label: 'Tất cả' },
-  { key: 'INSPECT_AND_REPAIR', label: 'Đo kiểm, xét điều kiện sửa' },
+  { key: 'INSPECT_AND_REPAIR', label: 'Đo kiểm và xem xét sửa chữa' },
   { key: 'MEASURE_ONLY', label: 'Chỉ đo kiểm' },
 ];
 
 export const TASK_MODE_CHIP: Record<TaskMode | 'UNKNOWN', { variant: ChipVariant; label: string }> = {
   UNKNOWN: { variant: 'status-pending', label: 'Chưa xác định chế độ' },
-  INSPECT_AND_REPAIR: { variant: 'fast-track', label: 'Đo kiểm, xét điều kiện sửa' },
+  INSPECT_AND_REPAIR: { variant: 'fast-track', label: 'Đo kiểm và xem xét sửa chữa' },
   MEASURE_ONLY: { variant: 'measure-only', label: 'Chỉ đo kiểm' },
   INSPECT_ONLY: { variant: 'status-pending', label: 'Chỉ kiểm tra' },
 };
@@ -291,7 +291,7 @@ export default function CrewTasksScreen() {
 
                   <View style={styles.taskFooter}>
                     <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || 'Chưa có mã WO'}</Text>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || 'Chưa có mã công việc'}</Text>
                     </View>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>

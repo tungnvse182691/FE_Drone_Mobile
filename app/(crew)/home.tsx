@@ -58,7 +58,7 @@ export default function CrewHomeScreen() {
 
   return (
     <View style={styles.screen}>
-      <SafeAreaScreen scroll header={<AppHeader subtitle="Đội Sửa Chữa" />}>
+      <SafeAreaScreen scroll header={<AppHeader subtitle="Đội sửa chữa" />}>
         {/* HERO GREETING: Lời chào + Mã NV badge tương phản cao ngoài nắng */}
         <View style={styles.heroSection}>
           <View style={styles.heroTextCol}>
@@ -80,7 +80,7 @@ export default function CrewHomeScreen() {
             </View>
             <View style={styles.teamStatusPill}>
               <MaterialIcons name="engineering" size={14} color={colors.secondary} />
-              <Text style={[typography.labelSm, styles.teamStatusText]}>Crew</Text>
+              <Text style={[typography.labelSm, styles.teamStatusText]}>Đội sửa chữa</Text>
             </View>
           </View>
 
@@ -236,7 +236,7 @@ export default function CrewHomeScreen() {
                   <View style={styles.taskCardFooter}>
                     <View style={styles.footerLeftMeta}>
                       <View style={styles.woCodeBadge}>
-                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || 'Chưa có mã WO'}</Text>
+                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || 'Chưa có mã công việc'}</Text>
                       </View>
                       {task.distance_label ? (
                         <Text style={[typography.caption, styles.distanceText]}>

@@ -18,12 +18,12 @@ test('W1-01 restored history reaches Progress/Complete without authorizing new s
 });
 test('W1-07 FIELD submitted is distinct from construction and PM acceptance',()=>{
  const {crewStatusLabel}=load('app/(crew)/tasks.tsx',{'react-native':{Platform:{select:()=>({})},StyleSheet:{create:v=>v}}});
- assert.equal(crewStatusLabel('SUBMITTED'),'Đã gửi hồ sơ hiện trường (FIELD)');
+ assert.equal(crewStatusLabel('SUBMITTED'),'Đã gửi hồ sơ');
  assert.equal(crewStatusLabel('InProgress'),'Đang thực hiện');
  assert.equal(crewStatusLabel('SupplementRequired'),'Cần bổ sung');
  assert.equal(crewStatusLabel('Rejected'),'Đã từ chối');
  assert.doesNotMatch(fs.readFileSync('app/(crew)/tasks.tsx','utf8'),/Đã gửi kết quả/);
- assert.match(fs.readFileSync('app/(crew)/wo-detail.tsx','utf8'),/Đã gửi hồ sơ hiện trường \(FIELD\)/);
+ assert.match(fs.readFileSync('app/(crew)/wo-detail.tsx','utf8'),/Đã gửi hồ sơ đo kiểm/);
 });
 async function confirmed(op){
  const h=op==='assessment'||op==='start'?harness():op==='finish'?await started():await finishedForIntake();

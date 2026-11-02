@@ -49,7 +49,7 @@ const SETTINGS_ROWS = [
   },
   {
     icon: 'help-outline' as const,
-    label: 'Trợ giúp & Hỗ trợ kỹ thuật',
+    label: 'Trợ giúp và hỗ trợ kỹ thuật',
     action: 'help' as const,
   },
 ];
@@ -89,7 +89,7 @@ export default function CrewProfileScreen() {
         return;
       case 'help':
         Alert.alert(
-          'Trợ giúp & Hỗ trợ kỹ thuật',
+          'Trợ giúp và hỗ trợ kỹ thuật',
           'Chưa có thông tin liên hệ hỗ trợ được cấu hình. Vui lòng liên hệ người quản lý dự án.',
         );
         return;
@@ -97,7 +97,7 @@ export default function CrewProfileScreen() {
   };
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ Sơ" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
       <View style={styles.profileHeader}>
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
@@ -115,7 +115,7 @@ export default function CrewProfileScreen() {
 
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
-          Mã NV: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
+          Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
         </Text>
         <Text style={[typography.caption, styles.unit]}>
           Chưa có thông tin đội phụ trách

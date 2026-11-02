@@ -24,14 +24,14 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
     <Card>
       <Text style={typography.titleMd}>Chưa thể xác minh yêu cầu bổ sung sửa chữa</Text>
       <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
-      <Text>{task.wo_code||'Chưa có mã WO'}</Text>
+      <Text>{task.wo_code||'Chưa có mã công việc'}</Text>
       <Text>Trạng thái nhiệm vụ từ máy chủ: {crewStatusLabel(task.status)}</Text>
       <Text>Chưa có yêu cầu bổ sung từ người quản lý được xác minh cho hồ sơ sửa chữa này.</Text>
       <Text>Trạng thái đã gửi hoặc chờ đánh giá không có nghĩa là người quản lý yêu cầu bổ sung. Chưa có nội dung yêu cầu và lượt hồ sơ cần sửa.</Text>
       <Text>Gửi bổ sung đang khóa đến khi xác minh được yêu cầu quản lý, hồ sơ liên quan và phiên bản hạng mục.</Text>
       <Text>Phụ thuộc nguồn Backend: API đọc lịch sử RepairItem hiện chỉ cho quản lý; chưa có nguồn Crew xác minh yêu cầu bổ sung và lượt tiếp nhận liên quan.</Text>
       <CrewRepairReceiptHistory task={task}/>
-      <Text>Nháp, bằng chứng và nhật ký lệnh đã lưu được giữ nguyên. Màn này không tạo hoặc gửi lệnh bổ sung, không xác nhận PM đã nghiệm thu.</Text>
+      <Text>Nháp, bằng chứng và nhật ký lệnh đã lưu được giữ nguyên. Màn này không tạo hoặc gửi lệnh bổ sung, không xác nhận quản lý đã nghiệm thu.</Text>
     </Card>
     <Button variant="secondary" title="Về chi tiết nhiệm vụ" onPress={() => router.replace({
       pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId },
@@ -60,7 +60,7 @@ export function CrewRepairReceiptHistory({task}:{task:CrewTask}) {
   const phase={PREPARED:'Đã lưu, chưa xác nhận gửi',PENDING:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã lưu biên nhận, chờ đối soát',CONFIRMED:'Đã đối soát biên nhận',REJECTED:'Bị từ chối'};
   return <View>
     <Text style={typography.titleMd}>Lịch sử biên nhận trên thiết bị</Text>
-    <Text>Đối chiếu quyền và liên kết nhiệm vụ hiện tại trước khi hiển thị. Đây không phải kết quả đánh giá của PM.</Text>
+    <Text>Đối chiếu quyền và liên kết nhiệm vụ hiện tại trước khi hiển thị. Đây không phải kết quả đánh giá của quản lý dự án.</Text>
     {busy?<Text>Đang kiểm tra lịch sử…</Text>:null}
     {rows?.length===0?<Text>Chưa có biên nhận đã lưu trên thiết bị cho nhiệm vụ này.</Text>:null}
     {rows?.map(c=><View key={c.key}><Text>{operation[c.operation]}: {phase[c.phase]}</Text>{c.receipt?<Text>Biên nhận máy chủ đã lưu, đúng nguồn liên kết. {c.receipt.data.intakeReadiness==='READY'?'Hồ sơ đủ thông tin tiếp nhận; chưa phải được PM chấp thuận.':''}</Text>:null}</View>)}

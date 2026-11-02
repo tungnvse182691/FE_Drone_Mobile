@@ -20,7 +20,7 @@ function fixture(){
 test('C4 completed uses same mode filters, retains selection and unfiltered loaded counts',()=>{
  const f=fixture();assert.equal(f.ids().length,2);f.tap('Chỉ đo kiểm');assert.deepEqual(f.ids(),[f.rows[3].id]);f.tap('Hoàn thành');
  assert.ok(f.s.nodes().some(n=>n.type==='Pressable'&&n.props.children.flat(Infinity).some(c=>c?.props?.children?.includes('Chỉ đo kiểm'))));
- assert.deepEqual(f.ids(),[f.rows[0].id]);f.tap('Đo kiểm, xét điều kiện sửa');assert.deepEqual(f.ids(),[f.rows[1].id]);
+ assert.deepEqual(f.ids(),[f.rows[0].id]);f.tap('Đo kiểm và xem xét sửa chữa');assert.deepEqual(f.ids(),[f.rows[1].id]);
  f.tap('Chưa hoàn thành');assert.deepEqual(f.ids(),[f.rows[4].id]);f.tap('Hoàn thành');f.tap('Tất cả');assert.equal(f.ids().length,3);
  assert.ok(f.s.nodes().some(n=>n.type==='Text'&&n.props.children.includes(3))); // count before filter across loaded pages
  f.s.unmount();

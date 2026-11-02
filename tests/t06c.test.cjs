@@ -203,14 +203,14 @@ for(const operation of ['finish','attempt','claim'])test('T06C UI explicit '+ope
  const draft={captures:[],measurements:[],...(operation==='attempt'?{repairClaim:{},command:{phase:'confirmed'}}:{})};
  const h=screen('app/(crew)/wo-detail.tsx','NormalRepairBootstrap',[history,draft,'',false,true]);
  assert.equal(h.calls.length,0);
- const title={finish:'Kết thúc thi công',attempt:'Nộp hồ sơ chờ PM đánh giá',claim:'Chụp AFTER / lập hồ sơ sửa chữa'}[operation];
+ const title={finish:'Kết thúc thi công',attempt:'Nộp hồ sơ chờ quản lý đánh giá',claim:'Chụp ảnh sau sửa / lập hồ sơ sửa chữa'}[operation];
  const button=h.nodes.find(n=>n.props.title===title);assert.equal(!!button.props.disabled,false);button.props.onPress();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(h.calls[0],operation);if(operation!=='claim')assert.equal(h.calls[1],'POST');else {assert.equal(h.routes[0].pathname,'/(crew)/viewfinder');assert.equal(h.routes[0].params.mode,'AFTER');}
  assert.ok(!h.routes.some(r=>/complete|progress|repair-correction/.test(r.pathname)));
 });
 for(const phase of ['PENDING','ACKNOWLEDGED','REJECTED'])test('T06C UI '+phase+' cannot open finish or claim replacement',()=>{
  const h=screen('app/(crew)/wo-detail.tsx','NormalRepairBootstrap',[[{key:'x',operation:'start',phase}],{captures:[],measurements:[]},'',false,true]);
- for(const title of ['Kết thúc thi công','Chụp AFTER / lập hồ sơ sửa chữa','Nộp hồ sơ chờ PM đánh giá'])assert.equal(h.nodes.find(n=>n.props.title===title).props.disabled,true);
+ for(const title of ['Kết thúc thi công','Chụp ảnh sau sửa / lập hồ sơ sửa chữa','Nộp hồ sơ chờ quản lý đánh giá'])assert.equal(h.nodes.find(n=>n.props.title===title).props.disabled,true);
 });
 for(const [label,claim,attestation] of [['missing finish',false,false],['no attestation',true,false],['confirmed source',true,true]])test('T06C camera AFTER '+label+' nullable GPS stays real',()=>{
  const draft={captures:[],...(claim?{repairClaim:{}}:{})};

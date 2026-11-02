@@ -17,6 +17,11 @@ import { readFieldRecovery, reconcileFieldDraft, currentFieldContext, openFieldR
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
+/** Display only: stored instrument and backend free text are never rewritten. */
+export function crewInstrumentLabel(value: string): string {
+  return value === 'RULER' ? 'Thước đo' : value || 'Chưa có thông tin';
+}
+
 export default function CrewFieldReviewScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
 }
@@ -57,8 +62,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     finally{if(current(c))setLoading(false);}
   },[task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
-  const block=!identity.user||!identity.scope||!task.detail?'Phiên Crew không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'submit');
-  const captureBlock=!identity.user||!task.detail?'Phiên Crew không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'capture');
+  const block=!identity.user||!identity.scope||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'submit');
+  const captureBlock=!identity.user||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'capture');
   const frozen=!!draft?.command;
   const normalMeasurement=task.detail?.mode==='NORMAL'&&!draft?.repairClaim;
   const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'new'|'download',fileId?:string)=>{
@@ -99,8 +104,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     <AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />
     <View style={styles.content}>
       <Card style={styles.card}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><Chip label={mode.label} variant={mode.variant}/>
-        <Text>{task.wo_code||'Chưa có mã WO từ máy chủ'}</Text>
-        <Text>{draft?.repairClaim?'Hồ sơ sửa chữa NORMAL: ảnh AFTER và số đo thực. Gửi FIELD chưa phải tiếp nhận sửa chữa hay PM xác nhận.':'Kết quả đo kiểm FIELD.'}</Text></Card>
+        <Text>{task.wo_code||'Chưa có mã công việc từ máy chủ'}</Text>
+        <Text>{draft?.repairClaim?'Hồ sơ sửa chữa theo kế hoạch: ảnh sau sửa và số đo thực. Gửi hồ sơ đo kiểm chưa phải tiếp nhận sửa chữa hay quản lý xác nhận.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
       <Button variant="secondary" title="Tải lại hồ sơ / trạng thái" disabled={busy} onPress={()=>void load()}/>
@@ -109,7 +114,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       {preview?<Image source={{uri:preview}} style={{width:'100%',height:240}} resizeMode="contain"/>:null}
       {draft?<>
         <Card style={styles.card}><Text style={styles.sectionTitle}>Số đo hiện trường</Text>
-          {!measurements.length?<Text>BE chưa cung cấp loại đo được hỗ trợ; khóa gửi hồ sơ.</Text>:null}
+          {!measurements.length?<Text>Chưa có loại đo được máy chủ hỗ trợ; chưa thể gửi hồ sơ.</Text>:null}
           {measurements.map((m,i)=><View key={m.sampleId} pointerEvents={busy||frozen?'none':'auto'} style={{opacity:busy||frozen?0.6:1}}>
             <Text>{m.dimension==='AREA'?'Diện tích hư hại':m.type==='SlabFaultingHeight'?'Độ chênh tấm':m.type==='ShoulderErosionExtent'?'Kích thước xói lở':'Độ sâu thực tế'} ({m.unit})</Text>
             <InputField label="Giá trị đo thực (để trống nếu chưa đo)" value={rawValues[m.sampleId]??(m.value===null?'':String(m.value))} keyboardType="decimal-pad" onChangeText={text=>{
@@ -117,7 +122,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               const normalized=text.trim().replace(',','.');const value=normalized===''?null:Number(normalized);
               update(i,{value,state:value===null?'UNKNOWN':'KNOWN',unknownReason:value===null?m.unknownReason||'Chưa đo tại hiện trường':null});}}/>
             {m.value===null?<InputField label="Lý do chưa đo" value={m.unknownReason??''} onChangeText={unknownReason=>update(i,{unknownReason})}/>:null}
-            <InputField label="Dụng cụ đo thực tế" value={m.instrument} onChangeText={instrument=>update(i,{instrument})}/>
+            <InputField label="Dụng cụ đo thực tế" value={m.instrument ? crewInstrumentLabel(m.instrument) : ''} onChangeText={instrument=>update(i,{instrument})}/>
             <InputField label="Phương pháp đo thực tế" value={m.method} onChangeText={method=>update(i,{method})}/>
             {m.latitude==null||m.longitude==null?<InputField label="Lý do chưa có tọa độ quan sát" value={m.locationReason??''} onChangeText={locationReason=>update(i,{locationReason})}/>:<Text>GPS quan sát trong hồ sơ máy chủ: {m.latitude}, {m.longitude}</Text>}
           </View>)}
@@ -143,12 +148,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             <Text style={styles.muted}>{c.coordinates?'Có vị trí camera quan sát':'Không có GPS quan sát'} · {c.capturedAt?'Ảnh chụp trực tiếp':'Ảnh từ thiết bị, chưa xác minh thời điểm chụp'}</Text>
           </View>)}
           {captureBlock?<Text>{captureBlock}</Text>:null}
-          <Button variant="secondary" title="Chụp / chọn ảnh FIELD" disabled={busy||frozen||!!captureBlock} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE'}})}/>
+          <Button variant="secondary" title="Chụp / chọn ảnh hiện trường" disabled={busy||frozen||!!captureBlock} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE'}})}/>
           <Button variant="secondary" title="Tải ảnh / kiểm tra xác minh" disabled={busy||frozen||!draft.captures.length||!!captureBlock} onPress={()=>void run('upload')}/>
         </Card>
         {block?<Text>{block}</Text>:null}
-        {normalMeasurement?<Text>Với NORMAL, lưu số đo và upload ảnh để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ REPAIR_CLAIM sau khi kết thúc thi công; không gửi nhầm lượt MEASUREMENT làm hồ sơ sửa chữa.</Text>:null}
-        <Button variant="primary" title={draft.repairClaim?'Gửi hồ sơ sửa chữa FIELD':latest?'Gửi bổ sung FIELD':'Gửi hồ sơ FIELD'} loading={busy} disabled={busy||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>
+        {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
+        <Button variant="primary" title={draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy} disabled={busy||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>
         {fieldDraftPending(draft)?<Card style={styles.card}>
           <Text>Kết quả thao tác đang được đối soát. Không tạo hồ sơ mới hoặc thay nội dung lệnh đã lưu.</Text>
           {!draft.command?.responseId?<Text>Chưa có mã hồ sơ được máy chủ xác nhận để đọc lại. Chỉ có thể chủ động đối soát bằng lệnh gốc; tải lại không chứng minh lệnh đã thành công.</Text>:<Text>Đã có mã hồ sơ máy chủ. Có thể đọc lại kết quả mà không gửi lệnh mới.</Text>}
@@ -157,7 +162,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {replayConfirmed?<View><Text accessibilityRole="alert">Gửi lại giữ nguyên nội dung, khóa và phiên bản gốc. Nếu máy chủ chưa nhận lệnh, thao tác này có thể thực thi lần đầu.</Text><Button variant="secondary" title="Xác nhận gửi lại lệnh gốc" disabled={busy} onPress={()=>void run('replay')}/><Button variant="text" title="Hủy" onPress={()=>setReplayConfirmed(null)}/></View>:null}
         </Card>:null}
         {!draft.repairClaim&&draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/>:null}
-        {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ PM" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
+        {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ quản lý" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
         {draft.result?<Card><Text>{draft.result.readiness==='READY'?'Hồ sơ đủ thông tin theo máy chủ':'Hồ sơ cần bổ sung thông tin'}</Text><Text>Đây là kết quả đọc lại hồ sơ, chưa phải xác nhận nghiệm thu.</Text></Card>:null}
       </>:null}
       {notice?<Text accessibilityLiveRegion="polite">{notice}</Text>:null}

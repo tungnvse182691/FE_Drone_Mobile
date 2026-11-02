@@ -64,11 +64,11 @@ for(const context of [null,{mode:'NORMAL',itemVersion:'AAAAAAAAB9E='},{mode:'CON
  const t=task();t.detail.mode='CONDITIONAL_FT';t.detail.repairContext=context;
  const h=render('app/(crew)/wo-detail.tsx','RepairContractStatus',t);
  assert.match(h.text,/Sửa nhanh chưa sẵn sàng/);assert.match(h.text,/Chưa có đủ thông tin phân công/);assert.match(h.text,/hệ thống xác nhận đủ điều kiện/);
- assert.equal(h.nodes.find(n=>n.props.title==='Thi công FastTrack').props.disabled,true);
- h.nodes.find(n=>n.props.title==='Thi công FastTrack').props.onPress();
+ assert.equal(h.nodes.find(n=>n.props.title==='Thi công sửa chữa nhanh').props.disabled,true);
+ h.nodes.find(n=>n.props.title==='Thi công sửa chữa nhanh').props.onPress();
  assert.equal(h.writes.length,0);assert.equal(h.effects.length,0);
 });
 test('T06E NORMAL is not labelled FastTrack and no speculative eligibility request is sent',()=>{
  const h=render('app/(crew)/wo-detail.tsx','RepairContractStatus',task());
- assert.doesNotMatch(h.text,/Thi công FastTrack/);assert.equal(h.writes.length,0);
+ assert.doesNotMatch(h.text,/Thi công sửa chữa nhanh/);assert.equal(h.writes.length,0);
 });

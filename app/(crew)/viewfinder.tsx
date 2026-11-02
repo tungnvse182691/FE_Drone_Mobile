@@ -62,7 +62,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     if (context) void openFieldRuntime(context).then(runtime=>loadFieldDraft(context,runtime)).then(value=>{if(active&&matches(context)){setDraft(value);setReady(true);}}).catch(error=>{if(active&&matches(context))setNotice(fieldErrorMessage(error));});
     return ()=>{active=false;activeRef.current=false;};
   },[task.id,task.projectId,scope]));
-  const block = !user || !scope || !task.detail ? 'Phiên Crew không hợp lệ.' : fieldCapabilityBlock(task.detail,task.etag??'',user.id,'capture');
+  const block = !user || !scope || !task.detail ? 'Phiên đội sửa chữa không hợp lệ.' : fieldCapabilityBlock(task.detail,task.etag??'',user.id,'capture');
   const beforeReady = !!draft?.captures.some(c=>c.purpose==='BEFORE');
   const afterReady = !!draft?.captures.some(c=>c.purpose==='AFTER');
   const photoCount = draft?.captures.length??0;
@@ -90,12 +90,12 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           <MaterialIcons name="location-on" size={14} color={colors.warning} />
           <Text style={[typography.labelSm, styles.watermarkGpsText]}>{gpsText}</Text>
         </View>
-        <Text style={styles.rtkBadge}>{coords ? 'GPS OK' : 'GPS…'}</Text>
+        <Text style={styles.rtkBadge}>{coords ? 'Có GPS' : 'GPS…'}</Text>
       </View>
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="description" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>
-          {task.wo_code || 'Chưa có mã WO'}
+          {task.wo_code || 'Chưa có mã công việc'}
         </Text>
       </View>
       <View style={styles.watermarkMeta}>
@@ -181,7 +181,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const switchButton = (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Đổi camera trước/sau"
+      accessibilityLabel="Đổi máy ảnh trước/sau"
       onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
@@ -196,7 +196,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
+        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Đóng máy ảnh" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <MaterialIcons name="close" size={20} color={colors.surface} />
         </Pressable>
 
@@ -223,6 +223,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           <Pressable
             onPress={() => setFlashOn((value) => !value)}
             accessibilityRole="button"
+            accessibilityLabel={flashOn ? 'Tắt đèn flash' : 'Bật đèn flash'}
             accessibilityState={{ selected: flashOn }}
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           >
@@ -230,7 +231,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Đổi camera trước/sau"
+            accessibilityLabel="Đổi máy ảnh trước/sau"
             onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           >
@@ -240,7 +241,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       </View>
 
       {normalAfter?<View style={{padding:spacing.sm}}>
-        <Text style={{color:colors.surface}}>{draft?.repairClaim?'Ảnh AFTER phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp AFTER.'}</Text>
+        <Text style={{color:colors.surface}}>{draft?.repairClaim?'Ảnh sau sửa phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp ảnh sau sửa.'}</Text>
         <Button variant="secondary" title={postRepairCapture?'Đã xác nhận chụp hiện trạng sau sửa':'Tôi xác nhận đang chụp hiện trạng sau sửa'} disabled={!draft?.repairClaim||busy||!!draft.command} onPress={()=>setPostRepairCapture(v=>!v)}/>
       </View>:null}
       {!ready?<Button variant="secondary" title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.replace({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
@@ -266,7 +267,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           <View style={styles.sheetTitleRow}>
             <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
             <Text style={[typography.labelLg, styles.sheetTitle]}>
-              {task.wo_code || 'Chưa có mã WO'}
+              {task.wo_code || 'Chưa có mã công việc'}
             </Text>
             <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
             <Text style={[typography.labelLg, styles.sheetSub]}>
@@ -278,7 +279,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           </Text>
         </View>
 
-        <Button variant="primary" title="Đo kiểm & Hồ sơ FIELD" disabled={busy || !ready} onPress={handleConfirm} />
+        <Button variant="primary" title="Đo kiểm và hồ sơ hiện trường" disabled={busy || !ready} onPress={handleConfirm} />
 
         <Text style={[typography.caption, styles.sheetHint]}>
           {notice || 'Chỉ lưu tọa độ camera quan sát được. Ảnh thư viện không được gán GPS hoặc thời gian chụp mới.'}

@@ -15,7 +15,7 @@ test('Crew NORMAL replay rejection cannot prove an earlier timed-out command had
 test('Crew restore truthful labels and shared specialized NORMAL screens',()=>{
  const read=p=>fs.readFileSync(p,'utf8');assert.match(read('app/(crew)/sync.tsx'),/done: 'Đã xác nhận'/);
  for(const p of ['progress','complete']){const s=read('app/(crew)/'+p+'.tsx');assert.match(s,/NormalRepairPanel/);assert.match(s,/CrewTaskBoundary operational=\{false\}/);assert.doesNotMatch(s,/dispatchRepair|useEffect|LockedRepairScreen/);}
- for(const p of ['home','tasks'])assert.match(read('app/(crew)/'+p+'.tsx'),/task.wo_code \|\| 'Chưa có mã WO'/);
+ for(const p of ['home','tasks'])assert.match(read('app/(crew)/'+p+'.tsx'),/task.wo_code \|\| 'Chưa có mã công việc'/);
 });
 const vm=require('node:vm'),path=require('node:path');
 test('Crew specialized routes and recovery modules have no runtime import cycle',()=>{
@@ -137,7 +137,7 @@ function normalScreen(stage,rows=[],extra={}){
 for(const stage of ['progress','closeout'])test('Crew mounted '+stage+' filters actual action groups without a second dispatcher',async()=>{
  const f=normalScreen(stage);f.s.render();await f.s.flush();const titles=f.s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
  for(const title of ['Gửi đánh giá trước sửa','Bắt đầu thi công','Kết thúc thi công'])assert.equal(titles.includes(title),stage==='progress');
- for(const title of ['Chụp AFTER / lập hồ sơ sửa chữa','Nộp hồ sơ chờ PM đánh giá'])assert.equal(titles.includes(title),stage==='closeout');
+ for(const title of ['Chụp ảnh sau sửa / lập hồ sơ sửa chữa','Nộp hồ sơ chờ quản lý đánh giá'])assert.equal(titles.includes(title),stage==='closeout');
  assert.equal(f.posts(),0);f.s.unmount();
 });
 test('Crew mounted definitive recovery requires explicit confirmation and cannot POST or survive actor switch',async()=>{

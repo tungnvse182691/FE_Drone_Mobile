@@ -18,12 +18,12 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     <Text style={[typography.titleMd,styles.topBarTitle]}>Khuyết tật thuộc nhiệm vụ</Text></View></View>}>
     <Card style={styles.banner}><View style={styles.bannerRow}>
       <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
-      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin chỉ đọc từ nhiệm vụ được giao. Crew không tạo khuyết tật mới tại màn hình này.</Text>
+      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin chỉ đọc từ nhiệm vụ được giao. Đội sửa chữa không tạo khuyết tật mới tại màn hình này.</Text>
     </View></Card>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
       <Card style={{gap:spacing.sm}}>
-        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text style={typography.bodyMd}>{task.wo_code || 'Chưa có mã WO'}</Text>
+        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text style={typography.bodyMd}>{task.wo_code || 'Chưa có mã công việc'}</Text>
         <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
         <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude.toFixed(6)}, ${task.coordinates.longitude.toFixed(6)}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
       </Card>

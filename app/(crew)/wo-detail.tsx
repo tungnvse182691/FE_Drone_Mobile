@@ -93,7 +93,7 @@ export function crewDetailPresentation(status: string | null | undefined, comman
     NewAssigned: { summary: 'Nhiệm vụ mới được giao. Kiểm tra hướng dẫn trước khi nhận hoặc từ chối.', commands: ['accept', 'reject'] },
     Accepted: { summary: 'Bạn đã nhận nhiệm vụ. Bắt đầu khi sẵn sàng đo kiểm tại hiện trường.', commands: ['start'] },
     InProgress: { summary: 'Đang đo kiểm. Tiếp tục ghi nhận số đo và bằng chứng hiện trường.', commands: [], fieldLabel: 'Tác nghiệp hiện trường' },
-    Submitted: { summary: 'Đã gửi hồ sơ hiện trường (FIELD), chưa phải xác nhận hoàn tất sửa chữa. Xem hồ sơ và theo dõi phản hồi.', commands: [], fieldLabel: 'Xem hồ sơ đã gửi' },
+    Submitted: { summary: 'Đã gửi hồ sơ đo kiểm, chưa phải xác nhận hoàn tất sửa chữa. Xem hồ sơ và theo dõi phản hồi.', commands: [], fieldLabel: 'Xem hồ sơ đã gửi' },
     SupplementRequired: { summary: 'Nhiệm vụ cần bổ sung hồ sơ. Xem yêu cầu và kiểm tra điều kiện trước khi bổ sung.', commands: [], fieldLabel: 'Xem hồ sơ cần bổ sung' },
     Completed: { summary: 'Nhiệm vụ đo kiểm đã hoàn thành. Có thể xem kết quả và lịch sử xử lý.', commands: [], fieldLabel: 'Xem kết quả đo kiểm' },
     Rejected: { summary: 'Nhiệm vụ đã bị từ chối. Xem thông tin và lịch sử xử lý.', commands: [] },
@@ -191,7 +191,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       if(currentCrewScope()!==scope)return;
       if(origin.id!==response.data.firstStartOriginId||origin.taskId!==task.id)throw new Error('First-start không khớp nhiệm vụ.');
       router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}});
-    }catch(error){if(currentCrewScope()===scope)setNotice((error as Error).message || 'Không xác nhận được điều kiện FIELD.');}
+    }catch(error){if(currentCrewScope()===scope)setNotice((error as Error).message || 'Không xác nhận được điều kiện đo kiểm.');}
     finally{if(currentCrewScope()===scope)setBusy(false);}
   };
   const fieldBlock = !fresh.detail ? 'Chưa tải dữ liệu nhiệm vụ.' : fieldCapabilityBlock(fresh.detail,fresh.etag??'',actor,'review');
@@ -263,7 +263,7 @@ export function RepairContractStatus({ task }: { task: CrewTask }) {
       <Text>Chưa có đủ thông tin phân công hạng mục để kiểm tra điều kiện sửa nhanh.</Text>
       <Text>Chỉ có thể thi công khi hệ thống xác nhận đủ điều kiện và quyền xử lý.</Text>
       <Text>Bạn vẫn có thể xem thông tin nhiệm vụ. Chức năng sửa nhanh tiếp tục được khóa.</Text>
-      <Button variant="secondary" title="Thi công FastTrack" disabled onPress={() => {}} />
+      <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
     </> : null}
     <Text>Hồ sơ sửa chữa chỉ được bổ sung khi có yêu cầu phù hợp từ người quản lý.</Text>
     <Button variant="secondary" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={() => router.push({
@@ -297,7 +297,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
         const field=await readRepairFieldDraft(i);
         if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setDraft(field);
       }catch{
-        if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice('Nháp FIELD cũ được giữ riêng để đối soát. Lịch sử repair không bị xóa; không tự nhận nháp phiên cũ.');
+        if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice('Nháp đo kiểm cũ được giữ riêng để đối soát. Lịch sử sửa chữa không bị xóa; không tự nhận nháp phiên cũ.');
       }
     }catch(e){if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(repairErrorMessage(e));}
   },[task.id,task.projectId,identity.scope,identity.user?.id,live?.environment]);
@@ -347,7 +347,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       <Text style={styles.body}>{started?'✓ Đã đối soát bắt đầu thi công':'Bắt đầu thi công: chờ xác nhận'}</Text>
       <Text style={styles.body}>{finished?'✓ Đã đối soát kết thúc thi công':'Kết thúc thi công: chờ xác nhận'}</Text>
       <Text style={styles.body}>{intake?'✓ Đã tiếp nhận hồ sơ, chờ quản lý đánh giá':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
-      <Text style={styles.hint}>Biên nhận đã đối soát không thay cho kết quả nghiệm thu của PM.</Text>
+      <Text style={styles.hint}>Biên nhận đã đối soát không thay cho kết quả nghiệm thu của quản lý dự án.</Text>
     </Card>:null}
     {stage==='overview' && result.repairContext ? <>
       <Text style={styles.hint}>Luồng thi công riêng, theo ngữ cảnh và quyền đã được máy chủ xác nhận.</Text>
@@ -376,7 +376,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {stage!=='closeout'&&stage!=='overview'?<>
     <Text>Số đo đã lưu: {draft?.measurements.length??0}. Ảnh trước sửa/đo đã xác minh: {draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}.</Text>
     {!sourceReady?<Text>Cần lưu số đo thực và tải ảnh hiện trạng hoặc đo kiểm để máy chủ xác minh. Ảnh sau sửa không được dùng cho đánh giá trước sửa.</Text>:null}
-    <Button variant="secondary" title="Số đo / ảnh FIELD" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
+    <Button variant="secondary" title="Số đo / ảnh hiện trường" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
     {assessmentBlock&&!started?<Text>{assessmentBlock}</Text>:null}
     <Button variant="secondary" title="Gửi đánh giá trước sửa" disabled={busy||!loaded||!sourceReady||!!assessmentBlock||!!pending||(!!activeHistory.length&&assessment?.receipt?.data.readiness!=='INCOMPLETE')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('assessment')}/>
     </>:null}
@@ -405,11 +405,11 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     <Button variant="secondary" title="Kết thúc thi công" disabled={busy||!loaded||!started||!!finished||!!pending||rejected||activeHistory.some(c=>c.operation==='finish')||result.status!=='ready'||result.repairContext?.status!=='InProgress'} onPress={()=>void run('finish')}/>
     </>:null}
     {stage!=='progress'&&stage!=='overview'?<>
-    {finished?<Text>Đã thi công xong theo biên nhận máy chủ. Hồ sơ chưa được PM xác nhận.</Text>:null}
-    <Button variant="secondary" title="Chụp AFTER / lập hồ sơ sửa chữa" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||!!draft?.command} onPress={()=>void run('claim')}/>
+    {finished?<Text>Đã thi công xong theo biên nhận máy chủ. Hồ sơ chưa được quản lý xác nhận.</Text>:null}
+    <Button variant="secondary" title="Chụp ảnh sau sửa / lập hồ sơ sửa chữa" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||!!draft?.command} onPress={()=>void run('claim')}/>
     {draft?.repairClaim?<Button variant="secondary" title="Xem hồ sơ sửa chữa đã lưu" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
-    <Button variant="secondary" title="Nộp hồ sơ chờ PM đánh giá" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||draft?.command?.phase!=='confirmed'||!draft?.repairClaim} onPress={()=>void run('attempt')}/>
-    {intake?<Text>Đã gửi hồ sơ vào tiếp nhận. Đang chờ PM đánh giá; chưa được PM xác nhận.</Text>:null}
+    <Button variant="secondary" title="Nộp hồ sơ chờ quản lý đánh giá" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||draft?.command?.phase!=='confirmed'||!draft?.repairClaim} onPress={()=>void run('attempt')}/>
+    {intake?<Text>Đã gửi hồ sơ vào tiếp nhận. Đang chờ quản lý đánh giá; chưa được quản lý xác nhận.</Text>:null}
     <Text>Gửi hồ sơ không đồng nghĩa đã được nghiệm thu. Theo dõi kết quả đánh giá của người quản lý.</Text>
     </>:null}
     {stage==='progress'&&finished?<Button variant="secondary" title="Mở hồ sơ sau thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
@@ -426,10 +426,10 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
   return <View style={{gap:spacing.md}}>
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Số đo hiện trường</Text>
-      <Text style={styles.hint}>Nguồn: hồ sơ FIELD trên thiết bị của nhiệm vụ hiện tại; chưa thay cho hồ sơ được máy chủ tiếp nhận.</Text>
+      <Text style={styles.hint}>Nguồn: hồ sơ đo kiểm trên thiết bị của nhiệm vụ hiện tại; chưa thay cho hồ sơ được máy chủ tiếp nhận.</Text>
       {draft?.measurements.length?draft.measurements.map(m=><View key={m.sampleId}>
         <Text style={styles.body}>{m.dimension==='AREA'?'Diện tích hư hại':m.type==='SlabFaultingHeight'?'Độ chênh tấm':m.type==='ShoulderErosionExtent'?'Kích thước xói lở':m.dimension==='DEPTH'?'Độ sâu thực tế':'Số đo hiện trường'}: {m.state==='KNOWN'&&typeof m.value==='number'&&Number.isFinite(m.value)&&m.unit?`${m.value} ${m.unit}`:m.unknownReason||'Chưa có giá trị và đơn vị được xác nhận'}</Text>
-      </View>):<Text style={styles.body}>Chưa có số đo trong hồ sơ FIELD hiện tại.</Text>}
+      </View>):<Text style={styles.body}>Chưa có số đo trong hồ sơ đo kiểm hiện tại.</Text>}
     </Card>
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Ảnh trước và sau sửa</Text>

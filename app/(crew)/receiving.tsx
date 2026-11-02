@@ -18,7 +18,7 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /** Nhãn tiếng Việt cho `kind` của BusinessDutyView; kind lạ → nhãn chung. */
 const KIND_LABELS: Record<string, string> = {
-  REPAIR_REVIEW_REQUEST: 'Yêu cầu PM duyệt lượt sửa',
+  REPAIR_REVIEW_REQUEST: 'Yêu cầu quản lý duyệt lượt sửa',
   FIELD_VERIFICATION: 'Xác minh kết quả đo hiện trường',
   HANDOVER_RECEIPT: 'Biên nhận bàn giao',
 };
@@ -60,7 +60,7 @@ function formatWaiting(seconds: number): string {
   }
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
-  return hours > 0 ? `${hours}h ${minutes}p` : `${minutes}p`;
+  return hours > 0 ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 }
 
 function formatDateTime(iso: string | null): string {
@@ -86,7 +86,7 @@ function ackStateChip(request: BusinessDutyView): { variant: ChipVariant; label:
 export default function CrewReceivingScreen() {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
   const identity=currentReceivingIdentity();
-  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Nhận việc" />}><Text>Cần phiên đăng nhập Crew hợp lệ.</Text></SafeAreaScreen>;
+  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Nhận việc" />}><Text>Cần phiên đăng nhập đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
   return <ReceivingProjects key={JSON.stringify(identity)} identity={identity} />;
 }
 function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
@@ -177,7 +177,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
         <EmptyState
           icon="inbox"
           title="Chưa có yêu cầu nhận việc"
-          message="Khi PM hoặc Giám sát gửi việc cho bạn, yêu cầu sẽ xuất hiện tại đây để xác nhận."
+          message="Khi quản lý dự án hoặc giám sát gửi việc cho bạn, yêu cầu sẽ xuất hiện tại đây để xác nhận."
         />
       );
     }
