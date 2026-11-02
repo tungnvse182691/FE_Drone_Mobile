@@ -69,7 +69,8 @@ test('Reporter summary lists omit free text; detail retains the submitted descri
  assert.ok(home.nodes().includes(' ảnh hiện trường'));
  }
  const detail=screenHarness('app/(reporter)/report-detail.tsx');
- assert.ok(detail.nodes().includes('real report'));
+ const description=detail.nodes().find(n=>typeof n?.type==='function'&&n.type.name==='ExpandableDescription');
+ assert.equal(description.props.value,'real report');detail.render(description.type,{value:description.props.value});assert.ok(detail.nodes().includes('real report'));
 });
 test('Reporter profile does not display raw server account status codes',()=>{
  const s=screenHarness('app/(reporter)/profile.tsx',{profile:{data:{userId:'a',displayName:'Test',email:'qa@example.test',status:'INTERNAL_STATUS'}}});s.render();
@@ -157,7 +158,7 @@ test('T03 image preview is opt-in, uses only memory data URI and shows errors',(
   const h=screenHarness('app/(reporter)/report-detail.tsx');
   h.render(h.module.EvidencePreview,{scope:'a/s1',reportId:'r',evidenceId:'e'});
   assert.equal(h.configs[0].enabled,false);assert.ok(!h.nodes().some(n=>n?.type==='Image'));
-  h.nodes().find(n=>n?.props?.title==='Xem ảnh đính kèm').props.onPress();
+  h.nodes().find(n=>n?.props?.accessibilityLabel==='Xem ảnh đính kèm').props.onPress();
   h.render(h.module.EvidencePreview,{scope:'a/s1',reportId:'r',evidenceId:'e'});
   assert.equal(h.configs[0].enabled,true);assert.equal(h.nodes().find(n=>n?.type==='Image').props.source.uri,'data:image/png;base64,fixture');
 });

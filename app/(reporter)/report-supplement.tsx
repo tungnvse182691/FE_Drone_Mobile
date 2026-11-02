@@ -30,7 +30,7 @@ import {
   normalizePhotoMediaType,
 } from '../../src/api/uploads';
 import { hasUsableCoordinate } from '../../src/types/position';
-import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
+import { useReporterStore, useReporterDraftScope, reporterFailureMessage, reporterProgressLabel, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
@@ -72,6 +72,7 @@ export default function ReporterReportSupplementScreen() {
   const [restored, setRestored] = useState(false);
   const completed = useRef(false);
   const submittingRef = useRef(false);
+  const [submitProgress, setSubmitProgress] = useState('');
   const metadata = useRef<Map<string, DraftPhoto>>(new Map());
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -259,13 +260,14 @@ export default function ReporterReportSupplementScreen() {
       setError('Vui lòng nhập nội dung và chọn ít nhất một ảnh bổ sung.'); return;
     }
     submittingRef.current = true;
-    setError(null); setPhase('submitting');
+    setError(null); setPhase('submitting'); setSubmitProgress('Đang chuẩn bị ảnh…');
     try {
       if (!isCurrent()) return;
       await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords,
         targetReportId: reportId, ifMatch: expectedVersion, submitRequested: true });
       if (!isCurrent()) return;
-      const id = await useReporterStore.getState().submitPendingDraft();
+      const id = await useReporterStore.getState().submitPendingDraft({ isCurrent,
+        onProgress: progress => { if (isCurrent()) setSubmitProgress(reporterProgressLabel(progress)); } });
       if (!isCurrent()) return;
       completed.current = true;
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: id } });
@@ -318,7 +320,7 @@ export default function ReporterReportSupplementScreen() {
   if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Bổ sung thông tin phản ánh" />}><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
 
   return (
-    <SafeAreaScreen scroll header={<ReporterHeader title="Bổ sung thông tin phản ánh" />}>
+    <SafeAreaScreen scroll header={<><ReporterHeader title="Bổ sung thông tin phản ánh" />{phase === 'submitting' ? <Text testID="submission-progress" accessibilityLiveRegion="polite" style={[typography.caption, { padding: spacing.md }]}>{submitProgress}</Text> : null}</>}>
       <Text style={[typography.caption, styles.subtitle]}>
         Gửi thêm thông tin cho phản ánh đã tạo. Nếu phản ánh đã thay đổi ở nơi khác, hệ thống sẽ cảnh
         báo xung đột phiên bản.

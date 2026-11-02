@@ -78,7 +78,7 @@ test('G5 publication preview requires click, separates query identity, discards 
   h.render(h.module.EvidencePreview,props);assert.equal(h.configs[0].enabled,false);
   assert.equal(h.configs[0].gcTime,0);assert.equal(h.configs[0].retry,false);
   assert.equal(h.configs[0].queryKey.join('/'),['reporter-publication-evidence','session-a',reportId,publicationId,evidenceId].join('/'));
-  h.nodes().find(n=>n.props?.title==='Xem ảnh được chia sẻ').props.onPress();h.render(h.module.EvidencePreview,props);
+  h.nodes().find(n=>n.props?.accessibilityLabel==='Xem ảnh được chia sẻ').props.onPress();h.render(h.module.EvidencePreview,props);
   assert.equal(h.configs[0].enabled,true);assert.ok(h.nodes().find(n=>n.type==='Image'));
   const signal=new AbortController().signal;await h.configs[0].queryFn({signal});assert.equal(h.calls[0][0],h.source);assert.equal(h.calls[0][3],signal);
   const cleanups=h.focus.map(fn=>fn()).filter(fn=>typeof fn==='function');cleanups.forEach(fn=>fn());h.render(h.module.EvidencePreview,props);
@@ -89,6 +89,6 @@ test('G5 mounted publication previews vanish with invalid session',()=>{
 });
 for(const state of [{isFetching:true},{isError:true}])test('G5 hides cached publication bytes during revalidation or denial '+JSON.stringify(state),()=>{
   const h=screenHarness(state),props={scope:'session-a',reportId,evidenceId,publication:{id:publicationId,report:h.source}};
-  h.render(h.module.EvidencePreview,props);h.nodes().find(n=>n.props?.title==='Xem ảnh được chia sẻ').props.onPress();h.render(h.module.EvidencePreview,props);
+  h.render(h.module.EvidencePreview,props);h.nodes().find(n=>n.props?.accessibilityRole==='button').props.onPress();h.render(h.module.EvidencePreview,props);
   assert.equal(h.nodes().some(n=>n.type==='Image'),false);
 });

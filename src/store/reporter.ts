@@ -12,6 +12,8 @@ import { reporterPhotoFailureMessage } from '../api/reporterLocalMedia';
 import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '../api/reporterApi';
 import { uuidv4 } from '../utils/uuid';
 import { useEffect, useRef } from 'react';
+import { AppState } from 'react-native';
+import { waitForReporterVerification } from './reporterVerification';
 import { buildReportEvidenceLocation, locationSourceFor as sourceFor } from '../types/position';
 
 export interface DraftPhoto {
@@ -135,6 +137,8 @@ export function reporterFailureMessage(error: unknown): string {
   const e = error as { code?: string; stage?: string; status?: number; response?: { status?: number; data?: { code?: string } } };
   const status = e.response?.status ?? e.status;
   const code = e.response?.data?.code ?? e.code;
+  if (code === 'verification_timeout') return 'Máy chủ chưa xác minh xong ảnh trong thời gian theo dõi. Chưa gửi phản ánh; ảnh và lệnh vẫn được giữ. Bạn có thể kiểm tra lại sau.';
+  if (code === 'submission_paused') return 'Đã dừng theo dõi khi rời màn hình hoặc ứng dụng. Lệnh và ảnh được giữ; không tự gửi lại khi quay về.';
   if (status === 401 || code === 'auth_unauthorized') return 'Vui lòng đăng nhập lại. Nháp và ảnh vẫn được giữ.';
   if (status === 403 || code === 'access_forbidden') return 'Tài khoản không có quyền gửi nháp này.';
   if (status === 412 || code === 'concurrency_conflict') return 'Phiên bản đã thay đổi. Nháp được giữ nguyên; cần kiểm tra trước khi gửi lại.';
@@ -146,13 +150,33 @@ export function reporterFailureMessage(error: unknown): string {
   if (code === 'local_photo_read_failed') return 'Không đọc được ảnh cục bộ. Chưa xác định nguyên nhân; nháp và ảnh vẫn được giữ.';
   if ((e.stage === 'submitReport' || e.stage === 'submitSupplement') && code === 'source_not_ready')
     return 'Chưa xác nhận kết quả gửi. Nháp và khóa lệnh được giữ nguyên để đối soát.';
-  if (code === 'source_not_ready') return 'Ảnh đang chờ xác minh. Chưa gửi phản ánh; bấm gửi lại để kiểm tra.';
+  if (code === 'source_not_ready') return 'Ảnh đang chờ xác minh. Chưa gửi phản ánh; ảnh và lệnh vẫn được giữ.';
   if (code === 'local_photo_missing') return 'Không đọc được ảnh cục bộ. Nháp vẫn còn; vui lòng chọn lại ảnh.';
   if (code === 'draft_locked') return 'Lần gửi trước chưa được xác nhận. Giữ nguyên nội dung và bấm gửi lại để kiểm tra.';
   if (status === 400 || status === 422) return 'Thông tin hoặc điều kiện gửi chưa hợp lệ. Nháp được giữ nguyên.';
   if (status === 409) return 'Yêu cầu xung đột với dữ liệu máy chủ. Nháp và khóa lệnh được giữ nguyên.';
   if (status === 503) return 'Dịch vụ tạm thời không sẵn sàng. Chưa xác nhận kết quả; vui lòng thử lại.';
   return 'Chưa xác nhận kết quả gửi. Nháp được giữ nguyên; bấm gửi lại để kiểm tra với cùng khóa lệnh.';
+}
+
+export interface ReporterSubmissionProgress {
+  phase: 'uploading' | 'verifying' | 'verified' | 'submitting' | 'readback';
+  index: number;
+  total: number;
+  elapsedMs: number;
+}
+export function reporterProgressLabel(progress: ReporterSubmissionProgress): string {
+  switch (progress.phase) {
+    case 'uploading': return `Đang tải ảnh ${progress.index}/${progress.total}…`;
+    case 'verifying': return `Đang chờ máy chủ xác minh ảnh ${progress.index}/${progress.total} · ${Math.floor(progress.elapsedMs / 1000)} giây. Phản ánh chưa được gửi.`;
+    case 'verified': return 'Ảnh đã xác minh. Đang chuẩn bị gửi…';
+    case 'submitting': return 'Đang gửi phản ánh…';
+    case 'readback': return 'Đang đối soát phản ánh đã gửi…';
+  }
+}
+interface SubmissionOptions {
+  isCurrent?: () => boolean;
+  onProgress?: (progress: ReporterSubmissionProgress) => void;
 }
 
 interface ReporterSessionState {
@@ -166,7 +190,7 @@ interface ReporterSessionState {
   restoreStartedCommand: () => Promise<ReporterDraft | null>;
   savePendingDraft: (input: DraftInput) => Promise<ReporterDraft>;
   bindPendingDraft: () => Promise<ReporterDraft | null>;
-  submitPendingDraft: () => Promise<string>;
+  submitPendingDraft: (options?: SubmissionOptions) => Promise<string>;
   renewSupplementDraft: () => Promise<ReporterDraft>;
   setEmail: (email: string) => void;
   markVerified: (email: string) => void;
@@ -287,13 +311,25 @@ export const useReporterStore = create<ReporterSessionState>()(
           return next;
         });
       },
-      submitPendingDraft: () => {
+      submitPendingDraft: (options = {}) => {
         const context = reporterContext();
         const caller = context.ownerId;
         if (!caller) return Promise.reject({ code: 'auth_unauthorized', status: 401 });
         if (submission) return submissionOwner === JSON.stringify(context) ? submission : Promise.reject({ status: 401 });
         submissionOwner = JSON.stringify(context);
+        // Latch interruption: coming back to foreground never resumes a mutation.
+        let interrupted = AppState.currentState !== 'active';
+        const lifecycle = AppState.addEventListener('change', state => { if (state !== 'active') interrupted = true; });
+        const assertActive = () => {
+          assertReporterContext(context);
+          if (interrupted || options.isCurrent?.() === false) throw { code: 'submission_paused' };
+        };
+        const timing = { uploadMs: 0, verificationObservedMs: 0, submitMs: 0, readbackMs: 0 };
+        const progress = (phase: ReporterSubmissionProgress['phase'], index: number, total: number, elapsedMs = 0) => {
+          assertActive(); options.onProgress?.({ phase, index, total, elapsedMs });
+        };
         submission = (async () => {
+          assertActive();
           const auth = useAuthStore.getState();
           if (!isReporterSession(auth)) throw { code: 'auth_unauthorized', status: 401 };
           let draft = await get().bindPendingDraft();
@@ -310,6 +346,9 @@ export const useReporterStore = create<ReporterSessionState>()(
           await queue.hydrate(context.partition);
           assertOwner();
           for (let index = 0; index < draft.photos.length && !draft.resultReportId; index++) {
+            assertActive();
+            progress('uploading', index + 1, draft.photos.length);
+            const uploadStarted = Date.now();
             assertOwner();
             const photo = draft.photos[index];
             let id = photo.itemId;
@@ -340,14 +379,33 @@ export const useReporterStore = create<ReporterSessionState>()(
             const linked = useUploadsStore.getState().items.find(p => p.id === id);
             if (!linked || linked.partitionId !== context.partition || linked.uriLocal !== photo.uri ||
                 linked.fileName !== photo.fileName || linked.mediaType !== photo.mediaType) throw { code: 'access_forbidden', status: 403 };
-            await queue.advanceItem(id);
-            assertOwner();
+            try { await queue.advanceItem(id, 'explicit', assertActive); }
+            finally { timing.uploadMs += Date.now() - uploadStarted; }
+            assertActive();
             const item = useUploadsStore.getState().items.find(p => p.id === id);
-            if (!item || item.mediaState !== 'VERIFIED' || !item.fileId || !item.verifiedVersion || item.lastErrorCode) {
-              if (item?.lastErrorCode) throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
-              throw { code: 'source_not_ready' };
-            }
+            if (item?.lastErrorCode) throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
+            if (!item?.fileId || !['VERIFIED', 'VERIFYING', 'COMPLETE_REQUESTED'].includes(item.mediaState)) throw { code: 'source_not_ready' };
           }
+          // Upload all selected bytes before waiting; the server may verify them
+          // independently. Every observation below is GET-only, with no replay.
+          const verificationStarted = Date.now();
+          try { for (let index = 0; index < draft.photos.length && !draft.resultReportId; index++) {
+            const id = draft.photos[index].itemId!;
+            const ready = () => {
+              assertActive();
+              const item = useUploadsStore.getState().items.find(p => p.id === id);
+              if (!item || item.partitionId !== context.partition) throw { status: 403, code: 'access_forbidden' };
+              if (item.lastErrorCode) throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
+              if (item.mediaState === 'FAILED') throw { code: 'upload_validation_failed', stage: 'upload_verify' };
+              return item.mediaState === 'VERIFIED' && Boolean(item.fileId && item.verifiedVersion);
+            };
+            if (!ready()) await waitForReporterVerification({
+              assertActive,
+              onWaiting: elapsed => progress('verifying', index + 1, draft!.photos.length, elapsed),
+              observe: async () => { await queue.advanceItem(id, 'observe', assertActive); return ready(); },
+            });
+          } } finally { timing.verificationObservedMs = Date.now() - verificationStarted; }
+          progress('verified', draft.photos.length, draft.photos.length);
           if (!draft.request) {
             const evidence = draft.photos.map(photo => {
               const item = useUploadsStore.getState().items.find(p => p.id === photo.itemId)!;
@@ -363,6 +421,9 @@ export const useReporterStore = create<ReporterSessionState>()(
             const firstDispatch = draft.commandOutcome === 'PREPARED';
             if (draft.targetReportId) await putDraft({ ...draft, commandOutcome: 'UNKNOWN_OUTCOME' });
             let result;
+            assertActive();
+            progress('submitting', draft.photos.length, draft.photos.length);
+            const submitStarted = Date.now();
             try {
               result = draft.targetReportId
                 ? await submitReportSupplementReal(draft.targetReportId, draft.request!, draft.commandKey, strongUploadETag(draft.ifMatch ?? ''))
@@ -376,7 +437,7 @@ export const useReporterStore = create<ReporterSessionState>()(
                   (e.response?.data?.code ?? e.code) === 'concurrency_conflict')
                 await putDraft({ ...draft, commandOutcome: 'REJECTED', rejection: { status: 412, code: 'concurrency_conflict' } });
               throw { ...(error as object), stage: draft.targetReportId ? 'submitSupplement' : 'submitReport' };
-            }
+            } finally { timing.submitMs = Date.now() - submitStarted; }
             if (draft.targetReportId && result.report.id !== draft.targetReportId) {
               // A response for another report cannot acknowledge this supplement.
               // Retain the original request/key as unknown for exact reconciliation.
@@ -386,8 +447,12 @@ export const useReporterStore = create<ReporterSessionState>()(
           }
           assertOwner();
           let found;
+          assertActive();
+          progress('readback', draft.photos.length, draft.photos.length);
+          const readbackStarted = Date.now();
           try { found = await getOwnReportReal(draft.resultReportId!); }
           catch (error) { assertOwner(); throw { ...(error as object), stage: 'readback' }; }
+          finally { timing.readbackMs = Date.now() - readbackStarted; }
           assertOwner();
           if ((draft.targetReportId && draft.resultReportId !== draft.targetReportId) ||
             found.report.id !== draft.resultReportId || !draft.request!.evidence?.every(expected =>
@@ -406,7 +471,12 @@ export const useReporterStore = create<ReporterSessionState>()(
           assertOwner();
           set({ pendingDraft: null, pendingDraftId: null, pendingReport: null });
           return reportId;
-        })().finally(() => { submission = null; submissionOwner = null; });
+        })().finally(() => {
+          lifecycle.remove();
+          // Durations only: no actor, file, payload, GPS, credentials or URL.
+          console.info('[Reporter timing]', JSON.stringify(timing));
+          submission = null; submissionOwner = null;
+        });
         return submission;
       },
       setEmail: (email) => set({ email }),

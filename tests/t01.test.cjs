@@ -169,7 +169,8 @@ async function pending(h) {
   return store;
 }
 for (const status of ['VERIFYING','FAILED']) test(status + ' metadata never creates report', async () => {
-  const h=harness();const original=h.transport.getFileMetadata;
+  const real=harness().load('src/store/reporterVerification.ts');let time=0;
+  const h=harness({modules:{'./reporterVerification':{...real,waitForReporterVerification:o=>real.waitForReporterVerification({...o,clock:{now:()=>time,sleep:async ms=>{time+=ms;}}})}}});const original=h.transport.getFileMetadata;
   h.transport.getFileMetadata=async()=>({...await original(),status});
   const store=await pending(h);
   await assert.rejects(store.getState().submitPendingDraft());

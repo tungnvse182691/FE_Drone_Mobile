@@ -27,7 +27,7 @@ import {
 } from '../../src/api/uploads';
 import { hasUsableCoordinate } from '../../src/types/position';
 import { useUploadsStore, reporterContext } from '../../src/store/uploads';
-import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type DraftPhoto } from '../../src/store/reporter';
+import { useReporterStore, useReporterDraftScope, reporterFailureMessage, reporterProgressLabel, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { preserveReporterPhoto, reporterPhotoFailureMessage } from '../../src/api/reporterLocalMedia';
 import { REPORTER_REPORT_DETAIL, REPORTER_HOME } from '../../src/constants/routes';
@@ -76,6 +76,7 @@ export default function ReporterReportScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitProgress, setSubmitProgress] = useState('');
 
   const [restored, setRestored] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
@@ -103,7 +104,7 @@ export default function ReporterReportScreen() {
     setRestored(false);
     setRestoreFailed(false); setDataScope('');
     setDescription(''); updatePhotos(() => []); setCoords(null); setCameraOpen(false); setShowVerifiedPhotos(false);
-    setErrors({}); setSubmitError(null); setSubmitting(false);
+    setErrors({}); setSubmitError(null); setSubmitting(false); setSubmitProgress('');
     photoMeta.current = new Map(); completed.current = false; submitted.current = false;
     void useReporterStore.getState().restoreStartedCommand().then(draft => {
       if (!active || !isCurrent()) return;
@@ -270,12 +271,13 @@ export default function ReporterReportScreen() {
         return;
       }
     submitted.current = true;
-    setSubmitting(true); setSubmitError(null);
+    setSubmitting(true); setSubmitError(null); setSubmitProgress('Đang chuẩn bị ảnh…');
     try {
       if (!isCurrent()) return;
       await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
       if (!isCurrent()) return;
-      const reportId = await useReporterStore.getState().submitPendingDraft();
+      const reportId = await useReporterStore.getState().submitPendingDraft({ isCurrent,
+        onProgress: progress => { if (isCurrent()) setSubmitProgress(reporterProgressLabel(progress)); } });
       if (!isCurrent()) return;
       completed.current = true;
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId } });
@@ -300,6 +302,7 @@ export default function ReporterReportScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ReporterHeader title="Gửi phản ánh" />
+      {submitting ? <Text testID="submission-progress" accessibilityLiveRegion="polite" style={[typography.caption, styles.progress]}>{submitProgress}</Text> : null}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -441,12 +444,7 @@ export default function ReporterReportScreen() {
               loading={submitting}
               disabled={!restored || submitting}
             />
-            {!submitError ? <Text accessibilityLiveRegion="polite" style={[typography.caption, styles.submitHint]}>
-              {submitting ? 'Đang xử lý ảnh và gửi phản ánh…' :
-              isReporterSession(useAuthStore.getState())
-                ? ''
-                : 'Đăng nhập để gửi phản ánh.'}
-            </Text> : null}
+            {!submitError && !submitting && !isReporterSession(useAuthStore.getState()) ? <Text style={[typography.caption, styles.submitHint]}>Đăng nhập để gửi phản ánh.</Text> : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -489,6 +487,7 @@ export default function ReporterReportScreen() {
 }
 
 const styles = StyleSheet.create({
+  progress: { padding: spacing.md, color: colors.secondary, backgroundColor: colors.surfaceAlt },
   safe: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   content: { padding: spacing.screenMargin + spacing.xs, paddingBottom: spacing.lg },

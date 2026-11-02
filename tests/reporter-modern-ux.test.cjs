@@ -83,18 +83,18 @@ test('UX05 credential input disables word correction and uses an email-capable k
 for(const publication of [undefined,{id:'p',report:{id:'r'}}])test('UX04 preview reserves space through download/decode, handles failure and retries '+!!publication,async()=>{
  const query={isFetching:true,isError:false,data:undefined,refetch:async()=>{query.isFetching=true;}};
  const s=screen('app/(reporter)/report-detail.tsx',{expose:'EvidencePreview',exportName:'EvidencePreview',props:{scope:'a/s1',reportId:'r',evidenceId:'e',publication},modules:{'../../src/components/Card':{Card:'Card'},'@tanstack/react-query':{useQuery:()=>query}}});
- s.render();assert.equal(s.nodes().some(n=>n.props.testID==='evidence-preview-frame'),false);
- await s.press(publication?'Xem ảnh được chia sẻ':'Xem ảnh đính kèm');await s.flush();
- const frame=s.nodes().find(n=>n.props.testID==='evidence-preview-frame');assert.ok(frame,'preview needs a stable frame while downloading');
- assert.equal(flatten(frame.props.style).height,220);
+ s.render();assert.equal(s.nodes().some(n=>n.type==='Image'),false);
+ s.nodes().find(n=>n.type==='Pressable').props.onPress();await s.flush();
+ const frame=s.nodes().find(n=>n.type==='Pressable');assert.ok(frame,'preview needs a stable frame while downloading');
+ assert.equal(flatten(frame.props.style).height,120);
  assert.match(JSON.stringify(s.nodes()),/Đang tải ảnh/);
  query.isFetching=false;query.data='data:image/png;base64,qa';s.render();
  assert.match(JSON.stringify(s.nodes()),/Đang tải ảnh/);
  s.nodes().find(n=>n.type==='Image').props.onLoad();await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes()),/Đang tải ảnh/);
  s.nodes().find(n=>n.type==='Image').props.onError();await s.flush();assert.match(JSON.stringify(s.nodes()),/Không tải được/);
  assert.equal(s.nodes().some(n=>n.type==='Image'),false);
- await s.press(publication?'Xem ảnh được chia sẻ':'Xem ảnh đính kèm');await s.flush();assert.match(JSON.stringify(s.nodes()),/Đang tải ảnh/);
- s.blur();await s.flush();assert.equal(s.nodes().some(n=>n.props.testID==='evidence-preview-frame'),false);s.unmount();
+ s.nodes().find(n=>n.type==='Pressable').props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes()),/Đang tải ảnh/);
+ s.blur();await s.flush();assert.equal(s.nodes().some(n=>n.type==='Image'),false);s.unmount();
 });
 
 
@@ -105,4 +105,15 @@ test('UX01 pending verification shows one actionable status and never success',a
  await s.press('Gửi phản ánh');await s.flush();const text=JSON.stringify(s.nodes());
  assert.match(text,/Ảnh đang chờ xác minh/);assert.doesNotMatch(text,/Ảnh cần được xác minh trước/);assert.doesNotMatch(text,/Bấm gửi lại để kiểm tra kết quả/);
  assert.equal(s.nav.length,0);s.unmount();
+});
+
+
+test('D02 progress remains outside scrolling form while one send is pending',async()=>{
+ const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/progress.png',name:'progress.png',mimeType:'image/png'}]})});
+ s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();s.input('Mô tả hiện trạng','QA progress');
+ let release;s.reporter.useReporterStore.getState().submitPendingDraft=async options=>{options.onProgress({phase:'verifying',index:1,total:1,elapsedMs:1000});await new Promise(r=>release=r);throw {code:'verification_timeout'};};
+ const send=s.press('Gửi phản ánh');await s.flush();
+ const status=s.nodes().find(n=>n.props?.testID==='submission-progress');assert.ok(status,'visible status must have a fixed position outside the scroll content');
+ const scroll=s.nodes().find(n=>n.type==='ScrollView');assert.ok(!JSON.stringify(scroll).includes('submission-progress'));
+ assert.match(JSON.stringify(status),/xác minh/);release();await send;await s.flush();s.unmount();
 });

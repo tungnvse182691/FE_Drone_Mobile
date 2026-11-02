@@ -515,7 +515,7 @@ interface UploadsState {
   setPartition(partitionId: string): void;
   hydrate(partitionId?: string): Promise<void>;
   enqueuePhoto(input: EnqueuePhotoInput): Promise<string>;
-  advanceItem(id: string, mode?: 'explicit' | 'observe'): Promise<void>;
+  advanceItem(id: string, mode?: 'explicit' | 'observe', beforeRequest?: () => void): Promise<void>;
   advanceAll(mode?: 'explicit' | 'observe'): Promise<void>;
   retryItem(id: string): Promise<void>;
   removeItem(id: string): Promise<boolean>;
@@ -600,7 +600,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     return item.id;
   },
 
-  async advanceItem(id, mode = 'explicit') {
+  async advanceItem(id, mode = 'explicit', beforeRequest) {
     const start = get().items.find((item) => item.id === id);
     const auth = useAuthStore.getState();
     if (!isReporterSession(auth) || !start) return;
@@ -633,6 +633,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
 
     const transport = Object.fromEntries(Object.entries(uploadTransport).map(([name, method]) => [name, async (...args: unknown[]) => {
       assertReporterContext(context);
+      beforeRequest?.();
       if (get().partitionId !== start.partitionId) throw { status: 401, code: 'auth_unauthorized' };
       stage = ({ createSession: 'upload_create', getSession: 'upload_session', requestPartUrls: 'upload_part_urls',
         putPart: 'upload_put', completeUpload: 'upload_complete', getFileMetadata: 'upload_verify' } as Record<string, UploadFailureStage>)[name];
