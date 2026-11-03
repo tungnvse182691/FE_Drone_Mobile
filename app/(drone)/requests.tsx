@@ -1,7 +1,7 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import { Button } from '../../src/components/Button';
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -13,25 +13,15 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
-  default: {},
-});
-
 type TabKey = 'pending' | 'ongoing' | 'submitted' | 'supplement' | 'completed' | 'other';
 
 interface SurveyRequestItem {
   id: string;
   code: string;
-  timeAgo: string;
   title: string;
   location: string;
-  note: string;
-  statusRaw: string;
   statusLabel: string;
   tab: TabKey;
-  isCurrentTask?: boolean;
 }
 
 function classifyTab(status: string): TabKey {
@@ -48,31 +38,26 @@ function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
   const tab = classifyTab(dto.status);
   const totalSegments = dto.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
   const targetBand = operatorTaskTargetBand(dto);
-  const isOngoing = tab === 'ongoing';
 
   return {
     id: dto.id,
     code: operatorTaskDisplayCode(dto.id),
-    timeAgo: 'Đã giao',
     title: `Khảo sát dải ${targetBand} • ${totalSegments} phân đoạn`,
     location: `Mã dự án: ${dto.projectId.slice(0, 8).toUpperCase()}…`,
-    note: operatorTaskStatusLabel(dto.status),
-    statusRaw: dto.status,
     statusLabel: operatorTaskStatusLabel(dto.status),
     tab,
-    isCurrentTask: isOngoing,
   };
 }
 
 export default function DroneRequestsScreen() {
-  const [activeTab, setActiveTab] = useState<TabKey>('pending');
+  const [activeTab, setActiveTab] = useState<TabKey | 'all'>('all');
+  const [filterOpen, setFilterOpen] = useState(false);
   const pages = useOperatorTaskPages();
   const { loading, error } = pages;
   const tasks = pages.tasks.map(mapDtoToItem);
   const fetchTasks = pages.refresh;
   if (!pages.ready) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
-  const pendingCount = tasks.filter((r) => r.tab === 'pending').length;
   const filters: { key: TabKey; label: string }[] = [
     { key: 'pending', label: 'Chờ nhận' },
     { key: 'ongoing', label: 'Đang thực hiện' },
@@ -82,56 +67,49 @@ export default function DroneRequestsScreen() {
     { key: 'other', label: 'Trạng thái khác' },
   ];
 
-  const filteredRequests = tasks.filter((item) => item.tab === activeTab);
+  const availableFilters = filters.map(filter => ({ ...filter, count: tasks.filter(t => t.tab === filter.key).length }))
+    .filter(filter => filter.count > 0);
+  // A refresh or account switch can remove the selected state. Keep remaining tasks visible.
+  const selectedFilter = availableFilters.find(filter => filter.key === activeTab);
+  const selectedKey = selectedFilter?.key ?? 'all';
+  const selectedLabel = selectedFilter?.label ?? 'Tất cả trạng thái';
+  const filteredRequests = selectedKey === 'all' ? tasks : tasks.filter(item => item.tab === selectedKey);
+  const options = [{ key: 'all' as const, label: 'Tất cả trạng thái', count: tasks.length }, ...availableFilters];
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" />}>
-      {/* Top Segmented Tabs: Yêu cầu mới ({pendingCount}) | Nhật ký */}
-      <View style={styles.topTabContainer}>
-        <Pressable style={[styles.topTabItem, styles.topTabItemActive]} accessibilityRole="button">
-          <View style={styles.topTabTitleRow}>
-            <Text style={styles.topTabTitleActive}>Yêu cầu mới</Text>
-            <View style={styles.countBadgeActive}>
-              <Text style={styles.countBadgeTextActive}>{pendingCount}</Text>
-            </View>
-          </View>
-          <View style={styles.activeUnderline} />
+      <View style={styles.toolbar}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Lọc trạng thái: ${selectedLabel}`}
+          accessibilityState={{ expanded: filterOpen }}
+          onPress={() => setFilterOpen(open => !open)} style={styles.filterToggle}>
+          <MaterialIcons name="filter-list" size={20} color={colors.secondary} />
+          <Text style={styles.filterLabel}>{selectedLabel}</Text>
+          <MaterialIcons name={filterOpen ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
         </Pressable>
-
-        <Pressable
-          style={styles.topTabItem}
-          onPress={() => router.push('/(drone)/log')}
-          accessibilityRole="button"
-        >
-          <Text style={styles.topTabTitleInactive}>Nhật ký</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Làm mới nhiệm vụ"
+          style={styles.iconButton} onPress={() => void fetchTasks()}>
+          <MaterialIcons name="refresh" size={24} color={colors.secondary} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Nhật ký lệnh"
+          style={styles.iconButton} onPress={() => router.push('/(drone)/log')}>
+          <MaterialIcons name="history" size={24} color={colors.secondary} />
         </Pressable>
       </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow}>
-        {filters.map(filter => {
-          const label = `${filter.label} (${tasks.filter(t => t.tab === filter.key).length})`;
-          return <Pressable key={filter.key}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            accessibilityState={{ selected: activeTab === filter.key }}
-            style={[styles.tabButton, activeTab === filter.key && styles.tabButtonActive]}
-            onPress={() => setActiveTab(filter.key)}>
-            <Text style={[styles.tabText, activeTab === filter.key && styles.tabTextActive]}>{label}</Text>
-          </Pressable>;
-        })}
-      </ScrollView>
-
-      <Text style={typography.caption}>Số lượng theo danh sách đã tải; các bộ lọc áp dụng trên những trang đã tải.</Text>
-      {/* Header Info Section */}
-      <View style={styles.sectionHeader}>
-        <Text style={[typography.labelSm, styles.sectionTitle]}>
-          NHIỆM VỤ KHẢO SÁT ({filteredRequests.length})
-        </Text>
-        <Pressable style={styles.filterChip} onPress={() => void fetchTasks()}>
-          <MaterialIcons name="refresh" size={14} color={colors.primary} />
-          <Text style={[typography.caption, styles.filterChipText]}>Làm mới</Text>
-        </Pressable>
-      </View>
+      {filterOpen ? <View style={styles.filterMenu} accessibilityRole="radiogroup">
+        {options.map(option => <Pressable key={option.key} accessibilityRole="radio"
+          accessibilityLabel={`${option.label} (${option.count})`}
+          accessibilityState={{ checked: selectedKey === option.key }}
+          style={[styles.filterOption, selectedKey === option.key && styles.filterOptionSelected]}
+          onPress={() => { setActiveTab(option.key); setFilterOpen(false); }}>
+          <Text style={[styles.optionLabel, selectedKey === option.key && styles.optionLabelSelected]}>{option.label}</Text>
+          <Text style={styles.optionCount}>{option.count}</Text>
+          <MaterialIcons name={selectedKey === option.key ? 'radio-button-checked' : 'radio-button-unchecked'}
+            size={20} color={selectedKey === option.key ? colors.primary : colors.secondary} />
+        </Pressable>)}
+      </View> : null}
+      <Text style={[typography.caption, styles.resultSummary]}>
+        {filteredRequests.length} nhiệm vụ · Trong {tasks.length} nhiệm vụ đã tải
+      </Text>
 
       {/* Content */}
       {error ? <Text accessibilityRole="alert">{error} Danh sách đã tải vẫn được giữ trong phiên này.</Text> : null}
@@ -153,9 +131,9 @@ export default function DroneRequestsScreen() {
           icon="flight-takeoff"
           title="Không có nhiệm vụ"
           message={
-            activeTab === 'pending'
+            selectedKey === 'pending'
               ? 'Hiện tại không có nhiệm vụ mới đang chờ tiếp nhận.'
-              : activeTab === 'ongoing'
+              : selectedKey === 'ongoing'
                 ? 'Không có nhiệm vụ nào đang trong quá trình thực hiện.'
                 : 'Không có nhiệm vụ thuộc trạng thái này trong các trang đã tải.'
           }
@@ -165,7 +143,7 @@ export default function DroneRequestsScreen() {
       ) : (
         <View style={styles.listContainer}>
           {filteredRequests.map((item) => {
-            const isOngoing = item.isCurrentTask;
+            const isOngoing = item.tab === 'ongoing';
             const isPending = item.tab === 'pending';
             const railColor = isPending
               ? colors.warning
@@ -183,23 +161,17 @@ export default function DroneRequestsScreen() {
                   })
                 }
                 accessibilityRole="button"
+                accessibilityLabel={`Xem nhiệm vụ ${item.code}, ${item.statusLabel}`}
               >
-                <Card style={[styles.requestCard, isOngoing && styles.requestCardHighlight]}>
+                <Card style={styles.requestCard}>
                   <View style={[styles.rail, { backgroundColor: railColor }]} />
-                  {isOngoing && (
-                    <View style={styles.floatingTaskBadge}>
-                      <Text style={styles.floatingBadgeText}>ĐANG THỰC HIỆN</Text>
-                    </View>
-                  )}
-
                   <View style={styles.cardHeader}>
                     <View style={styles.metaRow}>
                       <Text style={[typography.caption, styles.codeText]}>{item.code}</Text>
-                      <Text style={[typography.caption, styles.timeText]}>• {item.timeAgo}</Text>
                     </View>
 
                     <Chip
-                      variant={item.tab === 'completed' ? 'approved' : item.tab === 'ongoing' ? 'severity-medium' : 'status-pending'}
+                      variant={item.tab === 'completed' ? 'approved' : item.tab === 'supplement' ? 'severity-medium' : 'status-pending'}
                       label={item.statusLabel}
                       uppercase={false}
                     />
@@ -213,9 +185,6 @@ export default function DroneRequestsScreen() {
                   </View>
 
                   <View style={styles.cardFooter}>
-                    <Text style={[typography.caption, styles.noteText]} numberOfLines={1}>
-                      {item.note}
-                    </Text>
                     <View style={styles.detailArrow}>
                       <Text style={[typography.labelSm, styles.detailLink]}>Chi tiết</Text>
                       <MaterialIcons name="arrow-forward" size={14} color={colors.primary} />
@@ -233,103 +202,51 @@ export default function DroneRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  topTabContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  topTabItem: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topTabItemActive: {
-    position: 'relative',
-  },
-  topTabTitleRow: {
+  toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  topTabTitleActive: {
-    ...typography.labelLg,
-    color: colors.primary,
-  },
-  topTabTitleInactive: {
-    ...typography.bodyMd,
-    color: colors.secondary,
-  },
-  countBadgeActive: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.full,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  countBadgeTextActive: {
-    ...typography.caption,
-    color: colors.surface,
-    fontWeight: 'bold',
-  },
-  activeUnderline: {
-    position: 'absolute',
-    bottom: -1,
-    left: spacing.lg,
-    right: spacing.lg,
-    height: 3,
-    backgroundColor: colors.primary,
-    borderRadius: radius.sm,
-  },
-  tabRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    padding: 3,
-    marginBottom: spacing.md,
-  },
-  tabButton: {
-    flexShrink: 0,
+  filterToggle: {
+    flex: 1,
     minHeight: 48,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 2,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: radius.sm,
-  },
-  tabButtonActive: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     backgroundColor: colors.surface,
-    ...softShadow,
   },
-  tabText: {
+  filterLabel: {
     ...typography.labelSm,
-    color: colors.secondary,
-  },
-  tabTextActive: {
+    flex: 1,
     color: colors.neutral,
-    fontWeight: '600',
   },
-  sectionHeader: {
+  iconButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  filterMenu: {
+    marginTop: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  filterOption: {
+    minHeight: 48,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  sectionTitle: {
-    color: colors.secondary,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-  },
-  filterChipText: {
-    color: colors.primary,
-  },
+  filterOptionSelected: { backgroundColor: colors.surfaceAlt },
+  optionLabel: { ...typography.bodyMd, color: colors.neutral, flex: 1 },
+  optionLabelSelected: { fontWeight: '600' },
+  optionCount: { ...typography.caption, color: colors.secondary },
+  resultSummary: { color: colors.secondary, marginVertical: spacing.sm },
   loadingContainer: {
     paddingVertical: spacing.xl,
     alignItems: 'center',
@@ -347,31 +264,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     paddingLeft: spacing.lg,
   },
-  requestCardHighlight: {
-    borderColor: colors.primary,
-    borderWidth: 1.5,
-  },
   rail: {
     position: 'absolute',
     left: 0,
     top: 0,
     bottom: 0,
     width: 4,
-  },
-  floatingTaskBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomLeftRadius: radius.sm,
-  },
-  floatingBadgeText: {
-    ...typography.caption,
-    color: colors.surface,
-    fontWeight: 'bold',
-    fontSize: 10,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -390,9 +288,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.neutral,
   },
-  timeText: {
-    color: colors.secondary,
-  },
   roadTitle: {
     color: colors.neutral,
     marginBottom: spacing.xs,
@@ -409,16 +304,11 @@ const styles = StyleSheet.create({
   },
   cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: spacing.xs,
-  },
-  noteText: {
-    color: colors.secondary,
-    flex: 1,
-    marginRight: spacing.sm,
   },
   detailArrow: {
     flexDirection: 'row',

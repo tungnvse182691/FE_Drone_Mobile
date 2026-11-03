@@ -7,23 +7,57 @@ const fixture = status => ({ ...task, status, version: 'AAAAAAAAAAE=', scope: [{
 const apiFor = t => ({ getOperatorSurveyTaskDetailReal: async () => ({ data: t, etag: `"${t.version}"` }), getOperatorWorkPackageReal: async () => ({ data: { task: t, geometryRefs: [] } }) });
 const routeSpy = routes => ({ 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: route => routes.push(route) } }) });
 
-test('UI02A mounted filters distinguish submitted, supplement and completion across loaded pages', async () => {
+test('Requests compact selector preserves every loaded state across pages without empty filter clutter', async () => {
   const states = ['NEW_ASSIGNED', 'Reassigned', 'ACCEPTED', 'InProgress', 'SUBMITTED', 'Submitted', 'SUPPLEMENT_REQUIRED', 'SupplementRequired', 'COMPLETED', 'UnknownFuture'];
   const items = states.map((status, i) => ({ ...fixture(status), id: id(20 + i) }));
   const s = drone('requests', { listOperatorSurveyTasksReal: async cursor => cursor ? { items: items.slice(5), nextCursor: null } : { items: items.slice(0, 5), nextCursor: 'next' } });
   s.render(); await s.flush();
-  const tap = async (label, expected) => {
-    const filter = s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === label);
-    assert.ok(filter, label); filter.props.onPress(); await s.flush();
-    assert.equal(s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === label).props.accessibilityState.selected, true);
-    const cards = s.nodes().filter(n => n.type === 'Card'); assert.equal(cards.length, expected.length);
-    for (const item of expected) assert.match(text(s), new RegExp(item.id.slice(0, 8)));
+  const tap = async label => {
+    const button = s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === label);
+    assert.ok(button, label); button.props.onPress(); await s.flush();
   };
-  await tap('Đã nộp (1)', [items[4]]);
+  assert.equal(s.nodes().filter(n => n.type === 'Card').length, 5, 'default shows every task');
+  assert.ok(!s.nodes().some(n => n.props.accessibilityRole === 'radio'), 'options start collapsed');
+  await tap('Lọc trạng thái: Tất cả trạng thái');
+  assert.ok(!s.nodes().some(n => n.props.accessibilityLabel === 'Cần bổ sung (0)'));
+  await tap('Đã nộp (1)');
+  assert.equal(s.nodes().filter(n => n.type === 'Card').length, 1);
+  assert.ok(!s.nodes().some(n => n.props.accessibilityRole === 'radio'), 'selection closes options');
   s.press('Tải thêm nhiệm vụ'); await s.flush();
-  for (const [label, indexes] of [['Chờ nhận (2)', [0,1]], ['Đang thực hiện (2)',[2,3]], ['Đã nộp (2)',[4,5]], ['Cần bổ sung (2)',[6,7]], ['Hoàn tất (1)',[8]], ['Trạng thái khác (1)',[9]]]) await tap(label, indexes.map(i => items[i]));
-  assert.ok(s.nodes().some(n => n.type === 'ScrollView' && n.props.horizontal));
-  assert.match(text(s), /trang đã tải/); s.unmount();
+  for (const [label, indexes] of [['Chờ nhận (2)', [0,1]], ['Đang thực hiện (2)',[2,3]], ['Đã nộp (2)',[4,5]], ['Cần bổ sung (2)',[6,7]], ['Hoàn tất (1)',[8]], ['Trạng thái khác (1)',[9]], ['Tất cả trạng thái (10)',states.map((_,i)=>i)]]) {
+    const toggle = s.nodes().find(n => n.props.accessibilityLabel?.startsWith('Lọc trạng thái:'));
+    toggle.props.onPress(); await s.flush();
+    await tap(label);
+    assert.equal(s.nodes().filter(n => n.type === 'Card').length, indexes.length);
+    for (const i of indexes) assert.match(text(s), new RegExp(items[i].id.slice(0, 8)));
+  }
+  assert.match(text(s), /đã tải/); s.unmount();
+});
+
+test('Requests card uses one server status and no overlapping current-task badge or inert new-task tab', async () => {
+  const routes = [];
+  const s = drone('requests', { listOperatorSurveyTasksReal: async () => ({ items: [fixture('ACCEPTED')], nextCursor: null }) }, { moduleFactories: routeSpy(routes) });
+  s.render(); await s.flush();
+  assert.equal(s.nodes().filter(n => n.type === 'Chip' && n.props.label === 'Đã nhận').length, 1);
+  assert.doesNotMatch(text(s), /ĐANG THỰC HIỆN|Yêu cầu mới/);
+  assert.ok(!s.nodes().some(n => n.type === 'Text' && n.props.children.includes('Đã nhận')), 'no duplicated footer status');
+  const card = s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel?.startsWith('Xem nhiệm vụ'));
+  assert.ok(card); card.props.onPress();
+  assert.equal(routes.at(-1).pathname, '/(drone)/request-detail');
+  assert.equal(routes.at(-1).params.taskId, task.id);
+  s.unmount();
+});
+
+test('Requests refresh cannot strand selection when selected state disappears', async () => {
+  let current = [fixture('SUBMITTED')];
+  const s = drone('requests', { listOperatorSurveyTasksReal: async () => ({ items: current, nextCursor: null }) });
+  s.render(); await s.flush();
+  const tap = async label => { s.nodes().find(n => n.props.accessibilityLabel === label).props.onPress(); await s.flush(); };
+  await tap('Lọc trạng thái: Tất cả trạng thái'); await tap('Đã nộp (1)');
+  current = [fixture('SUPPLEMENT_REQUIRED')]; await tap('Làm mới nhiệm vụ');
+  assert.equal(s.nodes().filter(n => n.type === 'Card').length, 1);
+  assert.ok(s.nodes().some(n => n.props.accessibilityLabel === 'Lọc trạng thái: Tất cả trạng thái'));
+  assert.match(text(s), /Cần bổ sung/); s.unmount();
 });
 
 for (const status of ['SUBMITTED', 'SUPPLEMENT_REQUIRED', 'COMPLETED', 'ACCEPTED', 'UNKNOWN']) test(`UI02A Detail ${status} has read-only path without decline invitation`, async () => {
