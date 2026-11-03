@@ -121,7 +121,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               const normalized=text.trim().replace(',','.');const value=normalized===''?null:Number(normalized);
               update(i,{value,state:value===null?'UNKNOWN':'KNOWN',unknownReason:value===null?m.unknownReason||'Chưa đo tại hiện trường':null});}}/>
             {m.value===null?<InputField label="Lý do chưa đo" value={m.unknownReason??''} onChangeText={unknownReason=>update(i,{unknownReason})}/>:null}
-            <InputField label="Dụng cụ đo thực tế" value={m.instrument ? crewInstrumentLabel(m.instrument) : ''} onChangeText={instrument=>update(i,{instrument})}/>
+            <InputField label="Dụng cụ đo thực tế" value={m.instrument} onChangeText={instrument=>update(i,{instrument})}/>
             <InputField label="Phương pháp đo thực tế" value={m.method} onChangeText={method=>update(i,{method})}/>
             {m.latitude==null||m.longitude==null?<InputField label="Lý do chưa có tọa độ quan sát" value={m.locationReason??''} onChangeText={locationReason=>update(i,{locationReason})}/>:<Text>GPS quan sát trong hồ sơ máy chủ: {m.latitude}, {m.longitude}</Text>}
           </View>)}
