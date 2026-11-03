@@ -336,8 +336,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   logoCircle: {
-    width: 72,
-    height: 72,
+    width: 120,
+    height: 120,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -356,13 +356,13 @@ const styles = StyleSheet.create({
     }),
   },
   logoImage: {
-    width: 64,
-    height: 64,
+    width: 104,
+    height: 104,
   },
   brandTitle: {
     fontFamily: 'Sansation',
-    fontSize: 27,
-    lineHeight: 38,
+    fontSize: 30,
+    lineHeight: 42,
     fontWeight: '500',
     letterSpacing: 3,
     color: colors.brandGold,

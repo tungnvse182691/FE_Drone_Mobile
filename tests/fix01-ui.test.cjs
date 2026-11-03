@@ -30,7 +30,7 @@ for(const method of ['login','otp'])test('RPT-01 real '+method+' screen restores
   assert.equal(JSON.stringify([...s.h.rows]),before);assert.equal(s.h.calls.length,0);
   assert.doesNotMatch(JSON.stringify(s.nodes()),/không tự chuyển/);
   if(method==='login'){
-    assert.equal(s.nodes().find(n=>n.type==='Image').props.style.width,64);
+    assert.equal(s.nodes().find(n=>n.type==='Image').props.style.width,104);
     assert.equal(s.nodes().find(n=>n.type==='ScrollView').props.contentContainerStyle.justifyContent,'flex-start');
   }
   s.unmount();

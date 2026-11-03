@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const flat=s=>Array.isArray(s)?Object.assign({},...s.filter(Boolean).map(flat)):s??{};
 
-test('LOGIN-UI-01 restores a bounded card and passive decoration without expanding the logo',()=>{
+test('LOGIN-UI-01 retains the card and passive decoration with LOGIN-BRAND-02 prominent branding',()=>{
  const s=screen('app/(auth)/index.tsx');s.render();
  assert.equal(flat(s.nodes()[0].props.style).backgroundColor,'#F8F9FA');
  const circles=s.nodes().filter(n=>n.props.pointerEvents==='none');assert.equal(circles.length,2);
@@ -13,7 +13,19 @@ test('LOGIN-UI-01 restores a bounded card and passive decoration without expandi
  const card=s.nodes().find(n=>n.props.children?.includes(heading));const style=flat(card.props.style);
  assert.equal(style.backgroundColor,'#FFFFFF');assert.equal(style.borderRadius,20);assert.ok(style.paddingHorizontal>=16&&style.paddingHorizontal<=20);
  const scroll=s.nodes().find(n=>n.type==='ScrollView');assert.equal(scroll.props.contentContainerStyle.maxWidth,440);assert.equal(scroll.props.contentContainerStyle.height,undefined);
- const logo=s.nodes().find(n=>n.type==='Image');assert.equal(logo.props.style.width,64);
+ const logo=s.nodes().find(n=>n.type==='Image');
+ assert.equal(logo.props.style.width,104);assert.equal(logo.props.style.height,104);
+ const circle=s.nodes().find(n=>n.props.children?.includes(logo));
+ assert.equal(flat(circle.props.style).width,120);assert.equal(flat(circle.props.style).height,120);
+ const brand=s.nodes().find(n=>n.type==='Text'&&n.props.children.includes('HOÀNG HẢI'));
+ assert.equal(flat(brand.props.style).fontSize,30);assert.equal(flat(brand.props.style).lineHeight,42);
+ const header=s.nodes().find(n=>n.props.children?.includes(brand));
+ assert.equal(flat(header.props.style).alignItems,'center');
+ for(const node of [circle,logo,brand,header,card]) {
+  const st=flat(node.props.style);assert.notEqual(st.position,'absolute');assert.equal(st.transform,undefined);
+  for(const [key,value] of Object.entries(st))if(key.startsWith('margin')&&typeof value==='number')assert.ok(value>=0);
+ }
+ assert.equal(scroll.props.keyboardShouldPersistTaps,'handled');
  const email=s.nodes().find(n=>n.type==='InputField');assert.equal(email.props.autoCapitalize,'none');assert.equal(email.props.autoCorrect,false);
  const register=s.nodes().find(n=>n.props.accessibilityLabel==='Đăng ký tài khoản người phản ánh');assert.ok(flat(register.props.style).minHeight>=48);
  s.unmount();

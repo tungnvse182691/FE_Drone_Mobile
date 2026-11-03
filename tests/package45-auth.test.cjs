@@ -11,10 +11,10 @@ test('default Login omits guest draft notice and uses the responsive mobile layo
   assert.equal(scroll.props.contentContainerStyle.justifyContent,'flex-start');
   assert.equal(scroll.props.contentContainerStyle.paddingHorizontal,20);
   const image=nodes.find(n=>n.type==='Image');
-  assert.equal(image.props.style.width,64);
-  assert.equal(image.props.style.height,64);
-  const logo=nodes.find(n=>n.type==='View'&&n.props.style?.width===72);
-  assert.equal(logo.props.style.height,72);
+  assert.equal(image.props.style.width,104);
+  assert.equal(image.props.style.height,104);
+  const logo=nodes.find(n=>n.type==='View'&&n.props.style?.width===120);
+  assert.equal(logo.props.style.height,120);
   assert.ok(nodes.some(n=>n.type==='InputField'&&n.props.placeholder==='Email hoặc SĐT'));
   assert.match(JSON.stringify(nodes),/Xem cổng phản ánh · Đăng nhập để gửi/);
   s.unmount();
