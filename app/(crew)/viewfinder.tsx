@@ -75,7 +75,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     try {
       const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,coords,camera,normalAfter&&postRepairCapture);
       if(!activeRef.current||!matches(context))return;
-      setDraft(value);setNotice('Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa upload hoặc gửi hồ sơ.');
+      setDraft(value);setNotice('Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa tải ảnh lên hoặc gửi hồ sơ.');
     } catch(error) {if(activeRef.current&&matches(context))setNotice(fieldErrorMessage(error));}
     finally {savingRef.current=false;if(activeRef.current&&matches(context))setBusy(false);}
   };

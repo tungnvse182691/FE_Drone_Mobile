@@ -224,7 +224,7 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     const detail = await guarded(context,runtime,() => crew.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
     const reason = crew.fieldCapabilityBlock(detail.data,detail.etag,context.actor,'capture');
     if (reason) throw new Error(reason);
-    if (purpose === 'AFTER' && detail.data.purpose !== 'PostRepair') throw new Error('AFTER chỉ hợp lệ với nhiệm vụ PostRepair.');
+    if (purpose === 'AFTER' && detail.data.purpose !== 'PostRepair') throw new Error('Ảnh sau sửa chỉ hợp lệ với nhiệm vụ sau sửa chữa.');
     if (purpose==='AFTER'&&detail.data.mode==='NORMAL') {
       await verifyRepairClaim(draft,detail.data,runtime);
       if(!camera||!postRepairCapture)throw Error('repair_after_camera_required');
@@ -513,15 +513,15 @@ export function fieldErrorMessage(error: unknown): string {
   if (status === 409 || status === 412) return 'Dữ liệu hoặc phiên bản đã thay đổi. Tải lại và đối soát lệnh cũ.';
   const message=(error as Error)?.message;
   const repairMessages: Record<string,string>={
-    repair_finish_required:'Cần biên nhận kết thúc thi công đã đối soát đúng nhiệm vụ, binding và phiên bản.',
-    repair_claim_root_required:'Nhiệm vụ đã có lượt FIELD trước đó; chưa thể dùng lượt MEASUREMENT hoặc bổ sung làm hồ sơ sửa chữa gốc. Cần đối soát với điều phối.',
+    repair_finish_required:'Cần biên nhận kết thúc thi công đã đối soát đúng nhiệm vụ, liên kết phân công và phiên bản.',
+    repair_claim_root_required:'Nhiệm vụ đã có lượt hồ sơ hiện trường trước đó; chưa thể dùng lượt đo kiểm hoặc bổ sung làm hồ sơ sửa chữa gốc. Cần đối soát với điều phối.',
     repair_claim_source_changed:'Nguồn thi công hoặc phiên bản đã thay đổi. Giữ nháp và đối soát trước khi gửi.',
-    repair_after_camera_required:'Cần ảnh AFTER chụp trực tiếp sau thời điểm kết thúc được máy chủ xác nhận và xác nhận hiện trạng sau sửa.',
+    repair_after_camera_required:'Cần ảnh sau sửa chụp trực tiếp sau thời điểm kết thúc được máy chủ xác nhận và xác nhận hiện trạng sau sửa.',
     repair_claim_retained_for_intake:'Hồ sơ sửa chữa được giữ cho bước tiếp nhận; không tạo nháp thay thế.',
     repair_claim_readback_invalid:'Dữ liệu đọc lại chưa khớp hồ sơ sửa chữa gốc. Chưa xác nhận gửi thành công.',
   };
   if(repairMessages[message])return repairMessages[message];
-  const messages: Record<string,string>={field_previous_session_requires_reconciliation:'Có nháp thuộc phiên đăng nhập cũ. Đã khóa gửi lại để tránh ghi trùng; cần đối soát hồ sơ cũ.',field_session_changed:'Phiên Crew đã thay đổi. Đã dừng thao tác.',field_verified_evidence_required:'Cần ảnh đã VERIFIED thực từ máy chủ trước khi gửi.',field_measurements_required:'Nhập số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS.',field_verification_pending:'Máy chủ đang xác minh ảnh. Tải lại trạng thái; chưa được gửi hồ sơ.',field_command_rejected:'Lệnh đã bị từ chối. Xem lỗi, tải lại rồi xác nhận tạo nháp mới.',field_unknown_outcome_use_reconcile:'Kết quả lệnh cũ chưa xác định. Dùng đối soát hoặc gửi lại đúng lệnh đã lưu.'};
+  const messages: Record<string,string>={field_previous_session_requires_reconciliation:'Có nháp thuộc phiên đăng nhập cũ. Đã khóa gửi lại để tránh ghi trùng; cần đối soát hồ sơ cũ.',field_session_changed:'Phiên đội sửa chữa đã thay đổi. Đã dừng thao tác.',field_verified_evidence_required:'Cần ảnh đã được máy chủ xác minh trước khi gửi.',field_measurements_required:'Nhập số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS.',field_verification_pending:'Máy chủ đang xác minh ảnh. Tải lại trạng thái; chưa được gửi hồ sơ.',field_command_rejected:'Lệnh đã bị từ chối. Xem lỗi, tải lại rồi xác nhận tạo nháp mới.',field_unknown_outcome_use_reconcile:'Kết quả lệnh cũ chưa xác định. Dùng đối soát hoặc gửi lại đúng lệnh đã lưu.'};
   if (messages[message]) return messages[message];
   if (message && /[À-ỹ]/.test(message)) return message;
   return 'Chưa xác nhận được thao tác. Nháp và lệnh đã lưu được giữ nguyên; tải lại hoặc đối soát trước khi gửi mới.';

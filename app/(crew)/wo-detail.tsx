@@ -120,9 +120,9 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
     if (currentCrewScope() !== scope) return;
     setRecord(result);
     if (result.task && result.etag) setFresh(previous => ({ ...previous, detail: result.task, status: result.task!.status ?? '', version: result.task!.version!, etag: result.etag }));
-    setNotice(result.phase === 'rejected' ? 'Máy chủ từ chối lệnh (HTTP ' + result.rejectionStatus + '). Tải lại dữ liệu trước khi thử một lệnh mới.' :
+    setNotice(result.phase === 'rejected' ? 'Máy chủ từ chối lệnh. Tải lại dữ liệu trước khi thử một lệnh mới.' :
       result.phase === 'confirmed' && result.readbackStatus === 200 ? 'Đã xác nhận trạng thái và phiên bản bằng dữ liệu mới từ máy chủ.' :
-      result.phase === 'acknowledged' ? 'Máy chủ đã ghi nhận lệnh; chưa xác nhận được bằng GET. Giữ biên nhận để đối soát.' :
+      result.phase === 'acknowledged' ? 'Máy chủ đã ghi nhận lệnh; chưa đối chiếu được dữ liệu đọc lại. Giữ biên nhận để đối soát.' :
       'Chưa xác định được kết quả lệnh. Giữ nguyên lệnh cũ; tải lại để đối soát.');
   }, [scope]);
   useEffect(() => {
@@ -189,9 +189,9 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       if(reason)throw new Error(reason);
       const origin=await getFieldTaskStartOriginReal(task.projectId,task.id);
       if(currentCrewScope()!==scope)return;
-      if(origin.id!==response.data.firstStartOriginId||origin.taskId!==task.id)throw new Error('First-start không khớp nhiệm vụ.');
+      if(origin.id!==response.data.firstStartOriginId||origin.taskId!==task.id)throw new Error('Mốc bắt đầu đầu tiên không khớp nhiệm vụ.');
       router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}});
-    }catch(error){if(currentCrewScope()===scope)setNotice((error as Error).message || 'Không xác nhận được điều kiện đo kiểm.');}
+    }catch(error){if(currentCrewScope()===scope)setNotice(fieldTaskActionMessage(error, 'read'));}
     finally{if(currentCrewScope()===scope)setBusy(false);}
   };
   const fieldBlock = !fresh.detail ? 'Chưa tải dữ liệu nhiệm vụ.' : fieldCapabilityBlock(fresh.detail,fresh.etag??'',actor,'review');
@@ -248,7 +248,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
           <MaterialIcons name="info-outline" size={20} color={colors.secondary} /><Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
         </Pressable>
-        {showTechnical ? <View style={{ gap: spacing.sm }}><Text selectable style={styles.hint}>Mã nhiệm vụ: {fresh.id}</Text><Text selectable style={styles.hint}>Dự án: {fresh.projectId}</Text><Text selectable style={styles.hint}>Phiên bản: {fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn: {fresh.status} · {fresh.rawMode}</Text>{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
+        {showTechnical ? <View style={{ gap: spacing.sm }}><Text selectable style={styles.hint}>Mã nhiệm vụ: {fresh.id}</Text><Text selectable style={styles.hint}>Dự án: {fresh.projectId}</Text><Text selectable style={styles.hint}>Phiên bản: {fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn: {fresh.status} · {fresh.rawMode}</Text>{record?.rejectionStatus ? <Text style={styles.hint}>Mã phản hồi máy chủ: {record.rejectionStatus}</Text> : null}{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
       </Card>
       <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </SafeAreaScreen>
@@ -276,7 +276,7 @@ export function RepairContractStatus({ task }: { task: CrewTask }) {
 export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; stage?:'all'|'progress'|'closeout'|'overview' }) {
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
   const identity=useCrewIdentity();
-  const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên Crew hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
+  const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên đội sửa chữa hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
   const [storedHistory,setHistory]=useState<RepairJournalRecord[]>([]),[storedDraft,setDraft]=useState<FieldDraft|null>(null);
   const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
   const [showRepairTechnical,setShowRepairTechnical]=useState(false);
@@ -369,7 +369,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
         <Text selectable style={styles.hint}>Hạng mục: {result.repairContext.itemId}</Text>
         <Text selectable style={styles.hint}>Liên kết phân công: {result.repairContext.bindingId}</Text>
         <Text selectable style={styles.hint}>Phiên bản hạng mục: {result.itemVersion}</Text>
-        <Text style={styles.hint}>Trạng thái nguồn: {result.repairContext.status} · Checklist: {result.repairContext.checklistVersion}</Text>
+        <Text style={styles.hint}>Trạng thái nguồn: {result.repairContext.status} · Phiên bản bộ kiểm tra: {result.repairContext.checklistVersion}</Text>
       </View> : null}
     </> : null}
 

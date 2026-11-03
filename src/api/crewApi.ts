@@ -123,17 +123,17 @@ export type FieldCommandAction = 'accept' | 'reject' | 'start';
 /** These commands do not require GPS, defect labels, WO metadata or repair eligibility. */
 export function fieldCommandBlock(task: FieldTaskViewFact, etag: string, actorId: string, action: FieldCommandAction): string | null {
   try { validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId); } catch { return 'Định danh, người nhận hoặc phiên bản nhiệm vụ không hợp lệ.'; }
-  if (!isCrewResourceId(task.assignmentId) || !/^"[A-Za-z0-9+/]{11}="$/.test(etag)) return 'Thiếu assignment hoặc strong ETag hợp lệ.';
+  if (!isCrewResourceId(task.assignmentId) || !/^"[A-Za-z0-9+/]{11}="$/.test(etag)) return 'Thiếu thông tin phân công hoặc mã phiên bản hợp lệ từ máy chủ.';
   if (task.status !== (action === 'start' ? 'Accepted' : 'NewAssigned')) return 'Trạng thái nhiệm vụ không cho phép thao tác này.';
   return null;
 }
 /** FIELD only: presentation metadata, GPS and repair eligibility are independent. */
 export function fieldCapabilityBlock(task: FieldTaskViewFact, etag: string, actorId: string, capability: 'capture' | 'review' | 'submit'): string | null {
   try { validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId); } catch { return 'Định danh, người nhận hoặc phiên bản nhiệm vụ không hợp lệ.'; }
-  if (!isCrewResourceId(task.assignmentId) || !/^"[A-Za-z0-9+/]{11}="$/.test(etag)) return 'Thiếu assignment hoặc strong ETag hợp lệ.';
-  if (!isCrewResourceId(task.firstStartOriginId)) return 'Cần bắt đầu nhiệm vụ và đọc first-start từ máy chủ.';
+  if (!isCrewResourceId(task.assignmentId) || !/^"[A-Za-z0-9+/]{11}="$/.test(etag)) return 'Thiếu thông tin phân công hoặc mã phiên bản hợp lệ từ máy chủ.';
+  if (!isCrewResourceId(task.firstStartOriginId)) return 'Cần bắt đầu nhiệm vụ và đọc mốc bắt đầu đầu tiên từ máy chủ.';
   const states = capability === 'review' ? ['InProgress','SupplementRequired','Submitted','Completed'] : ['InProgress','SupplementRequired'];
-  return states.includes(task.status ?? '') ? null : 'Trạng thái nhiệm vụ chưa cho phép thao tác FIELD này.';
+  return states.includes(task.status ?? '') ? null : 'Trạng thái nhiệm vụ chưa cho phép thao tác hiện trường này.';
 }
 
 /** API-085/086: private task-scoped evidence; never expose an unauthenticated URL. */
@@ -316,22 +316,22 @@ export function normalRepairBlock(task: FieldTaskViewFact, etag: string, actorId
   capability: NormalRepairCapability, expected?: CrewRepairContext): string | null {
   try { validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId); }
   catch { return 'Định danh, người nhận hoặc phiên bản nhiệm vụ không hợp lệ.'; }
-  if (!isCrewResourceId(task.assignmentId) || !isRepairItemVersion(task.version)) return 'Thiếu assignment hoặc phiên bản nhiệm vụ hợp lệ.';
-  if (task.mode !== 'NORMAL') return 'Chỉ hỗ trợ bootstrap NORMAL; FastTrack chưa được mở.';
+  if (!isCrewResourceId(task.assignmentId) || !isRepairItemVersion(task.version)) return 'Thiếu thông tin phân công hoặc phiên bản nhiệm vụ hợp lệ.';
+  if (task.mode !== 'NORMAL') return 'Chỉ hỗ trợ khởi tạo sửa chữa theo kế hoạch; sửa chữa nhanh chưa được mở.';
   const ctx = task.repairContext;
-  if (!ctx) return 'Máy chủ chưa cung cấp ngữ cảnh NORMAL đang được giao cho bạn.';
+  if (!ctx) return 'Máy chủ chưa cung cấp ngữ cảnh sửa chữa theo kế hoạch đang được giao cho bạn.';
   if (ctx.mode !== 'NORMAL' || ![ctx.packageId,ctx.itemId,ctx.bindingId].every(isCrewResourceId) ||
       !isRepairItemVersion(ctx.itemVersion) || !ctx.repairPlan?.trim() || !ctx.checklistVersion?.trim() ||
-      !['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired','Cancelled'].includes(ctx.status)) return 'Ngữ cảnh hạng mục, binding hoặc phiên bản sửa chữa không hợp lệ.';
+      !['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired','Cancelled'].includes(ctx.status)) return 'Ngữ cảnh hạng mục, liên kết phân công hoặc phiên bản sửa chữa không hợp lệ.';
   if (expected && ['packageId','itemId','bindingId','itemVersion'].some(k => ctx[k as keyof CrewRepairContext] !== expected[k as keyof CrewRepairContext])) return 'Ngữ cảnh sửa chữa đã thay đổi; cần đối soát lệnh cũ.';
   if (capability === 'bootstrap') return null;
   if (capability === 'assessment' || capability === 'start') {
-    if (ctx.status !== 'Assigned' || task.status !== 'InProgress' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục Assigned, nhiệm vụ InProgress và first-start thật trước khi sửa.';
+    if (ctx.status !== 'Assigned' || task.status !== 'InProgress' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục đã phân công, nhiệm vụ đang thực hiện và mốc bắt đầu đầu tiên từ máy chủ trước khi sửa.';
     return null;
   }
   if (capability === 'finish' || capability === 'attempt') {
     if (ctx.status !== 'InProgress' || task.status !== (capability === 'attempt' ? 'Submitted' : 'InProgress') ||
-        task.purpose !== 'PostRepair' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục NORMAL InProgress, nhiệm vụ PostRepair và first-start đúng trạng thái.';
+        task.purpose !== 'PostRepair' || !isCrewResourceId(task.firstStartOriginId)) return 'Cần hạng mục sửa chữa theo kế hoạch đang thi công, nhiệm vụ sau sửa chữa và mốc bắt đầu đầu tiên đúng trạng thái.';
     return null;
   }
   return 'Kết thúc, nộp và bổ sung sửa chữa chưa được mở.';

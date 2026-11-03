@@ -58,9 +58,9 @@ test('Crew null GPS navigation keeps layout, no map or URL, and returns with pro
 test('Crew valid server coordinates alone provide map destination; opening it does not claim arrival',()=>{
  const {s,urls}=navigation({...task(),coordinates:{latitude:10.75,longitude:106.6}});s.render();s.press('Mở Google Maps');assert.match(urls[0],/destination=10.75,106.6$/);assert.ok(s.nodes().some(n=>n.type==='Map'));assert.ok(!s.nodes().some(n=>n.props.title==='Đã đến nơi'));s.unmount();
 });
-test('Crew unchanged FIELD preparation callbacks retain baseline execution source',()=>{
- const file='app/(crew)/wo-detail.tsx',old=cp.execFileSync('git',['show',`HEAD:${file}`],{encoding:'utf8'});
- function declaration(source,name){const s=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let found;function visit(n){if(ts.isVariableDeclaration(n)&&n.name.getText()===name)found=n.getText().replace(/\r\n/g,'\n').replace('Không xác nhận được điều kiện đo kiểm.','Không xác nhận được điều kiện FIELD.').replace('Đã lưu biên nhận máy chủ và đối chiếu hạng mục.','Đã lưu receipt máy chủ và đối chiếu ngữ cảnh hạng mục.');ts.forEachChild(n,visit);}visit(s);return found;}
+test('Crew FIELD preparation retains baseline guards, reads and navigation after presentation changes',()=>{
+ const file='app/(crew)/wo-detail.tsx',old=cp.execFileSync('git',['show',`5ffba7e:${file}`],{encoding:'utf8'});
+ function declaration(source,name){const s=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let found;function visit(n){if(ts.isVariableDeclaration(n)&&n.name.getText()===name)found=n.getText().replace(/\r\n/g,'\n').replace('Không xác nhận được điều kiện đo kiểm.','Không xác nhận được điều kiện FIELD.').replace('Đã lưu biên nhận máy chủ và đối chiếu hạng mục.','Đã lưu receipt máy chủ và đối chiếu ngữ cảnh hạng mục.').replace('First-start không khớp nhiệm vụ.','Mốc bắt đầu đầu tiên không khớp nhiệm vụ.').replace("(error as Error).message || 'Không xác nhận được điều kiện FIELD.'","fieldTaskActionMessage(error, 'read')");ts.forEachChild(n,visit);}visit(s);return found;}
  for(const name of ['openField','blocked'])assert.equal(declaration(read(file),name),declaration(old,name),name);
 });
 

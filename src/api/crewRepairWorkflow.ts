@@ -235,23 +235,23 @@ export async function readRepairFieldDraft(i: RepairIdentity) {
 }
 export function repairErrorMessage(e: unknown): string {
   const status=(e as {response?:{status?:number}})?.response?.status;
-  if(status===401||status===403)return 'Phiên hoặc quyền Crew không còn hợp lệ. Lệnh được giữ để đối soát.';
+  if(status===401||status===403)return 'Phiên hoặc quyền đội sửa chữa không còn hợp lệ. Lệnh được giữ để đối soát.';
   if(status===409||status===412||status===428)return 'Chưa xác nhận kết quả do phiên bản hoặc điều kiện lệnh. Giữ nguyên lệnh và khóa gửi mới; đối soát lệnh gốc.';
   const code=e instanceof Error?e.message:'';
   const messages: Record<string,string>={
     repair_rejection_proof_missing:'Chưa có bằng chứng lệnh cũ bị từ chối ở lần gửi đầu. Cần nguồn đối soát máy chủ cho khóa lệnh này; tiếp tục giữ khóa tạo mới.',
     repair_rejection_resolution_blocked:'Chưa đủ bằng chứng giải quyết lệnh bị từ chối. Giữ nguyên lịch sử và khóa tạo lệnh mới.',
     repair_measurements_required:'Cần số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS quan sát.',
-    repair_verified_evidence_required:'Cần ảnh BEFORE/MEASUREMENT đúng nháp Crew và VERIFIED từ máy chủ, khớp checksum.',
-    repair_first_start_invalid:'First-start không khớp nhiệm vụ hoặc assignment hiện tại. Đã khóa lệnh.',
-    repair_binding_changed:'Binding hoặc assignment đã thay đổi. Giữ lịch sử để đối soát.',
-    repair_stale_assessment:'Phiên bản hạng mục đã thay đổi sau assessment. Chưa được bắt đầu thi công.',
-    repair_previous_session_unresolved:'Có lệnh phiên cũ chưa rõ kết quả. Cần xác nhận trước khi POST lại nguyên lệnh; có thể thực thi lần đầu.',
+    repair_verified_evidence_required:'Cần ảnh trước sửa hoặc đo kiểm đúng nháp đội sửa chữa, đã được máy chủ xác minh và khớp mã kiểm tra toàn vẹn.',
+    repair_first_start_invalid:'Mốc bắt đầu đầu tiên không khớp nhiệm vụ hoặc phân công hiện tại. Đã khóa lệnh.',
+    repair_binding_changed:'Liên kết hoặc phân công đã thay đổi. Giữ lịch sử để đối soát.',
+    repair_stale_assessment:'Phiên bản hạng mục đã thay đổi sau đánh giá trước sửa. Chưa được bắt đầu thi công.',
+    repair_previous_session_unresolved:'Có lệnh phiên cũ chưa rõ kết quả. Cần xác nhận trước khi gửi lại nguyên lệnh; có thể thực thi lần đầu.',
     repair_history_requires_reconciliation:'Lịch sử sửa chữa cần đối soát trước khi tạo lệnh mới.',
-    repair_session_changed:'Phiên Crew đã thay đổi. Đã dừng thao tác và giữ lệnh cũ.',
+    repair_session_changed:'Phiên đội sửa chữa đã thay đổi. Đã dừng thao tác và giữ lệnh cũ.',
     repair_finish_required:'Cần biên nhận kết thúc thi công đã được đối soát trước khi lập và nộp hồ sơ.',
     repair_start_required:'Cần biên nhận bắt đầu thi công đã được đối soát trước khi kết thúc.',
-    repair_claim_required:'Cần hồ sơ REPAIR_CLAIM gốc, đã xác nhận bằng GET, khớp phiên thi công hiện tại.',
+    repair_claim_required:'Cần hồ sơ sửa chữa gốc, đã xác nhận bằng dữ liệu đọc lại từ máy chủ, khớp phiên thi công hiện tại.',
     repair_claim_readback_invalid:'Hồ sơ đọc lại chưa khớp nguồn, nội dung hoặc thời điểm thi công. Đã khóa tiếp nhận.',
     repair_reconciliation_pending:'Phiên bản hoặc trạng thái máy chủ chưa khớp biên nhận. Giữ lệnh và đối soát.',
   };

@@ -53,7 +53,7 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
       </Text>
         {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||
           (['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?
-          <Button title="Đối soát bằng GET máy chủ" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)} />:null}
+          <Button title="Đọc kết quả từ máy chủ để đối soát" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)} />:null}
       </View>)}
     </View>:null}
     <View style={styles.capabilities}>
