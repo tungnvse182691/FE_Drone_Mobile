@@ -158,7 +158,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ ngoại tuyến" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Dữ liệu trên thiết bị" />}>
       <DroneTaskRecoveryList />
       {/* Toast Notification */}
       {toastMsg && (
@@ -170,7 +170,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
       {/* Switcher */}
       <View style={styles.headerRow}>
-        <Text style={[typography.labelSm, styles.headerTitle]}>HÀNG ĐỢI ĐỒNG BỘ NỀN</Text>
+        <Text style={[typography.labelSm, styles.headerTitle]}>HÀNG ĐỢI TRÊN THIẾT BỊ</Text>
         <View style={styles.tabToggle}>
           <Pressable
             style={[styles.toggleBtn, queueTab === 'pending' && styles.toggleBtnActive]}
@@ -208,13 +208,13 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             />
             <Text style={[typography.titleMd, styles.summaryCount]}>
               {pendingQueue.length > 0
-                ? `${pendingQueue.length} tệp đang chờ đồng bộ`
+                ? `${pendingQueue.length} mục chờ xử lý`
                 : 'Không có mục trong phân vùng này'}
             </Text>
           </View>
           <Text style={[typography.caption, styles.totalSize]}>
             {pendingQueue.length > 0
-              ? `${pendingQueue.length} mục chờ đồng bộ`
+              ? `${pendingQueue.length} mục được giữ trên thiết bị`
               : `${completedQueue.length} mục ghi nhận cục bộ`}
           </Text>
         </View>
@@ -231,7 +231,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       {/* Section Title */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
-          {queueTab === 'pending' ? 'DANH SÁCH TỆP CHỜ TẢI' : 'BẢN GHI CỤC BỘ'}
+          {queueTab === 'pending' ? 'CÁC MỤC CHỜ XỬ LÝ' : 'BẢN GHI CỤC BỘ'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
           {queueTab === 'pending' ? 'Yêu cầu vẫn được giữ trên thiết bị' : 'Chưa xác minh biên nhận máy chủ'}
@@ -244,7 +244,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           <Card style={styles.emptyCard}>
             <MaterialIcons name="inbox" size={36} color={colors.secondary} />
             <Text style={[typography.bodyMd, { color: colors.secondary, marginTop: 6 }]}>
-              Không có tệp nào trong danh sách
+              Không có mục nào trong danh sách
             </Text>
           </Card>
         ) : (
@@ -344,6 +344,8 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
@@ -382,9 +384,9 @@ const styles = StyleSheet.create({
     ...softShadow,
   },
   summaryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.xs,
   },
   syncPulseRow: {
     flexDirection: 'row',
@@ -399,6 +401,7 @@ const styles = StyleSheet.create({
   },
   summaryCount: {
     color: colors.neutral,
+    flex: 1,
   },
   totalSize: {
     color: colors.secondary,
@@ -406,6 +409,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.xs,

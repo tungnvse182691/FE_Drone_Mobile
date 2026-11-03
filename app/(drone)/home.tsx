@@ -132,8 +132,8 @@ export default function DroneHomeScreen() {
           onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
         >
-          <MaterialIcons name="sd-card" size={18} color={colors.primaryDark} />
-          <Text style={[typography.labelSm, styles.quickButtonText]}>Nạp thẻ SD</Text>
+          <MaterialIcons name="assignment" size={18} color={colors.primaryDark} />
+          <Text style={[typography.labelSm, styles.quickButtonText]}>Nhiệm vụ</Text>
         </AnimatedPressable>
 
         <AnimatedPressable
@@ -333,11 +333,13 @@ const styles = StyleSheet.create({
   },
   telemetryStripRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
   },
   telemetryTag: {
     flexDirection: 'row',
+    maxWidth: '100%',
     alignItems: 'center',
     gap: 4,
     backgroundColor: colors.surfaceAlt,
@@ -347,6 +349,7 @@ const styles = StyleSheet.create({
   },
   telemetryTagText: {
     color: colors.secondary,
+    flexShrink: 1,
   },
   quickAccessRow: {
     flexDirection: 'row',

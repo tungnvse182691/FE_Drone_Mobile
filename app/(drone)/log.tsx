@@ -81,7 +81,7 @@ function DroneLogContent({ scope }: { scope: string }) {
       if (kind === 'upload') {
         // A server upload status is not a flight receipt, dataset acceptance or repair completion.
         setUploadText(`Phiên ${result.id}: ${STATUS_LABELS[result.status.toLowerCase()] ?? 'Trạng thái chưa được hỗ trợ'}`);
-      } else setTaskText(`Nhiệm vụ ${result.id}: ${result.status}`);
+      } else setTaskText(`Nhiệm vụ ${result.id}: ${operatorTaskStatusLabel(result.status)}`);
     } catch (e) {
       if (!active() || !isCurrent()) return;
       const status = (e as { response?: { status?: number } }).response?.status;
@@ -94,7 +94,7 @@ function DroneLogContent({ scope }: { scope: string }) {
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhật ký" />}>
     <View style={styles.tabs}>
       <Pressable onPress={() => router.push('/(drone)/requests')} accessibilityRole="button"><Text style={typography.labelSm}>Yêu cầu mới</Text></Pressable>
-      <Text style={[typography.labelSm, styles.active]}>Nhật ký chuyến bay</Text>
+      <Text style={[typography.labelSm, styles.active]}>Nhật ký lệnh</Text>
     </View>
     <DroneTaskRecoveryList />
     <Card style={styles.card}>
