@@ -1,4 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import { useAuthStore } from '../../src/store/auth';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -30,6 +31,7 @@ import {
   operatorTaskSegmentCount,
   operatorTaskStatusLabel,
   operatorTaskTargetBand,
+  operatorTaskCanRespond,
 } from '../../src/api/operator-task-view';
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
@@ -134,6 +136,9 @@ export default function DroneRequestDetailScreen() {
   }, [loadTask]);
 
   const displayCode = dataScope === scope.key && scope.key && task ? operatorTaskDisplayCode(task.id, params.code) : 'Nhiệm vụ';
+  const canOpenDecline = !!scope.key && dataScope === scope.key && !loading && !!task &&
+    task.id === target && task.operatorId === useAuthStore.getState().user?.id &&
+    !!task.version && etag === `"${task.version}"` && operatorTaskCanRespond(task.status);
   const point = workPackage?.accessPoint?.point;
   const accessPoint = point && Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90 && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180 ? workPackage!.accessPoint : null;
 
@@ -151,7 +156,7 @@ export default function DroneRequestDetailScreen() {
  * lệnh từ chối (API-230) với Idempotency-Key + If-Match. Màn này chỉ còn điều hướng.
  */
   const handleOpenDecline = () => {
-    if (!scope.capture()() || dataScope !== scope.key || !task) {
+    if (!scope.capture()() || !canOpenDecline || !task) {
       return;
     }
     router.push(`${DRONE_REQUEST_DECLINE}?taskId=${encodeURIComponent(task.id)}`);
@@ -343,7 +348,7 @@ export default function DroneRequestDetailScreen() {
             onPress={handleOpenWorkPackage}
           />
 
-          <Pressable
+          {canOpenDecline ? <Pressable
             style={styles.rejectButton}
             onPress={handleOpenDecline}
             accessibilityRole="button"
@@ -353,10 +358,12 @@ export default function DroneRequestDetailScreen() {
             <Text style={[typography.labelLg, styles.rejectButtonText]}>
               Từ chối nhiệm vụ
             </Text>
-          </Pressable>
+          </Pressable> : null}
 
           <Text style={[typography.caption, styles.syncFootnote]}>
-            Thông tin nhiệm vụ được đọc từ máy chủ. Lệnh tiếp nhận hoặc từ chối được lưu trước khi bạn xác nhận gửi.
+            {canOpenDecline
+              ? 'Thông tin nhiệm vụ được đọc từ máy chủ. Lệnh tiếp nhận hoặc từ chối được lưu trước khi bạn xác nhận gửi.'
+              : 'Xem trạng thái và gói công việc của nhiệm vụ. Trạng thái hiện tại không cho phép chuẩn bị yêu cầu tiếp nhận hoặc từ chối mới.'}
           </Text>
         </View>
       </>

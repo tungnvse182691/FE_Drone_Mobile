@@ -1,4 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import { operatorTaskTargetBand } from '../../src/api/operator-task-view';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -215,7 +216,7 @@ export default function DroneWorkPackageScreen() {
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Dải mục tiêu</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {workPackage.task.scope[0]?.targetBand ?? '—'}
+              {operatorTaskTargetBand(workPackage.task)}
             </Text>
           </View>
         </Card>
@@ -263,7 +264,7 @@ export default function DroneWorkPackageScreen() {
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Dữ liệu bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              4K RGB + DSM (OpenDroneMap), video kèm tệp SRT/GPS
+              Video khảo sát 4K RGB kèm dữ liệu telemetry/SRT/GPS theo nhiệm vụ.
             </Text>
           </View>
           <View style={styles.infoRow}>

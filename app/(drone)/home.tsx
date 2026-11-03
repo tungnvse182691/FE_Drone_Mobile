@@ -13,7 +13,7 @@ import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
-import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
+import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -157,7 +157,7 @@ export default function DroneHomeScreen() {
 
       {/* Section Tasks */}
       <View style={styles.sectionHeader}>
-        <Text style={[typography.titleMd, styles.sectionTitle]}>Việc cần làm</Text>
+        <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ khảo sát</Text>
         <AnimatedPressable
           onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
@@ -197,10 +197,13 @@ export default function DroneHomeScreen() {
             const displayCode = operatorTaskDisplayCode(task.id);
             const statusLabel = operatorTaskStatusLabel(task.status);
             const totalSegments = task.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
-            const targetBand = task.scope?.[0]?.targetBand ?? '—';
+            const targetBand = operatorTaskTargetBand(task);
             const s = task.status?.toUpperCase();
             const isPending = s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED';
             const isOngoing = s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS';
+            const isCompleted = s === 'COMPLETED';
+            const stateColor = isPending || s === 'SUPPLEMENT_REQUIRED' || s === 'SUPPLEMENTREQUIRED'
+              ? colors.warning : isOngoing ? colors.primary : isCompleted ? colors.success : colors.secondary;
 
             return (
               <AnimatedPressable
@@ -217,22 +220,22 @@ export default function DroneHomeScreen() {
                   <View
                     style={[
                       styles.rail,
-                      { backgroundColor: isPending ? colors.warning : isOngoing ? colors.primary : colors.success },
+                      { backgroundColor: stateColor },
                     ]}
                   />
 
                   <View style={[styles.taskIconBox, { backgroundColor: colors.surfaceAlt }]}>
                     <MaterialIcons
-                      name={isPending ? 'explore' : isOngoing ? 'flight-takeoff' : 'check-circle'}
+                      name={isPending ? 'explore' : isOngoing ? 'flight-takeoff' : isCompleted ? 'check-circle' : s === 'SUBMITTED' ? 'task-alt' : 'info-outline'}
                       size={20}
-                      color={isPending ? colors.warning : isOngoing ? colors.primary : colors.success}
+                      color={stateColor}
                     />
                   </View>
 
                   <View style={styles.taskContentBox}>
                     <View style={styles.taskBadgeRow}>
                       <Chip
-                        variant={isPending ? 'status-pending' : isOngoing ? 'severity-medium' : 'approved'}
+                        variant={isCompleted ? 'approved' : isOngoing ? 'severity-medium' : 'status-pending'}
                         label={statusLabel}
                       />
                       <Text style={[typography.caption, styles.taskCodeText]}>{displayCode}</Text>
@@ -242,7 +245,7 @@ export default function DroneHomeScreen() {
                       Dải {targetBand} • {totalSegments} phân đoạn
                     </Text>
                     <Text style={[typography.caption, styles.taskSubtitleText]} numberOfLines={1}>
-                      Dự án: {task.projectId.slice(0, 8).toUpperCase()}… • Bản: {task.version ?? '—'}
+                      Dự án: {task.projectId.slice(0, 8).toUpperCase()}…
                     </Text>
                   </View>
 
@@ -375,6 +378,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.sm,

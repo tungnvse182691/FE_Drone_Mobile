@@ -134,7 +134,7 @@ export default function DroneProfileScreen() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="sync" size={18} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Cài đặt đồng bộ ngoại tuyến</Text>
+            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Hàng đợi trên thiết bị</Text>
           </View>
           <Text style={[typography.caption, styles.menuSubText]}>Xem hàng đợi</Text>
         </Pressable>

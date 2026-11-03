@@ -1,7 +1,7 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import { Button } from '../../src/components/Button';
 import React, { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -11,7 +11,7 @@ import { Chip } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
-import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
+import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -19,7 +19,7 @@ const softShadow = Platform.select({
   default: {},
 });
 
-type TabKey = 'pending' | 'ongoing' | 'completed' | 'other';
+type TabKey = 'pending' | 'ongoing' | 'submitted' | 'supplement' | 'completed' | 'other';
 
 interface SurveyRequestItem {
   id: string;
@@ -38,6 +38,8 @@ function classifyTab(status: string): TabKey {
   const s = status?.toUpperCase();
   if (s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED') return 'pending';
   if (s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS') return 'ongoing';
+  if (s === 'SUBMITTED') return 'submitted';
+  if (s === 'SUPPLEMENT_REQUIRED' || s === 'SUPPLEMENTREQUIRED') return 'supplement';
   if (s === 'COMPLETED') return 'completed';
   return 'other';
 }
@@ -45,7 +47,7 @@ function classifyTab(status: string): TabKey {
 function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
   const tab = classifyTab(dto.status);
   const totalSegments = dto.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
-  const targetBand = dto.scope?.[0]?.targetBand ?? '—';
+  const targetBand = operatorTaskTargetBand(dto);
   const isOngoing = tab === 'ongoing';
 
   return {
@@ -54,7 +56,7 @@ function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
     timeAgo: 'Đã giao',
     title: `Khảo sát dải ${targetBand} • ${totalSegments} phân đoạn`,
     location: `Mã dự án: ${dto.projectId.slice(0, 8).toUpperCase()}…`,
-    note: `Phiên bản: ${dto.version ?? '—'}`,
+    note: operatorTaskStatusLabel(dto.status),
     statusRaw: dto.status,
     statusLabel: operatorTaskStatusLabel(dto.status),
     tab,
@@ -71,8 +73,14 @@ export default function DroneRequestsScreen() {
   if (!pages.ready) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
   const pendingCount = tasks.filter((r) => r.tab === 'pending').length;
-  const ongoingCount = tasks.filter((r) => r.tab === 'ongoing').length;
-  const completedCount = tasks.filter((r) => r.tab === 'completed').length;
+  const filters: { key: TabKey; label: string }[] = [
+    { key: 'pending', label: 'Chờ nhận' },
+    { key: 'ongoing', label: 'Đang thực hiện' },
+    { key: 'submitted', label: 'Đã nộp' },
+    { key: 'supplement', label: 'Cần bổ sung' },
+    { key: 'completed', label: 'Hoàn tất' },
+    { key: 'other', label: 'Trạng thái khác' },
+  ];
 
   const filteredRequests = tasks.filter((item) => item.tab === activeTab);
 
@@ -99,37 +107,20 @@ export default function DroneRequestsScreen() {
         </Pressable>
       </View>
 
-      {/* 3 Tabs Filter Row */}
-      <View style={styles.tabRow}>
-        <Pressable
-          style={[styles.tabButton, activeTab === 'pending' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('pending')}
-        >
-          <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextActive]}>
-            Chờ nhận ({pendingCount})
-          </Text>
-        </Pressable>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow}>
+        {filters.map(filter => {
+          const label = `${filter.label} (${tasks.filter(t => t.tab === filter.key).length})`;
+          return <Pressable key={filter.key}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: activeTab === filter.key }}
+            style={[styles.tabButton, activeTab === filter.key && styles.tabButtonActive]}
+            onPress={() => setActiveTab(filter.key)}>
+            <Text style={[styles.tabText, activeTab === filter.key && styles.tabTextActive]}>{label}</Text>
+          </Pressable>;
+        })}
+      </ScrollView>
 
-        <Pressable
-          style={[styles.tabButton, activeTab === 'ongoing' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('ongoing')}
-        >
-          <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
-            Đang thực hiện ({ongoingCount})
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.tabButton, activeTab === 'completed' && styles.tabButtonActive]}
-          onPress={() => setActiveTab('completed')}
-        >
-          <Text style={[styles.tabText, activeTab === 'completed' && styles.tabTextActive]}>
-            Đã xong ({completedCount})
-          </Text>
-        </Pressable>
-      </View>
-
-      <Pressable onPress={() => setActiveTab('other')} accessibilityRole="button"><Text style={typography.caption}>Trạng thái khác ({tasks.filter(t => t.tab === 'other').length})</Text></Pressable>
       <Text style={typography.caption}>Số lượng theo danh sách đã tải; các bộ lọc áp dụng trên những trang đã tải.</Text>
       {/* Header Info Section */}
       <View style={styles.sectionHeader}>
@@ -166,7 +157,7 @@ export default function DroneRequestsScreen() {
               ? 'Hiện tại không có nhiệm vụ mới đang chờ tiếp nhận.'
               : activeTab === 'ongoing'
                 ? 'Không có nhiệm vụ nào đang trong quá trình thực hiện.'
-                : 'Chưa có nhiệm vụ nào hoàn tất trong mục này.'
+                : 'Không có nhiệm vụ thuộc trạng thái này trong các trang đã tải.'
           }
           actionLabel="Tải lại"
           onAction={() => void fetchTasks()}
@@ -180,7 +171,7 @@ export default function DroneRequestsScreen() {
               ? colors.warning
               : isOngoing
                 ? colors.primary
-                : colors.success;
+                : item.tab === 'completed' ? colors.success : item.tab === 'supplement' ? colors.warning : colors.secondary;
 
             return (
               <Pressable
@@ -207,15 +198,11 @@ export default function DroneRequestsScreen() {
                       <Text style={[typography.caption, styles.timeText]}>• {item.timeAgo}</Text>
                     </View>
 
-                    {item.tab === 'pending' && (
-                      <Chip variant="status-pending" label={item.statusLabel} />
-                    )}
-                    {item.tab === 'ongoing' && (
-                      <Chip variant="severity-medium" label={item.statusLabel} />
-                    )}
-                    {item.tab === 'completed' && (
-                      <Chip variant="approved" label={item.statusLabel} />
-                    )}
+                    <Chip
+                      variant={item.tab === 'completed' ? 'approved' : item.tab === 'ongoing' ? 'severity-medium' : 'status-pending'}
+                      label={item.statusLabel}
+                      uppercase={false}
+                    />
                   </View>
 
                   <Text style={[typography.titleMd, styles.roadTitle]}>{item.title}</Text>
@@ -302,7 +289,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tabButton: {
-    flex: 1,
+    flexShrink: 0,
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs + 2,
     alignItems: 'center',
     borderRadius: radius.sm,
@@ -387,6 +377,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     marginBottom: spacing.xs,
   },
   metaRow: {

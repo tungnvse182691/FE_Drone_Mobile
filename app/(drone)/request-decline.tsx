@@ -22,6 +22,7 @@ import {
   operatorTaskSegmentCount,
   operatorTaskStatusLabel,
   operatorTaskTargetBand,
+  operatorTaskCanRespond,
 } from '../../src/api/operator-task-view';
 import { DroneTaskCommandPanel } from '../../src/components/drone/DroneTaskCommandPanel';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -140,7 +141,9 @@ export default function DroneRequestDeclineScreen() {
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            Từ chối nhiệm vụ. Lý do từ chối được gửi tới PM để điều phối lại. Chỉ gửi sau khi bạn xác nhận; gửi lại giữ nguyên yêu cầu đã lưu.
+            {operatorTaskCanRespond(detail.status)
+              ? 'Từ chối nhiệm vụ. Lý do từ chối được gửi tới PM để điều phối lại. Chỉ gửi sau khi bạn xác nhận; gửi lại giữ nguyên yêu cầu đã lưu.'
+              : 'Trạng thái hiện tại không thể chuẩn bị yêu cầu từ chối mới. Bạn có thể đọc chi tiết nhiệm vụ và kiểm tra yêu cầu đã lưu bên dưới.'}
           </Text>
         </View>
 

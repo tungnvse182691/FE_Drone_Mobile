@@ -11,6 +11,8 @@ import type { SurveyTaskV2ResponseDto } from './droneApi';
 const STATUS_LABEL: Record<string, string> = {
   NewAssigned: 'Mới giao',
   NEW_ASSIGNED: 'Mới giao',
+  Reassigned: 'Được giao lại',
+  REASSIGNED: 'Được giao lại',
   Accepted: 'Đã nhận',
   ACCEPTED: 'Đã nhận',
   InProgress: 'Đang thực hiện',
@@ -43,7 +45,19 @@ export interface TaskWithScopeLike {
 }
 
 export function operatorTaskTargetBand(task: TaskWithScopeLike): string {
-  return task.scope[0]?.targetBand ?? '—';
+  // Display only. Wire values remain unchanged in scope, commands and guards.
+  const labels: Record<string, string> = {
+    SURFACE: 'Mặt đường',
+    LEFT_EDGE: 'Mép trái',
+    RIGHT_EDGE: 'Mép phải',
+  };
+  const band = task.scope[0]?.targetBand;
+  return Object.prototype.hasOwnProperty.call(labels, band) ? labels[band] : 'Chưa xác định';
+}
+
+/** Presentation prerequisite only; the journal independently revalidates before preparation. */
+export function operatorTaskCanRespond(status: string): boolean {
+  return status === 'NEW_ASSIGNED' || status === 'REASSIGNED';
 }
 
 export function operatorTaskSegmentCount(task: TaskWithScopeLike): number {
