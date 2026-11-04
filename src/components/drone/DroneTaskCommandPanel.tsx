@@ -11,7 +11,9 @@ import { typography, spacing, colors } from '../../design-tokens';
 type Runtime = Awaited<ReturnType<typeof openDroneTaskJournal>>;
 type Saved = Awaited<ReturnType<Runtime['read']>>;
 /** One dispatcher for detail/decline/recovery. Opening the panel never posts. */
-export function DroneTaskCommandPanel({taskId, operation}: {taskId: string; operation: 'accept' | 'decline'}) {
+export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand}: {
+  taskId: string; operation: 'accept' | 'decline'; collapsed?: boolean; onExpand?: () => void;
+}) {
   const scope = useOperatorReadScope(taskId);
   const [runtime,setRuntime] = useState<Runtime | null>(null), [saved,setSaved] = useState<Saved>(null);
   const [ready,setReady] = useState(false), [busy,setBusy] = useState(false), [reason,setReason] = useState('');
@@ -67,6 +69,16 @@ export function DroneTaskCommandPanel({taskId, operation}: {taskId: string; oper
   };
   if (dataScope !== scope.key) return <Text>Đang khôi phục lịch sử yêu cầu…</Text>;
   if(!scope.key)return <Text>Cần phiên Operator hợp lệ.</Text>;
+  // Keep the journal mounted while collapsed. A saved command or a storage
+  // failure must remain visible independently of the current task GET/status.
+  if (collapsed) return saved && saved.phase !== 'RECEIPT' || error ?
+    <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
+      <View accessibilityRole="alert" testID="command-recovery-notice">
+        <Text style={typography.titleMd}>{saved?.phase === 'PREPARED' ? 'Đã lưu lệnh, chưa gửi' : saved && saved.phase !== 'RECEIPT' ? 'Chưa rõ kết quả lệnh đã gửi' : 'Cần kiểm tra lịch sử yêu cầu'}</Text>
+        <Text style={typography.bodyMd}>{error ?? 'Lệnh gốc vẫn được giữ. Mở để kiểm tra; ứng dụng không tự gửi lại.'}</Text>
+      </View>
+      <Button variant="secondary" title="Xem lệnh cần đối soát" onPress={() => onExpand?.()} />
+    </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
   return <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
     <Text style={typography.titleMd}>Tiếp nhận và phản hồi nhiệm vụ</Text>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
@@ -107,7 +119,8 @@ export function DroneTaskRecoveryList() {
   if (!scope.key) return null;
   return <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
     <Text style={typography.titleMd}>Yêu cầu nhiệm vụ đã lưu</Text>
-    <Text style={typography.caption}>Lịch sử trên thiết bị của tài khoản và môi trường hiện tại. Mở yêu cầu để kiểm tra hoặc xác nhận gửi lại lệnh gốc.</Text>
+    <Text style={typography.caption}>Theo tài khoản và môi trường hiện tại.</Text>
+    {dataScope===scope.key && rows.length > 0 ? <Text style={typography.caption}>Mở yêu cầu để kiểm tra hoặc xác nhận gửi lại lệnh gốc.</Text> : null}
     {dataScope===scope.key ? rows.map(row=><Button key={row.taskId} variant="secondary"
       title={`${operatorTaskDisplayCode(row.taskId)} · ${row.operation==='accept'?'Tiếp nhận':'Từ chối'} · ${row.phase==='RECEIPT'?'Có kết quả máy chủ':row.phase==='PREPARED'?'Chưa gửi':'Chưa rõ kết quả'}`}
       onPress={()=>{if(scope.capture()())router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(row.taskId)}`);}} />):null}

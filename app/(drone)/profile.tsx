@@ -51,8 +51,6 @@ export default function DroneProfileScreen() {
         </View>
       </View>
 
-      <Text style={[typography.caption, styles.versionFootnote]}>Chưa có dữ liệu thống kê bay và chứng nhận từ máy chủ.</Text>
-
       {/* Hardware / Devices Card */}
       <Card style={styles.deviceCard}>
         <View style={styles.deviceHeader}>
@@ -60,20 +58,7 @@ export default function DroneProfileScreen() {
           <Text style={[typography.labelSm, styles.deviceTitle]}>THIẾT BỊ PHÂN BỔ HIỆN TRƯỜNG</Text>
         </View>
 
-        <View style={styles.deviceList}>
-          <View style={styles.deviceRow}>
-            <MaterialIcons name="flight-takeoff" size={16} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.deviceName]}>
-              Thiết bị bay: Chưa có dữ liệu phân bổ
-            </Text>
-          </View>
-          <View style={styles.deviceRow}>
-            <MaterialIcons name="cell-tower" size={16} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.deviceName]}>
-              Trạm RTK: Chưa có dữ liệu
-            </Text>
-          </View>
-        </View>
+        <Text style={[typography.caption, { color: colors.secondary }]}>Chưa có dữ liệu thiết bị bay, RTK, thống kê bay và chứng nhận từ máy chủ.</Text>
       </Card>
 
       {/* Settings Menu List */}

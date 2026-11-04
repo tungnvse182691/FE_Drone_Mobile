@@ -134,7 +134,7 @@ function DroneLogContent({ scope }: { scope: string }) {
   </SafeAreaScreen>;
 }
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingVertical: spacing.md, minHeight: 48 },
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', paddingBottom: spacing.sm, minHeight: 48 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
   taskRow: { minHeight: 56, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 4 },
   note: { color: colors.secondary, marginBottom: spacing.sm },

@@ -168,11 +168,11 @@ export default function DroneRequestsScreen() {
                     />
                   </View>
 
-                  <Text style={[typography.titleMd, styles.roadTitle]}>{item.title}</Text>
+                  <Text style={[typography.bodyMd, styles.roadTitle]}>{item.title}</Text>
 
                   <View style={styles.locationRow}>
                     <MaterialIcons name="folder-open" size={16} color={colors.secondary} />
-                    <Text style={[typography.bodyMd, styles.locationText]}>{item.location}</Text>
+                    <Text style={[typography.caption, styles.locationText]}>{item.location}</Text>
                   </View>
 
                   <View style={styles.cardFooter}>
@@ -282,6 +282,7 @@ const styles = StyleSheet.create({
   },
   roadTitle: {
     color: colors.neutral,
+    fontWeight: '600',
     marginBottom: spacing.xs,
   },
   locationRow: {

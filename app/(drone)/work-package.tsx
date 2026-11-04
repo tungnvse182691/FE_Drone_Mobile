@@ -208,11 +208,12 @@ export default function DroneWorkPackageScreen() {
         <Card style={styles.card}>
           <Text style={[typography.labelSm, styles.sectionTitle]}>PHẠM VI ĐÃ GHIM</Text>
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Số phân đoạn</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              {workPackage.geometryRefs.length ? `${workPackage.geometryRefs.reduce((count, entry) => count + entry.segmentIds.length, 0)}` : '—'}
+            <Text style={[typography.caption, styles.infoLabel]}>Phân đoạn trong gói đang xem</Text>
+            <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>
+              {ref ? `${ref.segmentIds.length}` : '—'}
             </Text>
           </View>
+          {ref ? <Text style={[typography.caption, { color: colors.secondary, marginTop: spacing.sm }]}>Gói hình học 1/{workPackage.geometryRefs.length} · Chỉ hiển thị phân đoạn đã ghim của gói này.{workPackage.geometryRefs.length > 1 ? ' Các gói còn lại nằm trong thông tin kỹ thuật.' : ''}</Text> : null}
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Dải mục tiêu</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
@@ -227,7 +228,7 @@ export default function DroneWorkPackageScreen() {
             <View style={styles.chipRow}>
               <Chip variant="status-pending" label={geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
             </View>
-            <Text style={[typography.caption, styles.noticeText]}>Hình học của gói đầu tiên đã ghim.</Text>
+            <Text style={[typography.caption, styles.noticeText]}>Phiên bản tuyến: {geometry.route.versionNo} · Gói hình học 1/{workPackage.geometryRefs.length}</Text>
             {geometry.segmentSet.segments.filter(segment => ref?.segmentIds.includes(segment.id)).map(segment => (
               <View key={segment.id} style={styles.infoRow}>
                 <Text style={[typography.bodyMd, styles.infoValue]}>{segment.code?.trim() || 'Phân đoạn chưa có mã'}</Text>
@@ -270,6 +271,7 @@ export default function DroneWorkPackageScreen() {
           {technicalExpanded ? <View style={{ gap: spacing.sm }}>
             <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage.scopeVersion ?? '—'}</Text>
             {workPackage.geometryRefs.map((entry, index) => <View key={index} style={{ gap: spacing.xs }}>
+              <Text style={typography.labelSm}>Gói hình học {index + 1}/{workPackage.geometryRefs.length}{index === 0 ? ' · Đang xem' : ''}</Text>
               <Text selectable style={typography.caption}>Tuyến: {entry.routeVersionId}</Text>
               <Text selectable style={typography.caption}>Bộ phân đoạn: {entry.segmentSetId}</Text>
               <Text selectable style={typography.caption}>Phân đoạn: {entry.segmentIds.join(', ')}</Text>
@@ -365,7 +367,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   infoRow: {
-    flexDirection: 'column',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.xs,
@@ -376,6 +379,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     color: colors.secondary,
+    flexBasis: '45%',
     flexShrink: 1,
   },
   infoValue: {

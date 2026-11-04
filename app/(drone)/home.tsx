@@ -105,10 +105,6 @@ export default function DroneHomeScreen() {
           </View>
         </View>
 
-        <View style={styles.telemetryStripRow}>
-          <Text style={[typography.caption, styles.telemetryTagText]}>Thời tiết: Chưa có dữ liệu</Text>
-          <Text style={[typography.caption, styles.telemetryTagText]}>Thiết bị: Chưa có dữ liệu</Text>
-        </View>
       </Card>
 
       {hasMore ? <Button title="Xem tiếp nhiệm vụ" variant="secondary" onPress={() => router.push('/(drone)/requests')} /> : null}
@@ -151,7 +147,7 @@ export default function DroneHomeScreen() {
           accessibilityRole="button"
           style={styles.seeAllPress}
         >
-          <Text style={[typography.caption, styles.seeAll]}>Xem danh sách nhiệm vụ</Text>
+          <Text style={[typography.caption, styles.seeAll]}>Xem tất cả</Text>
           <MaterialIcons name="chevron-right" size={16} color={colors.primaryDark} />
         </AnimatedPressable>
       </View>
@@ -358,6 +354,7 @@ const styles = StyleSheet.create({
     color: colors.neutral,
   },
   seeAllPress: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,

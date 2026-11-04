@@ -232,20 +232,18 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       </Card>
 
       {/* Section Title */}
-      <View style={styles.sectionHeader}>
+      {activeItems.length > 0 ? <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
           {queueTab === 'pending' ? 'CÁC MỤC CHỜ XỬ LÝ' : 'BẢN GHI CỤC BỘ'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
           {queueTab === 'pending' ? 'Yêu cầu vẫn được giữ trên thiết bị' : 'Chưa xác minh biên nhận máy chủ'}
         </Text>
-      </View>
+      </View> : null}
 
       {/* Queue Items */}
       <View style={styles.itemsList}>
-        {activeItems.length === 0 ? (
-          <Text style={[typography.caption, styles.sectionSub]}>Không có mục nào trong danh sách</Text>
-        ) : (
+        {activeItems.length === 0 ? null : (
           activeItems.map((item) => (
             <Card key={item.id} style={styles.itemCard}>
               <View style={styles.itemMain}>

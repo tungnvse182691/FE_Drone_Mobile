@@ -230,7 +230,7 @@ export default function DroneUploadScreen() {
           </View>
         </View>
         <View style={styles.statusBadge}>
-          <Text style={styles.statusBadgeText}>4K RGB + ODM</Text>
+          <Text style={styles.statusBadgeText}>Video 4K RGB</Text>
         </View>
       </Card>
 
@@ -361,7 +361,7 @@ export default function DroneUploadScreen() {
               />
             </View>
             <Text style={[typography.caption, styles.stepLabel]}>ĐÃ XÁC MINH</Text>
-            <Text style={styles.stepSubLabel}>Máy chủ ODM</Text>
+            <Text style={styles.stepSubLabel}>Máy chủ</Text>
           </View>
         </View>
 

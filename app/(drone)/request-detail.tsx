@@ -395,6 +395,8 @@ export default function DroneRequestDetailScreen() {
         </View>
       }
     >
+      {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+        collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} /> : null}
       {renderBody()}
       {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
       {scope.key && target ? <>
@@ -403,9 +405,6 @@ export default function DroneRequestDetailScreen() {
           <Text style={[typography.labelSm, { flex: 1 }]}>Lệnh và đối soát trên thiết bị</Text>
           <MaterialIcons name={commandsExpanded ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
         </Pressable> : null}
-        <View style={!canOpenDecline && !commandsExpanded ? { display: 'none' } : undefined}>
-          <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept" />
-        </View>
       </> : null}
     </SafeAreaScreen>
   );
