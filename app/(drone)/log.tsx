@@ -1,6 +1,7 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -93,19 +94,15 @@ function DroneLogContent({ scope }: { scope: string }) {
   };
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhật ký" />}>
     <View style={styles.tabs}>
-      <Pressable onPress={() => router.push('/(drone)/requests')} accessibilityRole="button"><Text style={typography.labelSm}>Yêu cầu mới</Text></Pressable>
+      <Pressable style={styles.taskLink} onPress={() => router.push('/(drone)/requests')} accessibilityRole="button"><Text style={typography.labelSm}>Nhiệm vụ</Text></Pressable>
       <Text style={[typography.labelSm, styles.active]}>Nhật ký lệnh</Text>
     </View>
+    <View style={styles.sectionHeading}><MaterialIcons name="pending-actions" size={20} color={colors.primary} /><Text style={typography.titleMd}>Lệnh trên thiết bị</Text></View>
     <DroneTaskRecoveryList />
-    <Card style={styles.card}>
-      <Text style={typography.titleMd}>Lịch sử chuyến bay</Text>
-      <Text style={typography.bodyMd}>Chưa có nguồn lịch sử chuyến bay từ máy chủ. Không có dữ liệu để hiển thị.</Text>
-      <Text style={typography.caption}>Trạng thái nhiệm vụ và phiên tải lên được đọc riêng bên dưới; không thay thế lịch sử bay hoặc biên nhận nộp bộ dữ liệu.</Text>
-    </Card>
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Nhiệm vụ được giao</Text>
       <Text style={typography.caption}>Danh sách nhiệm vụ đã tải. Chọn để xem trạng thái và phạm vi hiện hành.</Text>
-      {tasks.map(task => <Pressable key={task.id} accessibilityRole="button" onPress={() => { if (active()) router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(task.id)}`); }}>
+      {tasks.map(task => <Pressable key={task.id} style={styles.taskRow} accessibilityRole="button" onPress={() => { if (active()) router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(task.id)}`); }}>
         <Text style={typography.labelLg}>{operatorTaskDisplayCode(task.id)}</Text>
         <Text style={typography.bodyMd}>{operatorTaskStatusLabel(task.status)}</Text>
       </Pressable>)}
@@ -114,6 +111,8 @@ function DroneLogContent({ scope }: { scope: string }) {
       {pages.nextCursor ? <Button title={listError ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.loadMore()} /> : !pages.loading && !listError ? <Text>Đã tải hết danh sách nhiệm vụ.</Text> : null}
       <Button title="Đọc lại danh sách" variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.refresh()} />
     </Card>
+    <View style={styles.sectionHeading}><MaterialIcons name="cloud-done" size={20} color={colors.secondary} /><Text style={typography.titleMd}>Kết quả từ máy chủ</Text></View>
+    <Text style={[typography.caption, styles.note]}>Tra cứu trạng thái nhiệm vụ, tệp và bộ dữ liệu. Chưa có nguồn lịch sử chuyến bay.</Text>
     <Button title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
     {advanced ? <>
     <Card style={styles.card}>
@@ -135,8 +134,12 @@ function DroneLogContent({ scope }: { scope: string }) {
   </SafeAreaScreen>;
 }
 const styles = StyleSheet.create({
-  tabs: { flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md },
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingVertical: spacing.md, minHeight: 48 },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
+  taskRow: { minHeight: 56, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 4 },
+  note: { color: colors.secondary, marginBottom: spacing.sm },
   active: { color: colors.primaryDark },
+  taskLink: { minHeight: 48, justifyContent: 'center', paddingRight: spacing.md },
   card: { marginBottom: spacing.md, gap: spacing.sm },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, color: colors.neutral },
 });

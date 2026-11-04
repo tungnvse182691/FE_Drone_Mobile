@@ -80,16 +80,12 @@ export default function DroneHomeScreen() {
       {/* Greeting Header */}
       <View style={styles.greetingHeader}>
         <View style={styles.greetingTextGroup}>
-          <Text style={[typography.headlineLg, styles.greetingName]}>
+          <Text style={[typography.titleMd, styles.greetingName]}>
             Chào, {user?.full_name ? user.full_name.replace(/\s*\([^)]*\)/g, '').trim() : 'Kỹ thuật viên Drone'}
           </Text>
           <Text style={[typography.caption, styles.greetingMeta]}>
             Phi công hiện trường • {user?.phone_or_email ?? 'RoadGuard'}
           </Text>
-        </View>
-        <View style={styles.readyBadge}>
-          <View style={styles.readyDot} />
-          <Text style={[typography.labelSm, styles.readyText]}>Chưa xác nhận an toàn</Text>
         </View>
       </View>
 
@@ -109,17 +105,9 @@ export default function DroneHomeScreen() {
           </View>
         </View>
 
-        <View style={styles.metricDivider} />
-
         <View style={styles.telemetryStripRow}>
-          <View style={styles.telemetryTag}>
-            <MaterialIcons name="cloud-queue" size={15} color={colors.secondary} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Thời tiết: Chưa có dữ liệu</Text>
-          </View>
-          <View style={styles.telemetryTag}>
-            <MaterialIcons name="battery-unknown" size={15} color={colors.secondary} />
-            <Text style={[typography.caption, styles.telemetryTagText]}>Thiết bị: Chưa có dữ liệu</Text>
-          </View>
+          <Text style={[typography.caption, styles.telemetryTagText]}>Thời tiết: Chưa có dữ liệu</Text>
+          <Text style={[typography.caption, styles.telemetryTagText]}>Thiết bị: Chưa có dữ liệu</Text>
         </View>
       </Card>
 
@@ -199,11 +187,8 @@ export default function DroneHomeScreen() {
             const totalSegments = task.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
             const targetBand = operatorTaskTargetBand(task);
             const s = task.status?.toUpperCase();
-            const isPending = s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED';
             const isOngoing = s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS';
             const isCompleted = s === 'COMPLETED';
-            const stateColor = isPending || s === 'SUPPLEMENT_REQUIRED' || s === 'SUPPLEMENTREQUIRED'
-              ? colors.warning : isOngoing ? colors.primary : isCompleted ? colors.success : colors.secondary;
 
             return (
               <AnimatedPressable
@@ -217,21 +202,6 @@ export default function DroneHomeScreen() {
                 accessibilityRole="button"
               >
                 <Card style={styles.taskCardItem}>
-                  <View
-                    style={[
-                      styles.rail,
-                      { backgroundColor: stateColor },
-                    ]}
-                  />
-
-                  <View style={[styles.taskIconBox, { backgroundColor: colors.surfaceAlt }]}>
-                    <MaterialIcons
-                      name={isPending ? 'explore' : isOngoing ? 'flight-takeoff' : isCompleted ? 'check-circle' : s === 'SUBMITTED' ? 'task-alt' : 'info-outline'}
-                      size={20}
-                      color={stateColor}
-                    />
-                  </View>
-
                   <View style={styles.taskContentBox}>
                     <View style={styles.taskBadgeRow}>
                       <Chip
@@ -262,9 +232,6 @@ export default function DroneHomeScreen() {
 
 const styles = StyleSheet.create({
   greetingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     marginBottom: spacing.md,
   },
   greetingTextGroup: {
@@ -361,7 +328,8 @@ const styles = StyleSheet.create({
   },
   quickButton: {
     flex: 1,
-    flexDirection: 'row',
+    minWidth: 0,
+    minHeight: 64,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -373,6 +341,8 @@ const styles = StyleSheet.create({
     ...softShadow,
   },
   quickButtonText: {
+    textAlign: 'center',
+    flexShrink: 1,
     color: colors.primaryDark,
     fontWeight: '600',
   },
@@ -413,7 +383,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: spacing.lg,
+    paddingLeft: spacing.md,
     paddingRight: spacing.sm,
     paddingVertical: spacing.md,
     ...softShadow,
@@ -435,9 +405,11 @@ const styles = StyleSheet.create({
   },
   taskContentBox: {
     flex: 1,
+    minWidth: 0,
   },
   taskBadgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.xs,
     marginBottom: 4,

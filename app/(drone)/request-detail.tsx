@@ -199,6 +199,9 @@ export default function DroneRequestDetailScreen() {
     }
   };
 
+  const [technical, setTechnical] = useState(false);
+  const [commandsExpanded, setCommandsExpanded] = useState(false);
+
   const renderBody = () => {
     if (!scope.key || dataScope !== scope.key || loading) {
       return (
@@ -221,15 +224,13 @@ export default function DroneRequestDetailScreen() {
       );
     }
 
-    const s = task.status?.toUpperCase();
-
     return (
       <>
         <Card style={styles.headerCard}>
           <View style={styles.headerTitleRow}>
             <View style={styles.headerTextGroup}>
               <Text style={[typography.caption, styles.codeLabel]}>MÃ NHIỆM VỤ: {displayCode}</Text>
-              <Text style={[typography.titleLg, styles.roadTitle]}>Nhiệm vụ khảo sát</Text>
+              <Text style={[typography.titleMd, styles.roadTitle]}>Nhiệm vụ khảo sát</Text>
             </View>
             <Chip
               variant={task.status === 'REJECTED' ? 'rejected' : 'status-pending'}
@@ -249,7 +250,7 @@ export default function DroneRequestDetailScreen() {
         <Card style={styles.paramCard}>
           <View style={styles.paramCardHeader}>
             <MaterialIcons name="assignment" size={18} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.paramHeaderTitle]}>PHẠM VI ĐƯỢC GHIM</Text>
+            <Text style={[typography.labelSm, styles.paramHeaderTitle]}>Phạm vi khảo sát</Text>
           </View>
 
           <View style={styles.paramGrid}>
@@ -266,25 +267,7 @@ export default function DroneRequestDetailScreen() {
                 {formatDateTime(workPackage?.dueAt ?? null)}
               </Text>
             </View>
-
-            <View style={styles.paramItem}>
-              <Text style={[typography.caption, styles.paramLabel]}>Dải mục tiêu</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>
-                {operatorTaskTargetBand(task)}
-              </Text>
-            </View>
           </View>
-
-          {workPackage ? (
-            <View style={styles.techDetailBox}>
-              <View style={styles.techRow}>
-                <MaterialIcons name="lock-outline" size={16} color={colors.primary} />
-                <Text style={[typography.caption, styles.techText]}>
-                  Phạm vi chỉ đọc, ghim theo nhiệm vụ; xem chi tiết ở Gói công việc.
-                </Text>
-              </View>
-            </View>
-          ) : null}
         </Card>
 
         <Card style={styles.accessPointCard}>
@@ -292,7 +275,7 @@ export default function DroneRequestDetailScreen() {
             <View style={styles.accessPointHeaderLeft}>
               <MaterialIcons name="flight-takeoff" size={18} color={colors.primary} />
               <Text style={[typography.labelSm, styles.accessPointHeaderTitle]}>
-                ĐIỂM TIẾP CẬN CẤT-HẠ CÁNH
+                Điểm tiếp cận cất-hạ cánh
               </Text>
             </View>
           </View>
@@ -362,10 +345,22 @@ export default function DroneRequestDetailScreen() {
 
           <Text style={[typography.caption, styles.syncFootnote]}>
             {canOpenDecline
-              ? 'Thông tin nhiệm vụ được đọc từ máy chủ. Lệnh tiếp nhận hoặc từ chối được lưu trước khi bạn xác nhận gửi.'
-              : 'Xem trạng thái và gói công việc của nhiệm vụ. Trạng thái hiện tại không cho phép chuẩn bị yêu cầu tiếp nhận hoặc từ chối mới.'}
+              ? 'Xác nhận trước khi gửi lệnh tiếp nhận hoặc từ chối.'
+              : 'Trạng thái hiện tại không cho phép tiếp nhận hoặc từ chối mới.'}
           </Text>
         </View>
+        <Card style={styles.headerCard}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật" accessibilityState={{ expanded: technical }} onPress={() => setTechnical(value => !value)} style={styles.technicalToggle}>
+            <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
+            <Text style={[typography.labelSm, { flex: 1 }]}>Thông tin kỹ thuật</Text>
+            <MaterialIcons name={technical ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
+          </Pressable>
+          {technical ? <View style={styles.techDetailBox}>
+            <Text selectable style={typography.caption}>Mã máy chủ: {task.id}</Text>
+            <Text selectable style={typography.caption}>Phiên bản nhiệm vụ: {task.version}</Text>
+            <Text style={typography.caption}>Phạm vi được ghim theo nhiệm vụ; xem các phân đoạn ở Gói công việc.</Text>
+          </View> : null}
+        </Card>
       </>
     );
   };
@@ -402,7 +397,16 @@ export default function DroneRequestDetailScreen() {
     >
       {renderBody()}
       {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
-      {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept" /> : null}
+      {scope.key && target ? <>
+        {!canOpenDecline ? <Pressable accessibilityRole="button" accessibilityLabel="Lệnh và đối soát" accessibilityState={{ expanded: commandsExpanded }} onPress={() => setCommandsExpanded(value => !value)} style={styles.technicalToggle}>
+          <MaterialIcons name="history" size={20} color={colors.secondary} />
+          <Text style={[typography.labelSm, { flex: 1 }]}>Lệnh và đối soát trên thiết bị</Text>
+          <MaterialIcons name={commandsExpanded ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
+        </Pressable> : null}
+        <View style={!canOpenDecline && !commandsExpanded ? { display: 'none' } : undefined}>
+          <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept" />
+        </View>
+      </> : null}
     </SafeAreaScreen>
   );
 }
@@ -429,8 +433,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   circleIconButton: {
-    width: 36,
-    height: 36,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -439,6 +443,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   topBarCenter: {
+    flex: 1,
+    minWidth: 0,
     alignItems: 'center',
   },
   topBarCode: {
@@ -498,7 +504,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   headerTitleRow: {
-    flexDirection: 'row',
+    gap: spacing.sm,
+    flexDirection: 'column',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
@@ -558,7 +565,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   paramItem: {
-    width: '48%',
+    flexGrow: 1,
+    flexBasis: '45%',
+    minWidth: 0,
     backgroundColor: colors.surfaceAlt,
     padding: spacing.sm,
     borderRadius: radius.sm,
@@ -590,6 +599,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   accessPointHeaderTitle: {
+    flex: 1,
     color: colors.secondary,
     fontWeight: '700',
   },
@@ -854,6 +864,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: {
     gap: spacing.sm,
     marginBottom: spacing.xl,

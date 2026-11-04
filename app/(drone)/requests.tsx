@@ -143,14 +143,6 @@ export default function DroneRequestsScreen() {
       ) : (
         <View style={styles.listContainer}>
           {filteredRequests.map((item) => {
-            const isOngoing = item.tab === 'ongoing';
-            const isPending = item.tab === 'pending';
-            const railColor = isPending
-              ? colors.warning
-              : isOngoing
-                ? colors.primary
-                : item.tab === 'completed' ? colors.success : item.tab === 'supplement' ? colors.warning : colors.secondary;
-
             return (
               <Pressable
                 key={item.id}
@@ -164,7 +156,6 @@ export default function DroneRequestsScreen() {
                 accessibilityLabel={`Xem nhiệm vụ ${item.code}, ${item.statusLabel}`}
               >
                 <Card style={styles.requestCard}>
-                  <View style={[styles.rail, { backgroundColor: railColor }]} />
                   <View style={styles.cardHeader}>
                     <View style={styles.metaRow}>
                       <Text style={[typography.caption, styles.codeText]}>{item.code}</Text>
@@ -262,7 +253,8 @@ const styles = StyleSheet.create({
   requestCard: {
     position: 'relative',
     overflow: 'hidden',
-    paddingLeft: spacing.lg,
+    padding: spacing.md,
+    elevation: 1,
   },
   rail: {
     position: 'absolute',
