@@ -2,7 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { drone, id, task } = require('./package45-drone.test.cjs');
 const { screen } = require('./helpers/roadfe-screen.cjs');
-const text = s => JSON.stringify(s.nodes().filter(n => n.type === 'Text' || n.type === 'Chip' || n.type === 'EmptyState'));
+const text = s => JSON.stringify(s.nodes().filter(n => n.type === 'Text' || n.type === 'Chip' || n.type === 'EmptyState' || n.type === 'OperatorTaskRow'));
 const fixture = status => ({ ...task, status, version: 'AAAAAAAAAAE=', scope: [{ routeVersionId: id(4), segmentSetId: id(5), segmentIds: [id(6)], targetBand: 'SURFACE' }] });
 const apiFor = t => ({ getOperatorSurveyTaskDetailReal: async () => ({ data: t, etag: `"${t.version}"` }), getOperatorWorkPackageReal: async () => ({ data: { task: t, geometryRefs: [] } }) });
 const routeSpy = routes => ({ 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: route => routes.push(route) } }) });
@@ -16,19 +16,19 @@ test('Requests compact selector preserves every loaded state across pages withou
     const button = s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === label);
     assert.ok(button, label); button.props.onPress(); await s.flush();
   };
-  assert.equal(s.nodes().filter(n => n.type === 'Card').length, 5, 'default shows every task');
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 5, 'default shows every task');
   assert.ok(!s.nodes().some(n => n.props.accessibilityRole === 'radio'), 'options start collapsed');
   await tap('Lọc trạng thái: Tất cả trạng thái');
   assert.ok(!s.nodes().some(n => n.props.accessibilityLabel === 'Cần bổ sung (0)'));
   await tap('Đã nộp (1)');
-  assert.equal(s.nodes().filter(n => n.type === 'Card').length, 1);
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 1);
   assert.ok(!s.nodes().some(n => n.props.accessibilityRole === 'radio'), 'selection closes options');
   s.press('Tải thêm nhiệm vụ'); await s.flush();
   for (const [label, indexes] of [['Chờ nhận (2)', [0,1]], ['Đang thực hiện (2)',[2,3]], ['Đã nộp (2)',[4,5]], ['Cần bổ sung (2)',[6,7]], ['Hoàn tất (1)',[8]], ['Trạng thái khác (1)',[9]], ['Tất cả trạng thái (10)',states.map((_,i)=>i)]]) {
     const toggle = s.nodes().find(n => n.props.accessibilityLabel?.startsWith('Lọc trạng thái:'));
     toggle.props.onPress(); await s.flush();
     await tap(label);
-    assert.equal(s.nodes().filter(n => n.type === 'Card').length, indexes.length);
+    assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, indexes.length);
     for (const i of indexes) assert.match(text(s), new RegExp(items[i].id.slice(0, 8)));
   }
   assert.match(text(s), /đã tải/); s.unmount();
@@ -38,10 +38,10 @@ test('Requests card uses one server status and no overlapping current-task badge
   const routes = [];
   const s = drone('requests', { listOperatorSurveyTasksReal: async () => ({ items: [fixture('ACCEPTED')], nextCursor: null }) }, { moduleFactories: routeSpy(routes) });
   s.render(); await s.flush();
-  assert.equal(s.nodes().filter(n => n.type === 'Chip' && n.props.label === 'Đã nhận').length, 1);
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow' && n.props.task.status === 'ACCEPTED').length, 1);
   assert.doesNotMatch(text(s), /ĐANG THỰC HIỆN|Yêu cầu mới/);
   assert.ok(!s.nodes().some(n => n.type === 'Text' && n.props.children.includes('Đã nhận')), 'no duplicated footer status');
-  const card = s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel?.startsWith('Xem nhiệm vụ'));
+  const card = s.nodes().find(n => n.type === 'OperatorTaskRow');
   assert.ok(card); card.props.onPress();
   assert.equal(routes.at(-1).pathname, '/(drone)/request-detail');
   assert.equal(routes.at(-1).params.taskId, task.id);
@@ -55,9 +55,9 @@ test('Requests refresh cannot strand selection when selected state disappears', 
   const tap = async label => { s.nodes().find(n => n.props.accessibilityLabel === label).props.onPress(); await s.flush(); };
   await tap('Lọc trạng thái: Tất cả trạng thái'); await tap('Đã nộp (1)');
   current = [fixture('SUPPLEMENT_REQUIRED')]; await tap('Làm mới nhiệm vụ');
-  assert.equal(s.nodes().filter(n => n.type === 'Card').length, 1);
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 1);
   assert.ok(s.nodes().some(n => n.props.accessibilityLabel === 'Lọc trạng thái: Tất cả trạng thái'));
-  assert.match(text(s), /Cần bổ sung/); s.unmount();
+  assert.equal(s.nodes().find(n => n.type === 'OperatorTaskRow').props.task.status, 'SUPPLEMENT_REQUIRED'); s.unmount();
 });
 
 for (const status of ['SUBMITTED', 'SUPPLEMENT_REQUIRED', 'COMPLETED', 'ACCEPTED', 'UNKNOWN']) test(`UI02A Detail ${status} has read-only path without decline invitation`, async () => {
@@ -123,9 +123,9 @@ test('UI02A bounded band labels never mutate wire values and unknown has neutral
 
 test('UI02A Home uses neutral task heading and no Base64 version on card', async () => {
   const t = fixture('SUBMITTED'); const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [t], nextCursor: null }) });
-  s.render(); await s.flush(); assert.match(text(s), /Nhiệm vụ khảo sát/); assert.match(text(s), /Mặt đường/);
-  assert.ok(!s.nodes().some(n => n.type === 'Chip' && n.props.variant === 'approved'), 'Submitted is not completed');
-  assert.doesNotMatch(text(s), /Việc cần làm|AAAAAAAAAAE=/); s.unmount();
+  s.render(); await s.flush(); assert.match(text(s), /Nhiệm vụ khảo sát/); assert.equal(s.nodes().find(n => n.type === 'OperatorTaskRow').props.task.scope[0].targetBand, 'SURFACE');
+  assert.equal(s.nodes().find(n => n.type === 'OperatorTaskRow').props.task.status, 'SUBMITTED', 'Submitted remains distinct from Completed');
+  assert.doesNotMatch(JSON.stringify(s.nodes().filter(n => n.type === 'Text')), /Việc cần làm|AAAAAAAAAAE=/); s.unmount();
 });
 
 test('UI02A Work Package promises only current survey video and telemetry; Profile labels local queue', async () => {

@@ -9,12 +9,12 @@ test('DRONE-ANDROID-01 Home names the task-list shortcut honestly and keeps its 
     moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: route => routes.push(route) } }) },
   });
   s.render(); await s.flush();
-  const shortcut = s.nodes().find(n => n.type === 'AnimatedPressable' && JSON.stringify(n.props.children).includes('Nhiệm vụ'));
+  const shortcut = s.nodes().find(n => n.type === 'AnimatedPressable' && n.props.accessibilityLabel === 'Xem tất cả nhiệm vụ khảo sát');
   assert.ok(shortcut, 'task-list shortcut must not promise SD ingestion');
   assert.doesNotMatch(allText(s), /Nạp thẻ SD/);
   // UI03 omits unavailable telemetry instead of repeating empty placeholders.
   assert.doesNotMatch(allText(s), /Thời tiết:|Thiết bị:|An toàn bay|Sẵn sàng bay/);
-  assert.match(allText(s), /nhiệm vụ trong danh sách đã tải/);
+  assert.match(allText(s), /Đã tải/);
   shortcut.props.onPress(); assert.equal(routes.at(-1), '/(drone)/requests');
   s.unmount();
 });

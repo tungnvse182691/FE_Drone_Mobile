@@ -1,28 +1,17 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import { Button } from '../../src/components/Button';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
-import { Card } from '../../src/components/Card';
-import { Chip } from '../../src/components/Chip';
+import { OperatorTaskRow, OperatorTaskSkeleton } from '../../src/components/drone/OperatorTaskRow';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
-import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBand } from '../../src/api/operator-task-view';
+import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
 
 type TabKey = 'pending' | 'ongoing' | 'submitted' | 'supplement' | 'completed' | 'other';
-
-interface SurveyRequestItem {
-  id: string;
-  code: string;
-  title: string;
-  location: string;
-  statusLabel: string;
-  tab: TabKey;
-}
 
 function classifyTab(status: string): TabKey {
   const s = status?.toUpperCase();
@@ -34,27 +23,12 @@ function classifyTab(status: string): TabKey {
   return 'other';
 }
 
-function mapDtoToItem(dto: SurveyTaskV2ResponseDto): SurveyRequestItem {
-  const tab = classifyTab(dto.status);
-  const totalSegments = dto.scope?.reduce((acc, s) => acc + (s.segmentIds?.length ?? 0), 0) ?? 0;
-  const targetBand = operatorTaskTargetBand(dto);
-
-  return {
-    id: dto.id,
-    code: operatorTaskDisplayCode(dto.id),
-    title: `Khảo sát dải ${targetBand} • ${totalSegments} phân đoạn`,
-    location: `Mã dự án: ${dto.projectId.slice(0, 8).toUpperCase()}…`,
-    statusLabel: operatorTaskStatusLabel(dto.status),
-    tab,
-  };
-}
-
 export default function DroneRequestsScreen() {
   const [activeTab, setActiveTab] = useState<TabKey | 'all'>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const pages = useOperatorTaskPages();
   const { loading, error } = pages;
-  const tasks = pages.tasks.map(mapDtoToItem);
+  const tasks = pages.tasks.map(dto => ({ ...dto, tab: classifyTab(dto.status) }));
   const fetchTasks = pages.refresh;
   if (!pages.ready) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
@@ -77,7 +51,7 @@ export default function DroneRequestsScreen() {
   const options = [{ key: 'all' as const, label: 'Tất cả trạng thái', count: tasks.length }, ...availableFilters];
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" variant="operatorCompact" />}>
       <View style={styles.toolbar}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Lọc trạng thái: ${selectedLabel}`}
           accessibilityState={{ expanded: filterOpen }}
@@ -108,16 +82,14 @@ export default function DroneRequestsScreen() {
         </Pressable>)}
       </View> : null}
       <Text style={[typography.caption, styles.resultSummary]}>
-        {filteredRequests.length} nhiệm vụ · Trong {tasks.length} nhiệm vụ đã tải
+        {selectedKey === 'all' ? `${tasks.length} nhiệm vụ đã tải` : `${filteredRequests.length} trong ${tasks.length} nhiệm vụ đã tải`}
       </Text>
 
+      {loading && tasks.length > 0 ? <Text accessibilityLiveRegion="polite" style={styles.loadingText}>Đang cập nhật…</Text> : null}
       {/* Content */}
       {error ? <Text accessibilityRole="alert">{error} Danh sách đã tải vẫn được giữ trong phiên này.</Text> : null}
       {loading && tasks.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[typography.caption, styles.loadingText]}>Đang tải danh sách nhiệm vụ…</Text>
-        </View>
+        <OperatorTaskSkeleton />
       ) : error && tasks.length === 0 ? (
         <EmptyState
           icon="error-outline"
@@ -142,49 +114,8 @@ export default function DroneRequestsScreen() {
         />
       ) : (
         <View style={styles.listContainer}>
-          {filteredRequests.map((item) => {
-            return (
-              <Pressable
-                key={item.id}
-                onPress={() =>
-                  router.push({
-                    pathname: '/(drone)/request-detail',
-                    params: { taskId: item.id, code: item.code },
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={`Xem nhiệm vụ ${item.code}, ${item.statusLabel}`}
-              >
-                <Card style={styles.requestCard}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.metaRow}>
-                      <Text style={[typography.caption, styles.codeText]}>{item.code}</Text>
-                    </View>
-
-                    <Chip
-                      variant={item.tab === 'completed' ? 'approved' : item.tab === 'supplement' ? 'severity-medium' : 'status-pending'}
-                      label={item.statusLabel}
-                      uppercase={false}
-                    />
-                  </View>
-
-                  <Text style={[typography.bodyMd, styles.roadTitle]}>{item.title}</Text>
-
-                  <View style={styles.locationRow}>
-                    <MaterialIcons name="folder-open" size={16} color={colors.secondary} />
-                    <Text style={[typography.caption, styles.locationText]}>{item.location}</Text>
-                  </View>
-
-                  <View style={styles.cardFooter}>
-                    <View style={styles.detailArrow}>
-                      <Text style={[typography.labelSm, styles.detailLink]}>Chi tiết</Text>
-                      <MaterialIcons name="arrow-forward" size={14} color={colors.primary} />
-                    </View>
-                  </View>
-                </Card>
-              </Pressable>
-            );
-          })}
+          {filteredRequests.map(item => <OperatorTaskRow key={item.id} task={item}
+            onPress={() => router.push({ pathname: '/(drone)/request-detail', params: { taskId: item.id, code: operatorTaskDisplayCode(item.id) } })} />)}
         </View>
       )}
       {pages.nextCursor ? <Button title={error ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={loading} loading={loading} onPress={() => void pages.loadMore()} /> : !loading && !error ? <Text style={typography.caption}>Đã tải hết danh sách nhiệm vụ.</Text> : null}
@@ -212,7 +143,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   filterLabel: {
-    ...typography.labelSm,
+    ...typography.bodyMd,
     flex: 1,
     color: colors.neutral,
   },
@@ -238,77 +169,6 @@ const styles = StyleSheet.create({
   optionLabelSelected: { fontWeight: '600' },
   optionCount: { ...typography.caption, color: colors.secondary },
   resultSummary: { color: colors.secondary, marginVertical: spacing.sm },
-  loadingContainer: {
-    paddingVertical: spacing.xl,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  loadingText: {
-    color: colors.secondary,
-  },
-  listContainer: {
-    gap: spacing.sm,
-    paddingBottom: spacing.xl,
-  },
-  requestCard: {
-    position: 'relative',
-    overflow: 'hidden',
-    padding: spacing.md,
-    elevation: 1,
-  },
-  rail: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  codeText: {
-    fontWeight: 'bold',
-    color: colors.neutral,
-  },
-  roadTitle: {
-    color: colors.neutral,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: spacing.sm,
-  },
-  locationText: {
-    color: colors.secondary,
-    flex: 1,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    paddingTop: spacing.xs,
-  },
-  detailArrow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  detailLink: {
-    color: colors.primary,
-  },
+  loadingText: { ...typography.caption, lineHeight: 18, color: colors.secondary, marginBottom: 8 },
+  listContainer: { gap: 12, paddingBottom: 24 },
 });

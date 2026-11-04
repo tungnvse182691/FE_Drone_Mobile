@@ -4,15 +4,17 @@ const { drone, task, id } = require('./package45-drone.test.cjs');
 const text = s => JSON.stringify(s.nodes().filter(n => n.type === 'Text'));
 const fixture = { ...task, status: 'SUBMITTED', version: 'AAAAAAAAAAE=', scope: [{ routeVersionId: id(4), segmentSetId: id(5), segmentIds: [id(6)], targetBand: 'SURFACE' }] };
 
-test('02B Home gives greeting full width and compact shortcuts without unverified safety status', async () => {
-  const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [fixture], nextCursor: null }) });
+test('UI05 Home supersedes 02B duplicate shortcuts with compact summary and survey navigation', async () => {
+  const routes = [];
+  const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [fixture], nextCursor: null }) }, {
+    moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: r => routes.push(r) } }) },
+  });
   s.render(); await s.flush();
-  assert.doesNotMatch(text(s), /Chưa xác nhận an toàn/);
-  for (const label of ['Nhiệm vụ', 'Nhật ký lệnh', 'Đồng bộ']) {
-    const button = s.nodes().find(n => n.type === 'AnimatedPressable' && JSON.stringify(n.props.children).includes(label));
-    assert.ok(button); assert.ok(button.props.style.minHeight >= 48);
-  }
-  assert.doesNotMatch(text(s), /AAAAAAAAAAE=/); s.unmount();
+  assert.doesNotMatch(text(s), /Chưa xác nhận an toàn|AAAAAAAAAAE=|Đồng bộ/);
+  const button = s.nodes().find(n => n.props.accessibilityLabel === 'Xem tất cả nhiệm vụ khảo sát');
+  assert.ok(button.props.style.minHeight >= 48 && button.props.style.minWidth >= 48);
+  button.props.onPress(); assert.equal(routes.at(-1), '/(drone)/requests');
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 1); s.unmount();
 });
 
 test('02B Detail keeps technical IDs collapsed, toggles them and preserves Work Package and recovery', async () => {

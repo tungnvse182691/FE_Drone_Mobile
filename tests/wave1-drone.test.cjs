@@ -12,6 +12,7 @@ function drone(file,api={},extra={}){
   '../../src/hooks/useOperatorReadScope':readScope,
   '../../src/api/droneApi':api,
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
+  '../../src/components/drone/OperatorTaskRow':{OperatorTaskRow:'OperatorTaskRow',OperatorTaskSkeleton:'OperatorTaskSkeleton'},
   '../../src/components/Chip':{Chip:'Chip'},'../../src/components/EmptyState':{EmptyState:'EmptyState'},
   '../../src/components/AnimatedPressable':{AnimatedPressable:'AnimatedPressable'},
   '../../src/components/drone/DroneTaskCommandPanel':{DroneTaskCommandPanel:'DroneTaskCommandPanel'},
@@ -99,7 +100,7 @@ test('W1-02 actor change and ABA bounce reject late page, no cross-session tasks
 });
 test('W1-02 Home marks first page and links to remaining tasks',async()=>{
  const f=drone('app/(drone)/home.tsx',{listOperatorSurveyTasksReal:async()=>({items:[task(1)],nextCursor:'p2'})});
- f.s.render();await f.s.flush();assert.match(text(f.s),/trang đầu/);assert.ok(f.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Xem tiếp nhiệm vụ'));f.s.unmount();
+ f.s.render();await f.s.flush();assert.match(text(f.s),/trang đầu/);assert.ok(f.s.nodes().some(n=>n.type==='AnimatedPressable'&&n.props.accessibilityLabel==='Xem tất cả nhiệm vụ khảo sát'));f.s.unmount();
 });
 
 test('W1-02 Log loads next page and refresh resets the loaded list',async()=>{

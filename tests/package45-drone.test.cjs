@@ -10,6 +10,7 @@ function drone(file,api={},extra={}) {
     require('node:vm').runInNewContext(require('typescript').transpileModule(require('node:fs').readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='../api/droneApi'?api:{useOperatorReadScope:(...a)=>s.h.load('src/hooks/useOperatorReadScope.ts').useOperatorReadScope(...a)}});
     return mod.exports;
   },...extra.moduleFactories},modules:{
+    '../../src/components/drone/OperatorTaskRow':{OperatorTaskRow:'OperatorTaskRow',OperatorTaskSkeleton:'OperatorTaskSkeleton'},
     '../../src/components/AppHeader':component('AppHeader'), '../../src/components/Card':component('Card'),
     '../../src/components/Chip':component('Chip'),'../../src/components/EmptyState':component('EmptyState'),
     '../../src/components/AnimatedPressable':component('AnimatedPressable'), '../../src/components/Toast':component('Toast'),

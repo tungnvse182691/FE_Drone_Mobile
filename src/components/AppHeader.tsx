@@ -8,13 +8,16 @@ import { RoleCode } from '../types/enums';
 
 interface AppHeaderProps {
   subtitle: string;
+  variant?: 'operatorCompact';
   showBack?: boolean;
   onBack?: () => void;
   fallbackRoute?: string;
 }
 
-export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }: AppHeaderProps) {
+export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, variant }: AppHeaderProps) {
   const role = useAuthStore((state) => state.role);
+
+  const compact = variant === 'operatorCompact' && role === RoleCode.DRONE_OPERATOR;
 
   const handleBack = () => {
     if (onBack) {
@@ -46,7 +49,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
 
   return (
     <View style={styles.container}>
-      <View style={styles.brandGroup}>
+      <View style={[styles.brandGroup, compact && styles.compactBrandGroup]}>
         {showBack ? (
           <Pressable
             onPress={handleBack}
@@ -58,15 +61,15 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
             <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </Pressable>
         ) : null}
-        <Image source={require('../../assets/logo_hoanghai_icon.png')} style={styles.logo} resizeMode="contain" />
-        <View>
+        <Image source={require('../../assets/logo_hoanghai_icon.png')} style={[styles.logo, compact && styles.compactLogo]} resizeMode="contain" />
+        <View style={compact ? styles.compactBrandText : undefined}>
           <Text style={[typography.titleMd, styles.brand]}>HOÀNG HẢI</Text>
           <Text style={[typography.caption, styles.subtitle]}>{subtitle}</Text>
         </View>
       </View>
 
       <View style={styles.actionGroup}>
-        <Pressable
+        {!compact ? <Pressable
           style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
           onPress={handleNotificationPress}
           accessibilityRole="button"
@@ -74,9 +77,9 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
         >
           <MaterialIcons name="notifications-none" size={20} color={colors.secondary} />
           <View style={styles.dot} />
-        </Pressable>
+        </Pressable> : null}
         <Pressable
-          style={({ pressed }) => [styles.avatar, pressed && styles.actionPressed]}
+          style={({ pressed }) => [styles.avatar, compact && styles.compactAvatar, pressed && styles.actionPressed]}
           onPress={handleAvatarPress}
           accessibilityRole="button"
           accessibilityLabel="Trang cá nhân"
@@ -89,6 +92,10 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute }:
 }
 
 const styles = StyleSheet.create({
+  compactBrandGroup: { flex: 1, minWidth: 0 },
+  compactBrandText: { flex: 1, minWidth: 0 },
+  compactLogo: { width: 32, height: 32 },
+  compactAvatar: { width: 48, height: 48 },
   container: {
     flexDirection: 'row',
     alignItems: 'center',

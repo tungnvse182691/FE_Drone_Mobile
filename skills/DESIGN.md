@@ -270,3 +270,19 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 ### Authority và offline capability
 
 Áp dụng `AGENTS.md` cho business/BE/evidence/mode; file này chỉ hướng dẫn UI. Khi C10 API-130 còn `BLOCKED_CONTRACT`, không hiển thị CTA “Đồng bộ ngay” có vẻ gửi được; disabled action phải kèm lý do thiếu provider/contract/fixture thực. Local save, network availability, server receipt và PM acceptance hiển thị riêng: `LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`. Native/Android chưa chạy ghi `NOT_RUN`.
+
+## Owner-approved Operator visual rules — 04/11/2026
+
+Áp dụng riêng Home và Requests của Operator trong OP-UI-05 / Phase 1:
+
+- Card chính: radius 20dp; dense task row: 12dp. Không đổi token hoặc default Card/Chip/Button.
+- KPI: Roboto Medium, 28sp/500, tabular; không dùng headline Sansation cho số liệu chức năng.
+- Screen margin và card padding 16dp; card gap 12dp; section gap 24dp; spacing nội bộ 4/8/16.
+- Surface trắng, nền #F8F9FA, border #E2E5E9; chữ chính #1A1D20, chữ phụ #2D3748.
+- Primary #C9A227, brand gold #8C6D1F; CTA vàng phải dùng chữ tối #1A1D20.
+- Bóng mềm tối đa opacity 0.08, radius 18, elevation 3. Không thêm tint vàng, gradient hoặc shimmer.
+- Giữ Sansation ở thương hiệu, MaterialIcons, vùng chạm tối thiểu 48dp và font scale 1.15.
+- Home và Requests dùng chung task row, trạng thái từ API; không suy ra priority/current task.
+- Header compact riêng Operator không hiển thị notification dot hoặc thông báo hệ thống giả.
+
+Các quy tắc này là override có phạm vi của Owner; quy tắc mặc định của các role/màn khác giữ nguyên.
