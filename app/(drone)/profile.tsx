@@ -3,6 +3,7 @@ import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
+import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
@@ -28,7 +29,7 @@ export default function DroneProfileScreen() {
   };
 
   return (
-    <SafeAreaScreen scroll>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
       {/* Avatar & Personal Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarCircle}>
@@ -50,29 +51,7 @@ export default function DroneProfileScreen() {
         </View>
       </View>
 
-      {/* 3 Flight Statistics */}
-      <Card style={styles.statsCard}>
-        <View style={styles.statItem}>
-          <Text style={[typography.headlineLg, styles.statNumber]}>—</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Giờ bay</Text>
-        </View>
-
-        <View style={styles.statDivider} />
-
-        <View style={styles.statItem}>
-          <Text style={[typography.headlineLg, styles.statNumber]}>—</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Nhiệm vụ</Text>
-        </View>
-
-        <View style={styles.statDivider} />
-
-        <View style={styles.statItem}>
-          <Text style={[typography.headlineLg, styles.statSuccess]}>—</Text>
-          <Text style={[typography.caption, styles.statLabel]}>Sự cố</Text>
-        </View>
-      </Card>
-
-      <Text style={[typography.caption, styles.versionFootnote]}>Chưa có dữ liệu giờ bay, chuyến bay, sự cố và chứng nhận từ máy chủ.</Text>
+      <Text style={[typography.caption, styles.versionFootnote]}>Chưa có dữ liệu thống kê bay và chứng nhận từ máy chủ.</Text>
 
       {/* Hardware / Devices Card */}
       <Card style={styles.deviceCard}>
@@ -136,7 +115,7 @@ export default function DroneProfileScreen() {
             <MaterialIcons name="sync" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.menuItemTitle]}>Hàng đợi trên thiết bị</Text>
           </View>
-          <Text style={[typography.caption, styles.menuSubText]}>Xem hàng đợi</Text>
+          <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
         </Pressable>
 
         <View style={styles.menuDivider} />
@@ -144,9 +123,8 @@ export default function DroneProfileScreen() {
         <View style={styles.menuItem}>
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="inventory-2" size={18} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Dữ liệu trên thiết bị</Text>
+            <View style={{ flex: 1 }}><Text style={[typography.bodyMd, styles.menuItemTitle]}>Dữ liệu trên thiết bị</Text><Text style={[typography.caption, styles.menuSubText]}>Được giữ để khôi phục</Text></View>
           </View>
-          <Text style={[typography.caption, styles.menuSubText]}>Được giữ để khôi phục</Text>
         </View>
       </Card>
 
@@ -275,6 +253,7 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   userName: {
+    textAlign: 'center',
     color: colors.neutral,
     marginTop: 2,
   },
@@ -363,6 +342,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   menuItem: {
+    minHeight: 56,
+    gap: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -370,11 +351,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   menuItemLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
   menuItemTitle: {
+    flexShrink: 1,
     color: colors.neutral,
   },
   menuSubText: {
@@ -433,6 +417,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   infoModalCloseBtn: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: 4,
   },
   infoModalBody: {

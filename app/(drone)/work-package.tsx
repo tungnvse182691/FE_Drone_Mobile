@@ -82,6 +82,7 @@ export default function DroneWorkPackageScreen() {
   const [geometry, setGeometry] = useState<GeometryPackageViewDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [geometryError, setGeometryError] = useState<string | null>(null);
+  const [technicalExpanded, setTechnicalExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -158,8 +159,7 @@ export default function DroneWorkPackageScreen() {
         <View style={styles.notice}>
           <MaterialIcons name="lock-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            CHỈ ĐỌC. Phạm vi được ghim theo nhiệm vụ; không có quyền xem bản đồ toàn dự án và
-            không có thao tác ghi trên gói công việc.
+            Gói chỉ đọc theo phạm vi nhiệm vụ được giao.
           </Text>
         </View>
 
@@ -210,7 +210,7 @@ export default function DroneWorkPackageScreen() {
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Số phân đoạn</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {ref ? `${ref.segmentIds.length}` : '—'}
+              {workPackage.geometryRefs.length ? `${workPackage.geometryRefs.reduce((count, entry) => count + entry.segmentIds.length, 0)}` : '—'}
             </Text>
           </View>
           <View style={styles.infoRow}>
@@ -225,13 +225,15 @@ export default function DroneWorkPackageScreen() {
           <Card style={styles.card}>
             <Text style={[typography.labelSm, styles.sectionTitle]}>GÓI HÌNH HỌC TUYẾN</Text>
             <View style={styles.chipRow}>
-              <Chip variant="approved" label="Bản hiện hành" uppercase={false} />
-              <Chip variant="measure-only" label="BTXM TCVN 10380" uppercase={false} />
+              <Chip variant="status-pending" label={geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Số phiên bản</Text>
-              <Text style={[typography.bodyMd, styles.infoValue]}>v{geometry.route.versionNo}</Text>
-            </View>
+            <Text style={[typography.caption, styles.noticeText]}>Hình học của gói đầu tiên đã ghim.</Text>
+            {geometry.segmentSet.segments.filter(segment => ref?.segmentIds.includes(segment.id)).map(segment => (
+              <View key={segment.id} style={styles.infoRow}>
+                <Text style={[typography.bodyMd, styles.infoValue]}>{segment.code?.trim() || 'Phân đoạn chưa có mã'}</Text>
+                <Text style={[typography.caption, styles.infoValue]}>{segment.lengthMeters} m</Text>
+              </View>
+            ))}
             <View style={styles.infoRow}>
               <Text style={[typography.caption, styles.infoLabel]}>Hiệu lực từ</Text>
               <Text style={[typography.bodyMd, styles.infoValue]}>
@@ -258,6 +260,23 @@ export default function DroneWorkPackageScreen() {
             </View>
           </Card>
         ) : null}
+
+        <Card style={styles.card}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật"
+            accessibilityState={{ expanded: technicalExpanded }} onPress={() => setTechnicalExpanded(value => !value)} style={styles.technicalToggle}>
+            <Text style={[typography.bodyMd, styles.infoValue]}>Thông tin kỹ thuật</Text>
+            <MaterialIcons name={technicalExpanded ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
+          </Pressable>
+          {technicalExpanded ? <View style={{ gap: spacing.sm }}>
+            <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage.scopeVersion ?? '—'}</Text>
+            {workPackage.geometryRefs.map((entry, index) => <View key={index} style={{ gap: spacing.xs }}>
+              <Text selectable style={typography.caption}>Tuyến: {entry.routeVersionId}</Text>
+              <Text selectable style={typography.caption}>Bộ phân đoạn: {entry.segmentSetId}</Text>
+              <Text selectable style={typography.caption}>Phân đoạn: {entry.segmentIds.join(', ')}</Text>
+            </View>)}
+            {geometry ? <Text selectable style={typography.caption}>Phiên bản hình học: {geometry.route.versionNo}</Text> : null}
+          </View> : null}
+        </Card>
 
         <Card style={styles.card}>
           <Text style={[typography.labelSm, styles.sectionTitle]}>MỤC ĐÍCH TẢI LÊN</Text>
@@ -346,10 +365,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   infoRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: spacing.xs,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
@@ -357,12 +376,12 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     color: colors.secondary,
-    flexShrink: 0,
+    flexShrink: 1,
   },
   infoValue: {
     color: colors.neutral,
     flexShrink: 1,
-    textAlign: 'right',
+    textAlign: 'left',
   },
   topBar: {
     flexDirection: 'row',
@@ -373,14 +392,21 @@ const styles = StyleSheet.create({
     color: colors.neutral,
   },
   backButton: {
-    width: 34,
-    height: 34,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  technicalToggle: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
   pressed: {
     opacity: 0.7,

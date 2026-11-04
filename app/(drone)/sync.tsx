@@ -69,7 +69,7 @@ function describeItem(row: OutboxItem): SyncItem {
     tone: 'blocked' as const,
   };
   const title = row.kind === 'submit_dataset' ? 'Hồ sơ khảo sát' : 'Bản ghi được lưu trên thiết bị';
-  const meta = `${presentation.label} · ${row.attempt} lần gửi đã ghi nhận`;
+  const meta = `${row.attempt} lần gửi đã ghi nhận`;
   return {
     id: row.id,
     name: title,
@@ -159,7 +159,6 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Dữ liệu trên thiết bị" />}>
-      <DroneTaskRecoveryList />
       {/* Toast Notification */}
       {toastMsg && (
         <View style={styles.toast}>
@@ -174,6 +173,8 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         <View style={styles.tabToggle}>
           <Pressable
             style={[styles.toggleBtn, queueTab === 'pending' && styles.toggleBtnActive]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: queueTab === 'pending' }}
             onPress={() => setQueueTab('pending')}
           >
             <Text
@@ -185,6 +186,8 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
           <Pressable
             style={[styles.toggleBtn, queueTab === 'completed' && styles.toggleBtnActive]}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: queueTab === 'completed' }}
             onPress={() => setQueueTab('completed')}
           >
             <Text
@@ -206,7 +209,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
                 { backgroundColor: colors.secondary },
               ]}
             />
-            <Text style={[typography.titleMd, styles.summaryCount]}>
+            <Text style={[typography.bodyMd, styles.summaryCount]}>
               {pendingQueue.length > 0
                 ? `${pendingQueue.length} mục chờ xử lý`
                 : 'Không có mục trong phân vùng này'}
@@ -241,12 +244,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       {/* Queue Items */}
       <View style={styles.itemsList}>
         {activeItems.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <MaterialIcons name="inbox" size={36} color={colors.secondary} />
-            <Text style={[typography.bodyMd, { color: colors.secondary, marginTop: 6 }]}>
-              Không có mục nào trong danh sách
-            </Text>
-          </Card>
+          <Text style={[typography.caption, styles.sectionSub]}>Không có mục nào trong danh sách</Text>
         ) : (
           activeItems.map((item) => (
             <Card key={item.id} style={styles.itemCard}>
@@ -264,7 +262,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
                 </View>
 
                 <View style={styles.itemInfo}>
-                  <Text style={[typography.bodyMd, styles.itemName]} numberOfLines={1}>
+                  <Text style={[typography.bodyMd, styles.itemName]}>
                     {item.name}
                   </Text>
                   <Text style={[typography.caption, styles.itemMeta]}>{item.meta}</Text>
@@ -296,6 +294,9 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         )}
       </View>
 
+      <Text style={[typography.titleMd, styles.sectionTitle]}>Lệnh và đối soát</Text>
+      <DroneTaskRecoveryList />
+
       {/* Safe Local Purge Section */}
       <Card style={styles.purgeCard}>
         <View style={styles.purgeHeader}>
@@ -306,7 +307,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         </View>
 
         <Text style={[typography.bodyMd, styles.purgeDesc]}>
-          Màn hình chỉ đọc hàng đợi của phiên hiện tại. Trạng thái cục bộ không chứng minh máy chủ đã nhận hồ sơ. Bản nháp, tệp và lịch sử được giữ nguyên.
+          Dữ liệu được giữ để đối soát. Ghi nhận cục bộ chưa phải biên nhận máy chủ.
         </Text>
 
         <Pressable
@@ -315,8 +316,8 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           disabled={purgedCount > 0}
           accessibilityRole="button"
         >
-          <MaterialIcons name="info-outline" size={16} color={purgedCount > 0 ? colors.secondary : colors.error} />
-          <Text style={[typography.labelSm, { color: purgedCount > 0 ? colors.secondary : colors.error }]}>
+          <MaterialIcons name="info-outline" size={16} color={colors.secondary} />
+          <Text style={[typography.labelSm, { color: colors.secondary }]}>
             {purgedCount > 0
               ? `Đã giải phóng an toàn ${purgedCount} bản sao`
               : 'Vì sao dữ liệu vẫn được giữ?'}
@@ -354,6 +355,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   tabToggle: {
+    width: '100%',
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -362,6 +364,10 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   toggleBtn: {
+    minHeight: 48,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radius.sm,
@@ -370,7 +376,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   toggleBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     color: colors.secondary,
   },
   toggleBtnTextActive: {
@@ -426,8 +432,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   itemCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.sm,
     justifyContent: 'space-between',
     padding: spacing.sm,
     borderRadius: radius.xl,
@@ -451,6 +458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   itemInfo: {
+    minWidth: 0,
     flex: 1,
   },
   itemName: {
@@ -537,12 +545,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   purgeBtn: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     borderWidth: 1,
-    borderColor: colors.error,
+    borderColor: colors.border,
     borderRadius: radius.md,
     paddingVertical: 10,
     backgroundColor: colors.surface,
