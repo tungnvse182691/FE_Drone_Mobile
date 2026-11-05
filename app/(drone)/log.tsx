@@ -82,7 +82,7 @@ function DroneLogContent({ scope }: { scope: string }) {
       if (kind === 'upload') {
         // A server upload status is not a flight receipt, dataset acceptance or repair completion.
         setUploadText(`Phiên ${result.id}: ${STATUS_LABELS[result.status.toLowerCase()] ?? 'Trạng thái chưa được hỗ trợ'}`);
-      } else setTaskText(`Nhiệm vụ ${result.id}: ${operatorTaskStatusLabel(result.status)}`);
+      } else setTaskText(`Nhiệm vụ ${operatorTaskDisplayCode(result.id)}: ${operatorTaskStatusLabel(result.status)}`);
     } catch (e) {
       if (!active() || !isCurrent()) return;
       const status = (e as { response?: { status?: number } }).response?.status;

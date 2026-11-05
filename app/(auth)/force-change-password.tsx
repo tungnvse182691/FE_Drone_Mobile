@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -89,23 +90,25 @@ export default function ForceChangePasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={isForced ? ['top', 'left', 'right', 'bottom'] : ['left', 'right', 'bottom']}>
       {!isForced && (
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Quay lại"
-        >
-          <MaterialIcons name="arrow-back" size={24} color={colors.neutral} />
-        </Pressable>
+        <SafeAreaView edges={['top']} style={styles.header}>
+          <Pressable
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Quay lại"
+          >
+            <MaterialIcons name="arrow-back" size={24} color={colors.neutral} />
+          </Pressable>
+        </SafeAreaView>
       )}
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <Image
             source={require('../../assets/logo_hoanghai.png')}
             style={styles.logoImage}
@@ -179,7 +182,7 @@ export default function ForceChangePasswordScreen() {
               }}
             />
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -193,15 +196,21 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
+  header: {
+    minHeight: 56,
+    // SafeAreaView adds the top inset to this padding (once, in this header).
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.screenMargin,
+  },
   backButton: {
-    position: 'absolute',
-    top: spacing.md,
-    left: spacing.screenMargin,
-    zIndex: 10,
-    padding: spacing.xs,
+    minWidth: 48,
+    minHeight: 48,
+    alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: spacing.screenMargin,
   },
