@@ -1,16 +1,7 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import { useAuthStore } from '../../src/store/auth';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  Platform,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -36,12 +27,6 @@ import {
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
 import { DroneTaskCommandPanel } from '../../src/components/drone/DroneTaskCommandPanel';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
-  default: {},
-});
 
 const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
   PLANNED_RENDEZVOUS: 'Theo kế hoạch',
@@ -169,28 +154,6 @@ export default function DroneRequestDetailScreen() {
     router.push(`${DRONE_WORK_PACKAGE}?taskId=${encodeURIComponent(task.id)}`);
   };
 
-  const handleShareTask = async () => {
-    if (!scope.capture()() || dataScope !== scope.key || !task) {
-      return;
-    }
-    const parts = [
-      `Nhiệm vụ khảo sát ${displayCode}`,
-      operatorTaskStatusLabel(task.status),
-      `Dải mục tiêu: ${operatorTaskTargetBand(task)}`,
-      `Hạn bay: ${formatDateTime(workPackage?.dueAt ?? null)}`,
-    ];
-    if (accessPoint) {
-      parts.push(
-        `Điểm tiếp cận WGS84: ${accessPoint.point.latitude.toFixed(6)}, ${accessPoint.point.longitude.toFixed(6)}`,
-      );
-    }
-    try {
-      await Share.share({ message: parts.join(' • ') });
-    } catch {
-      // ignore
-    }
-  };
-
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -226,11 +189,11 @@ export default function DroneRequestDetailScreen() {
 
     return (
       <>
-        <Card style={styles.headerCard}>
+        <Card style={styles.heroCard}>
           <View style={styles.headerTitleRow}>
             <View style={styles.headerTextGroup}>
-              <Text style={[typography.caption, styles.codeLabel]}>MÃ NHIỆM VỤ: {displayCode}</Text>
-              <Text style={[typography.titleMd, styles.roadTitle]}>Nhiệm vụ khảo sát</Text>
+              <Text style={[typography.titleLg, styles.heroTitle]}>Nhiệm vụ khảo sát</Text>
+              <Text style={[typography.caption, styles.codeLabel]}>Mã nhiệm vụ: {displayCode}</Text>
             </View>
             <Chip
               variant={task.status === 'REJECTED' ? 'rejected' : 'status-pending'}
@@ -239,7 +202,7 @@ export default function DroneRequestDetailScreen() {
             />
           </View>
 
-          <View style={styles.locationDivider}>
+          <View style={styles.scopeLine}>
             <MaterialIcons name="map" size={18} color={colors.primary} />
             <Text style={[typography.bodyMd, styles.locationFull]}>
               Dải mục tiêu: {operatorTaskTargetBand(task)}
@@ -247,25 +210,24 @@ export default function DroneRequestDetailScreen() {
           </View>
         </Card>
 
-        <Card style={styles.paramCard}>
-          <View style={styles.paramCardHeader}>
-            <MaterialIcons name="assignment" size={18} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.paramHeaderTitle]}>Phạm vi khảo sát</Text>
-          </View>
-
-          <View style={styles.paramGrid}>
-            <View style={styles.paramItem}>
-              <Text style={[typography.caption, styles.paramLabel]}>Số phân đoạn</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>
-                {operatorTaskSegmentCount(task)}
-              </Text>
+        <Card style={styles.scopeCard}>
+          <Text style={[typography.titleMd, styles.sectionTitle]}>Phạm vi khảo sát</Text>
+          <View style={styles.scopeGrid}>
+            <View style={styles.scopeItem}>
+              <Text style={[typography.caption, styles.paramLabel]}>Dải mục tiêu</Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>{operatorTaskTargetBand(task)}</Text>
             </View>
-
-            <View style={styles.paramItem}>
+            <View style={styles.scopeItem}>
+              <Text style={[typography.caption, styles.paramLabel]}>Số phân đoạn</Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>{operatorTaskSegmentCount(task)}</Text>
+            </View>
+            <View style={styles.scopeItem}>
               <Text style={[typography.caption, styles.paramLabel]}>Hạn bay</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>
-                {formatDateTime(workPackage?.dueAt ?? null)}
-              </Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>{formatDateTime(workPackage?.dueAt ?? null)}</Text>
+            </View>
+            <View style={styles.scopeItem}>
+              <Text style={[typography.caption, styles.paramLabel]}>Phiên bản phạm vi</Text>
+              <Text style={[typography.bodyMd, styles.paramValue]}>{workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
             </View>
           </View>
         </Card>
@@ -317,7 +279,7 @@ export default function DroneRequestDetailScreen() {
           ) : (
             <View style={styles.accessPointBody}>
               <Text style={[typography.caption, styles.accessPointDesc]}>
-                {workPackage?.accessPoint ? 'Tọa độ điểm tiếp cận không hợp lệ. Không thể mở dẫn đường; vui lòng liên hệ PM.' : 'Máy chủ chưa công bố điểm tiếp cận cho nhiệm vụ này. Liên hệ PM nếu cần bổ sung.'}
+                {workPackage?.accessPoint ? 'Tọa độ điểm tiếp cận không hợp lệ. Không thể mở dẫn đường; vui lòng liên hệ PM.' : 'Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này. Máy chủ chưa công bố điểm tiếp cận.'}
               </Text>
             </View>
           )}
@@ -349,7 +311,7 @@ export default function DroneRequestDetailScreen() {
               : 'Trạng thái hiện tại không cho phép tiếp nhận hoặc từ chối mới.'}
           </Text>
         </View>
-        <Card style={styles.headerCard}>
+        <Card style={styles.technicalCard}>
           <Pressable accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật" accessibilityState={{ expanded: technical }} onPress={() => setTechnical(value => !value)} style={styles.technicalToggle}>
             <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
             <Text style={[typography.labelSm, { flex: 1 }]}>Thông tin kỹ thuật</Text>
@@ -380,24 +342,16 @@ export default function DroneRequestDetailScreen() {
           </Pressable>
 
           <View style={styles.topBarCenter}>
-            <Text style={[typography.titleMd, styles.topBarCode]}>{displayCode}</Text>
-            <Text style={[typography.caption, styles.topBarSub]}>Chi tiết nhiệm vụ bay</Text>
+            <Text style={[typography.titleMd, styles.topBarTitle]}>Chi tiết nhiệm vụ</Text>
           </View>
 
-          <Pressable
-            style={styles.circleIconButton}
-            onPress={handleShareTask}
-            accessibilityRole="button"
-            accessibilityLabel="Chia sẻ nhiệm vụ bay"
-          >
-            <MaterialIcons name="share" size={18} color={colors.secondary} />
-          </Pressable>
+          <View style={styles.headerSpacer} />
         </View>
       }
     >
+      {renderBody()}
       {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
         collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} /> : null}
-      {renderBody()}
       {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
       {scope.key && target ? <>
         {!canOpenDecline ? <Pressable accessibilityRole="button" accessibilityLabel="Lệnh và đối soát" accessibilityState={{ expanded: commandsExpanded }} onPress={() => setCommandsExpanded(value => !value)} style={styles.technicalToggle}>
@@ -412,484 +366,42 @@ export default function DroneRequestDetailScreen() {
 
 
 const styles = StyleSheet.create({
-  loading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.xl,
-    gap: spacing.sm,
-  },
-  loadingText: {
-    color: colors.secondary,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.screenMargin,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  circleIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topBarCenter: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: 'center',
-  },
-  topBarCode: {
-    color: colors.brandGold,
-    fontWeight: '700',
-  },
-  topBarSub: {
-    color: colors.secondary,
-  },
-  selectorBar: {
-    marginBottom: spacing.sm,
-  },
-  selectorTitle: {
-    color: colors.secondary,
-    marginBottom: 6,
-  },
-  selectorScroll: {
-    gap: spacing.xs,
-    paddingVertical: 2,
-  },
-  taskChip: {
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    minWidth: 110,
-    gap: 2,
-  },
-  taskChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: '#FEF3E2',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  taskChipCode: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.neutral,
-  },
-  taskChipCodeActive: {
-    color: colors.primaryDark,
-  },
-  taskChipRoad: {
-    fontSize: 10,
-    color: colors.secondary,
-  },
-  taskChipRoadActive: {
-    color: colors.neutral,
-    fontWeight: '500',
-  },
-  headerCard: {
-    marginBottom: spacing.sm,
-  },
-  headerTitleRow: {
-    gap: spacing.sm,
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  headerTextGroup: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  codeLabel: {
-    color: colors.secondary,
-    fontWeight: '600',
-  },
-  roadTitle: {
-    color: colors.neutral,
-    marginTop: 2,
-  },
-  statusPill: {
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  statusPillText: {
-    color: colors.secondary,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  locationDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-  },
-  locationFull: {
-    color: colors.secondary,
-    flex: 1,
-  },
-  paramCard: {
-    marginBottom: spacing.sm,
-  },
-  paramCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: spacing.sm,
-  },
-  paramHeaderTitle: {
-    color: colors.secondary,
-  },
-  paramGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  paramItem: {
-    flexGrow: 1,
-    flexBasis: '45%',
-    minWidth: 0,
-    backgroundColor: colors.surfaceAlt,
-    padding: spacing.sm,
-    borderRadius: radius.sm,
-  },
-  paramLabel: {
-    color: colors.secondary,
-  },
-  paramValue: {
-    color: colors.neutral,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  accessPointCard: {
-    marginBottom: spacing.sm,
-    backgroundColor: '#FBFBFA',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  accessPointHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  accessPointHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flex: 1,
-  },
-  accessPointHeaderTitle: {
-    flex: 1,
-    color: colors.secondary,
-    fontWeight: '700',
-  },
-  accessPointBody: {
-    gap: 4,
-    marginVertical: spacing.xs,
-  },
-  accessPointName: {
-    color: colors.neutral,
-    fontWeight: '700',
-  },
-  accessPointDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  accessPointDesc: {
-    color: colors.secondary,
-    flex: 1,
-  },
-  accessPointCoord: {
-    color: colors.secondary,
-    flex: 1,
-  },
-  boldCoord: {
-    fontWeight: '700',
-    color: colors.neutral,
-    fontFamily: 'Roboto',
-  },
-  navMapButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: 10,
-    backgroundColor: colors.surface,
-    marginTop: spacing.xs,
-  },
-  navMapButtonText: {
-    color: colors.neutral,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  techDetailBox: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.xs,
-    marginTop: spacing.xs,
-    gap: 6,
-  },
-  techRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  techText: {
-    color: colors.secondary,
-    flex: 1,
-  },
-  techBold: {
-    fontWeight: '600',
-    color: colors.neutral,
-  },
-  mapCard: {
-    marginBottom: spacing.sm,
-    padding: 0,
-    overflow: 'hidden',
-    borderRadius: radius.xl,
-    ...softShadow,
-  },
-  mapHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  mapHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  mapHeaderTitle: {
-    color: colors.secondary,
-  },
-  gpsCoord: {
-    color: colors.secondary,
-    fontFamily: 'Roboto',
-  },
-  mapVisualContainer: {
-    height: 180,
-    backgroundColor: '#E8ECEF',
-    position: 'relative',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  simulatedRiver: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-    backgroundColor: colors.surfaceAlt,
-    justifyContent: 'center',
-    paddingLeft: spacing.md,
-  },
-  riverLabel: {
-    fontSize: 10,
-    color: colors.secondary,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  simulatedRoad: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    height: 36,
-    backgroundColor: '#FCE8B2',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  roadStripe: {
-    position: 'absolute',
-    height: 4,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.primary,
-  },
-  roadNameLabel: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: colors.neutral,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pinTarget: {
-    position: 'absolute',
-    top: 25,
-    alignItems: 'center',
-  },
-  pinCallout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.neutral,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-    marginBottom: 2,
-  },
-  pinDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-  },
-  pinText: {
-    color: colors.surface,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  pinIconWrap: {
-    marginTop: -4,
-  },
-  mapsLinkOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  mapsLinkText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.neutral,
-  },
-  instructionCard: {
-    marginBottom: spacing.md,
-    borderRadius: radius.xl,
-    ...softShadow,
-  },
-  instructionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xs,
-  },
-  instructionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  instructionTitle: {
-    color: colors.secondary,
-  },
-  instructionTime: {
-    color: colors.secondary,
-  },
-  quoteBox: {
-    backgroundColor: colors.surfaceAlt,
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-    marginVertical: spacing.xs,
-  },
-  quoteText: {
-    color: colors.neutral,
-    lineHeight: 20,
-    fontStyle: 'italic',
-  },
-  boldText: {
-    fontWeight: 'bold',
-    color: colors.neutral,
-    fontStyle: 'normal',
-  },
-  instructionFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  senderGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  onlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.success,
-  },
-  senderName: {
-    color: colors.secondary,
-  },
-  priorityPill: {
-    backgroundColor: '#FDECEC',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-  },
-  priorityText: {
-    color: colors.error,
-    fontSize: 10,
-    fontWeight: '700',
-  },
+  loading: { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl, gap: spacing.sm },
+  loadingText: { color: colors.secondary },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.screenMargin, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  circleIconButton: { width: 48, height: 48, borderRadius: radius.full, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  headerSpacer: { width: 48, height: 48 },
+  topBarCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
+  topBarTitle: { color: colors.neutral },
+  heroCard: { borderRadius: radius.xl, marginBottom: spacing.md },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  headerTextGroup: { flex: 1, minWidth: 0 },
+  heroTitle: { color: colors.neutral, marginBottom: spacing.xs },
+  codeLabel: { color: colors.secondary },
+  scopeLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.md },
+  locationFull: { color: colors.secondary, flex: 1 },
+  sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
+  scopeCard: { borderRadius: radius.xl, marginBottom: spacing.md },
+  scopeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  scopeItem: { flexGrow: 1, flexBasis: '45%', minWidth: 0, backgroundColor: colors.surfaceAlt, padding: spacing.sm, borderRadius: radius.md },
+  paramLabel: { color: colors.secondary },
+  paramValue: { color: colors.neutral, fontWeight: '500', marginTop: spacing.xs },
+  accessPointCard: { borderRadius: radius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  accessPointHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
+  accessPointHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  accessPointHeaderTitle: { flex: 1, color: colors.neutral },
+  accessPointBody: { gap: spacing.sm, marginVertical: spacing.xs },
+  accessPointDetailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  accessPointDesc: { color: colors.secondary, flex: 1 },
+  accessPointCoord: { color: colors.secondary, flex: 1 },
+  boldCoord: { fontWeight: '500', color: colors.neutral, fontFamily: 'Roboto' },
+  navMapButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.sm, backgroundColor: colors.surface, marginTop: spacing.xs },
+  navMapButtonText: { color: colors.neutral },
+  technicalCard: { borderRadius: radius.lg, marginBottom: spacing.md },
+  techDetailBox: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs, gap: spacing.sm },
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  actionContainer: {
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  pendingSyncNote: {
-    color: colors.secondary,
-    textAlign: 'center',
-  },
-  rejectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.error,
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-  },
-  rejectButtonText: {
-    color: colors.error,
-    fontWeight: '700',
-  },
-  syncFootnote: {
-    textAlign: 'center',
-    color: colors.secondary,
-    marginTop: 2,
-  },
+  actionContainer: { gap: spacing.sm, marginBottom: spacing.md },
+  rejectButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.error, borderRadius: radius.md, paddingHorizontal: spacing.md, backgroundColor: colors.surface },
+  rejectButtonText: { color: colors.error },
+  syncFootnote: { textAlign: 'center', color: colors.secondary, marginTop: spacing.xs },
 });
