@@ -1,5 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
-import { operatorTaskTargetBand } from '../../src/api/operator-task-view';
+import { operatorTaskDisplayCode, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -41,7 +41,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 function formatCoord(longitude: number, latitude: number): string {
-  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  return `${Math.abs(latitude).toFixed(6)}°${latitude < 0 ? 'N' : 'B'}, ${Math.abs(longitude).toFixed(6)}°${longitude < 0 ? 'T' : 'Đ'}`;
 }
 
 const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
@@ -164,34 +164,40 @@ export default function DroneWorkPackageScreen() {
         </View>
 
         <Card style={styles.scopeCard}>
-          <Text style={[typography.labelSm, styles.scopeOverline]}>NHIỆM VỤ</Text>
+          <View style={styles.cardHeader}>
+            <MaterialIcons name="assignment" size={16} color={colors.brandGold} />
+            <Text style={[typography.labelSm, styles.scopeOverline]}>NHIỆM VỤ</Text>
+            <Text style={[typography.caption, { color: colors.secondary }]}>{operatorTaskDisplayCode(workPackage.task.id)}</Text>
+          </View>
           <Text style={[typography.titleMd, styles.scopeTitle]}>Phạm vi đã ghim</Text>
-          <View style={styles.scopeGrid}>
-            <View style={styles.scopeItem}>
-              <Text style={[typography.caption, styles.infoLabel]}>Dải mục tiêu</Text>
-              <Text style={[typography.bodyMd, styles.infoValue]}>{operatorTaskTargetBand(workPackage.task)}</Text>
-            </View>
-            <View style={styles.scopeItem}>
-              <Text style={[typography.caption, styles.infoLabel]}>Phân đoạn đang xem</Text>
-              <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{ref ? `${ref.segmentIds.length}` : '—'}</Text>
-            </View>
+          <Text style={styles.groupLabel}>PHẠM VI</Text>
+          <View style={styles.infoRow}>
+            <MaterialIcons name="layers" size={16} color={colors.brandGold} />
+            <Text style={[typography.bodyMd, styles.infoLabel]}>Dải mục tiêu</Text>
+            <Text style={[typography.bodyMd, styles.infoValue]}>{operatorTaskTargetBand(workPackage.task)}</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <MaterialIcons name="route" size={16} color={colors.brandGold} />
+            <Text style={[typography.bodyMd, styles.infoLabel]}>Phân đoạn đang xem</Text>
+            <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{ref ? `${ref.segmentIds.length}` : '—'}</Text>
           </View>
           {ref ? <Text style={[typography.caption, styles.scopeNote]}>Gói hình học 1/{workPackage.geometryRefs.length} · Đang xem phạm vi đã ghim của nhiệm vụ.</Text> : null}
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Phiên bản phạm vi</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>{workPackage.scopeVersion || 'Chưa có dữ liệu'}</Text>
-          </View>
         </Card>
 
         <Card style={styles.card}>
-          <Text style={[typography.titleMd, styles.sectionTitle]}>Hạn bay và điểm tiếp cận</Text>
+          <View style={styles.cardHeader}><MaterialIcons name="flight-takeoff" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Hạn bay và điểm tiếp cận</Text></View>
+          <Text style={styles.groupLabel}>THỜI HẠN</Text>
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Hạn bay</Text>
+            <MaterialIcons name="event" size={16} color={colors.brandGold} />
+            <Text style={[typography.bodyMd, styles.infoLabel]}>Hạn bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>{formatDateTime(workPackage.dueAt ?? null)}</Text>
           </View>
+          <View style={styles.divider} />
+          <Text style={styles.groupLabel}>ĐIỂM TIẾP CẬN</Text>
           {accessPoint ? (
             <>
               <View style={styles.infoRow}>
+                <MaterialIcons name="my-location" size={16} color={colors.brandGold} />
                 <Text style={[typography.caption, styles.infoLabel]}>Toạ độ WGS84</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>
                   {formatCoord(accessPoint.point.longitude, accessPoint.point.latitude)}
@@ -213,15 +219,16 @@ export default function DroneWorkPackageScreen() {
               </View>
             </>
           ) : (
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              Máy chủ chưa công bố điểm tiếp cận cho nhiệm vụ này.
+            <Text style={[typography.bodyMd, { color: colors.secondary }]}>
+              Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này.
             </Text>
           )}
         </Card>
 
         {geometry ? (
           <Card style={styles.card}>
-            <Text style={[typography.titleMd, styles.sectionTitle]}>Gói hình học tuyến</Text>
+            <View style={styles.cardHeader}><MaterialIcons name="map" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Gói hình học tuyến</Text></View>
+            <Text style={styles.groupLabel}>PHÂN ĐOẠN ĐÃ GHIM</Text>
             <View style={styles.chipRow}>
               <Chip variant="status-pending" label={geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
             </View>
@@ -278,11 +285,11 @@ export default function DroneWorkPackageScreen() {
         </Card>
 
         <Card style={styles.card}>
-            <Text style={[typography.titleMd, styles.sectionTitle]}>Mục đích tải lên</Text>
+            <View style={styles.cardHeader}><MaterialIcons name="folder-open" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Mục đích tải lên</Text></View>
           <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Dữ liệu bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              Video khảo sát 4K RGB kèm dữ liệu telemetry/SRT/GPS theo nhiệm vụ.
+              Video khảo sát 4K RGB kèm dữ liệu hành trình/SRT/GPS theo nhiệm vụ.
             </Text>
           </View>
           <View style={styles.infoRow}>
@@ -290,6 +297,13 @@ export default function DroneWorkPackageScreen() {
             <Text style={[typography.bodyMd, styles.infoValue]}>
               Thiếu SRT/GPS thì KHÔNG đạt điều kiện phủ tuyến.
             </Text>
+          </View>
+        </Card>
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}><MaterialIcons name="perm-media" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Bằng chứng khảo sát</Text></View>
+          <View style={styles.emptyEvidence}>
+            <MaterialIcons name="image-not-supported" size={32} color={colors.secondary} />
+            <Text style={[typography.bodyMd, { color: colors.secondary, textAlign: 'center' }]}>Gói công việc chưa cung cấp danh sách tệp hoặc bộ dữ liệu để hiển thị.</Text>
           </View>
         </Card>
       </>
@@ -322,6 +336,10 @@ export default function DroneWorkPackageScreen() {
 }
 
 const styles = StyleSheet.create({
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  groupLabel: { ...typography.labelSm, color: colors.secondary, marginTop: 16, marginBottom: 4 },
+  divider: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 12 },
+  emptyEvidence: { minHeight: 150, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 12, backgroundColor: colors.surfaceAlt, marginTop: 16 },
   screen: {
     flex: 1,
   },
@@ -351,40 +369,28 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: radius.xl,
-    marginBottom: spacing.md,
+    marginBottom: 12,
+    borderWidth: 1, borderColor: colors.border, elevation: 2,
   },
   scopeCard: {
     borderRadius: radius.xl,
-    marginBottom: spacing.md,
+    marginBottom: 12,
+    borderWidth: 1, borderColor: colors.border, elevation: 2,
   },
   scopeTitle: {
     color: colors.neutral,
     marginBottom: spacing.sm,
   },
   scopeOverline: {
-    color: colors.secondary,
-    marginBottom: spacing.xs,
-  },
-  scopeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  scopeItem: {
-    flexGrow: 1,
-    flexBasis: '45%',
-    minWidth: 0,
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    color: colors.brandGold,
+    flex: 1,
   },
   scopeNote: {
     color: colors.secondary,
     marginTop: spacing.sm,
   },
   sectionTitle: {
-    color: colors.secondary,
-    marginBottom: spacing.sm,
+    flex: 1, color: colors.neutral,
   },
   chipRow: {
     flexDirection: 'row',
@@ -394,10 +400,8 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
@@ -405,12 +409,13 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     color: colors.secondary,
-    flexBasis: '45%',
-    flexShrink: 1,
+    flex: 1,
   },
   infoValue: {
     color: colors.neutral,
     flexShrink: 1,
+    maxWidth: '65%',
+    fontFamily: 'Roboto-Medium',
     textAlign: 'left',
   },
   topBar: {

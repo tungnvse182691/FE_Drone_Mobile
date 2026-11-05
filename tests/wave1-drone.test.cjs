@@ -36,10 +36,10 @@ for(const [name,error,message] of [['403',{response:{status:403}},'không có qu
  const f=drone('app/(drone)/request-detail.tsx',{
   getOperatorSurveyTaskDetailReal:async()=>{details++;return {data:task(1),etag:'"v1"'};},
   getOperatorWorkPackageReal:async()=>{works++;if(bad)throw error;return {data:{accessPoint:null}};},
- });f.s.render();await f.s.flush();assert.match(text(f.s),new RegExp(message));assert.doesNotMatch(text(f.s),/Máy chủ chưa công bố/);
- bad=false;f.s.press('Thử lại gói công việc');await f.s.flush();assert.equal(details,1);assert.equal(works,2);assert.match(text(f.s),/Máy chủ chưa công bố/);f.s.unmount();
+ });f.s.render();await f.s.flush();assert.match(text(f.s),new RegExp(message));assert.doesNotMatch(text(f.s),/Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này./);
+ bad=false;f.s.press('Thử lại gói công việc');await f.s.flush();assert.equal(details,1);assert.equal(works,2);assert.match(text(f.s),/Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này./);f.s.unmount();
 });
-for(const [name,point,expected] of [['null',null,'Máy chủ chưa công bố'],['valid',{point:{latitude:10,longitude:106}},'Google Maps'],['invalid',{point:{latitude:91,longitude:106}},'Tọa độ điểm tiếp cận không hợp lệ']])test('W1-03 point '+name,async()=>{
+for(const [name,point,expected] of [['null',null,'Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này.'],['valid',{point:{latitude:10,longitude:106}},'Google Maps'],['invalid',{point:{latitude:91,longitude:106}},'Tọa độ điểm tiếp cận không hợp lệ']])test('W1-03 point '+name,async()=>{
  const f=drone('app/(drone)/request-detail.tsx',{getOperatorSurveyTaskDetailReal:async()=>({data:task(1),etag:'"v1"'}),getOperatorWorkPackageReal:async()=>({data:{accessPoint:point}})});
  f.s.render();await f.s.flush();assert.match(text(f.s),new RegExp(expected));if(name!=='valid')assert.doesNotMatch(text(f.s),/Dẫn đường đến Điểm tiếp cận/);f.s.unmount();
 });

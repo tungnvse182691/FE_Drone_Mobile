@@ -286,3 +286,17 @@ Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và t
 - Header compact riêng Operator không hiển thị notification dot hoặc thông báo hệ thống giả.
 
 Các quy tắc này là override có phạm vi của Owner; quy tắc mặc định của các role/màn khác giữ nguyên.
+
+
+## Operator — ngôn ngữ Crew, OP-UI-06 (Owner 05/11/2026)
+
+Phạm vi: Detail, Gói công việc, hàng nhiệm vụ dùng chung Home/Requests; Upload chỉ hàng bằng chứng và lý do khóa nộp. Không đổi KPI, lọc danh sách, API, quyền hoặc luồng xác nhận lệnh.
+
+- Hàng nhiệm vụ: rail trái 4dp theo trạng thái máy chủ; mới giao/giao lại/cần bổ sung/tạm hoãn dùng warning, đã nhận/đang thực hiện dùng brandGold, hoàn tất dùng success, từ chối/hủy dùng error, đã nộp hoặc chưa biết dùng secondary. Không suy ra ưu tiên hay nhiệm vụ hiện tại.
+- Chip riêng Operator: pastel của họ trạng thái, dot 6dp + icon + nhãn tiếng Việt. Chữ primaryDark trên pastel cam; chữ secondary trên pastel xanh/đỏ/xám để đạt AA. Không thay variant dùng chung. Màu không thay thế chữ.
+- Card chính radius 20dp, dense 12dp, padding/margin 16dp, gap card 12dp; header icon vàng 16dp + tiêu đề + mã 8 ký tự. Hero chỉ có rail vàng khi mới giao/giao lại/cần bổ sung.
+- Nhãn nhóm IN HOA, divider mảnh, info row có icon vàng và giá trị Roboto Medium. UUID/phiên bản thô nằm trong kỹ thuật đóng/mở; tọa độ 6 chữ số thập phân kèm hướng B/N/Đ/T theo dấu thật.
+- CTA inline, cao tối thiểu 52dp, radius 12dp, nền primary và chữ neutral; khi có hành động phụ dùng tỷ lệ 1:2. Nút khóa opacity 0.5 và hộp lý do có icon thông tin. Giữ chuẩn bị → xác nhận gửi; không tự gửi lại journal.
+- Bằng chứng: placeholder dashed cao 150dp khi chưa có preview, tag nguồn, tên, thời gian/tọa độ từ dữ liệu thật. Local chưa tính mã băm không phải máy chủ VERIFIED; không tick xanh. DTO Gói công việc hiện không chứa danh sách file/dataset nên chỉ hiện trạng thái chưa có nguồn, không dựng hàng giả hoặc gọi thêm API.
+- Gói công việc chỉ đọc, phạm vi đã ghim nằm trong viewport đầu; chỉ đếm phân đoạn của ref đang xem. Upload vẫn khóa nộp bằng DRONE_DATASET_BLOCK_REASON.
+- Không FAB, map/GPS giả, dữ liệu demo, đổi token/default component hoặc ảnh hưởng Crew/Reporter. Keyboard Android và UUID upload ở Log không nằm trong nghiệm thu thay đổi này.

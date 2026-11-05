@@ -11,12 +11,24 @@ interface OperatorTaskRowProps {
   onPress: () => void;
 }
 
+// Operator-only palette: unknown wire values remain neutral, never successful.
+export function operatorTaskVisual(status: string) {
+  const key = status?.replace(/_/g, '').toUpperCase();
+  if (['NEWASSIGNED', 'REASSIGNED', 'SUPPLEMENTREQUIRED', 'POSTPONED'].includes(key))
+    return { rail: colors.warning, background: '#FEF3E2', ink: colors.primaryDark };
+  if (key === 'COMPLETED') return { rail: colors.success, background: '#E9F7EC', ink: colors.secondary };
+  if (['REJECTED', 'CANCELLED'].includes(key)) return { rail: colors.error, background: '#FDECEC', ink: colors.secondary };
+  if (['ACCEPTED', 'INPROGRESS'].includes(key)) return { rail: colors.brandGold, background: '#FEF3E2', ink: colors.primaryDark };
+  return { rail: colors.secondary, background: colors.surfaceAlt, ink: colors.secondary };
+}
+
 // Presentation only: status and scope remain sourced from the assigned task DTO.
 export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
   const label = operatorTaskStatusLabel(task.status);
   const code = operatorTaskDisplayCode(task.id);
   const segments = task.scope?.reduce((count, scope) => count + (scope.segmentIds?.length ?? 0), 0) ?? 0;
   const status = task.status?.toUpperCase();
+  const visual = operatorTaskVisual(task.status);
   const icon = status === 'COMPLETED' ? 'check-circle-outline'
     : status === 'SUBMITTED' ? 'task-alt'
     : ['SUPPLEMENT_REQUIRED', 'SUPPLEMENTREQUIRED'].includes(status) ? 'error-outline'
@@ -24,14 +36,15 @@ export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
 
   return <Pressable onPress={onPress} style={styles.touch}
     accessibilityRole="button" accessibilityLabel={`Xem nhiệm vụ ${code}, ${label}`}>
-    <Card style={styles.card}>
+    <Card style={{ ...styles.card, borderLeftWidth: 4, borderLeftColor: visual.rail }}>
       <View style={styles.heading}>
         <Text style={styles.title}>Khảo sát {operatorTaskTargetBand(task)}</Text>
         <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
       </View>
-      <View style={styles.status}>
-        <MaterialIcons name={icon} size={16} color={colors.secondary} />
-        <Text style={styles.statusText}>{label}</Text>
+      <View style={[styles.status, { backgroundColor: visual.background }]}>
+        <View testID="operator-status-dot" style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: visual.rail }} />
+        <MaterialIcons name={icon} size={16} color={visual.ink} />
+        <Text style={[styles.statusText, { color: visual.ink }]}>{label}</Text>
       </View>
       <View style={styles.metadata}>
         <Text style={styles.metaText}>{segments} phân đoạn</Text>

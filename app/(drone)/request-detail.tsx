@@ -7,7 +7,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
-import { Chip } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -47,7 +46,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 function formatCoordinates(longitude: number, latitude: number): string {
-  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+  return `${Math.abs(latitude).toFixed(6)}°${latitude < 0 ? 'N' : 'B'}, ${Math.abs(longitude).toFixed(6)}°${longitude < 0 ? 'T' : 'Đ'}`;
 }
 
 function operatorErrorMessage(error: unknown): string {
@@ -187,48 +186,48 @@ export default function DroneRequestDetailScreen() {
       );
     }
 
+    const status = task.status?.replace(/_/g, '').toUpperCase();
+    const attention = ['NEWASSIGNED', 'REASSIGNED', 'SUPPLEMENTREQUIRED'].includes(status);
+    const warning = attention || status === 'POSTPONED';
+    const active = ['ACCEPTED', 'INPROGRESS'].includes(status);
+    const failure = ['REJECTED', 'CANCELLED'].includes(status);
+    const semantic = warning ? colors.warning : status === 'COMPLETED' ? colors.success : failure ? colors.error : active ? colors.brandGold : colors.secondary;
+    const pastel = warning || active ? '#FEF3E2' : status === 'COMPLETED' ? '#E9F7EC' : failure ? '#FDECEC' : colors.surfaceAlt;
     return (
       <>
-        <Card style={styles.heroCard}>
+        <Card style={{ ...styles.heroCard, ...(attention ? { borderLeftWidth: 4, borderLeftColor: colors.primary } : {}) }}>
           <View style={styles.headerTitleRow}>
-            <View style={styles.headerTextGroup}>
-              <Text style={[typography.titleLg, styles.heroTitle]}>Nhiệm vụ khảo sát</Text>
-              <Text style={[typography.caption, styles.codeLabel]}>Mã nhiệm vụ: {displayCode}</Text>
-            </View>
-            <Chip
-              variant={task.status === 'REJECTED' ? 'rejected' : 'status-pending'}
-              label={operatorTaskStatusLabel(task.status)}
-              uppercase={false}
-            />
+            <MaterialIcons name="assignment" size={16} color={colors.brandGold} />
+            <Text style={styles.overline}>NHIỆM VỤ KHẢO SÁT</Text>
+            <Text style={[typography.caption, styles.codeLabel]}>{displayCode}</Text>
           </View>
-
-          <View style={styles.scopeLine}>
-            <MaterialIcons name="map" size={18} color={colors.primary} />
-            <Text style={[typography.bodyMd, styles.locationFull]}>
-              Dải mục tiêu: {operatorTaskTargetBand(task)}
-            </Text>
+          <Text style={[typography.titleLg, styles.heroTitle]}>Khảo sát {operatorTaskTargetBand(task)}</Text>
+          <View style={[styles.statusChip, { backgroundColor: pastel }]}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: semantic }} />
+            <MaterialIcons name={failure || warning ? 'error-outline' : status === 'COMPLETED' ? 'check-circle-outline' : 'schedule'} size={16} color={warning || active ? colors.primaryDark : colors.secondary} />
+            <Text style={[typography.caption, { color: warning || active ? colors.primaryDark : colors.secondary }]}>{operatorTaskStatusLabel(task.status)}</Text>
           </View>
         </Card>
 
         <Card style={styles.scopeCard}>
-          <Text style={[typography.titleMd, styles.sectionTitle]}>Phạm vi khảo sát</Text>
-          <View style={styles.scopeGrid}>
-            <View style={styles.scopeItem}>
-              <Text style={[typography.caption, styles.paramLabel]}>Dải mục tiêu</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>{operatorTaskTargetBand(task)}</Text>
-            </View>
-            <View style={styles.scopeItem}>
-              <Text style={[typography.caption, styles.paramLabel]}>Số phân đoạn</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>{operatorTaskSegmentCount(task)}</Text>
-            </View>
-            <View style={styles.scopeItem}>
-              <Text style={[typography.caption, styles.paramLabel]}>Hạn bay</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>{formatDateTime(workPackage?.dueAt ?? null)}</Text>
-            </View>
-            <View style={styles.scopeItem}>
-              <Text style={[typography.caption, styles.paramLabel]}>Phiên bản phạm vi</Text>
-              <Text style={[typography.bodyMd, styles.paramValue]}>{workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
-            </View>
+          <View style={styles.headerTitleRow}>
+            <MaterialIcons name="map" size={16} color={colors.brandGold} />
+            <Text style={[typography.titleMd, styles.sectionTitle]}>Phạm vi khảo sát</Text>
+          </View>
+          <Text style={styles.groupLabel}>PHẠM VI</Text>
+          <View style={styles.infoLine}>
+            <MaterialIcons name="layers" size={16} color={colors.brandGold} />
+            <Text style={styles.infoText}>Dải mục tiêu: <Text style={styles.medium}>{operatorTaskTargetBand(task)}</Text></Text>
+          </View>
+          <View style={styles.infoLine}>
+            <MaterialIcons name="route" size={16} color={colors.brandGold} />
+            <Text style={styles.infoText}>Số phân đoạn: <Text style={styles.medium}>{operatorTaskSegmentCount(task)}</Text></Text>
+          </View>
+          <View style={styles.divider} />
+          <Text style={styles.groupLabel}>THỜI HẠN</Text>
+          <View style={styles.infoLine}>
+            <MaterialIcons name="event" size={16} color={colors.brandGold} />
+            <Text style={styles.infoText}>Hạn bay: <Text style={styles.medium}>{formatDateTime(workPackage?.dueAt ?? null)}</Text></Text>
           </View>
         </Card>
 
@@ -237,7 +236,7 @@ export default function DroneRequestDetailScreen() {
             <View style={styles.accessPointHeaderLeft}>
               <MaterialIcons name="flight-takeoff" size={18} color={colors.primary} />
               <Text style={[typography.labelSm, styles.accessPointHeaderTitle]}>
-                Điểm tiếp cận cất-hạ cánh
+                ĐIỂM TIẾP CẬN
               </Text>
             </View>
           </View>
@@ -279,7 +278,7 @@ export default function DroneRequestDetailScreen() {
           ) : (
             <View style={styles.accessPointBody}>
               <Text style={[typography.caption, styles.accessPointDesc]}>
-                {workPackage?.accessPoint ? 'Tọa độ điểm tiếp cận không hợp lệ. Không thể mở dẫn đường; vui lòng liên hệ PM.' : 'Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này. Máy chủ chưa công bố điểm tiếp cận.'}
+                {workPackage?.accessPoint ? 'Tọa độ điểm tiếp cận không hợp lệ. Không thể mở dẫn đường; vui lòng liên hệ PM.' : 'Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này.'}
               </Text>
             </View>
           )}
@@ -292,18 +291,6 @@ export default function DroneRequestDetailScreen() {
             icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
             onPress={handleOpenWorkPackage}
           />
-
-          {canOpenDecline ? <Pressable
-            style={styles.rejectButton}
-            onPress={handleOpenDecline}
-            accessibilityRole="button"
-            accessibilityLabel="Từ chối nhiệm vụ"
-          >
-            <MaterialIcons name="cancel" size={18} color={colors.error} />
-            <Text style={[typography.labelLg, styles.rejectButtonText]}>
-              Từ chối nhiệm vụ
-            </Text>
-          </Pressable> : null}
 
           <Text style={[typography.caption, styles.syncFootnote]}>
             {canOpenDecline
@@ -320,6 +307,7 @@ export default function DroneRequestDetailScreen() {
           {technical ? <View style={styles.techDetailBox}>
             <Text selectable style={typography.caption}>Mã máy chủ: {task.id}</Text>
             <Text selectable style={typography.caption}>Phiên bản nhiệm vụ: {task.version}</Text>
+            <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
             <Text style={typography.caption}>Phạm vi được ghim theo nhiệm vụ; xem các phân đoạn ở Gói công việc.</Text>
           </View> : null}
         </Card>
@@ -351,7 +339,12 @@ export default function DroneRequestDetailScreen() {
     >
       {renderBody()}
       {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
-        collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} /> : null}
+        collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
+        {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
+          <MaterialIcons name="cancel" size={18} color={colors.secondary} />
+          <Text style={[typography.labelLg, styles.rejectButtonText]}>Từ chối nhiệm vụ</Text>
+        </Pressable> : null}
+      </DroneTaskCommandPanel> : null}
       {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
       {scope.key && target ? <>
         {!canOpenDecline ? <Pressable accessibilityRole="button" accessibilityLabel="Lệnh và đối soát" accessibilityState={{ expanded: commandsExpanded }} onPress={() => setCommandsExpanded(value => !value)} style={styles.technicalToggle}>
@@ -373,20 +366,20 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 48, height: 48 },
   topBarCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
   topBarTitle: { color: colors.neutral },
-  heroCard: { borderRadius: radius.xl, marginBottom: spacing.md },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  headerTextGroup: { flex: 1, minWidth: 0 },
-  heroTitle: { color: colors.neutral, marginBottom: spacing.xs },
+  heroCard: { borderRadius: radius.xl, marginBottom: 12, borderWidth: 1, borderColor: colors.border, elevation: 2 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  overline: { ...typography.labelSm, color: colors.brandGold, flex: 1, lineHeight: 18 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 6 },
+  groupLabel: { ...typography.labelSm, color: colors.secondary, marginTop: 12, marginBottom: 8 },
+  infoLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  infoText: { ...typography.bodyMd, color: colors.secondary, flex: 1 },
+  medium: { fontFamily: 'Roboto-Medium', color: colors.neutral },
+  divider: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4 },
+  heroTitle: { color: colors.neutral, marginVertical: 12 },
   codeLabel: { color: colors.secondary },
-  scopeLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.md },
-  locationFull: { color: colors.secondary, flex: 1 },
   sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
-  scopeCard: { borderRadius: radius.xl, marginBottom: spacing.md },
-  scopeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  scopeItem: { flexGrow: 1, flexBasis: '45%', minWidth: 0, backgroundColor: colors.surfaceAlt, padding: spacing.sm, borderRadius: radius.md },
-  paramLabel: { color: colors.secondary },
-  paramValue: { color: colors.neutral, fontWeight: '500', marginTop: spacing.xs },
-  accessPointCard: { borderRadius: radius.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  scopeCard: { borderRadius: radius.xl, marginBottom: 12, borderWidth: 1, borderColor: colors.border, elevation: 2 },
+  accessPointCard: { borderRadius: radius.xl, marginBottom: 12, elevation: 2, borderWidth: 1, borderColor: colors.border },
   accessPointHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
   accessPointHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   accessPointHeaderTitle: { flex: 1, color: colors.neutral },
@@ -397,11 +390,11 @@ const styles = StyleSheet.create({
   boldCoord: { fontWeight: '500', color: colors.neutral, fontFamily: 'Roboto' },
   navMapButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.sm, backgroundColor: colors.surface, marginTop: spacing.xs },
   navMapButtonText: { color: colors.neutral },
-  technicalCard: { borderRadius: radius.lg, marginBottom: spacing.md },
+  technicalCard: { borderRadius: radius.xl, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
   techDetailBox: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs, gap: spacing.sm },
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: { gap: spacing.sm, marginBottom: spacing.md },
-  rejectButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.error, borderRadius: radius.md, paddingHorizontal: spacing.md, backgroundColor: colors.surface },
-  rejectButtonText: { color: colors.error },
+  rejectButton: { flex: 1, minHeight: 52, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.sm, backgroundColor: colors.surface },
+  rejectButtonText: { color: colors.neutral, textAlign: 'center', lineHeight: 21 },
   syncFootnote: { textAlign: 'center', color: colors.secondary, marginTop: spacing.xs },
 });

@@ -34,6 +34,21 @@ interface UploadConfig {
   gpsAddress: string;
 }
 
+function evidencePlaceholder() {
+  return <View style={styles.evidencePreview}>
+    <MaterialIcons name="image-not-supported" size={32} color={colors.secondary} />
+    <Text style={[typography.caption, { color: colors.secondary }]}>Chưa có ảnh xem trước</Text>
+  </View>;
+}
+function evidenceMetadata() {
+  return <>
+    <View style={styles.sourceTag}><Text style={[typography.caption, { color: colors.primaryDark }]}>Tệp trên thiết bị</Text></View>
+    <Text style={styles.evidenceMeta}>Thời gian ghi hình: Chưa có dữ liệu</Text>
+    <Text style={styles.evidenceMeta}>Tọa độ ghi hình: Chưa có dữ liệu</Text>
+    <View style={styles.evidenceStatus}><MaterialIcons name="info-outline" size={16} color={colors.secondary} /><Text style={styles.evidenceMeta}>Chưa được máy chủ xác minh</Text></View>
+  </>;
+}
+
 export default function DroneUploadScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const scope = useOperatorReadScope(params.taskId ?? '');
@@ -208,7 +223,9 @@ export default function DroneUploadScreen() {
         {copying && <Text accessibilityRole="alert">Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text>}
         <Text style={typography.caption}>MP4 tối đa 8 GiB; SRT tối đa 10 MiB theo giới hạn máy chủ đã đối chiếu.</Text>
         <Text style={typography.caption}>Cùng tài khoản và máy chủ. Tệp từ phiên cũ cần chọn lại chủ động; chưa tính mã băm, chưa tải lên, chưa được máy chủ xác minh.</Text>
-        {savedFiles.map(file => <View key={file.key}>
+        {savedFiles.map(file => <View key={file.key} style={styles.savedEvidence}>
+          {evidencePlaceholder()}
+          {evidenceMetadata()}
           <Text>{file.name} · {file.availability === 'LOCAL_UNHASHED' ? 'Bản sao trên thiết bị' : file.availability === 'INCOMPLETE' ? 'Bản sao chưa đầy đủ' : 'Không tìm thấy tệp trên thiết bị'}</Text>
           <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={copying || file.availability !== 'LOCAL_UNHASHED'} onPress={() => restoreFile(file.key)} />
         </View>)}
@@ -413,11 +430,13 @@ export default function DroneUploadScreen() {
           </Pressable>
         </View>
 
+        {evidencePlaceholder()}
         <View style={styles.fileInfoRow}>
           <View style={styles.fileIconBox}>
             <MaterialIcons name="movie" size={24} color={colors.primary} />
           </View>
           <View style={styles.fileDetailsGroup}>
+            {evidenceMetadata()}
             <Text testID="selected-video" style={[typography.titleMd, styles.fileNameText]}>{videoName}</Text>
             <Text style={[typography.caption, styles.fileSizeText]}>
               Dung lượng: <Text style={styles.boldText}>{videoSize}</Text> · Chưa kiểm tra thông số video
@@ -455,11 +474,13 @@ export default function DroneUploadScreen() {
           </Pressable>
         </View>
 
+        {evidencePlaceholder()}
         <View style={styles.fileInfoRow}>
           <View style={styles.fileIconBox}>
             <MaterialIcons name="description" size={24} color={colors.primary} />
           </View>
           <View style={styles.fileDetailsGroup}>
+            {evidenceMetadata()}
             <Text style={[typography.titleMd, styles.fileNameText]}>{srtName}</Text>
             <Text style={[typography.caption, styles.fileSizeText]}>
               Dung lượng: <Text style={styles.boldText}>{srtSize}</Text> · Chưa kiểm tra dữ liệu GPS
@@ -525,9 +546,11 @@ export default function DroneUploadScreen() {
 
       {/* Action CTA Section */}
       <View style={styles.actionSection}>
+        <Button variant="secondary" title="Chọn nhiệm vụ từ danh sách" onPress={() => router.push('/(drone)/requests')} />
         {uploadStep === 'SERVER_CONFIRMED' ? (
           <Button
-            variant="primary"
+            variant="secondary"
+            style={styles.primaryAction}
             title="Xem nhật ký chuyến bay khảo sát"
             onPress={() =>
               router.push({
@@ -538,20 +561,26 @@ export default function DroneUploadScreen() {
           />
         ) : (
           <Button
-            variant="primary"
+            variant="secondary"
+            style={styles.primaryAction}
+            disabledTextStyle={{ color: colors.neutral }}
+            icon={<MaterialIcons name="cloud-upload" size={18} color={colors.neutral} />}
             title={
               uploadStep === 'UPLOADING'
                 ? `Đang đẩy dữ liệu (${uploadProgress}%)...`
                 : uploadStep === 'QUEUED'
                 ? 'Đang chuẩn bị tệp...'
-                : `Nộp bộ dữ liệu 4K RGB (${config.code})`
+                : 'Nộp bộ dữ liệu 4K RGB'
             }
             loading={submitting}
             disabled={true}
             onPress={handleStartSubmitDataset}
           />
         )}
-        <Text accessibilityRole="alert" style={typography.caption}>{DRONE_DATASET_BLOCK_REASON}</Text>
+        <View testID="dataset-disabled-reason" accessibilityRole="alert" style={styles.disabledReason}>
+          <MaterialIcons name="info-outline" size={20} color={colors.secondary} />
+          <Text style={[typography.bodyMd, { color: colors.secondary, flex: 1, textAlign: 'center' }]}>{DRONE_DATASET_BLOCK_REASON}</Text>
+        </View>
         {submitError && <Text style={[typography.caption, styles.statusError]}>{submitError}</Text>}
         {statusMsg && <Text style={[typography.caption, styles.statusMsg]}>{statusMsg}</Text>}
       </View>
@@ -560,6 +589,13 @@ export default function DroneUploadScreen() {
 }
 
 const styles = StyleSheet.create({
+  evidencePreview: { height: 150, alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginVertical: 12 },
+  sourceTag: { alignSelf: 'flex-start', backgroundColor: '#FEF3E2', borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8 },
+  evidenceMeta: { ...typography.caption, color: colors.secondary, lineHeight: 18 },
+  evidenceStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  savedEvidence: { gap: 8, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 16, paddingTop: 8 },
+  primaryAction: { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary },
+  disabledReason: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginTop: 8 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -778,13 +814,15 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   fileCard: {
-    marginBottom: spacing.sm,
+    borderRadius: 20, borderWidth: 1, borderColor: colors.border,
+    marginBottom: 12,
     gap: spacing.xs,
   },
   fileCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingBottom: spacing.xs,
@@ -798,6 +836,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   pickFileBtn: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -863,8 +902,8 @@ const styles = StyleSheet.create({
   checksumHash: {
     fontSize: 11,
     fontFamily: 'Roboto',
-    color: colors.success,
-    fontWeight: 'bold',
+    color: colors.secondary,
+    fontWeight: '500',
     marginTop: 1,
   },
   gpsCard: {

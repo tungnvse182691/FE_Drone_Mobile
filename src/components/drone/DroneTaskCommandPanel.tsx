@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { openDroneTaskJournal, listDroneTaskCommands } from '../../api/droneTaskJournal';
 import { operatorTaskStatusLabel, operatorTaskDisplayCode } from '../../api/operator-task-view';
 import { useRouter } from 'expo-router';
@@ -11,8 +12,9 @@ import { typography, spacing, colors } from '../../design-tokens';
 type Runtime = Awaited<ReturnType<typeof openDroneTaskJournal>>;
 type Saved = Awaited<ReturnType<Runtime['read']>>;
 /** One dispatcher for detail/decline/recovery. Opening the panel never posts. */
-export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand}: {
+export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand, children}: {
   taskId: string; operation: 'accept' | 'decline'; collapsed?: boolean; onExpand?: () => void;
+  children?: React.ReactNode;
 }) {
   const scope = useOperatorReadScope(taskId);
   const [runtime,setRuntime] = useState<Runtime | null>(null), [saved,setSaved] = useState<Saved>(null);
@@ -79,8 +81,10 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
       </View>
       <Button variant="secondary" title="Xem lệnh cần đối soát" onPress={() => onExpand?.()} />
     </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
-  return <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
-    <Text style={typography.titleMd}>Tiếp nhận và phản hồi nhiệm vụ</Text>
+  const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Chỉ chuẩn bị yêu cầu khi máy chủ xác nhận nhiệm vụ mới được giao hoặc giao lại cho bạn.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
+  const primaryStyle = { flex: 2, minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
+  return <Card style={{gap:spacing.sm,marginBottom:12,borderRadius:20,borderWidth:1,borderColor:colors.border}}>
+    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>Tiếp nhận và phản hồi nhiệm vụ</Text></View>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
     {saved ? <>
       <Text style={typography.bodyMd}>{saved.command.operation==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text>
@@ -88,13 +92,19 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
       <Text>{saved.phase==='RECEIPT'?'Máy chủ đã trả kết quả cho lệnh này.':saved.phase==='PREPARED'?'Đã lưu lệnh, chưa gửi.':'Lệnh đã gửi nhưng chưa xác nhận được kết quả.'}</Text>
       {saved.phase!=='RECEIPT'?<>
         <Text style={typography.caption}>Gửi lại giữ nguyên nội dung, phiên bản và mã yêu cầu đã lưu. Đọc trạng thái nhiệm vụ không tự giải quyết lệnh chưa rõ kết quả.</Text>
-        <Button variant="primary" title="Xác nhận gửi lệnh đã lưu" disabled={busy||!ready} onPress={()=>void run('dispatch')} />
+        <Button variant="secondary" style={primaryStyle} disabledTextStyle={{color:colors.neutral}} icon={<MaterialIcons name="send" size={18} color={colors.neutral} />} title="Xác nhận gửi lệnh đã lưu" disabled={busy||!ready} onPress={()=>void run('dispatch')} />
       </>:null}
     </>:<>
-      {operation==='decline'?<TextInput accessibilityLabel="Lý do từ chối" value={reason} editable={!busy&&ready} onChangeText={setReason} multiline placeholder="Nhập lý do thực tế" style={{borderWidth:1,borderColor:colors.border,padding:spacing.sm}}/>:null}
-      {!canPrepare?<Text style={typography.caption}>Chỉ chuẩn bị yêu cầu khi máy chủ xác nhận nhiệm vụ mới được giao hoặc giao lại cho bạn.</Text>:null}
-      <Button variant="primary" title={operation==='accept'?'Chuẩn bị tiếp nhận nhiệm vụ':'Lưu yêu cầu từ chối để xác nhận'} disabled={busy||!ready||!canPrepare||(operation==='decline'&&!reason.trim())} onPress={()=>void run('prepare')} />
+      {operation==='decline'?<TextInput accessibilityLabel="Lý do từ chối" value={reason} editable={!busy&&ready} onChangeText={setReason} multiline placeholder="Nhập lý do thực tế" style={{...typography.bodyMd,minHeight:96,borderWidth:1,borderColor:colors.border,borderRadius:12,padding:16,color:colors.neutral,textAlignVertical:'top'}}/>:null}
+      <View style={{flexDirection:'row',alignItems:'stretch',gap:8}}>
+      {children ? <View style={{flex:1}}>{children}</View> : null}
+      {children ? <Pressable accessibilityRole="button" accessibilityLabel="Chuẩn bị tiếp nhận nhiệm vụ" accessibilityState={{disabled:busy||!ready||!canPrepare}} disabled={busy||!ready||!canPrepare} onPress={()=>void run('prepare')} style={{...primaryStyle,alignItems:'center',justifyContent:'center',padding:12,opacity:busy||!ready||!canPrepare?0.5:1}}>
+        <MaterialIcons name="assignment-turned-in" size={18} color={colors.neutral} />
+        <Text style={{...typography.labelLg,color:colors.neutral,textAlign:'center',lineHeight:21}}>Chuẩn bị tiếp nhận nhiệm vụ</Text>
+      </Pressable> : <Button variant="secondary" style={primaryStyle} disabledTextStyle={{color:colors.neutral}} icon={<MaterialIcons name={operation==='accept'?'assignment-turned-in':'save'} size={18} color={colors.neutral} />} title={operation==='accept'?'Chuẩn bị tiếp nhận nhiệm vụ':'Lưu yêu cầu từ chối để xác nhận'} disabled={busy||!ready||!canPrepare||(operation==='decline'&&!reason.trim())} onPress={()=>void run('prepare')} />}
+      </View>
     </>}
+    {disabledReason ? <View testID="command-disabled-reason" style={{flexDirection:'row',alignItems:'center',gap:8,padding:12,borderRadius:12,backgroundColor:colors.surfaceAlt}}><MaterialIcons name="info-outline" size={18} color={colors.secondary} /><Text style={{...typography.caption,color:colors.secondary,textAlign:'center',flex:1}}>{disabledReason}</Text></View> : null}
     <Button variant="secondary" title="Đọc trạng thái nhiệm vụ hiện hành" disabled={busy||!ready} onPress={()=>void run('read')} />
     {current?<Text>Trạng thái hiện hành: {current}</Text>:null}
     {error?<View accessibilityRole="alert"><Text>{error}</Text></View>:null}

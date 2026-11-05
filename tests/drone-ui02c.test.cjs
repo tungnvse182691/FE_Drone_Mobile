@@ -30,7 +30,7 @@ test('02C Work Package shows only pinned segments, truthful revision and collaps
  const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref]}}),getOperatorGeometryPackageReal:async()=>({data:geometry})},{params:{taskId:task.id}});
  s.render();await s.flush();assert.match(text(s),/Phân đoạn chưa có mã/);assert.doesNotMatch(text(s),/OUTSIDE-SCOPE/);
  assert.ok(!s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Bản hiện hành'));
- assert.match(text(s),/chưa công bố điểm tiếp cận/);assert.doesNotMatch(text(s),/DSM|OpenDroneMap|SfM/);
+ assert.match(text(s),/chưa cung cấp điểm tiếp cận cho nhiệm vụ này/);assert.doesNotMatch(text(s),/DSM|OpenDroneMap|SfM/);
  const toggle=()=>s.nodes().find(n=>n.props.accessibilityLabel==='Thông tin kỹ thuật');
  assert.ok(toggle());assert.equal(toggle().props.accessibilityState.expanded,false);toggle().props.onPress();await s.flush();assert.match(text(s),new RegExp(id(4)));
  const back=walk(s.nodes().find(n=>n.type==='SafeAreaScreen').props.header).find(n=>n.props.accessibilityLabel==='Quay lại');assert.ok(back.props.style({pressed:false})[0].width>=48);s.unmount();
