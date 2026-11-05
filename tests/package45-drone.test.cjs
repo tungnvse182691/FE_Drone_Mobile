@@ -23,7 +23,7 @@ test('Drone profile keeps cards without fabricated pilot, hardware, statistics o
   const s=drone('profile');s.render();await s.flush();
   const text=JSON.stringify(s.nodes());
   assert.doesNotMatch(text,/HH-2089|128h|M350-HH-02|142 MB|Đội Khảo sát Số 1/);
-  assert.match(text,/Chưa có dữ liệu/);
+  assert.doesNotMatch(text,/Mã NV: Chưa có mã nhân viên|Đội phụ trách|Thiết bị phân bổ|Chưa có dữ liệu phân bổ/);
   assert.ok(!s.nodes().some(n=>n.props?.accessibilityLabel==='Dọn dẹp cache máy')); s.unmount();
 });
 for(const file of ['home','requests']) test(`Drone ${file} discards late page after environment switch`,async()=>{

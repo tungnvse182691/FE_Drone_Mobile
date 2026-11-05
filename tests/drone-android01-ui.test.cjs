@@ -49,12 +49,12 @@ test('DRONE-ANDROID-01 Sync describes a local queue and gives its summary separa
     '../../src/offline/upload-queue': { currentQueueIdentity: () => identity, sameQueueIdentity: () => true, createQueueReader: () => ({ cancel() {}, read: async () => [] }), queueChecksumLabel: () => '' },
   } });
   s.render(); await s.flush();
-  assert.equal(s.nodes().find(n => n.type === 'SafeAreaScreen').props.header.props.subtitle, 'Dữ liệu trên thiết bị');
+  assert.equal(s.nodes().find(n => n.type === 'SafeAreaScreen').props.header.props.subtitle, 'Đồng bộ');
   assert.doesNotMatch(allText(s), /ĐỒNG BỘ NỀN|DANH SÁCH TỆP CHỜ TẢI|Không có tệp nào/);
   const summary = s.nodes().find(n => n.type === 'Text' && JSON.stringify(n.props.children).includes('Không có mục trong phân vùng này'));
   const row = s.nodes().find(n => n.type === 'View' && n.props.children?.some?.(child => child?.props?.children?.includes?.(summary)));
   assert.ok(row); assert.equal(row.props.style.flexDirection, 'column');
-  await s.press('Đọc lại hàng đợi'); await s.flush();
-  assert.match(allText(s), /không gửi hoặc xác minh biên nhận/);
+  s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Đọc lại hàng đợi').props.onPress(); await s.flush();
+  assert.match(allText(s), /không gửi lên máy chủ và không xác minh biên nhận/);
   s.unmount();
 });

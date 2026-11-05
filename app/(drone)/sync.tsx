@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -84,7 +84,7 @@ function describeItem(row: OutboxItem): SyncItem {
 export default function DroneSyncScreen() {
   useAuthStore(s=>s.token);useAuthStore(s=>s.user);useAuthStore(s=>s.status);
   const identity=currentQueueIdentity();
-  if(!identity||identity.role!=='DRONE_OPERATOR')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" />}><Text>Cần phiên Operator hợp lệ.</Text></SafeAreaScreen>;
+  if(!identity||identity.role!=='DRONE_OPERATOR')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" variant="operatorCompact" />}><Text>Cần phiên Operator hợp lệ.</Text></SafeAreaScreen>;
   return <DroneSyncContent key={JSON.stringify(identity)} identity={identity} />;
 }
 function DroneSyncContent({identity}:{identity:QueueIdentity}) {
@@ -158,7 +158,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Dữ liệu trên thiết bị" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ" variant="operatorCompact" />}>
       {/* Toast Notification */}
       {toastMsg && (
         <View style={styles.toast}>
@@ -222,14 +222,19 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           </Text>
         </View>
 
-        <Button
-          variant="primary"
-          title={syncing ? 'Đang đọc hàng đợi…' : 'Đọc lại hàng đợi'}
-          loading={syncing}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Đọc lại hàng đợi"
+          accessibilityState={{ disabled: syncing, busy: syncing }}
           disabled={syncing}
           onPress={handleSyncAll}
-        />
+          style={({ pressed }) => [styles.operatorReload, pressed && !syncing && styles.operatorReloadPressed, syncing && styles.operatorReloadDisabled]}
+        >
+          {syncing ? <ActivityIndicator color={colors.neutral} /> : <MaterialIcons name="refresh" size={18} color={colors.neutral} />}
+          <Text style={styles.operatorReloadText}>{syncing ? 'Đang đọc hàng đợi…' : 'Đọc lại hàng đợi'}</Text>
+        </Pressable>
       </Card>
+      <Text style={[typography.caption, styles.reloadNote]}>Chỉ đọc lại dữ liệu SQLite đang giữ trên thiết bị; không gửi lên máy chủ và không xác minh biên nhận.</Text>
 
       {/* Section Title */}
       {activeItems.length > 0 ? <View style={styles.sectionHeader}>
@@ -245,7 +250,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       <View style={styles.itemsList}>
         {activeItems.length === 0 ? null : (
           activeItems.map((item) => (
-            <Card key={item.id} style={styles.itemCard}>
+            <Card key={item.id} style={[styles.itemCard, { borderLeftColor: item.tone === 'blocked' ? colors.error : item.tone === 'done' ? colors.success : colors.warning }]}>
               <View style={styles.itemMain}>
                 <View style={styles.itemIconWrap}>
                   {item.type === 'video' && (
@@ -378,7 +383,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   toggleBtnTextActive: {
-    color: colors.onPrimary,
+    color: colors.neutral,
     fontWeight: 'bold',
   },
   summaryCard: {
@@ -435,8 +440,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
     padding: spacing.sm,
-    borderRadius: radius.xl,
-    ...softShadow,
+    borderRadius: radius.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.secondary,
   },
   itemMain: {
     flexDirection: 'row',
@@ -521,6 +527,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: spacing.xl,
   },
+  operatorReload: {
+    minHeight: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  operatorReloadPressed: { backgroundColor: colors.primaryDark },
+  operatorReloadDisabled: { opacity: 0.5 },
+  operatorReloadText: { ...typography.labelLg, color: colors.neutral },
+  reloadNote: { color: colors.secondary, marginBottom: spacing.md },
   purgeCard: {
     marginBottom: spacing.xl,
     gap: spacing.sm,

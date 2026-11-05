@@ -21,6 +21,7 @@ function normalizeName(name: string): string {
 export default function DroneProfileScreen() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const employeeCode = user?.employee_code?.trim() || '';
 
   const [infoVisible, setInfoVisible] = useState(false);
   const handleLogout = () => {
@@ -29,7 +30,7 @@ export default function DroneProfileScreen() {
   };
 
   return (
-    <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" variant="operatorCompact" />}>
       {/* Avatar & Personal Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarCircle}>
@@ -41,25 +42,13 @@ export default function DroneProfileScreen() {
           {normalizeName(user?.full_name ?? '') || 'Phi công hiện trường'}
         </Text>
 
-        <Text style={[typography.caption, styles.userSub]}>
-          Mã NV: {user?.employee_code?.trim() || 'Chưa có mã nhân viên'}
-        </Text>
+        {employeeCode ? <Text style={[typography.caption, styles.userSub]}>Mã NV: {employeeCode}</Text> : null}
 
         <View style={styles.roleChip}>
           <MaterialIcons name="flight-takeoff" size={14} color={colors.primaryDark} />
           <Text style={styles.roleChipText}>Phi công hiện trường</Text>
         </View>
       </View>
-
-      {/* Hardware / Devices Card */}
-      <Card style={styles.deviceCard}>
-        <View style={styles.deviceHeader}>
-          <MaterialIcons name="memory" size={18} color={colors.primary} />
-          <Text style={[typography.labelSm, styles.deviceTitle]}>THIẾT BỊ PHÂN BỔ HIỆN TRƯỜNG</Text>
-        </View>
-
-        <Text style={[typography.caption, { color: colors.secondary }]}>Chưa có dữ liệu thiết bị bay, RTK, thống kê bay và chứng nhận từ máy chủ.</Text>
-      </Card>
 
       {/* Settings Menu List */}
       <Card style={styles.menuCard}>
@@ -154,29 +143,15 @@ export default function DroneProfileScreen() {
                 </Text>
               </View>
 
-              <View style={styles.infoRow}>
+              {employeeCode ? <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Mã nhân viên</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>
-                  {user?.employee_code?.trim() || 'Chưa có mã nhân viên'}
-                </Text>
-              </View>
-
-              <View style={styles.infoRow}>
-                <Text style={[typography.caption, styles.infoLabel]}>Đội phụ trách</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>Chưa có dữ liệu</Text>
-              </View>
-
+                <Text style={[typography.bodyMd, styles.infoValue]}>{employeeCode}</Text>
+              </View> : null}
               <View style={styles.infoRow}>
                 <Text style={[typography.caption, styles.infoLabel]}>Vai trò</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>Phi công hiện trường</Text>
               </View>
 
-              <View style={styles.infoRow}>
-                <Text style={[typography.caption, styles.infoLabel]}>Thiết bị phân bổ</Text>
-                <Text style={[typography.bodyMd, styles.infoValue]}>
-                  Chưa có dữ liệu phân bổ
-                </Text>
-              </View>
             </View>
 
             <Pressable
