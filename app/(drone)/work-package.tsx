@@ -62,6 +62,21 @@ function metadataStatusLabel(status: string | null): string {
   return METADATA_STATUS_LABEL[status] ?? 'Đang cập nhật';
 }
 
+function optionalMeters(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value} m` : 'Chưa có dữ liệu';
+}
+
+function segmentMetadata(segment: GeometryPackageViewDto['segmentSet']['segments'][number]): string {
+  const parts = [
+    `Từ ${optionalMeters(segment.fromOffsetMeters)}`,
+    `đến ${optionalMeters(segment.toOffsetMeters)}`,
+    `trạm đầu ${optionalMeters(segment.startStationMeters)}`,
+    `trạm cuối ${optionalMeters(segment.endStationMeters)}`,
+    `dài ${optionalMeters(segment.lengthMeters)}`,
+  ];
+  return parts.join(' · ');
+}
+
 function operatorErrorMessage(error: unknown): string {
   const response = (error as { response?: { data?: unknown; status?: number } }).response;
   const code = parseProblemDetails(response?.data).code;
@@ -181,7 +196,7 @@ export default function DroneWorkPackageScreen() {
             <Text style={[typography.bodyMd, styles.infoLabel]}>Phân đoạn đang xem</Text>
             <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{ref ? `${ref.segmentIds.length}` : '—'}</Text>
           </View>
-          {ref ? <Text style={[typography.caption, styles.scopeNote]}>Gói hình học 1/{workPackage.geometryRefs.length} · Đang xem phạm vi đã ghim của nhiệm vụ.</Text> : null}
+          {ref ? <Text style={[typography.caption, styles.scopeNote]}>Đang xem bộ phân đoạn đã ghim của nhiệm vụ.</Text> : null}
         </Card>
 
         <Card style={styles.card}>
@@ -232,11 +247,13 @@ export default function DroneWorkPackageScreen() {
             <View style={styles.chipRow}>
               <Chip variant="status-pending" label={geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
             </View>
-            <Text style={[typography.caption, styles.noticeText]}>Phiên bản tuyến: {geometry.route.versionNo} · Gói hình học 1/{workPackage.geometryRefs.length}</Text>
+            <Text style={[typography.caption, styles.noticeText]}>Phiên bản tuyến: {geometry.route.versionNo}</Text>
             {geometry.segmentSet.segments.filter(segment => ref?.segmentIds.includes(segment.id)).map(segment => (
               <View key={segment.id} style={styles.infoRow}>
-                <Text style={[typography.bodyMd, styles.infoValue]}>{segment.code?.trim() || 'Phân đoạn chưa có mã'}</Text>
-                <Text style={[typography.caption, styles.infoValue]}>{segment.lengthMeters} m</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[typography.bodyMd, styles.infoValue]}>{segment.sequence == null ? 'Phân đoạn chưa có mã' : `Phân đoạn ${segment.sequence}`}</Text>
+                  <Text style={[typography.caption, styles.infoLabel]}>{segmentMetadata(segment)}</Text>
+                </View>
               </View>
             ))}
             <View style={styles.infoRow}>
@@ -274,8 +291,8 @@ export default function DroneWorkPackageScreen() {
           </Pressable>
           {technicalExpanded ? <View style={{ gap: spacing.sm }}>
             <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage.scopeVersion ?? '—'}</Text>
-            {workPackage.geometryRefs.map((entry, index) => <View key={index} style={{ gap: spacing.xs }}>
-              <Text style={typography.labelSm}>Gói hình học {index + 1}/{workPackage.geometryRefs.length}{index === 0 ? ' · Đang xem' : ''}</Text>
+            {workPackage.geometryRefs.map((entry) => <View key={`${entry.routeVersionId}:${entry.segmentSetId}`} style={{ gap: spacing.xs }}>
+              <Text style={typography.labelSm}>{entry.routeVersionId === ref?.routeVersionId && entry.segmentSetId === ref?.segmentSetId ? 'Bộ hình học đang xem' : 'Bộ hình học đã ghim'}</Text>
               <Text selectable style={typography.caption}>Tuyến: {entry.routeVersionId}</Text>
               <Text selectable style={typography.caption}>Bộ phân đoạn: {entry.segmentSetId}</Text>
               <Text selectable style={typography.caption}>Phân đoạn: {entry.segmentIds.join(', ')}</Text>

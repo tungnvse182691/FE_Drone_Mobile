@@ -116,10 +116,15 @@ export interface RoadGeometryVersionViewDto {
 
 export interface SegmentGeometryViewDto {
   id: string;
-  code: string;
-  chainageStart: number;
-  chainageEnd: number;
-  lengthMeters: number;
+  sequence: number;
+  fromOffsetMeters?: number | null;
+  toOffsetMeters?: number | null;
+  startStationMeters?: number | null;
+  endStationMeters?: number | null;
+  lengthMeters?: number | null;
+  metricGeometry?: GeometryShapeDto | null;
+  wgs84Geometry?: GeometryShapeDto | null;
+  missingMetadata: string[];
 }
 
 export interface SegmentSetViewDto {

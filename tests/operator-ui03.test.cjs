@@ -38,8 +38,8 @@ test('UI03 Submitted detail delegates collapsed rendering to live command panel'
 test('UI03 multi-ref package counts only displayed pinned geometry and identifies its version',async()=>{
  const ref={routeVersionId:id(4),segmentSetId:id(5),segmentIds:[id(6)]};
  const other={routeVersionId:id(7),segmentSetId:id(8),segmentIds:[id(9),id(10)]};let queries=[];
- const geometry={projectId:task.projectId,route:{routeVersionId:id(4),versionNo:7,isCurrent:false,effectiveFrom:null},segmentSet:{id:id(5),routeVersionId:id(4),segments:[{id:id(6),code:'PINNED',lengthMeters:100},{id:id(9),code:'OUTSIDE'}]}};
+ const geometry={projectId:task.projectId,route:{routeVersionId:id(4),versionNo:7,isCurrent:false,effectiveFrom:null},segmentSet:{id:id(5),routeVersionId:id(4),segments:[{id:id(6),sequence:3,fromOffsetMeters:10,toOffsetMeters:110,startStationMeters:null,endStationMeters:110,lengthMeters:100,missingMetadata:['startStationMeters']},{id:id(9),sequence:8,lengthMeters:null,missingMetadata:[]}]}};
  const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref,other]}}),getOperatorGeometryPackageReal:async(project,query)=>{queries.push(query);return{data:geometry};}},{params:{taskId:task.id}});
  s.render();await s.flush();assert.match(JSON.stringify(s.nodes().find(n=>n.props?.testID==='displayed-segment-count')),/"1"/);
- assert.match(text(s),/Gói hình học 1\/2/);assert.match(text(s),/Phiên bản tuyến: 7/);assert.doesNotMatch(text(s),/OUTSIDE/);assert.equal(queries.length,1);assert.equal(queries[0].routeVersionId,ref.routeVersionId);s.unmount();
+ assert.doesNotMatch(text(s),/Gói hình học 1\/2/);assert.match(text(s),/Phiên bản tuyến: 7/);assert.match(text(s),/Phân đoạn 3/);assert.match(text(s),/Chưa có dữ liệu/);assert.doesNotMatch(text(s),/OUTSIDE/);assert.equal(queries.length,1);assert.equal(queries[0].routeVersionId,ref.routeVersionId);s.unmount();
 });

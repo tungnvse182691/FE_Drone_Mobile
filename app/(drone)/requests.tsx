@@ -13,6 +13,16 @@ import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
 
 type TabKey = 'pending' | 'ongoing' | 'submitted' | 'supplement' | 'completed' | 'other';
 
+const FILTER_ICON: Record<TabKey | 'all', { name: React.ComponentProps<typeof MaterialIcons>['name']; color: string }> = {
+  all: { name: 'filter-list', color: colors.secondary },
+  pending: { name: 'schedule', color: colors.warning },
+  ongoing: { name: 'flight-takeoff', color: colors.brandGold },
+  submitted: { name: 'task-alt', color: colors.success },
+  supplement: { name: 'error-outline', color: colors.warning },
+  completed: { name: 'check-circle', color: colors.success },
+  other: { name: 'help-outline', color: colors.secondary },
+};
+
 function classifyTab(status: string): TabKey {
   const s = status?.toUpperCase();
   if (s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED') return 'pending';
@@ -75,6 +85,7 @@ export default function DroneRequestsScreen() {
           accessibilityState={{ checked: selectedKey === option.key }}
           style={[styles.filterOption, selectedKey === option.key && styles.filterOptionSelected]}
           onPress={() => { setActiveTab(option.key); setFilterOpen(false); }}>
+          <MaterialIcons name={FILTER_ICON[option.key].name} size={20} color={FILTER_ICON[option.key].color} />
           <Text style={[styles.optionLabel, selectedKey === option.key && styles.optionLabelSelected]}>{option.label}</Text>
           <Text style={styles.optionCount}>{option.count}</Text>
           <MaterialIcons name={selectedKey === option.key ? 'radio-button-checked' : 'radio-button-unchecked'}

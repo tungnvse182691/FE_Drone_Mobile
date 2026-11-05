@@ -77,13 +77,17 @@ export default function DroneHomeScreen() {
       <Card style={styles.metricStripCard}>
         <View style={styles.metrics}>
           {[
-            { key: 'loaded', count: tasks.length, label: 'Đã tải' },
-            { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện' },
-            { key: 'submitted', count: submittedCount, label: 'Đã nộp' },
-          ].map(metric => <View key={metric.key} style={styles.metricColumn}>
-            <Text testID={`operator-kpi-${metric.key}`} style={styles.metricNumber}>{metric.count}</Text>
-            <Text style={styles.metricLabel}>{metric.label}</Text>
-          </View>)}
+            { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download-done' as const, color: colors.secondary },
+            { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'flight-takeoff' as const, color: colors.brandGold },
+            { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'task-alt' as const, color: colors.success },
+          ].map((metric, index) => <React.Fragment key={metric.key}>
+            {index > 0 ? <View accessibilityElementsHidden style={styles.metricDivider} /> : null}
+            <View style={styles.metricColumn}>
+              <MaterialIcons name={metric.icon} size={18} color={metric.color} accessibilityLabel={metric.label} />
+              <Text testID={`operator-kpi-${metric.key}`} style={{ ...styles.metricNumber, color: metric.color }}>{metric.count}{''}</Text>
+              <Text style={styles.metricLabel} numberOfLines={2}>{metric.label}</Text>
+            </View>
+          </React.Fragment>)}
         </View>
         {hasMore ? <Text style={styles.pageNote}>Số liệu của trang đầu đã tải.</Text> : null}
       </Card>
@@ -137,8 +141,9 @@ const styles = StyleSheet.create({
   greetingName: { color: colors.neutral },
   greetingMeta: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   metricStripCard: { padding: 16, borderRadius: 20, marginBottom: 24, ...softShadow },
-  metrics: { flexDirection: 'row', gap: 8 },
-  metricColumn: { flex: 1, minWidth: 0, gap: 4 },
+  metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  metricColumn: { flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' },
+  metricDivider: { width: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 2 },
   metricNumber: { fontFamily: 'Roboto-Medium', fontSize: 28, fontWeight: '500', lineHeight: 36, color: colors.neutral, fontVariant: ['tabular-nums'] },
   metricLabel: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary, marginTop: 8 },

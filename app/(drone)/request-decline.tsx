@@ -183,7 +183,7 @@ export default function DroneRequestDeclineScreen() {
             <Text style={[typography.bodyMd, styles.infoValue]}>
               {accessPoint
                 ? `${accessPoint.latitude.toFixed(6)}, ${accessPoint.longitude.toFixed(6)}`
-                : 'Máy chủ chưa công bố'}
+                  : 'Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này.'}
             </Text>
           </View>
         </Card>
