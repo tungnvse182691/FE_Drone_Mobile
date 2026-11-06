@@ -23,7 +23,7 @@ export type DroneUploadIntent = {
   ifMatch: string | null; parts: DroneUploadPart[]; status: DroneUploadIntentStatus;
   updatedAt: string; receipt: Record<string, unknown> | null; error: { status?: number; code: string } | null;
 };
-type UploadInput = Omit<DroneUploadIntent, 'schema'|'key'|'kind'|'actor'|'environment'|'session'|'updatedAt'|'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'> & { kind: 'upload'|'dataset'; uploadId?: string|null; fileId?: string|null; version?: string|null; ifMatch?: string|null };
+type UploadInput = Omit<DroneUploadIntent, 'schema'|'key'|'kind'|'actor'|'environment'|'session'|'taskId'|'updatedAt'|'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'> & { kind: 'upload'|'dataset'; uploadId?: string|null; fileId?: string|null; version?: string|null; ifMatch?: string|null };
 // A task may be open in detail, decline and recovery screens at once. Keep the
 // lock until transport settles, even if its originating screen/session closes.
 const activeCommands = new Set<string>();
