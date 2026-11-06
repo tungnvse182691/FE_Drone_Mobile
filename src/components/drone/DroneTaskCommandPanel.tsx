@@ -83,7 +83,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
     </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
   const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Chỉ chuẩn bị yêu cầu khi máy chủ xác nhận nhiệm vụ mới được giao hoặc giao lại cho bạn.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
   const primaryStyle = { flex: 2, minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
-  return <Card style={{gap:spacing.sm,marginBottom:12,borderRadius:20,borderWidth:1,borderColor:colors.border}}>
+  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,borderRadius:20,borderWidth:1,borderColor:colors.border}}>
     <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>Tiếp nhận và phản hồi nhiệm vụ</Text></View>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
     {saved ? <>
@@ -106,7 +106,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
     </>}
     {disabledReason ? <View testID="command-disabled-reason" style={{flexDirection:'row',alignItems:'center',gap:8,padding:12,borderRadius:12,backgroundColor:colors.surfaceAlt}}><MaterialIcons name="info-outline" size={18} color={colors.secondary} /><Text style={{...typography.caption,color:colors.secondary,textAlign:'center',flex:1}}>{disabledReason}</Text></View> : null}
     <Button variant="secondary" title="Đọc trạng thái nhiệm vụ hiện hành" disabled={busy||!ready} onPress={()=>void run('read')} />
-    {current?<Text>Trạng thái hiện hành: {current}</Text>:null}
+    {current?<Text style={{borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm}}>Trạng thái hiện hành: {current}</Text>:null}
     {error?<View accessibilityRole="alert"><Text>{error}</Text></View>:null}
     {!ready&&error?<Button variant="secondary" title="Thử mở lại lịch sử yêu cầu" onPress={()=>{if(scope.capture()())setRevision(v=>v+1);}} />:null}
   </Card>;
