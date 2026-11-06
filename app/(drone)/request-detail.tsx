@@ -290,6 +290,7 @@ export default function DroneRequestDetailScreen() {
             title="Xem gói công việc (chỉ đọc)"
             icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
             onPress={handleOpenWorkPackage}
+            style={styles.workPackageButton}
           />
 
           <Text style={[typography.caption, styles.syncFootnote]}>
@@ -310,6 +311,20 @@ export default function DroneRequestDetailScreen() {
             <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
             <Text style={typography.caption}>Phạm vi được ghim theo nhiệm vụ; xem các phân đoạn ở Gói công việc.</Text>
           </View> : null}
+          {scope.key && target ? <>
+            <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+              collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
+              {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
+                <MaterialIcons name="cancel" size={18} color={colors.secondary} />
+                <Text style={[typography.labelLg, styles.rejectButtonText]}>Từ chối nhiệm vụ</Text>
+              </Pressable> : null}
+            </DroneTaskCommandPanel>
+            {!canOpenDecline ? <Pressable accessibilityRole="button" accessibilityLabel="Lệnh và đối soát" accessibilityState={{ expanded: commandsExpanded }} onPress={() => setCommandsExpanded(value => !value)} style={styles.technicalToggle}>
+              <MaterialIcons name="history" size={20} color={colors.secondary} />
+              <Text style={[typography.labelSm, { flex: 1 }]}>Lệnh và đối soát trên thiết bị</Text>
+              <MaterialIcons name={commandsExpanded ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
+            </Pressable> : null}
+          </> : null}
         </Card>
       </>
     );
@@ -338,21 +353,21 @@ export default function DroneRequestDetailScreen() {
       }
     >
       {renderBody()}
-      {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
-        collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
-        {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
-          <MaterialIcons name="cancel" size={18} color={colors.secondary} />
-          <Text style={[typography.labelLg, styles.rejectButtonText]}>Từ chối nhiệm vụ</Text>
-        </Pressable> : null}
-      </DroneTaskCommandPanel> : null}
-      {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
-      {scope.key && target ? <>
+      {scope.key && target && (!task || loadError) ? <>
+        <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+          collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
+          {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
+            <MaterialIcons name="cancel" size={18} color={colors.secondary} />
+            <Text style={[typography.labelLg, styles.rejectButtonText]}>Từ chối nhiệm vụ</Text>
+          </Pressable> : null}
+        </DroneTaskCommandPanel>
         {!canOpenDecline ? <Pressable accessibilityRole="button" accessibilityLabel="Lệnh và đối soát" accessibilityState={{ expanded: commandsExpanded }} onPress={() => setCommandsExpanded(value => !value)} style={styles.technicalToggle}>
           <MaterialIcons name="history" size={20} color={colors.secondary} />
           <Text style={[typography.labelSm, { flex: 1 }]}>Lệnh và đối soát trên thiết bị</Text>
           <MaterialIcons name={commandsExpanded ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
         </Pressable> : null}
       </> : null}
+      {acceptError ? <Text accessibilityRole="alert">{acceptError}</Text> : null}
     </SafeAreaScreen>
   );
 }
@@ -390,10 +405,11 @@ const styles = StyleSheet.create({
   boldCoord: { fontWeight: '500', color: colors.neutral, fontFamily: 'Roboto' },
   navMapButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.sm, backgroundColor: colors.surface, marginTop: spacing.xs },
   navMapButtonText: { color: colors.neutral },
-  technicalCard: { borderRadius: radius.xl, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
+  technicalCard: { borderRadius: radius.xl, marginBottom: -72, borderWidth: 1, borderColor: colors.border },
   techDetailBox: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs, gap: spacing.sm },
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: { gap: spacing.sm, marginBottom: spacing.md },
+  workPackageButton: { width: '100%', backgroundColor: colors.surfaceAlt, borderColor: colors.neutral },
   rejectButton: { flex: 1, minHeight: 52, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.sm, backgroundColor: colors.surface },
   rejectButtonText: { color: colors.neutral, textAlign: 'center', lineHeight: 21 },
   syncFootnote: { textAlign: 'center', color: colors.secondary, marginTop: spacing.xs },

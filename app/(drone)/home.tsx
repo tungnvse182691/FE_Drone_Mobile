@@ -5,7 +5,6 @@ import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
-import { Card } from '../../src/components/Card';
 import { OperatorTaskRow, OperatorTaskSkeleton } from '../../src/components/drone/OperatorTaskRow';
 import { EmptyState } from '../../src/components/EmptyState';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
@@ -74,23 +73,20 @@ export default function DroneHomeScreen() {
         </Text>
         <Text style={styles.greetingMeta}>Phi công hiện trường</Text>
       </View>
-      <Card style={styles.metricStripCard}>
-        <View style={styles.metrics}>
-          {[
-            { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download-done' as const, color: colors.secondary },
-            { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'flight-takeoff' as const, color: colors.brandGold },
-            { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'task-alt' as const, color: colors.success },
-          ].map((metric, index) => <React.Fragment key={metric.key}>
-            {index > 0 ? <View accessibilityElementsHidden style={styles.metricDivider} /> : null}
-            <View style={styles.metricColumn}>
-              <MaterialIcons name={metric.icon} size={18} color={metric.color} accessibilityLabel={metric.label} />
-              <Text testID={`operator-kpi-${metric.key}`} style={{ ...styles.metricNumber, color: metric.color }}>{metric.count}{''}</Text>
-              <Text style={styles.metricLabel} numberOfLines={2}>{metric.label}</Text>
-            </View>
-          </React.Fragment>)}
-        </View>
-        {hasMore ? <Text style={styles.pageNote}>Số liệu của trang đầu đã tải.</Text> : null}
-      </Card>
+      <View style={styles.metrics}>
+        {[
+          { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download' as const, color: colors.secondary },
+          { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'autorenew' as const, color: colors.brandGold },
+          { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'check-circle' as const, color: colors.success },
+        ].map(metric => (
+          <View key={metric.key} style={styles.metricColumn}>
+            <MaterialIcons name={metric.icon} size={20} color={metric.color} accessibilityLabel={metric.label} />
+            <Text testID={`operator-kpi-${metric.key}`} style={{ ...styles.metricNumber, color: metric.color }}>{metric.count}{''}</Text>
+            <Text style={styles.metricLabel} numberOfLines={2}>{metric.label}</Text>
+          </View>
+        ))}
+      </View>
+      {hasMore ? <Text style={styles.pageNote}>Số liệu của trang đầu đã tải.</Text> : null}
       {/* Section Tasks */}
       <View style={styles.sectionHeader}>
         <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ khảo sát</Text>
@@ -140,12 +136,10 @@ const styles = StyleSheet.create({
   greetingHeader: { gap: 4, marginBottom: 16 },
   greetingName: { color: colors.neutral },
   greetingMeta: { ...typography.caption, lineHeight: 18, color: colors.secondary },
-  metricStripCard: { padding: 16, borderRadius: 20, marginBottom: 24, ...softShadow },
-  metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
-  metricColumn: { flex: 1, minWidth: 0, gap: 4, alignItems: 'flex-start' },
-  metricDivider: { width: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 2 },
+  metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 24 },
+  metricColumn: { flex: 1, minWidth: 0, gap: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 8, ...softShadow },
   metricNumber: { fontFamily: 'Roboto-Medium', fontSize: 28, fontWeight: '500', lineHeight: 36, color: colors.neutral, fontVariant: ['tabular-nums'] },
-  metricLabel: { ...typography.caption, lineHeight: 18, color: colors.secondary },
+  metricLabel: { ...typography.caption, lineHeight: 17, minHeight: 34, textAlign: 'center', color: colors.secondary },
   pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary, marginTop: 8 },
   sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: 8 },
   sectionTitle: { color: colors.neutral },
