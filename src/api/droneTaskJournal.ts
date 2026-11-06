@@ -10,6 +10,20 @@ type Command = { schema: 1; environment: string; actor: string; session: string;
   key: string; operation: Operation; version: string; payload: Record<string, string>; source: SurveyTaskV2ResponseDto };
 type Outcome = { phase: 'PREPARED' | 'UNKNOWN_OUTCOME' | 'RECEIPT'; receipt?: { data: SurveyTaskV2ResponseDto; etag: string } };
 const KIND = 'DRONE_TASK_COMMAND', STATE = 'DRONE_TASK_OUTCOME';
+export const DRONE_UPLOAD_INTENT_KIND = 'DRONE_UPLOAD_INTENT';
+export const DRONE_DATASET_INTENT_KIND = 'DRONE_DATASET_INTENT';
+export type DroneUploadIntentStatus = 'PREPARED' | 'SESSION_CREATED' | 'PARTS_IN_PROGRESS' | 'COMPLETE_UNKNOWN' | 'VERIFY_PENDING' | 'VERIFIED' | 'DATASET_UNKNOWN' | 'DATASET_CONFIRMED' | 'CONFLICT' | 'FAILED';
+export type DroneUploadPart = { partNumber: number; sizeBytes: number; etag: string };
+export type DroneUploadIntent = {
+  schema: 1; key: string; kind: typeof DRONE_UPLOAD_INTENT_KIND | typeof DRONE_DATASET_INTENT_KIND;
+  actor: string; environment: string; session: string; projectId: string; taskId: string;
+  localFileId?: string; localUri?: string; sizeBytes?: number; checksumSha256?: string;
+  purpose?: 'SURVEY_VIDEO' | 'TELEMETRY'; mimeType?: 'video/mp4' | 'application/x-subrip';
+  body: Record<string, unknown>; uploadId: string | null; fileId: string | null; version: string | null;
+  ifMatch: string | null; parts: DroneUploadPart[]; status: DroneUploadIntentStatus;
+  updatedAt: string; receipt: Record<string, unknown> | null; error: { status?: number; code: string } | null;
+};
+type UploadInput = Omit<DroneUploadIntent, 'schema'|'key'|'kind'|'actor'|'environment'|'session'|'updatedAt'|'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'> & { kind: 'upload'|'dataset'; uploadId?: string|null; fileId?: string|null; version?: string|null; ifMatch?: string|null };
 // A task may be open in detail, decline and recovery screens at once. Keep the
 // lock until transport settles, even if its originating screen/session closes.
 const activeCommands = new Set<string>();
@@ -153,4 +167,69 @@ export async function listDroneTaskCommands() {
     }
     guard(); return result;
   } finally { unsubscribe(); }
+}
+
+const uploadKinds = new Set([DRONE_UPLOAD_INTENT_KIND, DRONE_DATASET_INTENT_KIND]);
+const uploadStates = new Set<DroneUploadIntentStatus>(['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED','DATASET_UNKNOWN','DATASET_CONFIRMED','CONFLICT','FAILED']);
+const forbiddenJournalKey = /token|password|otp|authorization|presigned|signedurl|signed_url/i;
+function assertJournalSafe(value: unknown, key = ''): void {
+  if (forbiddenJournalKey.test(key)) throw Error('drone_upload_journal_sensitive_field');
+  if (typeof value === 'string' && /bearer\s|https?:\/\//i.test(value)) throw Error('drone_upload_journal_sensitive_value');
+  if (Array.isArray(value)) value.forEach((item) => assertJournalSafe(item, key));
+  else if (value && typeof value === 'object') Object.entries(value).forEach(([child, item]) => assertJournalSafe(item, child));
+}
+function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
+function validateUploadIntent(intent: DroneUploadIntent, owner: { actor: string; environment: string }, taskId: string): void {
+  if (intent.schema !== 1 || !uploadKinds.has(intent.kind) || intent.actor !== owner.actor || intent.environment !== owner.environment || intent.taskId !== taskId || !uuid(intent.key) || !uuid(intent.projectId) || typeof intent.session !== 'string' || JSON.parse(intent.session)[0] !== owner.actor || !JSON.parse(intent.session)[1] || !uploadStates.has(intent.status) || !/^[a-f0-9]{64}$/.test(intent.checksumSha256 ?? '') && intent.kind === DRONE_UPLOAD_INTENT_KIND || !Array.isArray(intent.parts)) throw Error('drone_upload_journal_invalid');
+  assertJournalSafe(intent.body);
+  for (const part of intent.parts) if (!Number.isSafeInteger(part.partNumber) || part.partNumber < 1 || !Number.isSafeInteger(part.sizeBytes) || part.sizeBytes <= 0 || !part.etag.trim() || /https?:\/\//i.test(part.etag)) throw Error('drone_upload_journal_invalid_part');
+}
+
+/** Durable upload/dataset intent journal. It has no dispatcher and never calls the network. */
+export async function openDroneUploadJournal(taskId: string) {
+  const owner = identity();
+  if (!owner || !uuid(taskId)) throw Error('drone_session_invalid');
+  let closed = false, invalidated = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (JSON.stringify(identity()) !== JSON.stringify(owner)) invalidated = true; });
+  const guard = () => { if (closed || invalidated || JSON.stringify(identity()) !== JSON.stringify(owner)) throw Error('drone_session_changed'); };
+  const close = () => { closed = true; unsubscribe(); };
+  let db: ReturnType<typeof openDatabase>;
+  try { db = openDatabase(); await initDatabase(db); guard(); } catch (error) { close(); throw error; }
+  const prefix = 'drone-upload-v1:' + JSON.stringify([owner.environment, owner.actor, taskId]) + ':';
+  const readRows = async () => {
+    guard();
+    const rows = await db.getAllAsync<{id: string; kind: string; payload: string}>('SELECT id, kind, payload FROM local_draft WHERE substr(id, 1, ?) = ? AND kind IN (?, ?)', prefix.length, prefix, DRONE_UPLOAD_INTENT_KIND, DRONE_DATASET_INTENT_KIND);
+    guard();
+    return rows.map(row => { const item = JSON.parse(row.payload) as DroneUploadIntent; if (row.id !== prefix + item.key || row.kind !== item.kind) throw Error('drone_upload_journal_identity_invalid'); validateUploadIntent(item, owner, taskId); return item; });
+  };
+  const exclusive = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    guard(); if (activeCommands.has(prefix + ':upload')) throw Error('drone_upload_journal_busy'); activeCommands.add(prefix + ':upload');
+    try { return await fn(); } finally { activeCommands.delete(prefix + ':upload'); }
+  };
+  return {
+    close,
+    read: async (kind?: 'upload' | 'dataset') => { const items = await readRows(); return kind ? items.filter(item => item.kind === (kind === 'upload' ? DRONE_UPLOAD_INTENT_KIND : DRONE_DATASET_INTENT_KIND)) : items; },
+    prepare: (input: UploadInput) => exclusive(async () => {
+      guard();
+      const kind = input.kind === 'upload' ? DRONE_UPLOAD_INTENT_KIND : DRONE_DATASET_INTENT_KIND;
+      if (!uuid(input.projectId) || !input.body || typeof input.body !== 'object' || !Number.isSafeInteger(input.sizeBytes) && input.sizeBytes !== undefined || (input.kind === 'upload' && (!input.localFileId || !input.localUri || !input.checksumSha256 || !input.purpose || !input.mimeType))) throw Error('drone_upload_intent_invalid');
+      if (input.checksumSha256 !== undefined && !/^[a-f0-9]{64}$/.test(input.checksumSha256)) throw Error('drone_upload_intent_invalid');
+      assertJournalSafe(input.body); assertJournalSafe({ localFileId: input.localFileId, localUri: input.localUri, sizeBytes: input.sizeBytes, checksumSha256: input.checksumSha256, purpose: input.purpose, mimeType: input.mimeType });
+      const body = clone(input.body); const existing = (await readRows()).filter(item => item.kind === kind);
+      const same = existing.find(item => JSON.stringify(item.body) === JSON.stringify(body) && item.localFileId === input.localFileId);
+      if (same) return clone(same);
+      if (existing.some(item => item.status !== 'FAILED' && item.status !== 'CONFLICT')) throw Error('drone_upload_intent_pending');
+      const now = new Date().toISOString();
+      const intent: DroneUploadIntent = { schema: 1, key: randomUUID(), kind, ...owner, taskId, projectId: input.projectId, localFileId: input.localFileId, localUri: input.localUri, sizeBytes: input.sizeBytes, checksumSha256: input.checksumSha256, purpose: input.purpose, mimeType: input.mimeType, body, uploadId: input.uploadId ?? null, fileId: input.fileId ?? null, version: input.version ?? null, ifMatch: input.ifMatch ?? null, parts: [], status: 'PREPARED', updatedAt: now, receipt: null, error: null };
+      validateUploadIntent(intent, owner, taskId);
+      await db.withExclusiveTransactionAsync(async tx => { guard(); await tx.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', prefix + intent.key, intent.kind, JSON.stringify(intent), now, now); guard(); });
+      return clone(intent);
+    }),
+    update: (key: string, patch: Partial<Pick<DroneUploadIntent, 'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'>>) => exclusive(async () => {
+      if (!uuid(key)) throw Error('drone_upload_intent_invalid'); const items = await readRows(); const current = items.find(item => item.key === key); if (!current) throw Error('drone_upload_intent_missing');
+      if ('status' in patch && (!patch.status || !uploadStates.has(patch.status))) throw Error('drone_upload_intent_invalid_state');
+      assertJournalSafe(patch); const next = { ...current, ...clone(patch), updatedAt: new Date().toISOString() } as DroneUploadIntent; validateUploadIntent(next, owner, taskId);
+      await db.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?', JSON.stringify(next), next.updatedAt, prefix + key, current.kind); guard(); return clone(next);
+    }),
+  };
 }

@@ -199,3 +199,19 @@ test('Fresh task journal accepts only actionable assigned states with valid sour
   assert.equal(f.posts.length,0);runtime.close();
  }
 });
+test('Drone upload journal persists immutable upload intent before any dispatcher exists and reuses same body',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ const input={kind:'upload',projectId:id(3),localFileId:id(7),localUri:'file:///private/video.mp4',sizeBytes:4,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mimeType:'video/mp4',body:{projectId:id(3),targetId:id(2),fileName:'video.mp4',mediaType:'video/mp4',sizeBytes:4,checksumSha256:'a'.repeat(64)}};
+ const first=await r.prepare(input);assert.equal(first.status,'PREPARED');assert.equal(f.rows().length,1);assert.equal(f.rows()[0].kind,'DRONE_UPLOAD_INTENT');
+ const same=await r.prepare(input);assert.equal(same.key,first.key);assert.equal(f.rows().length,1);
+ await assert.rejects(r.prepare({...input,body:{...input.body,fileName:'changed.mp4'}}),/drone_upload_intent_pending/);
+ await r.update(first.key,{status:'SESSION_CREATED',uploadId:id(8),fileId:id(9),version:'AAAAAAAAAAE='});r.close();f.reopen();f.change({token:'sid-B'});
+ const next=await f.api.openDroneUploadJournal(id(2));const restored=(await next.read())[0];assert.equal(restored.key,first.key);assert.equal(restored.uploadId,id(8));assert.equal(restored.body.fileName,'video.mp4');assert.doesNotMatch(JSON.stringify(f.rows()),/presigned|bearer|token/i);next.close();
+});
+test('Drone upload and dataset journals are isolated and reject credential or URL fields',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ await assert.rejects(r.prepare({kind:'dataset',projectId:id(3),body:{authorization:'Bearer secret'}}),/sensitive/);
+ await assert.rejects(r.prepare({kind:'dataset',projectId:id(3),body:{url:'https://signed.example'}}),/sensitive/);
+ const d=await r.prepare({kind:'dataset',projectId:id(3),version:'AAAAAAAAAAE=',ifMatch:'"AAAAAAAAAAE="',body:{videoFileId:id(9),telemetryFileId:id(10)}});assert.equal(d.kind,'DRONE_DATASET_INTENT');
+ r.close();f.env('https://other.test');const other=await f.api.openDroneUploadJournal(id(2));assert.equal((await other.read()).length,0);other.close();
+});
