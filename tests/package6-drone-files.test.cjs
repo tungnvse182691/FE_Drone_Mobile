@@ -9,7 +9,7 @@ function fixture(){
  const db={runAsync:async(sql,...args)=>disk.prepare(sql).run(...args),getAllAsync:async(sql,...args)=>disk.prepare(sql).all(...args)};
  const listeners=new Set();let actor=id(1),sid='A',env='https://fixture.test',copy=async(from,to)=>fs.copyFileSync(from,to,fs.constants.COPYFILE_EXCL);
  const docs=pathToFileURL(root+path.sep).href;
- class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}}
+ class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}readableStream(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return new ReadableStream({pull(controller){if(offset>=bytes.length){controller.close();return;}const end=Math.min(offset+2,bytes.length);controller.enqueue(Uint8Array.from(bytes.subarray(offset,end)));offset=end;}});}}
  class Directory extends File {create(){fs.mkdirSync(fileURLToPath(this.uri),{recursive:true});}}
  const task={id:id(2),projectId:id(3),operatorId:actor,version:'AAAAAAAAAAE='};
  const deps={'expo-file-system':{File,Directory,Paths:{document:{uri:docs}}},'expo-crypto':{randomUUID},'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../store/auth':{useAuthStore:{getState:()=>({token:sid,status:'AUTHENTICATED',user:{id:actor,role_code:'DRONE_OPERATOR'}}),subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([actor,sid])},'./client':{apiClient:{defaults:{get baseURL(){return env;}}}},'./droneApi':{getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:`"${task.version}"`})}};
@@ -23,8 +23,8 @@ test('Drone private copy and immutable ownership survive restart/relogin without
  assert.equal(fs.readFileSync(fileURLToPath(saved.uri)).toString('hex'),'01020304');
  const payload=f.rows()[0].payload;f.reopen();f.change(id(1),'B');
  const next=await f.api.openDroneLocalFiles(id(2)),files=await next.list();
- assert.equal(files.length,1);assert.equal(files[0].availability,'LOCAL_UNHASHED');assert.equal(files[0].session,JSON.stringify([id(1),'A']));
- assert.equal(files[0].checksumSha256,null);assert.equal(f.rows()[0].payload,payload);next.close();
+ assert.equal(files.length,1);assert.equal(files[0].availability,'LOCAL_READY');assert.equal(files[0].session,JSON.stringify([id(1),'A']));
+ assert.equal(files[0].checksumSha256,'9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a');assert.equal(f.rows()[0].payload,payload);next.close();
 });
 test('Drone missing/partial copy is retained for recovery and never marked VERIFIED',async()=>{
  for(const partial of [false,true]){
@@ -47,3 +47,8 @@ test('Drone rejects wrong task ownership, unsafe URI and invalid/changed source 
 });
 
 test('Drone local preservation rejects files above pinned per-purpose BE limits before writing metadata',async()=>{for(const [kind,name,size] of [['VIDEO','large.mp4',8*1024**3+1],['TELEMETRY','large.srt',10*1024**2+1]]){const f=fixture(),r=await f.api.openDroneLocalFiles(id(2));f.sourceSize(size);let copied=0;f.copy(async()=>{copied++;throw Error('must not copy');});await assert.rejects(r.preserve(kind,{...f.asset,name,size}));assert.equal(f.rows().length,0);assert.equal(copied,0);r.close();}});
+test('Drone stream hashing matches SHA-256 vector across an odd final chunk',async()=>{
+ const f=fixture();fs.writeFileSync(f.source,Buffer.from('abc'));const r=await f.api.openDroneLocalFiles(id(2));
+ const saved=await r.preserve('VIDEO',{...f.asset,size:3});
+ assert.equal(saved.checksumSha256,'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');r.close();
+});
