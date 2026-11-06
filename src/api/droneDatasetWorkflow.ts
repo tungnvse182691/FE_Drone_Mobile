@@ -1,7 +1,7 @@
 import { useAuthStore } from '../store/auth';
 import { apiClient } from './client';
 import { passwordSessionIdentity } from './authApi';
-import { completeOperatorUploadReal, createOperatorUploadSessionReal, getOperatorUploadPartUrlsReal, getOperatorUploadSessionReal, getOperatorFileMetadataReal, putUploadPartBytesDirect, getOperatorDatasetReal, getOperatorDatasetCoverageReal, getOperatorSurveyTaskDetailReal, type BandScopeDto, type UploadSessionResponseDto, type UploadPartUrlsResponseDto, type FileMetadataResponseDto } from './droneApi';
+import { completeOperatorUploadReal, createOperatorUploadSessionReal, getOperatorUploadPartUrlsReal, getOperatorUploadSessionReal, getOperatorFileMetadataReal, putUploadPartBytesDirect, getOperatorDatasetReal, getOperatorDatasetCoverageReal, getOperatorSurveyTaskDetailReal, submitOperatorDatasetReal, type BandScopeDto, type UploadSessionResponseDto, type UploadPartUrlsResponseDto, type FileMetadataResponseDto, type SubmitDatasetRequestDto } from './droneApi';
 import { openDroneUploadJournal, type DroneUploadIntent } from './droneTaskJournal';
 
 // Neither a seed ID nor a user-entered UUID proves an active aircraft assignment.
@@ -137,5 +137,82 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
     const metadata: FileMetadataResponseDto = await transport.getMetadata(intent.fileId!);
     if (metadata.id !== intent.fileId || metadata.status !== 'VERIFIED' || metadata.checksumSha256 !== plan.file.checksumSha256 || metadata.sizeBytes !== plan.file.sizeBytes || metadata.mediaType !== plan.file.mediaType) throw Error('drone_upload_metadata_mismatch');
     return journal.update(intent.key, { status: 'VERIFIED', receipt: { uploadId: observed.id, fileId: metadata.id, status: metadata.status, checksumSha256: metadata.checksumSha256 } });
+  } finally { journal.close(); }
+}
+
+export type DroneDatasetPlan = { taskId: string; projectId: string; ifMatch: string; payload: SubmitDatasetRequestDto };
+export type DroneDatasetTransport = {
+  submitDataset: typeof submitOperatorDatasetReal;
+  readTask: typeof getOperatorSurveyTaskDetailReal;
+};
+const realDroneDatasetTransport: DroneDatasetTransport = { submitDataset: submitOperatorDatasetReal, readTask: getOperatorSurveyTaskDetailReal };
+const strongIfMatch = (value: string): string => `"${value.trim().replace(/^"+|"+$/g, '')}"`;
+const sameJson = (left: unknown, right: unknown): boolean => JSON.stringify(left) === JSON.stringify(right);
+function validateDatasetPlan(plan: DroneDatasetPlan): void {
+  if (!isDroneResourceId(plan.taskId) || !isDroneResourceId(plan.projectId) || !text(plan.ifMatch) ||
+      !plan.payload || !Array.isArray(plan.payload.videoFileIds) || !plan.payload.videoFileIds.length || !plan.payload.videoFileIds.every(isDroneResourceId) ||
+      !Array.isArray(plan.payload.telemetryFileIds) || !plan.payload.telemetryFileIds.every(isDroneResourceId) || !text(plan.payload.recordedAt) ||
+      !isDroneResourceId(plan.payload.deviceId) || !Array.isArray(plan.payload.scope) || !plan.payload.scope.length) throw Error('drone_dataset_plan_invalid');
+  scopeKeys(plan.payload.scope);
+}
+function datasetIntentInput(plan: DroneDatasetPlan) {
+  return { kind: 'dataset' as const, projectId: plan.projectId, version: plan.ifMatch.trim().replace(/^"+|"+$/g, ''), ifMatch: strongIfMatch(plan.ifMatch), body: plan.payload as unknown as Record<string, unknown> };
+}
+function datasetResponseError(status: number, code: string): Error & { response: { status: number; data: { code: string } } } {
+  const error = new Error(code) as Error & { response: { status: number; data: { code: string } } };
+  error.response = { status, data: { code } };
+  return error;
+}
+async function sendDatasetIntent(journal: Awaited<ReturnType<typeof openDroneUploadJournal>>, intent: DroneUploadIntent, transport: DroneDatasetTransport, replay: boolean): Promise<DroneUploadIntent> {
+  if (intent.kind !== 'DRONE_DATASET_INTENT' || (replay ? intent.status !== 'DATASET_UNKNOWN' : !['PREPARED', 'DATASET_UNKNOWN'].includes(intent.status))) throw Error('drone_dataset_intent_not_dispatchable');
+  if (!intent.ifMatch || !intent.body || !isDroneResourceId(intent.projectId)) throw Error('drone_dataset_intent_invalid');
+  try {
+    const response = await transport.submitDataset(intent.taskId, intent.body as unknown as SubmitDatasetRequestDto, intent.ifMatch, intent.key);
+    if (!response?.data || !isDroneResourceId(response.data.id) || response.data.surveyTaskId !== intent.taskId || !text(response.etag)) throw Error('drone_dataset_receipt_invalid');
+    return journal.update(intent.key, { status: 'DATASET_CONFIRMED', receipt: { datasetId: response.data.id, surveyTaskId: response.data.surveyTaskId, etag: response.etag, replayed: replay } });
+  } catch (error) {
+    const status = uploadErrorStatus(error);
+    if (status === 409) { await journal.update(intent.key, { status: 'CONFLICT', error: { status, code: 'idempotency_key_reused' } }); throw error; }
+    if (status === 412) {
+      try { await transport.readTask(intent.taskId); } catch { /* readback is evidence only; keep the original 412 */ }
+      await journal.update(intent.key, { status: 'CONFLICT', error: { status, code: 'task_version_changed' } }); throw error;
+    }
+    const uncertain = isUncertain(error);
+    await journal.update(intent.key, { status: uncertain ? 'DATASET_UNKNOWN' : 'FAILED', error: { status, code: uncertain ? 'dataset_transport_unknown' : 'dataset_submission_rejected' } });
+    throw error;
+  }
+}
+
+/** Persist the immutable dataset body/key/version. This function does not call the network. */
+export async function prepareDroneDatasetIntent(plan: DroneDatasetPlan): Promise<DroneUploadIntent> {
+  validateDatasetPlan(plan);
+  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
+  const journal = await openDroneUploadJournal(plan.taskId);
+  try { return await journal.prepare(datasetIntentInput(plan)); } finally { journal.close(); }
+}
+
+/** Initial dataset submission path for tests/future wiring; UI remains blocked in Part 1. */
+export async function submitDroneDataset(plan: DroneDatasetPlan, transport: DroneDatasetTransport = realDroneDatasetTransport): Promise<DroneUploadIntent> {
+  validateDatasetPlan(plan);
+  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
+  const journal = await openDroneUploadJournal(plan.taskId);
+  try {
+    const intent = await journal.prepare(datasetIntentInput(plan));
+    return await sendDatasetIntent(journal, intent, transport, false);
+  } finally { journal.close(); }
+}
+
+/** Explicit replay only: uses the stored dataset body, key and original If-Match. */
+export async function replayDroneDataset(plan: DroneDatasetPlan, transport: DroneDatasetTransport = realDroneDatasetTransport): Promise<DroneUploadIntent> {
+  validateDatasetPlan(plan);
+  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
+  const journal = await openDroneUploadJournal(plan.taskId);
+  try {
+    const intents = await journal.read('dataset');
+    if (intents.length !== 1) throw Error('drone_dataset_intent_missing');
+    const intent = intents[0];
+    // Replay always uses the stored original If-Match. The caller may have read a newer task version after the lost ACK.
+    if (intent.projectId !== plan.projectId || !sameJson(intent.body, plan.payload)) throw datasetResponseError(409, 'idempotency_key_reused');
+    return await sendDatasetIntent(journal, intent, transport, true);
   } finally { journal.close(); }
 }
