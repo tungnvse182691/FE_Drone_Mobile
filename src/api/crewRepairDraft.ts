@@ -210,10 +210,10 @@ export async function openRepairJournal(identity: RepairIdentity,
           const previous = stored.at(-1);
           const previousSubmission = previous?.payload.fieldSubmissionId;
           if (!previous || !['attempt','supplement'].includes(previous.operation) || previous.phase !== 'CONFIRMED' ||
-              !sameBinding(previous.identity,record.identity) || previous.itemVersion !== record.itemVersion ||
+              !sameBinding(previous.identity,record.identity) ||
               !isCrewResourceId(record.payload.fieldSubmissionId) || record.payload.fieldSubmissionId === previousSubmission ||
               previous.receipt?.data.submissionId !== previousSubmission ||
-              previous.receipt?.itemVersion !== record.itemVersion)
+              !previous.receipt?.itemVersion)
             throw new Error('repair_history_requires_reconciliation');
         } else if (stored.length) {
           const previous=stored[stored.length-1];

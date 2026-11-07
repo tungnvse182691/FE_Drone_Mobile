@@ -40,6 +40,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
       </Pressable>
       {technical?<Text style={typography.caption}>API-080 chỉ cung cấp trạng thái và mã liên quan; nội dung nhận xét chi tiết của quản lý chưa có trong response.</Text>:null}
       <CrewRepairReceiptHistory task={task}/>
+      <CrewRepairRecoveryEntry task={task}/>
       <Text>{review.canSupplement ? 'Đã đủ điều kiện mở luồng FIELD bổ sung. Bản nộp phải được máy chủ xác minh trước khi liên kết lượt sửa chữa.' : 'Đây là trạng thái đọc từ máy chủ. Chưa đủ điều kiện tạo bản bổ sung hoặc lệnh liên kết.'}</Text>
     </Card>
     <Button variant="secondary" title="Về chi tiết nhiệm vụ" onPress={() => router.replace({
@@ -48,6 +49,34 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
     <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </View>
   </SafeAreaScreen>;
+}
+
+/** Entry point for an already durable API-159 command; it never creates or sends a new command. */
+export function CrewRepairRecoveryEntry({task}:{task:CrewTask}) {
+  const identity=useCrewIdentity(),live=currentRepairIdentity(task.projectId,task.id);
+  const [recovery,setRecovery]=useState<RepairJournalRecord|null>(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+  const active=useRef(false),generation=useRef(0);
+  const load=useCallback(async()=>{
+    const turn=++generation.current,i=currentRepairIdentity(task.projectId,task.id);setRecovery(null);setMessage('');
+    if(!i){setBusy(false);return;}setBusy(true);
+    const valid=()=>active.current&&turn===generation.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id));
+    try {
+      const rows=await readRepairHistory(i,undefined,true);
+      const row=rows.filter(value=>value.operation==='supplement'&&['PREPARED','PENDING','ACKNOWLEDGED'].includes(value.phase)).at(-1)??null;
+      if(valid())setRecovery(row);
+    } catch(e) { if(valid())setMessage(repairErrorMessage(e)); }
+    finally { if(valid())setBusy(false); }
+  },[task.projectId,task.id,identity.scope,identity.user?.id,live?.environment]);
+  useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;++generation.current;};},[load]));
+  if(message)return <Text accessibilityRole="alert">{message}</Text>;
+  if(!recovery)return busy?<Text>Đang kiểm tra lệnh bổ sung đã lưu…</Text>:null;
+  return <View style={{gap:spacing.xs}}>
+    <Text style={typography.titleMd}>Có lệnh bổ sung đã lưu cần đối soát</Text>
+    <Text>Lệnh API-159 được giữ nguyên theo đúng phiên, liên kết và nội dung gốc. Mở FIELD để tiếp tục có xác nhận hoặc đọc lại biên nhận.</Text>
+    <Button variant="secondary" title="Đối soát bổ sung đã lưu" disabled={busy||!live} onPress={()=>router.push({
+      pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId,supplement:'1'},
+    })}/>
+  </View>;
 }
 
 export function repairReviewPresentation(attempt: CrewRepairAttempt | null | undefined) {
