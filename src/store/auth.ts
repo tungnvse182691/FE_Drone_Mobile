@@ -249,4 +249,3 @@ export function initAuthBridge(): void {
 }
 
 initAuthBridge();
-void useAuthStore.getState().restoreRefreshToken();

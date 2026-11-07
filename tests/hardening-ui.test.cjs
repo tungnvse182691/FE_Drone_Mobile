@@ -35,3 +35,9 @@ test('HARDEN02 unused Drone upload pipelines cannot expose fake or unjournalled 
  assert.equal(fs.existsSync('src/api/operator-uploads.ts'),false);
  assert.doesNotMatch(fs.readFileSync('src/api/droneApi.ts','utf8'),/export async function uploadOperatorFileReal/);
 });
+test('FE-BUG-01 auth refresh restore starts from RootLayout effect, not module evaluation',()=>{
+ const auth=fs.readFileSync('src/store/auth.ts','utf8');
+ const layout=fs.readFileSync('app/_layout.tsx','utf8');
+ assert.doesNotMatch(auth,/void useAuthStore\.getState\(\)\.restoreRefreshToken\(\)/);
+ assert.match(layout,/useEffect\(\(\) => \{[\s\S]*restoreRefreshToken/s);
+});

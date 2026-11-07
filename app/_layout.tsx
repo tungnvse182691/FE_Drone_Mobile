@@ -52,6 +52,10 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    void useAuthStore.getState().restoreRefreshToken();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
