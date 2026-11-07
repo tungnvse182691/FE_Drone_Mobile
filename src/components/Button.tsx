@@ -26,7 +26,8 @@ const baseButtonStyle = {
 };
 
 export function Button({ variant, onPress, disabled, loading, title, icon, style, disabledStyle, disabledTextStyle }: ButtonProps) {
-  const isDisabled = disabled || loading;
+  const explicitlyDisabled = !!disabled;
+  const isDisabled = explicitlyDisabled || !!loading;
 
   return (
     <Pressable
@@ -39,30 +40,27 @@ export function Button({ variant, onPress, disabled, loading, title, icon, style
         variant === 'primary' && [styles.primary, pressed && !isDisabled && styles.primaryPressed],
         variant === 'secondary' && [styles.secondary, pressed && !isDisabled && styles.secondaryPressed],
         variant === 'text' && styles.text,
-        isDisabled && styles.disabled,
-        isDisabled && disabledStyle,
+        explicitlyDisabled && styles.disabled,
+        explicitlyDisabled && disabledStyle,
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.onPrimary : colors.secondary} />
-      ) : (
-        <View style={styles.content}>
-          {icon ? <View style={styles.icon}>{icon}</View> : null}
-          <Text
-            style={[
-              typography.labelLg,
-              variant === 'primary' && styles.primaryText,
-              variant === 'secondary' && styles.secondaryText,
-              variant === 'text' && styles.textLabel,
-              isDisabled && styles.disabledText,
-              isDisabled && disabledTextStyle,
-            ]}
-          >
-            {title}
-          </Text>
-        </View>
-      )}
+      <View style={styles.content}>
+        {icon ? <View style={styles.icon}>{icon}</View> : null}
+        <Text
+          style={[
+            typography.labelLg,
+            variant === 'primary' && styles.primaryText,
+            variant === 'secondary' && styles.secondaryText,
+            variant === 'text' && styles.textLabel,
+            explicitlyDisabled && styles.disabledText,
+            explicitlyDisabled && disabledTextStyle,
+          ]}
+        >
+          {title}
+        </Text>
+        {loading ? <ActivityIndicator size="small" color={variant === 'primary' ? colors.neutral : colors.secondary} /> : null}
+      </View>
     </Pressable>
   );
 }
