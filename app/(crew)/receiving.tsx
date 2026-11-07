@@ -52,6 +52,25 @@ export function formatWaiting(seconds: number): string {
   return hours > 0 ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 }
 
+export function receivingTimingLabel(request: Pick<BusinessDutyView, 'completedAt' | 'requestedAt' | 'waitingSeconds'>): string {
+  const displayDate = (iso: string | null) => {
+    if (!iso) return '—';
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return 'Chưa có thời điểm hợp lệ';
+    return `${date.toLocaleDateString('vi-VN')} ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+  };
+  const displayWaiting = (seconds: number) => {
+    if (seconds <= 0) return '—';
+    const hours = Math.floor(seconds / 3600), minutes = Math.floor((seconds % 3600) / 60);
+    const days = Math.floor(hours / 24), remainingHours = hours % 24;
+    if (days > 0) return remainingHours > 0 ? `${days} ngày ${remainingHours} giờ` : `${days} ngày`;
+    return hours > 0 ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
+  };
+  return request.completedAt
+    ? `Đóng lúc ${displayDate(request.completedAt)}`
+    : `Gửi lúc ${displayDate(request.requestedAt)} • Chờ ${displayWaiting(request.waitingSeconds)}`;
+}
+
 function formatDateTime(iso: string | null): string {
   if (!iso) {
     return '—';
@@ -68,9 +87,16 @@ function formatDateTime(iso: string | null): string {
 
 export function ackStateChip(request: BusinessDutyView): { variant: ChipVariant; label: string } {
   if (request.completedAt) return { variant: 'status-pending', label: 'Đã đóng' };
+  if (Boolean(request.acknowledgmentId) !== Boolean(request.acknowledgedAt)) {
+    return { variant: 'status-pending', label: 'Đang đối soát' };
+  }
   return request.acknowledgmentId && request.acknowledgedAt
     ? { variant: 'approved', label: 'Đã xác nhận' }
     : { variant: 'status-pending', label: 'Chưa xác nhận' };
+}
+
+export function canAcknowledgeReceiving(request: Pick<BusinessDutyView, 'acknowledgmentId' | 'acknowledgedAt' | 'completedAt'>): boolean {
+  return !request.completedAt && !request.acknowledgmentId && !request.acknowledgedAt;
 }
 
 export default function CrewReceivingScreen() {
@@ -91,7 +117,7 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
       if(!mounted.current||n!==sequence.current)return;
       setProjects(old=>Array.from(new Map([...(more?old:[]),...page.items].map(p=>[p.projectId,p])).values()));
       setCursor(page.nextCursor);
-      if(!more)setSelected(selectReceivingProject(page.items, null, page.nextCursor!==null));
+      if(!more)setSelected(current => selectReceivingProject(page.items, current, page.nextCursor!==null));
     }catch(e){if(mounted.current&&n===sequence.current)setError(repairCommandErrorMessage(e));}
     finally{if(mounted.current&&n===sequence.current)setLoading(false);}
   },[identity,cursor]);
@@ -108,7 +134,10 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
       </Pressable>)}
     {error?<Text accessibilityRole="alert">{error}</Text>:null}
     {!loading&&!error&&!projects.length?<Text>Không có dự án trong phạm vi được máy chủ trả về.</Text>:null}
-    <Button variant="secondary" title="Tải lại dự án" loading={loading} onPress={()=>void load(false)} />
+    <View style={styles.projectHeader}>
+      <Text style={typography.labelLg}>Dự án</Text>
+      <Button variant="text" title="Tải lại" loading={loading} onPress={()=>void load(false)} style={styles.compactButton} />
+    </View>
     {cursor?<Button variant="secondary" title="Thêm dự án" disabled={loading} onPress={()=>void load(true)} />:null}
     {selected?<ReceivingRequests key={selected} identity={{...identity,projectId:selected}} />:null}
   </SafeAreaScreen>;
@@ -203,9 +232,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
                 </View>
                 <View style={styles.metaRow}>
                   <MaterialIcons name="schedule" size={13} color={colors.secondary} />
-                  <Text style={[typography.caption, styles.metaText]}>
-                    Gửi lúc {formatDateTime(request.requestedAt)} • Chờ {formatWaiting(request.waitingSeconds)}
-                  </Text>
+                  <Text style={[typography.caption, styles.metaText]}>{receivingTimingLabel(request)}</Text>
                 </View>
                 <View style={styles.metaRow}>
                   <MaterialIcons name="person" size={13} color={colors.secondary} />
@@ -227,6 +254,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
     }
     const state = ackStateChip(selected);
     const acknowledged = Boolean(selected.acknowledgmentId && selected.acknowledgedAt);
+    const ackInconsistent = Boolean(selected.acknowledgmentId) !== Boolean(selected.acknowledgedAt);
     const closed = Boolean(selected.completedAt);
     const sourceLabel = sourceKindLabel(selected.sourceKind);
     return (
@@ -250,9 +278,9 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Thời gian chờ</Text>
+            <Text style={[typography.caption, styles.infoLabel]}>{closed ? 'Đóng lúc' : 'Thời gian chờ'}</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
-              {formatWaiting(selected.waitingSeconds)}
+              {closed ? formatDateTime(selected.completedAt) : formatWaiting(selected.waitingSeconds)}
             </Text>
           </View>
           {acknowledged ? (
@@ -265,18 +293,18 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
           ) : null}
         </Card>
 
-        <View style={styles.notice}>
+        {!closed ? <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={16} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            Xác nhận là thao tác bất biến: yêu cầu sẽ được ghi nhận cho người tiếp nhận đầu tiên. Xác nhận là không thể hoàn tác.
+            {ackInconsistent ? 'Dữ liệu xác nhận chưa đầy đủ; cần đối soát trước khi tiếp tục.' : 'Xác nhận là thao tác bất biến: yêu cầu sẽ được ghi nhận cho người tiếp nhận đầu tiên. Xác nhận là không thể hoàn tác.'}
           </Text>
-        </View>
+        </View> : null}
 
         <Button
-          variant="primary"
-          title={closed || acknowledged ? (closed ? 'Đã đóng' : 'Đã xác nhận') : 'Xác nhận đã tiếp nhận yêu cầu'}
+          variant={closed || acknowledged || ackInconsistent ? 'secondary' : 'primary'}
+          title={closed ? 'Đã đóng' : acknowledged ? 'Đã xác nhận' : ackInconsistent ? 'Đang đối soát' : 'Xác nhận đã tiếp nhận yêu cầu'}
           loading={acking}
-          disabled={closed || acknowledged || acking}
+          disabled={!canAcknowledgeReceiving(selected) || acking}
           onPress={() => void handleAck()}
           style={styles.ackButton}
         />
@@ -287,7 +315,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
   return (
     <View style={styles.screen}>
       {step==='detail'?<Pressable disabled={acking} onPress={()=>{sequence.current++;setStep('list');setSelected(null);}} accessibilityRole="button" accessibilityLabel="Quay lại danh sách" style={{minHeight:48,justifyContent:'center'}}><Text style={typography.labelLg}>← Danh sách yêu cầu</Text></Pressable>:null}
-        {step === 'list' ? <>{renderList()}<Button variant="secondary" title="Tải lại yêu cầu" disabled={loading||acking} onPress={()=>void loadList()} />{cursor?<Button variant="secondary" title="Tải thêm yêu cầu" disabled={loading||acking} onPress={()=>void loadList(true)} />:null}</> : renderDetail()}
+        {step === 'list' ? <><View style={styles.listHeader}><Text style={typography.labelLg}>Danh sách yêu cầu</Text><Button variant="text" title="Tải lại" disabled={loading||acking} onPress={()=>void loadList()} style={styles.compactButton} /></View>{renderList()}{cursor?<Button variant="secondary" title="Tải thêm yêu cầu" disabled={loading||acking} onPress={()=>void loadList(true)} />:null}</> : renderDetail()}
       {toast ? <Toast type={toastType} message={toast} /> : null}
     </View>
   );
@@ -423,6 +451,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   projectText: { flex: 1, gap: spacing.xs },
+  projectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  compactButton: {
+    minHeight: 48,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',

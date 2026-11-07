@@ -14,7 +14,7 @@ test('Crew duration and dates are Vietnamese display only',()=>{
  assert.match(date('2026-11-02T00:05:00Z'),/07:05/);assert.match(date('bad'),/Chưa/);
 });
 test('Receiving request semantics keep kind, source and server status separate',()=>{
- const kind=fn('app/(crew)/receiving.tsx','kindLabel'),source=fn('app/(crew)/receiving.tsx','sourceKindLabel'),status=fn('app/(crew)/receiving.tsx','ackStateChip'),select=fn('app/(crew)/receiving.tsx','selectReceivingProject');
+ const kind=fn('app/(crew)/receiving.tsx','kindLabel'),source=fn('app/(crew)/receiving.tsx','sourceKindLabel'),status=fn('app/(crew)/receiving.tsx','ackStateChip'),select=fn('app/(crew)/receiving.tsx','selectReceivingProject'),timing=fn('app/(crew)/receiving.tsx','receivingTimingLabel'),canAck=fn('app/(crew)/receiving.tsx','canAcknowledgeReceiving');
  assert.equal(kind('CrewSupplement'),'Yêu cầu bổ sung hồ sơ sửa chữa');
  assert.equal(kind('UNKNOWN_KIND'),'Yêu cầu cần tiếp nhận');
  assert.equal(source('RepairReview'),'Lượt sửa đã nộp');assert.equal(source('CrewSupplement'),null);
@@ -22,8 +22,12 @@ test('Receiving request semantics keep kind, source and server status separate',
  assert.equal(status(base).label,'Chưa xác nhận');
  assert.equal(status({...base,acknowledgmentId:'ack',acknowledgedAt:'2026-11-08T01:00:00Z'}).label,'Đã xác nhận');
  assert.equal(status({...base,completedAt:'2026-11-08T02:00:00Z'}).label,'Đã đóng');
+ assert.equal(status({...base,acknowledgmentId:'ack'}).label,'Đang đối soát');
+ assert.equal(canAck(base),true);assert.equal(canAck({...base,completedAt:'2026-11-08T02:00:00Z'}),false);assert.equal(canAck({...base,acknowledgmentId:'ack'}),false);
+ assert.match(timing({...base,requestedAt:'2026-11-01T00:00:00Z',waitingSeconds:100}),/Gửi lúc/);
+ assert.match(timing({...base,requestedAt:'2026-11-01T00:00:00Z',waitingSeconds:100,completedAt:'2026-11-08T02:00:00Z'}),/Đóng lúc/);
  const one=[{projectId:'p1'}],many=[...one,{projectId:'p2'}];
- assert.equal(select(one,null),'p1');assert.equal(select(one,null,true),null);assert.equal(select(many,'p2'),'p2');assert.equal(select(many,'missing'),null);
+ assert.equal(select(one,null),'p1');assert.equal(select(one,null,true),null);assert.equal(select(many,'p2'),'p2');assert.equal(select(many,'missing'),null);assert.equal(select(many,'p2',true),'p2');
 });
 test('Wire instrument gets a display label; arbitrary backend text stays unchanged',()=>{
  const label=fn('app/(crew)/field-review.tsx','crewInstrumentLabel');
