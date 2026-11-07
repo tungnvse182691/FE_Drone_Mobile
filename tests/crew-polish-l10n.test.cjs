@@ -10,8 +10,20 @@ test('Crew labels distinguish submission, completion and modes without changing 
 });
 test('Crew duration and dates are Vietnamese display only',()=>{
  const wait=fn('app/(crew)/receiving.tsx','formatWaiting'),date=fn('app/(crew)/tasks.tsx','crewDateTime');
- assert.equal(wait(3660),'1 giờ 1 phút');assert.equal(wait(60),'1 phút');
+ assert.equal(wait(3660),'1 giờ 1 phút');assert.equal(wait(60),'1 phút');assert.equal(wait((11*24+13)*3600),'11 ngày 13 giờ');
  assert.match(date('2026-11-02T00:05:00Z'),/07:05/);assert.match(date('bad'),/Chưa/);
+});
+test('Receiving request semantics keep kind, source and server status separate',()=>{
+ const kind=fn('app/(crew)/receiving.tsx','kindLabel'),source=fn('app/(crew)/receiving.tsx','sourceKindLabel'),status=fn('app/(crew)/receiving.tsx','ackStateChip'),select=fn('app/(crew)/receiving.tsx','selectReceivingProject');
+ assert.equal(kind('CrewSupplement'),'Yêu cầu bổ sung hồ sơ sửa chữa');
+ assert.equal(kind('UNKNOWN_KIND'),'Yêu cầu cần tiếp nhận');
+ assert.equal(source('RepairReview'),'Lượt sửa đã nộp');assert.equal(source('CrewSupplement'),null);
+ const base={acknowledgmentId:null,acknowledgedAt:null,completedAt:null};
+ assert.equal(status(base).label,'Chưa xác nhận');
+ assert.equal(status({...base,acknowledgmentId:'ack',acknowledgedAt:'2026-11-08T01:00:00Z'}).label,'Đã xác nhận');
+ assert.equal(status({...base,completedAt:'2026-11-08T02:00:00Z'}).label,'Đã đóng');
+ const one=[{projectId:'p1'}],many=[...one,{projectId:'p2'}];
+ assert.equal(select(one,null),'p1');assert.equal(select(one,null,true),null);assert.equal(select(many,'p2'),'p2');assert.equal(select(many,'missing'),null);
 });
 test('Wire instrument gets a display label; arbitrary backend text stays unchanged',()=>{
  const label=fn('app/(crew)/field-review.tsx','crewInstrumentLabel');

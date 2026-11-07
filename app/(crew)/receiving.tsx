@@ -16,50 +16,39 @@ import { discoverReceivingProjects, listReceiving, readReceiving, acknowledgeRec
 import type { CrewProject } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
-/** Nhãn tiếng Việt cho `kind` của BusinessDutyView; kind lạ → nhãn chung. */
-const KIND_LABELS: Record<string, string> = {
-  REPAIR_REVIEW_REQUEST: 'Yêu cầu quản lý duyệt lượt sửa',
-  FIELD_VERIFICATION: 'Xác minh kết quả đo hiện trường',
-  HANDOVER_RECEIPT: 'Biên nhận bàn giao',
-};
-
-function kindLabel(kind: string | null): string {
-  if (!kind) {
-    return 'Yêu cầu nhận việc';
+export function kindLabel(kind: string | null): string {
+  switch (kind) {
+    case 'CrewSupplement': case 'CREW_SUPPLEMENT': return 'Yêu cầu bổ sung hồ sơ sửa chữa';
+    case 'REPAIR_REVIEW_REQUEST': return 'Yêu cầu quản lý duyệt lượt sửa';
+    case 'FIELD_VERIFICATION': return 'Xác minh kết quả đo hiện trường';
+    case 'HANDOVER_RECEIPT': return 'Biên nhận bàn giao';
+    default: return 'Yêu cầu cần tiếp nhận';
   }
-  return KIND_LABELS[kind] ?? 'Yêu cầu nhận việc';
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  RepairCrew: 'Đội sửa chữa',
-  REPAIR_CREW: 'Đội sửa chữa',
-  DRONE_OPERATOR: 'Phi công drone',
-  REPORTER: 'Người dân',
-  PROJECT_MANAGER: 'Quản lý dự án',
-  SUPERVISOR: 'Giám sát',
-};
-
-function roleLabel(role: string | null | undefined): string {
-  if (!role) {
-    return ROLE_LABELS.REPAIR_CREW;
+export function sourceKindLabel(sourceKind: string | null | undefined): string | null {
+  switch (sourceKind) {
+    case 'FieldReview': case 'FIELD_SUBMISSION': return 'Kết quả đo hiện trường';
+    case 'RepairReview': case 'REPAIR_ATTEMPT': return 'Lượt sửa đã nộp';
+    case 'REPAIR_HANDOVER': return 'Bàn giao hạng mục sửa chữa';
+    default: return null;
   }
-  return ROLE_LABELS[role] ?? '—';
 }
 
-const SOURCE_KIND_LABELS: Record<string, string> = {
-  FieldReview: 'Kết quả đo hiện trường',
-  RepairReview: 'Lượt sửa đã nộp',
-  REPAIR_ATTEMPT: 'Lượt sửa đã nộp',
-  FIELD_SUBMISSION: 'Kết quả đo hiện trường',
-  REPAIR_HANDOVER: 'Bàn giao hạng mục sửa chữa',
-};
+export function selectReceivingProject(projects: CrewProject[], current: string | null, hasMore = false): string | null {
+  if (projects.length === 1 && !hasMore) return projects[0].projectId;
+  return current && projects.some(project => project.projectId === current) ? current : null;
+}
 
-function formatWaiting(seconds: number): string {
+export function formatWaiting(seconds: number): string {
   if (seconds <= 0) {
     return '—';
   }
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  if (days > 0) return remainingHours > 0 ? `${days} ngày ${remainingHours} giờ` : `${days} ngày`;
   return hours > 0 ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 }
 
@@ -77,21 +66,23 @@ function formatDateTime(iso: string | null): string {
   })}`;
 }
 
-function ackStateChip(request: BusinessDutyView): { variant: ChipVariant; label: string } {
-  return request.acknowledgmentId
-    ? { variant: 'approved', label: 'Đã nhận việc' }
-    : { variant: 'status-pending', label: 'Chờ nhận việc' };
+export function ackStateChip(request: BusinessDutyView): { variant: ChipVariant; label: string } {
+  if (request.completedAt) return { variant: 'status-pending', label: 'Đã đóng' };
+  return request.acknowledgmentId && request.acknowledgedAt
+    ? { variant: 'approved', label: 'Đã xác nhận' }
+    : { variant: 'status-pending', label: 'Chưa xác nhận' };
 }
 
 export default function CrewReceivingScreen() {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
   const identity=currentReceivingIdentity();
-  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Nhận việc" />}><Text>Cần phiên đăng nhập đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
+  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" />}><Text>Cần phiên đăng nhập đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
   return <ReceivingProjects key={JSON.stringify(identity)} identity={identity} />;
 }
 function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
   const [projects,setProjects]=useState<CrewProject[]>([]), [cursor,setCursor]=useState<string|null>(null);
   const [selected,setSelected]=useState<string|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
+  const [showHelp,setShowHelp]=useState(false);
   const sequence=useRef(0),mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;sequence.current++;};},[]);
   const load=useCallback(async(more=false)=>{
@@ -99,14 +90,22 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
     try {const page=await discoverReceivingProjects(identity,more?cursor??undefined:undefined);
       if(!mounted.current||n!==sequence.current)return;
       setProjects(old=>Array.from(new Map([...(more?old:[]),...page.items].map(p=>[p.projectId,p])).values()));
-      setCursor(page.nextCursor);if(!more)setSelected(null);
+      setCursor(page.nextCursor);
+      if(!more)setSelected(selectReceivingProject(page.items, null, page.nextCursor!==null));
     }catch(e){if(mounted.current&&n===sequence.current)setError(repairCommandErrorMessage(e));}
     finally{if(mounted.current&&n===sequence.current)setLoading(false);}
   },[identity,cursor]);
   useFocusEffect(useCallback(()=>{void load(false);},[identity]));
-  return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhận việc" />}>
-    <Text style={typography.caption}>Chỉ hiển thị yêu cầu trong các dự án mà hệ thống xác nhận quyền hiện tại. Danh sách có thể chưa bao phủ tất cả dự án của bạn.</Text>
-    {projects.map(p=><Button key={p.projectId} title={`${p.projectCode} · ${p.name}`} variant={selected===p.projectId?'primary':'secondary'} onPress={()=>setSelected(p.projectId)} />)}
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" />}>
+    <Pressable onPress={()=>setShowHelp(value=>!value)} accessibilityRole="button" accessibilityState={{expanded:showHelp}} style={styles.helpToggle}>
+      <MaterialIcons name="help-outline" size={18} color={colors.brandGold}/><Text style={styles.helpLabel}>Vì sao cần chọn dự án?</Text>
+    </Pressable>
+    {showHelp?<Text style={[typography.caption,styles.helpText]}>Chỉ hiển thị yêu cầu trong các dự án mà máy chủ xác nhận quyền hiện tại. Danh sách có thể chưa bao phủ tất cả dự án của bạn.</Text>:null}
+    {projects.map(p=>selected===p.projectId&&projects.length===1?
+      <View key={p.projectId} style={styles.projectSelected}><MaterialIcons name="check-circle" size={18} color={colors.success}/><View style={styles.projectText}><Text style={typography.labelLg}>{p.projectCode}</Text><Text style={typography.caption}>{p.name}</Text></View></View>:
+      <Pressable key={p.projectId} accessibilityRole="button" accessibilityState={{selected:selected===p.projectId}} onPress={()=>setSelected(p.projectId)} style={({pressed})=>[styles.projectOption,pressed&&styles.pressed]}>
+        <MaterialIcons name={selected===p.projectId?'radio-button-checked':'radio-button-unchecked'} size={18} color={selected===p.projectId?colors.brandGold:colors.secondary}/><View style={styles.projectText}><Text style={typography.labelLg}>{p.projectCode}</Text><Text style={typography.caption}>{p.name}</Text></View>
+      </Pressable>)}
     {error?<Text accessibilityRole="alert">{error}</Text>:null}
     {!loading&&!error&&!projects.length?<Text>Không có dự án trong phạm vi được máy chủ trả về.</Text>:null}
     <Button variant="secondary" title="Tải lại dự án" loading={loading} onPress={()=>void load(false)} />
@@ -144,10 +143,10 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
     finally{if(active()&&n===sequence.current)setLoading(false);}
   };
   const handleAck=async()=>{
-    if(!selected||selected.acknowledgmentId||ackLock.current)return;
+    if(!selected||selected.acknowledgmentId||selected.completedAt||ackLock.current)return;
     ackLock.current=true;setAcking(true);setToast(null);
     try{const result=await acknowledgeReceiving(identity,selected.id);if(active()){
-      setSelected(result);setItems(old=>old.map(v=>v.id===result.id?result:v));setToastType('success');setToast('Máy chủ xác nhận bạn đã nhận việc. Đây không phải phê duyệt hay hoàn thành sửa chữa.');
+      setSelected(result);setItems(old=>old.map(v=>v.id===result.id?result:v));setToastType('success');setToast('Máy chủ đã xác nhận bạn tiếp nhận yêu cầu. Đây không phải phê duyệt hay hoàn thành sửa chữa.');
     }}catch(e){if(active()){setToastType('error');setToast(repairCommandErrorMessage(e)+' Lệnh được giữ để đối soát; thử lại giữ nguyên khóa và phiên bản.');}}
     finally{ackLock.current=false;if(active())setAcking(false);}
   };
@@ -157,7 +156,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
       return (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
-          <Text style={[typography.caption, styles.loadingText]}>Đang tải yêu cầu nhận việc…</Text>
+          <Text style={[typography.caption, styles.loadingText]}>Đang tải yêu cầu cần tiếp nhận…</Text>
         </View>
       );
     }
@@ -165,7 +164,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
       return (
         <EmptyState
           icon="error-outline"
-          title="Không tải được yêu cầu nhận việc"
+          title="Không tải được yêu cầu cần tiếp nhận"
           message={listError}
           actionLabel="Tải lại"
           onAction={() => void loadList()}
@@ -176,8 +175,8 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
       return (
         <EmptyState
           icon="inbox"
-          title="Chưa có yêu cầu nhận việc"
-          message="Khi quản lý dự án hoặc giám sát gửi việc cho bạn, yêu cầu sẽ xuất hiện tại đây để xác nhận."
+          title="Chưa có yêu cầu cần tiếp nhận"
+          message="Khi có yêu cầu được gửi cho đội sửa chữa, yêu cầu sẽ xuất hiện tại đây để bạn xác nhận đã tiếp nhận."
         />
       );
     }
@@ -211,7 +210,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
                 <View style={styles.metaRow}>
                   <MaterialIcons name="person" size={13} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
-                    Người nhận: {roleLabel(request.responsibleRole)}
+                    {sourceKindLabel(request.sourceKind) ? `Nguồn: ${sourceKindLabel(request.sourceKind)}` : null}
                   </Text>
                 </View>
               </Card>
@@ -227,8 +226,9 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
       return null;
     }
     const state = ackStateChip(selected);
-    const acknowledged = Boolean(selected.acknowledgmentId);
-    const sourceLabel = selected.sourceKind ? SOURCE_KIND_LABELS[selected.sourceKind] : undefined;
+    const acknowledged = Boolean(selected.acknowledgmentId && selected.acknowledgedAt);
+    const closed = Boolean(selected.completedAt);
+    const sourceLabel = sourceKindLabel(selected.sourceKind);
     return (
       <View>
         <Card style={styles.detailCard}>
@@ -244,12 +244,6 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
             </View>
           ) : null}
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Vai trò nhận việc</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              {roleLabel(selected.responsibleRole)}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
             <Text style={[typography.caption, styles.infoLabel]}>Gửi lúc</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
               {formatDateTime(selected.requestedAt)}
@@ -263,7 +257,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
           </View>
           {acknowledged ? (
             <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Đã nhận việc lúc</Text>
+              <Text style={[typography.caption, styles.infoLabel]}>Đã xác nhận lúc</Text>
               <Text style={[typography.bodyMd, styles.infoValue]}>
                 {formatDateTime(selected.acknowledgedAt)}
               </Text>
@@ -274,15 +268,15 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={16} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            Xác nhận nhận việc là thao tác bất biến: người nhận đầu tiên được chốt cho yêu cầu này.
+            Xác nhận là thao tác bất biến: yêu cầu sẽ được ghi nhận cho người tiếp nhận đầu tiên. Xác nhận là không thể hoàn tác.
           </Text>
         </View>
 
         <Button
           variant="primary"
-          title={acknowledged ? 'Đã nhận việc' : 'Xác nhận nhận việc'}
+          title={closed || acknowledged ? (closed ? 'Đã đóng' : 'Đã xác nhận') : 'Xác nhận đã tiếp nhận yêu cầu'}
           loading={acking}
-          disabled={acknowledged || acking}
+          disabled={closed || acknowledged || acking}
           onPress={() => void handleAck()}
           style={styles.ackButton}
         />
@@ -391,6 +385,44 @@ const styles = StyleSheet.create({
   ackButton: {
     marginTop: spacing.lg,
   },
+  helpToggle: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  helpLabel: {
+    ...typography.labelLg,
+    color: colors.secondary,
+  },
+  helpText: {
+    color: colors.secondary,
+    marginBottom: spacing.sm,
+  },
+  projectOption: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  projectSelected: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    marginBottom: spacing.sm,
+  },
+  projectText: { flex: 1, gap: spacing.xs },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
