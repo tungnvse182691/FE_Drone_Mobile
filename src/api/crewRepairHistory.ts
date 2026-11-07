@@ -41,7 +41,7 @@ export async function fresh(i: RepairIdentity,r: RepairRuntime,expected?: Repair
 }
 export function validateRepairReceipt(c: RepairJournalRecord,data: Record<string,unknown>,etag: string) {
   const itemVersion=version(etag);
-  if(c.operation==='attempt') {
+  if(c.operation==='attempt' || c.operation==='supplement') {
     if(![data.attemptId,data.linkId,data.reviewClockId].every(api.isCrewResourceId)||data.itemId!==c.identity.itemId||
       data.submissionId!==c.payload.fieldSubmissionId||!timestamp(data.originalReviewDueAt)||!['READY','INCOMPLETE'].includes(String(data.intakeReadiness)))throw Error('repair_receipt_invalid');
     return {data,itemVersion};
@@ -73,7 +73,7 @@ export async function readRepairHistory(i: RepairIdentity,r=repairRuntime(i),inc
     // outcomes still use fresh versions and exact receipt reconciliation in dispatch.
     if(row.phase==='CONFIRMED') {
       const states=row.operation==='assessment'?['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired']:
-        row.operation==='attempt'?['Submitted','Reviewed','Confirmed','CorrectionRequired']:
+        ['attempt','supplement'].includes(row.operation)?['Submitted','Reviewed','Confirmed','CorrectionRequired']:
         ['InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired'];
       if(!row.receipt||!states.includes(read.data.repairContext!.status))throw Error('repair_reconciliation_pending');
     }

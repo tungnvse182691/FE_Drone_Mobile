@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -15,6 +15,8 @@ import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDet
 import { readFieldRecovery, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto,
   type FieldDraft } from '../../src/api/crewFieldDraft';
+import { prepareRepairSupplement, dispatchRepair, repairRuntime } from '../../src/api/crewRepairWorkflow';
+import { currentRepairIdentity } from '../../src/api/crewRepairDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /** Display only: stored instrument and backend free text are never rewritten. */
@@ -26,6 +28,8 @@ export default function CrewFieldReviewScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
+  const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string}>():{};
+  const supplementMode=params.supplement==='1';
   const identity=useCrewIdentity();
   const [draft,setDraft]=useState<FieldDraft|null>(null);
   const [measurements,setMeasurements]=useState<FieldMeasurementInput[]>([]);
@@ -65,7 +69,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const block=!identity.user||!identity.scope||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'submit');
   const captureBlock=!identity.user||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'capture');
   const frozen=!!draft?.command;
-  const normalMeasurement=task.detail?.mode==='NORMAL'&&!draft?.repairClaim;
+  const normalMeasurement=task.detail?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
   const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'new'|'download',fileId?:string)=>{
     if(busyRef.current)return;
     const c=context();if(!c)return;
@@ -87,7 +91,16 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         saved=await saveFieldMeasurements(c,measurements,proof);
       }
       if(action==='upload') for(let i=0;i<saved.captures.length;i++)saved=await uploadFieldCapture(saved,i,runtime);
-      if(action==='submit')saved=await submitFieldDraft(saved,runtime);
+      if(action==='submit') {
+        saved=await submitFieldDraft(saved,runtime);
+        if(supplementMode&&saved.command?.phase==='confirmed') {
+          const repairIdentity=currentRepairIdentity(task.projectId,task.id);
+          if(!repairIdentity) throw Error('repair_session_changed');
+          const command=await prepareRepairSupplement(repairIdentity,saved,repairRuntime(repairIdentity));
+          const result=await dispatchRepair(repairIdentity,command.key,repairRuntime(repairIdentity));
+          if(result.phase!=='CONFIRMED') throw Error('repair_reconciliation_pending');
+        }
+      }
       if(!current(c))return;
       setDraft({...saved});
       setNotice(saved.command?.phase==='confirmed'?'Đã đọc lại và xác nhận hồ sơ từ máy chủ. '+(saved.result?.readiness==='READY'?'Đủ thông tin theo đánh giá máy chủ; chưa phải nghiệm thu.':'Hồ sơ còn thiếu thông tin; chưa được nghiệm thu.'):
@@ -104,7 +117,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     <View style={styles.content}>
       <Card style={styles.card}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><Chip label={mode.label} variant={mode.variant}/>
         <Text>{task.wo_code||'Chưa có mã công việc từ máy chủ'}</Text>
-        <Text>{draft?.repairClaim?'Hồ sơ sửa chữa theo kế hoạch: ảnh sau sửa và số đo thực. Gửi hồ sơ đo kiểm chưa phải tiếp nhận sửa chữa hay quản lý xác nhận.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
+        <Text>{supplementMode?'Bản bổ sung FIELD cho yêu cầu SUPPLEMENT. Chỉ dùng số đo và bằng chứng thật đã được máy chủ xác minh.':draft?.repairClaim?'Hồ sơ sửa chữa theo kế hoạch: ảnh sau sửa và số đo thực. Gửi hồ sơ đo kiểm chưa phải tiếp nhận sửa chữa hay quản lý xác nhận.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
       <Button variant="secondary" title="Tải lại hồ sơ / trạng thái" disabled={busy} onPress={()=>void load()}/>
@@ -152,7 +165,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
-        <Button variant="primary" title={draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy} disabled={busy||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>
+        <Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy} disabled={busy||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>
         {fieldDraftPending(draft)?<Card style={styles.card}>
           <Text>Kết quả thao tác đang được đối soát. Không tạo hồ sơ mới hoặc thay nội dung lệnh đã lưu.</Text>
           {!draft.command?.responseId?<Text>Chưa có mã hồ sơ được máy chủ xác nhận để đọc lại. Chỉ có thể chủ động đối soát bằng lệnh gốc; tải lại không chứng minh lệnh đã thành công.</Text>:<Text>Đã có mã hồ sơ máy chủ. Có thể đọc lại kết quả mà không gửi lệnh mới.</Text>}

@@ -78,7 +78,7 @@ function decode(payload: string): RepairJournalRecord {
     const base = snapshot(row);
     if (row.schema !== 1 || !['PREPARED','PENDING','ACKNOWLEDGED','CONFIRMED','REJECTED'].includes(row.phase)) throw new Error();
     if (row.receipt && (!isRepairItemVersion(row.receipt.itemVersion) || row.receipt.data.itemId !== row.identity.itemId ||
-        (row.operation === 'attempt' ? ![row.receipt.data.attemptId,row.receipt.data.linkId,row.receipt.data.submissionId,row.receipt.data.reviewClockId].every(isCrewResourceId) :
+        (row.operation === 'attempt' || row.operation === 'supplement' ? ![row.receipt.data.attemptId,row.receipt.data.linkId,row.receipt.data.submissionId,row.receipt.data.reviewClockId].every(isCrewResourceId) :
           !isCrewResourceId(row.receipt.data.id) || row.receipt.data.taskId !== row.identity.taskId))) throw new Error();
     if (['ACKNOWLEDGED','CONFIRMED'].includes(row.phase) && !row.receipt) throw new Error();
     if (row.phase === 'REJECTED' && (!row.rejection || ![400,401,403,404,409,412,422,428].includes(row.rejection.status))) throw new Error();

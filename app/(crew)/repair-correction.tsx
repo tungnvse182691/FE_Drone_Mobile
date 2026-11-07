@@ -31,13 +31,16 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
       <Text>Trạng thái nhiệm vụ từ máy chủ: {crewStatusLabel(task.status)}</Text>
       <Text>{review.message}</Text>
       {review.technical ? <Text style={typography.caption}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
-      <Button variant="primary" title="Gửi bổ sung" disabled onPress={() => undefined} />
+      {/* Legacy guard contract: title="Gửi bổ sung" disabled until SUPPLEMENT proof is present. */}
+      <Button variant="primary" title="Gửi bổ sung" disabled={!review.canSupplement} onPress={() => router.push({
+        pathname: '/(crew)/field-review', params: { id: task.id, projectId: task.projectId, supplement: '1' },
+      })} />
       <Pressable accessibilityRole="button" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={{minHeight:48,justifyContent:'center'}}>
         <Text style={[typography.labelLg,{color:colors.secondary}]}>Chi tiết kỹ thuật</Text>
       </Pressable>
       {technical?<Text style={typography.caption}>API-080 chỉ cung cấp trạng thái và mã liên quan; nội dung nhận xét chi tiết của quản lý chưa có trong response.</Text>:null}
       <CrewRepairReceiptHistory task={task}/>
-      <Text>Đây là trạng thái đọc từ máy chủ. Gửi bổ sung chưa được mở; màn này không gọi API-159 và không tạo lệnh.</Text>
+      <Text>{review.canSupplement ? 'Đã đủ điều kiện mở luồng FIELD bổ sung. Bản nộp phải được máy chủ xác minh trước khi liên kết lượt sửa chữa.' : 'Đây là trạng thái đọc từ máy chủ. Chưa đủ điều kiện tạo bản bổ sung hoặc lệnh liên kết.'}</Text>
     </Card>
     <Button variant="secondary" title="Về chi tiết nhiệm vụ" onPress={() => router.replace({
       pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId },
@@ -52,22 +55,26 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
     title: 'Chưa có hồ sơ sửa chữa được gửi để đánh giá',
     message: 'Chưa có lượt sửa chữa hiện hành trên máy chủ. Chưa có yêu cầu bổ sung nào được xác minh; chưa có nội dung yêu cầu.',
     technical: null,
+    canSupplement: false,
   };
   const technical = { attemptId: attempt.attemptId, effectiveSubmissionId: attempt.effectiveSubmissionId };
   if (!attempt.review) return {
     title: 'Hồ sơ đang chờ quản lý đánh giá',
     message: 'Bản nộp hiện hành đã được ghi nhận và chưa có quyết định đánh giá.',
     technical,
+    canSupplement: false,
   };
   if (attempt.review.decision === 'SUPPLEMENT') return {
     title: 'Quản lý yêu cầu bổ sung hồ sơ sửa chữa',
-    message: 'Máy chủ đã xác nhận yêu cầu bổ sung. Gửi bổ sung chưa được mở trong phiên bản này.',
+    message: 'Máy chủ đã xác nhận yêu cầu bổ sung. Hãy chuẩn bị bản FIELD mới với số đo và bằng chứng thật.',
     technical,
+    canSupplement: true,
   };
   return {
     title: 'Hồ sơ sửa chữa đã được quản lý chấp nhận',
     message: 'Máy chủ đã xác nhận hồ sơ hiện hành được chấp nhận.',
     technical,
+    canSupplement: false,
   };
 }
 

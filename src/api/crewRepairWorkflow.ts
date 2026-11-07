@@ -15,9 +15,10 @@ function commandIdentity(i: RepairIdentity,task: api.FieldTaskViewFact): RepairC
   const ctx=task.repairContext!;
   return {...i,packageId:ctx.packageId,itemId:ctx.itemId,bindingId:ctx.bindingId,assignmentId:task.assignmentId!};
 }
-export function validateRepairInput(operation: 'assessment'|'start'|'finish'|'attempt',body: Record<string,unknown>): void {
-  if(operation==='attempt') {
-    if(!api.isCrewResourceId(body.fieldSubmissionId)||!api.isCrewResourceId(body.executionFinishId)||
+export function validateRepairInput(operation: 'assessment'|'start'|'finish'|'attempt'|'supplement',body: Record<string,unknown>): void {
+  if(operation==='attempt' || operation==='supplement') {
+    if(!api.isCrewResourceId(body.fieldSubmissionId)||
+      (operation==='attempt'&&!api.isCrewResourceId(body.executionFinishId))||
       typeof body.expectedContentHash!=='string'||!/^[a-f0-9]{64}$/i.test(body.expectedContentHash))throw Error('repair_input_invalid');
     return;
   }
@@ -128,6 +129,26 @@ export async function prepareRepairAttempt(i: RepairIdentity,r=repairRuntime(i))
   validateRepairInput('attempt',payload);
   return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'attempt',key:r.uuid(),itemVersion:ctxVersion(task),payload}));
 }
+/** Prepare API-159 only after a real API-095/096 revision and current SUPPLEMENT review proof. */
+export async function prepareRepairSupplement(i: RepairIdentity, draft: FieldDraft, r=repairRuntime(i)) {
+  guard(i,r);
+  if(!sameRepairIdentity(i,draft)||!draft.command||draft.command.phase!=='confirmed'||!draft.result?.contentHash||
+    !api.isCrewResourceId(draft.result.id)||draft.result.taskId!==i.taskId) throw Error('repair_supplement_source_invalid');
+  const response=await guarded(i,r,()=>r.api.getFieldInspectionTaskDetailReal(i.projectId,i.taskId));
+  r.api.validateCrewTaskDetail(response.data,response.etag,i.projectId,i.taskId,i.actor);
+  const task=response.data,ctx=task.repairContext,attempt=ctx?.attempt;
+  if(task.mode==='CONDITIONAL_FT') throw Error('repair_fasttrack_mutation_disabled');
+  if(!ctx||ctx.mode!=='NORMAL'||!api.isCrewResourceId(task.assignmentId)||!api.isCrewResourceId(ctx.packageId)||
+    !api.isCrewResourceId(ctx.itemId)||!api.isCrewResourceId(ctx.bindingId)||!api.isRepairItemVersion(ctx.itemVersion)||
+    !attempt||!api.isCrewResourceId(attempt.attemptId)||!api.isCrewResourceId(attempt.effectiveSubmissionId)||
+    draft.command.body.parentSubmissionId!==attempt.effectiveSubmissionId||
+    !attempt.review||attempt.review.decision!=='SUPPLEMENT') throw Error('repair_supplement_not_allowed');
+  const payload={fieldSubmissionId:draft.result.id,expectedContentHash:draft.result.contentHash};
+  validateRepairInput('supplement',payload);
+  const j=await guarded(i,r,()=>r.journal(i));
+  return guarded(i,r,()=>j.prepare({identity:{...i,packageId:ctx.packageId,itemId:ctx.itemId,bindingId:ctx.bindingId,assignmentId:task.assignmentId!},
+    operation:'supplement',key:r.uuid(),itemVersion:ctx.itemVersion,payload}));
+}
 function ctxVersion(task: api.FieldTaskViewFact) {return task.repairContext!.itemVersion;}
 const locks=new Set<string>();
 /** Only explicit UI calls enter this dispatcher. No background/online listener sends commands. */
@@ -136,16 +157,16 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
   if(locks.has(lock))throw Error('repair_busy');locks.add(lock);
   try {
     const j=await guarded(i,r,()=>r.journal(i));let c=await guarded(i,r,()=>j.historicalRead(key));
-    if(!c||!['assessment','start','finish','attempt'].includes(c.operation))throw Error('repair_operation_disabled');
+    if(!c||!['assessment','start','finish','attempt','supplement'].includes(c.operation))throw Error('repair_operation_disabled');
     if(c.phase==='CONFIRMED') {
       await readRepairHistory(i,r);
       return c;
     }
     const response=await fresh(i,r,c.identity),task=response.data;
     if(c.phase==='REJECTED')return c;
-    const first=await firstStart(i,r,task);
+    const first=['supplement'].includes(c.operation)?null:await firstStart(i,r,task);
     if(['assessment','start'].includes(c.operation)&&first!==c.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
-    validateRepairInput(c.operation as 'assessment'|'start'|'finish'|'attempt',c.payload);
+    validateRepairInput(c.operation as 'assessment'|'start'|'finish'|'attempt'|'supplement',c.payload);
     if(c.operation==='start') {
       const previous=(await guarded(i,r,()=>j.history())).filter(row=>!row.rejectionResolved&&row.operation==='assessment').at(-1);
       if(!previous?.receipt || previous.phase!=='CONFIRMED' || previous.receipt.data.readiness!=='READY' ||
@@ -165,10 +186,15 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
         const source=await attemptSource(i,r,task,previous,c.identity);
         if(Object.entries(source).some(([k,v])=>c!.payload[k]!==v))throw Error('repair_claim_source_changed');
       }
+    } else if(c.operation==='supplement') {
+      const ctx=task.repairContext,attempt=ctx?.attempt;
+      if(task.mode==='CONDITIONAL_FT'||!ctx||ctx.mode!=='NORMAL'||!attempt||!attempt.review||attempt.review.decision!=='SUPPLEMENT'||
+        c.payload.fieldSubmissionId===attempt.effectiveSubmissionId||
+        ctx.itemVersion!==c.itemVersion) throw Error('repair_supplement_not_allowed');
     }
     const firstDispatch=c.phase==='PREPARED';
     if(c.phase==='PREPARED') {
-      const block=r.api.normalRepairBlock(task,response.etag,i.actor,c.operation as 'assessment'|'start'|'finish'|'attempt');
+      const block=c.operation==='supplement'?null:r.api.normalRepairBlock(task,response.etag,i.actor,c.operation as 'assessment'|'start'|'finish'|'attempt');
       if(block)throw Error(block);
       if(task.repairContext!.itemVersion!==c.itemVersion)throw Error('repair_stale_assessment');
       c=await guarded(i,r,()=>j.transition(key,'PENDING'));
@@ -177,7 +203,8 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
       let response: {data: api.RepairAssessmentView|api.RepairExecutionStartView|api.RepairExecutionFinishView|api.RepairAttemptIntakeView;etag:string};
       const command=c;
       try {
-        response=await guarded(i,r,async()=>command.operation==='assessment'?
+        response=await guarded(i,r,async()=>command.operation==='supplement'?r.api.supplementRepairAttemptReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
+            command.payload as unknown as api.RepairAttemptSupplementInput,command.ifMatch,command.key):command.operation==='assessment'?
           r.api.submitRepairAssessmentReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
             command.payload as unknown as api.RepairMeasurementAssessmentInput,command.ifMatch,command.key):
           command.operation==='start'?r.api.startRepairExecutionReal(i.projectId,command.identity.packageId,command.identity.itemId,i.taskId,
@@ -202,8 +229,11 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
     }
     if(c.phase==='ACKNOWLEDGED') {
       validateRepairReceipt(c,c.receipt!.data,`"${c.receipt!.itemVersion}"`);
-      const read=(await fresh(i,r,c.identity)).data;
-      if(read.repairContext!.itemVersion!==c.receipt!.itemVersion || read.repairContext!.status!==(c.operation==='assessment'?'Assigned':c.operation==='attempt'?'Submitted':'InProgress'))throw Error('repair_reconciliation_pending');
+      const read=(await guarded(i,r,()=>r.api.getFieldInspectionTaskDetailReal(i.projectId,i.taskId))).data;
+      if(c.operation==='supplement') {
+        const a=read.repairContext?.attempt;
+        if(!a||a.attemptId!==c.receipt!.data.attemptId||a.effectiveSubmissionId!==c.payload.fieldSubmissionId||a.review!==null) throw Error('repair_reconciliation_pending');
+      } else if(read.repairContext!.itemVersion!==c.receipt!.itemVersion || read.repairContext!.status!==(c.operation==='assessment'?'Assigned':c.operation==='attempt'?'Submitted':'InProgress'))throw Error('repair_reconciliation_pending');
       c=await guarded(i,r,()=>j.transition(key,'CONFIRMED'));
     }
     return c;
@@ -254,6 +284,9 @@ export function repairErrorMessage(e: unknown): string {
     repair_claim_required:'Cần hồ sơ sửa chữa gốc, đã xác nhận bằng dữ liệu đọc lại từ máy chủ, khớp phiên thi công hiện tại.',
     repair_claim_readback_invalid:'Hồ sơ đọc lại chưa khớp nguồn, nội dung hoặc thời điểm thi công. Đã khóa tiếp nhận.',
     repair_reconciliation_pending:'Phiên bản hoặc trạng thái máy chủ chưa khớp biên nhận. Giữ lệnh và đối soát.',
+    repair_supplement_not_allowed:'Chỉ bản nộp hiện hành có yêu cầu SUPPLEMENT từ máy chủ mới được gửi bổ sung.',
+    repair_supplement_source_invalid:'Cần bản đo kiểm bổ sung đã được máy chủ xác minh trước khi liên kết với lượt sửa chữa.',
+    repair_fasttrack_mutation_disabled:'Luồng sửa nhanh chưa mở thao tác thay đổi trên ứng dụng.',
   };
   if(messages[code])return messages[code];
   return 'Chưa xác nhận được kết quả hoặc dữ liệu đầu vào. Lệnh đã lưu được giữ nguyên; tải lại và đối soát trước khi tiếp tục.';
