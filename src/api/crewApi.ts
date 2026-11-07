@@ -96,6 +96,13 @@ export function validateCrewTaskDetail(item: FieldTaskViewFact, etag: string, pr
   validateCrewTaskIdentity({ ...item, crewId: item.assignedToUserId ?? '', version: item.version ?? '' }, actorId);
   if (item.id.toLowerCase() !== taskId.toLowerCase() || item.projectId.toLowerCase() !== projectId.toLowerCase() ||
       !etag || etag !== `"${item.version}"`) throw new Error('crew_version_or_identity_invalid');
+  const attempt = item.repairContext?.attempt;
+  if (attempt !== undefined && attempt !== null &&
+      (!isCrewResourceId(attempt.attemptId) || !isCrewResourceId(attempt.effectiveSubmissionId) ||
+       (attempt.review !== null && (!isCrewResourceId(attempt.review.reviewId) ||
+        !['SUPPLEMENT', 'ACCEPT'].includes(attempt.review.decision))))) {
+    throw new Error('crew_repair_attempt_invalid');
+  }
 }
 export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: FieldTaskViewFact, etag?: string): CrewTask {
   const rawMode = detail?.mode ?? item.mode;
@@ -304,6 +311,18 @@ export interface CrewRepairContext {
   itemVersion: string;
   repairPlan: string;
   checklistVersion: string;
+  attempt?: CrewRepairAttempt | null;
+}
+
+export interface CrewRepairAttempt {
+  attemptId: string;
+  effectiveSubmissionId: string;
+  review: CrewRepairReview | null;
+}
+
+export interface CrewRepairReview {
+  reviewId: string;
+  decision: 'SUPPLEMENT' | 'ACCEPT';
 }
 
 export type NormalRepairCapability = 'bootstrap' | 'assessment' | 'start' | 'finish' | 'attempt' | 'supplement';

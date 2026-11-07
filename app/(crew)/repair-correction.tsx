@@ -5,7 +5,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
-import type { CrewTask } from '../../src/api/crewApi';
+import type { CrewRepairAttempt, CrewTask } from '../../src/api/crewApi';
 import { colors, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskBoundary,crewStatusLabel,useCrewIdentity } from './tasks';
 
@@ -21,22 +21,23 @@ export default function CrewRepairCorrectionScreen() {
 
 export function CorrectionReadOnly({ task }: { task: CrewTask }) {
   const [technical, setTechnical] = useState(false);
+  const review = repairReviewPresentation(task.detail?.repairContext?.attempt);
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Bổ sung hồ sơ sửa chữa" showBack onBack={()=>router.back()} />}>
     <View style={{gap:spacing.md}}>
     <Card style={{gap:spacing.sm}}>
-      <Text style={typography.titleMd}>Chưa thể xác minh yêu cầu bổ sung sửa chữa</Text>
+      <Text style={typography.titleMd}>{review.title}</Text>
       <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
       <Text>{task.wo_code||'Chưa có mã công việc'}</Text>
       <Text>Trạng thái nhiệm vụ từ máy chủ: {crewStatusLabel(task.status)}</Text>
-      <Text>Chưa có yêu cầu bổ sung từ người quản lý được xác minh cho hồ sơ sửa chữa này.</Text>
-      <Text>Trạng thái đã gửi hoặc chờ đánh giá không có nghĩa là người quản lý yêu cầu bổ sung. Chưa có nội dung yêu cầu và lượt hồ sơ cần sửa.</Text>
-      <Text>Gửi bổ sung đang khóa đến khi xác minh được yêu cầu quản lý, hồ sơ liên quan và phiên bản hạng mục.</Text>
+      <Text>{review.message}</Text>
+      {review.technical ? <Text style={typography.caption}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
+      <Button variant="primary" title="Gửi bổ sung" disabled onPress={() => undefined} />
       <Pressable accessibilityRole="button" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={{minHeight:48,justifyContent:'center'}}>
         <Text style={[typography.labelLg,{color:colors.secondary}]}>Chi tiết kỹ thuật</Text>
       </Pressable>
-      {technical?<Text style={typography.caption}>Phụ thuộc nguồn Backend: API đọc lịch sử RepairItem hiện chỉ cho quản lý; chưa có nguồn Crew xác minh yêu cầu bổ sung và lượt tiếp nhận liên quan.</Text>:null}
+      {technical?<Text style={typography.caption}>API-080 chỉ cung cấp trạng thái và mã liên quan; nội dung nhận xét chi tiết của quản lý chưa có trong response.</Text>:null}
       <CrewRepairReceiptHistory task={task}/>
-      <Text>Nháp, bằng chứng và nhật ký lệnh đã lưu được giữ nguyên. Màn này không tạo hoặc gửi lệnh bổ sung, không xác nhận quản lý đã nghiệm thu.</Text>
+      <Text>Đây là trạng thái đọc từ máy chủ. Gửi bổ sung chưa được mở; màn này không gọi API-159 và không tạo lệnh.</Text>
     </Card>
     <Button variant="secondary" title="Về chi tiết nhiệm vụ" onPress={() => router.replace({
       pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId },
@@ -44,6 +45,30 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
     <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </View>
   </SafeAreaScreen>;
+}
+
+export function repairReviewPresentation(attempt: CrewRepairAttempt | null | undefined) {
+  if (!attempt) return {
+    title: 'Chưa có hồ sơ sửa chữa được gửi để đánh giá',
+    message: 'Chưa có lượt sửa chữa hiện hành trên máy chủ. Chưa có yêu cầu bổ sung nào được xác minh; chưa có nội dung yêu cầu.',
+    technical: null,
+  };
+  const technical = { attemptId: attempt.attemptId, effectiveSubmissionId: attempt.effectiveSubmissionId };
+  if (!attempt.review) return {
+    title: 'Hồ sơ đang chờ quản lý đánh giá',
+    message: 'Bản nộp hiện hành đã được ghi nhận và chưa có quyết định đánh giá.',
+    technical,
+  };
+  if (attempt.review.decision === 'SUPPLEMENT') return {
+    title: 'Quản lý yêu cầu bổ sung hồ sơ sửa chữa',
+    message: 'Máy chủ đã xác nhận yêu cầu bổ sung. Gửi bổ sung chưa được mở trong phiên bản này.',
+    technical,
+  };
+  return {
+    title: 'Hồ sơ sửa chữa đã được quản lý chấp nhận',
+    message: 'Máy chủ đã xác nhận hồ sơ hiện hành được chấp nhận.',
+    technical,
+  };
 }
 
 /** Local receipts checked against current API-080 authority; never represents a PM decision feed. */
