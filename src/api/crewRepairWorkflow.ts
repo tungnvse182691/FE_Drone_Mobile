@@ -188,9 +188,11 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
       }
     } else if(c.operation==='supplement') {
       const ctx=task.repairContext,attempt=ctx?.attempt;
-      if(task.mode==='CONDITIONAL_FT'||!ctx||ctx.mode!=='NORMAL'||!attempt||!attempt.review||attempt.review.decision!=='SUPPLEMENT'||
-        c.payload.fieldSubmissionId===attempt.effectiveSubmissionId||
-        ctx.itemVersion!==c.itemVersion) throw Error('repair_supplement_not_allowed');
+      if(task.mode==='CONDITIONAL_FT'||!ctx||ctx.mode!=='NORMAL'||!attempt||
+        (c.phase==='PREPARED' && c.payload.fieldSubmissionId===attempt.effectiveSubmissionId)||
+        (c.phase==='PREPARED' && (!attempt.review||attempt.review.decision!=='SUPPLEMENT')) ||
+        (c.phase!=='PREPARED' && !attempt.review && attempt.effectiveSubmissionId!==c.payload.fieldSubmissionId))
+        throw Error('repair_supplement_not_allowed');
     }
     const firstDispatch=c.phase==='PREPARED';
     if(c.phase==='PREPARED') {
@@ -232,7 +234,8 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
       const read=(await guarded(i,r,()=>r.api.getFieldInspectionTaskDetailReal(i.projectId,i.taskId))).data;
       if(c.operation==='supplement') {
         const a=read.repairContext?.attempt;
-        if(!a||a.attemptId!==c.receipt!.data.attemptId||a.effectiveSubmissionId!==c.payload.fieldSubmissionId||a.review!==null) throw Error('repair_reconciliation_pending');
+        if(!a||a.attemptId!==c.receipt!.data.attemptId||a.effectiveSubmissionId!==c.payload.fieldSubmissionId||
+          (a.review!==null&&a.review.decision!=='ACCEPT')) throw Error('repair_reconciliation_pending');
       } else if(read.repairContext!.itemVersion!==c.receipt!.itemVersion || read.repairContext!.status!==(c.operation==='assessment'?'Assigned':c.operation==='attempt'?'Submitted':'InProgress'))throw Error('repair_reconciliation_pending');
       c=await guarded(i,r,()=>j.transition(key,'CONFIRMED'));
     }

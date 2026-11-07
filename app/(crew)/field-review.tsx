@@ -15,8 +15,8 @@ import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDet
 import { readFieldRecovery, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto,
   type FieldDraft } from '../../src/api/crewFieldDraft';
-import { prepareRepairSupplement, dispatchRepair, repairRuntime } from '../../src/api/crewRepairWorkflow';
-import { currentRepairIdentity } from '../../src/api/crewRepairDraft';
+import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
+import { currentRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /** Display only: stored instrument and backend free text are never rewritten. */
@@ -40,13 +40,24 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [busy,setBusy]=useState(false), busyRef=useRef(false);
   const [loading,setLoading]=useState(true), [error,setError]=useState('');
   const [replayConfirmed,setReplayConfirmed]=useState<{key:string;context:string}|null>(null);
+  const [repairRecovery,setRepairRecovery]=useState<RepairJournalRecord|null>(null);
+  const [repairRecoveryConfirmed,setRepairRecoveryConfirmed]=useState<{key:string;context:string}|null>(null);
   const [notice,setNotice]=useState(''),[preview,setPreview]=useState<string|null>(null);
   const active=useRef(true);
   const context=()=>currentFieldContext(task.projectId,task.id);
   const current=(c: NonNullable<ReturnType<typeof context>>)=>active.current&&JSON.stringify(context())===JSON.stringify(c);
+  const loadRepairRecovery=useCallback(async(c:NonNullable<ReturnType<typeof context>>,fieldSubmissionId?:string)=>{
+    if(!supplementMode){setRepairRecovery(null);return;}
+    const i=currentRepairIdentity(task.projectId,task.id);if(!i){setRepairRecovery(null);return;}
+    try {
+      const rows=await readRepairHistory(i,repairRuntime(i),true);
+      const row=rows.filter(value=>value.operation==='supplement'&&(!fieldSubmissionId||value.payload.fieldSubmissionId===fieldSubmissionId)).at(-1)??null;
+      if(current(c))setRepairRecovery(row);
+    } catch(e) { if(current(c)) setNotice(repairErrorMessage(e)); }
+  },[supplementMode,task.id,task.projectId]);
   const load=useCallback(async()=>{
     const c=currentFieldContext(task.projectId,task.id);if(!c)return;
-    setLoading(true);setError('');setReplayConfirmed(null);setDraft(null);setLatest(null);setPreview(null);
+    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRepairRecovery(null);setDraft(null);setLatest(null);setPreview(null);
     try {
       const runtime=await openFieldRuntime(c);
       let saved:FieldDraft;try{saved=await loadFieldDraft(c,runtime);}catch(error){
@@ -58,26 +69,37 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!current(c))return;
       setDraft(saved);setLatest(previous);
+      await loadRepairRecovery(c,saved.result?.id);
       setLocationProof(saved.locationProof);setChainage(saved.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));
       setRawValues({});
       const initial=measurementTemplate(fresh.data.requiredMeasurementType,randomUUID());
       setMeasurements(saved.measurements.length?saved.measurements:previous?.measurements?.length?previous.measurements:initial?[initial]:[]);
     } catch(e){if(current(c)){setDraft(null);setError(fieldErrorMessage(e));}}
     finally{if(current(c))setLoading(false);}
-  },[task.id,task.projectId,identity.scope]);
+  },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
   const block=!identity.user||!identity.scope||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'submit');
   const captureBlock=!identity.user||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'capture');
   const frozen=!!draft?.command;
   const normalMeasurement=task.detail?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
-  const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'new'|'download',fileId?:string)=>{
+  const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
     if(busyRef.current)return;
     const c=context();if(!c)return;
     if(action==='replay'&&(!replayConfirmed||replayConfirmed.key!==draft?.command?.key||replayConfirmed.context!==JSON.stringify(c)))return;
+    if(action==='recover'&&(!repairRecovery||repairRecovery.phase==='CONFIRMED'||
+      (['PREPARED','PENDING'].includes(repairRecovery.phase)&&(!repairRecoveryConfirmed||repairRecoveryConfirmed.key!==repairRecovery.key||repairRecoveryConfirmed.context!==JSON.stringify(c)))))return;
     busyRef.current=true;setBusy(true);setNotice('');setReplayConfirmed(null);
+    setRepairRecoveryConfirmed(null);
     try {
       const runtime=await openFieldRuntime(c);
       let saved:FieldDraft;
+      if(action==='recover') {
+        const i=currentRepairIdentity(task.projectId,task.id);if(!i||!repairRecovery)throw Error('repair_session_changed');
+        const result=await dispatchRepair(i,repairRecovery.key,repairRuntime(i));
+        if(current(c))setRepairRecovery(result);
+        setNotice(result.phase==='CONFIRMED'?'Đã đối soát bổ sung đã lưu từ máy chủ.':'Chưa xác nhận kết quả. Lệnh bổ sung gốc được giữ nguyên.');
+        return;
+      }
       if(action==='replay'||action==='reconcile')saved=await reconcileFieldDraft(c,action==='replay',draft?.command?.key);
       else if(action==='new')saved=await acknowledgeFieldResult(c);
       else if(action==='download')saved=draft??await loadFieldDraft(c,runtime);
@@ -96,9 +118,16 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         if(supplementMode&&saved.command?.phase==='confirmed') {
           const repairIdentity=currentRepairIdentity(task.projectId,task.id);
           if(!repairIdentity) throw Error('repair_session_changed');
+          const rows=await readRepairHistory(repairIdentity,repairRuntime(repairIdentity),true);
+          const existing=rows.filter(row=>row.operation==='supplement'&&row.payload.fieldSubmissionId===saved.result?.id).at(-1);
+          if(existing) {
+            if(current(c))setRepairRecovery(existing);
+            setNotice('Bản FIELD đã xác nhận; lệnh bổ sung đã lưu cần được tiếp tục hoặc đối soát riêng.');
+            return;
+          }
           const command=await prepareRepairSupplement(repairIdentity,saved,repairRuntime(repairIdentity));
           const result=await dispatchRepair(repairIdentity,command.key,repairRuntime(repairIdentity));
-          if(result.phase!=='CONFIRMED') throw Error('repair_reconciliation_pending');
+          if(result.phase!=='CONFIRMED') {if(current(c))setRepairRecovery(result);throw Error('repair_reconciliation_pending');}
         }
       }
       if(!current(c))return;
@@ -108,7 +137,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(action==='new')await load();
     }catch(e){if(current(c)){
       setNotice(fieldErrorMessage(e));
-      try{const saved=await loadFieldDraft(c,await openFieldRuntime(c));if(current(c))setDraft(saved);}catch{/* keep explicit error; never reset an unresolved command */}
+      try{const saved=await loadFieldDraft(c,await openFieldRuntime(c));if(current(c)){setDraft(saved);await loadRepairRecovery(c,saved.result?.id);}}catch{/* keep explicit error; never reset an unresolved command */}
     }}finally{busyRef.current=false;if(current(c))setBusy(false);}
   };
   const update=(index:number,change:Partial<FieldMeasurementInput>)=>{if(busy||frozen)return;setMeasurements(values=>values.map((v,i)=>i===index?{...v,...change}:v));};
@@ -172,6 +201,15 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <Button variant="secondary" title="Chỉ đọc lại kết quả — không gửi" disabled={busy||!draft.command?.responseId} onPress={()=>void run('reconcile')}/>
           {draft.command?.phase==='pending'?<Button variant="secondary" title="Đối soát / gửi lại đúng lệnh đã lưu" disabled={busy} onPress={()=>setReplayConfirmed(draft.command?{key:draft.command.key,context:JSON.stringify(context())}:null)}/>:null}
           {replayConfirmed?<View><Text accessibilityRole="alert">Gửi lại giữ nguyên nội dung, khóa và phiên bản gốc. Nếu máy chủ chưa nhận lệnh, thao tác này có thể thực thi lần đầu.</Text><Button variant="secondary" title="Xác nhận gửi lại lệnh gốc" disabled={busy} onPress={()=>void run('replay')}/><Button variant="text" title="Hủy" onPress={()=>setReplayConfirmed(null)}/></View>:null}
+        </Card>:null}
+        {supplementMode&&repairRecovery&&repairRecovery.phase!=='CONFIRMED'?<Card style={styles.card}>
+          <Text style={styles.sectionTitle}>Đối soát bổ sung hồ sơ sửa chữa</Text>
+          <Text>{repairRecovery.phase==='ACKNOWLEDGED'?'Đã có biên nhận API-159 trên thiết bị; chỉ cần đọc lại trạng thái máy chủ.':repairRecovery.phase==='PREPARED'?'Lệnh bổ sung đã lưu nhưng chưa gửi.':'Chưa xác nhận kết quả API-159; lệnh gốc được giữ nguyên.'}</Text>
+          <Button variant="secondary" title="Tiếp tục / Đối soát bổ sung đã lưu" disabled={busy} onPress={()=>{
+            if(['PREPARED','PENDING'].includes(repairRecovery.phase))setRepairRecoveryConfirmed({key:repairRecovery.key,context:JSON.stringify(context())});
+            else void run('recover');
+          }}/>
+          {repairRecoveryConfirmed?<View><Text accessibilityRole="alert">Sẽ giữ nguyên khóa, nội dung và phiên bản gốc. Nếu máy chủ chưa nhận lệnh, thao tác này có thể thực thi lần đầu.</Text><Button variant="secondary" title="Xác nhận tiếp tục lệnh bổ sung đã lưu" disabled={busy} onPress={()=>void run('recover')}/><Button variant="text" title="Hủy" onPress={()=>setRepairRecoveryConfirmed(null)}/></View>:null}
         </Card>:null}
         {!draft.repairClaim&&draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/>:null}
         {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ quản lý" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
