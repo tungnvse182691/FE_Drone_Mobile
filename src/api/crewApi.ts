@@ -104,6 +104,41 @@ export function validateCrewTaskDetail(item: FieldTaskViewFact, etag: string, pr
     throw new Error('crew_repair_attempt_invalid');
   }
 }
+
+/** Validate the additive FastTrack read projection without granting execution authority. */
+export function validateFastTrackRepairContext(
+  item: FieldTaskViewFact,
+  projectId: string,
+  taskId: string,
+  actorId: string,
+  etag = `"${item.version ?? ''}"`,
+): void {
+  if (item.mode !== 'CONDITIONAL_FT' || item.id.toLowerCase() !== taskId.toLowerCase() ||
+      item.projectId.toLowerCase() !== projectId.toLowerCase() || item.assignedToUserId?.toLowerCase() !== actorId.toLowerCase() ||
+      !isCrewResourceId(item.assignmentId)) throw new Error('fasttrack_task_identity_invalid');
+  if (!item.repairContext) throw new Error('fasttrack_context_missing');
+  const ctx = item.repairContext;
+  if (ctx.mode !== 'FAST_TRACK' || ![ctx.packageId, ctx.itemId, ctx.bindingId].every(isCrewResourceId) ||
+      !isRepairItemVersion(ctx.itemVersion) || !ctx.repairPlan?.trim() || !ctx.checklistVersion?.trim() ||
+      !['Assigned','InProgress','Submitted','Reviewed','Confirmed','CorrectionRequired','Cancelled'].includes(ctx.status)) {
+    throw new Error('fasttrack_context_invalid');
+  }
+  if (!item.version?.trim() || etag !== `"${item.version}"`) throw new Error('fasttrack_task_version_invalid');
+}
+
+/** Read-only admission helper; this never returns permission to execute a FastTrack command. */
+export function fastTrackRepairBlock(
+  item: FieldTaskViewFact,
+  projectId: string,
+  taskId: string,
+  actorId: string,
+  etag = `"${item.version ?? ''}"`,
+): string | null {
+  if (item.mode !== 'CONDITIONAL_FT') return 'Nhiệm vụ không thuộc ngữ cảnh sửa chữa nhanh.';
+  if (!item.repairContext) return 'Chưa có ngữ cảnh sửa chữa nhanh hiện hành được máy chủ cung cấp cho nhiệm vụ này.';
+  try { validateFastTrackRepairContext(item, projectId, taskId, actorId, etag); return null; }
+  catch { return 'Ngữ cảnh sửa chữa nhanh từ máy chủ không hợp lệ; chưa thể hiển thị như nguồn tác nghiệp.'; }
+}
 export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: FieldTaskViewFact, etag?: string): CrewTask {
   const rawMode = detail?.mode ?? item.mode;
   return {

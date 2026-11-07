@@ -6,6 +6,7 @@ import {
   getFieldInspectionTaskDetailReal,
   isCrewResourceId,
   normalRepairBlock,
+  validateFastTrackRepairContext,
   validateCrewTaskDetail,
 } from '../api/crewApi';
 import { currentRepairIdentity, sameRepairIdentity, type RepairIdentity } from '../api/crewRepairDraft';
@@ -109,7 +110,10 @@ export async function readRepairBootstrap(
   if (!sameRepairIdentity(identity, currentRepairIdentity(projectId, taskId))) throw syntheticError('crew_session_changed', 409, 'Crew session changed during read');
   const view = response.data;
   validateCrewTaskDetail(view, response.etag, projectId, taskId, identity.actor);
-  if (view.repairContext) {
+  if (view.mode === 'CONDITIONAL_FT') {
+    try { validateFastTrackRepairContext(view, projectId, taskId, identity.actor, response.etag); }
+    catch (error) { throw syntheticError('repair_context_invalid', 409, error instanceof Error ? error.message : 'FastTrack context invalid'); }
+  } else if (view.repairContext) {
     const reason = normalRepairBlock(view, response.etag, identity.actor, 'bootstrap');
     if (reason) throw syntheticError('repair_context_invalid', 409, reason);
   }

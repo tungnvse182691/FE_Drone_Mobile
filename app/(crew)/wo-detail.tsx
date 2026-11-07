@@ -19,6 +19,7 @@ import { randomUUID } from 'expo-crypto';
 import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
 import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal,
   validateCrewTaskDetail, normalRepairBlock, getFieldInspectionTaskDetailReal,
+  fastTrackRepairBlock, isRepairItemVersion,
   isConcurrencyConflict, isPreconditionRequired, newIdempotencyKey,
   type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -243,7 +244,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <Button variant="text" title="Khuyết tật thuộc nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
       </Card>
       {fresh.detail?.mode === 'NORMAL' ? <Card style={styles.taskActionCard}><NormalRepairBootstrap task={fresh} stage="overview" /></Card> : null}
-      {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={styles.taskActionCard}><Text style={typography.titleMd}>Sửa chữa nhanh, có điều kiện</Text><Text style={styles.hint}>Chưa có đủ nguồn phân công hạng mục để xác nhận quyền thi công. Chế độ nhiệm vụ không tự cấp quyền sửa chữa.</Text></Card> : null}
+      {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={styles.taskActionCard}><FastTrackRepairSummary task={fresh} /></Card> : null}
       <Card style={styles.taskActionCard}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
           <MaterialIcons name="info-outline" size={20} color={colors.secondary} /><Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
@@ -258,18 +259,45 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
 /** Read-only D/E capability status. Never derive repair admission from task state. */
 export function RepairContractStatus({ task }: { task: CrewTask }) {
   return <View style={{ gap: spacing.sm }}>
-    {task.detail?.mode === 'CONDITIONAL_FT' ? <>
-      <Text style={typography.titleMd}>Sửa nhanh chưa sẵn sàng</Text>
-      <Text>Chưa có đủ thông tin phân công hạng mục để kiểm tra điều kiện sửa nhanh.</Text>
-      <Text>Chỉ có thể thi công khi hệ thống xác nhận đủ điều kiện và quyền xử lý.</Text>
-      <Text>Bạn vẫn có thể xem thông tin nhiệm vụ. Chức năng sửa nhanh tiếp tục được khóa.</Text>
-      <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
-    </> : null}
+    {task.detail?.mode === 'CONDITIONAL_FT' ? FastTrackRepairSummary({ task }) : null}
     <Text>Hồ sơ sửa chữa chỉ được bổ sung khi có yêu cầu phù hợp từ người quản lý.</Text>
     <Button variant="secondary" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={() => router.push({
       pathname: '/(crew)/repair-correction', params: { id: task.id, projectId: task.projectId },
     })} />
   </View>;
+}
+
+/** Pure read-only presentation of the server supplied FastTrack bootstrap. */
+export function FastTrackRepairSummary({ task }: { task: CrewTask }) {
+  const detail = task.detail;
+  if (detail?.mode !== 'CONDITIONAL_FT') return null;
+  const ctx = detail.repairContext;
+  const valid = !!ctx && ctx.mode === 'FAST_TRACK' && [ctx.packageId, ctx.itemId, ctx.bindingId].every(v =>
+    typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)) &&
+    isRepairItemVersion(ctx.itemVersion) && !!ctx.repairPlan?.trim() && !!ctx.checklistVersion?.trim();
+  if (!ctx) return <>
+    <Text style={typography.titleMd}>Sửa nhanh chưa sẵn sàng</Text>
+    <Text>Chưa có ngữ cảnh sửa chữa nhanh hiện hành được máy chủ cung cấp cho nhiệm vụ này.</Text>
+    <Text>Chưa có đủ thông tin phân công hạng mục để kiểm tra điều kiện sửa nhanh.</Text>
+    <Text>Chỉ có thể thi công khi hệ thống xác nhận đủ điều kiện và quyền xử lý.</Text>
+    <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
+  </>;
+  if (!valid) return <>
+    <Text style={typography.titleMd}>Sửa nhanh chưa sẵn sàng</Text>
+    <Text>Ngữ cảnh sửa chữa nhanh từ máy chủ không hợp lệ; chưa thể hiển thị như nguồn tác nghiệp.</Text>
+    <Text>Chưa có đủ thông tin phân công hạng mục để kiểm tra điều kiện sửa nhanh.</Text>
+    <Text>Chỉ có thể thi công khi hệ thống xác nhận đủ điều kiện và quyền xử lý.</Text>
+    <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
+  </>;
+  return <>
+    <Text style={typography.titleMd}>Sửa chữa nhanh, có điều kiện</Text>
+    <Text>Trạng thái hạng mục: {ctx.status}</Text>
+    <Text>Kế hoạch sửa chữa: {ctx.repairPlan}</Text>
+    <Text>Phiên bản checklist: {ctx.checklistVersion}</Text>
+    <Text selectable>Phiên bản hạng mục: {ctx.itemVersion}</Text>
+    <Text>Thông tin sửa chữa đã được máy chủ cung cấp. Chức năng thi công sửa chữa nhanh chưa được mở trên ứng dụng.</Text>
+    <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
+  </>;
 }
 
 /** Explicit NORMAL commands only. Legacy repair content remains unmounted. */
