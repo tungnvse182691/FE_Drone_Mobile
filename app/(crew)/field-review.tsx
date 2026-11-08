@@ -13,7 +13,7 @@ import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal,
   type CrewTask, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
-import { readFieldRecovery, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, measurementTemplate, saveFieldMeasurements,
+import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, newFieldDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
@@ -28,10 +28,11 @@ function safeFieldErrorDetail(error: unknown): string {
   return 'Không có thêm chi tiết an toàn để hiển thị. Không đưa URL có chữ ký, token hoặc bytes vào giao diện.';
 }
 
-function FieldErrorPanel({title,message,detail,expanded,onToggle}:{title:string;message:string;detail:string;expanded:boolean;onToggle:()=>void}) {
-  return <Card style={styles.errorPanel}>
-    <View style={styles.errorHeading}><MaterialIcons name="error-outline" size={20} color={colors.error}/><Text style={styles.errorTitle}>{title}</Text></View>
-    <Text accessibilityLiveRegion="polite" style={styles.errorMessage}>{message}</Text>
+function FieldErrorPanel({title,message,detail,expanded,onToggle,tone='error'}:{title:string;message:string;detail:string;expanded:boolean;onToggle:()=>void;tone?:'error'|'success'|'pending'}) {
+  const palette=tone==='success'?{icon:'check-circle' as const,color:colors.success,style:styles.successPanel}:tone==='pending'?{icon:'hourglass-top' as const,color:colors.warning,style:styles.pendingPanel}:{icon:'error-outline' as const,color:colors.error,style:styles.errorPanel};
+  return <Card style={palette.style}>
+    <View style={styles.errorHeading}><MaterialIcons name={palette.icon} size={20} color={palette.color}/><Text style={[styles.errorTitle,{color:palette.color}]}>{title}</Text></View>
+    <Text accessibilityLiveRegion="polite" style={[styles.errorMessage,tone==='error'?null:styles.noticeMessage]}>{message}</Text>
     <Pressable accessibilityRole="button" accessibilityState={{expanded}} onPress={onToggle} style={styles.detailToggle}><Text style={styles.detailLabel}>{expanded?'Ẩn chi tiết':'Chi tiết'}</Text><MaterialIcons name={expanded?'expand-less':'expand-more'} size={18} color={colors.secondary}/></Pressable>
     {expanded?<Text style={styles.errorDetail}>{detail}</Text>:null}
   </Card>;
@@ -125,6 +126,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [repairRecovery,setRepairRecovery]=useState<RepairJournalRecord|null>(null);
   const [repairRecoveryConfirmed,setRepairRecoveryConfirmed]=useState<{key:string;context:string}|null>(null);
   const [notice,setNotice]=useState(''),[noticeDetail,setNoticeDetail]=useState(''),[preview,setPreview]=useState<string|null>(null);
+  const [localRecoveryBlocked,setLocalRecoveryBlocked]=useState(false);
   const [deleteTarget,setDeleteTarget]=useState<string|null>(null),[showErrorDetail,setShowErrorDetail]=useState(false);
   const active=useRef(true);
   const loadSequence=useRef(0);
@@ -144,11 +146,11 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     const c=currentFieldContext(task.projectId,task.id);if(!c)return;
     const sequence=++loadSequence.current;
     const isLatest=()=>current(c)&&fieldRequestIsCurrent(sequence,loadSequence.current);
-    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRepairRecovery(null);setDraft(null);setLatest(null);setPreview(null);setVerifiedTask(null);setVerifiedEtag('');setPreviousMeasurements([]);
+    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRepairRecovery(null);setDraft(null);setLatest(null);setPreview(null);setVerifiedTask(null);setVerifiedEtag('');setPreviousMeasurements([]);setLocalRecoveryBlocked(false);
     try {
       const runtime=await openFieldRuntime(c);
-      let saved:FieldDraft;try{saved=await loadFieldDraft(c,runtime);}catch(error){
-        if(!current(c))return;const recovery=await readFieldRecovery(c);saved=recovery.draft;
+      let saved:FieldDraft;let localError='';try{saved=await loadFieldDraft(c,runtime);}catch(error){
+        if(!current(c))return;localError=fieldErrorMessage(error);saved=newFieldDraft(c);
       }
       const fresh=await getFieldInspectionTaskDetailReal(task.projectId,task.id);
       validateCrewTaskDetail(fresh.data,fresh.etag,task.projectId,task.id,c.actor);
@@ -156,7 +158,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       const previous=fresh.data.latestSubmissionId ? (await getFieldSubmissionDetailReal(task.projectId,task.id,fresh.data.latestSubmissionId)).data : null;
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!isLatest())return;
-      setDraft(saved);setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);
+      setDraft(saved);setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);setLocalRecoveryBlocked(!!localError);if(localError)setNotice(`Không thể dùng nháp cũ: ${localError} Chỉ đọc hồ sơ máy chủ; cần đối soát trước khi lưu mới.`);
       await loadRepairRecovery(c,saved.result?.id);
       setLocationProof(saved.locationProof);setChainage(saved.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));
       setRawValues({});
@@ -164,12 +166,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       const prior = previous?.measurements?.length ? previous.measurements : [];
       setPreviousMeasurements(prior);
       setMeasurements(saved.measurements.length ? saved.measurements : initial ? [initial] : []);
-    } catch(e){if(isLatest()){setDraft(null);setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được bản nháp hoặc trạng thái nhiệm vụ.');}}
+    } catch(e){if(isLatest()){setDraft(null);setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được trạng thái nhiệm vụ từ máy chủ.');}}
     finally{if(isLatest())setLoading(false);}
   },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
-  const block=!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
-  const captureBlock=!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
+  const block=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi lưu hoặc gửi hồ sơ.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
+  const captureBlock=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi thêm ảnh.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
   const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
   const frozen=!!draft?.command;
@@ -310,7 +312,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ quản lý" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
         {draft.result?<Card><Text>{draft.result.readiness==='READY'?'Hồ sơ đủ thông tin theo máy chủ':'Hồ sơ cần bổ sung thông tin'}</Text><Text>Đây là kết quả đọc lại hồ sơ, chưa phải xác nhận nghiệm thu.</Text></Card>:null}
       </>:null}
-      {notice?<FieldErrorPanel title={notice.startsWith('Đã')?'Trạng thái hồ sơ':'Cần xử lý'} message={notice} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
+      {notice?<FieldErrorPanel tone={notice.includes('Ảnh đã')||notice.startsWith('Đã lưu')||notice.startsWith('Đã đọc')?'success':notice.includes('đối soát')||notice.includes('chờ')?'pending':'error'} title={notice.includes('Ảnh đã')||notice.startsWith('Đã lưu')||notice.startsWith('Đã đọc')?'Đã cập nhật':notice.includes('đối soát')||notice.includes('chờ')?'Đang chờ đối soát':'Cần xử lý'} message={notice} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={()=>setDeleteTarget(null)}>
         <View style={styles.modalBackdrop}><View style={styles.confirmModal} accessibilityViewIsModal>
           <Text style={styles.sectionTitle}>Xóa ảnh cục bộ?</Text>
@@ -374,6 +376,9 @@ const styles = StyleSheet.create({
   evidenceBody: { flex: 1, gap: 4 },
   removePhoto: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   errorPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.error, gap: spacing.xs },
+  successPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.success, gap: spacing.xs },
+  pendingPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.warning, gap: spacing.xs },
+  noticeMessage: { color: colors.neutral },
   errorHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   errorTitle: { ...typography.labelLg, color: colors.neutral },
   errorMessage: { ...typography.bodyMd, color: colors.neutral },

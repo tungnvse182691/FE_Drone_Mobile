@@ -8,6 +8,7 @@ import { colors, radius, spacing, typography } from '../design-tokens';
 
 interface ViewFinderProps {
   disabled?: boolean;
+  disabledReason?: string;
   onCapture: (photo: CameraCapturedPicture) => void;
   defectType: string;
   showGridGuide?: boolean;
@@ -54,6 +55,7 @@ export function watchCaptureLocation(onCoords: (value: Coords | null) => void,
 
 export function ViewFinder({
   disabled = false,
+  disabledReason,
   onCapture,
   defectType,
   showGridGuide,
@@ -141,21 +143,6 @@ export function ViewFinder({
           <Text style={[typography.labelSm, styles.defectLabel]}>{defectType.toUpperCase()}</Text>
         </View>
 
-        <View style={styles.ruler} pointerEvents="none">
-          <View style={styles.rulerLine} />
-          <View style={styles.rulerMarks}>
-            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((mark) => (
-              <View
-                key={mark}
-                style={[
-                  styles.rulerTick,
-                  mark % 2 === 0 ? styles.rulerTickMajor : styles.rulerTickMinor,
-                ]}
-              />
-            ))}
-          </View>
-        </View>
-
         {watermarkContent ?? (
           <View style={styles.gpsWatermark} pointerEvents="none">
             <MaterialIcons name="location-on" size={14} color={colors.onPrimary} />
@@ -168,7 +155,7 @@ export function ViewFinder({
         )}
 
         {hudItems}
-        {captureError ? <Text accessibilityLiveRegion="polite">{captureError}</Text> : null}
+        {captureError || disabledReason ? <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>{captureError || disabledReason}</Text> : null}
 
         <View style={styles.bottomBar}>
           <View style={styles.bottomSideLeft}>{leftControl ?? null}</View>
@@ -205,6 +192,17 @@ const styles = StyleSheet.create({
   },
   permissionText: {
     color: colors.secondary,
+    textAlign: 'center',
+  },
+  captureStatus: {
+    alignSelf: 'center',
+    maxWidth: '92%',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    color: colors.onPrimary,
+    backgroundColor: 'rgba(15, 20, 28, 0.82)',
     textAlign: 'center',
   },
   overlay: {
