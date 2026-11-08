@@ -388,6 +388,21 @@ export async function saveFieldMeasurements(context: FieldContext,measurements: 
     await persist(draft,runtime);return draft;
   });
 }
+
+/** Remove only an unsubmitted local capture. Upload sessions and pending commands are immutable. */
+export async function removeLocalFieldCapture(context: FieldContext, captureId: string): Promise<FieldDraft> {
+  return exclusive(context, async () => {
+    const runtime = await openFieldRuntime(context);
+    const draft = await loadFieldDraft(context, runtime);
+    if (draft.command) throw new Error('field_command_pending');
+    const capture = draft.captures.find(item => item.id === captureId);
+    if (!capture) return draft;
+    if (capture.upload || capture.completed || capture.verified) throw new Error('field_capture_locked');
+    draft.captures = draft.captures.filter(item => item.id !== captureId);
+    await persist(draft, runtime);
+    return draft;
+  });
+}
 export async function acknowledgeFieldResult(context: FieldContext): Promise<FieldDraft> {
   return exclusive(context,async()=>{
     const runtime=await openFieldRuntime(context);

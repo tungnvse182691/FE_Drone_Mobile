@@ -1,7 +1,8 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -13,7 +14,7 @@ import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal,
   type CrewTask, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
 import { readFieldRecovery, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, measurementTemplate, saveFieldMeasurements,
-  uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto,
+  uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
 import { currentRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
@@ -213,6 +214,19 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       try{const saved=await loadFieldDraft(c,await openFieldRuntime(c));if(current(c)){setDraft(saved);await loadRepairRecovery(c,saved.result?.id);}}catch{/* keep explicit error; never reset an unresolved command */}
     }}finally{busyRef.current=false;if(current(c))setBusy(false);}
   };
+  const removeLocalCapture = (captureId: string) => {
+    Alert.alert('Xóa ảnh cục bộ?', 'Ảnh chưa tải lên sẽ bị xóa khỏi bản nháp trên thiết bị.', [
+      { text: 'Hủy', style: 'cancel' },
+      { text: 'Xóa ảnh', style: 'destructive', onPress: () => void (async () => {
+        const ctx = context();
+        try {
+          if (!ctx) return;
+          const saved = await removeLocalFieldCapture(ctx, captureId);
+          if (current(ctx)) setDraft(saved);
+        } catch (e) { if (ctx && current(ctx)) setNotice(fieldErrorMessage(e)); }
+      })() },
+    ]);
+  };
   const update=(index:number,change:Partial<FieldMeasurementInput>)=>{if(busy||frozen)return;setMeasurements(values=>values.map((v,i)=>i===index?{...v,...change}:v));};
   const mode=TASK_MODE_CHIP[task.task_mode];
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />}>
@@ -221,7 +235,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         <Text>{supplementMode?'Bản bổ sung FIELD cho yêu cầu SUPPLEMENT.':draft?.repairClaim?'Hồ sơ đo kiểm sau sửa.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
-      <Button style={styles.compactAction} variant="secondary" title="Tải lại" disabled={busy} onPress={()=>void load()}/>
+      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy} onPress={()=>void load()}><MaterialIcons name="refresh" size={18} color={colors.secondary}/><Text style={styles.refreshLabel}>{loading?'Đang tải…':'Tải lại'}</Text></Pressable>
       {latest?<Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={styles.sectionTitle}>Lượt gửi #{latest.revision}</Text><Text style={styles.muted}>{fieldSubmissionSummary(verifiedTask?.status,latest.readiness)}</Text></View></View>{latest.missingReasons?.length&&verifiedTask?.status==='SupplementRequired'?<View style={styles.missingList}><Text style={styles.muted}>Thông tin máy chủ còn thiếu:</Text>{fieldMissingReasonLabels(latest.missingReasons).map(reason=><Text key={reason}>• {reason}</Text>)}</View>:null}
         {(latest.evidence??[]).filter(e=>e.fileId).map(e=><Button key={e.captureOriginId} variant="secondary" title={`Xem ảnh ${e.purpose==='AFTER'?'sau sửa':e.purpose==='BEFORE'?'hiện trạng':'đo kiểm'} riêng tư`} disabled={busy} onPress={()=>void run('download',e.fileId!)}/>)}</Card>:<Text>Chưa có lượt gửi từ máy chủ.</Text>}
       {preview?<Image source={{uri:preview}} style={{width:'100%',height:240}} resizeMode="contain"/>:null}
@@ -249,10 +263,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
           {!draft.captures.length?<Text>Chưa có ảnh nháp của phiên và nhiệm vụ này.</Text>:null}
           {draft.captures.map(c=><View key={c.id} style={styles.missingBox}>
-            <Image source={{uri:c.uri}} style={styles.thumbnail} resizeMode="cover"/>
-            <Text style={typography.labelLg}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
-            <Chip {...fieldEvidenceStatus(c)} />
-            <Text style={styles.muted}>{c.coordinates?'Có vị trí camera quan sát':'Không có GPS quan sát'} · {c.capturedAt?'Ảnh chụp trực tiếp':'Ảnh từ thiết bị, chưa xác minh thời điểm chụp'}</Text>
+            <View style={styles.evidenceTop}><Image source={{uri:c.uri}} style={styles.thumbnail} resizeMode="cover"/><View style={styles.evidenceBody}><Text style={typography.labelLg}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text><Chip {...fieldEvidenceStatus(c)} /><Text style={styles.muted}>{c.coordinates?'Có vị trí camera quan sát':'Không có GPS quan sát'}</Text></View>{!c.upload&&!c.completed&&!c.verified&&!frozen?<Pressable accessibilityRole="button" accessibilityLabel="Xóa ảnh cục bộ" style={styles.removePhoto} onPress={()=>removeLocalCapture(c.id)}><MaterialIcons name="delete-outline" size={20} color={colors.error}/></Pressable>:null}</View>
           </View>)}
           {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
           {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
@@ -297,6 +308,9 @@ const styles = StyleSheet.create({
   priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
   missingList: { gap: spacing.xs },
   compactAction: { alignSelf: 'flex-start', minHeight: 36, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  refreshAction: { alignSelf: 'flex-start', minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  refreshPressed: { backgroundColor: colors.surfaceAlt },
+  refreshLabel: { ...typography.labelSm, color: colors.secondary },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   actionButton: { flex: 1 },
   thumbnail: { width: 88, height: 88, borderRadius: radius.md },
@@ -331,6 +345,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
     gap: 4,
   },
+  evidenceTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  evidenceBody: { flex: 1, gap: 4 },
+  removePhoto: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   missingRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

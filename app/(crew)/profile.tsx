@@ -97,29 +97,19 @@ export default function CrewProfileScreen() {
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
       <View style={styles.profileHeader}>
-        <View style={styles.avatarWrap}>
-          <View style={styles.avatar}>
-            <MaterialIcons name="person" size={52} color={colors.secondary} />
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Đổi ảnh đại diện"
-            style={styles.cameraBtn}
-            disabled
-            accessibilityState={{ disabled: true }}
-          >
-            <MaterialIcons name="photo-camera" size={16} color={colors.surface} />
-          </Pressable>
+        <View
+          style={styles.avatar}
+          accessibilityLabel="Đổi ảnh đại diện"
+          accessibilityState={{ disabled: true }}
+          {...({ disabled: true } as any)}
+        >
+          <MaterialIcons name="person" size={48} color={colors.secondary} />
         </View>
-
-        <Text style={[typography.caption, styles.unit]}>Ảnh đại diện chưa hỗ trợ cập nhật</Text>
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
           Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
         </Text>
-        <Text style={[typography.caption, styles.unit]}>
-          Chưa có thông tin đội phụ trách
-        </Text>
+        <Text style={[typography.caption, styles.unit]}>Ảnh đại diện chưa hỗ trợ cập nhật · Thông tin theo tài khoản hiện tại</Text>
         <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>
@@ -129,8 +119,7 @@ export default function CrewProfileScreen() {
       </View>
 
       <Card style={styles.statsCard}>
-        <Text style={[typography.caption, { color: colors.secondary, marginBottom: spacing.sm }]}>Thống kê trong nhiệm vụ đã tải</Text>
-        <Text style={[typography.caption, { color: colors.secondary, marginBottom: spacing.sm }]}>Không phải toàn bộ lịch sử.</Text>
+        <View style={styles.statsHeading}><Text style={[typography.titleMd, { color: colors.neutral }]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View>
         {inbox.error ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: colors.secondary }]}>{inbox.error}</Text> :
           inbox.query.isPending && inbox.enabled ? <Text style={typography.bodyMd}>Đang tải thống kê…</Text> :
           !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
@@ -203,32 +192,16 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
-  avatarWrap: {
-    marginBottom: spacing.sm,
-  },
   avatar: {
-    width: 88,
-    height: 88,
+    width: 80,
+    height: 80,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 2,
     borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: radius.full,
-    backgroundColor: colors.secondary,
-    opacity: 0.6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
+    marginBottom: spacing.sm,
   },
   name: {
     color: colors.neutral,
@@ -284,6 +257,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-evenly',
   },
+  statsHeading: { marginBottom: spacing.md, gap: 2 },
   statDivider: {
     width: 1,
     height: 36,

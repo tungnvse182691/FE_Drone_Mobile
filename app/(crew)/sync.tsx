@@ -93,6 +93,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
+  const [showTechnical, setShowTechnical] = useState(false);
   const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;reader.cancel();};},[reader]);
   const active=()=>mounted.current&&sameQueueIdentity(identity);
@@ -222,26 +223,13 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
             </View>
           </View>
         </View>
-        <Text style={[typography.bodyMd, styles.statusDesc]}>
-          Hàng đợi này chưa được phép gửi. Bản ghi chưa xác minh được quyền sở hữu được giữ riêng, không hiển thị trong phiên này.
-        </Text>
-        <View style={styles.heroDivider} />
-        <View style={styles.syncBtnWrap}>
-          <Button
-            variant="primary"
-            title="Chỉ kiểm tra hàng đợi — không gửi"
-            loading={syncing}
-            disabled={counts.pending === 0}
-            onPress={syncNow}
-            disabledStyle={styles.syncDisabled}
-            disabledTextStyle={styles.syncDisabledText}
-          />
-          {counts.pending === 0 ? (
-            <Text style={[typography.caption, styles.syncAllDone]}>
-              Chưa có mục chờ trong tài khoản này. Đây không phải xác nhận đã gửi lên máy chủ.
-            </Text>
-          ) : null}
+        <View style={styles.stateGrid}>
+          <View style={styles.stateCell}><Text style={styles.stateValue}>{outboxRows.length}</Text><Text style={styles.stateLabel}>Trên thiết bị</Text></View>
+          <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.pending}</Text><Text style={styles.stateLabel}>Chờ xử lý</Text></View>
+          <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.done}</Text><Text style={styles.stateLabel}>Đã xác nhận</Text></View>
         </View>
+        <Text style={[typography.bodyMd, styles.statusDesc]}>Dữ liệu chỉ được tính là đã đồng bộ khi có biên nhận máy chủ hợp lệ.</Text>
+        <View style={styles.actionLine}><Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái hàng đợi" style={({pressed})=>[styles.smallAction,pressed&&styles.pressed]} onPress={refresh}><MaterialIcons name="refresh" size={18} color={colors.secondary}/><Text style={styles.smallActionText}>Tải lại</Text></Pressable><Text style={styles.lockedHint}>Gửi hàng đợi chưa được mở</Text></View>
       </Card>
 
       <CrewOfflinePanel identity={identity} />
@@ -286,15 +274,16 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
                 <MaterialIcons name="verified-user" size={24} color={colors.brandGold} />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[typography.labelLg, styles.infoTitle]}>Bảo toàn dữ liệu ngoại tuyến</Text>
-                <Text style={[typography.caption, styles.infoDesc]}>
-                  Các bản ghi đang được giữ trên thiết bị để đối soát. Hàng đợi cũ chưa được phép gửi; lưu trên thiết bị không đồng nghĩa máy chủ đã nhận.
-                </Text>
+                <Text style={[typography.labelLg, styles.infoTitle]}>Dữ liệu được giữ an toàn</Text>
+                <Text style={[typography.caption, styles.infoDesc]}>Mục chờ vẫn nằm trên thiết bị để đối soát; chưa có thao tác gửi tự động.</Text>
               </View>
             </View>
           </Card>
 
-          <Card style={styles.cacheCard}>
+          <Pressable accessibilityRole="button" accessibilityState={{expanded:showTechnical}} onPress={()=>setShowTechnical(v=>!v)} style={styles.technicalToggle}>
+            <View><Text style={styles.technicalTitle}>Chi tiết kỹ thuật</Text><Text style={styles.technicalHint}>Nhật ký, thiết bị và chẩn đoán</Text></View><MaterialIcons name={showTechnical?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
+          </Pressable>
+          {showTechnical?<Card style={styles.cacheCard}>
             <View style={styles.cacheRow}>
               <View style={styles.cacheIcon}>
                 <MaterialIcons name="storage" size={24} color={colors.brandGold} />
@@ -305,7 +294,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
               </View>
             </View>
 
-          </Card>
+          </Card>:null}
         </>
       ) : counts.done > 0 ? (
         <EmptyState
@@ -448,6 +437,14 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     marginTop: spacing.sm,
   },
+  stateGrid: { flexDirection: 'row', marginTop: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm },
+  stateCell: { flex: 1, alignItems: 'center', gap: 2 },
+  stateValue: { ...typography.titleLg, color: colors.neutral },
+  stateLabel: { ...typography.caption, color: colors.secondary, textAlign: 'center' },
+  actionLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, gap: spacing.sm },
+  smallAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md },
+  smallActionText: { ...typography.labelSm, color: colors.secondary },
+  lockedHint: { ...typography.caption, color: colors.secondary, flex: 1, textAlign: 'right' },
   heroDivider: {
     height: 1,
     backgroundColor: colors.border,
@@ -612,6 +609,9 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  technicalToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, marginBottom: spacing.sm },
+  technicalTitle: { ...typography.labelLg, color: colors.neutral },
+  technicalHint: { ...typography.caption, color: colors.secondary, marginTop: 2 },
   cacheRow: {
     flexDirection: 'row',
     alignItems: 'center',
