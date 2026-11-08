@@ -40,6 +40,35 @@ export function selectReceivingProject(projects: CrewProject[], current: string 
   return current && projects.some(project => project.projectId === current) ? current : null;
 }
 
+export async function reconcileReceivingProjects(
+  firstPage: { items: CrewProject[]; nextCursor: string | null },
+  current: string | null,
+  fetchPage: (cursor: string) => Promise<{ items: CrewProject[]; nextCursor: string | null }>,
+  maxPages = 40,
+) {
+  const pages: CrewProject[] = [];
+  let page = firstPage;
+  let pageCount = 0;
+  let foundCurrent = page.items.some(project => project.projectId === current);
+  const append = (items: CrewProject[]) => {
+    pages.push(...items);
+    const unique = new Map(pages.map(project => [project.projectId, project]));
+    pages.splice(0, pages.length, ...unique.values());
+  };
+  append(page.items);
+  while (page.nextCursor && pageCount < maxPages && current && !foundCurrent) {
+    page = await fetchPage(page.nextCursor);
+    pageCount += 1;
+    append(page.items);
+    foundCurrent = page.items.some(project => project.projectId === current) || pages.some(project => project.projectId === current);
+  }
+  const verified = !page.nextCursor;
+  const selected = current
+    ? foundCurrent || !page.nextCursor ? (foundCurrent ? current : null) : current
+    : pages.length === 1 && !page.nextCursor ? pages[0].projectId : null;
+  return { items: pages, nextCursor: page.nextCursor, selected, verified };
+}
+
 export function formatWaiting(seconds: number): string {
   if (seconds <= 0) {
     return '—';
@@ -108,16 +137,21 @@ export default function CrewReceivingScreen() {
 function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
   const [projects,setProjects]=useState<CrewProject[]>([]), [cursor,setCursor]=useState<string|null>(null);
   const [selected,setSelected]=useState<string|null>(null),[error,setError]=useState<string|null>(null),[loading,setLoading]=useState(false);
+  const selectedRef=useRef<string|null>(null);
   const [showHelp,setShowHelp]=useState(false);
   const sequence=useRef(0),mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;sequence.current++;};},[]);
+  useEffect(()=>{selectedRef.current=selected;},[selected]);
   const load=useCallback(async(more=false)=>{
     const n=++sequence.current;setLoading(true);setError(null);
     try {const page=await discoverReceivingProjects(identity,more?cursor??undefined:undefined);
       if(!mounted.current||n!==sequence.current)return;
-      setProjects(old=>Array.from(new Map([...(more?old:[]),...page.items].map(p=>[p.projectId,p])).values()));
-      setCursor(page.nextCursor);
-      if(!more)setSelected(current => selectReceivingProject(page.items, current, page.nextCursor!==null));
+      const reconciled=more ? {items:page.items,nextCursor:page.nextCursor,selected:selectedRef.current} : await reconcileReceivingProjects(page,selectedRef.current,
+        nextCursor=>discoverReceivingProjects(identity,nextCursor),40);
+      if(!mounted.current||n!==sequence.current)return;
+      setProjects(old=>Array.from(new Map([...(more?old:[]),...reconciled.items].map(p=>[p.projectId,p])).values()));
+      setCursor(reconciled.nextCursor);
+      if(!more)setSelected(reconciled.selected);
     }catch(e){if(mounted.current&&n===sequence.current)setError(repairCommandErrorMessage(e));}
     finally{if(mounted.current&&n===sequence.current)setLoading(false);}
   },[identity,cursor]);
@@ -127,6 +161,10 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
       <MaterialIcons name="help-outline" size={18} color={colors.brandGold}/><Text style={styles.helpLabel}>Vì sao cần chọn dự án?</Text>
     </Pressable>
     {showHelp?<Text style={[typography.caption,styles.helpText]}>Chỉ hiển thị yêu cầu trong các dự án mà máy chủ xác nhận quyền hiện tại. Danh sách có thể chưa bao phủ tất cả dự án của bạn.</Text>:null}
+    <View style={styles.projectHeader}>
+      <Text style={typography.labelLg}>Dự án</Text>
+      <Button variant="text" title="Tải lại" loading={loading} onPress={()=>void load(false)} style={styles.compactButton} />
+    </View>
     {projects.map(p=>selected===p.projectId&&projects.length===1?
       <View key={p.projectId} style={styles.projectSelected}><MaterialIcons name="check-circle" size={18} color={colors.success}/><View style={styles.projectText}><Text style={typography.labelLg}>{p.projectCode}</Text><Text style={typography.caption}>{p.name}</Text></View></View>:
       <Pressable key={p.projectId} accessibilityRole="button" accessibilityState={{selected:selected===p.projectId}} onPress={()=>setSelected(p.projectId)} style={({pressed})=>[styles.projectOption,pressed&&styles.pressed]}>
@@ -134,10 +172,6 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
       </Pressable>)}
     {error?<Text accessibilityRole="alert">{error}</Text>:null}
     {!loading&&!error&&!projects.length?<Text>Không có dự án trong phạm vi được máy chủ trả về.</Text>:null}
-    <View style={styles.projectHeader}>
-      <Text style={typography.labelLg}>Dự án</Text>
-      <Button variant="text" title="Tải lại" loading={loading} onPress={()=>void load(false)} style={styles.compactButton} />
-    </View>
     {cursor?<Button variant="secondary" title="Thêm dự án" disabled={loading} onPress={()=>void load(true)} />:null}
     {selected?<ReceivingRequests key={selected} identity={{...identity,projectId:selected}} />:null}
   </SafeAreaScreen>;

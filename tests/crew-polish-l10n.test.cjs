@@ -29,6 +29,21 @@ test('Receiving request semantics keep kind, source and server status separate',
  const one=[{projectId:'p1'}],many=[...one,{projectId:'p2'}];
  assert.equal(select(one,null),'p1');assert.equal(select(one,null,true),null);assert.equal(select(many,'p2'),'p2');assert.equal(select(many,'missing'),null);assert.equal(select(many,'p2',true),'p2');
 });
+test('Receiving project refresh reconciles paginated selection without stale fallback',async()=>{
+ const reconcile=fn('app/(crew)/receiving.tsx','reconcileReceivingProjects');
+ const projects=Array.from({length:26},(_,i)=>({projectId:`p${i+1}`,projectCode:`P${i+1}`,name:`Project ${i+1}`,status:'Active'}));
+ const pages=[{items:projects.slice(0,25),nextCursor:'p25'},{items:projects.slice(25),nextCursor:null}];
+ let calls=0;
+ const result=await reconcile(pages[0],'p26',async cursor=>{assert.equal(cursor,'p25');calls+=1;return pages[1];});
+ assert.equal(calls,1);assert.equal(result.selected,'p26');assert.equal(result.items.length,26);assert.equal(result.nextCursor,null);
+ const revoked=await reconcile(pages[0],'gone',async()=>pages[1]);
+ assert.equal(revoked.selected,null);assert.equal(revoked.verified,true);
+ let staleResolve;const stale=new Promise(resolve=>{staleResolve=resolve;});
+ const current=await reconcile({items:projects.slice(0,1),nextCursor:'next'},'p1',async()=>{await stale;return pages[1];});
+ assert.equal(current.selected,'p1');staleResolve();
+ const source=fs.readFileSync('app/(crew)/receiving.tsx','utf8');
+ assert.ok(source.indexOf('<View style={styles.projectHeader}>') < source.indexOf('{projects.map'));
+});
 test('Wire instrument gets a display label; arbitrary backend text stays unchanged',()=>{
  const label=fn('app/(crew)/field-review.tsx','crewInstrumentLabel');
  const raw={instrument:'RULER',method:'Backend FIELD method'};
