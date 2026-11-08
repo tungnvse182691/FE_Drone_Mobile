@@ -316,7 +316,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   let session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
   if (session.id !== c.upload.id || session.fileId !== c.upload.fileId) throw new Error('field_upload_identity_invalid');
   if (!['VERIFYING','VERIFIED'].includes(session.status)) {
-    if (session.status === 'FAILED') throw new Error('field_upload_failed');
+    if (session.status === 'FAILED') { c.upload=session; c.verified=false; await persist(draft,runtime); throw new Error('field_upload_failed'); }
     if (!Number.isSafeInteger(session.partSizeBytes) || session.partSizeBytes <= 0) throw new Error('field_part_size_invalid');
     const count = Math.ceil(bytes.length/session.partSizeBytes);
     for (let part=1;part<=count;part++) if (!c.parts.some(p=>p.partNumber===part)) {
@@ -342,7 +342,17 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       }
       const url = urls.parts.find(p=>p.partNumber===part)?.url;
       if (!url) throw new Error('field_part_url_missing');
-      const result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType));
+      let result: Awaited<ReturnType<typeof runtime.api.putCrewUploadPartBytes>>;
+      try {
+        result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType));
+      } catch (error) {
+        // Keep the original transport error and annotate only the failed stage.
+        // The signed URL, checksum, journal key and replay identity remain unchanged.
+        if (typeof error === 'object' && error !== null && Object.isExtensible(error)) {
+          Object.assign(error, { uploadStage: 'upload_put' as const });
+        }
+        throw error;
+      }
       if (!result.etag) throw new Error('field_part_etag_missing');
       c.parts.push({partNumber:part,etag:result.etag}); await persist(draft,runtime);
     }
@@ -358,7 +368,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
     if (session.id !== c.upload.id || session.fileId !== c.upload.fileId) throw new Error('field_upload_identity_invalid');
     if (session.status === 'VERIFIED') break;
-    if (session.status === 'FAILED') throw new Error('field_upload_failed');
+    if (session.status === 'FAILED') { c.upload=session; c.verified=false; await persist(draft,runtime); throw new Error('field_upload_failed'); }
     await guarded(draft,runtime,() => runtime.wait());
   }
   if (session.status !== 'VERIFIED') throw new Error('field_verification_pending');
@@ -510,10 +520,17 @@ export function validateRepairClaimReadback(read: crew.FieldSubmissionViewFact,b
 
 export function fieldErrorMessage(error: unknown): string {
   const status = (error as {response?:{status?:number}})?.response?.status;
+  const code = (error as {code?:unknown})?.code;
+  const uploadStage = (error as {uploadStage?:unknown})?.uploadStage;
+  if (uploadStage === 'upload_put' && status === 403) return 'Dịch vụ lưu ảnh từ chối đường tải. Cần kiểm tra chữ ký, thời hạn và cấu hình endpoint; ảnh và phiên tải cũ được giữ.';
   if (status === 401) return 'Phiên đăng nhập hết hiệu lực. Lệnh cũ được giữ để đối soát.';
   if (status === 403) return 'Không còn quyền trên nhiệm vụ hoặc bằng chứng này.';
   if (status === 409 || status === 412) return 'Dữ liệu hoặc phiên bản đã thay đổi. Tải lại và đối soát lệnh cũ.';
+  if (uploadStage === 'upload_put' && (code === 'ERR_NETWORK' || code === 'ECONNABORTED')) {
+    return 'Không kết nối được dịch vụ lưu ảnh. Ảnh chưa xác minh; nháp vẫn được giữ. Kiểm tra mạng rồi đối soát trước khi thử lại.';
+  }
   const message=(error as Error)?.message;
+  if (message === 'field_upload_failed') return 'Máy chủ không xác minh được ảnh. Ảnh và phiên tải cũ được giữ; cần kiểm tra trước khi tạo lần tải khác.';
   const repairMessages: Record<string,string>={
     repair_finish_required:'Cần biên nhận kết thúc thi công đã đối soát đúng nhiệm vụ, liên kết phân công và phiên bản.',
     repair_claim_root_required:'Nhiệm vụ đã có lượt hồ sơ hiện trường trước đó; chưa thể dùng lượt đo kiểm hoặc bổ sung làm hồ sơ sửa chữa gốc. Cần đối soát với điều phối.',

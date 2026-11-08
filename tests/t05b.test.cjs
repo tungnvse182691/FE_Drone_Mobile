@@ -35,6 +35,35 @@ test('T05B checksum mismatch sends no POST',async()=>{const h=fieldHarness(),d=h
 test('T05B unverified metadata never supplies a submission file',async()=>{const h=fieldHarness(),d=h.draft();d.captures=[{id:randomUUID(),uri:'file://real',purpose:'BEFORE',mediaType:'image/jpeg',checksum:'a'.repeat(64),size:3,createKey:'c',completeKey:'f',parts:[]}];h.runtime.api.getCrewFileMetadata=async()=>({status:'VERIFYING'});await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime));assert.ok(!h.stored().captures[0].verified);});
 test('T05B actor/session changes stop upload before any write request',async()=>{const h=fieldHarness();h.switch();await assert.rejects(()=>h.m.uploadFieldCapture(h.draft(),0,h.runtime));assert.ok(!h.calls.includes('create'));});
 function measured(h){const d=h.draft();d.measurements=[{sampleId:'actual',type:'DepressionDepth',value:0,state:'KNOWN',dimension:'LENGTH',unit:'cm',instrument:'ruler',method:'manual',locationReason:'GPS unavailable'}];d.captures=[{id:randomUUID(),uri:'file://real',purpose:'BEFORE',checksum:'a'.repeat(64),mediaType:'image/jpeg',size:3,capturedAt:null,coordinates:null,upload:{fileId:randomUUID()},verified:true}];return d;}
+
+test('IOS FIELD failed storage PUT preserves upload identity across reopen and never submits',async()=>{
+ const h=fieldHarness(),d=measured(h);
+ d.captures[0]={...d.captures[0],upload:undefined,verified:false,createKey:'original-create',completeKey:'original-complete',parts:[]};
+ const failure={code:'ERR_NETWORK'};
+ h.runtime.api.putCrewUploadPartBytes=async()=>{throw failure;};
+ await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime),error=>error===failure&&error.uploadStage==='upload_put');
+ assert.match(h.m.fieldErrorMessage(failure),/dịch vụ lưu ảnh/);
+ const reopened=h.stored(),saved=structuredClone(reopened.captures[0]);
+ assert.equal(saved.verified,false);assert.equal(saved.parts.length,0);assert.equal(saved.createKey,'original-create');
+ assert.equal(saved.completeKey,'original-complete');assert.ok(saved.partCommands[1].key);
+ assert.equal(h.calls.includes('submit'),false);
+ const createCount=h.calls.filter(x=>x==='create').length;
+ h.runtime.api.putCrewUploadPartBytes=async()=>({etag:'part-etag'});
+ await h.m.uploadFieldCapture(reopened,0,h.runtime);
+ const result=h.stored().captures[0];
+ assert.equal(result.upload.id,saved.upload.id);assert.equal(result.partCommands[1].key,saved.partCommands[1].key);
+ assert.equal(h.calls.filter(x=>x==='create').length,createCount);assert.equal(result.verified,true);
+ assert.equal(h.calls.includes('submit'),false);
+});
+
+test('IOS FIELD server FAILED is retained as failed, never VERIFIED or submitted',async()=>{
+ const h=fieldHarness(),d=measured(h);
+ d.captures[0]={...d.captures[0],upload:{id:randomUUID(),fileId:randomUUID()},verified:false,parts:[]};
+ h.runtime.api.getCrewUploadSession=async()=>({...d.captures[0].upload,status:'FAILED'});
+ await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime),/field_upload_failed/);
+ assert.equal(h.stored().captures[0].upload.status,'FAILED');
+ assert.equal(h.stored().captures[0].verified,false);assert.equal(h.calls.includes('submit'),false);
+});
 test('T05B initial submission uses real first-start and GET096 before confirmation',async()=>{const h=fieldHarness(),d=measured(h);const r=await h.m.submitFieldDraft(d,h.runtime);assert.equal(r.command.phase,'confirmed');assert.equal(r.command.body.startOriginId,start);assert.equal(r.command.body.parentSubmissionId,null);assert.equal(r.command.body.measurements[0].value,0);});
 test('T05B supplement retains latest server lineage',async()=>{const h=fieldHarness(),d=measured(h),parent=randomUUID();h.runtime.api.getFieldInspectionTaskDetailReal=async()=>({data:{...task(),status:'SupplementRequired',latestSubmissionId:parent},etag:'"AAAAAAAAB9E="'});const read=h.runtime.api.getFieldSubmissionDetailReal;h.runtime.api.getFieldSubmissionDetailReal=async(p,t,id)=>id===parent?{data:{id:parent,taskId,evidence:[]}}:read();const r=await h.m.submitFieldDraft(d,h.runtime);assert.equal(r.command.body.parentSubmissionId,parent);});
 test('T05B timeout preserves immutable payload/key across restart and explicit replay',async()=>{const h=fieldHarness(),d=measured(h);let first;const submit=h.runtime.api.submitFieldTaskReal;h.runtime.api.submitFieldTaskReal=async(...args)=>{first=args;throw Error('timeout');};await assert.rejects(()=>h.m.submitFieldDraft(d,h.runtime));const saved=h.stored();assert.equal(saved.command.phase,'pending');saved.measurements[0].value=100;h.runtime.api.submitFieldTaskReal=async(...args)=>{assert.equal(JSON.stringify(args),JSON.stringify(first));return submit(...args);};const r=await h.m.submitFieldDraft(saved,h.runtime,true);assert.equal(r.command.body.measurements[0].value,0);assert.equal(r.command.phase,'confirmed');});

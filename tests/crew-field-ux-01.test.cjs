@@ -29,9 +29,19 @@ test('FIELD evidence and submission statuses distinguish local, pending and serv
   assert.equal(fieldEvidenceStatus({}).variant, 'status-pending');
   assert.equal(fieldEvidenceStatus({ upload: { fileId: 'local' }, completed: true }).label, 'Đã tải lên, chờ xác minh');
   assert.equal(fieldEvidenceStatus({ verified: true, completed: true }).variant, 'approved');
+  assert.equal(fieldEvidenceStatus({ upload: { status: 'FAILED' }, completed: true }).label, 'Máy chủ không xác minh được ảnh');
   assert.equal(fieldSubmissionReadinessLabel('READY'), 'Đủ thông tin theo máy chủ');
   assert.equal(fieldSubmissionReadinessLabel('INCOMPLETE'), 'Cần bổ sung thông tin');
   assert.equal(fieldSubmissionReadinessLabel('UNKNOWN'), 'Chưa xác nhận độ đầy đủ');
+});
+
+test('FIELD upload PUT network failures explain storage reachability and preserve reconciliation guidance', () => {
+  const { fieldErrorMessage } = pure('src/api/crewFieldDraft.ts', ['fieldErrorMessage']);
+  assert.match(fieldErrorMessage({ code: 'ERR_NETWORK', uploadStage: 'upload_put' }), /dịch vụ lưu ảnh/);
+  assert.match(fieldErrorMessage({ code: 'ECONNABORTED', uploadStage: 'upload_put' }), /đối soát/);
+  assert.match(fieldErrorMessage({ code: 'ERR_NETWORK' }), /Chưa xác nhận được thao tác/);
+  assert.match(fieldErrorMessage({ response: { status: 403 }, uploadStage: 'upload_put' }), /chữ ký, thời hạn/);
+  assert.match(fieldErrorMessage({ response: { status: 403 } }), /Không còn quyền/);
 });
 
 test('API-080 correction presentation keeps technical IDs behind an explicit state and blocks without SUPPLEMENT', () => {

@@ -73,7 +73,8 @@ export function measurementValidationMessage(value: string): string | null {
   return Number.isFinite(number) && number >= 0 ? null : 'Nhập một số từ 0 trở lên.';
 }
 
-export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: boolean; upload?: unknown }) {
+export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: boolean; upload?: { status?: string } }) {
+  if (capture.upload?.status === 'FAILED') return { label: 'Máy chủ không xác minh được ảnh', variant: 'rejected' as const };
   if (capture.verified) return { label: 'Máy chủ đã xác minh', variant: 'approved' as const };
   if (capture.completed) return { label: 'Đã tải lên, chờ xác minh', variant: 'status-pending' as const };
   if (capture.upload) return { label: 'Đang tải lên', variant: 'status-pending' as const };
