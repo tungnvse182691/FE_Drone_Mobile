@@ -94,7 +94,11 @@ export interface AuthBridge {
  * Cổng Backend RoadGuard (Candidate3 local, Docker roadguard-fe-starter01).
  * Thay đổi số cổng tại đây nếu docker-compose ánh xạ sang cổng khác.
  */
-const LOCAL_BACKEND_PORT = 18081;
+const DEFAULT_BACKEND_PORT = 18081;
+const configuredPort = Number.parseInt(process.env.EXPO_PUBLIC_API_PORT ?? '', 10);
+const LOCAL_BACKEND_PORT = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort < 65536
+  ? configuredPort
+  : DEFAULT_BACKEND_PORT;
 
 /**
  * Tự chọn base URL theo môi trường chạy:
@@ -115,6 +119,7 @@ const LOCAL_BACKEND_PORT = 18081;
  * Hướng dẫn cài đặt cho máy thật:
  *   1. Tạo file .env.local tại gốc project (đã có trong .gitignore).
  *   2. Thêm dòng: EXPO_PUBLIC_API_HOST=<IP LAN thật của máy>
+ *      Có thể đặt EXPO_PUBLIC_API_PORT để chạy sandbox riêng (mặc định vẫn 18081).
  *      (tìm IP LAN: ipconfig | findstr IPv4 trên Windows)
  *   3. Restart `expo start`.
  */
