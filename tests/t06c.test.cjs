@@ -181,7 +181,24 @@ test('T06C attempt switched session and wrong receipt stay unconfirmed',async()=
 });
 function screen(file,name,states,overrides={}){
  let slot=0;const routes=[],calls=[];
- const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:v=>[slot<states.length?states[slot++]:v,()=>{}],useRef:v=>({current:v}),useCallback:f=>f,useEffect:()=>{}};
+ const isViewfinder = file.endsWith('viewfinder.tsx') && states && !Array.isArray(states);
+ const semanticState = isViewfinder ? states : null;
+ const stateOccurrences = new Map();
+ const mockedState = (initial) => {
+   const occurrence = (stateOccurrences.get(initial) ?? 0) + 1;
+   stateOccurrences.set(initial, occurrence);
+   if (!semanticState) return Array.isArray(states) && slot < states.length ? states[slot++] : initial;
+   if (initial === 'after') return semanticState.mode ?? initial;
+   if (initial === 'back') return semanticState.facing ?? initial;
+   if (initial === null) return occurrence === 1 ? semanticState.coords ?? initial : semanticState.draft ?? initial;
+   if (initial === '') return semanticState.notice ?? initial;
+   if (initial === false) {
+     const keys = ['flashOn', 'busy', 'localRecoveryBlocked', 'ready', 'postRepairCapture'];
+     return semanticState[keys[occurrence - 1]] ?? initial;
+   }
+   return initial;
+ };
+ const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:v=>[mockedState(v),()=>{}],useRef:v=>({current:v}),useCallback:f=>f,useEffect:()=>{}};
  const identity={actor:ids.actor,scope:'session',projectId:ids.projectId,taskId:ids.taskId,environment:'fixture'};
  const draft={...identity,captures:[],measurements:[]};
  const deps={react:React,'react-native':{StyleSheet:{create:v=>v}},'expo-router':{router:{push:v=>routes.push(v)},useFocusEffect:f=>f(),useLocalSearchParams:()=>({mode:'AFTER'})},
@@ -214,7 +231,7 @@ for(const phase of ['PENDING','ACKNOWLEDGED','REJECTED'])test('T06C UI '+phase+'
 });
 for(const [label,claim,attestation] of [['missing finish',false,false],['no attestation',true,false],['confirmed source',true,true]])test('T06C camera AFTER '+label+' nullable GPS stays real',()=>{
  const draft={captures:[],...(claim?{repairClaim:{}}:{})};
- const h=screen('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',['after',false,'back',null,draft,false,'',true,attestation]);
+ const h=screen('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',{mode:'after',draft,ready:true,postRepairCapture:attestation});
  const camera=h.nodes.find(n=>n.props.onCapture);assert.equal(camera.props.disabled,!claim||!attestation);
  assert.equal(camera.props.leftControl.props.disabled,true);
 });
