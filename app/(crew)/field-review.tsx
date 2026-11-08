@@ -21,7 +21,34 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 /** Display only: stored instrument and backend free text are never rewritten. */
 export function crewInstrumentLabel(value: string): string {
-  return value === 'RULER' ? 'Thước đo' : value || 'Chưa có thông tin';
+  if (value === 'RULER') return 'Thước đo';
+  if (value === 'MANUAL') return 'Thủ công';
+  return value || 'Chưa có thông tin';
+}
+
+export function fieldTaskStatusLabel(status: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    NewAssigned: 'Mới phân công', Accepted: 'Đã nhận', InProgress: 'Đang thực hiện',
+    Submitted: 'Đã nộp', SupplementRequired: 'Cần bổ sung', Completed: 'Đã hoàn tất',
+    Rejected: 'Đã từ chối', Cancelled: 'Đã hủy',
+  };
+  return labels[status ?? ''] ?? 'Chưa xác định trạng thái';
+}
+
+export function fieldMissingReasonLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    MEASUREMENTS_REQUIRED: 'Thiếu số đo bắt buộc', EVIDENCE_REQUIRED: 'Thiếu ảnh bằng chứng',
+    LOCATION_UNKNOWN: 'Chưa có bằng chứng vị trí', AFTER_ATTEMPT_BINDING_UNAVAILABLE: 'Chưa liên kết được lượt sửa chữa',
+    NORMAL_FLOW_REQUIRES_SUPERVISOR_APPROVAL: 'Luồng thông thường cần quản lý đánh giá', ASSESSMENT_REQUIRED: 'Cần đánh giá điều kiện trước khi tiếp tục',
+    POLICY_UNKNOWNMEASUREMENT: 'Số đo chưa đạt yêu cầu chính sách', POLICY_THRESHOLDNOTMET: 'Số đo chưa đạt ngưỡng chính sách', POLICY_NOTCONFIGURED: 'Chưa có cấu hình chính sách',
+  };
+  return labels[reason] ?? reason.replaceAll('_', ' ').toLowerCase();
+}
+export function fieldMissingReasonLabels(reasons: string[] | null | undefined): string[] { return (reasons ?? []).filter(Boolean).map(fieldMissingReasonLabel); }
+export function fieldEvidenceActionModel(status: string | null | undefined, captureBlock: string | null, captureCount: number) {
+  const readOnly = status === 'Submitted' || status === 'Completed';
+  const canCapture = !readOnly && !captureBlock;
+  return { readOnly, canCapture, canUpload: canCapture && captureCount > 0, statusLabel: fieldTaskStatusLabel(status), blockReason: captureBlock ?? null };
 }
 
 export function measurementValidationMessage(value: string): string | null {
@@ -55,6 +82,9 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [locationProof,setLocationProof]=useState<FieldPositionProofInput|null>(null);
   const [chainage,setChainage]=useState('');
   const [latest,setLatest]=useState<FieldSubmissionViewFact|null>(null);
+  const [verifiedTask,setVerifiedTask]=useState<CrewTask['detail']|null>(null);
+  const [verifiedEtag,setVerifiedEtag]=useState('');
+  const [previousMeasurements,setPreviousMeasurements]=useState<FieldMeasurementInput[]>([]);
   const [busy,setBusy]=useState(false), busyRef=useRef(false);
   const [loading,setLoading]=useState(true), [error,setError]=useState('');
   const [replayConfirmed,setReplayConfirmed]=useState<{key:string;context:string}|null>(null);
@@ -75,7 +105,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   },[supplementMode,task.id,task.projectId]);
   const load=useCallback(async()=>{
     const c=currentFieldContext(task.projectId,task.id);if(!c)return;
-    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRepairRecovery(null);setDraft(null);setLatest(null);setPreview(null);
+    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRepairRecovery(null);setDraft(null);setLatest(null);setPreview(null);setVerifiedTask(null);setVerifiedEtag('');setPreviousMeasurements([]);
     try {
       const runtime=await openFieldRuntime(c);
       let saved:FieldDraft;try{saved=await loadFieldDraft(c,runtime);}catch(error){
@@ -86,20 +116,23 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       const previous=fresh.data.latestSubmissionId ? (await getFieldSubmissionDetailReal(task.projectId,task.id,fresh.data.latestSubmissionId)).data : null;
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!current(c))return;
-      setDraft(saved);setLatest(previous);
+      setDraft(saved);setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);
       await loadRepairRecovery(c,saved.result?.id);
       setLocationProof(saved.locationProof);setChainage(saved.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));
       setRawValues({});
       const initial=measurementTemplate(fresh.data.requiredMeasurementType,randomUUID());
-      setMeasurements(saved.measurements.length?saved.measurements:previous?.measurements?.length?previous.measurements:initial?[initial]:[]);
+      const prior = previous?.measurements?.length ? previous.measurements : [];
+      setPreviousMeasurements(prior);
+      setMeasurements(saved.measurements.length ? saved.measurements : initial ? [initial] : []);
     } catch(e){if(current(c)){setDraft(null);setError(fieldErrorMessage(e));}}
     finally{if(current(c))setLoading(false);}
   },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
-  const block=!identity.user||!identity.scope||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'submit');
-  const captureBlock=!identity.user||!task.detail?'Phiên đội sửa chữa không hợp lệ.':fieldCapabilityBlock(task.detail,task.etag??'',identity.user.id,'capture');
+  const block=!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
+  const captureBlock=!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
+  const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
   const frozen=!!draft?.command;
-  const normalMeasurement=task.detail?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
+  const normalMeasurement=verifiedTask?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
   const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
     if(busyRef.current)return;
     const c=context();if(!c)return;
@@ -163,16 +196,17 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />}>
     <View style={styles.content}>
       <Card style={styles.card}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><Chip label={mode.label} variant={mode.variant}/>
-        <Text>{task.wo_code||'Chưa có mã công việc từ máy chủ'}</Text>
+        <Text>{fieldTaskStatusLabel(verifiedTask?.status ?? task.status)}</Text>
         <Text>{supplementMode?'Bản bổ sung FIELD cho yêu cầu SUPPLEMENT. Chỉ dùng số đo và bằng chứng thật đã được máy chủ xác minh.':draft?.repairClaim?'Hồ sơ sửa chữa theo kế hoạch: ảnh sau sửa và số đo thực. Gửi hồ sơ đo kiểm chưa phải tiếp nhận sửa chữa hay quản lý xác nhận.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
       <Button variant="secondary" title="Tải lại hồ sơ / trạng thái" disabled={busy} onPress={()=>void load()}/>
-      {latest?<Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={styles.sectionTitle}>Lượt gửi #{latest.revision}</Text><Text style={styles.muted}>Kết quả đọc lại từ máy chủ, chưa phải nghiệm thu.</Text></View><Chip label={fieldSubmissionReadinessLabel(latest.readiness)} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/></View>{latest.missingReasons?.length?<Text>Máy chủ yêu cầu kiểm tra thêm số đo, ảnh hoặc bằng chứng vị trí. Hồ sơ đã gửi được giữ nguyên.</Text>:null}
+      {latest?<Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={styles.sectionTitle}>Lượt gửi #{latest.revision}</Text><Text style={styles.muted}>Kết quả đọc lại từ máy chủ, chưa phải nghiệm thu.</Text></View><Chip label={fieldSubmissionReadinessLabel(latest.readiness)} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/></View>{latest.missingReasons?.length?<View style={styles.missingList}><Text style={styles.muted}>Máy chủ yêu cầu bổ sung:</Text>{fieldMissingReasonLabels(latest.missingReasons).map(reason=><Text key={reason}>• {reason}</Text>)}</View>:null}
         {(latest.evidence??[]).filter(e=>e.fileId).map(e=><Button key={e.captureOriginId} variant="secondary" title={`Xem ảnh ${e.purpose==='AFTER'?'sau sửa':e.purpose==='BEFORE'?'hiện trạng':'đo kiểm'} riêng tư`} disabled={busy} onPress={()=>void run('download',e.fileId!)}/>)}</Card>:<Text>Chưa có lượt gửi từ máy chủ.</Text>}
       {preview?<Image source={{uri:preview}} style={{width:'100%',height:240}} resizeMode="contain"/>:null}
       {draft?<>
-        <Card style={styles.card}><Text style={styles.sectionTitle}>Số đo hiện trường</Text>
+        {previousMeasurements.length?<Card style={styles.priorCard}><Text style={styles.sectionTitle}>Số đo lượt trước</Text><Text style={styles.muted}>Chỉ đọc từ lần gửi máy chủ; không dùng làm nháp đang chỉnh.</Text>{previousMeasurements.map(m=><Text key={m.sampleId}>{m.dimension} · {m.value == null ? 'Chưa có giá trị' : `${m.value} ${m.unit}`}</Text>)}</Card>:null}
+        <Card style={styles.card}><Text style={styles.sectionTitle}>Số đo đang chỉnh</Text>
           {!measurements.length?<Text>Chưa có loại đo được máy chủ hỗ trợ; chưa thể gửi hồ sơ.</Text>:null}
           {measurements.map((m,i)=><View key={m.sampleId} pointerEvents={busy||frozen?'none':'auto'} style={{opacity:busy||frozen?0.6:1}}>
             <Text>{m.dimension==='AREA'?'Diện tích hư hại':m.type==='SlabFaultingHeight'?'Độ chênh tấm':m.type==='ShoulderErosionExtent'?'Kích thước xói lở':'Độ sâu thực tế'} ({m.unit})</Text>
@@ -190,9 +224,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <Text>Nhấn lưu nháp để giữ số đo khi đóng app. Vị trí nhiệm vụ không thay cho GPS quan sát.</Text>
           <Text>Đối chiếu vị trí thực tế (tùy chọn; máy chủ đánh giá mức đầy đủ)</Text>
           <Text>Chỉ nhập dấu mốc bạn đã quan sát. Không lấy tọa độ hoặc ID nhiệm vụ thay bằng chứng vị trí.</Text>
-          <Button variant="secondary" title="Đối chiếu dấu mốc tuyến / lý trình" disabled={busy||frozen} onPress={()=>setLocationProof({kind:'POSITION_CHECKLIST',checklist:'ROUTE_CHAINAGE_MARKINGS_CONFIRMED'})}/>
-          <Button variant="secondary" title="Đối chiếu ký hiệu tấm bê tông" disabled={busy||frozen} onPress={()=>setLocationProof({kind:'POSITION_CHECKLIST',checklist:'SLAB_MARKINGS_CONFIRMED'})}/>
-          <Button variant="secondary" title="Chưa xác định vị trí" disabled={busy||frozen} onPress={()=>{setLocationProof(null);setChainage('');}}/>
+          <View style={styles.choiceRow}>{[['ROUTE_CHAINAGE_MARKINGS_CONFIRMED','Dấu mốc tuyến / lý trình'],['SLAB_MARKINGS_CONFIRMED','Ký hiệu tấm bê tông'],['UNKNOWN','Chưa xác định']].map(([value,label])=><Button key={value} style={styles.choiceButton} variant={locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof) ? 'primary' : 'secondary'} title={label} disabled={busy||frozen} onPress={()=>value==='UNKNOWN'?(setLocationProof(null),setChainage('')):setLocationProof({kind:'POSITION_CHECKLIST',checklist:value})}/>)}</View>
           {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
             <InputField label="Mã phiên bản tuyến trên hồ sơ đối chiếu" value={locationProof.observedRouteVersionId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedRouteVersionId:value});}}/>
             <InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>
@@ -207,9 +239,9 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             <Chip {...fieldEvidenceStatus(c)} />
             <Text style={styles.muted}>{c.coordinates?'Có vị trí camera quan sát':'Không có GPS quan sát'} · {c.capturedAt?'Ảnh chụp trực tiếp':'Ảnh từ thiết bị, chưa xác minh thời điểm chụp'}</Text>
           </View>)}
-          {captureBlock?<Text>{captureBlock}</Text>:null}
-          <Button variant="secondary" title="Chụp / chọn ảnh hiện trường" disabled={busy||frozen||!!captureBlock} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE'}})}/>
-          <Button variant="secondary" title="Tải ảnh / kiểm tra xác minh" disabled={busy||frozen||!draft.captures.length||!!captureBlock} onPress={()=>void run('upload')}/>
+          {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
+          {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
+          {evidenceModel.canCapture?<View style={styles.actionRow}><Button style={styles.actionButton} variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE'}})}/><Button style={styles.actionButton} variant="secondary" title="Tải ảnh đã lưu" disabled={busy||frozen||!evidenceModel.canUpload} onPress={()=>void run('upload')}/></View>:null}
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
@@ -247,6 +279,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: spacing.sm,
   },
+  priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
+  missingList: { gap: spacing.xs },
+  actionRow: { flexDirection: 'row', gap: spacing.sm },
+  actionButton: { flex: 1 },
   summaryHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
