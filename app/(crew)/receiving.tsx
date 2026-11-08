@@ -81,7 +81,7 @@ export function formatWaiting(seconds: number): string {
   return hours > 0 ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
 }
 
-export function receivingTimingLabel(request: Pick<BusinessDutyView, 'completedAt' | 'requestedAt' | 'waitingSeconds'>): string {
+export function receivingTimingLabel(request: Pick<BusinessDutyView, 'completedAt' | 'requestedAt' | 'waitingSeconds' | 'acknowledgedAt'>): string {
   const displayDate = (iso: string | null) => {
     if (!iso) return '—';
     const date = new Date(iso);
@@ -95,9 +95,9 @@ export function receivingTimingLabel(request: Pick<BusinessDutyView, 'completedA
     if (days > 0) return remainingHours > 0 ? `${days} ngày ${remainingHours} giờ` : `${days} ngày`;
     return hours > 0 ? `${hours} giờ ${minutes} phút` : `${minutes} phút`;
   };
-  return request.completedAt
-    ? `Đóng lúc ${displayDate(request.completedAt)}`
-    : `Gửi lúc ${displayDate(request.requestedAt)} • Chờ ${displayWaiting(request.waitingSeconds)}`;
+  if (request.completedAt) return `Đóng lúc ${displayDate(request.completedAt)}`;
+  if (request.acknowledgedAt) return `Gửi lúc ${displayDate(request.requestedAt)} • Đã xác nhận sau ${displayWaiting(request.waitingSeconds)}`;
+  return `Gửi lúc ${displayDate(request.requestedAt)} • Chờ ${displayWaiting(request.waitingSeconds)}`;
 }
 
 function formatDateTime(iso: string | null): string {
@@ -131,7 +131,7 @@ export function canAcknowledgeReceiving(request: Pick<BusinessDutyView, 'acknowl
 export default function CrewReceivingScreen() {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
   const identity=currentReceivingIdentity();
-  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" />}><Text>Cần phiên đăng nhập đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
+  if(!identity)return <SafeAreaScreen header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" showBack fallbackRoute="/(crew)/home" />}><Text>Cần phiên đăng nhập đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
   return <ReceivingProjects key={JSON.stringify(identity)} identity={identity} />;
 }
 function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
@@ -156,7 +156,7 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
     finally{if(mounted.current&&n===sequence.current)setLoading(false);}
   },[identity,cursor]);
   useFocusEffect(useCallback(()=>{void load(false);},[identity]));
-  return <SafeAreaScreen scroll header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" />}>
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" showBack fallbackRoute="/(crew)/home" />}>
     <Pressable onPress={()=>setShowHelp(value=>!value)} accessibilityRole="button" accessibilityState={{expanded:showHelp}} style={styles.helpToggle}>
       <MaterialIcons name="help-outline" size={18} color={colors.brandGold}/><Text style={styles.helpLabel}>Vì sao cần chọn dự án?</Text>
     </Pressable>
@@ -265,6 +265,10 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
                   <Chip variant={state.variant} label={state.label} uppercase={false} />
                 </View>
                 <View style={styles.metaRow}>
+                  <MaterialIcons name="tag" size={13} color={colors.secondary} />
+                  <Text style={[typography.caption, styles.metaText]}>ID yêu cầu: {request.id.slice(0, 8)}</Text>
+                </View>
+                <View style={styles.metaRow}>
                   <MaterialIcons name="schedule" size={13} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>{receivingTimingLabel(request)}</Text>
                 </View>
@@ -299,6 +303,10 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
             <Chip variant={state.variant} label={state.label} uppercase={false} />
           </View>
 
+          <View style={styles.infoRow}>
+            <Text style={[typography.caption, styles.infoLabel]}>ID yêu cầu</Text>
+            <Text selectable style={[typography.caption, styles.infoValue]}>{selected.id}</Text>
+          </View>
           {sourceLabel ? (
             <View style={styles.infoRow}>
               <Text style={[typography.caption, styles.infoLabel]}>Nguồn yêu cầu</Text>
@@ -312,7 +320,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
             </Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>{closed ? 'Đóng lúc' : 'Thời gian chờ'}</Text>
+            <Text style={[typography.caption, styles.infoLabel]}>{closed ? 'Đóng lúc' : acknowledged ? 'Đã chờ trước khi nhận' : 'Thời gian chờ'}</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>
               {closed ? formatDateTime(selected.completedAt) : formatWaiting(selected.waitingSeconds)}
             </Text>
@@ -327,7 +335,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
           ) : null}
         </Card>
 
-        {!closed ? <View style={styles.notice}>
+        {!closed && !acknowledged ? <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={16} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
             {ackInconsistent ? 'Dữ liệu xác nhận chưa đầy đủ; cần đối soát trước khi tiếp tục.' : 'Xác nhận là thao tác bất biến: yêu cầu sẽ được ghi nhận cho người tiếp nhận đầu tiên. Xác nhận là không thể hoàn tác.'}

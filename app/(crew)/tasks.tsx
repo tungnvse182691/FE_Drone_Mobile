@@ -291,7 +291,7 @@ export default function CrewTasksScreen() {
 
                   <View style={styles.taskFooter}>
                     <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || 'Chưa có mã công việc'}</Text>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
                     </View>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>

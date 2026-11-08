@@ -27,7 +27,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
     <Card style={{gap:spacing.sm}}>
       <Text style={typography.titleMd}>{review.title}</Text>
       <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
-      <Text>{task.wo_code||'Chưa có mã công việc'}</Text>
+      <Text>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
       <Text>Trạng thái nhiệm vụ từ máy chủ: {crewStatusLabel(task.status)}</Text>
       <Text style={[typography.caption,{color:review.canSupplement?colors.warning:colors.secondary}]}>{review.statusLabel}</Text>
       <Text>{review.message}</Text>

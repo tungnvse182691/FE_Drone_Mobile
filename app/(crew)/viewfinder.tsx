@@ -95,7 +95,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="description" size={13} color="#94A3B8" />
         <Text style={[typography.caption, styles.watermarkMetaText]}>
-          {task.wo_code || 'Chưa có mã công việc'}
+          {task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}
         </Text>
       </View>
       <View style={styles.watermarkMeta}>
@@ -267,7 +267,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           <View style={styles.sheetTitleRow}>
             <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
             <Text style={[typography.labelLg, styles.sheetTitle]}>
-              {task.wo_code || 'Chưa có mã công việc'}
+              {task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}
             </Text>
             <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
             <Text style={[typography.labelLg, styles.sheetSub]}>

@@ -236,7 +236,7 @@ export default function CrewHomeScreen() {
                   <View style={styles.taskCardFooter}>
                     <View style={styles.footerLeftMeta}>
                       <View style={styles.woCodeBadge}>
-                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || 'Chưa có mã công việc'}</Text>
+                        <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
                       </View>
                       {task.distance_label ? (
                         <Text style={[typography.caption, styles.distanceText]}>

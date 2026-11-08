@@ -54,3 +54,23 @@ test('Pending and legacy ACK never acquire a success label',()=>{
  const label=fn('app/(crew)/sync.tsx','crewQueueStateLabel');
  for(const v of ['UNKNOWN_OUTCOME','ACKED','IN_FLIGHT','CONFLICT','PENDING_DEPENDENCY','mystery'])assert.doesNotMatch(label(v),/đã đồng bộ|hoàn thành|thành công/i);
 });
+
+test('Receiving ACK timing is historical after confirmation, not still pending',()=>{
+ const timing=fn('app/(crew)/receiving.tsx','receivingTimingLabel');
+ const request={completedAt:null,acknowledgedAt:null,requestedAt:'2026-11-08T08:00:00Z',waitingSeconds:120};
+ assert.match(timing(request),/Chờ 2 phút/);
+ const confirmed=timing({...request,acknowledgedAt:'2026-11-08T08:02:00Z'});
+ assert.match(confirmed,/Đã xác nhận sau 2 phút/);
+ assert.doesNotMatch(confirmed,/• Chờ /);
+ assert.match(timing({...request,completedAt:'2026-11-08T08:05:00Z'}),/Đóng lúc/);
+});
+
+test('Receiving navigation and reference ID remain read-only, without invented task code',()=>{
+ const source=fs.readFileSync('app/(crew)/receiving.tsx','utf8');
+ assert.equal((source.match(/showBack fallbackRoute="\/\(crew\)\/home"/g)||[]).length,2);
+ assert.match(source,/accessibilityLabel="Quay lại danh sách"/);
+ assert.match(source,/ID yêu cầu: \{request\.id\.slice\(0, 8\)\}/);
+ assert.match(source,/<Text selectable style=\{\[typography\.caption, styles\.infoValue\]\}>\{selected\.id\}<\/Text>/);
+ assert.match(source,/!closed && !acknowledged \? <View style=\{styles\.notice\}>/);
+ assert.doesNotMatch(source,/selected\.taskCode\s*\|\|/);
+});

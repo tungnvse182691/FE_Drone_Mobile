@@ -22,7 +22,7 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
       <Card style={{gap:spacing.sm}}>
-        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text style={typography.bodyMd}>{task.wo_code || 'Chưa có mã công việc'}</Text>
+        <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text style={typography.bodyMd}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
         <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
         <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude.toFixed(6)}, ${task.coordinates.longitude.toFixed(6)}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
       </Card>
