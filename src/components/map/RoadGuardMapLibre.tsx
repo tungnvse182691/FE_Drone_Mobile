@@ -358,7 +358,7 @@ export function RoadGuardMapLibre({
   return (
     <View style={[styles.container, style]}>
       {!loadError ? (
-        <WebView
+        <WebView<{}>
           ref={webViewRef}
           // Intercept ALL URLs: WebView otherwise opens non-whitelisted schemes via Linking.
           originWhitelist={['*']}

@@ -5,7 +5,6 @@ import {
   PressableProps,
   PressableStateCallbackType,
   StyleProp,
-  View,
   ViewStyle,
 } from 'react-native';
 import Animated, {
@@ -22,7 +21,7 @@ export interface AnimatedPressableProps extends Omit<PressableProps, 'style'> {
 
 const AnimatedPressableComponent = Animated.createAnimatedComponent(Pressable);
 
-export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
+export const AnimatedPressable = forwardRef<React.ComponentRef<typeof Pressable>, AnimatedPressableProps>(
   (
     {
       pressedScale = 0.98,

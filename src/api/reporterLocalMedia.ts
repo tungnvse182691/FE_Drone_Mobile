@@ -38,7 +38,7 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     const key = randomUUID();
     const partial = new File(directory, key + '.partial');
     const final = new File(directory, key + (jpeg ? '.jpg' : '.png'));
-    partial.write(bytes); guard();
+    await partial.write(bytes); guard();
     phase = 'read';
     const copied = await partial.bytes(); guard();
     const copyHash = await sha256HexOfBytes(copied); guard();

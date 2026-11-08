@@ -88,7 +88,7 @@ test('FIELD evidence capture persists camera and gallery provenance only for an 
       this.uri = name === undefined ? parent : `${parent.uri ?? parent}/${name}`;
     }
     async arrayBuffer() { return bytes.get(this.uri) ?? new Uint8Array([1]).buffer; }
-    write(value) { files.set(this.uri, Uint8Array.from(value)); }
+    async write(value) { await new Promise(resolve => setImmediate(resolve)); files.set(this.uri, Uint8Array.from(value)); }
     bytesSync() { return files.get(this.uri) ?? new Uint8Array(); }
     move(target) { files.set(target.uri, files.get(this.uri) ?? new Uint8Array()); files.delete(this.uri); this.uri = target.uri; }
   }
@@ -128,10 +128,12 @@ test('FIELD evidence capture persists camera and gallery provenance only for an 
   assert.equal(cameraDraft.captures.length, 1);
   assert.equal(cameraDraft.captures[0].capturedAt !== null, true);
   assert.deepEqual(cameraDraft.captures[0].coordinates, { latitude: 10, longitude: 106 });
+  assert.deepEqual(files.get(cameraDraft.captures[0].uri), bytes.get('file://camera.jpg'));
   const galleryDraft = await field.captureFieldPhoto(context, 'file://gallery.png', 'BEFORE', 'image/png', { latitude: 10, longitude: 106 }, false);
   assert.equal(galleryDraft.captures.length, 2);
   assert.equal(galleryDraft.captures[1].capturedAt, null);
   assert.equal(galleryDraft.captures[1].coordinates, null);
+  assert.deepEqual(files.get(galleryDraft.captures[1].uri), bytes.get('file://gallery.png'));
   assert.equal(stored.captures.length, 2);
 
   const blockedTask = { ...task, status: 'Completed' };

@@ -236,9 +236,11 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     if (!actualType || !bytes.length || bytes.length > 20 * 1024 * 1024 || (mediaType && mediaType !== actualType)) throw new Error('Chỉ nhận JPEG/PNG tối đa 20 MiB, đúng định dạng thực.');
     const id = runtime.uuid(), directory = new Directory(Paths.document,'crew-field');
     directory.create({ idempotent: true, intermediates: true });
-    const temp = new File(directory,`${id}.tmp`); temp.write(bytes);
+    const temp = new File(directory,`${id}.tmp`);
+    await guarded(context,runtime,() => temp.write(bytes));
     const checksum = await guarded(context,runtime,() => runtime.hash(new Uint8Array(temp.bytesSync())));
-    const file = new File(directory,`${id}.${isJpeg ? 'jpg' : 'png'}`); temp.move(file);
+    const file = new File(directory,`${id}.${isJpeg ? 'jpg' : 'png'}`);
+    await guarded(context,runtime,async () => { await temp.move(file); });
     draft.captures.push({ id,uri:file.uri,purpose,mediaType:actualType,checksum,size:bytes.length,
       capturedAt:camera ? new Date().toISOString() : null, coordinates:camera ? coordinates : null,
       createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
@@ -533,5 +535,6 @@ export async function downloadFieldPhoto(context: FieldContext,fileId: string): 
   const bytes=await guarded(context,runtime,()=>crew.downloadFieldEvidenceReal(context.projectId,context.taskId,fileId));
   if(bytes.length!==metadata.sizeBytes || await guarded(context,runtime,()=>runtime.hash(bytes))!==metadata.checksum)throw new Error('field_checksum_mismatch');
   const file=new File(Paths.cache,`field-private-${randomUUID()}.${metadata.mediaType==='image/png'?'png':'jpg'}`);
-  assertFieldContext(context,runtime);file.write(bytes);return file.uri;
+  await guarded(context,runtime,() => file.write(bytes));
+  return file.uri;
 }

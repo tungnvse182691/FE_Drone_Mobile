@@ -30,6 +30,21 @@ test('B2.1 admission awaits asynchronous native move before checking private fin
   const photo=await result; assert.deepEqual(r.files.get(photo.uri),png);
 });
 
+test('SDK58 reporter admission awaits asynchronous File.write before readback and move', async () => {
+  const r = mediaRuntime(); r.files.set(source.uri, png);
+  const Base = r.modules['expo-file-system'].File, gate = deferred();
+  r.modules['expo-file-system'].File = class extends Base {
+    async write(value) { await gate.promise; super.write(value); }
+  };
+  let settled = false;
+  const result = r.load().preserveReporterPhoto(source, () => true).then(photo => { settled = true; return photo; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false);
+  gate.resolve();
+  const photo = await result;
+  assert.deepEqual(r.files.get(photo.uri), png);
+});
+
 test('B2.1 read permission denied is distinct from a proven missing source', async () => {
   const r=mediaRuntime(); const Base=r.modules['expo-file-system'].File;
   r.modules['expo-file-system'].File=class extends Base {
