@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
 import { Button } from '../Button';
@@ -38,35 +39,34 @@ export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   if(!sameQueueIdentity(identity))return null;
+  const pending=records.filter(r=>['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
+  const confirmed=records.filter(r=>r.phase==='RECONCILED').length;
   return <Card style={styles.panel}>
-    <Text style={typography.titleMd}>Đồng bộ an toàn trên thiết bị</Text>
-    <Text style={styles.description}>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng kiểm thử thiết bị trong phạm vi được nghiệm thu. Chưa xác nhận dữ liệu đã gửi.':'Chưa đủ bằng chứng kiểm thử trên thiết bị để mở chức năng gửi an toàn.'}</Text>
-    <Button title="Kiểm tra thiết bị / đọc nhật ký" variant="secondary" loading={busy} disabled={busy} onPress={()=>void refresh()} />
-    {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
-    {probe?<View>
-      <Button title={showDiagnostics?'Ẩn thông tin chẩn đoán':'Thông tin chẩn đoán'} variant="text" onPress={()=>setShowDiagnostics(v=>!v)} />
-      {showDiagnostics ? <View><Text>Phiên bản Android API: {probe.capability.apiLevel || 'Chưa xác định'}</Text><Text>Thông tin chỉ phục vụ kiểm tra thiết bị; không xác nhận đồng bộ thành công.</Text></View> : null}
-      {records.length===0?<Text>Chưa có thao tác trong nhật ký đang theo dõi. Đây không phải xác nhận đã đồng bộ.</Text>:records.map(r=><View key={r.id}><Text>Dự án {r.projectId.slice(0,8)}… · {({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác thiết bị'}</Text><Text>
-        {({RECONCILED:'Đã đối soát kết quả máy chủ',RECEIVED:'Đã nhận phản hồi, cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả, giữ nguyên lệnh',IN_FLIGHT:'Đang xử lý, chưa xác nhận kết quả'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận kết quả'}
-        {r.identity.scope!==identity.scope?' — thao tác phiên trước được giữ để đối soát':''}
-
-      </Text>
-        {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||
-          (['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?
-          <Button title="Đọc kết quả từ máy chủ để đối soát" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)} />:null}
-      </View>)}
-    </View>:null}
-    <View style={styles.capabilities}>
-      <Text style={typography.labelLg}>Chức năng chưa khả dụng</Text>
-      <Text style={styles.description}>Chưa đủ dữ liệu nhiệm vụ và thiết bị được xác minh. Các lệnh cũ vẫn được giữ nguyên.</Text>
-      {['Đăng ký thiết bị', 'Tạo bản dữ liệu nhiệm vụ', 'Gửi dữ liệu đã ký'].map(label => <Text key={label} style={styles.description}>• {label}: chưa mở</Text>)}
-      <Text style={styles.description}>Chuyển giao thiết bị chưa khả dụng trong phạm vi hiện tại.</Text>
-    </View>
+    <View style={styles.heading}><MaterialIcons name="sync" size={20} color={colors.brandGold}/><Text style={typography.titleMd}>Hàng đợi trên thiết bị</Text></View>
+    <View style={styles.stateRow}><View><Text style={styles.value}>{records.length}</Text><Text style={styles.label}>Đã lưu</Text></View><View><Text style={styles.value}>{pending}</Text><Text style={styles.label}>Chờ đối soát</Text></View><View><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View></View>
+    <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
+    {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
+    {records.length===0?<Text style={styles.description}>Chưa có lệnh cần đối soát.</Text>:records.map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác thiết bị'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
+      {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
+    </View>)}
+    <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
+    {showDiagnostics?<View style={styles.diagnostics}><Text style={styles.description}>Thiết bị: {probe?.capability.apiLevel || 'Chưa đọc'}</Text><Text style={styles.description}>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng native trong phạm vi đã kiểm.':'Chưa có bằng chứng native đủ để mở gửi offline.'}</Text><Pressable accessibilityRole="button" style={styles.readButton} onPress={()=>void refresh()} disabled={busy}><Text style={styles.readLabel}>{busy?'Đang đọc…':'Đọc lại nhật ký'}</Text></Pressable></View>:null}
   </Card>;
 }
 
 const styles = StyleSheet.create({
   panel: { gap: spacing.sm, marginBottom: spacing.md },
   description: { ...typography.caption, color: colors.secondary },
-  capabilities: { gap: spacing.xs, borderTopWidth: 1, borderColor: colors.border, paddingTop: spacing.sm },
+  heading: { flexDirection:'row', alignItems:'center', gap: spacing.xs },
+  stateRow: { flexDirection:'row', justifyContent:'space-around', borderTopWidth:1, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
+  value: { ...typography.titleMd, color: colors.neutral, textAlign:'center' },
+  label: { ...typography.caption, color: colors.secondary, textAlign:'center' },
+  record: { gap: spacing.xs, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
+  recordTitle: { flexDirection:'row', justifyContent:'space-between', gap: spacing.sm },
+  phase: { ...typography.caption, color: colors.secondary },
+  error: { color: colors.error },
+  diagnosticToggle: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', minHeight:40 },
+  diagnostics: { gap: spacing.xs, borderTopWidth:1, borderColor:colors.border, paddingTop:spacing.sm },
+  readButton: { alignSelf:'flex-start', minHeight:40, justifyContent:'center' },
+  readLabel: { ...typography.labelSm, color: colors.secondary },
 });

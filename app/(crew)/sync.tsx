@@ -229,7 +229,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
           <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.done}</Text><Text style={styles.stateLabel}>Đã xác nhận</Text></View>
         </View>
         <Text style={[typography.bodyMd, styles.statusDesc]}>Dữ liệu chỉ được tính là đã đồng bộ khi có biên nhận máy chủ hợp lệ.</Text>
-        <View style={styles.actionLine}><Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái hàng đợi" style={({pressed})=>[styles.smallAction,pressed&&styles.pressed]} onPress={refresh}><MaterialIcons name="refresh" size={18} color={colors.secondary}/><Text style={styles.smallActionText}>Tải lại</Text></Pressable><Text style={styles.lockedHint}>Gửi hàng đợi chưa được mở</Text></View>
+        <Text style={[typography.caption, styles.lockedHint]}>Gửi hàng đợi chưa được mở; dữ liệu chờ vẫn được giữ để đối soát.</Text>
       </Card>
 
       <CrewOfflinePanel identity={identity} />

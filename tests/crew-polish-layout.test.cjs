@@ -24,8 +24,7 @@ test('Crew defect read-only screen uses branded header and retains all backend f
 });
 test('Crew profile does not offer a working avatar update; stats remain a loaded subset',()=>{
  const s=screen('app/(crew)/profile.tsx',{modules:{...common,'../../src/components/Toast':{Toast:'Toast'},'./tasks':{useCrewInbox:()=>({enabled:false,tasks:[],query:{}})}}});s.render();
- const avatar=s.nodes().find(n=>n.props.accessibilityLabel==='Đổi ảnh đại diện');assert.equal(avatar.props.disabled,true);assert.equal(avatar.props.accessibilityState.disabled,true);
- const text=JSON.stringify(s.nodes());assert.match(text,/chưa hỗ trợ cập nhật/);assert.match(text,/Không phải toàn bộ lịch sử/);assert.ok(styles('profile').footer.marginBottom<96);s.unmount();
+ const text=JSON.stringify(s.nodes());assert.doesNotMatch(text,/Đổi ảnh đại diện/);assert.doesNotMatch(text,/Ảnh đại diện chưa hỗ trợ cập nhật/);assert.match(text,/Không phải toàn bộ lịch sử/);assert.ok(styles('profile').footer.marginBottom<96);s.unmount();
 });
 test('Crew FIELD header stays outside scroll padding and measurement cards retain spacing',()=>{
  const s=screen('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task},modules:{...common,'./tasks':{useCrewIdentity:()=>({}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},'../../src/api/crewFieldDraft':{currentFieldContext:()=>null},'../../src/api/crewApi':{},'expo-crypto':{},'../../src/components/Toast':{Toast:'Toast'}}});s.render();

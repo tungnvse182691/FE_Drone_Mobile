@@ -16,11 +16,10 @@ test('C10BC mounted detail reads real facts; unavailable actions are not offered
 test('C10BC mounted sync hides stale identity and ignores late probe after unmount',async()=>{
  let active=true,resolve,reads=0;const pending=new Promise(r=>resolve=r),i={actor:'actor',scope:'A',environment:'fixture'};
  const h=mount('src/components/crew/CrewOfflinePanel.tsx','CrewOfflinePanel',{'../../api/crewOfflineDevice':{inspectOfflineDevice:()=>pending},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return [];}})},'../../api/crewOfflineWorkflow':{HANDOVER_GATE:'BLOCKED_CRYPTO_CONTRACT'},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>active}},{identity:i});
- const tree=h.render();
- for(const label of ['Đăng ký thiết bị','Tạo bản dữ liệu nhiệm vụ','Gửi dữ liệu đã ký']){
-   assert.ok(h.nodes(tree).some(n=>n.type==='Text'&&n.children.join('')===`• ${label}: chưa mở`));
+ let tree=h.render();
+ for(const label of ['Đăng ký thiết bị','Tạo bản dữ liệu nhiệm vụ','Gửi dữ liệu đã ký'])
    assert.equal(h.nodes(tree).filter(n=>n.props.title===label||n.props.onPress&&n.children.join('').includes(label)).length,0);
- }
- const button=h.nodes(tree).find(n=>n.props.title==='Kiểm tra thiết bị / đọc nhật ký');button.props.onPress();button.props.onPress();
+ const toggle=h.nodes(tree).find(n=>n.props.accessibilityLabel==='Chi tiết kỹ thuật');toggle.props.onPress();tree=h.render();
+ const button=h.nodes(tree).find(n=>n.props.onPress&&JSON.stringify(n).includes('Đọc lại nhật ký'));button.props.onPress();button.props.onPress();
  h.unmount();active=false;resolve({deviceId:null,capability:{}});await wait();assert.equal(reads,1);assert.equal(h.render(),null);
 });

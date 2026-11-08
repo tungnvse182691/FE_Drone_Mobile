@@ -97,19 +97,14 @@ export default function CrewProfileScreen() {
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
       <View style={styles.profileHeader}>
-        <View
-          style={styles.avatar}
-          accessibilityLabel="Đổi ảnh đại diện"
-          accessibilityState={{ disabled: true }}
-          {...({ disabled: true } as any)}
-        >
+        <View style={styles.avatar} accessibilityLabel="Biểu tượng tài khoản">
           <MaterialIcons name="person" size={48} color={colors.secondary} />
         </View>
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
           Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
         </Text>
-        <Text style={[typography.caption, styles.unit]}>Ảnh đại diện chưa hỗ trợ cập nhật · Thông tin theo tài khoản hiện tại</Text>
+        {user?.employee_code?.trim() ? <Text style={[typography.caption, styles.unit]}>Thông tin tài khoản hiện tại</Text> : null}
         <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>

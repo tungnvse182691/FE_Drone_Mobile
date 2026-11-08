@@ -20,6 +20,10 @@ export interface FieldCapture {
   partCommands?: Record<number, { key: string; partNumbers: number[] }>;
   retiredPartCommands?: { key: string; partNumbers: number[]; status: number }[];
   postRepairCapture?: boolean;
+  /** Explicit proof that no upload intent has ever been issued for this capture. */
+  localOnly?: boolean;
+  /** Durable marker written before any create-session request. */
+  uploadAttempt?: { key: string; stage: 'CREATE_INTENT' | 'CREATE_UNKNOWN' | 'SESSION_CREATED'; startedAt: string };
 }
 export interface FieldDraft extends FieldContext {
   captures: FieldCapture[]; measurements: crew.FieldMeasurementInput[];
@@ -243,7 +247,8 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     await guarded(context,runtime,async () => { await temp.move(file); });
     draft.captures.push({ id,uri:file.uri,purpose,mediaType:actualType,checksum,size:bytes.length,
       capturedAt:camera ? new Date().toISOString() : null, coordinates:camera ? coordinates : null,
-      createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
+      createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],localOnly:true,
+      postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
     await persist(draft,runtime); return draft;
   });
 }
@@ -307,10 +312,21 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   const bytes = await guarded(draft,runtime,() => runtime.bytes(c.uri));
   if (bytes.length !== c.size || await guarded(draft,runtime,() => runtime.hash(bytes)) !== c.checksum) throw new Error('field_checksum_mismatch');
   if (!c.upload) {
-    await persist(draft,runtime); // immutable create intent already has its stable key
-    c.upload = await guarded(draft,runtime,() => runtime.api.createCrewUploadSession(draft.projectId,draft.taskId,
-      `${c.id}.${c.mediaType === 'image/png' ? 'png' : 'jpg'}`,c.mediaType,c.size,c.checksum,c.purpose,c.createKey));
+    // The request may commit remotely even when the client sees a timeout. Persist
+    // an immutable marker before sending so local deletion fails closed afterwards.
+    c.localOnly = false;
+    c.uploadAttempt = { key: c.createKey, stage: 'CREATE_INTENT', startedAt: new Date().toISOString() };
+    await persist(draft,runtime);
+    try {
+      c.upload = await guarded(draft,runtime,() => runtime.api.createCrewUploadSession(draft.projectId,draft.taskId,
+        `${c.id}.${c.mediaType === 'image/png' ? 'png' : 'jpg'}`,c.mediaType,c.size,c.checksum,c.purpose,c.createKey));
+    } catch (error) {
+      c.uploadAttempt.stage = 'CREATE_UNKNOWN';
+      await persist(draft,runtime);
+      throw error;
+    }
     if (!runtime.api.isCrewResourceId(c.upload.id) || !runtime.api.isCrewResourceId(c.upload.fileId)) throw new Error('field_upload_identity_invalid');
+    c.uploadAttempt.stage = 'SESSION_CREATED';
     await persist(draft,runtime);
   }
   let session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
@@ -397,7 +413,7 @@ export async function removeLocalFieldCapture(context: FieldContext, captureId: 
     if (draft.command) throw new Error('field_command_pending');
     const capture = draft.captures.find(item => item.id === captureId);
     if (!capture) return draft;
-    if (capture.upload || capture.completed || capture.verified) throw new Error('field_capture_locked');
+    if (capture.localOnly !== true || capture.uploadAttempt || capture.upload || capture.completed || capture.verified || capture.partCommands || capture.parts.length) throw new Error('field_capture_locked');
     draft.captures = draft.captures.filter(item => item.id !== captureId);
     await persist(draft, runtime);
     return draft;
