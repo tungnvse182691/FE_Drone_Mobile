@@ -24,6 +24,24 @@ export function crewInstrumentLabel(value: string): string {
   return value === 'RULER' ? 'Thước đo' : value || 'Chưa có thông tin';
 }
 
+export function measurementValidationMessage(value: string): string | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  const number = Number(raw.replace(',', '.'));
+  return Number.isFinite(number) && number >= 0 ? null : 'Nhập một số từ 0 trở lên.';
+}
+
+export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: boolean; upload?: unknown }) {
+  if (capture.verified) return { label: 'Máy chủ đã xác minh', variant: 'approved' as const };
+  if (capture.completed) return { label: 'Đã tải lên, chờ xác minh', variant: 'status-pending' as const };
+  if (capture.upload) return { label: 'Đang tải lên', variant: 'status-pending' as const };
+  return { label: 'Đã lưu trên thiết bị', variant: 'status-pending' as const };
+}
+
+export function fieldSubmissionReadinessLabel(readiness: string | null | undefined) {
+  return readiness === 'READY' ? 'Đủ thông tin theo máy chủ' : readiness === 'INCOMPLETE' ? 'Cần bổ sung thông tin' : 'Chưa xác nhận độ đầy đủ';
+}
+
 export default function CrewFieldReviewScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
 }
@@ -150,7 +168,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<Text accessibilityLiveRegion="polite">{error}</Text>:null}
       <Button variant="secondary" title="Tải lại hồ sơ / trạng thái" disabled={busy} onPress={()=>void load()}/>
-      {latest?<Card style={styles.card}><Text>Lượt gửi #{latest.revision} • {latest.readiness==='READY'?'Đủ thông tin':'Cần bổ sung'}</Text>{latest.missingReasons?.length?<Text>Máy chủ yêu cầu kiểm tra thêm số đo, ảnh hoặc bằng chứng vị trí. Hồ sơ đã gửi được giữ nguyên.</Text>:null}
+      {latest?<Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={styles.sectionTitle}>Lượt gửi #{latest.revision}</Text><Text style={styles.muted}>Kết quả đọc lại từ máy chủ, chưa phải nghiệm thu.</Text></View><Chip label={fieldSubmissionReadinessLabel(latest.readiness)} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/></View>{latest.missingReasons?.length?<Text>Máy chủ yêu cầu kiểm tra thêm số đo, ảnh hoặc bằng chứng vị trí. Hồ sơ đã gửi được giữ nguyên.</Text>:null}
         {(latest.evidence??[]).filter(e=>e.fileId).map(e=><Button key={e.captureOriginId} variant="secondary" title={`Xem ảnh ${e.purpose==='AFTER'?'sau sửa':e.purpose==='BEFORE'?'hiện trạng':'đo kiểm'} riêng tư`} disabled={busy} onPress={()=>void run('download',e.fileId!)}/>)}</Card>:<Text>Chưa có lượt gửi từ máy chủ.</Text>}
       {preview?<Image source={{uri:preview}} style={{width:'100%',height:240}} resizeMode="contain"/>:null}
       {draft?<>
@@ -162,6 +180,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               if(busy||frozen)return;setRawValues(values=>({...values,[m.sampleId]:text}));
               const normalized=text.trim().replace(',','.');const value=normalized===''?null:Number(normalized);
               update(i,{value,state:value===null?'UNKNOWN':'KNOWN',unknownReason:value===null?m.unknownReason||'Chưa đo tại hiện trường':null});}}/>
+            {measurementValidationMessage(rawValues[m.sampleId]??'')?<Text style={styles.errorText}>{measurementValidationMessage(rawValues[m.sampleId]??'')}</Text>:null}
             {m.value===null?<InputField label="Lý do chưa đo" value={m.unknownReason??''} onChangeText={unknownReason=>update(i,{unknownReason})}/>:null}
             <InputField label="Dụng cụ đo thực tế" value={m.instrument} onChangeText={instrument=>update(i,{instrument})}/>
             <InputField label="Phương pháp đo thực tế" value={m.method} onChangeText={method=>update(i,{method})}/>
@@ -185,7 +204,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {draft.captures.map(c=><View key={c.id} style={styles.missingBox}>
             <Image source={{uri:c.uri}} style={{width:'100%',height:180,borderRadius:radius.md}} resizeMode="cover"/>
             <Text style={typography.labelLg}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
-            <Text>{c.verified?'Máy chủ đã xác minh ảnh':c.completed?'Đã tải lên, chờ máy chủ xác minh':c.upload?'Đang tải ảnh lên':'Đã lưu ảnh trên thiết bị'}</Text>
+            <Chip {...fieldEvidenceStatus(c)} />
             <Text style={styles.muted}>{c.coordinates?'Có vị trí camera quan sát':'Không có GPS quan sát'} · {c.capturedAt?'Ảnh chụp trực tiếp':'Ảnh từ thiết bị, chưa xác minh thời điểm chụp'}</Text>
           </View>)}
           {captureBlock?<Text>{captureBlock}</Text>:null}
@@ -292,5 +311,13 @@ const styles = StyleSheet.create({
   evidenceText: {
     flex: 1,
     color: colors.secondary,
+  },
+  errorText: {
+    ...typography.caption,
+    color: colors.error,
+  },
+  flex: {
+    flex: 1,
+    minWidth: 0,
   },
 });

@@ -29,16 +29,20 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
       <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
       <Text>{task.wo_code||'Chưa có mã công việc'}</Text>
       <Text>Trạng thái nhiệm vụ từ máy chủ: {crewStatusLabel(task.status)}</Text>
+      <Text style={[typography.caption,{color:review.canSupplement?colors.warning:colors.secondary}]}>{review.statusLabel}</Text>
       <Text>{review.message}</Text>
-      {review.technical ? <Text style={typography.caption}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
       {/* Legacy guard contract: title="Gửi bổ sung" disabled until SUPPLEMENT proof is present. */}
       <Button variant="primary" title="Gửi bổ sung" disabled={!review.canSupplement} onPress={() => router.push({
         pathname: '/(crew)/field-review', params: { id: task.id, projectId: task.projectId, supplement: '1' },
       })} />
+      {!review.canSupplement ? <Text style={typography.caption}>Lý do: {review.blockReason}</Text> : null}
       <Pressable accessibilityRole="button" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={{minHeight:48,justifyContent:'center'}}>
         <Text style={[typography.labelLg,{color:colors.secondary}]}>Chi tiết kỹ thuật</Text>
       </Pressable>
-      {technical?<Text style={typography.caption}>API-080 chỉ cung cấp trạng thái và mã liên quan; nội dung nhận xét chi tiết của quản lý chưa có trong response.</Text>:null}
+      {technical?<View style={{gap:spacing.xs}}>
+        <Text style={typography.caption}>API-080 chỉ cung cấp trạng thái và mã liên quan; nội dung nhận xét chi tiết của quản lý chưa có trong response.</Text>
+        {review.technical ? <Text selectable style={typography.caption}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
+      </View>:null}
       <CrewRepairReceiptHistory task={task}/>
       <CrewRepairRecoveryEntry task={task}/>
       <Text>{review.canSupplement ? 'Đã đủ điều kiện mở luồng FIELD bổ sung. Bản nộp phải được máy chủ xác minh trước khi liên kết lượt sửa chữa.' : 'Đây là trạng thái đọc từ máy chủ. Chưa đủ điều kiện tạo bản bổ sung hoặc lệnh liên kết.'}</Text>
@@ -85,6 +89,8 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
     message: 'Chưa có lượt sửa chữa hiện hành trên máy chủ. Chưa có yêu cầu bổ sung nào được xác minh; chưa có nội dung yêu cầu.',
     technical: null,
     canSupplement: false,
+    statusLabel: 'Chưa có lượt gửi',
+    blockReason: 'Chưa có quyết định SUPPLEMENT hợp lệ từ máy chủ.',
   };
   const technical = { attemptId: attempt.attemptId, effectiveSubmissionId: attempt.effectiveSubmissionId };
   if (!attempt.review) return {
@@ -92,18 +98,24 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
     message: 'Bản nộp hiện hành đã được ghi nhận và chưa có quyết định đánh giá.',
     technical,
     canSupplement: false,
+    statusLabel: 'Đang chờ đánh giá',
+    blockReason: 'Chưa có quyết định bổ sung từ máy chủ.',
   };
   if (attempt.review.decision === 'SUPPLEMENT') return {
     title: 'Quản lý yêu cầu bổ sung hồ sơ sửa chữa',
     message: 'Máy chủ đã xác nhận yêu cầu bổ sung. Hãy chuẩn bị bản FIELD mới với số đo và bằng chứng thật.',
     technical,
     canSupplement: true,
+    statusLabel: 'Cần bổ sung hồ sơ',
+    blockReason: '',
   };
   return {
     title: 'Hồ sơ sửa chữa đã được quản lý chấp nhận',
     message: 'Máy chủ đã xác nhận hồ sơ hiện hành được chấp nhận.',
     technical,
     canSupplement: false,
+    statusLabel: 'Đã được chấp nhận',
+    blockReason: 'Hồ sơ đã được chấp nhận; không tạo bản bổ sung mới.',
   };
 }
 
