@@ -10,6 +10,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DRONE_DATASET_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
+import { listEligibleOperatorDronesReal, type EligibleDroneDto } from '../../src/api/droneApi';
 import { openDroneLocalFiles, type DroneLocalFile } from '../../src/api/droneLocalFiles';
 
 const softShadow = Platform.select({
@@ -52,16 +53,6 @@ function evidenceMetadata() {
 export default function DroneUploadScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const scope = useOperatorReadScope(params.taskId ?? '');
-  const config: UploadConfig = {
-    code: params.taskId ?? 'Chưa chọn nhiệm vụ máy chủ',
-    road: 'Phạm vi theo gói công việc máy chủ',
-    droneModel: 'Chưa xác nhận thiết bị bay từ máy chủ',
-    defaultVideoName: 'Chưa chọn tệp', defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp', defaultSrtSize: '—',
-    videoSha256: '—', srtSha256: '—',
-    gpsCoord: 'Chưa đọc tọa độ từ tệp GPS',
-    gpsAddress: 'Vị trí chưa được đối chiếu với gói công việc',
-  };
 
   // File state (Video & SRT)
   const [videoName, setVideoName] = useState('Chưa chọn tệp');
@@ -83,6 +74,23 @@ export default function DroneUploadScreen() {
   const [srtUri, setSrtUri] = useState<string | null>(null);
   const [savedFiles, setSavedFiles] = useState<(DroneLocalFile & {availability: string})[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [eligibleDrones, setEligibleDrones] = useState<EligibleDroneDto[]>([]);
+  const [eligibleCursor, setEligibleCursor] = useState<string | null>(null);
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [eligibleError, setEligibleError] = useState<string | null>(null);
+  const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
+  const selectedDrone = eligibleDrones.find(item => item.id === selectedDroneId);
+  const config: UploadConfig = {
+    code: params.taskId ?? 'Chưa chọn nhiệm vụ máy chủ',
+    road: 'Phạm vi theo gói công việc máy chủ',
+    droneModel: selectedDrone?.serialNo ?? 'Chưa chọn máy bay đủ điều kiện',
+    defaultVideoName: 'Chưa chọn tệp', defaultVideoSize: '—',
+    defaultSrtName: 'Chưa chọn tệp', defaultSrtSize: '—',
+    videoSha256: '—', srtSha256: '—',
+    gpsCoord: 'Chưa đọc tọa độ từ tệp GPS',
+    gpsAddress: 'Vị trí chưa được đối chiếu với gói công việc',
+  };
+  const eligibleRequest = useRef(0);
   const [copying, setCopying] = useState(false);
   const picking = useRef(false);
   const mounted = useRef(true);
@@ -102,6 +110,34 @@ export default function DroneUploadScreen() {
       if (isCurrent()) { setSavedFiles(files); setFileError(null); }
     } catch { if (isCurrent()) setFileError('Không đọc được tệp đã lưu. Dữ liệu cũ vẫn được giữ.'); }
     finally { runtime?.close(); }
+  };
+  const loadEligibleDrones = async (append = false) => {
+    const isCurrent = scope.capture();
+    if (!isCurrent() || !params.taskId || (append && !eligibleCursor)) return;
+    const request = ++eligibleRequest.current;
+    setEligibleLoading(true);
+    setEligibleError(null);
+    try {
+      const page = await listEligibleOperatorDronesReal(params.taskId, append ? eligibleCursor : null, 25);
+      if (!isCurrent() || request !== eligibleRequest.current) return;
+      setEligibleDrones(previous => {
+        const next = append ? [...previous, ...page.items] : page.items;
+        const seen = new Set<string>();
+        return next.filter(item => !seen.has(item.id) && seen.add(item.id));
+      });
+      setEligibleCursor(page.nextCursor);
+      if (!page.nextCursor && selectedDroneId && !page.items.some(item => item.id === selectedDroneId) && !append) {
+        setSelectedDroneId(null);
+      }
+    } catch (error) {
+      if (!isCurrent() || request !== eligibleRequest.current) return;
+      const status = (error as { response?: { status?: number } }).response?.status;
+      setEligibleError(status === 403 ? 'Bạn không có quyền đọc danh sách máy bay của nhiệm vụ này.' :
+        status === 404 ? 'Không tìm thấy nhiệm vụ để đọc máy bay đủ điều kiện.' :
+        'Chưa đọc được danh sách máy bay đủ điều kiện. Tải lại để thử lại.');
+    } finally {
+      if (isCurrent() && request === eligibleRequest.current) setEligibleLoading(false);
+    }
   };
   const selectFile = (file: DroneLocalFile) => {
     if (file.kind === 'VIDEO') {
@@ -138,9 +174,12 @@ export default function DroneUploadScreen() {
     setUploadProgress(0); setSubmitError(null);
     setNote('');
     setSavedFiles([]); setFileError(null);
+    eligibleRequest.current++;
+    setEligibleDrones([]); setEligibleCursor(null); setEligibleError(null); setSelectedDroneId(null);
     // Copy ownership outlives scope changes. Keep its generic busy indicator;
     // the old continuation must never publish its file into the new scope.
     void refreshFiles();
+    void loadEligibleDrones();
   }, [scope.key]);
 
   // Chọn video 4K RGB từ thẻ nhớ SD
@@ -218,6 +257,46 @@ export default function DroneUploadScreen() {
       <View style={styles.selectorBar}>
         <Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={() => router.push('/(drone)/requests')} />
       </View>
+      <Card style={styles.droneSelectorCard}>
+        <View style={styles.droneSelectorHeader}>
+          <View style={styles.droneSelectorTitleWrap}>
+            <MaterialIcons name="flight" size={18} color={colors.primary} />
+            <Text style={[typography.titleMd, styles.droneSelectorTitle]}>Máy bay đủ điều kiện</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Tải lại máy bay đủ điều kiện"
+            disabled={eligibleLoading}
+            onPress={() => { eligibleRequest.current++; setEligibleDrones([]); setEligibleCursor(null); setSelectedDroneId(null); void loadEligibleDrones(); }}
+            style={styles.smallRefresh}
+          >
+            <MaterialIcons name="refresh" size={18} color={eligibleLoading ? colors.border : colors.secondary} />
+          </Pressable>
+        </View>
+        <Text style={typography.caption}>Danh sách do máy chủ cấp cho đúng nhiệm vụ; chỉ chọn máy bay hiện còn đủ điều kiện.</Text>
+        {eligibleLoading && !eligibleDrones.length ? <Text style={typography.caption}>Đang đọc danh sách…</Text> : null}
+        {eligibleError ? <Text accessibilityRole="alert" style={styles.statusError}>{eligibleError}</Text> : null}
+        {!eligibleLoading && !eligibleError && !eligibleDrones.length ? <Text style={typography.caption}>Chưa có máy bay đủ điều kiện.</Text> : null}
+        <View accessibilityRole="radiogroup" style={styles.droneOptions}>
+          {eligibleDrones.map(drone => {
+            const selected = selectedDroneId === drone.id;
+            return <Pressable
+              key={drone.id}
+              accessibilityRole="radio"
+              accessibilityLabel={`Máy bay ${drone.serialNo}`}
+              accessibilityState={{ checked: selected }}
+              onPress={() => setSelectedDroneId(drone.id)}
+              style={[styles.droneOption, selected && styles.droneOptionSelected]}
+            >
+              <MaterialIcons name={selected ? 'radio-button-checked' : 'radio-button-unchecked'} size={22} color={selected ? colors.primary : colors.secondary} />
+              <Text style={styles.droneSerial}>{drone.serialNo}</Text>
+              <Text style={styles.droneHint}>Ghi dữ liệu khảo sát</Text>
+            </Pressable>;
+          })}
+        </View>
+        {eligibleCursor ? <Button title="Tải thêm máy bay" variant="secondary" disabled={eligibleLoading} loading={eligibleLoading} onPress={() => void loadEligibleDrones(true)} /> : null}
+        {selectedDroneId ? <Text style={styles.selectedDroneNote}>Đã chọn máy bay từ danh sách máy chủ. Việc nộp bộ dữ liệu vẫn đang khóa cho đến khi đầy đủ đường upload và nhật ký bền vững.</Text> : null}
+      </Card>
       <Card>
         <Text style={typography.titleMd}>Tệp đã lưu cho nhiệm vụ</Text>
         {copying && <Text accessibilityRole="alert">Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text>}
@@ -640,6 +719,17 @@ const styles = StyleSheet.create({
   selectorBar: {
     marginBottom: spacing.sm,
   },
+  droneSelectorCard: { marginBottom: spacing.sm, gap: spacing.xs },
+  droneSelectorHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  droneSelectorTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  droneSelectorTitle: { color: colors.neutral },
+  smallRefresh: { minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  droneOptions: { gap: spacing.xs, marginTop: spacing.xs },
+  droneOption: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  droneOptionSelected: { borderColor: colors.primary, backgroundColor: '#FEF9E7' },
+  droneSerial: { ...typography.bodyMd, color: colors.neutral, fontWeight: '600', flex: 1 },
+  droneHint: { ...typography.caption, color: colors.secondary },
+  selectedDroneNote: { ...typography.caption, color: colors.secondary, marginTop: spacing.xs },
   selectorTitle: {
     color: colors.secondary,
     marginBottom: spacing.xs,
