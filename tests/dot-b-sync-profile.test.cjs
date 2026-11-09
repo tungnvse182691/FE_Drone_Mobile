@@ -13,7 +13,7 @@ for(const state of ['loading','empty','error','pages'])test('B5 profile prioriti
 test('B4 sync keeps unavailable capabilities out of the overview and diagnostics remain functional',async()=>{
  let reads=0;const identity={actor:'A',scope:'S',environment:'E'};
  const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{reads++;throw Error('private');}},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
- s.render();assert.equal(reads,0);for(const title of ['Đăng ký thiết bị','Tạo bản dữ liệu nhiệm vụ','Gửi dữ liệu đã ký'])assert.doesNotMatch(text(s),new RegExp(title));
+ s.render();await s.flush();assert.equal(reads,1);for(const title of ['Đăng ký thiết bị','Tạo bản dữ liệu nhiệm vụ','Gửi dữ liệu đã ký'])assert.doesNotMatch(text(s),new RegExp(title));
  const diagnostics=s.nodes().find(n=>n.props?.accessibilityLabel==='Chi tiết kỹ thuật');assert.ok(diagnostics);diagnostics.props.onPress();s.render();
- const reread=s.nodes().find(n=>n.type==='Pressable'&&n.props?.onPress&&JSON.stringify(n.props.children).includes('Đọc lại nhật ký'));assert.ok(reread);reread.props.onPress();await s.flush();assert.equal(reads,1);assert.match(text(s),/Không đọc được.*dữ liệu được giữ nguyên/);assert.doesNotMatch(text(s),/private/);s.unmount();
+ const reread=s.nodes().find(n=>n.type==='Pressable'&&n.props?.onPress&&JSON.stringify(n.props.children).includes('Đọc lại nhật ký'));assert.ok(reread);reread.props.onPress();await s.flush();assert.equal(reads,2);assert.match(text(s),/Không đọc được.*dữ liệu được giữ nguyên/);assert.doesNotMatch(text(s),/private/);s.unmount();
 });

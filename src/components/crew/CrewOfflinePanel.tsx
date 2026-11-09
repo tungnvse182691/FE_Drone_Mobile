@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
@@ -11,20 +12,26 @@ import { NATIVE_ACCEPTANCE_VERIFIED } from '../../../modules/roadguard-offline-c
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
 
 /** Real Crew sync route, actor/session keyed by parent. Read never changes pending/legacy state. */
-export function CrewOfflinePanel({identity}:{identity:QueueIdentity}) {
+export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIdentity; refreshSignal?: number}) {
   const [probe,setProbe]=useState<Awaited<ReturnType<typeof inspectOfflineDevice>>|null>(null);
   const [records,setRecords]=useState<OfflineJournalRecord[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showDiagnostics,setShowDiagnostics]=useState(false);
   const sequence=useRef(0),running=useRef(false);
   useEffect(()=>()=>{sequence.current++;},[]);
-  const refresh=async()=>{
+  const refresh=useCallback(async()=>{
     if(running.current||!sameQueueIdentity(identity))return;running.current=true;setBusy(true);setError('');const n=++sequence.current;
     try {
       const p=await inspectOfflineDevice(identity),j=await openOfflineJournal(identity),rows=await j.list();
       if(n===sequence.current&&sameQueueIdentity(identity)){setProbe(p);setRecords(rows);}
     }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Không đọc được thông tin thiết bị hoặc nhật ký; dữ liệu được giữ nguyên.');}
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
-  };
+  },[identity]);
+  // Focus is the authoritative initial load. A positive signal is emitted by
+  // the parent screen's refresh action and should refresh this panel once.
+  useEffect(()=>{if(refreshSignal>0)void refresh();},[refresh,refreshSignal]);
+  useFocusEffect(useCallback(()=>{
+    void refresh();
+  },[refresh]));
   const reconcile=async(record:OfflineJournalRecord)=>{
     if(running.current||!sameQueueIdentity(identity)||!sameQueueIdentity(record.identity,identity))return;
     running.current=true;setBusy(true);setError('');const n=++sequence.current;

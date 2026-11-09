@@ -4,6 +4,11 @@ const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 const task={id:id(2),projectId:id(3),operatorId:id(1),scope:[],status:'NEW_ASSIGNED',version:'v1'};
 function drone(file,api={},extra={}) {
   const component=name=>({[name]:name});
+  // Upload reads API-226 on mount to resolve the project scope. Tests that
+  // exercise unrelated upload behavior do not need a server detail response;
+  // keep that read explicitly unavailable instead of letting an incomplete
+  // module mock crash during module/effect evaluation.
+  const defaultDroneApi={getOperatorSurveyTaskDetailReal:async()=>{throw Error('detail_not_mocked');}};
   let s;
   s=screen(`app/(drone)/${file}.tsx`,{...extra,moduleFactories:{'../../src/hooks/useOperatorTaskPages':({react,modules})=>{
     const mod={exports:{}};
@@ -16,7 +21,7 @@ function drone(file,api={},extra={}) {
     '../../src/components/AnimatedPressable':component('AnimatedPressable'), '../../src/components/Toast':component('Toast'),
     '../../src/components/drone/DroneDatasetReadbackPanel':component('DroneDatasetReadbackPanel'),
     '../../src/components/drone/DroneTaskCommandPanel':component('DroneTaskCommandPanel'),
-    '../../src/api/droneApi':api,...extra.modules,
+    '../../src/api/droneApi':{...defaultDroneApi,...api},...extra.modules,
   }}); s.h.login('DRONE_OPERATOR',id(1)); return s;
 }
 test('Drone profile keeps cards without fabricated pilot, hardware, statistics or cleanup success',async()=>{

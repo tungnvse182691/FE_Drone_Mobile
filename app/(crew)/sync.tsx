@@ -94,6 +94,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
   const [showTechnical, setShowTechnical] = useState(false);
+  const [panelRefreshSignal, setPanelRefreshSignal] = useState(0);
   const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;reader.cancel();};},[reader]);
   const active=()=>mounted.current&&sameQueueIdentity(identity);
@@ -169,7 +170,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
   
 
-  const refresh=()=>{void reload();};
+  const refresh=()=>{void reload();setPanelRefreshSignal(value=>value+1);};
   const retry=()=>{if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');};
 
 
@@ -232,7 +233,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         <Text style={[typography.caption, styles.lockedHint]}>Gửi hàng đợi chưa được mở; dữ liệu chờ vẫn được giữ để đối soát.</Text>
       </Card>
 
-      <CrewOfflinePanel identity={identity} />
+      <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
       {segment === 'pending' ? (
         <>
           <View style={styles.sectionHeader}>

@@ -10,8 +10,10 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { DRONE_DATASET_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
-import { listEligibleOperatorDronesReal, type EligibleDroneDto } from '../../src/api/droneApi';
+import { getOperatorSurveyTaskDetailReal, listEligibleOperatorDronesReal, type EligibleDroneDto } from '../../src/api/droneApi';
 import { openDroneLocalFiles, type DroneLocalFile } from '../../src/api/droneLocalFiles';
+import { openDroneSelectionJournal } from '../../src/api/droneSelectionJournal';
+import { useAuthStore } from '../../src/store/auth';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
@@ -51,7 +53,7 @@ function evidenceMetadata() {
 }
 
 export default function DroneUploadScreen() {
-  const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
+  const params = useLocalSearchParams<{ code?: string; taskId?: string; projectId?: string }>();
   const scope = useOperatorReadScope(params.taskId ?? '');
 
   // File state (Video & SRT)
@@ -79,6 +81,10 @@ export default function DroneUploadScreen() {
   const [eligibleLoading, setEligibleLoading] = useState(false);
   const [eligibleError, setEligibleError] = useState<string | null>(null);
   const [selectedDroneId, setSelectedDroneId] = useState<string | null>(null);
+  const selectedDroneIdRef = useRef<string | null>(null);
+  const [selectionProjectId, setSelectionProjectId] = useState<string | null>(params.projectId ?? null);
+  const selectionJournalRef = useRef<Awaited<ReturnType<typeof openDroneSelectionJournal>> | null>(null);
+  const selectionLoadedRef = useRef(false);
   const selectedDrone = eligibleDrones.find(item => item.id === selectedDroneId);
   const config: UploadConfig = {
     code: params.taskId ?? 'Chưa chọn nhiệm vụ máy chủ',
@@ -94,10 +100,60 @@ export default function DroneUploadScreen() {
   const [copying, setCopying] = useState(false);
   const picking = useRef(false);
   const mounted = useRef(true);
+  const setSelectedDrone = (value: string | null) => {
+    selectedDroneIdRef.current = value;
+    setSelectedDroneId(value);
+  };
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const isCurrent = scope.capture();
+    setSelectionProjectId(params.projectId ?? null);
+    if (!params.taskId || params.projectId || !isCurrent()) return () => { active = false; };
+    void getOperatorSurveyTaskDetailReal(params.taskId).then(detail => {
+      const actor = useAuthStore.getState().user?.id;
+      if (active && isCurrent() && detail.data.id === params.taskId && detail.data.operatorId === actor && detail.data.projectId) {
+        setSelectionProjectId(detail.data.projectId);
+      }
+    }).catch(() => { /* selection remains unavailable until the task source is verified */ });
+    return () => { active = false; };
+  }, [params.taskId, params.projectId, scope.key, scope.capture]);
+
+  useEffect(() => {
+    let disposed = false;
+    selectionLoadedRef.current = false;
+    setSelectedDrone(null);
+    selectionJournalRef.current?.close();
+    selectionJournalRef.current = null;
+    if (!params.taskId || !selectionProjectId || !scope.key) {
+      selectionLoadedRef.current = true;
+      return () => { disposed = true; };
+    }
+    void (async () => {
+      try {
+        const journal = await openDroneSelectionJournal(params.taskId!, selectionProjectId);
+        if (disposed || !scope.capture()()) { journal.close(); return; }
+        selectionJournalRef.current = journal;
+        const saved = await journal.read();
+        if (!disposed && scope.capture()()) setSelectedDrone(saved?.droneId ?? null);
+      } catch (error) {
+        if (!disposed && scope.capture()() && (error as Error).message !== 'drone_selection_session_changed') {
+          setEligibleError('Chưa khôi phục được máy bay đã chọn trong phiên này. Hãy tải lại danh sách.');
+        }
+      } finally {
+        if (!disposed) selectionLoadedRef.current = true;
+      }
+    })();
+    return () => {
+      disposed = true;
+      selectionJournalRef.current?.close();
+      selectionJournalRef.current = null;
+    };
+  }, [params.taskId, selectionProjectId, scope.key, scope.capture]);
 
   const refreshFiles = async () => {
     const isCurrent = scope.capture();
@@ -126,8 +182,30 @@ export default function DroneUploadScreen() {
         return next.filter(item => !seen.has(item.id) && seen.add(item.id));
       });
       setEligibleCursor(page.nextCursor);
-      if (!page.nextCursor && selectedDroneId && !page.items.some(item => item.id === selectedDroneId) && !append) {
-        setSelectedDroneId(null);
+
+      // A refresh starts at page one, but a saved selection may be on a later
+      // page. Verify the selected id with bounded read-only traversal before
+      // clearing it; absence from page one is not proof that the server revoked
+      // the drone. Keep the visible cursor on page one so the existing “Tải
+      // thêm” affordance remains intact.
+      let selectedStillEligible = page.items.some(item => item.id === selectedDroneIdRef.current);
+      let verifyCursor = page.nextCursor;
+      let verifyPages = 0;
+      const MAX_SELECTION_VERIFY_PAGES = 20;
+      if (!append && selectionLoadedRef.current && selectedDroneIdRef.current) {
+        while (verifyCursor && verifyPages < MAX_SELECTION_VERIFY_PAGES) {
+          const verifyPage = await listEligibleOperatorDronesReal(params.taskId, verifyCursor, 25);
+          if (!isCurrent() || request !== eligibleRequest.current) return;
+          selectedStillEligible = selectedStillEligible || verifyPage.items.some(item => item.id === selectedDroneIdRef.current);
+          verifyCursor = verifyPage.nextCursor;
+          verifyPages += 1;
+          if (selectedStillEligible || !verifyCursor) break;
+        }
+      }
+      if (!append && selectionLoadedRef.current && selectedDroneIdRef.current &&
+          !selectedStillEligible && !verifyCursor) {
+        setSelectedDrone(null);
+        void selectionJournalRef.current?.clear();
       }
     } catch (error) {
       if (!isCurrent() || request !== eligibleRequest.current) return;
@@ -137,6 +215,23 @@ export default function DroneUploadScreen() {
         'Chưa đọc được danh sách máy bay đủ điều kiện. Tải lại để thử lại.');
     } finally {
       if (isCurrent() && request === eligibleRequest.current) setEligibleLoading(false);
+    }
+  };
+  const selectDrone = async (drone: EligibleDroneDto) => {
+    const isCurrent = scope.capture();
+    if (!isCurrent()) return;
+    const journal = selectionJournalRef.current;
+    if (!journal) {
+      setEligibleError('Chưa xác minh được phạm vi nhiệm vụ để lưu lựa chọn máy bay.');
+      return;
+    }
+    try {
+      await journal.save({ droneId: drone.id, serialNo: drone.serialNo });
+      if (isCurrent()) setSelectedDrone(drone.id);
+    } catch (error) {
+      if (isCurrent()) setEligibleError((error as Error).message === 'drone_selection_session_changed'
+        ? 'Phiên Operator đã thay đổi. Hãy tải lại nhiệm vụ.'
+        : 'Không lưu được lựa chọn máy bay trong phiên này.');
     }
   };
   const selectFile = (file: DroneLocalFile) => {
@@ -175,7 +270,7 @@ export default function DroneUploadScreen() {
     setNote('');
     setSavedFiles([]); setFileError(null);
     eligibleRequest.current++;
-    setEligibleDrones([]); setEligibleCursor(null); setEligibleError(null); setSelectedDroneId(null);
+    setEligibleDrones([]); setEligibleCursor(null); setEligibleError(null); setSelectedDrone(null);
     // Copy ownership outlives scope changes. Keep its generic busy indicator;
     // the old continuation must never publish its file into the new scope.
     void refreshFiles();
@@ -267,7 +362,7 @@ export default function DroneUploadScreen() {
             accessibilityRole="button"
             accessibilityLabel="Tải lại máy bay đủ điều kiện"
             disabled={eligibleLoading}
-            onPress={() => { eligibleRequest.current++; setEligibleDrones([]); setEligibleCursor(null); setSelectedDroneId(null); void loadEligibleDrones(); }}
+            onPress={() => { eligibleRequest.current++; setEligibleDrones([]); setEligibleCursor(null); void loadEligibleDrones(); }}
             style={styles.smallRefresh}
           >
             <MaterialIcons name="refresh" size={18} color={eligibleLoading ? colors.border : colors.secondary} />
@@ -285,7 +380,7 @@ export default function DroneUploadScreen() {
               accessibilityRole="radio"
               accessibilityLabel={`Máy bay ${drone.serialNo}`}
               accessibilityState={{ checked: selected }}
-              onPress={() => setSelectedDroneId(drone.id)}
+              onPress={() => void selectDrone(drone)}
               style={[styles.droneOption, selected && styles.droneOptionSelected]}
             >
               <MaterialIcons name={selected ? 'radio-button-checked' : 'radio-button-unchecked'} size={22} color={selected ? colors.primary : colors.secondary} />
