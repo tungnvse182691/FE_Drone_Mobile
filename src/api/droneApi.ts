@@ -65,6 +65,16 @@ export interface SurveyTaskPageV2ResponseDto {
   asOf: string;
 }
 
+export interface EligibleDroneDto {
+  id: string;
+  serialNo: string;
+}
+
+export interface EligibleDronePageDto {
+  items: EligibleDroneDto[];
+  nextCursor: string | null;
+}
+
 export interface SurveyGeometryRefDto {
   routeVersionId: string;
   segmentSetId: string;
@@ -155,6 +165,7 @@ export interface UploadSessionResponseDto {
   partSizeBytes: number;
   expiresAt: string;
   version: string;
+  failureCode?: string | null;
 }
 
 export interface UploadPartUrlItemDto {
@@ -251,6 +262,12 @@ export interface GeometryPackageWithEtag {
 // HELPERS
 // =============================================================================
 
+function isDroneResourceId(value: unknown): value is string {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
+    value !== '00000000-0000-0000-0000-000000000000';
+}
+
 export function formatStrongIfMatch(version: string): string {
   const clean = version.trim().replace(/^"+|"+$/g, '');
   return `"${clean}"`;
@@ -327,6 +344,31 @@ export async function getOperatorSurveyTaskDetailReal(
     data: res.data,
     etag: extractEtagFromResponse(res),
   };
+}
+
+/** API-231: GET the server-authoritative drone registry for the assigned task. */
+export async function listEligibleOperatorDronesReal(
+  taskId: string,
+  cursor?: string | null,
+  limit = 25,
+): Promise<EligibleDronePageDto> {
+  if (!isDroneResourceId(taskId)) throw Error('invalid_task_id');
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw Error('invalid_limit');
+  const params: Record<string, string | number> = { limit };
+  if (cursor) params.cursor = cursor;
+  const res = await apiClient.get<EligibleDronePageDto>(
+    `/survey-tasks/${encodeURIComponent(taskId)}/eligible-drones`,
+    { params },
+  );
+  if (!res.data || !Array.isArray(res.data.items) || (res.data.nextCursor !== null && typeof res.data.nextCursor !== 'string')) {
+    throw Error('eligible_drone_response_invalid');
+  }
+  for (const item of res.data.items) {
+    if (!isDroneResourceId(item?.id) || typeof item.serialNo !== 'string' || !item.serialNo.trim()) {
+      throw Error('eligible_drone_response_invalid');
+    }
+  }
+  return res.data;
 }
 
 /**
@@ -507,6 +549,18 @@ export async function getOperatorUploadSessionReal(
   uploadId: string,
 ): Promise<UploadSessionResponseDto> {
   const res = await apiClient.get<UploadSessionResponseDto>(`/uploads/${encodeURIComponent(uploadId)}`);
+  return res.data;
+}
+
+/** API-237: cancel one Operator-owned upload session. No body or mutation headers. */
+export async function cancelOperatorUploadReal(uploadId: string): Promise<UploadSessionResponseDto> {
+  if (!isDroneResourceId(uploadId)) throw Error('invalid_upload_id');
+  const res = await apiClient.post<UploadSessionResponseDto>(
+    `/uploads/${encodeURIComponent(uploadId)}/cancel`,
+  );
+  if (!res.data || res.data.id !== uploadId || res.data.status !== 'FAILED' || res.data.failureCode !== 'upload_cancelled') {
+    throw Error('operator_upload_cancel_receipt_invalid');
+  }
   return res.data;
 }
 

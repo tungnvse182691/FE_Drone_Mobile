@@ -1,7 +1,7 @@
 import { useAuthStore } from '../store/auth';
 import { apiClient } from './client';
 import { passwordSessionIdentity } from './authApi';
-import { completeOperatorUploadReal, createOperatorUploadSessionReal, getOperatorUploadPartUrlsReal, getOperatorUploadSessionReal, getOperatorFileMetadataReal, putUploadPartBytesDirect, getOperatorDatasetReal, getOperatorDatasetCoverageReal, getOperatorSurveyTaskDetailReal, submitOperatorDatasetReal, type BandScopeDto, type UploadSessionResponseDto, type UploadPartUrlsResponseDto, type FileMetadataResponseDto, type SubmitDatasetRequestDto } from './droneApi';
+import { cancelOperatorUploadReal, completeOperatorUploadReal, createOperatorUploadSessionReal, getOperatorUploadPartUrlsReal, getOperatorUploadSessionReal, getOperatorFileMetadataReal, putUploadPartBytesDirect, getOperatorDatasetReal, getOperatorDatasetCoverageReal, getOperatorSurveyTaskDetailReal, submitOperatorDatasetReal, type BandScopeDto, type UploadSessionResponseDto, type UploadPartUrlsResponseDto, type FileMetadataResponseDto, type SubmitDatasetRequestDto } from './droneApi';
 import { openDroneUploadJournal, type DroneUploadIntent } from './droneTaskJournal';
 
 // Neither a seed ID nor a user-entered UUID proves an active aircraft assignment.
@@ -138,6 +138,52 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
     if (metadata.id !== intent.fileId || metadata.status !== 'VERIFIED' || metadata.checksumSha256 !== plan.file.checksumSha256 || metadata.sizeBytes !== plan.file.sizeBytes || metadata.mediaType !== plan.file.mediaType) throw Error('drone_upload_metadata_mismatch');
     return journal.update(intent.key, { status: 'VERIFIED', receipt: { uploadId: observed.id, fileId: metadata.id, status: metadata.status, checksumSha256: metadata.checksumSha256 } });
   } finally { journal.close(); }
+}
+
+export type DroneUploadCancelTransport = {
+  cancel: typeof cancelOperatorUploadReal;
+  getSession: typeof getOperatorUploadSessionReal;
+};
+const realDroneUploadCancelTransport: DroneUploadCancelTransport = {
+  cancel: cancelOperatorUploadReal,
+  getSession: getOperatorUploadSessionReal,
+};
+
+/**
+ * Explicit Operator recovery action. It only cancels an existing durable
+ * upload identity; it never creates a replacement session or changes its key.
+ */
+export async function cancelOperatorUploadSession(
+  taskId: string,
+  uploadId: string,
+  transport: DroneUploadCancelTransport = realDroneUploadCancelTransport,
+): Promise<DroneUploadIntent> {
+  if (!isDroneResourceId(taskId) || !isDroneResourceId(uploadId)) throw Error('drone_upload_cancel_input_invalid');
+  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
+  const journal = await openDroneUploadJournal(taskId);
+  try {
+    const items = await journal.read('upload');
+    const intent = items.find(item => item.uploadId === uploadId);
+    if (!intent) throw Error('drone_upload_cancel_intent_missing');
+    try {
+      const receipt = await transport.cancel(uploadId);
+      if (receipt.id !== uploadId || receipt.status !== 'FAILED' || receipt.failureCode !== 'upload_cancelled') throw Error('drone_upload_cancel_receipt_invalid');
+      return journal.update(intent.key, { status: 'FAILED', error: { status: 200, code: 'upload_cancelled' } });
+    } catch (error) {
+      const status = uploadErrorStatus(error);
+      if (status === 409) {
+        const observed = await transport.getSession(uploadId);
+        const nextStatus = observed.status === 'VERIFIED' ? 'VERIFY_PENDING' : intent.status;
+        const next = await journal.update(intent.key, { status: nextStatus, error: { status, code: 'upload_not_cancellable' } });
+        throw Object.assign(new Error('upload_not_cancellable'), { response: { status, data: { code: 'upload_not_cancellable' } }, intent: next });
+      }
+      const code = status === 401 ? 'cancel_auth_required' : status === 403 ? 'cancel_access_forbidden' : status === 404 ? 'upload_session_not_found' : isUncertain(error) ? 'cancel_unknown' : 'cancel_rejected';
+      await journal.update(intent.key, { error: { status, code } });
+      throw error;
+    }
+  } finally {
+    journal.close();
+  }
 }
 
 export type DroneDatasetPlan = { taskId: string; projectId: string; ifMatch: string; payload: SubmitDatasetRequestDto };
