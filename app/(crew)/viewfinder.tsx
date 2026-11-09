@@ -88,7 +88,9 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   };
   const renderedContext=currentFieldContext(task.projectId,task.id);
   const handleCapture = (photo: CameraCapturedPicture) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true);};
-  if (block) return <SafeAreaView><Text>{block}</Text><Button variant="secondary" title="Quay lại" onPress={()=>router.back()} /></SafeAreaView>;
+  const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId } };
+  const closeCamera = () => { if (router.canGoBack()) router.back(); else router.dismissTo(fieldHref); };
+  if (block) return <SafeAreaView><Text>{block}</Text><Button variant="secondary" title="Quay lại" onPress={closeCamera} /></SafeAreaView>;
 
   const watermark = (
     <View style={styles.watermarkCard} pointerEvents="none">
@@ -199,13 +201,13 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   );
 
   const handleConfirm = () => {
-    router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}});
+    router.dismissTo(fieldHref);
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Đóng máy ảnh" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
+        <Pressable onPress={closeCamera} accessibilityRole="button" accessibilityLabel="Đóng máy ảnh" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <MaterialIcons name="close" size={20} color={colors.surface} />
         </Pressable>
 
@@ -245,7 +247,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
         <Text style={{color:colors.surface}}>{draft?.repairClaim?'Ảnh sau sửa phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp ảnh sau sửa.'}</Text>
         <Button variant="secondary" title={postRepairCapture?'Đã xác nhận chụp hiện trạng sau sửa':'Tôi xác nhận đang chụp hiện trạng sau sửa'} disabled={!draft?.repairClaim||busy||!!draft.command} onPress={()=>setPostRepairCapture(v=>!v)}/>
       </View>:null}
-      {!ready?<Button variant="secondary" title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.replace({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
+      {!ready?<Button variant="secondary" title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.dismissTo(fieldHref)}/>:null}
       <View style={styles.viewport}>
         <ViewFinder
           key={`${task.projectId}:${task.id}:${isFocused}`}

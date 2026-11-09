@@ -37,7 +37,9 @@ export default function CrewLayout() {
   return (
     <View style={styles.container}>
       <View style={styles.stackArea}>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="field-review" getId={({ params }) => params?.projectId && params?.id ? `${params.projectId}:${params.id}` : undefined} />
+        </Stack>
       </View>
       <SafeAreaView edges={['bottom']}>
         <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} />
