@@ -111,3 +111,54 @@ test('camera rapid capture accepts one shot and discards photo after screen lose
   assert.equal(h.captures.length, 0);
   h.dispose();
 });
+
+test('capture finishing after a camera switch cannot keep the next session locked', async () => {
+  const h = harness(), shooting = [];
+  const onShootingChange = value => shooting.push(value);
+  let finishBack, finishFront, backShots = 0, frontShots = 0;
+  let ui = h.render({ active: true, taskKey: 'A', facing: 'back', onShootingChange });
+  ui.camera.props.ref.current = { takePictureAsync: () => { backShots++; return new Promise(done => { finishBack = done; }); } };
+  ui.camera.props.onCameraReady();
+  ui = h.render({ active: true, taskKey: 'A', facing: 'back', onShootingChange });
+  ui.shutter.props.onPress();
+  assert.equal(shooting.at(-1), true);
+  ui = h.render({ active: true, taskKey: 'A', facing: 'front', onShootingChange });
+  assert.equal(shooting.at(-1), false);
+  ui.camera.props.ref.current = { takePictureAsync: () => { frontShots++; return new Promise(done => { finishFront = done; }); } };
+  ui.camera.props.onCameraReady();
+  ui = h.render({ active: true, taskKey: 'A', facing: 'front', onShootingChange });
+  assert.equal(ui.shutter.props.disabled, false);
+  ui.shutter.props.onPress();
+  assert.equal(frontShots, 1);
+  finishBack({ uri: 'file://stale-back' });
+  await new Promise(done => setImmediate(done));
+  ui = h.render({ active: true, taskKey: 'A', facing: 'front', onShootingChange });
+  assert.equal(ui.shutter.props.disabled, true);
+  assert.equal(shooting.at(-1), true);
+  finishFront({ uri: 'file://front' });
+  await new Promise(done => setImmediate(done));
+  ui = h.render({ active: true, taskKey: 'A', facing: 'front', onShootingChange });
+  assert.equal(ui.shutter.props.disabled, false);
+  assert.equal(backShots, 1);
+  assert.deepEqual(h.captures.map(photo => photo.uri), ['file://front']);
+  h.dispose();
+});
+
+test('capture → switch camera → capture keeps both completed photos', async () => {
+  const h = harness(), shooting = [];
+  const onShootingChange = value => shooting.push(value);
+  let ui = h.render({ active: true, taskKey: 'A', facing: 'back', onShootingChange });
+  ui.camera.props.ref.current = { takePictureAsync: async () => ({ uri: 'file://back' }) };
+  ui.camera.props.onCameraReady();
+  ui = h.render({ active: true, taskKey: 'A', facing: 'back', onShootingChange });
+  await ui.shutter.props.onPress();
+  assert.equal(shooting.at(-1), false);
+  ui = h.render({ active: true, taskKey: 'A', facing: 'front', onShootingChange });
+  ui.camera.props.ref.current = { takePictureAsync: async () => ({ uri: 'file://front' }) };
+  ui.camera.props.onCameraReady();
+  ui = h.render({ active: true, taskKey: 'A', facing: 'front', onShootingChange });
+  assert.equal(ui.shutter.props.disabled, false);
+  await ui.shutter.props.onPress();
+  assert.deepEqual(h.captures.map(photo => photo.uri), ['file://back', 'file://front']);
+  h.dispose();
+});

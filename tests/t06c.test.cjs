@@ -193,7 +193,7 @@ function screen(file,name,states,overrides={}){
    if (initial === null) return occurrence === 1 ? semanticState.coords ?? initial : semanticState.draft ?? initial;
    if (initial === '') return semanticState.notice ?? initial;
    if (initial === false) {
-     const keys = ['flashOn', 'busy', 'localRecoveryBlocked', 'ready', 'postRepairCapture'];
+     const keys = ['flashOn', 'busy', 'localRecoveryBlocked', 'ready', 'postRepairCapture', 'cameraShooting'];
      return semanticState[keys[occurrence - 1]] ?? initial;
    }
    return initial;
@@ -234,6 +234,12 @@ for(const [label,claim,attestation] of [['missing finish',false,false],['no atte
  const h=screen('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',{mode:'after',draft,ready:true,postRepairCapture:attestation});
  const camera=h.nodes.find(n=>n.props.onCapture);assert.equal(camera.props.disabled,!claim||!attestation);
  assert.equal(camera.props.leftControl.props.disabled,true);
+});
+test('T06C camera switch is disabled while a photo is being captured',()=>{
+ const h=screen('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',{mode:'after',draft:{captures:[],repairClaim:{}},ready:true,postRepairCapture:true,cameraShooting:true});
+ const camera=h.nodes.find(n=>n.props.onCapture);
+ assert.equal(camera.props.rightControl.props.disabled,true);
+ assert.equal(camera.props.rightControl.props.accessibilityState.disabled,true);
 });
 test('T06C AFTER upload revalidates VERIFIED without creating a duplicate session',async()=>{
  const h=claimHarness();await h.runtime.write(h.d);let d=await h.m.prepareFieldRepairClaim(h.ctx,h.runtime);

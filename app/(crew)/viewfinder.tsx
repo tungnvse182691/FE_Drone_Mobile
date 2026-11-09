@@ -54,9 +54,11 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const [localRecoveryBlocked, setLocalRecoveryBlocked] = useState(false);
   const [ready, setReady] = useState(false);
   const [postRepairCapture,setPostRepairCapture]=useState(false);
+  const [cameraShooting, setCameraShooting] = useState(false);
   const normalAfter=mode==='after'&&task.detail?.mode==='NORMAL';
   const afterBlocked=normalAfter&&(!draft?.repairClaim||!postRepairCapture);
-  const activeRef=useRef(false),savingRef=useRef(false),pickerRef=useRef(false);
+  const activeRef=useRef(false),savingRef=useRef(false),pickerRef=useRef(false),cameraShootingRef=useRef(false);
+  const handleShootingChange = useCallback((value: boolean) => { cameraShootingRef.current = value; setCameraShooting(value); }, []);
   const matches=(c:ReturnType<typeof currentFieldContext>)=>!!c&&JSON.stringify(currentFieldContext(task.projectId,task.id))===JSON.stringify(c);
   useFocusEffect(useCallback(() => {
     let active=true;activeRef.current=true;setReady(false);setCoords(null);setLocalRecoveryBlocked(false);
@@ -187,9 +189,10 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Đổi máy ảnh trước/sau"
-      disabled={!isFocused||busy}
-      onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
-      style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
+      disabled={!isFocused||busy||cameraShooting}
+      accessibilityState={{ disabled: !isFocused||busy||cameraShooting }}
+      onPress={() => { if (!isFocused||busy||cameraShootingRef.current) return; setFacing((f) => (f === 'back' ? 'front' : 'back')); }}
+      style={({ pressed }) => [styles.sideControl, (!isFocused||busy||cameraShooting) && styles.sideControlDisabled, pressed && !cameraShooting && styles.sideControlPressed]}
     >
       <MaterialIcons name="flip-camera-android" size={20} color={colors.surface} />
     </Pressable>
@@ -251,6 +254,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           disabled={busy||!ready||!!draft?.command||afterBlocked||localRecoveryBlocked}
           disabledReason={localRecoveryBlocked ? 'Nháp phiên cũ cần đối soát trước khi chụp ảnh.' : !ready ? 'Đang mở hồ sơ hiện trường…' : draft?.command ? 'Hồ sơ có lệnh đang chờ đối soát.' : afterBlocked ? 'Cần xác nhận điều kiện ảnh sau sửa.' : busy ? 'Đang lưu ảnh vào nháp…' : undefined}
           onCapture={handleCapture}
+          onShootingChange={handleShootingChange}
           onCoordsChange={setCoords}
           defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : ''}
           flashMode={flashOn ? 'on' : 'off'}
@@ -498,6 +502,9 @@ const styles = StyleSheet.create({
   },
   sideControlPressed: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  sideControlDisabled: {
+    opacity: 0.45,
   },
   bottomSheet: {
     backgroundColor: colors.surface,

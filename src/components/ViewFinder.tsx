@@ -12,6 +12,7 @@ interface ViewFinderProps {
   disabled?: boolean;
   disabledReason?: string;
   onCapture: (photo: CameraCapturedPicture) => void;
+  onShootingChange?: (shooting: boolean) => void;
   defectType: string;
   showGridGuide?: boolean;
   showReticle?: boolean;
@@ -61,6 +62,7 @@ export function ViewFinder({
   disabled = false,
   disabledReason,
   onCapture,
+  onShootingChange,
   defectType,
   showGridGuide,
   showReticle,
@@ -101,6 +103,12 @@ export function ViewFinder({
     if (!active) { setReadySession(''); setCaptureError(''); setShooting(false); captureLock.current=false; }
   }, [active]);
 
+  useEffect(() => () => {
+    captureLock.current = false;
+    if (mounted.current) setShooting(false);
+    onShootingChange?.(false);
+  }, [cameraSession, onShootingChange]);
+
   if (!permission) {
     return <View style={styles.container} />;
   }
@@ -123,7 +131,7 @@ export function ViewFinder({
     }
     const capturedSession = cameraSession;
     const capturedGeneration = generation.current.value;
-    captureLock.current=true;setShooting(true);setCaptureError('');
+    captureLock.current=true;setShooting(true);onShootingChange?.(true);setCaptureError('');
     try {
       const photo = await cameraRef.current?.takePictureAsync();
       if (photo && mounted.current && activeRef.current && currentSession.current === capturedSession && generation.current.value === capturedGeneration) {
@@ -134,7 +142,7 @@ export function ViewFinder({
     } finally {
       if (generation.current.value === capturedGeneration) {
         captureLock.current=false;
-        if (mounted.current) setShooting(false);
+        if (mounted.current) { setShooting(false); onShootingChange?.(false); }
       }
     }
   };
