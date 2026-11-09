@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect, useIsFocused } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
@@ -35,9 +35,10 @@ function formatDateTime(date: Date): string {
 }
 
 export default function CrewViewfinderScreen() {
-  return <CrewTaskBoundary operational={false}>{task => <CrewViewfinderScreenContent task={task} />}</CrewTaskBoundary>;
+  return <CrewTaskBoundary operational={false}>{task => <CrewViewfinderScreenContent key={`${task.projectId}:${task.id}`} task={task} />}</CrewTaskBoundary>;
 }
 function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
+  const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ id?: string; mode?: string }>();
   const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';
 
@@ -58,7 +59,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const activeRef=useRef(false),savingRef=useRef(false),pickerRef=useRef(false);
   const matches=(c:ReturnType<typeof currentFieldContext>)=>!!c&&JSON.stringify(currentFieldContext(task.projectId,task.id))===JSON.stringify(c);
   useFocusEffect(useCallback(() => {
-    let active=true;activeRef.current=true;setReady(false);setLocalRecoveryBlocked(false);
+    let active=true;activeRef.current=true;setReady(false);setCoords(null);setLocalRecoveryBlocked(false);
     const context=currentFieldContext(task.projectId,task.id);
     if (context) void openFieldRuntime(context).then(runtime=>loadFieldDraft(context,runtime)).then(value=>{if(active&&matches(context)){setDraft(value);setReady(true);}}).catch(error=>{if(active&&matches(context)){setDraft({ ...context, captures: [], measurements: [], locationProof: null });setReady(true);setLocalRecoveryBlocked(true);setNotice(`Không thể dùng nháp cũ: ${fieldErrorMessage(error)} Chỉ đọc hồ sơ máy chủ; cần đối soát trước khi lưu ảnh mới.`);}});
     return ()=>{active=false;activeRef.current=false;};
@@ -70,7 +71,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const previewDate = new Date();
   const gpsText = coords ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : 'Chưa có GPS quan sát';
   const savePhoto = async (uri: string, mediaType: string, camera: boolean) => {
-    if (!activeRef.current || savingRef.current || busy || block || afterBlocked || localRecoveryBlocked || !ready || !draft || draft.command) {
+    if (!isFocused || !activeRef.current || savingRef.current || busy || block || afterBlocked || localRecoveryBlocked || !ready || !draft || draft.command) {
       if (activeRef.current && !busy && (block || afterBlocked || localRecoveryBlocked)) setNotice(block || (afterBlocked ? 'Cần xác nhận điều kiện ảnh sau sửa.' : 'Cần đối soát nháp cũ trước khi lưu ảnh mới.'));
       return;
     }
@@ -156,7 +157,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   );
 
   const handlePickGallery = async () => {
-    if(pickerRef.current||savingRef.current||busy||!ready||normalAfter||draft?.command||localRecoveryBlocked){if(localRecoveryBlocked)setNotice('Cần đối soát nháp cũ trước khi chọn ảnh mới.');return;}
+    if(!isFocused||pickerRef.current||savingRef.current||busy||!ready||normalAfter||draft?.command||localRecoveryBlocked){if(localRecoveryBlocked)setNotice('Cần đối soát nháp cũ trước khi chọn ảnh mới.');return;}
     const pickedContext=currentFieldContext(task.projectId,task.id),pickedMode=mode;
     if(!pickedContext)return;pickerRef.current=true;
     try {
@@ -174,7 +175,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Chọn ảnh từ thiết bị"
-      disabled={normalAfter||busy||!ready||!!draft?.command||localRecoveryBlocked}
+      disabled={!isFocused||normalAfter||busy||!ready||!!draft?.command||localRecoveryBlocked}
       onPress={handlePickGallery}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
@@ -186,6 +187,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Đổi máy ảnh trước/sau"
+      disabled={!isFocused||busy}
       onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
@@ -243,11 +245,14 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       {!ready?<Button variant="secondary" title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.replace({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
       <View style={styles.viewport}>
         <ViewFinder
+          key={`${task.projectId}:${task.id}:${isFocused}`}
+          active={isFocused}
+          taskKey={`${task.projectId}:${task.id}`}
           disabled={busy||!ready||!!draft?.command||afterBlocked||localRecoveryBlocked}
-          disabledReason={localRecoveryBlocked ? 'Cần đối soát nháp cũ trước khi chụp ảnh mới.' : !ready ? 'Đang mở hồ sơ hiện trường…' : undefined}
+          disabledReason={localRecoveryBlocked ? 'Nháp phiên cũ cần đối soát trước khi chụp ảnh.' : !ready ? 'Đang mở hồ sơ hiện trường…' : draft?.command ? 'Hồ sơ có lệnh đang chờ đối soát.' : afterBlocked ? 'Cần xác nhận điều kiện ảnh sau sửa.' : busy ? 'Đang lưu ảnh vào nháp…' : undefined}
           onCapture={handleCapture}
           onCoordsChange={setCoords}
-          defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'}
+          defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : ''}
           flashMode={flashOn ? 'on' : 'off'}
           facing={facing}
           watermarkContent={watermark}

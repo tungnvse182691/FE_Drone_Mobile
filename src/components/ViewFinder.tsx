@@ -7,6 +7,8 @@ import { Button } from './Button';
 import { colors, radius, spacing, typography } from '../design-tokens';
 
 interface ViewFinderProps {
+  active?: boolean;
+  taskKey?: string;
   disabled?: boolean;
   disabledReason?: string;
   onCapture: (photo: CameraCapturedPicture) => void;
@@ -54,6 +56,8 @@ export function watchCaptureLocation(onCoords: (value: Coords | null) => void,
 }
 
 export function ViewFinder({
+  active = true,
+  taskKey = '',
   disabled = false,
   disabledReason,
   onCapture,
@@ -70,16 +74,32 @@ export function ViewFinder({
 }: ViewFinderProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [coords, setCoords] = useState<Coords | null>(null);
-  const [cameraReady, setCameraReady] = useState(false);
+  const [readySession, setReadySession] = useState('');
   const [shooting, setShooting] = useState(false);
   const [captureError, setCaptureError] = useState('');
   const mounted = useRef(true), captureLock = useRef(false);
   const cameraRef = useRef<CameraView>(null);
-  useEffect(() => { mounted.current=true; return () => { mounted.current=false; }; }, []);
+  const cameraIdentity = `${taskKey}:${facing}`;
+  const activeRef = useRef(active);
+  const generation = useRef({ active, cameraIdentity, value: 0 });
+  if (generation.current.active !== active || generation.current.cameraIdentity !== cameraIdentity) {
+    generation.current = { active, cameraIdentity, value: generation.current.value + 1 };
+  }
+  const cameraSession = `${cameraIdentity}:${generation.current.value}`;
+  const currentSession = useRef(cameraSession);
+  currentSession.current = cameraSession;
+  activeRef.current = active;
+  const cameraReady = active && readySession === cameraSession;
+  useEffect(() => { mounted.current=true; return () => { mounted.current=false; activeRef.current=false; }; }, []);
 
   useEffect(() => {
+    if (!active) return;
     return watchCaptureLocation(next => { setCoords(next); onCoordsChange?.(next); });
-  }, [onCoordsChange]);
+  }, [active, onCoordsChange]);
+
+  useEffect(() => {
+    if (!active) { setReadySession(''); setCaptureError(''); setShooting(false); captureLock.current=false; }
+  }, [active]);
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -101,28 +121,35 @@ export function ViewFinder({
     if (disabled || !cameraReady || captureLock.current) {
       return;
     }
+    const capturedSession = cameraSession;
+    const capturedGeneration = generation.current.value;
     captureLock.current=true;setShooting(true);setCaptureError('');
     try {
       const photo = await cameraRef.current?.takePictureAsync();
-      if (photo && mounted.current) {
+      if (photo && mounted.current && activeRef.current && currentSession.current === capturedSession && generation.current.value === capturedGeneration) {
         onCapture(photo);
       }
     } catch {
-      if (mounted.current) setCaptureError('Không chụp được ảnh. Kiểm tra camera và thử lại.');
+      if (mounted.current && activeRef.current && currentSession.current === capturedSession && generation.current.value === capturedGeneration) setCaptureError('Camera không chụp được ảnh. Đóng rồi mở lại camera và thử lại.');
     } finally {
-      captureLock.current=false;if(mounted.current)setShooting(false);
+      if (generation.current.value === capturedGeneration) {
+        captureLock.current=false;
+        if (mounted.current) setShooting(false);
+      }
     }
   };
 
   return (
     <View style={styles.container}>
-      <CameraView
+      {active ? <CameraView
+        key={cameraSession}
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing={facing}
         flash={flashMode}
-        onCameraReady={() => setCameraReady(true)}
-      />
+        onCameraReady={() => { if (activeRef.current && currentSession.current === cameraSession) { setReadySession(cameraSession); setCaptureError(''); } }}
+        onMountError={() => { if (activeRef.current && currentSession.current === cameraSession) { setReadySession(''); setCaptureError('Camera không khởi động được. Đóng rồi mở lại camera và kiểm tra quyền truy cập.'); } }}
+      /> : null}
       <View style={[StyleSheet.absoluteFill, styles.overlay]}>
         {showGridGuide && (
           <View style={styles.gridGuide} pointerEvents="none">
@@ -140,7 +167,7 @@ export function ViewFinder({
         )}
 
         <View style={styles.topBar}>
-          <Text style={[typography.labelSm, styles.defectLabel]}>{defectType.toUpperCase()}</Text>
+          {defectType ? <Text style={[typography.labelSm, styles.defectLabel]}>{defectType.toUpperCase()}</Text> : null}
         </View>
 
         {watermarkContent ?? (
@@ -155,15 +182,17 @@ export function ViewFinder({
         )}
 
         {hudItems}
-        {captureError || disabledReason ? <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>{captureError || disabledReason}</Text> : null}
+        {captureError || disabledReason || !active || !cameraReady ? <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>{disabledReason || captureError || (!active ? 'Camera đang tạm dừng.' : 'Đang khởi động camera…')}</Text> : null}
 
         <View style={styles.bottomBar}>
           <View style={styles.bottomSideLeft}>{leftControl ?? null}</View>
           <Pressable
-            style={({ pressed }) => [styles.shutter, pressed && styles.shutterPressed]}
+            style={({ pressed }) => [styles.shutter, (disabled || shooting || !cameraReady) && styles.shutterDisabled, pressed && cameraReady && !disabled && styles.shutterPressed]}
             onPress={handleCapture}
             disabled={disabled || shooting || !cameraReady}
             accessibilityRole="button"
+            accessibilityState={{ disabled: disabled || shooting || !cameraReady, busy: shooting }}
+            accessibilityLabel={disabled || !cameraReady ? (disabledReason || captureError || 'Camera chưa sẵn sàng') : 'Chụp ảnh'}
             testID="capture-button"
           >
             <MaterialIcons name="photo-camera" size={24} color={colors.onPrimary} />
@@ -333,5 +362,9 @@ const styles = StyleSheet.create({
   },
   shutterPressed: {
     backgroundColor: colors.primaryDark,
+  },
+  shutterDisabled: {
+    backgroundColor: '#64748B',
+    opacity: 0.65,
   },
 });

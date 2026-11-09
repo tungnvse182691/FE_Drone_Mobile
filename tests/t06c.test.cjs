@@ -201,7 +201,7 @@ function screen(file,name,states,overrides={}){
  const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:v=>[mockedState(v),()=>{}],useRef:v=>({current:v}),useCallback:f=>f,useEffect:()=>{}};
  const identity={actor:ids.actor,scope:'session',projectId:ids.projectId,taskId:ids.taskId,environment:'fixture'};
  const draft={...identity,captures:[],measurements:[]};
- const deps={react:React,'react-native':{StyleSheet:{create:v=>v}},'expo-router':{router:{push:v=>routes.push(v)},useFocusEffect:f=>f(),useLocalSearchParams:()=>({mode:'AFTER'})},
+ const deps={react:React,'react-native':{StyleSheet:{create:v=>v}},'expo-router':{router:{push:v=>routes.push(v)},useFocusEffect:f=>f(),useIsFocused:()=>true,useLocalSearchParams:()=>({mode:'AFTER'})},
  '../../src/design-tokens':{colors:{},radius:{},spacing:{},typography:{}},'./tasks':{useCrewIdentity:()=>({user:{id:ids.actor},scope:'session'})},
  '../../src/api/crewApi':{normalRepairBlock:()=>null,fieldCapabilityBlock:()=>null},
  '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:{status:'InProgress'},reload:async()=>{}})},
