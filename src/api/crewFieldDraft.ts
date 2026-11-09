@@ -24,6 +24,8 @@ export interface FieldCapture {
   localOnly?: boolean;
   /** Durable marker written before any create-session request. */
   uploadAttempt?: { key: string; stage: 'CREATE_INTENT' | 'CREATE_UNKNOWN' | 'SESSION_CREATED'; startedAt: string };
+  /** Local outcome for the server cancel request; never a Backend upload status. */
+  cancelState?: 'REQUESTED' | 'UNKNOWN' | 'CONFIRMED' | 'BLOCKED';
 }
 export interface FieldDraft extends FieldContext {
   captures: FieldCapture[]; measurements: crew.FieldMeasurementInput[];
@@ -59,6 +61,11 @@ async function persist(draft: FieldDraft, runtime: FieldRuntime): Promise<void> 
   await guarded(draft, runtime, () => runtime.write(draft));
 }
 const locks = new Set<string>();
+const cancelGates = new Set<string>();
+const activeUploads = new Map<string, { controller: AbortController; done: Promise<FieldDraft> }>();
+function captureKey(context: FieldContext, captureId: string): string {
+  return JSON.stringify([context.environment, context.actor, context.scope, context.projectId, context.taskId, captureId]);
+}
 async function exclusive<T>(context: FieldContext, action: () => Promise<T>): Promise<T> {
   const key = JSON.stringify([context.environment, context.actor, context.projectId, context.taskId]);
   if (locks.has(key)) throw new Error('field_busy');
@@ -66,6 +73,10 @@ async function exclusive<T>(context: FieldContext, action: () => Promise<T>): Pr
 }
 export function fieldDraftPending(draft: FieldDraft): boolean {
   return !!draft.command && ['pending','acknowledged'].includes(draft.command.phase);
+}
+function fieldCancelPending(draft: FieldDraft): boolean {
+  return draft.captures.some(c => c.cancelState === 'REQUESTED' || c.cancelState === 'UNKNOWN' ||
+    (c.cancelState === 'BLOCKED' && !(c.verified && c.upload?.status === 'VERIFIED')));
 }
 export function currentFieldContext(projectId: string, taskId: string): FieldContext | null {
   const s = useAuthStore.getState(), scope = passwordSessionIdentity(s.token);
@@ -101,11 +112,11 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
   };
   return {
     current,
-    recoveryRead:async()=>{const drafts=await stored();check();const pending=drafts.filter(fieldDraftPending);if(pending.length>1)throw Error('field_multiple_unresolved');return pending[0]??drafts.filter(d=>sameContext(d,context)).at(-1)??drafts.at(-1)??null;},
+    recoveryRead:async()=>{const drafts=await stored();check();const pending=drafts.filter(d=>fieldDraftPending(d)||fieldCancelPending(d));if(pending.length>1)throw Error('field_multiple_unresolved');return pending[0]??drafts.filter(d=>sameContext(d,context)).at(-1)??drafts.at(-1)??null;},
     read: async () => {
       const drafts=await stored();check();
       // Never hide another session's unresolved write behind a new empty draft.
-      if(drafts.some(d=>!sameContext(d,context)&&fieldDraftPending(d)))throw Error('field_previous_session_requires_reconciliation');
+      if(drafts.some(d=>!sameContext(d,context)&&(fieldDraftPending(d)||fieldCancelPending(d))))throw Error('field_previous_session_requires_reconciliation');
       return drafts.filter(d=>sameContext(d,context)).at(-1)??drafts.at(-1)??null;
     },
     historicalRead:async scope=>{
@@ -226,7 +237,7 @@ export async function startNewFieldSessionDraft(context: FieldContext): Promise<
   const runtime = await openFieldRuntime(context);
   const previous = await guarded(context, runtime, () => runtime.read());
   if (previous && sameContext(previous, context)) throw Error('field_current_draft_exists');
-  if (previous?.command && fieldDraftPending(previous)) throw Error('field_command_pending');
+  if (previous && (fieldDraftPending(previous) || fieldCancelPending(previous))) throw Error('field_command_pending');
   const detail = await guarded(context, runtime, () => crew.getFieldInspectionTaskDetailReal(context.projectId, context.taskId));
   crew.validateCrewTaskDetail(detail.data, detail.etag, context.projectId, context.taskId, context.actor);
   const reason = crew.fieldCapabilityBlock(detail.data, detail.etag, context.actor, 'capture');
@@ -318,15 +329,20 @@ async function freshTask(draft: FieldDraft,runtime: FieldRuntime,capability: 'ca
   if (origin.id !== response.data.firstStartOriginId || origin.taskId !== draft.taskId || !runtime.api.isCrewResourceId(origin.id)) throw new Error('field_start_origin_invalid');
   return response;
 }
-async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRuntime): Promise<FieldDraft> {
+async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,controller: AbortController,onSession?: (draft: FieldDraft) => void): Promise<FieldDraft> {
   assertFieldContext(draft,runtime);
   const c = draft.captures[index]; if (!c) throw new Error('field_capture_missing');
+  const key = captureKey(draft,c.id);
+  const checkCancel = () => { if (cancelGates.has(key) || controller.signal.aborted || c.cancelState) throw Error('field_upload_cancel_pending'); };
+  checkCancel();
   const response = await freshTask(draft,runtime,'capture');
+  checkCancel();
   if (c.purpose === 'AFTER' && response.data.purpose !== 'PostRepair') throw new Error('field_after_not_allowed');
   if(draft.repairClaim)await verifyRepairClaim(draft,response.data,runtime);
   if(c.purpose==='AFTER'&&response.data.mode==='NORMAL'&&!draft.repairClaim)throw Error('repair_finish_required');
   const bytes = await guarded(draft,runtime,() => runtime.bytes(c.uri));
   if (bytes.length !== c.size || await guarded(draft,runtime,() => runtime.hash(bytes)) !== c.checksum) throw new Error('field_checksum_mismatch');
+  checkCancel();
   if (!c.upload) {
     // The request may commit remotely even when the client sees a timeout. Persist
     // an immutable marker before sending so local deletion fails closed afterwards.
@@ -345,13 +361,17 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     c.uploadAttempt.stage = 'SESSION_CREATED';
     await persist(draft,runtime);
   }
+  onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft);
+  checkCancel();
   let session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
+  checkCancel();
   if (session.id !== c.upload.id || session.fileId !== c.upload.fileId) throw new Error('field_upload_identity_invalid');
   if (!['VERIFYING','VERIFIED'].includes(session.status)) {
     if (session.status === 'FAILED') { c.upload=session; c.verified=false; await persist(draft,runtime); throw new Error('field_upload_failed'); }
     if (!Number.isSafeInteger(session.partSizeBytes) || session.partSizeBytes <= 0) throw new Error('field_part_size_invalid');
     const count = Math.ceil(bytes.length/session.partSizeBytes);
     for (let part=1;part<=count;part++) if (!c.parts.some(p=>p.partNumber===part)) {
+      checkCancel();
       // Persist issuance intent before POST; never persist the signed capability URL.
       c.partCommands ??= {};
       c.partCommands[part] ??= { key: runtime.uuid(), partNumbers: [part] };
@@ -374,9 +394,10 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       }
       const url = urls.parts.find(p=>p.partNumber===part)?.url;
       if (!url) throw new Error('field_part_url_missing');
+      checkCancel();
       let result: Awaited<ReturnType<typeof runtime.api.putCrewUploadPartBytes>>;
       try {
-        result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType));
+        result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType,controller.signal));
       } catch (error) {
         // Keep the original transport error and annotate only the failed stage.
         // The signed URL, checksum, journal key and replay identity remain unchanged.
@@ -385,6 +406,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
         }
         throw error;
       }
+      checkCancel();
       if (!result.etag) throw new Error('field_part_etag_missing');
       c.parts.push({partNumber:part,etag:result.etag}); await persist(draft,runtime);
     }
@@ -393,11 +415,14 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       c.complete = {version:session.version,parts:c.parts.map(p=>({...p}))}; await persist(draft,runtime);
     }
     // On timeout, replay retains this original version/body/key, never a newly assembled command.
+    checkCancel();
     await guarded(draft,runtime,() => runtime.api.completeCrewUpload(session.id,c.complete!.parts,c.checksum,c.complete!.version,c.completeKey));
+    checkCancel();
     c.completed = true; await persist(draft,runtime);
   }
   for (let poll=0;poll<12;poll++) {
     session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
+    checkCancel();
     if (session.id !== c.upload.id || session.fileId !== c.upload.fileId) throw new Error('field_upload_identity_invalid');
     if (session.status === 'VERIFIED') break;
     if (session.status === 'FAILED') { c.upload=session; c.verified=false; await persist(draft,runtime); throw new Error('field_upload_failed'); }
@@ -408,8 +433,74 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   if (file.id !== session.fileId || file.status !== 'VERIFIED' || file.checksumSha256 !== c.checksum || file.mediaType !== c.mediaType || file.sizeBytes !== c.size) throw new Error('field_file_not_verified');
   c.upload = session; c.verified = true; await persist(draft,runtime); return draft;
 }
-export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime): Promise<FieldDraft> {
-  return exclusive(draft,()=>uploadCapture(draft,index,runtime));
+export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,onSession?: (draft: FieldDraft) => void): Promise<FieldDraft> {
+  const capture = draft.captures[index]; if (!capture) throw Error('field_capture_missing');
+  const key = captureKey(draft,capture.id),controller = new AbortController();
+  if (cancelGates.has(key) || capture.cancelState) throw Error('field_upload_cancel_pending');
+  if (activeUploads.has(key)) throw Error('field_busy');
+  const done = exclusive(draft,()=>uploadCapture(draft,index,runtime,controller,onSession));
+  activeUploads.set(key,{controller,done});
+  try { return await done; }
+  finally { if (activeUploads.get(key)?.done === done) activeUploads.delete(key); }
+}
+
+/** Explicit cancel only. Preserve capture origin, local bytes and every upload command. */
+export async function cancelFieldUpload(draft: FieldDraft,index: number,runtime: FieldRuntime): Promise<FieldDraft> {
+  assertFieldContext(draft,runtime);
+  const original = draft.captures[index];
+  if (!original?.upload?.id || !runtime.api.isCrewResourceId(original.upload.id)) throw Error('field_upload_session_missing');
+  const key = captureKey(draft,original.id);
+  cancelGates.add(key);
+  const active = activeUploads.get(key);
+  active?.controller.abort();
+  if (active) await active.done.catch(() => undefined);
+  try { return await exclusive(draft,async()=>{
+    const current = await loadFieldDraft(draft,runtime);
+    const capture = current.captures.find(c=>c.id===original.id);
+    if (!capture?.upload?.id || capture.upload.id!==original.upload!.id || current.command) throw Error('field_upload_identity_invalid');
+    if (capture.cancelState==='CONFIRMED') return current;
+    if (!capture.cancelState && !['PENDING','UPLOADING'].includes(capture.upload.status)) throw Error('field_upload_not_cancellable');
+    const save=async()=>{await persist(current,runtime);};
+    const readback=async()=>{
+      const observed=await guarded(current,runtime,()=>runtime.api.getCrewUploadSession(capture.upload!.id));
+      if(observed.id!==capture.upload!.id||observed.fileId!==capture.upload!.fileId)throw Error('field_upload_identity_invalid');
+      capture.upload=observed;
+      if(observed.status==='FAILED'&&observed.failureCode==='upload_cancelled'){
+        capture.cancelState='CONFIRMED';capture.verified=false;
+      }else{
+        capture.cancelState='BLOCKED';
+        if(observed.status==='VERIFIED'){
+          const metadata=await guarded(current,runtime,()=>runtime.api.getCrewFileMetadata(observed.fileId));
+          capture.verified=metadata.id===observed.fileId&&metadata.status==='VERIFIED'&&
+            metadata.checksumSha256===capture.checksum&&metadata.sizeBytes===capture.size&&metadata.mediaType===capture.mediaType;
+        }else capture.verified=false;
+      }
+      await save();return current;
+    };
+    if(capture.cancelState==='BLOCKED') return readback();
+    capture.cancelState='REQUESTED';
+    await save(); // Durable before the POST; a failed write must never send cancel.
+    try{
+      const result=await guarded(current,runtime,()=>runtime.api.cancelCrewUpload(capture.upload!.id));
+      if(result.id!==capture.upload.id||result.status!=='FAILED'||result.failureCode!=='upload_cancelled')throw Error('field_cancel_receipt_invalid');
+      capture.upload=result;capture.cancelState='CONFIRMED';capture.verified=false;
+      await save();return current;
+    }catch(error){
+      const status=(error as {response?:{status?:number};status?:number}).response?.status??(error as {status?:number}).status;
+      if(status===409){
+        try{return await readback();}catch{capture.cancelState='BLOCKED';await save();return current;}
+      }
+      capture.cancelState=[401,403,404].includes(status??0)?'BLOCKED':'UNKNOWN';
+      await save();return current;
+    }
+  }); } catch (error) {
+    // If no intent was persisted, the server was not called and this process gate
+    // may be released. Durable or uncertain intents remain closed across retries.
+    const saved = await runtime.read().catch(() => null);
+    const capture = saved?.captures.find(c => c.id === original.id);
+    if (!capture?.cancelState) cancelGates.delete(key);
+    throw error;
+  }
 }
 export async function saveFieldMeasurements(context: FieldContext,measurements: crew.FieldMeasurementInput[],
   locationProof: crew.FieldPositionProofInput | null): Promise<FieldDraft> {
@@ -587,7 +678,7 @@ export function fieldErrorMessage(error: unknown): string {
     repair_claim_readback_invalid:'Dữ liệu đọc lại chưa khớp hồ sơ sửa chữa gốc. Chưa xác nhận gửi thành công.',
   };
   if(repairMessages[message])return repairMessages[message];
-  const messages: Record<string,string>={field_previous_session_requires_reconciliation:'Có nháp thuộc phiên đăng nhập cũ. Đã khóa gửi lại để tránh ghi trùng; cần đối soát hồ sơ cũ.',field_session_changed:'Phiên đội sửa chữa đã thay đổi. Đã dừng thao tác.',field_verified_evidence_required:'Cần ảnh đã được máy chủ xác minh trước khi gửi.',field_measurements_required:'Nhập số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS.',field_verification_pending:'Máy chủ đang xác minh ảnh. Tải lại trạng thái; chưa được gửi hồ sơ.',field_command_rejected:'Lệnh đã bị từ chối. Xem lỗi, tải lại rồi xác nhận tạo nháp mới.',field_unknown_outcome_use_reconcile:'Kết quả lệnh cũ chưa xác định. Dùng đối soát hoặc gửi lại đúng lệnh đã lưu.'};
+  const messages: Record<string,string>={field_previous_session_requires_reconciliation:'Có nháp thuộc phiên đăng nhập cũ. Đã khóa gửi lại để tránh ghi trùng; cần đối soát hồ sơ cũ.',field_session_changed:'Phiên đội sửa chữa đã thay đổi. Đã dừng thao tác.',field_verified_evidence_required:'Cần ảnh đã được máy chủ xác minh trước khi gửi.',field_measurements_required:'Nhập số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS.',field_verification_pending:'Máy chủ đang xác minh ảnh. Tải lại trạng thái; chưa được gửi hồ sơ.',field_command_rejected:'Lệnh đã bị từ chối. Xem lỗi, tải lại rồi xác nhận tạo nháp mới.',field_unknown_outcome_use_reconcile:'Kết quả lệnh cũ chưa xác định. Dùng đối soát hoặc gửi lại đúng lệnh đã lưu.',field_upload_cancel_pending:'Đang hủy hoặc đối soát phiên tải ảnh. Ảnh cục bộ vẫn được giữ.',field_upload_not_cancellable:'Phiên ảnh không còn ở trạng thái cho phép hủy. Đọc lại trạng thái máy chủ.',field_upload_session_missing:'Ảnh chưa có phiên tải để hủy.',field_cancel_receipt_invalid:'Biên nhận hủy không khớp phiên ảnh. Cần đối soát trước khi thao tác tiếp.'};
   if (messages[message]) return messages[message];
   if (message && /[À-ỹ]/.test(message)) return message;
   return 'Chưa xác nhận được thao tác. Nháp và lệnh đã lưu được giữ nguyên; tải lại hoặc đối soát trước khi gửi mới.';

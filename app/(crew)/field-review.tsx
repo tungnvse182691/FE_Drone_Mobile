@@ -14,7 +14,7 @@ import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal,
   type CrewTask, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
 import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
-  uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
+  uploadFieldCapture, cancelFieldUpload, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
 import { currentRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
@@ -92,13 +92,15 @@ export function measurementValidationMessage(value: string): string | null {
   return Number.isFinite(number) && number >= 0 ? null : 'Nhập một số từ 0 trở lên.';
 }
 
-export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: boolean; upload?: { status?: string } }) {
+export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: boolean; cancelState?: string; upload?: { status?: string; failureCode?: string | null } }) {
   const status = capture.upload?.status;
+  if (capture.cancelState === 'REQUESTED' || capture.cancelState === 'UNKNOWN') return { label: 'Chưa rõ kết quả hủy · cần đối soát', variant: 'status-pending' as const };
+  if (capture.cancelState === 'CONFIRMED' || (status === 'FAILED' && capture.upload?.failureCode === 'upload_cancelled')) return { label: 'Đã hủy phiên tải', variant: 'status-pending' as const };
   if (!status) return { label: 'Đã lưu trên thiết bị', variant: 'status-pending' as const };
   if (status === 'PENDING') return { label: 'Đang chờ tải lên', variant: 'status-pending' as const };
   if (status === 'UPLOADING') return { label: 'Đang tải lên', variant: 'status-pending' as const };
   if (status === 'VERIFYING') return { label: 'Đang xác minh', variant: 'status-pending' as const };
-  if (status === 'VERIFIED') return { label: 'Máy chủ đã xác minh', variant: 'approved' as const };
+  if (status === 'VERIFIED') return capture.verified ? { label: 'Máy chủ đã xác minh', variant: 'approved' as const } : { label: 'Đang đối soát ảnh', variant: 'status-pending' as const };
   if (status === 'FAILED') return { label: 'Máy chủ không xác minh được ảnh', variant: 'rejected' as const };
   const safeStatus = status.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'UNKNOWN';
   return { label: `Máy chủ trả mã chưa có diễn giải: ${safeStatus}`, variant: 'status-pending' as const };
@@ -136,6 +138,9 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [recoveryDecision,setRecoveryDecision]=useState<'new'|'replay'|null>(null);
   const [serverLoaded,setServerLoaded]=useState(false);
   const [deleteTarget,setDeleteTarget]=useState<string|null>(null),[showErrorDetail,setShowErrorDetail]=useState(false);
+  const [cancelTarget,setCancelTarget]=useState<string|null>(null);
+  const [cancelling,setCancelling]=useState(false),cancelRef=useRef(false);
+  const [uploadingCaptureId,setUploadingCaptureId]=useState<string|null>(null);
   const active=useRef(true);
   const loadSequence=useRef(0);
   const context=()=>currentFieldContext(task.projectId,task.id);
@@ -176,7 +181,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       const previous=fresh.data.latestSubmissionId ? (await getFieldSubmissionDetailReal(task.projectId,task.id,fresh.data.latestSubmissionId)).data : null;
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!isLatest())return;
-      if(!refresh&&!localError)setDraft(saved);
+      if(!localError)setDraft(saved);
       setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);setServerLoaded(true);
       await loadRepairRecovery(c,saved?.result?.id);
       if(!isLatest())return;
@@ -196,7 +201,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const frozen=!!draft?.command;
   const normalMeasurement=verifiedTask?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
   const recoverHistorical=async(action:'new'|'read'|'replay')=>{
-    if(busyRef.current)return;
+    if(busyRef.current||cancelRef.current)return;
     const c=context();if(!c||!current(c)||!historicalDraft||!serverLoaded)return;
     if(action==='replay'&&recoveryDecision!=='replay')return;
     if(action==='new'&&recoveryDecision!=='new')return;
@@ -209,7 +214,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     finally{busyRef.current=false;if(current(c))setBusy(false);}
   };
   const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
-    if(busyRef.current)return;
+    if(busyRef.current||cancelRef.current)return;
     const c=context();if(!c)return;
     if(action==='replay'&&(!replayConfirmed||replayConfirmed.key!==draft?.command?.key||replayConfirmed.context!==JSON.stringify(c)))return;
     if(action==='recover'&&(!repairRecovery||repairRecovery.phase==='CONFIRMED'||
@@ -231,14 +236,19 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       else if(action==='download')saved=draft??await loadFieldDraft(c,runtime);
       else saved=await loadFieldDraft(c,runtime);
       if(action==='download') {const uri=await downloadFieldPhoto(c,fileId!);if(current(c))setPreview(uri);return;}
-      if(['save','upload','submit'].includes(action)) {
+      if(action==='save'||action==='submit') {
         if(saved.command)throw Error('field_command_pending');
         if(Object.values(rawValues).some(v=>v.trim()!==''&&(!Number.isFinite(Number(v.replace(',','.')))||Number(v.replace(',','.'))<0)))throw Error('field_measurements_required');
         if(chainage.trim()!==''&&(!Number.isFinite(Number(chainage.replace(',','.')))||Number(chainage.replace(',','.'))<0))throw Error('field_measurements_required');
         const proof=locationProof?{...locationProof,observedChainageMeters:chainage.trim()===''?null:Number(chainage.replace(',','.'))}:null;
         saved=await saveFieldMeasurements(c,measurements,proof);
       }
-      if(action==='upload') for(let i=0;i<saved.captures.length;i++)saved=await uploadFieldCapture(saved,i,runtime);
+      if(action==='upload') {
+        const index=saved.captures.findIndex(capture=>capture.id===fileId);
+        if(index<0)throw Error('field_capture_missing');
+        setUploadingCaptureId(fileId??null);
+        saved=await uploadFieldCapture(saved,index,runtime,updated=>{if(current(c))setDraft(updated);});
+      }
       if(action==='submit') {
         saved=await submitFieldDraft(saved,runtime);
         if(supplementMode&&saved.command?.phase==='confirmed') {
@@ -265,7 +275,28 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       setNotice(fieldErrorMessage(e));
       setNoticeDetail(safeFieldErrorDetail(e));
       try{const saved=await loadFieldDraft(c,await openFieldRuntime(c));if(current(c)){setDraft(saved);await loadRepairRecovery(c,saved.result?.id);}}catch{/* keep explicit error; never reset an unresolved command */}
-    }}finally{busyRef.current=false;if(current(c))setBusy(false);}
+    }}finally{busyRef.current=false;if(current(c)){setBusy(false);setUploadingCaptureId(null);}}
+  };
+  const confirmCancelUpload=()=>{
+    const captureId=cancelTarget;setCancelTarget(null);
+    if(!captureId||cancelRef.current)return;
+    cancelRef.current=true;setCancelling(true);
+    void (async()=>{
+      const c=context();
+      try {
+        if(!c)return;
+        const runtime=await openFieldRuntime(c);
+        const saved=await loadFieldDraft(c,runtime);
+        const index=saved.captures.findIndex(capture=>capture.id===captureId);
+        if(index<0)throw Error('field_capture_missing');
+        const result=await cancelFieldUpload(saved,index,runtime);
+        if(!current(c))return;
+        setDraft(result);
+        setNotice(result.captures[index].cancelState==='CONFIRMED'?'Đã hủy phiên tải trên máy chủ. Ảnh cục bộ vẫn được giữ.':
+          result.captures[index].cancelState==='UNKNOWN'?'Chưa rõ kết quả hủy. Dùng đối soát đúng phiên ảnh này.':'Máy chủ không cho hủy phiên hiện tại. Đã đọc lại trạng thái; ảnh vẫn được giữ.');
+      } catch(e) {if(c&&current(c)){setNotice(fieldErrorMessage(e));setNoticeDetail(safeFieldErrorDetail(e));}}
+      finally {cancelRef.current=false;if(c&&current(c))setCancelling(false);}
+    })();
   };
   const removeLocalCapture = (captureId: string) => setDeleteTarget(captureId);
   const confirmRemoveLocalCapture = () => {
@@ -283,14 +314,15 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const mode=TASK_MODE_CHIP[task.task_mode];
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />}>
     <View style={styles.content}>
-      <Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><Chip label={`Nhiệm vụ: ${fieldTaskStatusLabel(verifiedTask?.status ?? task.status)}`} variant={mode.variant}/>{serverLoaded&&latest?<Chip label={`Hồ sơ: ${fieldSubmissionReadinessLabel(latest.readiness)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/></Pressable></View>
+      <Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><Chip label={`Nhiệm vụ: ${fieldTaskStatusLabel(verifiedTask?.status ?? task.status)}`} variant={mode.variant}/>{serverLoaded&&latest?<Chip label={`Hồ sơ: ${fieldSubmissionReadinessLabel(latest.readiness)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy||cancelling||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/></Pressable></View>
         <Text>{supplementMode?'Bản bổ sung FIELD cho yêu cầu SUPPLEMENT.':draft?.repairClaim?'Hồ sơ đo kiểm sau sửa.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<FieldErrorPanel title="Không đọc được hồ sơ" message={error} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
       {localRecoveryBlocked?<Card style={styles.card}><Text style={styles.sectionTitle}>Nháp cũ cần đối soát</Text><Text style={styles.muted}>{localRecoveryError} Ảnh, số đo và lệnh cũ vẫn được giữ trên thiết bị; chưa thể chỉnh sửa hay chụp ảnh mới.</Text>
         {historicalDraft?.command?.phase==='acknowledged'?<><Text>Đã có mã hồ sơ máy chủ. Chỉ đọc lại kết quả, không gửi lệnh mới.</Text><Button variant="secondary" title="Đọc lại kết quả đã lưu" disabled={busy||!serverLoaded} onPress={()=>void recoverHistorical('read')}/></>:null}
         {historicalDraft?.command?.phase==='pending'?<><Text>Kết quả lệnh cũ chưa rõ. Chỉ có thể gửi lại nguyên lệnh sau khi xác nhận; không tạo nháp hoặc lệnh mới.</Text><Button variant="secondary" title="Đối soát lệnh gốc" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('replay')}/></>:null}
-        {historicalDraft&&!fieldDraftPending(historicalDraft)?<><Text>Nháp phiên cũ không có lệnh đang chờ. Có thể bắt đầu nháp trống cho phiên hiện tại sau khi xác nhận; dữ liệu cũ không được chuyển sang.</Text><Button variant="secondary" title="Tạo nháp trống cho phiên này" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('new')}/></>:null}
+        {historicalDraft?.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')))?<Text>Phiên cũ còn lệnh hủy ảnh chưa đối soát. Cần khôi phục đúng phiên và quyền trước khi tiếp tục; không tạo nháp mới hoặc gửi ảnh khác.</Text>:null}
+        {historicalDraft&&!fieldDraftPending(historicalDraft)&&!historicalDraft.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')))?<><Text>Nháp phiên cũ không có lệnh đang chờ. Có thể bắt đầu nháp trống cho phiên hiện tại sau khi xác nhận; dữ liệu cũ không được chuyển sang.</Text><Button variant="secondary" title="Tạo nháp trống cho phiên này" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('new')}/></>:null}
         {!historicalDraft?<Text>Không xác định được một nháp cũ an toàn để đối soát. Cần kiểm tra dữ liệu cục bộ; không tự gửi lại hoặc xóa dữ liệu.</Text>:null}
         {recoveryDecision?<View><Text accessibilityRole="alert">{recoveryDecision==='new'?'Sẽ tạo nháp trống mới. Nháp và ảnh phiên cũ được giữ nguyên.':'Có thể thực thi lệnh gốc lần đầu nếu máy chủ chưa nhận; nội dung, khóa và phiên bản gốc được giữ nguyên.'}</Text><Button variant="secondary" title={recoveryDecision==='new'?'Xác nhận tạo nháp trống':'Xác nhận gửi lại lệnh gốc'} disabled={busy||!serverLoaded} onPress={()=>void recoverHistorical(recoveryDecision)}/><Button variant="text" title="Hủy" onPress={()=>setRecoveryDecision(null)}/></View>:null}
       </Card>:null}
@@ -312,7 +344,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             {!taskReadOnly?<><InputField label="Dụng cụ đo thực tế" value={m.instrument} onChangeText={instrument=>update(i,{instrument})}/><InputField label="Phương pháp đo thực tế" value={m.method} onChangeText={method=>update(i,{method})}/></>:<Text style={styles.muted}>Giá trị máy chủ: {m.value == null ? 'Chưa có' : `${m.value} ${m.unit}`}</Text>}
             {m.latitude==null||m.longitude==null?(taskReadOnly?<Text style={styles.muted}>Chưa có GPS quan sát{m.locationReason?` · ${m.locationReason}`:''}</Text>:<InputField label="Lý do chưa có tọa độ quan sát" value={m.locationReason??''} onChangeText={locationReason=>update(i,{locationReason})}/>):<Text>GPS quan sát trong hồ sơ máy chủ: {m.latitude}, {m.longitude}</Text>}
           </View>)}
-          {!taskReadOnly?<><Button variant="secondary" title="Lưu nháp số đo" disabled={busy||frozen} onPress={()=>void run('save')}/><Text style={styles.muted}>Vị trí nhiệm vụ không thay cho bằng chứng quan sát thực tế.</Text><Text style={styles.muted}>Đối chiếu vị trí thực tế (tùy chọn)</Text><View style={styles.choiceRow}>{[['ROUTE_CHAINAGE_MARKINGS_CONFIRMED','Dấu mốc tuyến / lý trình'],['SLAB_MARKINGS_CONFIRMED','Ký hiệu tấm bê tông'],['UNKNOWN','Chưa xác định']].map(([value,label])=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} accessibilityRole="radio" accessibilityState={{selected}} style={[styles.choiceOption,selected&&styles.choiceOptionSelected]} onPress={()=>value==='UNKNOWN'?(setLocationProof(null),setChainage('')):setLocationProof({kind:'POSITION_CHECKLIST',checklist:value})}><Text style={selected?styles.choiceTextSelected:styles.choiceText}>{label}</Text></Pressable>;})}</View></>:<Text style={styles.muted}>Số đo và đối chiếu vị trí đã khóa vì nhiệm vụ đã nộp/hoàn tất.</Text>}
+          {!taskReadOnly?<><Button variant="secondary" title="Lưu nháp số đo" disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/><Text style={styles.muted}>Vị trí nhiệm vụ không thay cho bằng chứng quan sát thực tế.</Text><Text style={styles.muted}>Đối chiếu vị trí thực tế (tùy chọn)</Text><View style={styles.choiceRow}>{[['ROUTE_CHAINAGE_MARKINGS_CONFIRMED','Dấu mốc tuyến / lý trình'],['SLAB_MARKINGS_CONFIRMED','Ký hiệu tấm bê tông'],['UNKNOWN','Chưa xác định']].map(([value,label])=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} accessibilityRole="radio" accessibilityState={{selected}} style={[styles.choiceOption,selected&&styles.choiceOptionSelected]} onPress={()=>value==='UNKNOWN'?(setLocationProof(null),setChainage('')):setLocationProof({kind:'POSITION_CHECKLIST',checklist:value})}><Text style={selected?styles.choiceTextSelected:styles.choiceText}>{label}</Text></Pressable>;})}</View></>:<Text style={styles.muted}>Số đo và đối chiếu vị trí đã khóa vì nhiệm vụ đã nộp/hoàn tất.</Text>}
           {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
             {taskReadOnly?<Text style={styles.muted}>Tuyến: {locationProof.observedRouteVersionId||'Chưa có'} · Lý trình: {chainage||'Chưa có'} m</Text>:<><InputField label="Mã phiên bản tuyến trên hồ sơ đối chiếu" value={locationProof.observedRouteVersionId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedRouteVersionId:value});}}/><InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/></>}
           </>:null}
@@ -322,14 +354,18 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {!draft.captures.length?<Text>Chưa có ảnh nháp của phiên và nhiệm vụ này.</Text>:null}
           {draft.captures.map(c=><View key={c.id} style={styles.missingBox}>
             <View style={styles.evidenceTop}><Image source={{uri:c.uri}} style={styles.thumbnail} resizeMode="cover"/><View style={styles.evidenceBody}><Text style={typography.labelLg}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text><Chip {...fieldEvidenceStatus(c)} /><Text style={styles.muted}>{c.coordinates?'Có vị trí camera quan sát':'Không có GPS quan sát'}</Text></View>{!c.upload&&!c.completed&&!c.verified&&!frozen?<Pressable accessibilityRole="button" accessibilityLabel="Xóa ảnh cục bộ" style={styles.removePhoto} onPress={()=>removeLocalCapture(c.id)}><MaterialIcons name="delete-outline" size={20} color={colors.error}/></Pressable>:null}</View>
+            {!evidenceModel.readOnly&&!frozen&&serverLoaded?<View style={styles.evidenceActions}>
+              {!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
+              {c.upload?.id&&(['PENDING','UPLOADING'].includes(c.upload.status)||['REQUESTED','UNKNOWN','BLOCKED'].includes(c.cancelState??''))?<Button variant="text" title={c.cancelState?'Đối soát hủy phiên':'Hủy tải lên'} disabled={cancelling||(busy&&uploadingCaptureId!==c.id)} onPress={()=>setCancelTarget(c.id)}/>:null}
+            </View>:null}
           </View>)}
           {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
           {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
-          {evidenceModel.canCapture?<View style={styles.actionRow}><Button style={styles.actionButton} variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE',...(supplementMode?{supplement:'1'}:{})}})}/><Button style={styles.actionButton} variant="secondary" title="Tải ảnh đã lưu" disabled={busy||frozen||!evidenceModel.canUpload} onPress={()=>void run('upload')}/></View>:null}
+          {evidenceModel.canCapture?<Button variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen||cancelling} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE',...(supplementMode?{supplement:'1'}:{})}})}/>:null}
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
-        {!taskReadOnly?<Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy} disabled={busy||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>:null}
+        {!taskReadOnly?<Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)||draft.captures.some(c=>!c.verified)} onPress={()=>void run('submit')}/>:null}
         {fieldDraftPending(draft)?<Card style={styles.card}>
           <Text>Kết quả thao tác đang được đối soát. Không tạo hồ sơ mới hoặc thay nội dung lệnh đã lưu.</Text>
           {!draft.command?.responseId?<Text>Chưa có mã hồ sơ được máy chủ xác nhận để đọc lại. Chỉ có thể chủ động đối soát bằng lệnh gốc; tải lại không chứng minh lệnh đã thành công.</Text>:<Text>Đã có mã hồ sơ máy chủ. Có thể đọc lại kết quả mà không gửi lệnh mới.</Text>}
@@ -356,6 +392,13 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <Text style={styles.sectionTitle}>Xóa ảnh cục bộ?</Text>
           <Text style={styles.muted}>Chỉ ảnh đã chứng minh còn LOCAL mới được xóa. Ảnh đang tải, đã xác minh hoặc có lệnh chưa đối soát sẽ được giữ nguyên.</Text>
           <View style={styles.modalActions}><Button variant="text" title="Hủy" onPress={()=>setDeleteTarget(null)} /><Button variant="secondary" title="Xóa ảnh" onPress={confirmRemoveLocalCapture} /></View>
+        </View></View>
+      </Modal>
+      <Modal visible={!!cancelTarget} transparent animationType="fade" onRequestClose={()=>setCancelTarget(null)}>
+        <View style={styles.modalBackdrop}><View style={styles.confirmModal}>
+          <Text style={styles.sectionTitle}>{draft?.captures.find(c=>c.id===cancelTarget)?.cancelState?'Đối soát phiên hủy?':'Hủy phiên tải ảnh?'}</Text>
+          <Text style={styles.muted}>Ảnh trên thiết bị và lệnh đã lưu vẫn được giữ. Nếu kết quả hủy chưa rõ, thao tác này có thể gửi lại yêu cầu hủy đúng phiên cũ; máy chủ sẽ quyết định trạng thái cuối.</Text>
+          <View style={styles.modalActions}><Button variant="text" title="Giữ phiên" onPress={()=>setCancelTarget(null)}/><Button variant="secondary" title="Xác nhận" onPress={confirmCancelUpload}/></View>
         </View></View>
       </Modal>
     </View>
@@ -411,6 +454,7 @@ const styles = StyleSheet.create({
   },
   evidenceTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   evidenceBody: { flex: 1, gap: 4 },
+  evidenceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   removePhoto: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   errorPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.error, gap: spacing.xs },
   successPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.success, gap: spacing.xs },

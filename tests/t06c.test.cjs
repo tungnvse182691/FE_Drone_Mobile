@@ -5,7 +5,7 @@ const vm=require('node:vm');
 const path=require('node:path');
 // Reuse the real SQLite/runtime harness without executing or changing T06B tests.
 const prefix=fs.readFileSync(path.join(__dirname,'t06b.test.cjs'),'utf8').split("test('T06B journal")[0];
-const sandbox={require,console,process,Buffer,__dirname,structuredClone,setTimeout,clearTimeout,URL,Uint8Array};
+const sandbox={require,console,process,Buffer,__dirname,structuredClone,setTimeout,clearTimeout,URL,Uint8Array,AbortController};
 vm.runInNewContext(prefix+';globalThis.fixture={harness,ids,version,next,load};',sandbox);
 const {harness,ids,version,next,load}=sandbox.fixture;
 const fieldSandbox={...sandbox,require:n=>n==='node:test'?{test:()=>{}}:require(n)};

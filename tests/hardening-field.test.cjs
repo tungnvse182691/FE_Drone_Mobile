@@ -1,5 +1,5 @@
 const fs=require('node:fs'),assert=require('node:assert/strict'),{test}=require('node:test'),vm=require('node:vm');
-const sandbox={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:require('node:path').resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array};
+const sandbox={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:require('node:path').resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array,AbortController};
 vm.runInNewContext(fs.readFileSync('tests/t06c.test.cjs','utf8')+';globalThis.fixtures={claimHarness,finishedForIntake,started,ids,load};',sandbox);
 const {claimHarness}=sandbox.fixtures;
 test('HARDEN explicit claim from confirmed old-session repair uses new empty FIELD, preserves old data',async()=>{

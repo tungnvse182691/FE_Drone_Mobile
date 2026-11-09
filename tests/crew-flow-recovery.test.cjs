@@ -28,7 +28,7 @@ test('Crew specialized routes and recovery modules have no runtime import cycle'
  }
  for(const entry of ['app/(crew)/progress.tsx','app/(crew)/complete.tsx','src/api/crewFieldDraft.ts','src/api/crewRepairWorkflow.ts'])visit(entry);
 });
-const scope={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:path.resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array};
+const scope={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:path.resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array,AbortController};
 vm.runInNewContext(fs.readFileSync('tests/hardening-field.test.cjs','utf8')+';globalThis.fieldFixtures={durableField,claimHarness};',scope);
 const {durableField,claimHarness}=scope.fieldFixtures;
 test('Crew FIELD starts a fresh session draft only after old resolved data and fresh task authorization',async()=>{
@@ -51,6 +51,14 @@ test('Crew FIELD cannot start a new draft while an old command is unresolved',as
  const d=durableField(old);d.seed(source);const bytes=d.rows()[0].payload;d.set(now);
  await assert.rejects(d.m.startNewFieldSessionDraft(now),/previous_session/);
  assert.equal(d.rows().length,1);assert.equal(d.rows()[0].payload,bytes);d.close();
+});
+test('Crew FIELD old-session uncertain upload cancel survives SQLite reopen and blocks a new draft',async()=>{
+ const h=claimHarness(),old={...h.ctx,scope:JSON.stringify([h.ctx.actor,'old-cancel'])},now={...old,scope:JSON.stringify([h.ctx.actor,'new-cancel'])};
+ const source={...old,captures:[{id:'photo',uri:'file://kept',parts:[],upload:{id:'old-upload',status:'UPLOADING'},cancelState:'UNKNOWN'}],measurements:[],locationProof:null};
+ const d=durableField(old);d.seed(source);const bytes=d.rows()[0].payload;d.reopen();d.set(now);
+ await assert.rejects(d.m.loadFieldDraft(now,await d.m.openFieldRuntime(now)),/previous_session/);
+ await assert.rejects(d.m.startNewFieldSessionDraft(now),/previous_session/);
+ assert.equal(d.rows()[0].payload,bytes);assert.equal(d.rows()[0].payload.includes('file://kept'),true);d.close();
 });
 for(const status of [401,409,412])test('Crew FIELD old sid '+status+' exact replay is additive and survives reopen',async()=>{
  const h=claimHarness(),old={...h.ctx,scope:JSON.stringify([h.ctx.actor,'old'])},now={...old,scope:JSON.stringify([h.ctx.actor,'new'])};
@@ -225,6 +233,25 @@ test('Crew FIELD refresh preserves local editor until GET fails, then fails clos
  fail=true;const refresh=s.nodes().find(n=>n.props.accessibilityLabel==='Tải lại hồ sơ hiện trường');await refresh.props.onPress();await s.flush();
  assert.equal(requests,2);assert.equal(post,0);assert.ok(!s.nodes().some(n=>n.props.title==='Lưu nháp số đo'));
  assert.ok(!JSON.stringify(s.nodes()).includes('Chưa có lượt gửi từ máy chủ.'));s.unmount();
+});
+test('Crew FIELD cancel is per-photo, requires confirmation and never POSTs on mount',async()=>{
+ const h=harness(),c=h.identity;let posts=0,selected=null;
+ const first={id:'first',uri:'file://first',purpose:'BEFORE',coordinates:null,upload:{id:'session-first',fileId:'file-first',status:'UPLOADING'}};
+ const second={id:'second',uri:'file://second',purpose:'BEFORE',coordinates:null,upload:{id:'session-second',fileId:'file-second',status:'VERIFIED'},verified:true};
+ let draft={...c,captures:[first,second],measurements:[],locationProof:null};
+ const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},modules:{
+  'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
+  '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:h.task,etag:'"fresh"'})},
+  '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,measurementTemplate:()=>null,fieldDraftPending:()=>false,
+   cancelFieldUpload:async(_saved,index)=>{posts++;selected=index;draft={...draft,captures:draft.captures.map((photo,i)=>i===index?{...photo,cancelState:'CONFIRMED',upload:{...photo.upload,status:'FAILED',failureCode:'upload_cancelled'}}:photo)};return draft;}},
+  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
+ }});
+ s.render();await s.flush();assert.equal(posts,0);
+ assert.equal(s.nodes().filter(n=>n.props.title==='Hủy tải lên').length,1);
+ s.press('Hủy tải lên');s.render();assert.equal(posts,0);
+ s.press('Xác nhận');await s.flush();
+ assert.equal(posts,1);assert.equal(selected,0);assert.equal(draft.captures[1].upload.status,'VERIFIED');
+ assert.ok(JSON.stringify(s.nodes()).includes('Đã hủy phiên tải'));s.unmount();
 });
 test('Crew correction displays only reconciled local receipts and hides late history after session switch',async()=>{
  const h=harness(),read=deferred();let current=h.identity,reads=0;

@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-const scope={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:require('node:path').resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array};
+const scope={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:require('node:path').resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array,AbortController};
 vm.runInNewContext(fs.readFileSync('tests/t06c.test.cjs','utf8')+';globalThis.f={harness,started,finishedForIntake,load};',scope);
 const {harness,started,finishedForIntake,load}=scope.f;
 

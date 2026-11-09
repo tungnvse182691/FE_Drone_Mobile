@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const {randomUUID}=require('node:crypto');
-function load(file, deps={}) { const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,setTimeout,clearTimeout,Uint8Array,URL,require:n=>deps[n]??(n==='axios'?require('axios'):new Proxy({},{get:()=>()=>{}}))});return module.exports; }
+function load(file, deps={}) { const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,setTimeout,clearTimeout,Uint8Array,URL,AbortController,require:n=>deps[n]??(n==='axios'?require('axios'):new Proxy({},{get:()=>()=>{}}))});return module.exports; }
 const actor=randomUUID(),project=randomUUID(),taskId=randomUUID(),assignment=randomUUID(),start=randomUUID();
 const task=()=>({id:taskId,projectId:project,assignedToUserId:actor,assignmentId:assignment,version:'AAAAAAAAB9E=',firstStartOriginId:start,status:'InProgress',purpose:'DefectVerification',requiredMeasurementType:1});
 function api(){return load('src/api/crewApi.ts',{'./client':{apiClient:{}},'./problemDetails':{parseProblemDetails:()=>({})}});}

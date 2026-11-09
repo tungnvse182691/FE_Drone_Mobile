@@ -42,7 +42,7 @@ test('FIELD evidence chip maps every upload session status from Backend', () => 
     [{ upload: { status: 'PENDING' } }, 'Đang chờ tải lên', 'status-pending'],
     [{ upload: { status: 'UPLOADING' } }, 'Đang tải lên', 'status-pending'],
     [{ upload: { status: 'VERIFYING' } }, 'Đang xác minh', 'status-pending'],
-    [{ upload: { status: 'VERIFIED' }, verified: false, completed: false }, 'Máy chủ đã xác minh', 'approved'],
+    [{ upload: { status: 'VERIFIED' }, verified: false, completed: false }, 'Đang đối soát ảnh', 'status-pending'],
     [{ upload: { status: 'FAILED' }, verified: true, completed: true }, 'Máy chủ không xác minh được ảnh', 'rejected'],
     [{ upload: { status: 'FUTURE_STATUS' }, verified: true, completed: true }, 'Máy chủ trả mã chưa có diễn giải: FUTURE_STATUS', 'status-pending'],
   ];

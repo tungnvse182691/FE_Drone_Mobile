@@ -653,6 +653,7 @@ export interface CrewUploadSessionDto {
   partSizeBytes: number;
   expiresAt: string;
   version: string;
+  failureCode?: string | null;
 }
 
 export interface CrewCompletedPartDto {
@@ -1065,6 +1066,12 @@ export async function getCrewUploadSession(uploadId: string): Promise<CrewUpload
   return response.data;
 }
 
+/** Cancel an owned Crew upload session. The wire request has no body or command headers. */
+export async function cancelCrewUpload(uploadId: string): Promise<CrewUploadSessionDto> {
+  const response = await apiClient.post<CrewUploadSessionDto>(`/uploads/${encodeURIComponent(uploadId)}/cancel`);
+  return response.data;
+}
+
 /** Xin URL ký trước (presigned URLs) cho từng part. */
 export async function requestCrewUploadPartUrls(
   uploadId: string,
@@ -1084,9 +1091,11 @@ export async function putCrewUploadPartBytes(
   presignedUrl: string,
   bytes: Uint8Array,
   contentType: string,
+  signal?: AbortSignal,
 ): Promise<{ etag: string }> {
   const response = await storageClient.put(presignedUrl, bytes, {
     headers: { 'Content-Type': contentType },
+    signal,
   });
   const rawEtag =
     (response.headers as Record<string, string | undefined>)['etag'] ??
