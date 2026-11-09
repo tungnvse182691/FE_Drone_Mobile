@@ -13,7 +13,7 @@ import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal,
   type CrewTask, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
-import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, newFieldDraft, measurementTemplate, saveFieldMeasurements,
+import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, submitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
@@ -93,11 +93,15 @@ export function measurementValidationMessage(value: string): string | null {
 }
 
 export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: boolean; upload?: { status?: string } }) {
-  if (capture.upload?.status === 'FAILED') return { label: 'Máy chủ không xác minh được ảnh', variant: 'rejected' as const };
-  if (capture.verified) return { label: 'Máy chủ đã xác minh', variant: 'approved' as const };
-  if (capture.completed) return { label: 'Đã tải lên, chờ xác minh', variant: 'status-pending' as const };
-  if (capture.upload) return { label: 'Đang tải lên', variant: 'status-pending' as const };
-  return { label: 'Đã lưu trên thiết bị', variant: 'status-pending' as const };
+  const status = capture.upload?.status;
+  if (!status) return { label: 'Đã lưu trên thiết bị', variant: 'status-pending' as const };
+  if (status === 'PENDING') return { label: 'Đang chờ tải lên', variant: 'status-pending' as const };
+  if (status === 'UPLOADING') return { label: 'Đang tải lên', variant: 'status-pending' as const };
+  if (status === 'VERIFYING') return { label: 'Đang xác minh', variant: 'status-pending' as const };
+  if (status === 'VERIFIED') return { label: 'Máy chủ đã xác minh', variant: 'approved' as const };
+  if (status === 'FAILED') return { label: 'Máy chủ không xác minh được ảnh', variant: 'rejected' as const };
+  const safeStatus = status.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'UNKNOWN';
+  return { label: `Máy chủ trả mã chưa có diễn giải: ${safeStatus}`, variant: 'status-pending' as const };
 }
 
 export function fieldSubmissionReadinessLabel(readiness: string | null | undefined) {
@@ -127,6 +131,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [repairRecoveryConfirmed,setRepairRecoveryConfirmed]=useState<{key:string;context:string}|null>(null);
   const [notice,setNotice]=useState(''),[noticeDetail,setNoticeDetail]=useState(''),[preview,setPreview]=useState<string|null>(null);
   const [localRecoveryBlocked,setLocalRecoveryBlocked]=useState(false);
+  const [historicalDraft,setHistoricalDraft]=useState<FieldDraft|null>(null);
+  const [localRecoveryError,setLocalRecoveryError]=useState('');
+  const [recoveryDecision,setRecoveryDecision]=useState<'new'|'replay'|null>(null);
+  const [serverLoaded,setServerLoaded]=useState(false);
   const [deleteTarget,setDeleteTarget]=useState<string|null>(null),[showErrorDetail,setShowErrorDetail]=useState(false);
   const active=useRef(true);
   const loadSequence=useRef(0);
@@ -142,31 +150,42 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(current(c)&&loadSequence.current===sequence)setRepairRecovery(row);
     } catch(e) { if(current(c)&&loadSequence.current===sequence) { setNotice(repairErrorMessage(e)); setNoticeDetail('Không đọc được trạng thái đọc lại từ máy chủ.'); } }
   },[supplementMode,task.id,task.projectId]);
-  const load=useCallback(async()=>{
+  const load=useCallback(async(refresh=false)=>{
     const c=currentFieldContext(task.projectId,task.id);if(!c)return;
     const sequence=++loadSequence.current;
     const isLatest=()=>current(c)&&fieldRequestIsCurrent(sequence,loadSequence.current);
-    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRepairRecovery(null);setDraft(null);setLatest(null);setPreview(null);setVerifiedTask(null);setVerifiedEtag('');setPreviousMeasurements([]);setLocalRecoveryBlocked(false);
+    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRecoveryDecision(null);
+    if(!refresh){setDraft(null);setLatest(null);setPreview(null);setVerifiedTask(null);setVerifiedEtag('');setPreviousMeasurements([]);setServerLoaded(false);}
+    let saved:FieldDraft|null=null, localError='', historical:FieldDraft|null=null;
     try {
       const runtime=await openFieldRuntime(c);
-      let saved:FieldDraft;let localError='';try{saved=await loadFieldDraft(c,runtime);}catch(error){
-        if(!current(c))return;localError=fieldErrorMessage(error);saved=newFieldDraft(c);
+      try{saved=await loadFieldDraft(c,runtime);}catch(e){
+        localError=fieldErrorMessage(e);
+        if((e as Error)?.message==='field_previous_session_requires_reconciliation'){
+          try{historical=await runtime.recoveryRead?.()??null;}catch(recoveryError){localError=fieldErrorMessage(recoveryError);}
+        }
       }
+    }catch(e){localError=fieldErrorMessage(e);}
+    if(!isLatest())return;
+    setLocalRecoveryBlocked(!!localError);setLocalRecoveryError(localError);setHistoricalDraft(historical);
+    if(localError){setDraft(null);setNotice(`Không thể dùng nháp của phiên này: ${localError} Dữ liệu cũ vẫn được giữ nguyên.`);}
+    try {
       const fresh=await getFieldInspectionTaskDetailReal(task.projectId,task.id);
       validateCrewTaskDetail(fresh.data,fresh.etag,task.projectId,task.id,c.actor);
       if(!isLatest())return;
       const previous=fresh.data.latestSubmissionId ? (await getFieldSubmissionDetailReal(task.projectId,task.id,fresh.data.latestSubmissionId)).data : null;
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!isLatest())return;
-      setDraft(saved);setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);setLocalRecoveryBlocked(!!localError);if(localError)setNotice(`Không thể dùng nháp cũ: ${localError} Chỉ đọc hồ sơ máy chủ; cần đối soát trước khi lưu mới.`);
-      await loadRepairRecovery(c,saved.result?.id);
-      setLocationProof(saved.locationProof);setChainage(saved.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));
-      setRawValues({});
+      if(!refresh&&!localError)setDraft(saved);
+      setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);setServerLoaded(true);
+      await loadRepairRecovery(c,saved?.result?.id);
+      if(!isLatest())return;
+      if(!refresh&&!localError){setLocationProof(saved?.locationProof??null);setChainage(saved?.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));setRawValues({});}
       const initial=measurementTemplate(fresh.data.requiredMeasurementType,randomUUID());
       const prior = previous?.measurements?.length ? previous.measurements : [];
       setPreviousMeasurements(prior);
-      setMeasurements(saved.measurements.length ? saved.measurements : initial ? [initial] : []);
-    } catch(e){if(isLatest()){setDraft(null);setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được trạng thái nhiệm vụ từ máy chủ.');}}
+      if(!refresh&&!localError)setMeasurements(saved?.measurements.length ? saved.measurements : initial ? [initial] : []);
+    } catch(e){if(isLatest()){setServerLoaded(false);setVerifiedTask(null);setVerifiedEtag('');setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được trạng thái nhiệm vụ từ máy chủ.');}}
     finally{if(isLatest())setLoading(false);}
   },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
@@ -176,6 +195,19 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
   const frozen=!!draft?.command;
   const normalMeasurement=verifiedTask?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
+  const recoverHistorical=async(action:'new'|'read'|'replay')=>{
+    if(busyRef.current)return;
+    const c=context();if(!c||!current(c)||!historicalDraft||!serverLoaded)return;
+    if(action==='replay'&&recoveryDecision!=='replay')return;
+    if(action==='new'&&recoveryDecision!=='new')return;
+    busyRef.current=true;setBusy(true);setRecoveryDecision(null);
+    try {
+      if(action==='new')await startNewFieldSessionDraft(c);
+      else await reconcileFieldDraft(c,action==='replay',historicalDraft.command?.key);
+      if(current(c))await load();
+    }catch(e){if(current(c)){setNotice(fieldErrorMessage(e));setNoticeDetail(safeFieldErrorDetail(e));}}
+    finally{busyRef.current=false;if(current(c))setBusy(false);}
+  };
   const run=async(action:'save'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
     if(busyRef.current)return;
     const c=context();if(!c)return;
@@ -251,15 +283,21 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const mode=TASK_MODE_CHIP[task.task_mode];
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />}>
     <View style={styles.content}>
-      <Card style={styles.card}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><Chip label={`Nhiệm vụ: ${fieldTaskStatusLabel(verifiedTask?.status ?? task.status)}`} variant={mode.variant}/>{latest?<Chip label={`Hồ sơ: ${fieldSubmissionReadinessLabel(latest.readiness)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View>
+      <Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><Chip label={`Nhiệm vụ: ${fieldTaskStatusLabel(verifiedTask?.status ?? task.status)}`} variant={mode.variant}/>{serverLoaded&&latest?<Chip label={`Hồ sơ: ${fieldSubmissionReadinessLabel(latest.readiness)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/></Pressable></View>
         <Text>{supplementMode?'Bản bổ sung FIELD cho yêu cầu SUPPLEMENT.':draft?.repairClaim?'Hồ sơ đo kiểm sau sửa.':'Kết quả đo kiểm hiện trường.'}</Text></Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<FieldErrorPanel title="Không đọc được hồ sơ" message={error} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
-      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy} onPress={()=>void load()}><MaterialIcons name="refresh" size={18} color={colors.secondary}/><Text style={styles.refreshLabel}>{loading?'Đang tải…':'Tải lại'}</Text></Pressable>
-      {latest?<Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={styles.sectionTitle}>Lượt gửi #{latest.revision}</Text><Text style={styles.muted}>{fieldSubmissionSummary(verifiedTask?.status,latest.readiness)}</Text></View></View>{latest.missingReasons?.length&&verifiedTask?.status==='SupplementRequired'?<View style={styles.missingList}><Text style={styles.muted}>Thông tin máy chủ còn thiếu:</Text>{fieldMissingReasonLabels(latest.missingReasons).map(reason=><Text key={reason}>• {reason}</Text>)}</View>:null}
-        {(latest.evidence??[]).filter(e=>e.fileId).map(e=><Button key={e.captureOriginId} variant="secondary" title={`Xem ảnh ${e.purpose==='AFTER'?'sau sửa':e.purpose==='BEFORE'?'hiện trạng':'đo kiểm'} riêng tư`} disabled={busy} onPress={()=>void run('download',e.fileId!)}/>)}</Card>:<Text>Chưa có lượt gửi từ máy chủ.</Text>}
+      {localRecoveryBlocked?<Card style={styles.card}><Text style={styles.sectionTitle}>Nháp cũ cần đối soát</Text><Text style={styles.muted}>{localRecoveryError} Ảnh, số đo và lệnh cũ vẫn được giữ trên thiết bị; chưa thể chỉnh sửa hay chụp ảnh mới.</Text>
+        {historicalDraft?.command?.phase==='acknowledged'?<><Text>Đã có mã hồ sơ máy chủ. Chỉ đọc lại kết quả, không gửi lệnh mới.</Text><Button variant="secondary" title="Đọc lại kết quả đã lưu" disabled={busy||!serverLoaded} onPress={()=>void recoverHistorical('read')}/></>:null}
+        {historicalDraft?.command?.phase==='pending'?<><Text>Kết quả lệnh cũ chưa rõ. Chỉ có thể gửi lại nguyên lệnh sau khi xác nhận; không tạo nháp hoặc lệnh mới.</Text><Button variant="secondary" title="Đối soát lệnh gốc" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('replay')}/></>:null}
+        {historicalDraft&&!fieldDraftPending(historicalDraft)?<><Text>Nháp phiên cũ không có lệnh đang chờ. Có thể bắt đầu nháp trống cho phiên hiện tại sau khi xác nhận; dữ liệu cũ không được chuyển sang.</Text><Button variant="secondary" title="Tạo nháp trống cho phiên này" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('new')}/></>:null}
+        {!historicalDraft?<Text>Không xác định được một nháp cũ an toàn để đối soát. Cần kiểm tra dữ liệu cục bộ; không tự gửi lại hoặc xóa dữ liệu.</Text>:null}
+        {recoveryDecision?<View><Text accessibilityRole="alert">{recoveryDecision==='new'?'Sẽ tạo nháp trống mới. Nháp và ảnh phiên cũ được giữ nguyên.':'Có thể thực thi lệnh gốc lần đầu nếu máy chủ chưa nhận; nội dung, khóa và phiên bản gốc được giữ nguyên.'}</Text><Button variant="secondary" title={recoveryDecision==='new'?'Xác nhận tạo nháp trống':'Xác nhận gửi lại lệnh gốc'} disabled={busy||!serverLoaded} onPress={()=>void recoverHistorical(recoveryDecision)}/><Button variant="text" title="Hủy" onPress={()=>setRecoveryDecision(null)}/></View>:null}
+      </Card>:null}
+      {serverLoaded&&latest?<Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={styles.sectionTitle}>Lượt gửi #{latest.revision}</Text><Text style={styles.muted}>{fieldSubmissionSummary(verifiedTask?.status,latest.readiness)}</Text></View></View>{latest.missingReasons?.length&&verifiedTask?.status==='SupplementRequired'?<View style={styles.missingList}><Text style={styles.muted}>Thông tin máy chủ còn thiếu:</Text>{fieldMissingReasonLabels(latest.missingReasons).map(reason=><Text key={reason}>• {reason}</Text>)}</View>:null}
+        {(latest.evidence??[]).filter(e=>e.fileId).map(e=><Button key={e.captureOriginId} variant="secondary" title={`Xem ảnh ${e.purpose==='AFTER'?'sau sửa':e.purpose==='BEFORE'?'hiện trạng':'đo kiểm'} riêng tư`} disabled={busy} onPress={()=>void run('download',e.fileId!)}/>)}</Card>:serverLoaded&&!loading?<Card style={styles.card}><Text style={styles.sectionTitle}>Lượt gửi từ máy chủ</Text><Text style={styles.muted}>Chưa có lượt gửi từ máy chủ.</Text></Card>:null}
       {preview?<Image source={{uri:preview}} style={{width:'100%',height:240}} resizeMode="contain"/>:null}
-      {draft?<>
+      {draft&&serverLoaded&&!localRecoveryBlocked?<>
         {previousMeasurements.length?<Card style={styles.priorCard}><Text style={styles.sectionTitle}>Số đo lượt trước</Text><Text style={styles.muted}>Chỉ đọc từ lần gửi máy chủ; không dùng làm nháp đang chỉnh.</Text>{previousMeasurements.map(m=><Text key={m.sampleId}>{m.dimension} · {m.value == null ? 'Chưa có giá trị' : `${m.value} ${m.unit}`}</Text>)}</Card>:null}
         <Card style={styles.card}><Text style={styles.sectionTitle}>Số đo đang chỉnh</Text>
           {!measurements.length?<Text>Chưa có loại đo được máy chủ hỗ trợ; chưa thể gửi hồ sơ.</Text>:null}
@@ -335,9 +373,8 @@ const styles = StyleSheet.create({
   priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
   missingList: { gap: spacing.xs },
   compactAction: { alignSelf: 'flex-start', minHeight: 36, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
-  refreshAction: { alignSelf: 'flex-start', minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  refreshAction: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   refreshPressed: { backgroundColor: colors.surfaceAlt },
-  refreshLabel: { ...typography.labelSm, color: colors.secondary },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   actionButton: { flex: 1 },
   thumbnail: { width: 88, height: 88, borderRadius: radius.md },

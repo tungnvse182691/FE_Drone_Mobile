@@ -219,6 +219,22 @@ export async function loadFieldDraft(context: FieldContext, runtime: FieldRuntim
   if (!Array.isArray(saved.captures) || !Array.isArray(saved.measurements)) throw new Error('field_draft_invalid');
   return saved;
 }
+/** Start an empty draft for the current login after an explicit user decision.
+ * Historical rows are retained. An unresolved command, corrupt store, or stale
+ * server assignment prevents this transition. */
+export async function startNewFieldSessionDraft(context: FieldContext): Promise<FieldDraft> {
+  const runtime = await openFieldRuntime(context);
+  const previous = await guarded(context, runtime, () => runtime.read());
+  if (previous && sameContext(previous, context)) throw Error('field_current_draft_exists');
+  if (previous?.command && fieldDraftPending(previous)) throw Error('field_command_pending');
+  const detail = await guarded(context, runtime, () => crew.getFieldInspectionTaskDetailReal(context.projectId, context.taskId));
+  crew.validateCrewTaskDetail(detail.data, detail.etag, context.projectId, context.taskId, context.actor);
+  const reason = crew.fieldCapabilityBlock(detail.data, detail.etag, context.actor, 'capture');
+  if (reason) throw Error(reason);
+  const next = newFieldDraft(context);
+  await guarded(context, runtime, () => runtime.write(next));
+  return next;
+}
 /** Native bytes closed by arrayBuffer; hash durable temp, rename, then commit its URI in SQLite. */
 export async function captureFieldPhoto(context: FieldContext, uri: string, purpose: FieldCapture['purpose'],
   mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false): Promise<FieldDraft> {

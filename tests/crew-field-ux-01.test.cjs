@@ -27,12 +27,30 @@ test('FIELD evidence and submission statuses distinguish local, pending and serv
   const { fieldEvidenceStatus, fieldSubmissionReadinessLabel } = pure('app/(crew)/field-review.tsx', ['fieldEvidenceStatus', 'fieldSubmissionReadinessLabel']);
   assert.equal(fieldEvidenceStatus({}).label, 'Đã lưu trên thiết bị');
   assert.equal(fieldEvidenceStatus({}).variant, 'status-pending');
-  assert.equal(fieldEvidenceStatus({ upload: { fileId: 'local' }, completed: true }).label, 'Đã tải lên, chờ xác minh');
-  assert.equal(fieldEvidenceStatus({ verified: true, completed: true }).variant, 'approved');
+  assert.equal(fieldEvidenceStatus({ completed: true }).label, 'Đã lưu trên thiết bị');
+  assert.equal(fieldEvidenceStatus({ upload: { status: 'VERIFIED' }, verified: true, completed: true }).variant, 'approved');
   assert.equal(fieldEvidenceStatus({ upload: { status: 'FAILED' }, completed: true }).label, 'Máy chủ không xác minh được ảnh');
   assert.equal(fieldSubmissionReadinessLabel('READY'), 'Đủ thông tin theo máy chủ');
   assert.equal(fieldSubmissionReadinessLabel('INCOMPLETE'), 'Cần bổ sung thông tin');
   assert.equal(fieldSubmissionReadinessLabel('UNKNOWN'), 'Chưa xác nhận độ đầy đủ');
+});
+
+test('FIELD evidence chip maps every upload session status from Backend', () => {
+  const { fieldEvidenceStatus } = pure('app/(crew)/field-review.tsx', ['fieldEvidenceStatus']);
+  const cases = [
+    [{}, 'Đã lưu trên thiết bị', 'status-pending'],
+    [{ upload: { status: 'PENDING' } }, 'Đang chờ tải lên', 'status-pending'],
+    [{ upload: { status: 'UPLOADING' } }, 'Đang tải lên', 'status-pending'],
+    [{ upload: { status: 'VERIFYING' } }, 'Đang xác minh', 'status-pending'],
+    [{ upload: { status: 'VERIFIED' }, verified: false, completed: false }, 'Máy chủ đã xác minh', 'approved'],
+    [{ upload: { status: 'FAILED' }, verified: true, completed: true }, 'Máy chủ không xác minh được ảnh', 'rejected'],
+    [{ upload: { status: 'FUTURE_STATUS' }, verified: true, completed: true }, 'Máy chủ trả mã chưa có diễn giải: FUTURE_STATUS', 'status-pending'],
+  ];
+  for (const [capture, label, variant] of cases) {
+    const result = fieldEvidenceStatus(capture);
+    assert.equal(result.label, label);
+    assert.equal(result.variant, variant);
+  }
 });
 
 test('FIELD upload PUT network failures explain storage reachability and preserve reconciliation guidance', () => {

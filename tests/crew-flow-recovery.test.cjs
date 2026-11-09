@@ -31,6 +31,27 @@ test('Crew specialized routes and recovery modules have no runtime import cycle'
 const scope={require:n=>n==='node:test'?{test:()=>{}}:require(n),console,process,Buffer,__dirname:path.resolve('tests'),structuredClone,setTimeout,clearTimeout,URL,Uint8Array};
 vm.runInNewContext(fs.readFileSync('tests/hardening-field.test.cjs','utf8')+';globalThis.fieldFixtures={durableField,claimHarness};',scope);
 const {durableField,claimHarness}=scope.fieldFixtures;
+test('Crew FIELD starts a fresh session draft only after old resolved data and fresh task authorization',async()=>{
+ const h=claimHarness(),old={...h.ctx,scope:JSON.stringify([h.ctx.actor,'old'])},now={...old,scope:JSON.stringify([h.ctx.actor,'new'])};
+ let authorized=true,gets=0;
+ const d=durableField(old,{validateCrewTaskDetail:()=>{},fieldCapabilityBlock:()=>authorized?null:'field_not_in_progress',
+  getFieldInspectionTaskDetailReal:async()=>{gets++;return {data:{id:now.taskId,projectId:now.projectId},etag:'"fresh"'};}});
+ const source={...old,captures:[{id:'old-photo'}],measurements:[],locationProof:null};d.seed(source);
+ const bytes=d.rows()[0].payload;d.reopen();d.set(now);
+ await assert.rejects(d.m.loadFieldDraft(now,await d.m.openFieldRuntime(now)),/previous_session/);
+ authorized=false;await assert.rejects(d.m.startNewFieldSessionDraft(now),/field_not_in_progress/);assert.equal(d.rows().length,1);
+ authorized=true;const fresh=await d.m.startNewFieldSessionDraft(now);
+ assert.equal(fresh.scope,now.scope);assert.equal(fresh.captures.length,0);assert.equal(d.rows()[0].payload,bytes);assert.equal(gets,2);
+ await assert.rejects(d.m.startNewFieldSessionDraft(now),/field_current_draft_exists/);
+ d.reopen();assert.equal((await d.m.loadFieldDraft(now,await d.m.openFieldRuntime(now))).captures.length,0);d.close();
+});
+test('Crew FIELD cannot start a new draft while an old command is unresolved',async()=>{
+ const h=claimHarness(),old={...h.ctx,scope:JSON.stringify([h.ctx.actor,'old'])},now={...old,scope:JSON.stringify([h.ctx.actor,'new'])};
+ const source={...old,captures:[],measurements:[],locationProof:null,command:{key:'original',phase:'pending'}};
+ const d=durableField(old);d.seed(source);const bytes=d.rows()[0].payload;d.set(now);
+ await assert.rejects(d.m.startNewFieldSessionDraft(now),/previous_session/);
+ assert.equal(d.rows().length,1);assert.equal(d.rows()[0].payload,bytes);d.close();
+});
 for(const status of [401,409,412])test('Crew FIELD old sid '+status+' exact replay is additive and survives reopen',async()=>{
  const h=claimHarness(),old={...h.ctx,scope:JSON.stringify([h.ctx.actor,'old'])},now={...old,scope:JSON.stringify([h.ctx.actor,'new'])};
  const submission=require('node:crypto').randomUUID(),body={originId:require('node:crypto').randomUUID(),startOriginId:require('node:crypto').randomUUID(),parentSubmissionId:null,evidence:[],measurements:[]};
@@ -163,6 +184,36 @@ for(const phase of ['pending','acknowledged'])test('Crew mounted FIELD '+phase+'
  if(phase==='acknowledged'){f.s.press('Chỉ đọc lại kết quả — không gửi');await f.s.flush();assert.equal(f.reconciles.length,1);assert.equal(f.reconciles[0][1],false);}
  else{f.s.press('Đối soát / gửi lại đúng lệnh đã lưu');f.s.render();assert.equal(f.reconciles.length,0);f.s.press('Xác nhận gửi lại lệnh gốc');await f.s.flush();assert.equal(f.reconciles[0][1],true);assert.equal(f.reconciles[0][2],'immutable');}
  f.s.unmount();
+});
+for(const phase of ['none','pending','acknowledged'])test('Crew mounted FIELD old-session '+phase+' offers only safe recovery and keeps GET read-only',async()=>{
+ const h=harness(),c=h.identity,old={...c,scope:JSON.stringify([c.actor,'old'])};let posts=0,news=0,reads=0;
+ const historical={...old,captures:[],measurements:[],locationProof:null,...(phase==='none'?{}:{command:{key:'original',phase,...(phase==='acknowledged'?{responseId:'response'}:{})}})};
+ const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},modules:{
+  'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
+  '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:h.task,etag:'"fresh"'})},
+  '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({recoveryRead:async()=>historical}),loadFieldDraft:async()=>{throw Error('field_previous_session_requires_reconciliation');},fieldErrorMessage:e=>e.message,measurementTemplate:()=>null,fieldDraftPending:d=>['pending','acknowledged'].includes(d.command?.phase),startNewFieldSessionDraft:async()=>{news++;},reconcileFieldDraft:async()=>{posts++;}},
+  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
+ }});s.render();await s.flush();
+ const titles=s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
+ assert.equal(titles.includes('Tạo nháp trống cho phiên này'),phase==='none');
+ assert.equal(titles.includes('Đối soát lệnh gốc'),phase==='pending');
+ assert.equal(titles.includes('Đọc lại kết quả đã lưu'),phase==='acknowledged');
+ assert.equal(titles.includes('Lưu nháp số đo'),false);assert.equal(posts,0);assert.equal(news,0);assert.equal(reads,0);
+ s.unmount();
+});
+test('Crew FIELD refresh preserves local editor until GET fails, then fails closed without false empty state',async()=>{
+ const h=harness(),c=h.identity;let requests=0,post=0,fail=false;
+ const draft={...c,captures:[],measurements:[],locationProof:null};
+ const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},modules:{
+  'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
+  '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>{requests++;if(fail)throw Error('GET failed');return {data:h.task,etag:'"fresh"'};}},
+  '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,fieldErrorMessage:e=>e.message,measurementTemplate:()=>null,fieldDraftPending:()=>false,submitFieldDraft:async()=>{post++;}},
+  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
+ }});s.render();await s.flush();assert.equal(requests,1);
+ assert.ok(s.nodes().some(n=>n.props.title==='Lưu nháp số đo'));
+ fail=true;const refresh=s.nodes().find(n=>n.props.accessibilityLabel==='Tải lại hồ sơ hiện trường');await refresh.props.onPress();await s.flush();
+ assert.equal(requests,2);assert.equal(post,0);assert.ok(!s.nodes().some(n=>n.props.title==='Lưu nháp số đo'));
+ assert.ok(!JSON.stringify(s.nodes()).includes('Chưa có lượt gửi từ máy chủ.'));s.unmount();
 });
 test('Crew correction displays only reconciled local receipts and hides late history after session switch',async()=>{
  const h=harness(),read=deferred();let current=h.identity,reads=0;

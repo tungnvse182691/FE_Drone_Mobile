@@ -39,3 +39,14 @@ Receiving navigation was not reachable from the observed home fixture and is rec
 - HTTP upload/MinIO and Backend receipt/readback: `NOT_VERIFIED`.
 - APK release/native provider verification: `NOT_VERIFIED`.
 - No credentials, tokens, private URLs, or personal media were recorded.
+
+## ROADGUARD-CREW-FINAL-FIX follow-up (2026-11-09)
+
+| Screen/state | Issue and fix | Executed evidence | Limit |
+|---|---|---|---|
+| FIELD old session | Local draft error previously produced a temporary editable draft and hid recovery. Server GET now runs independently; historical draft gets a separate recovery card with explicit new, original replay, or readback action. Corrupt/multiple unresolved data stays blocked. | SQLite backed old-session tests and mounted FIELD tests in `tests/crew-flow-recovery.test.cjs` | Device old-session state not observed in this run. |
+| FIELD refresh | Moved refresh to a 40 px header action; empty server state appears only after successful GET. Refresh retains form state and failed GET hides the editor until server verification succeeds. | TypeScript and FIELD targeted tests | Visual device review not available. |
+| FIELD evidence | Current draft chip uses Backend PENDING, UPLOADING, VERIFYING, VERIFIED, FAILED; unknown values have a safe fallback. | `tests/crew-field-ux-01.test.cjs` 8/8 | No HTTP upload mutation. |
+| Camera | Removed decorative grid and reticle from Crew camera caller. | TypeScript and iOS/Android export | Native capture not executed. |
+
+Automated gates: `npx tsc --noEmit` PASS; targeted FIELD recovery 33/33 and FIELD UX 8/8 PASS; full regression 1315/1315 PASS; `npx expo-doctor` 20/20 PASS; iOS and Android `npx expo export` PASS; `git diff --check` PASS. Metro reported an attached iPhone Expo Go session with no bundle errors or uncaught exceptions. The mobile device tool listed no available local devices, so iPhone visual, camera, storage PUT, complete, Backend VERIFIED, and submit E2E are `NOT_VERIFIED`. No runtime mutation or replay was performed.

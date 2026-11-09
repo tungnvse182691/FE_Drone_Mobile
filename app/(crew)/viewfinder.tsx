@@ -248,8 +248,6 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           onCapture={handleCapture}
           onCoordsChange={setCoords}
           defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'}
-          showGridGuide
-          showReticle
           flashMode={flashOn ? 'on' : 'off'}
           facing={facing}
           watermarkContent={watermark}
