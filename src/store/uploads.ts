@@ -80,6 +80,8 @@ export type UploadMediaState =
   | 'VERIFIED'
   | 'FAILED';
 
+export type UploadCancelState = 'REQUESTED' | 'UNKNOWN' | 'CONFIRMED' | 'BLOCKED' | null;
+
 export const UPLOAD_STATE_LABELS: Record<UploadMediaState, string> = {
   LOCAL_READY: 'Chờ tải lên',
   SESSION_CREATED: 'Đã mở phiên tải',
@@ -100,6 +102,7 @@ export interface UploadQueueItem {
   checksumSha256: string;
   mediaState: UploadMediaState;
   uploadId: string | null;
+  cancelState: UploadCancelState;
   fileId: string | null;
   sessionVersion: string | null;
   partSizeBytes: number;
@@ -165,6 +168,7 @@ CREATE TABLE IF NOT EXISTS upload_ledger (
   checksum_sha256   TEXT NOT NULL,
   media_state       TEXT NOT NULL,
   upload_id         TEXT,
+  cancel_state      TEXT,
   file_id           TEXT,
   session_version   TEXT,
   part_size_bytes   INTEGER NOT NULL,
@@ -195,6 +199,7 @@ interface UploadLedgerRow {
   checksum_sha256: string;
   media_state: string;
   upload_id: string | null;
+  cancel_state: string | null;
   file_id: string | null;
   session_version: string | null;
   part_size_bytes: number;
@@ -223,6 +228,9 @@ async function migrateLedger(db: SQLiteDatabase): Promise<void> {
   const columns = await db.getAllAsync<{ name: string }>('PRAGMA table_info(upload_ledger)');
   if (!columns.some((column) => column.name === 'accuracy_meters')) {
     await db.execAsync('ALTER TABLE upload_ledger ADD COLUMN accuracy_meters REAL');
+  }
+  if (!columns.some((column) => column.name === 'cancel_state')) {
+    await db.execAsync('ALTER TABLE upload_ledger ADD COLUMN cancel_state TEXT');
   }
 }
 
@@ -268,6 +276,8 @@ function mapRow(row: UploadLedgerRow): UploadQueueItem {
     checksumSha256: row.checksum_sha256,
     mediaState: toMediaState(row.media_state),
     uploadId: row.upload_id,
+    cancelState: ['REQUESTED', 'UNKNOWN', 'CONFIRMED', 'BLOCKED'].includes(row.cancel_state ?? '')
+      ? row.cancel_state as UploadCancelState : null,
     fileId: row.file_id,
     sessionVersion: row.session_version,
     partSizeBytes: row.part_size_bytes,
@@ -289,15 +299,17 @@ function mapRow(row: UploadLedgerRow): UploadQueueItem {
   };
 }
 
-async function persistItem(item: UploadQueueItem): Promise<void> {
+const pendingLedgerWrites = new Map<string, Promise<void>>();
+
+async function writeItem(item: UploadQueueItem): Promise<void> {
   const db = await ledger();
   await db.runAsync(
     `INSERT OR REPLACE INTO upload_ledger (
       id, partition_id, uri_local, file_name, media_type, size_bytes, checksum_sha256,
-      media_state, upload_id, file_id, session_version, part_size_bytes, part_etags,
+      media_state, upload_id, cancel_state, file_id, session_version, part_size_bytes, part_etags,
       server_status, verified_version, attempt, last_error_code, last_error_message,
       location_source, latitude, longitude, accuracy_meters, captured_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.id,
     item.partitionId,
     item.uriLocal,
@@ -307,6 +319,7 @@ async function persistItem(item: UploadQueueItem): Promise<void> {
     item.checksumSha256,
     item.mediaState,
     item.uploadId,
+    item.cancelState,
     item.fileId,
     item.sessionVersion,
     item.partSizeBytes,
@@ -325,6 +338,19 @@ async function persistItem(item: UploadQueueItem): Promise<void> {
     item.createdAt,
     item.updatedAt,
   );
+}
+
+async function persistItem(item: UploadQueueItem): Promise<void> {
+  // A pipeline write may already be waiting on SQLite when cancel starts. Serialize
+  // by local item so its older snapshot cannot overwrite the durable cancel intent.
+  const previous = pendingLedgerWrites.get(item.id) ?? Promise.resolve();
+  const current = previous.catch(() => undefined).then(() => writeItem(item));
+  pendingLedgerWrites.set(item.id, current);
+  try {
+    await current;
+  } finally {
+    if (pendingLedgerWrites.get(item.id) === current) pendingLedgerWrites.delete(item.id);
+  }
 }
 
 async function loadItems(partitionId: string): Promise<UploadQueueItem[]> {
@@ -511,6 +537,7 @@ interface UploadsState {
   hydrated: boolean;
   items: UploadQueueItem[];
   busyItemIds: string[];
+  cancelBusyItemIds: string[];
   watching: boolean;
   setPartition(partitionId: string): void;
   hydrate(partitionId?: string): Promise<void>;
@@ -518,6 +545,7 @@ interface UploadsState {
   advanceItem(id: string, mode?: 'explicit' | 'observe', beforeRequest?: () => void): Promise<void>;
   advanceAll(mode?: 'explicit' | 'observe'): Promise<void>;
   retryItem(id: string): Promise<void>;
+  cancelItem(id: string): Promise<void>;
   removeItem(id: string): Promise<boolean>;
   allVerified(): boolean;
   startWatch(): void;
@@ -527,6 +555,8 @@ interface UploadsState {
 let watchTimer: ReturnType<typeof setTimeout> | null = null;
 let watchSubscription: { remove: () => void } | null = null;
 let watchAttempt = 0;
+const activeUploadControllers = new Map<string, AbortController>();
+const cancelGates = new Set<string>();
 
 function clearWatchTimer(): void {
   if (watchTimer) {
@@ -540,6 +570,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
   hydrated: false,
   items: [],
   busyItemIds: [],
+  cancelBusyItemIds: [],
   watching: false,
 
   setPartition(partitionId) {
@@ -576,6 +607,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       checksumSha256: input.checksumSha256,
       mediaState: 'LOCAL_READY',
       uploadId: null,
+      cancelState: null,
       fileId: null,
       sessionVersion: null,
       partSizeBytes: PART_SIZE_BYTES,
@@ -606,6 +638,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     if (!isReporterSession(auth) || !start) return;
     const context = reporterContext();
     if (start.partitionId !== context.partition || get().partitionId !== context.partition) return;
+    if (start.cancelState || cancelGates.has(id)) return;
     if (start.mediaState === 'FAILED' && mode !== 'observe') {
       return;
     }
@@ -614,11 +647,14 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       return;
     }
     set((state) => ({ busyItemIds: [...state.busyItemIds, id] }));
+    const controller = new AbortController();
+    activeUploadControllers.set(id, controller);
 
     let stage: UploadFailureStage = 'local_read';
     const update: ItemUpdater = async (patch) => {
       assertReporterContext(context);
       if (get().partitionId !== start.partitionId) throw { status: 401 };
+      if (cancelGates.has(id) || get().items.find(item => item.id === id)?.cancelState) throw { code: 'upload_cancel_pending' };
       const latest = get().items.find((item) => item.id === id) ?? start;
       const next: UploadQueueItem = { ...latest, ...patch, updatedAt: new Date().toISOString() };
       const previousStage = stage;
@@ -627,6 +663,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       stage = previousStage;
       assertReporterContext(context);
       if (get().partitionId !== start.partitionId) throw { status: 401 };
+      if (cancelGates.has(id)) throw { code: 'upload_cancel_pending' };
       set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
       return next;
     };
@@ -635,9 +672,11 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       assertReporterContext(context);
       beforeRequest?.();
       if (get().partitionId !== start.partitionId) throw { status: 401, code: 'auth_unauthorized' };
+      if (cancelGates.has(id) || controller.signal.aborted) throw { code: 'upload_cancel_pending' };
       stage = ({ createSession: 'upload_create', getSession: 'upload_session', requestPartUrls: 'upload_part_urls',
         putPart: 'upload_put', completeUpload: 'upload_complete', getFileMetadata: 'upload_verify' } as Record<string, UploadFailureStage>)[name];
-      const result = await (method as (...values: unknown[]) => unknown)(...args);
+      const result = await (method as (...values: unknown[]) => unknown)(
+        ...args, ...(name === 'putPart' ? [controller.signal] : []));
       assertReporterContext(context);
       return result;
     }])) as unknown as UploadTransport;
@@ -661,13 +700,14 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
         lastErrorMessage: uploadFailureMessage(uploadErrorCode(error), status, stage),
       }).catch(() => undefined);
     } finally {
+      if (activeUploadControllers.get(id) === controller) activeUploadControllers.delete(id);
       set((state) => ({ busyItemIds: state.busyItemIds.filter((itemId) => itemId !== id) }));
     }
   },
 
   async advanceAll(mode = 'explicit') {
     const ids = get()
-      .items.filter((item) => !isTerminalMediaState(item.mediaState))
+      .items.filter((item) => !isTerminalMediaState(item.mediaState) && !item.cancelState)
       .map((item) => item.id);
     for (const id of ids) {
       await get().advanceItem(id, mode);
@@ -682,6 +722,84 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     // Never reset FAILED to LOCAL_READY or clear its identity/version/ETags. A
     // server-verified matching file can recover; other rejections need new evidence.
     await get().advanceItem(id, current.mediaState === 'FAILED' ? 'observe' : 'explicit');
+  },
+
+  async cancelItem(id) {
+    const context = reporterContext();
+    const item = get().items.find(entry => entry.id === id && entry.partitionId === context.partition);
+    if (!item?.uploadId || get().partitionId !== context.partition || item.cancelState === 'CONFIRMED' ||
+        get().cancelBusyItemIds.includes(id)) return;
+    if (!item.cancelState && !['SESSION_CREATED', 'UPLOADING'].includes(item.mediaState)) return;
+    cancelGates.add(id);
+    activeUploadControllers.get(id)?.abort();
+    set(state => ({ cancelBusyItemIds: [...state.cancelBusyItemIds, id] }));
+    const save = async (patch: Partial<UploadQueueItem>) => {
+      assertReporterContext(context);
+      const latest = get().items.find(entry => entry.id === id);
+      if (!latest || latest.partitionId !== context.partition) throw { code: 'auth_unauthorized' };
+      const next = { ...latest, ...patch, updatedAt: new Date().toISOString() };
+      await persistItem(next);
+      assertReporterContext(context);
+      set(state => ({ items: state.items.map(entry => entry.id === id ? next : entry) }));
+    };
+    const readback = async () => {
+      const observed = await uploadTransport.getSession(item.uploadId!);
+      assertReporterContext(context);
+      if (observed.id !== item.uploadId) throw { code: 'upload_cancel_readback_invalid' };
+      if (observed.status?.toUpperCase() === 'FAILED' && observed.failureCode === 'upload_cancelled') {
+        await save({ cancelState: 'CONFIRMED', mediaState: 'FAILED', serverStatus: observed.status,
+          lastErrorCode: 'upload_cancelled', lastErrorMessage: null });
+        return;
+      }
+      let verified: Partial<UploadQueueItem> = {};
+      if (observed.status?.toUpperCase() === 'VERIFIED' && item.fileId && observed.fileId === item.fileId) {
+        const metadata = await uploadTransport.getFileMetadata(item.fileId);
+        assertReporterContext(context);
+        if (metadata.id === item.fileId && metadata.status?.toUpperCase() === 'VERIFIED' && metadata.version &&
+            metadata.checksumSha256 === item.checksumSha256 && metadata.sizeBytes === item.sizeBytes) {
+          verified = { mediaState: 'VERIFIED', verifiedVersion: metadata.version };
+        }
+      }
+      await save({ ...verified, cancelState: 'BLOCKED', serverStatus: observed.status,
+        lastErrorCode: 'upload_not_cancellable',
+        lastErrorMessage: observed.status?.toUpperCase() === 'VERIFYING' || observed.status?.toUpperCase() === 'VERIFIED'
+          ? 'Máy chủ đã nhận phiên; đang đối soát trạng thái ảnh.' :
+            'Phiên đã chuyển trạng thái; không thể hủy. Ảnh trên thiết bị vẫn được giữ.' });
+    };
+    try {
+      if (item.cancelState === 'BLOCKED') {
+        try { await readback(); }
+        catch { await save({ cancelState: 'BLOCKED', lastErrorCode: 'upload_cancel_readback_unavailable',
+          lastErrorMessage: 'Chưa đọc được trạng thái phiên; thử kiểm tra lại sau.' }).catch(() => undefined); }
+        return;
+      }
+      await save({ cancelState: 'REQUESTED', lastErrorCode: null, lastErrorMessage: null });
+      const result = await uploadTransport.cancelUpload(item.uploadId);
+      assertReporterContext(context);
+      if (result.id !== item.uploadId || result.status?.toUpperCase() !== 'FAILED' ||
+          result.failureCode !== 'upload_cancelled') throw { code: 'upload_cancel_receipt_invalid' };
+      await save({ cancelState: 'CONFIRMED', mediaState: 'FAILED', serverStatus: result.status,
+        lastErrorCode: 'upload_cancelled', lastErrorMessage: null });
+    } catch (error) {
+      const status = (error as { response?: { status?: number }; status?: number }).response?.status ??
+        (error as { status?: number }).status;
+      if (status === 409) {
+        try {
+          await readback();
+        } catch {
+          await save({ cancelState: 'BLOCKED', lastErrorCode: 'upload_cancel_readback_unavailable',
+            lastErrorMessage: 'Máy chủ chưa cho hủy phiên; chưa đọc được trạng thái mới. Thử đối soát lại sau.' }).catch(() => undefined);
+        }
+      } else {
+        const message = status === 401 ? 'Cần đăng nhập lại để đối soát phiên tải ảnh.' :
+          status === 403 || status === 404 ? 'Không có quyền hoặc không tìm thấy phiên tải ảnh; ảnh vẫn được giữ.' :
+          'Chưa xác nhận kết quả hủy. Giữ nguyên phiên và thử lại cùng mã phiên.';
+        await save({ cancelState: status === 401 || status === 403 || status === 404 ? 'BLOCKED' : 'UNKNOWN',
+          lastErrorCode: uploadErrorCode(error) ?? 'upload_cancel_unknown', lastErrorMessage: message }).catch(() => undefined);
+      }
+    } finally {
+      set(state => ({ cancelBusyItemIds: state.cancelBusyItemIds.filter(itemId => itemId !== id) }));
+    }
   },
 
   async removeItem(id) {
@@ -731,7 +849,10 @@ useAuthStore.subscribe?.((state, previous) => {
       isReporterSession(state) !== isReporterSession(previous)) {
     reporterContextEpoch++;
     useUploadsStore.getState().stopWatch();
-    useUploadsStore.setState({ items: [], hydrated: false, partitionId: '', busyItemIds: [] });
+    for (const controller of activeUploadControllers.values()) controller.abort();
+    activeUploadControllers.clear();
+    cancelGates.clear();
+    useUploadsStore.setState({ items: [], hydrated: false, partitionId: '', busyItemIds: [], cancelBusyItemIds: [] });
   }
 });
 
@@ -744,7 +865,7 @@ async function watchTick(): Promise<void> {
   await store.advanceAll('observe');
 
   const latest = useUploadsStore.getState();
-  const hasPending = latest.items.some((item) => !isTerminalMediaState(item.mediaState));
+  const hasPending = latest.items.some((item) => !isTerminalMediaState(item.mediaState) && !item.cancelState);
   if (!hasPending) {
     latest.stopWatch();
     return;

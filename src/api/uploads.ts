@@ -88,6 +88,7 @@ export interface UploadSessionResponseDto {
   partSizeBytes: number;
   expiresAt: string;
   version: string | null;
+  failureCode?: string | null;
 }
 
 /** `## Schema UploadPartUrlsRequestDto` — body API-214. */
@@ -273,6 +274,7 @@ export interface UploadTransport {
     part: UploadPartUrlResponseDto,
     bytes: Uint8Array,
     contentType: string,
+    signal?: AbortSignal,
   ): Promise<StoredPartResult>;
   completeUpload(
     uploadId: string,
@@ -281,6 +283,7 @@ export interface UploadTransport {
     idempotencyKey: string,
   ): Promise<UploadSessionResponseDto>;
   getFileMetadata(fileId: string): Promise<FileMetadataResponseDto>;
+  cancelUpload(uploadId: string): Promise<UploadSessionResponseDto>;
 }
 
 /** Lỗi transport đọc được mã nghiệp vụ để cập nhật ledger. */
@@ -339,9 +342,11 @@ async function putRawBytesToStorageUrl(
   url: string,
   bytes: Uint8Array,
   contentType: string,
+  signal?: AbortSignal,
 ): Promise<{ eTag: string }> {
   const response = await storageClient.put(url, bytes, {
     headers: { 'Content-Type': contentType },
+    signal,
   });
   const headers = response.headers as Record<string, unknown>;
   const rawETag = headers.etag ?? headers.ETag ?? headers['x-etag'];
@@ -374,11 +379,11 @@ export const httpUploadTransport: UploadTransport = {
     return response.data;
   },
 
-  async putPart(part, bytes, contentType) {
+  async putPart(part, bytes, contentType, signal) {
     if (!part.url || typeof part.partNumber !== 'number') {
       throw { code: 'upload_storage_unavailable', status: 503 };
     }
-    const { eTag } = await putRawBytesToStorageUrl(part.url, bytes, contentType);
+    const { eTag } = await putRawBytesToStorageUrl(part.url, bytes, contentType, signal);
     return { partNumber: part.partNumber, eTag };
   },
 
@@ -394,6 +399,13 @@ export const httpUploadTransport: UploadTransport = {
   async getFileMetadata(fileId) {
     const response = await apiClient.get<FileMetadataResponseDto>(
       `/reporter-evidence/files/${fileId}`,
+    );
+    return response.data;
+  },
+
+  async cancelUpload(uploadId) {
+    const response = await apiClient.post<UploadSessionResponseDto>(
+      `/reporter-evidence/uploads/${encodeURIComponent(uploadId)}/cancel`,
     );
     return response.data;
   },

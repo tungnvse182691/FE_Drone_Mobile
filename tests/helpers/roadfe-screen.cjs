@@ -35,7 +35,7 @@ function screen(file, options = {}) {
   const params = options.params ?? {intentId:'fixture-intent',email:'fixture@example.test',resendAfterSeconds:'0',reportId:'fixture-report'};
   const reporter = h.load('src/store/reporter.ts');
   const uploads = h.load('src/store/uploads.ts');
-  const native = {Platform:{OS:'android',select:o=>o.default},StyleSheet:{create:o=>o}};
+  const native = {Platform:{OS:'android',select:o=>o.default},StyleSheet:{create:o=>o},Alert:{alert:options.alert??(()=>{})}};
   for(const name of ['Text','View','Image','Pressable','TextInput','Modal','ScrollView','KeyboardAvoidingView','ActivityIndicator'])native[name]=name;
   const gps = options.gps ?? {getForegroundPermissionsAsync:async()=>({status:'denied'}),requestForegroundPermissionsAsync:async()=>({status:'denied'}),Accuracy:{High:1,Balanced:1}};
   const modules = {

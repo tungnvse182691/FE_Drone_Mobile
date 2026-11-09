@@ -1,6 +1,6 @@
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -65,9 +65,11 @@ export default function ReporterUploadsScreen() {
   const hydrated = useUploadsStore((state) => state.hydrated && state.partitionId === expectedPartition);
   const watching = useUploadsStore((state) => state.watching);
   const busyItemIds = useUploadsStore((state) => state.busyItemIds);
+  const cancelBusyItemIds = useUploadsStore((state) => state.cancelBusyItemIds);
   const hydrate = useUploadsStore((state) => state.hydrate);
   const advanceAll = useUploadsStore((state) => state.advanceAll);
   const retryItem = useUploadsStore(state => state.retryItem);
+  const cancelItem = useUploadsStore(state => state.cancelItem);
   const stopWatch = useUploadsStore((state) => state.stopWatch);
   const scope = useReporterDraftScope();
   const [hydrateFailed, setHydrateFailed] = useState(false);
@@ -89,6 +91,7 @@ export default function ReporterUploadsScreen() {
 
   const renderRow = (item: UploadQueueItem, index: number) => {
     const busy = busyItemIds.includes(item.id);
+    const cancelBusy = cancelBusyItemIds.includes(item.id);
     const ratio = Math.round(uploadedRatio(item) * 100);
     return (
       <View key={item.id} style={styles.card}>
@@ -103,8 +106,11 @@ export default function ReporterUploadsScreen() {
         </View>
 
         <Text style={[typography.caption, { color: stateColor(item.mediaState) }]}>
-          {UPLOAD_STATE_LABELS[item.mediaState]}
-          {item.mediaState === 'UPLOADING' ? ` · ${ratio}%` : ''}
+          {item.cancelState === 'CONFIRMED' ? 'Đã hủy phiên tải' :
+            item.cancelState === 'UNKNOWN' || item.cancelState === 'REQUESTED' ? 'Chưa rõ kết quả hủy' :
+            item.cancelState === 'BLOCKED' && item.mediaState !== 'VERIFIED' ? 'Phiên đã chuyển trạng thái · cần đối soát' :
+            UPLOAD_STATE_LABELS[item.mediaState]}
+          {item.mediaState === 'UPLOADING' && !item.cancelState ? ` · ${ratio}%` : ''}
         </Text>
 
         {item.mediaState === 'FAILED' && item.lastErrorMessage ? (
@@ -124,7 +130,7 @@ export default function ReporterUploadsScreen() {
         </View>
 
         <View style={styles.actions}>
-          {item.mediaState === 'FAILED' || item.lastErrorCode ? (
+          {(item.mediaState === 'FAILED' || item.lastErrorCode) && !item.cancelState ? (
             <Pressable
               disabled={busy}
               onPress={() => { if (scope.capture()()) void retryItem(item.id); }}
@@ -135,6 +141,27 @@ export default function ReporterUploadsScreen() {
             >
               <MaterialIcons name="refresh" size={16} color={colors.brandGold} />
               <Text style={[typography.caption, styles.actionMuted]}>{busy ? 'Đang kiểm tra...' : item.mediaState === 'FAILED' ? 'Đọc lại kết quả' : 'Gửi lại cùng lệnh'}</Text>
+            </Pressable>
+          ) : null}
+          {item.uploadId && (item.cancelState === 'UNKNOWN' || item.cancelState === 'REQUESTED' || item.cancelState === 'BLOCKED' ||
+            (!item.cancelState && (item.mediaState === 'SESSION_CREATED' || item.mediaState === 'UPLOADING'))) ? (
+            <Pressable
+              disabled={cancelBusy}
+              onPress={() => {
+                if (!scope.capture()()) return;
+                if (item.cancelState === 'BLOCKED') { void cancelItem(item.id); return; }
+                Alert.alert('Hủy phiên tải ảnh?', 'Ảnh trên thiết bị vẫn được giữ. Phiên đã hủy không thể tiếp tục tải.', [
+                  { text: 'Giữ phiên', style: 'cancel' },
+                  { text: 'Hủy tải lên', style: 'destructive', onPress: () => { if (scope.capture()()) void cancelItem(item.id); } },
+                ]);
+              }}
+              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={item.cancelState ? 'Đối soát lệnh hủy tải ảnh' : 'Hủy tải ảnh'}
+              testID={`uploads-cancel-${item.id}`}
+            >
+              <MaterialIcons name="cancel" size={16} color={colors.error} />
+              <Text style={[typography.caption, styles.cardError]}>{cancelBusy ? 'Đang đối soát...' : item.cancelState === 'BLOCKED' ? 'Đọc trạng thái phiên' : item.cancelState ? 'Đối soát hủy' : 'Hủy tải lên'}</Text>
             </Pressable>
           ) : null}
         </View>

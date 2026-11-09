@@ -435,6 +435,7 @@ interface MockUploadSession {
   id: string;
   fileId: string;
   status: string;
+  failureCode?: string;
   partSizeBytes: number;
   expiresAt: string;
   version: string;
@@ -503,6 +504,7 @@ function sessionView(session: MockUploadSession): UploadSessionResponseDto {
     partSizeBytes: session.partSizeBytes,
     expiresAt: session.expiresAt,
     version: session.version,
+    failureCode: session.failureCode ?? null,
   };
 }
 
@@ -749,6 +751,19 @@ export function createMockUploadTransport(): UploadTransport {
         sizeBytes: file.sizeBytes,
         version: file.version,
       };
+    },
+
+    async cancelUpload(uploadId: string): Promise<UploadSessionResponseDto> {
+      const session = requireSession(uploadId);
+      if (session.status === 'FAILED' && session.failureCode === 'upload_cancelled') return sessionView(session);
+      if (session.status !== 'PENDING' && session.status !== 'UPLOADING') {
+        throwMockApiError('upload_not_cancellable', { message: 'Phiên đã chuyển trạng thái.' });
+      }
+      session.status = 'FAILED';
+      session.failureCode = 'upload_cancelled';
+      const file = requireFile(session.fileId);
+      file.status = 'FAILED';
+      return sessionView(session);
     },
   };
 }
