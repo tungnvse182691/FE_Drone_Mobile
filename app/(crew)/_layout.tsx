@@ -38,7 +38,7 @@ export default function CrewLayout() {
     <View style={styles.container}>
       <View style={styles.stackArea}>
         <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="field-review" getId={({ params }) => params?.projectId && params?.id ? `${params.projectId}:${params.id}` : undefined} />
+          <Stack.Screen name="field-review" getId={({ params }) => params?.projectId && params?.id ? `${params.projectId}:${params.id}:${params.supplement === '1' ? 'supplement' : 'normal'}` : undefined} />
         </Stack>
       </View>
       <SafeAreaView edges={['bottom']}>

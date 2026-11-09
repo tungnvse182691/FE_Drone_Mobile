@@ -39,7 +39,7 @@ export default function CrewViewfinderScreen() {
 }
 function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const isFocused = useIsFocused();
-  const params = useLocalSearchParams<{ id?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ id?: string; mode?: string; supplement?: string }>();
   const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';
 
   const [mode, setMode] = useState<ViewfinderMode>(initialMode);
@@ -88,7 +88,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   };
   const renderedContext=currentFieldContext(task.projectId,task.id);
   const handleCapture = (photo: CameraCapturedPicture) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true);};
-  const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId } };
+  const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId, ...(params.supplement === '1' ? { supplement: '1' } : {}) } };
   const closeCamera = () => { if (router.canGoBack()) router.back(); else router.dismissTo(fieldHref); };
   if (block) return <SafeAreaView><Text>{block}</Text><Button variant="secondary" title="Quay lại" onPress={closeCamera} /></SafeAreaView>;
 

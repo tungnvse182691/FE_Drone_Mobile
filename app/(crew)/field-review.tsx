@@ -325,7 +325,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </View>)}
           {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
           {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
-          {evidenceModel.canCapture?<View style={styles.actionRow}><Button style={styles.actionButton} variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE'}})}/><Button style={styles.actionButton} variant="secondary" title="Tải ảnh đã lưu" disabled={busy||frozen||!evidenceModel.canUpload} onPress={()=>void run('upload')}/></View>:null}
+          {evidenceModel.canCapture?<View style={styles.actionRow}><Button style={styles.actionButton} variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen} onPress={()=>router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:draft.repairClaim?'AFTER':'BEFORE',...(supplementMode?{supplement:'1'}:{})}})}/><Button style={styles.actionButton} variant="secondary" title="Tải ảnh đã lưu" disabled={busy||frozen||!evidenceModel.canUpload} onPress={()=>void run('upload')}/></View>:null}
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}

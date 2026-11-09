@@ -177,6 +177,17 @@ function fieldScreen(phase,responseId){
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  }});return {s,reconciles};
 }
+test('Crew FIELD supplement photo entry carries mode to camera without any mutation on focus',async()=>{
+ const h=harness(),c=h.identity,nav=[];let posts=0;
+ const draft={...c,captures:[],measurements:[],locationProof:null};
+ const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},
+  moduleFactories:{'expo-router':({react})=>({router:{push:value=>nav.push(value)},useLocalSearchParams:()=>({supplement:'1'}),useFocusEffect:fn=>react.useEffect(fn,[fn])})},
+  modules:{'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
+   '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:h.task,etag:'"fresh"'})},
+   '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,measurementTemplate:()=>null,fieldDraftPending:()=>false,submitFieldDraft:async()=>{posts++;}},
+   '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>null},'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'}}});
+ s.render();await s.flush();s.press('Chụp / chọn ảnh');assert.equal(nav[0].pathname,'/(crew)/viewfinder');assert.equal(nav[0].params.supplement,'1');assert.equal(posts,0);s.unmount();
+});
 for(const phase of ['pending','acknowledged'])test('Crew mounted FIELD '+phase+' exposes only the applicable recovery action',async()=>{
  const f=fieldScreen(phase,phase==='acknowledged'?'server-submission':undefined);f.s.render();await f.s.flush();
  const read=f.s.nodes().find(n=>n.props.title==='Chỉ đọc lại kết quả — không gửi');assert.equal(read.props.disabled,phase==='pending');
