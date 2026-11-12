@@ -218,6 +218,7 @@ for(const phase of ['none','pending','acknowledged'])test('Crew mounted FIELD ol
  assert.equal(titles.includes('Đối soát lệnh gốc'),phase==='pending');
  assert.equal(titles.includes('Đọc lại kết quả đã lưu'),phase==='acknowledged');
  assert.equal(titles.includes('Lưu nháp số đo'),false);assert.equal(posts,0);assert.equal(news,0);assert.equal(reads,0);
+ assert.equal(s.nodes().filter(n=>typeof n.type==='function'&&n.type.name==='FieldErrorPanel').length,0,'recovery card already explains the old-session block');
  s.unmount();
 });
 test('Crew FIELD refresh preserves local editor until GET fails, then fails closed without false empty state',async()=>{

@@ -386,7 +386,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ quản lý" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
         {draft.result?<Card><Text>{draft.result.readiness==='READY'?'Hồ sơ đủ thông tin theo máy chủ':'Hồ sơ cần bổ sung thông tin'}</Text><Text>Đây là kết quả đọc lại hồ sơ, chưa phải xác nhận nghiệm thu.</Text></Card>:null}
       </>:null}
-      {notice?<FieldErrorPanel tone={notice.includes('Ảnh đã')||notice.startsWith('Đã lưu')||notice.startsWith('Đã đọc')?'success':notice.includes('đối soát')||notice.includes('chờ')?'pending':'error'} title={notice.includes('Ảnh đã')||notice.startsWith('Đã lưu')||notice.startsWith('Đã đọc')?'Đã cập nhật':notice.includes('đối soát')||notice.includes('chờ')?'Đang chờ đối soát':'Cần xử lý'} message={notice} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
+      {notice&&!(localRecoveryBlocked&&notice===`Không thể dùng nháp của phiên này: ${localRecoveryError} Dữ liệu cũ vẫn được giữ nguyên.`)?<FieldErrorPanel tone={notice.includes('Ảnh đã')||notice.startsWith('Đã lưu')||notice.startsWith('Đã đọc')?'success':notice.includes('đối soát')||notice.includes('chờ')?'pending':'error'} title={notice.includes('Ảnh đã')||notice.startsWith('Đã lưu')||notice.startsWith('Đã đọc')?'Đã cập nhật':notice.includes('đối soát')||notice.includes('chờ')?'Đang chờ đối soát':'Cần xử lý'} message={notice} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={()=>setDeleteTarget(null)}>
         <View style={styles.modalBackdrop}><View style={styles.confirmModal} accessibilityViewIsModal>
           <Text style={styles.sectionTitle}>Xóa ảnh cục bộ?</Text>
@@ -412,11 +412,14 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: spacing.md,
     gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
+    borderRadius: radius.lg,
   },
   priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
   missingList: { gap: spacing.xs },
   compactAction: { alignSelf: 'flex-start', minHeight: 36, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
-  refreshAction: { width: 40, height: 40, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
+  refreshAction: { width: 48, height: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   refreshPressed: { backgroundColor: colors.surfaceAlt },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   actionButton: { flex: 1 },
@@ -424,6 +427,7 @@ const styles = StyleSheet.create({
   summaryHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
@@ -453,7 +457,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   evidenceTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  evidenceBody: { flex: 1, gap: 4 },
+  evidenceBody: { flex: 1, minWidth: 0, gap: 4 },
   evidenceActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, alignItems: 'center' },
   removePhoto: { width: 44, height: 44, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   errorPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.error, gap: spacing.xs },
@@ -486,13 +490,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   choiceRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
   choiceOption: {
-    flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderWidth: 1,
