@@ -7,7 +7,7 @@ import * as Location from 'expo-location';
 import { File } from 'expo-file-system';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
   MAX_PHOTO_BYTES,
@@ -27,8 +27,8 @@ import { REPORTER_REPORT, REPORTER_UPLOADS } from '../../src/constants/routes';
 import { useReporterDraftScope } from '../../src/store/reporter';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -267,8 +267,7 @@ export default function ReporterCaptureScreen() {
   return (
     <SafeAreaScreen scroll header={<ReporterHeader title="Ảnh hiện trường" />}>
       <Text style={[typography.caption, styles.subtitle]}>
-        Ảnh được tải lên dưới dạng tệp riêng tư và được kiểm tra tính toàn vẹn. Chỉ gửi phản ánh được
-        khi ảnh được chọn đã xác minh xong. Tối đa 3 ảnh cho mỗi phản ánh; ảnh cũ được giữ riêng.
+        Thêm ảnh riêng tư để xác minh. Mỗi phản ánh chọn tối đa 3 ảnh; ảnh cũ vẫn được giữ.
       </Text>
 
       <View style={styles.locationCard}>
@@ -368,14 +367,14 @@ export default function ReporterCaptureScreen() {
               ? 'Chọn ảnh để lập phản ánh'
               : items.length === 0
                 ? 'Chưa chọn ảnh nào'
-                : `Đang xác minh ${verifiedCount}/${items.length} ảnh`
+                : `Đã xác minh ${verifiedCount}/${items.length} ảnh`
           }
           onPress={() => router.push(REPORTER_REPORT)}
           disabled={!canSubmit}
         />
         <Button
           variant="secondary"
-          title="Mở hàng đợi xác minh"
+          title="Trạng thái ảnh"
           onPress={() => router.push(REPORTER_UPLOADS)}
         />
       </View>
@@ -394,7 +393,7 @@ const styles = StyleSheet.create({
   },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   locationText: { color: colors.secondary, flex: 1 },
-  retry: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  retry: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 48, paddingHorizontal: spacing.sm },
   retryText: { color: colors.brandGold },
   pressed: { opacity: 0.85 },
   label: { color: colors.secondary, marginBottom: spacing.sm },

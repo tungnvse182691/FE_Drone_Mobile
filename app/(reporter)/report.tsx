@@ -20,7 +20,7 @@ import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
@@ -28,15 +28,15 @@ import {
   normalizePhotoMediaType,
 } from '../../src/api/uploads';
 import { hasUsableCoordinate } from '../../src/types/position';
-import { useUploadsStore, reporterContext } from '../../src/store/uploads';
+import { useUploadsStore, reporterContext, UPLOAD_STATE_LABELS } from '../../src/store/uploads';
 import { useReporterStore, useReporterDraftScope, reporterFailureMessage, reporterProgressLabel, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { preserveReporterPhoto, reporterPhotoFailureMessage } from '../../src/api/reporterLocalMedia';
-import { REPORTER_REPORT_DETAIL, REPORTER_HOME } from '../../src/constants/routes';
+import { REPORTER_REPORT_DETAIL, REPORTER_HOME, REPORTER_UPLOADS } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -349,6 +349,14 @@ export default function ReporterReportScreen() {
   const candidates = queueItems.filter(item => item.partitionId === reporterContext().partition &&
     item.mediaState === 'VERIFIED' && item.fileId && item.verifiedVersion && !item.lastErrorCode && !photos.includes(item.uriLocal));
 
+  const photoState = (uri: string) => {
+    const item = queueItems.find(row => row.partitionId === reporterContext().partition &&
+      (row.id === photoMeta.current.get(uri)?.itemId || row.uriLocal === uri));
+    if (!item) return 'Chưa tải lên';
+    if (item.cancelState) return item.cancelState === 'CONFIRMED' ? 'Đã hủy phiên tải' : 'Cần đối soát';
+    return UPLOAD_STATE_LABELS[item.mediaState];
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ReporterHeader title="Gửi phản ánh" />
@@ -364,6 +372,7 @@ export default function ReporterReportScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.formSection}>
           <View style={styles.sectionHeading}>
             <Text style={[typography.titleMd, styles.label]}>Ảnh hiện trường</Text>
             <Text style={[typography.caption, styles.muted]}>Tối đa {MAX_PHOTOS} ảnh · {photos.length}/{MAX_PHOTOS}</Text>
@@ -371,7 +380,8 @@ export default function ReporterReportScreen() {
           <View style={styles.photoGrid} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
-                <Image source={{ uri }} style={styles.photo} />
+                <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
+                <Text testID={`photo-state-${index}`} style={[typography.caption, styles.photoState]}>{photoState(uri)}</Text>
                 <Pressable
                   onPress={() => updatePhotos((current) => current.filter((_, i) => i !== index))}
                   style={styles.photoRemove}
@@ -443,7 +453,14 @@ export default function ReporterReportScreen() {
             </View>
           ) : null}
 
-          <View testID="description-section"
+          <Pressable testID="open-photo-status" onPress={() => router.push(REPORTER_UPLOADS)}
+            accessibilityRole="button" accessibilityLabel="Trạng thái ảnh" style={styles.statusLink}>
+            <MaterialIcons name="photo-library" size={20} color={colors.secondary} />
+            <Text style={[typography.bodyMd, styles.muted]}>Trạng thái ảnh</Text>
+            <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
+          </Pressable>
+          </View>
+          <View testID="description-section" style={styles.formSection}
             onLayout={event => { descriptionTop.current = event.nativeEvent.layout.y; }}
             pointerEvents={submitting || draftLocked ? "none" : "auto"}>
           <InputField
@@ -476,7 +493,7 @@ export default function ReporterReportScreen() {
             {!coords && !gpsLoading ? <Text style={typography.caption}>Bạn vẫn có thể gửi khi chưa có vị trí.</Text> : null}
             {errors.coords ? <Text style={[typography.caption, styles.error]}>{errors.coords}</Text> : null}
           </View>
-          {draftLocked && !submitting && !submitError ? <Text style={typography.caption}>Đang giữ nguyên nội dung lần gửi trước. Bấm gửi lại để kiểm tra kết quả.</Text> : null}
+          {draftLocked && !submitting && !submitError ? <Text style={typography.caption}>Đang giữ nguyên nội dung lần gửi trước. Chỉ kiểm tra lại bằng lệnh cũ.</Text> : null}
 
           {submitError ? (
             <View style={styles.errorRow}>
@@ -526,7 +543,7 @@ export default function ReporterReportScreen() {
               accessibilityLabel="Chụp ảnh"
               testID="camera-shutter"
             >
-              <MaterialIcons name="camera" size={28} color={colors.onPrimary} />
+              <MaterialIcons name="camera" size={28} color={colors.neutral} />
             </Pressable>
           </View>
           </SafeAreaView>
@@ -589,9 +606,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   progress: { padding: spacing.md, color: colors.secondary, backgroundColor: colors.surfaceAlt },
-  safe: { flex: 1, backgroundColor: colors.surface },
+  safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   flex: { flex: 1 },
-  content: { padding: spacing.screenMargin + spacing.xs, paddingBottom: spacing.lg },
+  content: { padding: spacing.screenMargin, paddingBottom: spacing.lg, gap: spacing.md },
+  formSection: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.md },
+  statusLink: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  photoState: { maxWidth: 100, color: colors.secondary, marginTop: spacing.xs },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
   muted: { color: colors.secondary },
   reuseSection: { marginBottom: spacing.md },
@@ -616,11 +636,9 @@ const styles = StyleSheet.create({
   chipText: { color: colors.secondary },
   chipTextSelected: { color: colors.onPrimary },
   gpsCard: {
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    paddingTop: spacing.md,
-    borderBottomWidth: 1,
-    paddingBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
     gap: spacing.xs,
     marginBottom: spacing.lg,
   },
