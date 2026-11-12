@@ -35,7 +35,7 @@ function screen(file, options = {}) {
   const params = options.params ?? {intentId:'fixture-intent',email:'fixture@example.test',resendAfterSeconds:'0',reportId:'fixture-report'};
   const reporter = h.load('src/store/reporter.ts');
   const uploads = h.load('src/store/uploads.ts');
-  const native = {Platform:{OS:'android',select:o=>o.default},StyleSheet:{create:o=>o},Alert:{alert:options.alert??(()=>{})}};
+  const native = {Keyboard:{isVisible:()=>false,addListener:()=>({remove(){}})},Platform:{OS:'android',select:o=>o.default},StyleSheet:{create:o=>o},Alert:{alert:options.alert??(()=>{})}};
   for(const name of ['Text','View','Image','Pressable','TextInput','Modal','ScrollView','KeyboardAvoidingView','ActivityIndicator'])native[name]=name;
   const gps = options.gps ?? {getForegroundPermissionsAsync:async()=>({status:'denied'}),requestForegroundPermissionsAsync:async()=>({status:'denied'}),Accuracy:{High:1,Balanced:1}};
   const modules = {
@@ -65,6 +65,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/api/authApi'))return{loginReal:options.login??(async()=>{throw Error('fixture not configured');}),extractProblemCode:e=>e?.code??'unknown'};
     if(name.endsWith('/api/reporterApi'))return{...h.api,...options.api,extractProblemCode:e=>e?.code??'unknown'};
     if(name.endsWith('/api/idempotency'))return{getOrCreateCommandKey:()=> 'fixture-command-key',clearCommandKey(){}};
+    if(name.endsWith('/reporter/PhotoUploadStatus'))return{PhotoUploadStatus:'PhotoUploadStatus'};
     if(name.endsWith('/components/ReporterHeader'))return{ReporterHeader:'ReporterHeader'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};
     if(name.endsWith('/components/InputField'))return{InputField:'InputField'};

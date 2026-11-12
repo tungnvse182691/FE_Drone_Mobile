@@ -18,6 +18,7 @@ interface InputFieldProps {
   testID?: string;
   unit?: string;
   minHeight?: number;
+  onPressIn?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
 }
@@ -38,6 +39,7 @@ export function InputField({
   testID,
   unit,
   minHeight,
+  onPressIn,
   onFocus,
   onBlur,
 }: InputFieldProps) {
@@ -69,6 +71,7 @@ export function InputField({
           textAlignVertical={multiline ? 'top' : 'center'}
           autoFocus={autoFocus}
           testID={testID}
+          onPressIn={onPressIn}
           onFocus={onFocus}
           onBlur={onBlur}
         />

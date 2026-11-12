@@ -7,6 +7,6 @@ test('UI05 supplement is grouped and explains the disabled CTA without sending',
  assert.match(JSON.stringify(s.nodes().find(n=>n.props.testID==='supplement-disabled-reason')),/Nhập nội dung/);
  s.input('Nội dung bổ sung','Vị trí gần cầu');await s.flush();
  assert.match(JSON.stringify(s.nodes().find(n=>n.props.testID==='supplement-disabled-reason')),/ít nhất một ảnh/);
- const add=s.nodes().find(n=>n.props.testID==='add-photo');assert.ok(add.props.style({pressed:false})[0].height>=48);
+ const add=s.nodes().find(n=>n.props.testID==='add-photo');assert.ok(add.props.style({pressed:false})[0].minHeight>=48);
  assert.ok(s.nodes().some(n=>n.type==='KeyboardAvoidingView'));assert.equal(s.h.calls.length,0);s.unmount();
 });

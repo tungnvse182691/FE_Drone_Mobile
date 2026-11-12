@@ -21,6 +21,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import { Button } from '../../src/components/reporter/Button';
+import { useReporterKeyboard } from '../../src/components/reporter/keyboardVisibility';
+import { PhotoUploadStatus } from '../../src/components/reporter/PhotoUploadStatus';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
@@ -28,8 +30,8 @@ import {
   normalizePhotoMediaType,
 } from '../../src/api/uploads';
 import { hasUsableCoordinate } from '../../src/types/position';
-import { useUploadsStore, reporterContext, UPLOAD_STATE_LABELS } from '../../src/store/uploads';
-import { useReporterStore, useReporterDraftScope, reporterFailureMessage, reporterProgressLabel, type DraftPhoto } from '../../src/store/reporter';
+import { useUploadsStore, reporterContext } from '../../src/store/uploads';
+import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type ReporterSubmissionProgress, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { preserveReporterPhoto, reporterPhotoFailureMessage } from '../../src/api/reporterLocalMedia';
 import { REPORTER_REPORT_DETAIL, REPORTER_HOME, REPORTER_UPLOADS } from '../../src/constants/routes';
@@ -78,7 +80,7 @@ export default function ReporterReportScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitProgress, setSubmitProgress] = useState('');
+  const [submitProgress, setSubmitProgress] = useState<ReporterSubmissionProgress | null>(null);
 
   const [restored, setRestored] = useState(false);
   const [restoreFailed, setRestoreFailed] = useState(false);
@@ -106,7 +108,7 @@ export default function ReporterReportScreen() {
     setRestored(false);
     setRestoreFailed(false); setDataScope('');
     setDescription(''); updatePhotos(() => []); setCoords(null); setCameraOpen(false); setShowVerifiedPhotos(false);
-    setErrors({}); setSubmitError(null); setSubmitting(false); setSubmitProgress('');
+    setErrors({}); setSubmitError(null); setSubmitting(false); setSubmitProgress(null);
     photoMeta.current = new Map(); completed.current = false; submitted.current = false;
     void useReporterStore.getState().restoreStartedCommand().then(draft => {
       if (!active || !isCurrent()) return;
@@ -129,7 +131,7 @@ export default function ReporterReportScreen() {
     void useUploadsStore.getState().hydrate().catch(() => {
       if (active && isCurrent()) setSubmitError('Chưa đọc được ảnh trong hàng đợi. Lệnh đã bắt đầu gửi và ảnh vẫn được giữ; mở hàng đợi để thử tải lại.');
     });
-    return () => { active = false; scope.invalidate(); };
+    return () => { active = false; scope.invalidate(); useReporterKeyboard.getState().setOpening(false); };
   }, [scope.key, restoreAttempt]));
 
 
@@ -273,13 +275,13 @@ export default function ReporterReportScreen() {
         return;
       }
     submitted.current = true;
-    setSubmitting(true); setSubmitError(null); setSubmitProgress('Đang chuẩn bị ảnh…');
+    setSubmitting(true); setSubmitError(null); setSubmitProgress(null);
     try {
       if (!isCurrent()) return;
       await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
       if (!isCurrent()) return;
       const reportId = await useReporterStore.getState().submitPendingDraft({ isCurrent,
-        onProgress: progress => { if (isCurrent()) setSubmitProgress(reporterProgressLabel(progress)); } });
+        onProgress: progress => { if (isCurrent()) setSubmitProgress(progress); } });
       if (!isCurrent()) return;
       completed.current = true;
       router.replace({ pathname: REPORTER_REPORT_DETAIL, params: { reportId } });
@@ -349,18 +351,15 @@ export default function ReporterReportScreen() {
   const candidates = queueItems.filter(item => item.partitionId === reporterContext().partition &&
     item.mediaState === 'VERIFIED' && item.fileId && item.verifiedVersion && !item.lastErrorCode && !photos.includes(item.uriLocal));
 
-  const photoState = (uri: string) => {
+  const photoItem = (uri: string) => {
     const item = queueItems.find(row => row.partitionId === reporterContext().partition &&
       (row.id === photoMeta.current.get(uri)?.itemId || row.uriLocal === uri));
-    if (!item) return 'Chưa tải lên';
-    if (item.cancelState) return item.cancelState === 'CONFIRMED' ? 'Đã hủy phiên tải' : 'Cần đối soát';
-    return UPLOAD_STATE_LABELS[item.mediaState];
+    return item;
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
       <ReporterHeader title="Gửi phản ánh" />
-      {submitting ? <Text testID="submission-progress" accessibilityLiveRegion="polite" style={[typography.caption, styles.progress]}>{submitProgress}</Text> : null}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -381,7 +380,7 @@ export default function ReporterReportScreen() {
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
-                <Text testID={`photo-state-${index}`} style={[typography.caption, styles.photoState]}>{photoState(uri)}</Text>
+                <PhotoUploadStatus item={photoItem(uri)} index={index} />
                 <Pressable
                   onPress={() => updatePhotos((current) => current.filter((_, i) => i !== index))}
                   style={styles.photoRemove}
@@ -395,6 +394,8 @@ export default function ReporterReportScreen() {
                 </Pressable>
               </View>
             ))}
+          </View>
+          <View style={styles.photoActions} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
             {photos.length < MAX_PHOTOS ? (
               <Pressable
                 onPress={() => {
@@ -460,10 +461,11 @@ export default function ReporterReportScreen() {
             <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
           </Pressable>
           </View>
-          <View testID="description-section" style={styles.formSection}
+          <View testID="description-section" onTouchStart={() => { if (descriptionFocused.current) useReporterKeyboard.getState().setOpening(true); }} style={styles.formSection}
             onLayout={event => { descriptionTop.current = event.nativeEvent.layout.y; }}
             pointerEvents={submitting || draftLocked ? "none" : "auto"}>
           <InputField
+            onPressIn={() => useReporterKeyboard.getState().setOpening(true)}
             label="Mô tả hiện trạng"
             value={description}
             onChangeText={(text) => {
@@ -471,8 +473,8 @@ export default function ReporterReportScreen() {
               setErrors((current) => ({ ...current, description: '' }));
             }}
             placeholder="Đường hư hại như thế nào?"
-            onFocus={() => { descriptionFocused.current = true; revealDescription(); }}
-            onBlur={() => { descriptionFocused.current = false; }}
+            onFocus={() => { useReporterKeyboard.getState().setOpening(true); descriptionFocused.current = true; revealDescription(); }}
+            onBlur={() => { descriptionFocused.current = false; useReporterKeyboard.getState().setOpening(false); }}
             error={errors.description}
             multiline
             testID="reporter-description"
@@ -483,13 +485,14 @@ export default function ReporterReportScreen() {
             <Text style={typography.labelLg}>Vị trí (không bắt buộc)</Text>
             <View style={styles.gpsRow}>
               <MaterialIcons name={coords ? 'my-location' : 'location-off'} size={20} color={colors.secondary} />
-              <Text style={[typography.caption, styles.gpsText]}>{coords ? 'Đã lấy vị trí' : gpsStatus}</Text>
+              <Text style={[typography.caption, styles.gpsText]}>{gpsLoading ? 'Đang lấy vị trí…' : coords ? 'Vị trí thiết bị' : gpsStatus}</Text>
               <Pressable onPress={requestLocation} disabled={gpsLoading || submitting || draftLocked}
                 style={styles.gpsRetry} accessibilityRole="button" accessibilityLabel="Lấy lại vị trí" testID="retry-location">
                 <MaterialIcons name="refresh" size={20} color={colors.secondary} />
                 <Text style={typography.caption}>{gpsLoading ? 'Đang lấy' : 'Lấy lại'}</Text>
               </Pressable>
             </View>
+            {coords ? <Text testID="reporter-coordinate" style={[typography.caption, styles.fieldHint]}>{coords.latitude.toFixed(6)}, {coords.longitude.toFixed(6)}{coords.accuracyMeters !== null ? ` · Sai số khoảng ${Math.round(coords.accuracyMeters)} m` : ' · Chưa có sai số'}</Text> : null}
             {!coords && !gpsLoading ? <Text style={typography.caption}>Bạn vẫn có thể gửi khi chưa có vị trí.</Text> : null}
             {errors.coords ? <Text style={[typography.caption, styles.error]}>{errors.coords}</Text> : null}
           </View>
@@ -505,7 +508,7 @@ export default function ReporterReportScreen() {
           <View style={styles.submitWrapper}>
             <Button
               variant="primary"
-              title="Gửi phản ánh"
+              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang đối soát…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
               style={styles.submitButton}
               onPress={handleSubmit}
               loading={submitting}
@@ -605,13 +608,11 @@ const styles = StyleSheet.create({
     minHeight: 48,
     width: '100%',
   },
-  progress: { padding: spacing.md, color: colors.secondary, backgroundColor: colors.surfaceAlt },
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   flex: { flex: 1 },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.lg, gap: spacing.md },
   formSection: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.md },
   statusLink: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  photoState: { maxWidth: 100, color: colors.secondary, marginTop: spacing.xs },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
   muted: { color: colors.secondary },
   reuseSection: { marginBottom: spacing.md },
@@ -647,7 +648,8 @@ const styles = StyleSheet.create({
   gpsRetry: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48, paddingHorizontal: spacing.sm },
   gpsRetryText: { color: colors.brandGold },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  photoWrapper: { position: 'relative' },
+  photoWrapper: { position: 'relative', width: 88, height: 88 },
+  photoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   photo: { width: 88, height: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   photoRemove: {
     position: 'absolute',
@@ -663,7 +665,9 @@ const styles = StyleSheet.create({
   photoAdd: {
     flexGrow: 1,
     flexBasis: 120,
-    height: 88,
+    minHeight: 48,
+    padding: spacing.sm,
+    flexDirection: 'row',
     borderRadius: radius.lg,
     borderWidth: 1,
     backgroundColor: colors.surfaceAlt,

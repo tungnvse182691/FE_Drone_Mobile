@@ -1,7 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {screen}=require('./helpers/roadfe-screen.cjs');
 function layout(){const notices=[],nav=[];const s=screen('app/(reporter)/_layout.tsx',{modules:{
- 'react-native':{View:'View',StyleSheet:{create:o=>o},Alert:{alert:(...args)=>notices.push(args)}},
+ 'react-native':{Keyboard:{isVisible:()=>false,addListener:()=>({remove(){}})},View:'View',StyleSheet:{create:o=>o},Alert:{alert:(...args)=>notices.push(args)}},
  'expo-router':{Stack:'Stack',usePathname:()=>'/home',useRouter:()=>({push:p=>nav.push(p)})},
  '../../src/components/BottomNav':{BottomNav:'BottomNav'}
  }});s.render();const go=route=>s.nodes().find(n=>n.type==='BottomNav').props.onNavigate(route);return {s,nav,notices,go};}

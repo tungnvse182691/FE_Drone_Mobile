@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack, usePathname, useRouter } from 'expo-router';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, Keyboard, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useReporterKeyboard } from '../../src/components/reporter/keyboardVisibility';
 import { BottomNav, NavTab } from '../../src/components/BottomNav';
 import { useAuthStore } from '../../src/store/auth';
 import { isReporterSession } from '../../src/api/uploads';
@@ -47,6 +48,15 @@ const TABS: NavTab[] = [
 export default function ReporterLayout() {
   const pathname = usePathname();
   const router = useRouter();
+  const keyboardOpening = useReporterKeyboard(state => state.opening);
+  const [keyboardVisible, setKeyboardVisible] = useState(() => Keyboard.isVisible());
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
+  const [navigationHeight, setNavigationHeight] = useState(0);
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => { setKeyboardVisible(false); useReporterKeyboard.getState().setOpening(false); });
+    return () => { show.remove(); hide.remove(); useReporterKeyboard.getState().setOpening(false); };
+  }, []);
   const navigate = (route: string) => {
     const session = useAuthStore.getState();
     if ((route === REPORTER_UPLOADS || route === REPORTER_TRACK) && !isReporterSession(session)) {
@@ -75,13 +85,23 @@ export default function ReporterLayout() {
     ? segments : [PUBLIC_ROUTE_GROUP, ...segments]).join('/')}`;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.stackArea}>
+    <View style={styles.container} onLayout={({ nativeEvent: { layout } }) => {
+      setViewport(previous => {
+        const height = previous.width === layout.width ? Math.max(previous.height, layout.height) : layout.height;
+        return previous.width === layout.width && previous.height === height ? previous : { width: layout.width, height };
+      });
+    }}>
+      <View style={[styles.stackArea, { marginBottom: !keyboardVisible && !keyboardOpening ? navigationHeight : 0 }]}>
         <Stack screenOptions={{ headerShown: false }} />
       </View>
-      <SafeAreaView edges={['bottom']}>
+      {/* Keep the dock at the unresized bottom. Android clips it immediately
+          when the IME resizes the window, even before JS receives focus/show. */}
+      {!keyboardVisible && !keyboardOpening ? <View testID="reporter-navigation-dock" pointerEvents="box-none"
+        style={[styles.navigationDock, { height: viewport.height || '100%' }]}>
+        <SafeAreaView edges={['bottom']} onLayout={event => setNavigationHeight(event.nativeEvent.layout.height)}>
         <BottomNav tabs={TABS} activeRoute={activeRoute} onNavigate={navigate} />
-      </SafeAreaView>
+        </SafeAreaView>
+      </View> : null}
     </View>
   );
 }
@@ -89,6 +109,14 @@ export default function ReporterLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    overflow: 'hidden',
+  },
+  navigationDock: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    justifyContent: 'flex-end',
   },
   stackArea: {
     flex: 1,

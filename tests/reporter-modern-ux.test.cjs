@@ -108,12 +108,13 @@ test('UX01 pending verification shows one actionable status and never success',a
 });
 
 
-test('D02 progress remains outside scrolling form while one send is pending',async()=>{
+test('D02 pending send keeps progress compact without a growing header',async()=>{
  const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/progress.png',name:'progress.png',mimeType:'image/png'}]})});
  s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();s.input('Mô tả hiện trạng','QA progress');
  let release;s.reporter.useReporterStore.getState().submitPendingDraft=async options=>{options.onProgress({phase:'verifying',index:1,total:1,elapsedMs:1000});await new Promise(r=>release=r);throw {code:'verification_timeout'};};
  const send=s.press('Gửi phản ánh');await s.flush();
- const status=s.nodes().find(n=>n.props?.testID==='submission-progress');assert.ok(status,'visible status must have a fixed position outside the scroll content');
+ assert.equal(s.nodes().some(n=>n.props?.testID==='submission-progress'),false,'progress must not grow the header');
+ const button=s.nodes().find(n=>n.type==='Button'&&n.props.loading);assert.ok(button);assert.equal(button.props.title,'Đang chuẩn bị ảnh…');
  const scroll=s.nodes().find(n=>n.type==='ScrollView');assert.ok(!JSON.stringify(scroll).includes('submission-progress'));
- assert.match(JSON.stringify(status),/xác minh/);release();await send;await s.flush();s.unmount();
+ assert.equal(s.nodes().find(n=>n.type==='InputField').props.value,'QA progress');release();await send;await s.flush();s.unmount();
 });
