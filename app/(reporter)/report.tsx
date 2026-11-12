@@ -515,7 +515,6 @@ export default function ReporterReportScreen() {
               loading={submitting}
               disabled={!restored || submitting}
             />
-            {submitting ? <Text accessibilityLiveRegion="polite" style={[typography.caption, styles.submitHint]}>Ảnh sẵn sàng sẽ tự chuyển sang bước nộp phản ánh. Bạn không cần bấm gửi lại.</Text> : null}
             {!submitError && !submitting && !isReporterSession(useAuthStore.getState()) ? <Text style={[typography.caption, styles.submitHint]}>Đăng nhập để gửi phản ánh.</Text> : null}
           </View>
         </ScrollView>
