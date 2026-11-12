@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -86,14 +86,22 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
   return <Card style={{ marginBottom: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: colors.border }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
       <MaterialIcons name={inbox.error ? 'error-outline' : 'assignment'} size={20} color={inbox.error ? colors.error : colors.brandGold} />
-      <Text style={typography.titleMd}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={typography.titleMd}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
+        <Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong các nhiệm vụ đã tải.</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
+        accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
+        disabled={!inbox.enabled || inbox.query.isFetching}
+        style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
+        onPress={() => { void inbox.query.refetch(); }}>
+        {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
+      </Pressable>
     </View>
     {inbox.stale ? <Text style={typography.bodyMd}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
     {inbox.error ? <Text style={typography.bodyMd} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
-    <Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong các nhiệm vụ đã tải, không phải toàn bộ lịch sử.</Text>
     {inbox.query.data?.pages[0]?.asOf ? <Text style={typography.caption}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text> : null}
-    <Button variant="text" title="Tải lại" disabled={!inbox.enabled} loading={inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} />
     {inbox.query.hasNextPage && !inbox.error ? <Button variant="secondary" title="Tải thêm" loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} /> : null}
   </Card>;
 }
@@ -411,19 +419,12 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     marginBottom: spacing.md,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
+    elevation: 0,
+    shadowOpacity: 0,
   },
   rail: {
     position: 'absolute',

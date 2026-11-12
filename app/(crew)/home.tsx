@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -19,7 +19,7 @@ interface CrewMetric {
   valueColor: string;
   iconColor: string;
   iconBg: string;
-  subLabel: string;
+
 }
 
 const CREW_METRICS: CrewMetric[] = [
@@ -30,7 +30,6 @@ const CREW_METRICS: CrewMetric[] = [
     valueColor: colors.primaryDark,
     iconColor: '#6B5219',
     iconBg: '#FEF9E7',
-    subLabel: 'Trong nhiệm vụ được giao đã tải',
   },
   {
     label: 'Hoàn thành',
@@ -39,7 +38,6 @@ const CREW_METRICS: CrewMetric[] = [
     valueColor: colors.success,
     iconColor: '#2F9E44',
     iconBg: '#E9F7EC',
-    subLabel: 'Trong các nhiệm vụ đã tải',
   },
 ];
 
@@ -71,34 +69,6 @@ export default function CrewHomeScreen() {
           </View>
         </View>
 
-        {/* THẺ ĐỘI 01: Thẻ đội thi công hiện trường, viền trái vàng 4px */}
-        <Card style={styles.teamCard}>
-          <View style={styles.teamHeaderRow}>
-            <View style={styles.teamTitleGroup}>
-              <MaterialIcons name="engineering" size={18} color={colors.brandGold} />
-              <Text style={[typography.titleMd, styles.teamTitle]}>TÀI KHOẢN HIỆN TRƯỜNG</Text>
-            </View>
-            <View style={styles.teamStatusPill}>
-              <MaterialIcons name="engineering" size={14} color={colors.secondary} />
-              <Text style={[typography.labelSm, styles.teamStatusText]}>Đội sửa chữa</Text>
-            </View>
-          </View>
-
-          <View style={styles.teamDivider} />
-
-          <View style={styles.teamInfoList}>
-            <View style={styles.teamMemberRow}>
-              <View style={styles.memberRoleCol}>
-                <MaterialIcons name="build" size={15} color={colors.secondary} />
-                <Text style={[typography.caption, styles.memberRoleLabel]}>Kỹ thuật viên:</Text>
-              </View>
-              <Text style={[typography.bodyMd, styles.memberNameText]} numberOfLines={2}>
-                {displayName} • {employeeCode}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
         {/* 2 THẺ METRIC: 24px+, icon ô màu pastel, card trắng viền 1px bo 12px */}
         <View style={styles.metricRow}>
           {CREW_METRICS.map((metric, index) => (
@@ -112,7 +82,6 @@ export default function CrewHomeScreen() {
               <Text style={[typography.headlineLg, styles.metricValue, { color: metric.valueColor }]}>
                 {inbox.error || inbox.query.isPending ? '—' : String(index === 0 ? tasks.length : inbox.tasks.filter(crewTaskIsComplete).length)}
               </Text>
-              <Text style={[typography.caption, styles.metricSub]}>{metric.subLabel}</Text>
             </Card>
           ))}
         </View>
@@ -159,7 +128,7 @@ export default function CrewHomeScreen() {
         </Pressable>
 
 
-        {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, footer #HH-WO-xx, chevron phải */}
+        {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, mã nhiệm vụ thật, chevron phải */}
         <CrewInboxState inbox={inbox} />
         <View style={styles.taskList}>
           {tasks.map((task) => {
@@ -295,100 +264,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A8',
   },
   badgeText: {
     color: colors.brandGold,
     letterSpacing: 0.5,
-  },
-
-  /* Team Card */
-  teamCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.cardPadding,
-    marginBottom: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  teamHeaderRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  teamTitleGroup: {
-    flexDirection: 'row',
-    flexShrink: 1,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  teamTitle: {
-    flexShrink: 1,
-    color: colors.brandGold,
-    letterSpacing: 0.3,
-  },
-  teamStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#E9F7EC',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: radius.full,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-  },
-  teamStatusText: {
-    color: colors.success,
-    fontSize: 10,
-  },
-  teamDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.sm,
-  },
-  teamInfoList: {
-    gap: 6,
-  },
-  teamMemberRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  memberRoleCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flexShrink: 0,
-  },
-  memberRoleLabel: {
-    color: colors.secondary,
-  },
-  memberNameText: {
-    flex: 1,
-    flexShrink: 1,
-    textAlign: 'right',
-    color: colors.neutral,
-    fontFamily: 'Roboto-Medium',
   },
 
   /* Metrics Row */
@@ -401,20 +281,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
+    borderColor: '#E8D9A8',
+    borderRadius: radius.lg,
     padding: spacing.cardPadding,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    elevation: 0,
+    shadowOpacity: 0,
   },
   metricTopRow: {
     flexDirection: 'row',
@@ -523,20 +394,11 @@ const styles = StyleSheet.create({
   taskCard: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
+    borderColor: '#E8D9A8',
+    borderRadius: radius.lg,
     padding: spacing.cardPadding,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    elevation: 0,
+    shadowOpacity: 0,
   },
   taskCardHeader: {
     flexDirection: 'row',
@@ -632,7 +494,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A8',
   },
   woCodeText: {
     color: colors.secondary,

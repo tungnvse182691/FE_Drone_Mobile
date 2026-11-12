@@ -68,11 +68,11 @@ test('Crew FIELD preparation retains baseline guards, reads and navigation after
 test('Crew inbox renders loading, empty and HTTP failures with safe retry and cursor controls',()=>{
  const node=fn('app/(crew)/tasks.tsx','CrewInboxState');
  const code=ts.transpileModule(node.getText().replace(/^export /,''),{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS}}).outputText;
- const render=vm.runInNewContext(code+';CrewInboxState',{crewDateTime:pure('crewDateTime'),React:{createElement:(type,props,...children)=>({type,props,children})},Card:'Card',View:'View',Text:'Text',Button:'Button',MaterialIcons:'MaterialIcons',colors:{},spacing:{},typography:{}});
+ const render=vm.runInNewContext(code+';CrewInboxState',{crewDateTime:pure('crewDateTime'),React:{createElement:(type,props,...children)=>({type,props,children})},Card:'Card',View:'View',Text:'Text',Button:'Button',Pressable:'Pressable',ActivityIndicator:'ActivityIndicator',MaterialIcons:'MaterialIcons',colors:{},spacing:{},typography:{}});
  const walk=x=>!x?[]:Array.isArray(x)?x.flatMap(walk):typeof x==='object'?[x,...walk(x.children)]:[];
  for(const scenario of [{pending:true,expected:/Đang tải nhiệm vụ/},{expected:/Chưa có nhiệm vụ được giao/},{error:pure('crewReadError')({response:{status:403}}),expected:/không có quyền/},{error:pure('crewReadError')({response:{status:409}}),expected:/vừa thay đổi/}]){
   let reads=0,more=0;const tree=render({inbox:{enabled:true,tasks:[],error:scenario.error,query:{isPending:!!scenario.pending,isFetching:false,hasNextPage:!scenario.error&&!scenario.pending,refetch:()=>reads++,fetchNextPage:()=>more++}}});
-  assert.match(JSON.stringify(tree),scenario.expected);const nodes=walk(tree);nodes.find(n=>n.props?.title==='Tải lại').props.onPress();assert.equal(reads,1);
+  assert.match(JSON.stringify(tree),scenario.expected);const nodes=walk(tree);nodes.find(n=>n.props?.accessibilityLabel==='Tải lại nhiệm vụ').props.onPress();assert.equal(reads,1);
   const next=nodes.find(n=>n.props?.title==='Tải thêm');if(scenario.error)assert.equal(next,undefined);else if(next){next.props.onPress();assert.equal(more,1);}
  }
 });

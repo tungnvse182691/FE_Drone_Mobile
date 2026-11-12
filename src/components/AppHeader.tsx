@@ -17,7 +17,8 @@ interface AppHeaderProps {
 export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, variant }: AppHeaderProps) {
   const role = useAuthStore((state) => state.role);
 
-  const compact = variant === 'operatorCompact' && role === RoleCode.DRONE_OPERATOR;
+  const crew = role === RoleCode.REPAIR_CREW;
+  const compact = crew || (variant === 'operatorCompact' && role === RoleCode.DRONE_OPERATOR);
 
   const handleBack = () => {
     if (onBack) {
@@ -53,7 +54,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, v
         {showBack ? (
           <Pressable
             onPress={handleBack}
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            style={({ pressed }) => [styles.backButton, crew && styles.compactAvatar, pressed && styles.backButtonPressed]}
             accessibilityRole="button"
             accessibilityLabel="Quay lại"
             hitSlop={8}
@@ -63,7 +64,7 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, v
         ) : null}
         <Image source={require('../../assets/logo_hoanghai_icon.png')} style={[styles.logo, compact && styles.compactLogo]} resizeMode="contain" />
         <View style={compact ? styles.compactBrandText : undefined}>
-          <Text style={[typography.titleMd, styles.brand]}>HOÀNG HẢI</Text>
+          <Text style={[typography.titleMd, styles.brand]}>{crew ? 'BÊ TÔNG HOÀNG HẢI' : 'HOÀNG HẢI'}</Text>
           <Text style={[typography.caption, styles.subtitle]}>{subtitle}</Text>
         </View>
       </View>
