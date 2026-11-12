@@ -6,9 +6,9 @@ test('UI03 queue shows local thumbnails, KB and one retention; only byte upload 
  s.uploads.useUploadsStore.setState({hydrated:true,partitionId:partition,items:['UPLOADING','VERIFYING','VERIFIED','FAILED'].map((mediaState,i)=>({id:String(i),partitionId:partition,mediaState,uriLocal:'file://qa/'+i,sizeBytes:512,partSizeBytes:512,partETags:{}}))});s.render();
  assert.equal(s.nodes().filter(n=>n.type==='Image').length,4);
  assert.equal(s.nodes().filter(n=>n.props.testID?.startsWith('uploads-progress-')).length,1);
- assert.equal(s.nodes().filter(n=>n.props.testID==='uploads-retention').length,1);
+ assert.equal(s.nodes().filter(n=>n.props.testID==='uploads-retention').length,0);
  assert.match(JSON.stringify(s.nodes()),/1 KB/);assert.equal(s.h.calls.length,0);
- await s.tap('uploads-recovery-toggle');await s.flush();assert.match(JSON.stringify(s.nodes()),/cùng thông tin tải lên/);s.unmount();
+ await s.tap('uploads-recovery-toggle');await s.flush();assert.equal(s.nodes().filter(n=>n.props.testID==='uploads-retention').length,1);s.unmount();
 });
 test('UI03 initial hydration displays informative loading without starting transfer',()=>{
  const s=screen('app/(reporter)/uploads.tsx');s.h.login();s.render();

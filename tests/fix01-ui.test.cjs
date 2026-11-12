@@ -95,7 +95,7 @@ test('RPT-02 queue omits delete control with explanation and store retains row',
   const id=await queue.getState().enqueuePhoto({uriLocal:'cache://fixture.jpg',fileName:'fixture.jpg',mediaType:'image/jpeg',sizeBytes:3,checksumSha256:'fixture-checksum'});
   s.render();await s.flush();
   const button=s.nodes().find(n=>n.props?.testID===`uploads-remove-${id}`);
-  assert.equal(button,undefined);assert.match(JSON.stringify(s.nodes()),/khôi phục, xác minh và đối soát/);
+  assert.equal(button,undefined);await s.tap('uploads-recovery-toggle');await s.flush();assert.match(JSON.stringify(s.nodes()),/Ảnh được giữ trên thiết bị/);
   const before=JSON.stringify(s.h.rows.get(id));await queue.getState().removeItem(id);assert.equal(JSON.stringify(s.h.rows.get(id)),before);
   s.unmount();
 });

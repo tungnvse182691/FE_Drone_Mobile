@@ -35,5 +35,6 @@ for(const page of ['capture','uploads'])test('C5 '+page+' retains media with no 
  const before=JSON.stringify([...s.h.rows]);s.render();await s.flush();
  assert.ok(!s.nodes().some(n=>n.props.testID===`${page}-remove-${id}`));
  assert.ok(!s.nodes().some(n=>/Xoá ảnh|Xóa ảnh/.test(n.props.accessibilityLabel??'')));
- assert.match(text(s),/khôi phục, xác minh và đối soát/);assert.equal(removals,0);assert.equal(JSON.stringify([...s.h.rows]),before);assert.equal(s.h.calls.length,0);s.unmount();
+ if(page==='uploads'){await s.tap('uploads-recovery-toggle');await s.flush();assert.match(text(s),/Ảnh được giữ trên thiết bị/);}else assert.match(text(s),/khôi phục, xác minh và đối soát/);
+ assert.equal(removals,0);assert.equal(JSON.stringify([...s.h.rows]),before);assert.equal(s.h.calls.length,0);s.unmount();
 });

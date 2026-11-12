@@ -455,9 +455,10 @@ export default function ReporterReportScreen() {
           ) : null}
 
           <Pressable testID="open-photo-status" onPress={() => router.push(REPORTER_UPLOADS)}
+            disabled={submitting} accessibilityState={{ disabled: submitting }}
             accessibilityRole="button" accessibilityLabel="Trạng thái ảnh" style={styles.statusLink}>
             <MaterialIcons name="photo-library" size={20} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.muted]}>Trạng thái ảnh</Text>
+            <Text style={[typography.bodyMd, styles.muted]}>{submitting ? 'Đang gửi · xem tiến trình trên ảnh' : 'Trạng thái ảnh'}</Text>
             <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
           </Pressable>
           </View>
@@ -496,7 +497,7 @@ export default function ReporterReportScreen() {
             {!coords && !gpsLoading ? <Text style={typography.caption}>Bạn vẫn có thể gửi khi chưa có vị trí.</Text> : null}
             {errors.coords ? <Text style={[typography.caption, styles.error]}>{errors.coords}</Text> : null}
           </View>
-          {draftLocked && !submitting && !submitError ? <Text style={typography.caption}>Đang giữ nguyên nội dung lần gửi trước. Chỉ kiểm tra lại bằng lệnh cũ.</Text> : null}
+          {draftLocked && !submitting && !submitError ? <Text style={typography.caption}>Lần gửi trước chưa hoàn tất. Nội dung và ảnh vẫn được giữ.</Text> : null}
 
           {submitError ? (
             <View style={styles.errorRow}>
@@ -508,12 +509,13 @@ export default function ReporterReportScreen() {
           <View style={styles.submitWrapper}>
             <Button
               variant="primary"
-              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang đối soát…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
+              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
               style={styles.submitButton}
               onPress={handleSubmit}
               loading={submitting}
               disabled={!restored || submitting}
             />
+            {submitting ? <Text accessibilityLiveRegion="polite" style={[typography.caption, styles.submitHint]}>Ảnh sẵn sàng sẽ tự chuyển sang bước nộp phản ánh. Bạn không cần bấm gửi lại.</Text> : null}
             {!submitError && !submitting && !isReporterSession(useAuthStore.getState()) ? <Text style={[typography.caption, styles.submitHint]}>Đăng nhập để gửi phản ánh.</Text> : null}
           </View>
         </ScrollView>
@@ -615,7 +617,7 @@ const styles = StyleSheet.create({
   statusLink: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
   muted: { color: colors.secondary },
-  reuseSection: { marginBottom: spacing.md },
+  reuseSection: { marginBottom: 0 },
   reuseToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   candidateRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   candidatePhoto: { width: 56, height: 56, borderRadius: radius.md },
@@ -641,7 +643,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     padding: spacing.md,
     gap: spacing.xs,
-    marginBottom: spacing.lg,
+    marginBottom: 0,
   },
   gpsRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   gpsText: { color: colors.secondary, flex: 1 },

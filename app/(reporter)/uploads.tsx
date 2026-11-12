@@ -6,12 +6,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/reporter/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { PhotoUploadStatus } from '../../src/components/reporter/PhotoUploadStatus';
 import {
-  UPLOAD_STATE_LABELS,
   isTerminalMediaState,
   uploadedRatio,
   useUploadsStore,
-  UPLOAD_RETENTION_NOTICE,
   reporterContext,
   type UploadMediaState,
   type UploadQueueItem,
@@ -19,7 +18,6 @@ import {
 import { useAuthStore } from '../../src/store/auth';
 import { useReporterDraftScope } from '../../src/store/reporter';
 import {
-  REPORTER_CAPTURE,
   REPORTER_REPORT,
 } from '../../src/constants/routes';
 
@@ -42,19 +40,6 @@ function stateColor(state: UploadMediaState): string {
   return colors.warning;
 }
 
-function stateIcon(state: UploadMediaState): React.ComponentProps<typeof MaterialIcons>['name'] {
-  if (state === 'VERIFIED') {
-    return 'verified';
-  }
-  if (state === 'FAILED') {
-    return 'error-outline';
-  }
-  if (state === 'VERIFYING' || state === 'COMPLETE_REQUESTED') {
-    return 'hourglass-top';
-  }
-  return 'cloud-upload';
-}
-
 export default function ReporterUploadsScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -63,7 +48,6 @@ export default function ReporterUploadsScreen() {
   const expectedPartition = reporterContext().partition;
   const items = useUploadsStore((state) => state.items).filter(item => item.partitionId === expectedPartition);
   const hydrated = useUploadsStore((state) => state.hydrated && state.partitionId === expectedPartition);
-  const watching = useUploadsStore((state) => state.watching);
   const busyItemIds = useUploadsStore((state) => state.busyItemIds);
   const cancelBusyItemIds = useUploadsStore((state) => state.cancelBusyItemIds);
   const hydrate = useUploadsStore((state) => state.hydrate);
@@ -87,7 +71,7 @@ export default function ReporterUploadsScreen() {
   }, [hydrate, partitionId, scope.key, hydrateAttempt, stopWatch]);
 
   const pending = items.filter((item) => !isTerminalMediaState(item.mediaState)).length;
-  const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED').length;
+  const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED' && item.fileId && item.verifiedVersion && !item.lastErrorCode && !item.cancelState).length;
   const canSubmit = verifiedCount > 0;
 
   const renderRow = (item: UploadQueueItem, index: number) => {
@@ -97,27 +81,27 @@ export default function ReporterUploadsScreen() {
     return (
       <View key={item.id} style={styles.card}>
         <View style={styles.cardHeader}>
+          <View style={styles.preview}>
           <Image source={{ uri: item.uriLocal }} style={styles.thumbnail} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
-          <MaterialIcons name={stateIcon(item.mediaState)} size={18} color={stateColor(item.mediaState)} />
+          <PhotoUploadStatus item={item} index={index} />
+          </View>
+          <View style={styles.cardBody}>
           <Text style={[typography.labelLg, styles.cardTitle]} numberOfLines={1}>
             Ảnh {index + 1}
           </Text>
           <Text style={[typography.caption, styles.cardMeta]}>
             {item.sizeBytes < 1024 * 1024 ? `${Math.max(1, Math.round(item.sizeBytes / 1024))} KB` : `${(item.sizeBytes / (1024 * 1024)).toFixed(1)} MB`}
           </Text>
-        </View>
-
-        <Text style={[typography.caption, { color: stateColor(item.mediaState) }]}>
+        <Text style={[typography.caption, styles.cardMeta]}>
           {item.cancelState === 'CONFIRMED' ? 'Đã hủy phiên tải' :
-            item.cancelState === 'UNKNOWN' || item.cancelState === 'REQUESTED' ? 'Chưa rõ kết quả hủy' :
-            item.cancelState === 'BLOCKED' && item.mediaState !== 'VERIFIED' ? 'Phiên đã chuyển trạng thái · cần đối soát' :
-            UPLOAD_STATE_LABELS[item.mediaState]}
-          {item.mediaState === 'UPLOADING' && !item.cancelState ? ` · ${ratio}%` : ''}
+            item.cancelState ? 'Cần kiểm tra kết quả hủy' :
+            item.lastErrorCode || item.mediaState === 'FAILED' ? 'Chưa hoàn tất. Kiểm tra lại bên dưới.' :
+            item.mediaState === 'VERIFIED' ? 'Có thể dùng cho phản ánh' :
+            item.mediaState === 'VERIFYING' || item.mediaState === 'COMPLETE_REQUESTED' ? 'Đang kiểm tra ảnh trên máy chủ' :
+            'Ảnh đang được chuẩn bị để gửi'}
         </Text>
-
-        {item.mediaState === 'FAILED' && item.lastErrorMessage ? (
-          <Text style={[typography.caption, styles.cardError]}>{item.lastErrorMessage}</Text>
-        ) : null}
+          </View>
+        </View>
 
         {item.mediaState === 'UPLOADING' && !item.cancelState ? <View style={styles.progressTrack} testID={`uploads-progress-${item.id}`}>
           <View
@@ -142,7 +126,7 @@ export default function ReporterUploadsScreen() {
               testID={`uploads-retry-${item.id}`}
             >
               <MaterialIcons name="refresh" size={16} color={colors.brandGold} />
-              <Text style={[typography.caption, styles.actionMuted]}>{busy ? 'Đang kiểm tra...' : item.mediaState === 'FAILED' ? 'Đọc lại kết quả' : 'Gửi lại cùng lệnh'}</Text>
+              <Text style={[typography.caption, styles.actionMuted]}>{busy ? 'Đang kiểm tra…' : 'Kiểm tra lại ảnh'}</Text>
             </Pressable>
           ) : null}
           {item.uploadId && (item.cancelState === 'UNKNOWN' || item.cancelState === 'REQUESTED' || item.cancelState === 'BLOCKED' ||
@@ -163,7 +147,7 @@ export default function ReporterUploadsScreen() {
               testID={`uploads-cancel-${item.id}`}
             >
               <MaterialIcons name="cancel" size={16} color={colors.error} />
-              <Text style={[typography.caption, styles.cardError]}>{cancelBusy ? 'Đang đối soát...' : item.cancelState === 'BLOCKED' ? 'Đọc trạng thái phiên' : item.cancelState ? 'Đối soát hủy' : 'Hủy tải lên'}</Text>
+              <Text style={[typography.caption, styles.cardError]}>{cancelBusy ? 'Đang kiểm tra…' : item.cancelState ? 'Kiểm tra kết quả hủy' : 'Hủy tải lên'}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -184,14 +168,14 @@ export default function ReporterUploadsScreen() {
   return (
     <SafeAreaScreen scroll header={<ReporterHeader title="Trạng thái ảnh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_REPORT)} />}>
       <View style={styles.gateCard}>
-        <Text style={[typography.labelLg, styles.gateTitle]}>Đã xác minh {verifiedCount}/{items.length} ảnh</Text>
-        <Text style={[typography.caption, styles.gateText]}>{watching ? `Đang theo dõi ${pending} ảnh chờ xử lý.` : 'Chỉ ảnh đã xác minh mới dùng để gửi phản ánh.'}</Text>
+        <Text style={[typography.labelLg, styles.gateTitle]}>{verifiedCount}/{items.length} ảnh sẵn sàng</Text>
+        <Text style={[typography.caption, styles.gateText]}>Ảnh sẵn sàng chưa có nghĩa phản ánh đã được nộp.</Text>
         {items.length > 0 ? <>
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: showRecovery }} testID="uploads-recovery-toggle" onPress={() => setShowRecovery(value => !value)} style={styles.action}>
-            <Text style={[typography.caption, styles.gateTitle]}>{showRecovery ? 'Thu gọn hướng dẫn' : 'Khi ảnh chưa hoàn tất'}</Text>
+            <Text style={[typography.caption, styles.gateTitle]}>{showRecovery ? 'Thu gọn' : 'Thông tin lưu ảnh'}</Text>
             <MaterialIcons name={showRecovery ? 'expand-less' : 'expand-more'} size={20} color={colors.neutral} />
           </Pressable>
-          {showRecovery ? <Text style={[typography.caption, styles.gateText]}>Chưa tự gửi lại lệnh. Kiểm tra lại dùng cùng thông tin tải lên. Ảnh lỗi được giữ để đối soát; không thay ảnh của lệnh đang chờ kết quả.</Text> : null}
+          {showRecovery ? <Text testID="uploads-retention" style={[typography.caption, styles.gateText]}>Ảnh được giữ trên thiết bị để tiếp tục khi gián đoạn. Nếu đang chờ kết quả gửi, hãy giữ nguyên ảnh và nội dung. Chọn “Kiểm tra lại ảnh” khi cần kiểm tra kết quả tải.</Text> : null}
         </> : null}
       </View>
 
@@ -206,31 +190,22 @@ export default function ReporterUploadsScreen() {
       ) : null}
 
       <View style={styles.list}>{items.map(renderRow)}</View>
-      {items.length > 0 ? <Text style={[typography.caption, styles.retention]} testID="uploads-retention">{UPLOAD_RETENTION_NOTICE}</Text> : null}
 
       <View style={styles.footer}>
-        <Button variant="secondary" title="Thêm hoặc thay ảnh hiện trường" onPress={() => router.push(REPORTER_CAPTURE)} />
-        <Button
+        {pending > 0 ? <Button
           variant="secondary"
           title="Kiểm tra lại ngay"
           onPress={() => void advanceAll()}
           disabled={pending === 0}
-        />
+        /> : null}
         <Button
           variant="primary"
-          title={
-            canSubmit
-              ? 'Chọn ảnh để lập phản ánh'
-              : items.length === 0
-                ? 'Chưa có ảnh nào để xác minh'
-                : `Đã xác minh ${verifiedCount}/${items.length} ảnh`
-          }
+          title={canSubmit ? 'Dùng ảnh để phản ánh' : 'Về màn gửi phản ánh'}
           onPress={() => router.push(REPORTER_REPORT)}
-          disabled={!canSubmit}
         />
         <Button
           variant="text"
-          title="Chọn phản ánh cần bổ sung"
+          title="Bổ sung ảnh cho phản ánh đã gửi"
           onPress={() => router.push('/(reporter)/track')}
         />
       </View>
@@ -260,7 +235,9 @@ const styles = StyleSheet.create({
     ...softShadow,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  cardTitle: { color: colors.neutral, flex: 1 },
+  cardTitle: { color: colors.neutral },
+  cardBody: { flex: 1, minWidth: 0, gap: spacing.xs },
+  preview: { width: 88, height: 88, borderRadius: radius.md, overflow: 'hidden' },
   cardMeta: { color: colors.secondary },
   cardError: { color: colors.error },
   progressTrack: {
@@ -271,9 +248,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   progressFill: { height: 6, borderRadius: radius.full },
-  thumbnail: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.surfaceAlt },
+  thumbnail: { width: 88, height: 88, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   retention: { color: colors.secondary, marginBottom: spacing.md },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.sm },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   action: { minHeight: 48, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   actionText: { color: colors.brandGold },
   actionMuted: { color: colors.secondary },
