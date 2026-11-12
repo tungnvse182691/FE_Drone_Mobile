@@ -99,7 +99,7 @@ export default function ReporterLayout() {
       {!keyboardVisible && !keyboardOpening ? <View testID="reporter-navigation-dock" pointerEvents="box-none"
         style={[styles.navigationDock, { height: viewport.height || '100%' }]}>
         <SafeAreaView edges={['bottom']} onLayout={event => setNavigationHeight(event.nativeEvent.layout.height)}>
-        <BottomNav tabs={TABS} activeRoute={activeRoute} onNavigate={navigate} />
+        <BottomNav tabs={TABS} activeRoute={activeRoute} onNavigate={navigate} appearance="reporter" />
         </SafeAreaView>
       </View> : null}
     </View>

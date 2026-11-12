@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
 import { colors, typography } from '../design-tokens';
+import { reporterAppearance } from './reporter/appearance';
 
 type MatIconName = ComponentProps<typeof MaterialIcons>['name'];
 
@@ -21,26 +22,30 @@ interface BottomNavProps {
   tabs: NavTab[];
   activeRoute: string;
   onNavigate?: (route: string) => void;
+  appearance?: 'default' | 'reporter';
 }
 
-export function BottomNav({ tabs, activeRoute, onNavigate }: BottomNavProps) {
+export function BottomNav({ tabs, activeRoute, onNavigate, appearance = 'default' }: BottomNavProps) {
+  const isReporter = appearance === 'reporter';
   const activeIndex = tabs.findIndex(tab =>
     (tab.activeRoutes ?? tab.activePrefixes ?? [tab.route]).includes(activeRoute));
 
   return (
-    <View style={styles.container}>
+    <View style={isReporter ? [styles.container, styles.reporterContainer] : styles.container}>
       {tabs.map((tab, index) => {
         const isActive = index === activeIndex;
         const iconColor = isActive ? colors.primary : colors.secondary;
         return (
           <Pressable
             key={tab.route}
-            style={styles.tab}
+            style={isReporter ? [styles.tab, styles.reporterTab] : styles.tab}
+            android_ripple={isReporter ? { color: reporterAppearance.pressed, foreground: true } : undefined}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             onPress={() => onNavigate ? onNavigate(tab.route) : router.push(tab.route)}
           >
-            <View style={[styles.iconContainer, isActive && styles.activeIcon]}>
+            <View style={[styles.iconContainer, isActive && styles.activeIcon,
+              isReporter && styles.reporterIcon, isReporter && isActive && styles.reporterActiveIcon]}>
               <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
             </View>
             <Text style={[typography.labelSm, styles.label, { color: iconColor }]}>
@@ -74,4 +79,8 @@ const styles = StyleSheet.create({
   label: { textAlign: 'center', flexShrink: 1 },
   iconContainer: { width: 44, minHeight: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
   activeIcon: { backgroundColor: `${colors.primary}18` },
+  reporterContainer: { borderTopColor: reporterAppearance.border },
+  reporterTab: { borderRadius: 12, overflow: 'hidden' },
+  reporterIcon: { width: 56, borderRadius: 999, borderWidth: 1, borderColor: 'transparent' },
+  reporterActiveIcon: { backgroundColor: reporterAppearance.pressed, borderColor: reporterAppearance.border },
 });
