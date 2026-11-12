@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth';
@@ -104,7 +104,6 @@ export default function CrewProfileScreen() {
         <Text style={[typography.bodyMd, styles.meta]}>
           Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
         </Text>
-        {user?.employee_code?.trim() ? <Text style={[typography.caption, styles.unit]}>Thông tin tài khoản hiện tại</Text> : null}
         <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>
@@ -114,7 +113,9 @@ export default function CrewProfileScreen() {
       </View>
 
       <Card style={styles.statsCard}>
-        <View style={styles.statsHeading}><Text style={[typography.titleMd, { color: colors.neutral }]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View>
+        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, { color: colors.neutral }]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
+            {inbox.query.isFetching ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
+          </Pressable></View>
         {inbox.error ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: colors.secondary }]}>{inbox.error}</Text> :
           inbox.query.isPending && inbox.enabled ? <Text style={typography.bodyMd}>Đang tải thống kê…</Text> :
           !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
@@ -132,9 +133,7 @@ export default function CrewProfileScreen() {
             </React.Fragment>
           ))}
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={{ minHeight: 48, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={[typography.labelLg, { color: colors.secondary }]}>{inbox.query.isFetching ? 'Đang tải…' : 'Tải lại thống kê'}</Text>
-        </Pressable>
+
       </Card>
 
       <Text style={[typography.labelSm, styles.sectionLabel]}>CÀI ĐẶT HỆ THỐNG</Text>
@@ -207,11 +206,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     textAlign: 'center',
   },
-  unit: {
-    color: colors.secondary,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
   email: {
     color: colors.secondary,
     marginTop: spacing.xs,
@@ -233,26 +227,19 @@ const styles = StyleSheet.create({
     color: colors.brandGold,
   },
   statsCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     marginBottom: spacing.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-evenly',
   },
-  statsHeading: { marginBottom: spacing.md, gap: 2 },
+  statsHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, gap: spacing.sm },
+  statsHeadingText: { flex: 1, gap: 2 },
+  refreshButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full },
   statDivider: {
     width: 1,
     height: 36,
@@ -274,19 +261,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   settingsCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     marginBottom: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
   row: {
     flexDirection: 'row',
@@ -320,7 +298,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 48,
     paddingVertical: spacing.md,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     backgroundColor: '#FFFAFA',
     borderWidth: 1,
     borderColor: colors.error,
