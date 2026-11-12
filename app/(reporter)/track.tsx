@@ -88,6 +88,12 @@ export default function ReporterTrackScreen() {
                   </Text>
                   <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
                 </View>
+                <Text style={[typography.bodyMd, styles.description]} numberOfLines={3}>
+                  {report.description || 'Chưa có mô tả'}
+                </Text>
+                <Text style={[typography.caption, styles.metaText]}>
+                  {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
+                </Text>
                 <View style={styles.metaRow}>
                   <MaterialIcons name="photo-library" size={14} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
@@ -141,6 +147,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   reportDate: { color: colors.secondary, flex: 1 },
+  description: { color: colors.neutral },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   metaText: { color: colors.secondary },
 });

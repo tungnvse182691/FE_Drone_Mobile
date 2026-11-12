@@ -131,14 +131,14 @@ export default function ReporterReportDetailScreen() {
 
             {report.publicUpdates.length > 0 ? (
               <Card style={styles.card}>
-                <Text style={[typography.titleMd, styles.sectionTitle]}>Cập nhật từ Ban QLDA</Text>
+                <Text style={[typography.titleMd, styles.sectionTitle]}>Cập nhật từ Ban quản lý dự án</Text>
                 {report.publicUpdates.map((update) => (
                   <View key={update.id} style={styles.evidenceRow}>
                     <MaterialIcons name="campaign" size={16} color={colors.secondary} />
                     <View style={styles.evidenceText}>
                       <ExpandableDescription value={update.summary} />
                       <Text style={[typography.caption, styles.metaText]}>
-                        {formatDate(update.publishedAt)}
+                        Công bố lúc {formatDate(update.publishedAt)}
                       </Text>
                       <View style={styles.evidenceGrid}>{update.evidenceIds.map(evidenceId => (
                         <View key={evidenceId} style={styles.evidenceCell}>

@@ -62,10 +62,14 @@ for(const status of [401,403,404,409,412,503])test('T03 private read error '+sta
 });
 
 // Execute production screen logic with deterministic UI/query boundaries. Not native rendering.
-test('Reporter summary lists omit free text; detail retains the submitted description',()=>{
+test('Reporter home omits free text; track summarizes it and detail retains it',()=>{
  for(const file of ['home','track']){
  const home=screenHarness(`app/(reporter)/${file}.tsx`);
- assert.ok(!home.nodes().includes('real report'));
+ if(file==='home')assert.ok(!home.nodes().includes('real report'));
+ else {
+  const summary=home.nodes().find(n=>n?.type==='Text'&&n.props.children.includes('real report'));
+  assert.ok(summary);assert.equal(summary.props.numberOfLines,3);
+ }
  assert.ok(home.nodes().includes(' ảnh hiện trường'));
  }
  const detail=screenHarness('app/(reporter)/report-detail.tsx');
