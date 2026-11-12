@@ -17,8 +17,8 @@ import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -89,30 +89,19 @@ export default function ReporterHomeScreen() {
         </View>
       }
     >
-      <Card style={styles.banner}>
-        <View style={styles.bannerRow}>
-          <MaterialIcons name="campaign" size={28} color={colors.primaryDark} />
-          <Text style={[typography.titleMd, styles.bannerTitle]}>
-            Phản ánh hiện trạng hư hại đường bê tông
-          </Text>
-        </View>
-        <Text style={[typography.caption, styles.bannerBody]}>
-          Gửi ảnh và mô tả hiện trạng. Theo dõi tình trạng tiếp nhận và xử lý qua dữ liệu phản hồi từ hệ thống.
-        </Text>
-      </Card>
-
       <View style={styles.actions}>
         <ActionCard
           icon="add-circle"
-          title="Gửi phản ánh khuyết tật mới"
-          description="Chụp ảnh hiện trường và mô tả vị trí hư hại"
+          primary
+          title="Gửi phản ánh"
+          description="Ảnh hiện trường · Mô tả · Vị trí"
           onPress={() => router.push(REPORTER_REPORT)}
           testID="reporter-action-report"
         />
         <ActionCard
           icon="search"
           title="Phản ánh của tôi"
-          description="Xem lại các phản ánh đã gửi và bổ sung thông tin"
+          description="Xem cập nhật và bổ sung thông tin"
           onPress={() => router.push(REPORTER_TRACK)}
           testID="reporter-action-track"
         />
@@ -125,9 +114,10 @@ export default function ReporterHomeScreen() {
           disabled={checking} onPress={() => void inspect(command.id)} />)}
       </Card> : null}
       {enabled && historyMessage ? <Text style={typography.caption}>{historyMessage}</Text> : null}
-      <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây của bạn</Text>
-
-      {enabled ? <Button variant="secondary" title="Làm mới" loading={query.isFetching && !query.isFetchingNextPage} onPress={() => void query.refetch()} /> : null}
+      <View style={styles.sectionRow}>
+        <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây</Text>
+        {enabled ? <Button variant="text" title="Làm mới" loading={query.isFetching && !query.isFetchingNextPage} onPress={() => void query.refetch()} /> : null}
+      </View>
       {enabled && query.isError ? <Text style={{ color: colors.error }}>{query.isFetchNextPageError && canShowReportPages(query) ? 'Không tải thêm được. Đang hiển thị phản ánh đã tải; thử tải thêm hoặc làm mới.' : 'Không tải được phản ánh. Vui lòng làm mới để thử lại.'}</Text> : null}
       {enabled && query.isPending ? <Text>Đang tải phản ánh…</Text> : null}
       {!activeEmail ? (
@@ -164,10 +154,14 @@ export default function ReporterHomeScreen() {
             >
               <Card style={styles.reportCard}>
                 <View style={styles.reportHeader}>
-                  <Text style={[typography.titleMd, styles.reportCode]}>
-                    {formatDate(report.createdAt)}
+                  <Text numberOfLines={2} style={[typography.titleMd, styles.reportDescription]}>
+                    {report.description}
                   </Text>
                   <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
+                </View>
+                <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
+                <View style={styles.routingChip}>
+                  <Text style={[typography.caption, styles.reportDate]}>{report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : 'Chưa có thông tin phân tuyến'}</Text>
                 </View>
                 <View style={styles.reportFooter}>
                   <MaterialIcons name="photo-library" size={12} color={colors.secondary} />
@@ -187,13 +181,14 @@ export default function ReporterHomeScreen() {
 
 interface ActionCardProps {
   icon: 'add-circle' | 'search';
+  primary?: boolean;
   title: string;
   description: string;
   onPress: () => void;
   testID?: string;
 }
 
-function ActionCard({ icon, title, description, onPress, testID }: ActionCardProps) {
+function ActionCard({ icon, title, description, onPress, testID, primary }: ActionCardProps) {
   return (
     <AnimatedPressable
       onPress={onPress}
@@ -202,9 +197,9 @@ function ActionCard({ icon, title, description, onPress, testID }: ActionCardPro
       accessibilityLabel={title}
       style={({ pressed }) => [styles.actionWrapper, pressed && styles.actionPressed]}
     >
-      <Card style={styles.actionCard}>
+      <Card style={[styles.actionCard, primary && styles.primaryAction]}>
         <View style={styles.actionIcon}>
-          <MaterialIcons name={icon} size={26} color={colors.brandGold} />
+          <MaterialIcons name={icon} size={26} color={colors.neutral} />
         </View>
         <View style={styles.actionText}>
           <Text style={[typography.titleMd, styles.actionTitle]}>{title}</Text>
@@ -249,7 +244,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileBtn: {
-    padding: spacing.xs,
+    minWidth: 48,
+    minHeight: 48,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
@@ -259,34 +255,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   headerTitle: {
+    fontFamily: 'Sansation',
     color: colors.brandGold,
   },
   headerSubtitle: {
-    color: colors.secondary,
-  },
-  banner: {
-    backgroundColor: colors.surfaceAlt,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  bannerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  bannerTitle: {
-    flex: 1,
-    color: colors.onSurface,
-  },
-  bannerBody: {
     color: colors.secondary,
   },
   actions: {
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
+  primaryAction: { backgroundColor: colors.primary },
   actionWrapper: {
     borderRadius: radius.lg,
   },
@@ -320,8 +299,9 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.onSurface,
-    marginBottom: spacing.md,
+    flex: 1,
   },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   hintCard: {
     backgroundColor: colors.surfaceAlt,
   },
@@ -348,9 +328,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  reportCode: {
-    color: colors.brandGold,
-  },
+  reportDescription: { flex: 1, color: colors.neutral },
+  routingChip: { alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   reportFooter: {
     flexDirection: 'row',
     alignItems: 'center',
