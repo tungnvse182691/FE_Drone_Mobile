@@ -4,6 +4,7 @@ import { reportDescriptionError } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -18,7 +19,7 @@ import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-ca
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
@@ -35,8 +36,8 @@ import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -91,6 +92,7 @@ export default function ReporterReportSupplementScreen() {
   } | null>(null);
 
   const [phase, setPhase] = useState<Phase>('loading');
+  const [showConflictDetails, setShowConflictDetails] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scope = useReporterDraftScope();
@@ -320,11 +322,9 @@ export default function ReporterReportSupplementScreen() {
   if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Bổ sung thông tin phản ánh" />}><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
     <SafeAreaScreen scroll header={<><ReporterHeader title="Bổ sung thông tin phản ánh" />{phase === 'submitting' ? <Text testID="submission-progress" accessibilityLiveRegion="polite" style={[typography.caption, { padding: spacing.md }]}>{submitProgress}</Text> : null}</>}>
-      <Text style={[typography.caption, styles.subtitle]}>
-        Gửi thêm thông tin cho phản ánh đã tạo. Nếu phản ánh đã thay đổi ở nơi khác, hệ thống sẽ cảnh
-        báo xung đột phiên bản.
-      </Text>
+      <Text style={[typography.caption, styles.subtitle]}>Thêm mô tả và ảnh hiện trường cho phản ánh này.</Text>
       {phase === 'failed' ? <Button title="Thử tải lại" variant="secondary" onPress={() => void loadReport()} /> : null}
 
       {phase === 'failed' && pendingDraft && pendingDraft.targetReportId !== reportId ? (
@@ -339,12 +339,13 @@ export default function ReporterReportSupplementScreen() {
           <View style={styles.cardHeader}>
             <MaterialIcons name="description" size={18} color={colors.brandGold} />
             <Text style={[typography.labelLg, styles.cardTitle]}>
-              Phản ánh gửi lúc {formatTime(report.createdAt)}
+              Phản ánh gốc
             </Text>
           </View>
-          <Text style={[typography.caption, styles.cardText]}>
+          <Text style={[typography.bodyMd, styles.cardText]} numberOfLines={2}>
             {report.description?.trim() || 'Chưa có mô tả'}
           </Text>
+          <Text style={[typography.caption, styles.cardMeta]}>Đã gửi lúc {formatTime(report.createdAt)}</Text>
           {loadedAt ? (
             <Text style={[typography.caption, styles.cardMeta]}>
               Bản đang xem tải lúc {formatTime(loadedAt)}
@@ -373,16 +374,20 @@ export default function ReporterReportSupplementScreen() {
             {provenRejection ? <Button variant="secondary"
               title="Tạo bản bổ sung mới để xem lại" onPress={() => void renewCommand()} /> : null}
           </View>
-          <Text style={[typography.caption, styles.conflictText]}>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showConflictDetails }} testID="supplement-conflict-details" onPress={() => setShowConflictDetails(value => !value)} style={styles.detailsButton}>
+            <Text style={[typography.caption, styles.conflictText]}>{showConflictDetails ? 'Thu gọn điều kiện gửi lại' : 'Điều kiện gửi lại'}</Text>
+            <MaterialIcons name={showConflictDetails ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
+          </Pressable>
+          {showConflictDetails ? <Text style={[typography.caption, styles.conflictText]}>
             Chỉ tạo bản mới sau khi máy chủ từ chối lần gửi đầu và dữ liệu hiện hành chứng minh chưa có ảnh của lệnh đó.
-            Kết quả chưa rõ hoặc xung đột khóa lệnh cần đối soát; không tự đổi khóa hay phiên bản.
-          </Text>
+            Kết quả chưa rõ cần đối soát; không tự đổi khóa hay phiên bản.
+          </Text> : null}
         </View>
       ) : null}
 
       {report ? (
         <>
-          <View pointerEvents={busy || draftLocked ? "none" : "auto"}>
+          <View style={styles.card} pointerEvents={busy || draftLocked ? "none" : "auto"}>
           <InputField
             label="Nội dung bổ sung"
             value={description}
@@ -392,7 +397,7 @@ export default function ReporterReportSupplementScreen() {
                 setError(null);
               }
             }}
-            placeholder="Mô tả thêm tình trạng hiện trường, thời điểm, hướng xử lý mong muốn..."
+            placeholder="Mô tả thêm hiện trạng hoặc vị trí cần làm rõ…"
             multiline
             numberOfLines={5}
             testID="supplement-description-input"
@@ -400,13 +405,14 @@ export default function ReporterReportSupplementScreen() {
           </View>
           {draftLocked ? <Text style={typography.caption}>Đang giữ nguyên nội dung và điều kiện của lần gửi trước.</Text> : null}
 
+          <View style={styles.card}>
           <Text style={[typography.labelLg, styles.sectionLabel]}>
             Ảnh hiện trường bổ sung ({photos.length}/{MAX_PHOTOS})
           </Text>
           <View style={styles.photoGrid} pointerEvents={busy || draftLocked ? "none" : "auto"}>
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
-                <Image source={{ uri }} style={styles.photo} />
+                <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh bổ sung ${index + 1}`} />
                 <Pressable
                   onPress={() => handleRemovePhoto(index)}
                   style={styles.photoRemove}
@@ -445,7 +451,10 @@ export default function ReporterReportSupplementScreen() {
               </Pressable>
             ) : null}
           </View>
-
+          </View>
+          {busy || phase === 'conflict' || !description.trim() || photos.length === 0 ? <Text testID="supplement-disabled-reason" style={[typography.caption, styles.sectionLabel]}>
+            {phase === 'conflict' ? 'Cần xem lại xung đột trước khi gửi.' : busy ? 'Đang xử lý, vui lòng chờ.' : !description.trim() ? 'Nhập nội dung bổ sung để tiếp tục.' : 'Chọn ít nhất một ảnh bổ sung.'}
+          </Text> : null}
           <Button
             variant="primary"
             title="Gửi bổ sung"
@@ -523,13 +532,14 @@ export default function ReporterReportSupplementScreen() {
               accessibilityLabel="Chụp ảnh"
               testID="camera-shutter"
             >
-              <MaterialIcons name="camera" size={28} color={colors.onPrimary} />
+              <MaterialIcons name="camera" size={28} color={colors.neutral} />
             </Pressable>
           </View>
           </SafeAreaView>
         </View>
       </Modal>
     </SafeAreaScreen>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -546,7 +556,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cardTitle: { color: colors.neutral, flex: 1 },
   cardText: { color: colors.secondary },
-  cardMeta: { color: colors.brandGold },
+  cardMeta: { color: colors.secondary },
   conflictCard: {
     backgroundColor: '#FFF8E6',
     borderRadius: radius.lg,
@@ -560,6 +570,7 @@ const styles = StyleSheet.create({
   conflictTitle: { color: colors.neutral, flex: 1 },
   conflictText: { color: colors.secondary },
   conflictActions: { gap: spacing.sm },
+  detailsButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   sectionLabel: { color: colors.secondary, marginBottom: spacing.sm, marginTop: spacing.sm },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   photoWrapper: { position: 'relative' },
@@ -614,7 +625,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     borderWidth: 4,
     borderColor: colors.brandGold,
-    backgroundColor: 'rgba(218, 165, 32, 0.3)',
+    backgroundColor: colors.brandGold,
     alignItems: 'center',
     justifyContent: 'center',
   },
