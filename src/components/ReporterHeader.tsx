@@ -3,8 +3,8 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../design-tokens';
 
-// Uses the established Reporter Home branding without adding account or API actions.
-export function ReporterHeader({ title, onBack }: { title: string; onBack?: () => void }) {
+// Screen-owned actions are optional; the header does not dispatch API calls.
+export function ReporterHeader({ title, onBack, rightAction }: { title: string; onBack?: () => void; rightAction?: React.ReactNode }) {
   return (
     <View style={styles.header}>
       {onBack ? <Pressable accessibilityRole="button" accessibilityLabel="Quay lại" testID="reporter-header-back" onPress={onBack} style={styles.backButton}>
@@ -13,9 +13,10 @@ export function ReporterHeader({ title, onBack }: { title: string; onBack?: () =
       <Image source={require('../../assets/logo_hoanghai_icon.png')} style={styles.logo}
         resizeMode="contain" accessibilityLabel="Logo Bê tông Hoàng Hải" />
       <View style={styles.textBlock}>
-        <Text style={[typography.titleMd, styles.brand]}>BÊ TÔNG HOÀNG HẢI</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[typography.titleMd, styles.brand]}>BÊ TÔNG HOÀNG HẢI</Text>
         <Text accessibilityRole="header" style={[typography.caption, styles.title]}>{title}</Text>
       </View>
+      {rightAction}
     </View>
   );
 }
@@ -28,7 +29,7 @@ const styles = StyleSheet.create({
   },
   backButton: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   logo: { width: 40, height: 40 },
-  textBlock: { flex: 1, gap: spacing.xs },
+  textBlock: { flex: 1, minWidth: 0, gap: spacing.xs },
   brand: { fontFamily: 'Sansation', color: colors.brandGold, letterSpacing: 0.6 },
   title: { color: colors.secondary },
 });

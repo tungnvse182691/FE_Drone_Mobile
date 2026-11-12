@@ -1,7 +1,7 @@
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -84,9 +84,16 @@ export default function ReporterProfileScreen() {
   };
 
   const displayName = profile ? normalizeName(profile.displayName) : 'Chưa tải hồ sơ';
+  const refreshing = enabled && (profileQuery.isFetching || (reportQuery.isFetching && !reportQuery.isFetchingNextPage));
 
   return (
-    <SafeAreaScreen scroll header={<ReporterHeader title="Hồ sơ cá nhân" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_ACCOUNT)} />}>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Hồ sơ cá nhân" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_ACCOUNT)}
+      rightAction={<Pressable testID="refresh-profile" accessibilityRole="button" accessibilityLabel="Làm mới hồ sơ"
+        accessibilityState={{ disabled: !enabled || refreshing, busy: refreshing }} disabled={!enabled || refreshing}
+        onPress={() => { void refreshProfile(); void refreshReports(); }}
+        style={{ width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', opacity: !enabled ? 0.4 : 1 }}>
+        {refreshing ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
+      </Pressable>} />}>
       <View style={styles.profileHeader}>
         <View style={styles.identityRow}>
           <View style={styles.avatar}>
@@ -108,12 +115,9 @@ export default function ReporterProfileScreen() {
         </View>
       </View>
 
-      <Button variant="text" title="Làm mới hồ sơ" loading={enabled && (profileQuery.isFetching || (reportQuery.isFetching && !reportQuery.isFetchingNextPage))}
-        disabled={!enabled} onPress={() => { void refreshProfile(); void refreshReports(); }} />
       {!enabled ? <Text>Vui lòng đăng nhập để xem hồ sơ.</Text> : null}
       {enabled && (profileQuery.isError || reportQuery.isError) ? <Text style={{ color: colors.error }}>{reportQuery.isFetchNextPageError && canShowReportPages(reportQuery) && !profileQuery.isError ? 'Không tải thêm được. Thống kê hiện chỉ gồm các phản ánh đã tải.' : 'Không tải được dữ liệu. Vui lòng làm mới để thử lại.'}</Text> : null}
       {enabled && (profileQuery.isPending || reportQuery.isPending) ? <Text>Đang tải hồ sơ…</Text> : null}
-      <Text style={typography.caption}>Thống kê trong các phản ánh đã tải; không phải tổng toàn bộ lịch sử.</Text>
       <View style={styles.statsRow}>
         <Card style={styles.statCard}>
           <Text style={[typography.headlineLg, styles.statValue]}>{countAvailable ? totalReports : '—'}</Text>
@@ -196,9 +200,6 @@ export default function ReporterProfileScreen() {
           onPress={handleLogout}
           icon={<MaterialIcons name="logout" size={18} color={colors.error} />}
         />
-        <Text style={[typography.caption, styles.logoutHint]}>
-          Đăng xuất sẽ đóng phiên hiện tại và quay về màn hình đăng nhập hệ thống.
-        </Text>
       </View>
 
       {toast && <Toast message={toast} type="info" />}
@@ -341,10 +342,5 @@ const styles = StyleSheet.create({
   logoutWrapper: {
     marginTop: spacing.sm,
     marginBottom: spacing.xl,
-  },
-  logoutHint: {
-    color: colors.secondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
   },
 });

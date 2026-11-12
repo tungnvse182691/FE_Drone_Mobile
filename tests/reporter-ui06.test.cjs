@@ -11,15 +11,21 @@ test('UI06 account keeps security actions and profile route without employee-onl
  assert.equal(s.h.calls.length,0);s.unmount();
 });
 test('UI06 profile reports loaded-page statistics and offers no fabricated progress or support',async()=>{
- const reports={data:{pages:[{items:[{evidence:[{}],supplements:[]}]}]},isError:false,isFetching:false,refetch:async()=>{},hasNextPage:false};
+ let profileRefreshes=0,reportRefreshes=0;
+ const reports={data:{pages:[{items:[{evidence:[{}],supplements:[]}]}]},isError:false,isFetching:false,refetch:async()=>{reportRefreshes++;},hasNextPage:false};
  const s=screen('app/(reporter)/profile.tsx',{modules:{
-  '@tanstack/react-query':{useInfiniteQuery:()=>reports,useQuery:()=>({data:{displayName:'Resident',email:'resident@example.test',status:'ACTIVE'},refetch:async()=>{}})},
+  '@tanstack/react-query':{useInfiniteQuery:()=>reports,useQuery:()=>({data:{displayName:'Resident',email:'resident@example.test',status:'ACTIVE'},refetch:async()=>{profileRefreshes++;}})},
   '../../src/api/authApi':{passwordSessionIdentity:()=> 'fixture-session'},
   '../../src/api/reporterApi':{reporterReportsOptions:()=>({}),reportItemsFromPages:p=>p?.flatMap(p=>p.items)??[],canShowReportPages:()=>true},
   '../../src/components/Card':{Card:'Card'},'../../src/components/Toast':{Toast:'Toast'},'../../src/components/AnimatedPressable':{AnimatedPressable:'AnimatedPressable'}
  }});
  s.h.login();s.render();await s.flush();
- assert.match(text(s),/không phải tổng toàn bộ lịch sử/);assert.match(text(s),/Phản ánh của tôi/);
+ assert.doesNotMatch(text(s),/Thống kê trong các phản ánh đã tải; không phải tổng toàn bộ lịch sử/);assert.match(text(s),/Phản ánh đã tải/);assert.match(text(s),/Phản ánh của tôi/);
  assert.doesNotMatch(text(s),/Tra cứu tiến độ|Hỗ trợ phản ánh|chưa có thông tin liên hệ/i);
- assert.ok(s.nodes().some(n=>n.props.title==='Làm mới hồ sơ'));assert.equal(s.h.calls.length,0);s.unmount();
+ assert.ok(!s.nodes().some(n=>n.props.title==='Làm mới hồ sơ'));
+ const action=s.nodes().find(n=>n.type==='SafeAreaScreen').props.header.props.rightAction;
+ assert.equal(action.props.testID,'refresh-profile');assert.equal(action.props.accessibilityLabel,'Làm mới hồ sơ');
+ const before=[profileRefreshes,reportRefreshes];action.props.onPress();
+ assert.deepEqual([profileRefreshes,reportRefreshes],[before[0]+1,before[1]+1]);
+ assert.equal(s.h.calls.length,0);s.unmount();
 });

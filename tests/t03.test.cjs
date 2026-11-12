@@ -140,7 +140,7 @@ for(const file of ['home','track','profile','report-detail'])test('T03 '+file+' 
 });
 test('T03 profile displays server identity and no fabricated OTP claim or total count',()=>{
   const h=screenHarness('app/(reporter)/profile.tsx');const text=h.nodes().filter(x=>typeof x==='string').join(' ');
-  assert.match(text,/Server Name/);assert.match(text,/server@example.test/);assert.doesNotMatch(text,/Stale Name|stale@example.test|đã xác thực OTP/);assert.match(text,/không phải tổng/);
+  assert.match(text,/Server Name/);assert.match(text,/server@example.test/);assert.doesNotMatch(text,/Stale Name|stale@example.test|đã xác thực OTP/);assert.match(text,/Phản ánh đã tải/);assert.doesNotMatch(text,/không phải tổng toàn bộ lịch sử|Đăng xuất sẽ đóng phiên/);
 });
 test('T03 profile rejects a response for a different owner',async()=>{
   const h=screenHarness('app/(reporter)/profile.tsx',{wireProfile:{userId:'b',roleCode:'REPORTER'}});
