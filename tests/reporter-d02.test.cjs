@@ -10,6 +10,26 @@ function setup(opts={}){
  uploads.uploadTransport.getFileMetadata=(...args)=>h.transport.getFileMetadata(...args);
  return {h,sleeps,store,uploads};
 }
+
+test('one submit survives a temporary verification GET failure without replaying upload mutations',async()=>{
+ const {h,store}=setup();const metadata=h.transport.getFileMetadata;let reads=0;
+ h.transport.getFileMetadata=async()=>{if(++reads===1)throw {code:'ERR_NETWORK'};return metadata();};
+ await store.getState().savePendingDraft(input);
+ assert.equal(await store.getState().submitPendingDraft(),'report');
+ assert.equal(h.calls.filter(c=>c[0]==='create').length,1);
+ assert.equal(h.calls.filter(c=>c[0]==='complete').length,1);
+ assert.equal(h.calls.filter(c=>c[0]==='report').length,1);
+});
+
+test('selected photos upload concurrently with at most two active transfers and one report dispatch',async()=>{
+ const {h,store,uploads}=setup();const put=uploads.uploadTransport.putPart;const gate=deferred();let active=0,max=0,started=0;
+ uploads.uploadTransport.putPart=async(...args)=>{active++;max=Math.max(max,active);started++;await gate.promise;try{return await put(...args);}finally{active--;}};
+ await store.getState().savePendingDraft({...input,photos:Array.from({length:3},(_,i)=>({...input.photos[0],uri:`file://photo${i}.png`,fileName:`photo${i}.png`}))});
+ const pending=store.getState().submitPendingDraft();
+ await new Promise(r=>setTimeout(r,80));const overlapping=started;gate.resolve();await pending;
+ assert.equal(overlapping,2);assert.equal(max,2);
+ assert.equal(h.calls.filter(c=>c[0]==='report').length,1);
+});
 test('D02 one explicit submit observes pending with bounded GET backoff, then dispatches and reads back once',async()=>{
  const {h,sleeps,store}=setup();const metadata=h.transport.getFileMetadata;let reads=0;
  h.transport.getFileMetadata=async()=>({...await metadata(),status:++reads<4?'VERIFYING':'VERIFIED'});

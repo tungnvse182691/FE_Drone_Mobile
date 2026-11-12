@@ -2,10 +2,11 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {harness}=require('./helpers/roadfe-screen.cjs');
 const input={description:'valid description',photos:[{uri:'cache://old.jpg',fileName:'old.jpg',mediaType:'image/jpeg',capturedAt:'2026-10-31'}],coords:null};
 for(const [method,stage] of [['createSession','upload_create'],['requestPartUrls','upload_part_urls'],['putPart','upload_put'],['completeUpload','upload_complete'],['getFileMetadata','upload_verify']])test('B2 '+method+' failure records safe stage across reopen and never POSTs report',async()=>{
- const h=harness();h.login();h.transport[method]=async()=>{throw {code:'ERR_NETWORK'};};
+ let time=0;const verification=harness().load('src/store/reporterVerification.ts');
+ const h=harness({modules:{'./reporterVerification':{...verification,waitForReporterVerification:options=>verification.waitForReporterVerification({...options,clock:{now:()=>time,sleep:async ms=>{time+=ms;}}})}}});h.login();h.transport[method]=async()=>{throw {code:'ERR_NETWORK'};};
  const st=h.load('src/store/reporter.ts'),q=h.load('src/store/uploads.ts');await st.useReporterStore.getState().savePendingDraft(input);
  let error;try{await st.useReporterStore.getState().submitPendingDraft();}catch(e){error=e;}
- assert.ok(error);assert.equal(error.stage,stage);assert.equal(error.code,'ERR_NETWORK');assert.equal(h.calls.some(c=>c[0]==='report'),false);
+ assert.ok(error);if(method==='getFileMetadata')assert.equal(error.code,'verification_timeout');else{assert.equal(error.stage,stage);assert.equal(error.code,'ERR_NETWORK');}assert.equal(h.calls.some(c=>c[0]==='report'),false);
  const rows=h.rows;const reopened=harness({rows});reopened.login();const qs=reopened.load('src/store/uploads.ts').useUploadsStore;await qs.getState().hydrate();const item=qs.getState().items[0];assert.equal(item.lastErrorStage,stage);assert.equal(item.lastErrorCode,'ERR_NETWORK');
  const msg=st.reporterFailureMessage(error);assert.match(msg,method==='putPart'?/Không kết nối được dịch vụ lưu ảnh/:/ảnh/);assert.doesNotMatch(msg,/bấm gửi lại để kiểm tra với cùng khóa lệnh/);
 });

@@ -13,7 +13,7 @@ import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '
 import { uuidv4 } from '../utils/uuid';
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
-import { waitForReporterVerification } from './reporterVerification';
+import { isTemporaryVerificationFailure, waitForReporterVerification } from './reporterVerification';
 import { buildReportEvidenceLocation, locationSourceFor as sourceFor } from '../types/position';
 
 export interface DraftPhoto {
@@ -347,8 +347,6 @@ export const useReporterStore = create<ReporterSessionState>()(
           assertOwner();
           for (let index = 0; index < draft.photos.length && !draft.resultReportId; index++) {
             assertActive();
-            progress('uploading', index + 1, draft.photos.length);
-            const uploadStarted = Date.now();
             assertOwner();
             const photo = draft.photos[index];
             let id = photo.itemId;
@@ -379,12 +377,27 @@ export const useReporterStore = create<ReporterSessionState>()(
             const linked = useUploadsStore.getState().items.find(p => p.id === id);
             if (!linked || linked.partitionId !== context.partition || linked.uriLocal !== photo.uri ||
                 linked.fileName !== photo.fileName || linked.mediaType !== photo.mediaType) throw { code: 'access_forbidden', status: 403 };
-            try { await queue.advanceItem(id, 'explicit', assertActive); }
-            finally { timing.uploadMs += Date.now() - uploadStarted; }
-            assertActive();
-            const item = useUploadsStore.getState().items.find(p => p.id === id);
-            if (item?.lastErrorCode) throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
-            if (!item?.fileId || !['VERIFIED', 'VERIFYING', 'COMPLETE_REQUESTED'].includes(item.mediaState)) throw { code: 'source_not_ready' };
+          }
+          // Persist every photo binding serially before starting independent transfers.
+          // Settle both workers before rejecting; no orphan worker may keep dispatching.
+          for (let start = 0; start < draft.photos.length && !draft.resultReportId; start += 2) {
+            const uploadStarted = Date.now();
+            const batch = draft.photos.slice(start, start + 2);
+            const results = await Promise.allSettled(batch.map(async (photo, offset) => {
+              assertActive();
+              progress('uploading', start + offset + 1, draft!.photos.length);
+              const id = photo.itemId!;
+              await queue.advanceItem(id, 'explicit', assertActive);
+              assertActive();
+              const item = useUploadsStore.getState().items.find(p => p.id === id);
+              if (item?.lastErrorCode && !(item.lastErrorStage === 'upload_verify' &&
+                  isTemporaryVerificationFailure(item.lastErrorCode, item.lastErrorStatus)))
+                throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
+              if (!item?.fileId || !['VERIFIED', 'VERIFYING', 'COMPLETE_REQUESTED'].includes(item.mediaState)) throw { code: 'source_not_ready' };
+            }));
+            timing.uploadMs += Date.now() - uploadStarted;
+            const failed = results.find(result => result.status === 'rejected');
+            if (failed?.status === 'rejected') throw failed.reason;
           }
           // Upload all selected bytes before waiting; the server may verify them
           // independently. Every observation below is GET-only, with no replay.
@@ -395,7 +408,11 @@ export const useReporterStore = create<ReporterSessionState>()(
               assertActive();
               const item = useUploadsStore.getState().items.find(p => p.id === id);
               if (!item || item.partitionId !== context.partition) throw { status: 403, code: 'access_forbidden' };
-              if (item.lastErrorCode) throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
+              if (item.lastErrorCode) {
+                if (item.lastErrorStage === 'upload_verify' && item.mediaState !== 'FAILED' &&
+                    isTemporaryVerificationFailure(item.lastErrorCode, item.lastErrorStatus)) return false;
+                throw { code: item.lastErrorCode, stage: item.lastErrorStage, status: item.lastErrorStatus };
+              }
               if (item.mediaState === 'FAILED') throw { code: 'upload_validation_failed', stage: 'upload_verify' };
               return item.mediaState === 'VERIFIED' && Boolean(item.fileId && item.verifiedVersion);
             };

@@ -2,6 +2,11 @@ import { computePollBackoffMs } from '../api/uploads';
 
 // A foreground observation budget, not a server SLA. No mutation is retried here.
 export const REPORTER_VERIFICATION_BUDGET_MS = 180_000;
+/** Only temporary read failures may be observed again during the original intent. */
+export function isTemporaryVerificationFailure(code?: string | null, status?: number): boolean {
+  return status !== undefined ? [408, 429, 500, 502, 503, 504].includes(status)
+    : ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT'].includes(code ?? '');
+}
 export async function waitForReporterVerification(options: {
   observe: () => Promise<boolean>;
   assertActive: () => void;
