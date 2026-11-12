@@ -6,7 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { Toast } from '../../src/components/Toast';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -19,8 +19,8 @@ import { REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -88,17 +88,17 @@ export default function ReporterProfileScreen() {
   return (
     <SafeAreaScreen scroll header={<ReporterHeader title="Hồ sơ cá nhân" />}>
       <View style={styles.profileHeader}>
-        <View style={styles.avatarWrap}>
+        <View style={styles.identityRow}>
           <View style={styles.avatar}>
-            <MaterialIcons name="person" size={52} color={colors.secondary} />
+            <MaterialIcons name="person" size={32} color={colors.secondary} />
           </View>
-
+          <View style={styles.identityText}>
+            <Text style={[typography.titleMd, styles.name]}>{displayName}</Text>
+            <Text style={[typography.bodyMd, styles.email]}>
+              {activeEmail || 'Chưa có dữ liệu hồ sơ'}
+            </Text>
+          </View>
         </View>
-
-        <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
-        <Text style={[typography.bodyMd, styles.email]}>
-          {activeEmail || 'Chưa có dữ liệu hồ sơ'}
-        </Text>
 
         <View style={styles.statusPill}>
           <View style={[styles.statusDot, isActive ? styles.statusDotGreen : styles.statusDotYellow]} />
@@ -108,7 +108,7 @@ export default function ReporterProfileScreen() {
         </View>
       </View>
 
-      <Button variant="secondary" title="Làm mới hồ sơ" loading={enabled && (profileQuery.isFetching || (reportQuery.isFetching && !reportQuery.isFetchingNextPage))}
+      <Button variant="text" title="Làm mới hồ sơ" loading={enabled && (profileQuery.isFetching || (reportQuery.isFetching && !reportQuery.isFetchingNextPage))}
         disabled={!enabled} onPress={() => { void refreshProfile(); void refreshReports(); }} />
       {!enabled ? <Text>Vui lòng đăng nhập để xem hồ sơ.</Text> : null}
       {enabled && (profileQuery.isError || reportQuery.isError) ? <Text style={{ color: colors.error }}>{reportQuery.isFetchNextPageError && canShowReportPages(reportQuery) && !profileQuery.isError ? 'Không tải thêm được. Thống kê hiện chỉ gồm các phản ánh đã tải.' : 'Không tải được dữ liệu. Vui lòng làm mới để thử lại.'}</Text> : null}
@@ -156,63 +156,18 @@ export default function ReporterProfileScreen() {
           accessibilityRole="button"
         >
           <View style={styles.menuIconWrap}>
-            <MaterialIcons name="search" size={22} color={colors.primary} />
+            <MaterialIcons name="description" size={22} color={colors.primary} />
           </View>
           <View style={styles.menuTextWrap}>
-            <Text style={[typography.bodyMd, styles.menuLabel]}>Tra cứu tiến độ xử lý</Text>
-            <Text style={[typography.caption, styles.menuSub]}>Theo dõi trạng thái các phản ánh đã gửi</Text>
+            <Text style={[typography.bodyMd, styles.menuLabel]}>Phản ánh của tôi</Text>
+            <Text style={[typography.caption, styles.menuSub]}>Xem cập nhật đã công bố</Text>
           </View>
           <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
         </AnimatedPressable>
       </Card>
 
-      <Text style={[typography.titleMd, styles.sectionTitle]}>Hỗ trợ & Thông tin dự án</Text>
-
+      <Text style={[typography.titleMd, styles.sectionTitle]}>Quyền riêng tư</Text>
       <Card style={styles.menuCard}>
-        <AnimatedPressable
-          style={styles.menuItem}
-          onPress={() =>
-            Alert.alert(
-              'Thông tin phản ánh',
-              'Thông tin vị trí và trạng thái xử lý được hiển thị theo từng phản ánh. Chưa có thông tin dự án được xác minh cho tài khoản này.',
-            )
-          }
-          accessibilityRole="button"
-        >
-          <View style={styles.menuIconWrap}>
-            <MaterialIcons name="info-outline" size={22} color={colors.secondary} />
-          </View>
-          <View style={styles.menuTextWrap}>
-            <Text style={[typography.bodyMd, styles.menuLabel]}>Thông tin phản ánh</Text>
-            <Text style={[typography.caption, styles.menuSub]}>Vị trí và trạng thái theo từng phản ánh</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </AnimatedPressable>
-
-        <View style={styles.divider} />
-
-        <AnimatedPressable
-          style={styles.menuItem}
-          onPress={() =>
-            Alert.alert(
-              'Hỗ trợ phản ánh',
-              'Chưa có thông tin liên hệ hỗ trợ được xác minh trong ứng dụng. Bạn có thể xem tình trạng phản ánh trong mục Tra cứu.',
-            )
-          }
-          accessibilityRole="button"
-        >
-          <View style={styles.menuIconWrap}>
-            <MaterialIcons name="headset-mic" size={22} color={colors.secondary} />
-          </View>
-          <View style={styles.menuTextWrap}>
-            <Text style={[typography.bodyMd, styles.menuLabel]}>Hỗ trợ phản ánh</Text>
-            <Text style={[typography.caption, styles.menuSub]}>Chưa có thông tin liên hệ được xác minh</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-        </AnimatedPressable>
-
-        <View style={styles.divider} />
-
         <AnimatedPressable
           style={styles.menuItem}
           onPress={() =>
@@ -253,38 +208,22 @@ export default function ReporterProfileScreen() {
 
 const styles = StyleSheet.create({
   profileHeader: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.md,
-  },
-  avatarWrap: {
-    position: 'relative',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: radius.xl,
+    gap: spacing.sm,
     marginBottom: spacing.sm,
+    ...softShadow,
   },
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  identityText: { flex: 1 },
   avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
+    width: 56,
+    height: 56,
+    borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.success,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
   },
   name: {
     color: colors.neutral,
@@ -306,6 +245,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   statusDot: {
+    flexShrink: 0,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -317,20 +257,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
   },
   statusTextGreen: {
+    flex: 1,
     color: colors.success,
     fontFamily: 'Roboto-Medium',
   },
   statusTextYellow: {
+    flex: 1,
     color: colors.warning,
     fontFamily: 'Roboto-Medium',
   },
   statsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   statCard: {
     flex: 1,
+    minWidth: 88,
     alignItems: 'center',
     paddingVertical: spacing.md,
     borderRadius: radius.xl,

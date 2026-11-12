@@ -4,7 +4,7 @@ import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
@@ -18,8 +18,8 @@ import {
 } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -96,19 +96,19 @@ export default function ReporterAccountScreen() {
   return (
     <SafeAreaScreen scroll header={<ReporterHeader title="Tài khoản" />}>
       <Text style={[typography.caption, styles.subtitle]}>
-        Thông tin phiên đăng nhập và bảo mật tài khoản phản ánh.
+        Quản lý hồ sơ và bảo mật tài khoản.
       </Text>
 
       <View style={styles.card}>
         <View style={styles.identityRow}>
           <View style={styles.avatar}>
-            <MaterialIcons name="person" size={22} color={colors.onPrimary} />
+            <MaterialIcons name="person" size={22} color={colors.neutral} />
           </View>
           <View style={styles.identityText}>
-            <Text style={[typography.labelLg, styles.name]} numberOfLines={1}>
+            <Text style={[typography.labelLg, styles.name]}>
               {user?.full_name ?? 'Khách'}
             </Text>
-            <Text style={[typography.caption, styles.meta]} numberOfLines={1}>
+            <Text style={[typography.caption, styles.meta]}>
               {user?.phone_or_email ?? 'Chưa đăng nhập'}
             </Text>
           </View>
@@ -118,21 +118,13 @@ export default function ReporterAccountScreen() {
           <Text style={[typography.caption, styles.infoLabel]}>Vai trò</Text>
           <Text style={[typography.caption, styles.infoValue]}>{roleLabel}</Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={[typography.caption, styles.infoLabel]}>Mã nhân sự</Text>
-          <Text style={[typography.caption, styles.infoValue]}>
-            {user?.employee_code || 'Không áp dụng'}
-          </Text>
-        </View>
-        {user?.is_reporter ? (
-          <Text style={[typography.caption, styles.reporterTag]}>Tài khoản người dân phản ánh</Text>
-        ) : null}
+
       </View>
 
       <Text style={[typography.labelLg, styles.sectionTitle]}>Bảo mật</Text>
       <View style={styles.card}>
         <Text style={[typography.caption, styles.sectionText]}>
-          Đổi mật khẩu sẽ áp dụng cho cả trường hợp bắt buộc đổi mật khẩu khi đăng nhập lần đầu.
+          Chủ động đổi mật khẩu để bảo vệ tài khoản.
         </Text>
         <Button
           variant="primary"
@@ -211,10 +203,9 @@ const styles = StyleSheet.create({
   name: { color: colors.neutral },
   meta: { color: colors.secondary },
   divider: { height: 1, backgroundColor: colors.border },
-  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  infoRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   infoLabel: { color: colors.secondary },
   infoValue: { color: colors.neutral },
-  reporterTag: { color: colors.brandGold },
   sectionTitle: { color: colors.secondary, marginBottom: spacing.sm },
   sectionText: { color: colors.secondary },
   gap: { height: spacing.xs },
