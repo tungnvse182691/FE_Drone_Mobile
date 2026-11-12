@@ -99,7 +99,7 @@ test('T05B supplement camera confirmation preserves FIELD mode and returns to co
  h.nodes.find(n=>n.props.title==='Đo kiểm và hồ sơ hiện trường').props.onPress();
  assert.equal(h.dismissed[0].params.supplement,'1');
  const {StackRouter,StackActions}=require('../node_modules/expo-router/build/react-navigation/routers/StackRouter.js');
- const router=StackRouter({});const opts={routeGetIdList:{'field-review':({params})=>params?.id&&params?.projectId?`${params.projectId}:${params.id}:${params.supplement==='1'?'supplement':'normal'}`:undefined}};
+ const router=StackRouter({});const opts={routeGetIdList:{'field-review':crewFieldId()}};
  let s={stale:false,type:'stack',key:'crew-stack',index:2,routeNames:['repair-correction','field-review','viewfinder'],routeKeySeq:10,routes:[{name:'repair-correction',key:'correction',params:{id:taskId,projectId:project}},{name:'field-review',key:'field-supplement',params:{id:taskId,projectId:project,supplement:'1'}},{name:'viewfinder',key:'camera',params:{id:taskId,projectId:project,supplement:'1'}}]};
  s=router.getStateForAction(s,StackActions.popTo('field-review',h.dismissed[0].params),opts).state;
  assert.deepEqual(s.routes.map(r=>r.name),['repair-correction','field-review']);assert.equal(s.routes[1].params.supplement,'1');
@@ -114,6 +114,78 @@ test('T05B direct supplement camera fallback keeps mode for X and draft recovery
 });
 test('T05B camera X backs to its FIELD or Detail predecessor, with a FIELD fallback if history is absent',()=>{for(const predecessor of ['FIELD','Detail']){const h=ui('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',['after',false,'back',null,{captures:[]},false,'',true]);h.nodes.find(n=>n.props.accessibilityLabel==='Đóng máy ảnh').props.onPress();assert.equal(h.backs.length,1,predecessor);assert.equal(h.dismissed.length,0);}const direct=ui('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',['after',false,'back',null,{captures:[]},false,'',true],{},false);direct.nodes.find(n=>n.props.accessibilityLabel==='Đóng máy ảnh').props.onPress();assert.equal(direct.dismissed[0].pathname,'/(crew)/field-review');assert.equal(direct.dismissed[0].params.id,taskId);});
 test('T05B camera loading return uses stack dismissal, never replaces an existing FIELD',()=>{const h=ui('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',['after',false,'back',null,{captures:[]},false,'',false]);h.nodes.find(n=>n.props.title==='Quay lại hồ sơ để tải lại nháp').props.onPress();assert.equal(h.dismissed[0].pathname,'/(crew)/field-review');assert.equal(h.replaced.length,0);});
-test('T05B SDK stack returns Detail after FIELD → Camera → FIELD and isolates task identities across repeated captures',()=>{const {StackRouter,StackActions}=require('../node_modules/expo-router/build/react-navigation/routers/StackRouter.js');const id=({params})=>params?.id&&params?.projectId?`${params.projectId}:${params.id}`:undefined;const router=StackRouter({});const opts={routeGetIdList:{'field-review':id}};const detail={name:'wo-detail',key:'detail',params:{id:taskId,projectId:project}};let s={stale:false,type:'stack',key:'crew-stack',index:2,routeNames:['wo-detail','field-review','viewfinder'],routeKeySeq:10,routes:[detail,{name:'field-review',key:'field-a',params:{id:taskId,projectId:project}},{name:'viewfinder',key:'camera-a',params:{id:taskId,projectId:project}}]};for(let n=0;n<2;n++){s=router.getStateForAction(s,StackActions.popTo('field-review',{id:taskId,projectId:project}),opts).state;assert.deepEqual(s.routes.map(r=>r.name),['wo-detail','field-review']);if(n===0){s=router.getStateForAction(s,StackActions.push('viewfinder',{id:taskId,projectId:project}),opts).state;}}s=router.getStateForAction(s,StackActions.pop(),opts).state;assert.deepEqual(s.routes.map(r=>r.name),['wo-detail']);const other='other-task';s={...s,index:3,routes:[detail,{name:'field-review',key:'field-a',params:{id:taskId,projectId:project}},{name:'wo-detail',key:'detail-b',params:{id:other,projectId:project}},{name:'viewfinder',key:'camera-b',params:{id:other,projectId:project}}]};s=router.getStateForAction(s,StackActions.popTo('field-review',{id:other,projectId:project}),opts).state;assert.equal(s.routes[3].params.id,other);assert.equal(s.routes[2].name,'wo-detail');assert.equal(s.routes[1].params.id,taskId);});
-test('T05B Crew stack config keys FIELD by project, task and supplement mode',()=>{const source=fs.readFileSync('app/(crew)/_layout.tsx','utf8');const Screen=()=>null,Stack=()=>null;Stack.Screen=Screen;const React={createElement:(type,props,...children)=>({type,props:{...props,children}})};const module={exports:{}};const deps={'react':{...React,default:React},'expo-router':{Stack,usePathname:()=>'/field-review'},'react-native':{StyleSheet:{create:x=>x},View:()=>null},'react-native-safe-area-context':{SafeAreaView:()=>null},'../../src/components/BottomNav':{BottomNav:()=>null}};vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,React,require:name=>deps[name]});const tree=module.exports.default();const nodes=[];function visit(node){if(!node||typeof node!=='object')return;nodes.push(node);for(const child of node.props?.children??[])visit(child);}visit(tree);const config=nodes.find(node=>node.type===Screen&&node.props.name==='field-review');assert.ok(config);const id=config.props.getId;assert.equal(id({params:{projectId:project,id:taskId}}),`${project}:${taskId}:normal`);assert.notEqual(id({params:{projectId:project,id:'other-task'}}),id({params:{projectId:project,id:taskId}}));assert.notEqual(id({params:{projectId:project,id:taskId,supplement:'1'}}),id({params:{projectId:project,id:taskId}}));assert.equal(id({params:{projectId:project}}),undefined);});
+test('T05B SDK stack returns Detail after FIELD → Camera → FIELD and isolates task identities across repeated captures',()=>{const {StackRouter,StackActions}=require('../node_modules/expo-router/build/react-navigation/routers/StackRouter.js');const id=crewFieldId();const router=StackRouter({});const opts={routeGetIdList:{'field-review':id}};const detail={name:'wo-detail',key:'detail',params:{id:taskId,projectId:project}};let s={stale:false,type:'stack',key:'crew-stack',index:2,routeNames:['wo-detail','field-review','viewfinder'],routeKeySeq:10,routes:[detail,{name:'field-review',key:'field-a',params:{id:taskId,projectId:project}},{name:'viewfinder',key:'camera-a',params:{id:taskId,projectId:project}}]};for(let n=0;n<2;n++){s=router.getStateForAction(s,StackActions.popTo('field-review',{id:taskId,projectId:project}),opts).state;assert.deepEqual(s.routes.map(r=>r.name),['wo-detail','field-review']);if(n===0){s=router.getStateForAction(s,StackActions.push('viewfinder',{id:taskId,projectId:project}),opts).state;}}s=router.getStateForAction(s,StackActions.pop(),opts).state;assert.deepEqual(s.routes.map(r=>r.name),['wo-detail']);const other='other-task';s={...s,index:3,routes:[detail,{name:'field-review',key:'field-a',params:{id:taskId,projectId:project}},{name:'wo-detail',key:'detail-b',params:{id:other,projectId:project}},{name:'viewfinder',key:'camera-b',params:{id:other,projectId:project}}]};s=router.getStateForAction(s,StackActions.popTo('field-review',{id:other,projectId:project}),opts).state;assert.equal(s.routes[3].params.id,other);assert.equal(s.routes[2].name,'wo-detail');assert.equal(s.routes[1].params.id,taskId);});
+function crewFieldId(){const source=fs.readFileSync('app/(crew)/_layout.tsx','utf8');const Screen=()=>null,Stack=()=>null;Stack.Screen=Screen;const React={createElement:(type,props,...children)=>({type,props:{...props,children}})};const module={exports:{}};const deps={'react':{...React,default:React},'expo-router':{Stack,usePathname:()=>'/field-review'},'react-native':{StyleSheet:{create:x=>x},View:()=>null},'react-native-safe-area-context':{SafeAreaView:()=>null},'../../src/components/BottomNav':{BottomNav:()=>null}};vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,React,require:name=>deps[name]});const tree=module.exports.default();const nodes=[];function visit(node){if(!node||typeof node!=='object')return;nodes.push(node);for(const child of node.props?.children??[])visit(child);}visit(tree);const config=nodes.find(node=>node.type===Screen&&node.props.name==='field-review');assert.ok(config);
+ assert.equal(config.props.getId,undefined,'layout must stop using deprecated getId');
+ assert.equal(typeof config.props.dangerouslySingular,'function');
+ // Execute the installed adapter unchanged; expose its private sorter only in this VM.
+ const adapter={exports:{}},warnings=[];
+ vm.runInNewContext(fs.readFileSync('node_modules/expo-router/build/useScreens.js','utf8')+'\nmodule.exports.testSortedChildren=getSortedChildren;',{
+  module:adapter,exports:adapter.exports,
+  // All children are explicitly ordered, so the filesystem remainder is empty.
+  require:n=>n==='./Route'?{sortRoutesWithInitial:()=>undefined}:{},console:{warn:m=>warnings.push(m)}
+ });
+ const [screen]=adapter.exports.testSortedChildren([{route:'field-review'}],[config.props]);
+ assert.equal(warnings.length,0,'installed adapter must emit no deprecation warning');
+ return screen.props.getId;
+}
+function crewRouter(){
+ const {createRequire}=require('node:module');
+ const filename=require.resolve('../node_modules/expo-router/build/layouts/stack-router.js');
+ const localRequire=createRequire(filename),module={exports:{}};
+ // Native UI exports are not used by the action override under test.
+ vm.runInNewContext(fs.readFileSync(filename,'utf8'),{module,exports:module.exports,require:n=>n==='../react-navigation/native'?{extendRouter:()=>null}:localRequire(n)});
+ const {StackRouter,StackActions}=require('../node_modules/expo-router/build/react-navigation/routers/StackRouter.js');
+ return {router:module.exports.stackRouterOverride(StackRouter({})),actions:StackActions,opts:{routeGetIdList:{'field-review':crewFieldId()}}};
+}
+function crewStack(predecessor='wo-detail'){
+ return {stale:false,type:'stack',key:'crew-stack',index:0,routeNames:['wo-detail','repair-correction','field-review','viewfinder'],routeKeySeq:10,routes:[{name:predecessor,key:'predecessor',params:{id:taskId,projectId:project}}]};
+}
+test('T05B installed singular adapter preserves project/task/mode and missing-param semantics',()=>{
+ const id=crewFieldId(),normal={projectId:project,id:taskId};
+ assert.equal(id({params:normal}),`${project}:${taskId}:normal`);
+ for(const params of [{...normal,id:'other-task'},{...normal,projectId:'other-project'},{...normal,supplement:'1'}])assert.notEqual(id({params}),id({params:normal}));
+ for(const supplement of [undefined,'0','true',1])assert.equal(id({params:{...normal,supplement}}),id({params:normal}));
+ for(const params of [undefined,{}, {projectId:project},{id:taskId}])assert.equal(id({params}),undefined);
+});
+test('T05B installed Expo router reuses normal identity for PUSH/NAVIGATE and isolates project/task/mode',()=>{
+ const {router,actions,opts}=crewRouter();let state=crewStack();
+ const act=a=>{const result=router.getStateForAction(state,a,opts);assert.ok(result.state);state=result.state;};
+ const normal={id:taskId,projectId:project};
+ act(actions.push('field-review',normal));const key=state.routes[state.index].key;
+ act(actions.push('field-review',normal));
+ act({type:'NAVIGATE',payload:{name:'field-review',params:normal}});
+ assert.equal(state.routes.length,2);assert.equal(state.routes[state.index].key,key);
+ for(const params of [{...normal,id:'other-task'},{...normal,projectId:'other-project'},{...normal,supplement:'1'}])act(actions.push('field-review',params));
+ assert.equal(state.routes.length,5);assert.equal(new Set(state.routes.map(r=>r.key)).size,5);
+});
+test('T05B installed Expo router repeated camera dismissTo preserves normal/supplement and Back predecessor',()=>{
+ for(const supplement of [undefined,'1']){
+  const {router,actions,opts}=crewRouter();let state=crewStack(supplement?'repair-correction':'wo-detail');
+  const params={id:taskId,projectId:project,...(supplement?{supplement}:{})};
+  const act=a=>{state=router.getStateForAction(state,a,opts).state;assert.ok(state);};
+  act(actions.push('field-review',params));const fieldKey=state.routes[state.index].key;
+  for(let n=0;n<4;n++){
+   act(actions.push('viewfinder',params));
+   const h=ui('app/(crew)/viewfinder.tsx','CrewViewfinderScreenContent',['after',false,'back',null,{captures:[]},false,'',true],{},true,{mode:'AFTER',...params});
+   h.nodes.find(node=>node.props.title==='Đo kiểm và hồ sơ hiện trường').props.onPress();
+   act(actions.popTo('field-review',h.dismissed[0].params));
+   assert.equal(state.routes.length,2);assert.equal(state.routes[state.index].key,fieldKey);
+   assert.equal(state.routes[state.index].params.supplement,supplement);
+  }
+  act(actions.pop());assert.equal(state.routes.length,1);assert.equal(state.routes[0].name,supplement?'repair-correction':'wo-detail');
+ }
+});
+test('T05B complete FIELD link resolves params with the same configured identity',()=>{
+ const {getStateFromPath}=require('../node_modules/expo-router/build/fork/getStateFromPath.js');
+ const {router,opts}=crewRouter(),params={id:taskId,projectId:project,supplement:'1'};
+ // Use the grouped linking config; OS URL dispatch and native mount still need device acceptance.
+ const linked=getStateFromPath(`/field-review?id=${taskId}&projectId=${project}&supplement=1`,{screens:{'(crew)':{path:'',screens:{'field-review':'field-review'}}}});
+ assert.equal(linked.routes[0].name,'(crew)');
+ const route=linked.routes[0].state.routes[0];
+ assert.equal(route.name,'field-review');assert.deepEqual(route.params,params);
+ const state=router.getStateForAction(crewStack(),{type:'NAVIGATE',payload:route},opts).state;
+ assert.equal(opts.routeGetIdList['field-review']({params:state.routes[state.index].params}),`${project}:${taskId}:supplement`);
+});
+
 test('T05B definitive part URL conflict archives old intent and prepares durable renewal without changing file/complete command',async()=>{const h=fieldHarness(),d=measured(h);d.captures[0]={...d.captures[0],upload:undefined,verified:false,createKey:'create',completeKey:'complete',parts:[]};let old;h.runtime.api.requestCrewUploadPartUrls=async(_,ns,key)=>{old=key;throw {response:{status:409}};};await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime));const c=h.stored().captures[0];assert.equal(c.retiredPartCommands[0].key,old);assert.notEqual(c.partCommands[1].key,old);assert.equal(c.completeKey,'complete');assert.equal(c.createKey,'create');});
