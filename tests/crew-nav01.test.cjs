@@ -88,3 +88,16 @@ test('C1-B crew tab keeps a 48dp minimum touch target',()=>{
   for(const tab of tabs)assert.ok((tab.props.style?.minHeight??0)>=48,'tab touch target below 48dp');
   shell.unmount();s.unmount();
 });
+
+test('Crew dock stays at the original viewport bottom during keyboard resize and restores after hide',()=>{
+  const listeners={};let removed=0;
+  const s=screen('app/(crew)/_layout.tsx',{exportName:'CrewScreenShell',props:{children:['stack','nav']},moduleFactories:{'react-native':({modules})=>({...modules['react-native'],Keyboard:{isVisible:()=>false,addListener:(event,fn)=>{listeners[event]=fn;return{remove(){removed++;}};}}})},modules:{'expo-router':{Stack:'Stack',usePathname:()=>'/field-review'},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});
+  s.render();
+  const layout=height=>{s.nodes()[0].props.onLayout({nativeEvent:{layout:{width:400,height}}});s.render();};
+  layout(800);layout(500);
+  let dock=s.nodes().find(n=>n.props.testID==='crew-navigation-dock');assert.equal(dock.props.style[1].height,800);
+  listeners.keyboardDidShow();s.render();assert.ok(!s.nodes().some(n=>n.props.testID==='crew-navigation-dock'));
+  listeners.keyboardDidHide();s.render();assert.ok(s.nodes().some(n=>n.props.testID==='crew-navigation-dock'));
+  layout(850);layout(800);dock=s.nodes().find(n=>n.props.testID==='crew-navigation-dock');assert.equal(dock.props.style[1].height,850);
+  s.unmount();assert.equal(removed,2);
+});
