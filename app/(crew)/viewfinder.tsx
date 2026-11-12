@@ -269,21 +269,6 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       </View>
 
       <View style={styles.bottomSheet}>
-        <View style={styles.sheetHeaderRow}>
-          <View style={styles.sheetTitleRow}>
-            <View style={[styles.sheetDot, mode === 'after' && styles.sheetDotGold]} />
-            <Text style={[typography.labelLg, styles.sheetTitle]}>
-              {task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}
-            </Text>
-            <Text style={[typography.labelLg, styles.sheetDivider]}>|</Text>
-            <Text style={[typography.labelLg, styles.sheetSub]}>
-              {task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại từ máy chủ'} {task.chainage}
-            </Text>
-          </View>
-          <Text style={[typography.caption, styles.sheetFiles]}>
-            {beforeReady ? 'Đã có ảnh nháp hiện trạng' : 'Chưa có ảnh hiện trạng'}
-          </Text>
-        </View>
 
         <Button variant="primary" title="Đo kiểm và hồ sơ hiện trường" disabled={busy || !ready} onPress={handleConfirm} />
 
@@ -311,8 +296,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 6,
   },
   iconButton: {
-    width: 36,
-    height: 36,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
@@ -336,6 +321,8 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   modePill: {
+    minHeight: 48,
+    minWidth: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -495,8 +482,8 @@ const styles = StyleSheet.create({
     color: colors.warning,
   },
   sideControl: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
@@ -514,39 +501,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     padding: spacing.md,
     gap: spacing.sm,
-  },
-  sheetHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sheetTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sheetDot: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.full,
-    backgroundColor: colors.success,
-    marginRight: 2,
-  },
-  sheetDotGold: {
-    backgroundColor: colors.primary,
-  },
-  sheetTitle: {
-    color: colors.neutral,
-  },
-  sheetDivider: {
-    color: '#CBD5E1',
-  },
-  sheetSub: {
-    color: '#555F71',
-    fontWeight: '400',
-  },
-  sheetFiles: {
-    color: '#555F71',
   },
   sheetHint: {
     color: '#555F71',
