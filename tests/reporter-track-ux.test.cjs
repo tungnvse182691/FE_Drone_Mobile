@@ -49,9 +49,14 @@ test('card opens real UUID and refresh/pagination remain explicit actions',async
  const f=fixture('track',{hasNextPage:true});const {s}=f;
  assert.equal(f.more(),0);cards(s)[0].props.onPress();
  assert.equal(s.nav[0].pathname,'/(reporter)/report-detail');assert.equal(s.nav[0].params.reportId,id);
- const before=f.refreshes();await s.press('Làm mới');assert.equal(f.refreshes(),before+1);
+ const header=s.nodes().find(n=>n.type==='ReporterHeader');const refresh=()=>header.props.rightAction;
+ assert.equal(refresh().props.testID,'refresh-reports');assert.equal(refresh().props.accessibilityLabel,'Làm mới phản ánh');
+ assert.doesNotMatch(text(s),/Các phản ánh bạn đã gửi/);
+ const before=f.refreshes();refresh().props.onPress();assert.equal(f.refreshes(),before+1);
  await s.press('Tải thêm phản ánh');assert.equal(f.more(),1);
  f.result.isFetching=true;s.render();assert.equal(s.nodes().find(n=>n.props.title==='Tải thêm phản ánh').props.disabled,true);
+ const busy=s.nodes().find(n=>n.type==='ReporterHeader').props.rightAction;
+ assert.equal(busy.props.disabled,true);assert.equal(busy.props.accessibilityState.busy,true);
  s.unmount();
 });
 test('all loaded pages render once per real ID without implicit loading',()=>{

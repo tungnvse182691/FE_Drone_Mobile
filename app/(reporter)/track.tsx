@@ -1,7 +1,7 @@
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,17 +40,18 @@ export default function ReporterTrackScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ReporterHeader title="Phản ánh của tôi" />
+      <ReporterHeader title="Phản ánh của tôi" rightAction={
+        <Pressable testID="refresh-reports" accessibilityRole="button" accessibilityLabel="Làm mới phản ánh"
+          accessibilityState={{ disabled: !enabled || loading, busy: loading }} disabled={!enabled || loading}
+          onPress={load} style={styles.refreshButton}>
+          {loading ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
+        </Pressable>
+      } />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.toolbar}>
-          <Text style={[typography.caption, styles.subtitle]}>Các phản ánh bạn đã gửi</Text>
-          <Button variant="text" title="Làm mới" loading={loading} onPress={load} disabled={!enabled} />
-        </View>
-
         {error ? (
           <View style={styles.errorRow}>
             <MaterialIcons name="error-outline" size={16} color={colors.error} />
@@ -130,8 +131,7 @@ function formatDate(iso: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.sm },
-  toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  subtitle: { color: colors.secondary, flex: 1 },
+  refreshButton: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   routingChip: { alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   error: { color: colors.error, flex: 1 },
