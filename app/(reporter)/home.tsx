@@ -1,8 +1,9 @@
+import { reporterAppearance } from '../../src/components/reporter/appearance';
 import { listHistoricalReporterCommands, checkHistoricalReporterCommand, type HistoricalReporterCommand } from '../../src/store/reporterRecovery';
 import { useReporterDraftScope } from '../../src/store/reporter';
 import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../../src/components/Card';
@@ -15,12 +16,6 @@ import { isReporterSession } from '../../src/api/uploads';
 import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_PROFILE, REPORTER_REPORT, REPORTER_TRACK, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  android: { elevation: 1 },
-  default: {},
-});
 
 export default function ReporterHomeScreen() {
   const router = useRouter();
@@ -116,7 +111,11 @@ export default function ReporterHomeScreen() {
       {enabled && historyMessage ? <Text style={typography.caption}>{historyMessage}</Text> : null}
       <View style={styles.sectionRow}>
         <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây</Text>
-        {enabled ? <Button variant="text" title="Làm mới" loading={query.isFetching && !query.isFetchingNextPage} onPress={() => void query.refetch()} /> : null}
+        {enabled ? <Pressable accessibilityRole="button" accessibilityLabel="Làm mới phản ánh"
+          disabled={query.isFetching} accessibilityState={{ disabled: query.isFetching, busy: query.isFetching }}
+          onPress={() => void query.refetch()} style={({ pressed }) => [styles.refreshButton, pressed && styles.pressed]}>
+          {query.isFetching && !query.isFetchingNextPage ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
+        </Pressable> : null}
       </View>
       {enabled && query.isError ? <Text style={{ color: colors.error }}>{query.isFetchNextPageError && canShowReportPages(query) ? 'Không tải thêm được. Đang hiển thị phản ánh đã tải; thử tải thêm hoặc làm mới.' : 'Không tải được phản ánh. Vui lòng làm mới để thử lại.'}</Text> : null}
       {enabled && query.isPending ? <Text>Đang tải phản ánh…</Text> : null}
@@ -159,11 +158,11 @@ export default function ReporterHomeScreen() {
                   </Text>
                   <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
                 </View>
-                <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
                 <View style={styles.routingChip}>
                   <Text style={[typography.caption, styles.reportDate]}>{report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : 'Chưa có thông tin phân tuyến'}</Text>
                 </View>
                 <View style={styles.reportFooter}>
+                  <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
                   <MaterialIcons name="photo-library" size={12} color={colors.secondary} />
                   <Text style={[typography.caption, styles.reportDate]}>
                     {report.evidence.length} ảnh hiện trường
@@ -265,7 +264,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
-  primaryAction: { backgroundColor: colors.primary },
+  primaryAction: { backgroundColor: colors.primary, borderColor: colors.primary },
   actionWrapper: {
     borderRadius: radius.lg,
   },
@@ -276,14 +275,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderRadius: radius.xl,
-    ...softShadow,
+    ...reporterAppearance.card,
   },
   actionIcon: {
     width: 48,
     height: 48,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: reporterAppearance.pressed,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -301,8 +299,11 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     flex: 1,
   },
+  pressed: { backgroundColor: reporterAppearance.pressed },
+  refreshButton: { width: 48, minHeight: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   hintCard: {
+    ...reporterAppearance.card,
     backgroundColor: colors.surfaceAlt,
   },
   hintRow: {
@@ -319,8 +320,7 @@ const styles = StyleSheet.create({
   },
   reportCard: {
     gap: spacing.xs,
-    borderRadius: radius.xl,
-    ...softShadow,
+    ...reporterAppearance.card,
   },
   reportHeader: {
     flexDirection: 'row',
@@ -331,6 +331,8 @@ const styles = StyleSheet.create({
   reportDescription: { flex: 1, color: colors.neutral },
   routingChip: { alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   reportFooter: {
+    columnGap: spacing.sm,
+    flexWrap: 'wrap',
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
