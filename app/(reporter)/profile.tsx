@@ -1,7 +1,8 @@
+import { reporterAppearance } from '../../src/components/reporter/appearance';
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -17,12 +18,6 @@ import { fetchProfile, passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { REPORTER_ACCOUNT, REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  android: { elevation: 1 },
-  default: {},
-});
 
 function normalizeName(fullName?: string | null): string {
   if (!fullName) return 'Người dân';
@@ -118,20 +113,20 @@ export default function ReporterProfileScreen() {
       {!enabled ? <Text>Vui lòng đăng nhập để xem hồ sơ.</Text> : null}
       {enabled && (profileQuery.isError || reportQuery.isError) ? <Text style={{ color: colors.error }}>{reportQuery.isFetchNextPageError && canShowReportPages(reportQuery) && !profileQuery.isError ? 'Không tải thêm được. Thống kê hiện chỉ gồm các phản ánh đã tải.' : 'Không tải được dữ liệu. Vui lòng làm mới để thử lại.'}</Text> : null}
       {enabled && (profileQuery.isPending || reportQuery.isPending) ? <Text>Đang tải hồ sơ…</Text> : null}
-      <View style={styles.statsRow}>
-        <Card style={styles.statCard}>
+      <Card style={styles.statsRow}>
+        <View style={styles.statCard}>
           <Text style={[typography.headlineLg, styles.statValue]}>{countAvailable ? totalReports : '—'}</Text>
           <Text style={[typography.caption, styles.statLabel]}>Phản ánh đã tải</Text>
-        </Card>
-        <Card style={styles.statCard}>
+        </View>
+        <View style={[styles.statCard, styles.statDivider]}>
           <Text style={[typography.headlineLg, styles.statValuePrimary]}>{countAvailable ? totalEvidence : '—'}</Text>
           <Text style={[typography.caption, styles.statLabel]}>Ảnh hiện trường</Text>
-        </Card>
-        <Card style={styles.statCard}>
+        </View>
+        <View style={[styles.statCard, styles.statDivider]}>
           <Text style={[typography.headlineLg, styles.statValueSuccess]}>{countAvailable ? totalSupplements : '—'}</Text>
           <Text style={[typography.caption, styles.statLabel]}>Bổ sung</Text>
-        </Card>
-      </View>
+        </View>
+      </Card>
 
       {enabled && reportQuery.hasNextPage ? <Button variant="secondary" title="Tải thêm phản ánh" loading={reportQuery.isFetchingNextPage} disabled={reportQuery.isFetching} onPress={() => void reportQuery.fetchNextPage()} /> : null}
       <Text style={[typography.titleMd, styles.sectionTitle]}>Thao tác nhanh</Text>
@@ -139,11 +134,12 @@ export default function ReporterProfileScreen() {
       <Card style={styles.menuCard}>
         <AnimatedPressable
           style={styles.menuItem}
+          android_ripple={{ color: reporterAppearance.pressed, foreground: true }}
           onPress={() => router.push(REPORTER_REPORT)}
           accessibilityRole="button"
         >
           <View style={styles.menuIconWrap}>
-            <MaterialIcons name="add-circle-outline" size={22} color={colors.primary} />
+            <MaterialIcons name="add-circle-outline" size={22} color={colors.primaryDark} />
           </View>
           <View style={styles.menuTextWrap}>
             <Text style={[typography.bodyMd, styles.menuLabel]}>Gửi phản ánh khuyết tật mới</Text>
@@ -156,11 +152,12 @@ export default function ReporterProfileScreen() {
 
         <AnimatedPressable
           style={styles.menuItem}
+          android_ripple={{ color: reporterAppearance.pressed, foreground: true }}
           onPress={() => router.push(REPORTER_TRACK)}
           accessibilityRole="button"
         >
           <View style={styles.menuIconWrap}>
-            <MaterialIcons name="description" size={22} color={colors.primary} />
+            <MaterialIcons name="description" size={22} color={colors.primaryDark} />
           </View>
           <View style={styles.menuTextWrap}>
             <Text style={[typography.bodyMd, styles.menuLabel]}>Phản ánh của tôi</Text>
@@ -174,6 +171,7 @@ export default function ReporterProfileScreen() {
       <Card style={styles.menuCard}>
         <AnimatedPressable
           style={styles.menuItem}
+          android_ripple={{ color: reporterAppearance.pressed, foreground: true }}
           onPress={() =>
             Alert.alert(
               'Chính sách quyền riêng tư',
@@ -209,12 +207,10 @@ export default function ReporterProfileScreen() {
 
 const styles = StyleSheet.create({
   profileHeader: {
-    backgroundColor: colors.surface,
     padding: spacing.md,
-    borderRadius: radius.xl,
     gap: spacing.sm,
     marginBottom: spacing.sm,
-    ...softShadow,
+    ...reporterAppearance.card,
   },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   identityText: { flex: 1 },
@@ -222,7 +218,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: reporterAppearance.pressed,
+    borderWidth: 1,
+    borderColor: reporterAppearance.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -236,6 +234,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   statusPill: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -258,29 +258,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
   },
   statusTextGreen: {
-    flex: 1,
+    flexShrink: 1,
     color: colors.success,
     fontFamily: 'Roboto-Medium',
   },
   statusTextYellow: {
-    flex: 1,
+    flexShrink: 1,
     color: colors.warning,
     fontFamily: 'Roboto-Medium',
   },
   statsRow: {
+    ...reporterAppearance.card,
+    padding: 0,
+    overflow: 'hidden',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   statCard: {
     flex: 1,
-    minWidth: 88,
+    minWidth: 80,
+    paddingHorizontal: spacing.xs,
     alignItems: 'center',
     paddingVertical: spacing.md,
-    borderRadius: radius.xl,
-    ...softShadow,
   },
+  statDivider: { borderLeftWidth: 1, borderLeftColor: reporterAppearance.border },
   statValue: {
     color: colors.neutral,
     fontFamily: 'Roboto-Bold',
@@ -290,10 +292,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Roboto-Bold',
   },
   statValueSuccess: {
-    color: colors.success,
+    color: colors.neutral,
     fontFamily: 'Roboto-Bold',
   },
   statLabel: {
+    textAlign: 'center',
     color: colors.secondary,
     marginTop: 2,
   },
@@ -305,8 +308,7 @@ const styles = StyleSheet.create({
     padding: 0,
     marginBottom: spacing.md,
     overflow: 'hidden',
-    borderRadius: radius.xl,
-    ...softShadow,
+    ...reporterAppearance.card,
   },
   menuItem: {
     flexDirection: 'row',
@@ -319,7 +321,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: reporterAppearance.pressed,
+    borderWidth: 1,
+    borderColor: reporterAppearance.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,6 +1,7 @@
+import { reporterAppearance } from '../../src/components/reporter/appearance';
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -16,12 +17,6 @@ import {
   AUTH_FORCE_CHANGE_PASSWORD,
   REPORTER_PROFILE,
 } from '../../src/constants/routes';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  android: { elevation: 1 },
-  default: {},
-});
 
 const ROLE_LABELS: Record<RoleCode, string> = {
   [RoleCode.REPAIR_CREW]: 'Đội sửa chữa hiện trường',
@@ -95,10 +90,6 @@ export default function ReporterAccountScreen() {
 
   return (
     <SafeAreaScreen scroll header={<ReporterHeader title="Tài khoản" />}>
-      <Text style={[typography.caption, styles.subtitle]}>
-        Quản lý hồ sơ và bảo mật tài khoản.
-      </Text>
-
       <View style={styles.card}>
         <View style={styles.identityRow}>
           <View style={styles.avatar}>
@@ -123,15 +114,15 @@ export default function ReporterAccountScreen() {
 
       <Text style={[typography.labelLg, styles.sectionTitle]}>Bảo mật</Text>
       <View style={styles.card}>
-        <Text style={[typography.caption, styles.sectionText]}>
-          Chủ động đổi mật khẩu để bảo vệ tài khoản.
-        </Text>
         <Button
           variant="primary"
           title="Đổi mật khẩu"
           onPress={() => router.push(AUTH_FORCE_CHANGE_PASSWORD)}
         />
-        <View style={styles.gap} />
+      </View>
+
+      <Text style={[typography.labelLg, styles.sectionTitle]}>Khôi phục tài khoản</Text>
+      <View style={styles.card}>
         <InputField
           label="Khôi phục mật khẩu qua email"
           value={recoveryEmail}
@@ -181,21 +172,20 @@ export default function ReporterAccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
     padding: spacing.cardPadding,
     gap: spacing.sm,
     marginBottom: spacing.lg,
-    ...softShadow,
+    ...reporterAppearance.card,
   },
   identityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: radius.full,
-    backgroundColor: colors.primary,
+    backgroundColor: reporterAppearance.pressed,
+    borderWidth: 1,
+    borderColor: reporterAppearance.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -206,9 +196,8 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   infoLabel: { color: colors.secondary },
   infoValue: { color: colors.neutral },
-  sectionTitle: { color: colors.secondary, marginBottom: spacing.sm },
+  sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
   sectionText: { color: colors.secondary },
-  gap: { height: spacing.xs },
   noticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
   noticeText: { color: colors.info, flex: 1 },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
