@@ -1,5 +1,39 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {screen}=require('./helpers/roadfe-screen.cjs');
+const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
+const flatten=s=>Array.isArray(s)?Object.assign({},...s.filter(Boolean).map(flatten)):s??{};
+
+function photoScreen(file, options) {
+ return screen(file,{...options,moduleFactories:{'react-native':({modules})=>({...modules['react-native'],
+  AccessibilityInfo:{isReduceMotionEnabled:async()=>true,addEventListener:()=>({remove(){}})},
+  Animated:{View:'AnimatedView',Value:class{constructor(value){this.value=value;}setValue(value){this.value=value;}stopAnimation(){}},timing:()=>({start(){},stop(){}})}
+ })}});
+}
+
+test('photo verification keeps the image visible with a compact green badge',()=>{
+ const s=photoScreen('src/components/reporter/PhotoUploadStatus.tsx',{exportName:'PhotoUploadStatus',props:{item:{mediaState:'VERIFIED'},index:0}});s.render();
+ const root=s.nodes().find(n=>n.props.testID==='photo-state-0');
+ assert.equal(flatten(root.props.style).backgroundColor,'transparent');
+ assert.equal(s.nodes().find(n=>n.props.name==='check-circle').props.color,'#2F9E44');s.unmount();
+});
+
+test('photo status link has breathing room and a trailing chevron',async()=>{
+ const s=screen('app/(reporter)/report.tsx');s.h.login();s.render();await s.flush();
+ const link=s.nodes().find(n=>n.props.testID==='open-photo-status');
+ assert.equal(flatten(link.props.style).marginTop,16);
+ const label=link.props.children.find(n=>n?.type==='Text');assert.equal(flatten(label.props.style).flex,1);s.unmount();
+});
+
+test('submitting hides the status link until the operation settles',async()=>{
+ const gate=deferred();
+ const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/image.jpg',name:'image.jpg',mimeType:'image/jpeg'}]})});
+ s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();s.input('Mô tả hiện trạng','QA nứt tấm bê tông');
+ s.reporter.useReporterStore.getState().submitPendingDraft=()=>gate.promise;
+ const pending=s.press('Gửi phản ánh');await s.flush();
+ assert.ok(!s.nodes().some(n=>n.props.testID==='open-photo-status'));
+ assert.equal(flatten(s.nodes().find(n=>n.props.pointerEvents==='none'&&Array.isArray(n.props.style)&&flatten(n.props.style).opacity===0.45).props.style).opacity,0.45);
+ gate.reject(new Error('fixture stopped'));await pending;await s.flush();
+ assert.ok(s.nodes().some(n=>n.props.testID==='open-photo-status'));s.unmount();
+});
 test('Reporter keyboard hides only navigation and restores it without unmounting Stack',async()=>{
  const listeners=new Map();let removed=0;
  const s=screen('app/(reporter)/_layout.tsx',{moduleFactories:{'react-native':({modules})=>({...modules['react-native'],Keyboard:{isVisible:()=>false,addListener:(event,fn)=>{listeners.set(event,fn);return{remove(){removed++;}};}}})},modules:{'expo-router':{Stack:'Stack',usePathname:()=>'/report',useRouter:()=>({push(){}})},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});
@@ -13,9 +47,9 @@ test('Reporter keyboard hides only navigation and restores it without unmounting
  listeners.get('keyboardDidShow')();await s.flush();assert.ok(!s.nodes().some(n=>n.type==='BottomNav'));assert.ok(s.nodes().some(n=>n.type==='Stack'));
  listeners.get('keyboardDidHide')();await s.flush();assert.ok(s.nodes().some(n=>n.type==='BottomNav'));s.unmount();assert.equal(removed,2);
 });
-for(const [state,label,busy,verified] of [['LOCAL_READY','Chờ tải',false,false],['SESSION_CREATED','Đang tải',true,false],['UPLOADING','Đang tải',true,false],['COMPLETE_REQUESTED','Kiểm tra',true,false],['VERIFYING','Kiểm tra',true,false],['VERIFIED','Đã xác minh',false,true],['FAILED','Cần kiểm tra',false,false]])test('Photo overlay '+state+' shows honest compact feedback',()=>{
+for(const [state,label,busy,verified] of [['LOCAL_READY','Chờ tải',false,false],['SESSION_CREATED','Đang tải',true,false],['UPLOADING','Đang tải',true,false],['COMPLETE_REQUESTED','Đang kiểm tra',true,false],['VERIFYING','Đang kiểm tra',true,false],['VERIFIED','Đã xác minh',false,true],['FAILED','Cần kiểm tra',false,false]])test('Photo overlay '+state+' shows honest compact feedback',()=>{
  const item={mediaState:state,sizeBytes:100,partSizeBytes:50,partETags:{'1':'etag'},cancelState:null};
- const s=screen('src/components/reporter/PhotoUploadStatus.tsx',{exportName:'PhotoUploadStatus',props:{item,index:0}});s.render();
+ const s=photoScreen('src/components/reporter/PhotoUploadStatus.tsx',{exportName:'PhotoUploadStatus',props:{item,index:0}});s.render();
  const root=s.nodes().find(n=>n.props.testID==='photo-state-0');assert.match(root.props.accessibilityLabel,new RegExp(label));assert.equal(root.props.accessibilityState.busy,busy);
  assert.equal(s.nodes().some(n=>n.type==='ActivityIndicator'),busy&&state!=='UPLOADING');
  assert.equal(s.nodes().some(n=>n.props.name==='check-circle'),verified);
@@ -24,7 +58,7 @@ for(const [state,label,busy,verified] of [['LOCAL_READY','Chờ tải',false,fal
 });
 test('100 percent bytes and cancellation never show verification success',()=>{
  for(const item of [{mediaState:'UPLOADING',sizeBytes:100,partSizeBytes:50,partETags:{'1':'a','2':'b'}},{mediaState:'VERIFIED',cancelState:'UNKNOWN'}]){
- const s=screen('src/components/reporter/PhotoUploadStatus.tsx',{exportName:'PhotoUploadStatus',props:{item,index:1}});s.render();assert.ok(!s.nodes().some(n=>n.props.name==='check-circle'));s.unmount();
+ const s=photoScreen('src/components/reporter/PhotoUploadStatus.tsx',{exportName:'PhotoUploadStatus',props:{item,index:1}});s.render();assert.ok(!s.nodes().some(n=>n.props.name==='check-circle'));s.unmount();
  }
 });
 

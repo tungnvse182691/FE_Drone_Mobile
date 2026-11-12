@@ -395,7 +395,7 @@ export default function ReporterReportScreen() {
               </View>
             ))}
           </View>
-          <View style={styles.photoActions} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
+          <View style={[styles.photoActions, (submitting || draftLocked) && styles.photoActionsDisabled]} pointerEvents={submitting || draftLocked ? "none" : "auto"}>
             {photos.length < MAX_PHOTOS ? (
               <Pressable
                 onPress={() => {
@@ -454,13 +454,12 @@ export default function ReporterReportScreen() {
             </View>
           ) : null}
 
-          <Pressable testID="open-photo-status" onPress={() => router.push(REPORTER_UPLOADS)}
-            disabled={submitting} accessibilityState={{ disabled: submitting }}
+          {!submitting ? <Pressable testID="open-photo-status" onPress={() => router.push(REPORTER_UPLOADS)}
             accessibilityRole="button" accessibilityLabel="Trạng thái ảnh" style={styles.statusLink}>
             <MaterialIcons name="photo-library" size={20} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.muted]}>{submitting ? 'Đang gửi · xem tiến trình trên ảnh' : 'Trạng thái ảnh'}</Text>
+            <Text style={[typography.bodyMd, styles.muted, styles.statusLinkLabel]}>Trạng thái ảnh</Text>
             <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-          </Pressable>
+          </Pressable> : null}
           </View>
           <View testID="description-section" onTouchStart={() => { if (descriptionFocused.current) useReporterKeyboard.getState().setOpening(true); }} style={styles.formSection}
             onLayout={event => { descriptionTop.current = event.nativeEvent.layout.y; }}
@@ -613,7 +612,9 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.lg, gap: spacing.md },
   formSection: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.md },
-  statusLink: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusLink: { minHeight: 48, marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusLinkLabel: { flex: 1 },
+  photoActionsDisabled: { opacity: 0.45 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, marginBottom: spacing.md },
   muted: { color: colors.secondary },
   reuseSection: { marginBottom: 0 },
@@ -648,10 +649,10 @@ const styles = StyleSheet.create({
   gpsText: { color: colors.secondary, flex: 1 },
   gpsRetry: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48, paddingHorizontal: spacing.sm },
   gpsRetryText: { color: colors.brandGold },
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   photoWrapper: { position: 'relative', width: 88, height: 88 },
   photoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  photo: { width: 88, height: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  photo: { width: 88, height: 88, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt },
   photoRemove: {
     position: 'absolute',
     top: 0,
