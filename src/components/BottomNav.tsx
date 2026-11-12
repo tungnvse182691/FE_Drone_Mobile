@@ -22,30 +22,30 @@ interface BottomNavProps {
   tabs: NavTab[];
   activeRoute: string;
   onNavigate?: (route: string) => void;
-  appearance?: 'default' | 'reporter';
+  appearance?: 'default' | 'reporter' | 'crew';
 }
 
 export function BottomNav({ tabs, activeRoute, onNavigate, appearance = 'default' }: BottomNavProps) {
-  const isReporter = appearance === 'reporter';
+  const isWarm = appearance === 'reporter' || appearance === 'crew';
   const activeIndex = tabs.findIndex(tab =>
     (tab.activeRoutes ?? tab.activePrefixes ?? [tab.route]).includes(activeRoute));
 
   return (
-    <View style={isReporter ? [styles.container, styles.reporterContainer] : styles.container}>
+    <View style={isWarm ? [styles.container, styles.reporterContainer] : styles.container}>
       {tabs.map((tab, index) => {
         const isActive = index === activeIndex;
         const iconColor = isActive ? colors.primary : colors.secondary;
         return (
           <Pressable
             key={tab.route}
-            style={isReporter ? [styles.tab, styles.reporterTab] : styles.tab}
-            android_ripple={isReporter ? { color: reporterAppearance.pressed, foreground: true } : undefined}
+            style={isWarm ? [styles.tab, styles.reporterTab] : styles.tab}
+            android_ripple={isWarm ? { color: reporterAppearance.pressed, foreground: true } : undefined}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
             onPress={() => onNavigate ? onNavigate(tab.route) : router.push(tab.route)}
           >
             <View style={[styles.iconContainer, isActive && styles.activeIcon,
-              isReporter && styles.reporterIcon, isReporter && isActive && styles.reporterActiveIcon]}>
+              isWarm && styles.reporterIcon, isWarm && isActive && styles.reporterActiveIcon]}>
               <MaterialIcons name={tab.icon as any} size={22} color={iconColor} />
             </View>
             <Text style={[typography.labelSm, styles.label, { color: iconColor }]}>

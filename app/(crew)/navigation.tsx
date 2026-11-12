@@ -231,9 +231,9 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
             />
           </View>
         </View>
-        <Text style={[typography.caption, styles.arrivalHint]}>
+        {task.coordinates ? <Text style={[typography.caption, styles.arrivalHint]}>
           Đây là vị trí nhiệm vụ từ máy chủ, không phải GPS quan sát của thiết bị. Mở nhiệm vụ để xem thao tác được phép.
-        </Text>
+        </Text> : null}
       </Animated.View>
     </SafeAreaView>
   );
@@ -268,14 +268,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A8',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
   },
   gpsBadge: {
     flexDirection: 'row',
@@ -286,12 +281,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: '#E8D9A8',
   },
   gpsDot: {
     width: 8,
@@ -314,16 +304,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     borderTopWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A8',
     paddingHorizontal: spacing.lg,
     paddingTop: 2,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 10,
     zIndex: 30,
   },
   dragHeader: {
@@ -347,15 +332,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   collapsedLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
   collapsedTitle: {
+    flexShrink: 1,
     color: colors.neutral,
     fontWeight: '700',
   },
   collapsedRight: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -419,9 +407,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#FFF9EB',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A8',
     borderRadius: radius.md,
     padding: spacing.sm,
   },

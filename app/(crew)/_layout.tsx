@@ -43,7 +43,7 @@ export default function CrewLayout() {
         </Stack>
       </View>
       <SafeAreaView edges={['bottom']}>
-        <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} />
+        <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} appearance="crew" />
       </SafeAreaView>
     </CrewScreenShell>
   );

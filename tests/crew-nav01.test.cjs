@@ -85,8 +85,25 @@ test('C1-B crew tab keeps a 48dp minimum touch target',()=>{
   shell.render();
   const tabs=shell.nodes().filter(n=>n.props.accessibilityRole==='tab');
   assert.equal(tabs.length,4);
-  for(const tab of tabs)assert.ok((tab.props.style?.minHeight??0)>=48,'tab touch target below 48dp');
+  for(const tab of tabs){
+    const style=Object.assign({},...[tab.props.style].flat(Infinity).filter(Boolean));
+    assert.ok((style.minHeight??0)>=48,'tab touch target below 48dp');
+  }
   shell.unmount();s.unmount();
+});
+
+test('Crew opts into warm navigation without changing default Drone appearance',()=>{
+  const {s,nav}=mountCrewLayout('/tasks');
+  assert.equal(nav.props.appearance,'crew');
+  const props={tabs:nav.props.tabs,activeRoute:nav.props.activeRoute};
+  for(const appearance of ['crew','reporter',undefined]){
+    const shell=screen('src/components/BottomNav.tsx',{exportName:'BottomNav',props:{...props,appearance}});
+    shell.render();
+    const tabs=shell.nodes().filter(n=>n.props.accessibilityRole==='tab');
+    for(const tab of tabs)assert.equal(Boolean(tab.props.android_ripple),appearance!==undefined);
+    shell.unmount();
+  }
+  s.unmount();
 });
 
 test('Crew dock stays at the original viewport bottom during keyboard resize and restores after hide',()=>{
