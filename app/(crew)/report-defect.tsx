@@ -17,11 +17,11 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Khuyết tật nhiệm vụ" showBack onBack={()=>router.back()} />}>
     <Card style={styles.banner}><View style={styles.bannerRow}>
       <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
-      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin chỉ đọc từ nhiệm vụ được giao. Đội sửa chữa không tạo khuyết tật mới tại màn hình này.</Text>
+      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin khuyết tật từ nhiệm vụ được giao.</Text>
     </View></Card>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
-      <Card style={{gap:spacing.sm}}>
+      <Card style={styles.infoCard}>
         <Text style={typography.titleMd}>{task.title || 'Nhiệm vụ hiện trường'}</Text><Text style={typography.bodyMd}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
         <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
         <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude.toFixed(6)}, ${task.coordinates.longitude.toFixed(6)}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
@@ -29,7 +29,7 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>PHÂN LOẠI LỖI</Text>
-      <Card style={{gap:spacing.sm}}><View style={styles.bannerRow}><MaterialIcons name="category" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,{flex:1}]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text></View><Text style={typography.caption}>Không chọn hoặc tạo phân loại cho lỗi mới tại màn hình này.</Text></Card>
+      <Card style={styles.infoCard}><View style={styles.bannerRow}><MaterialIcons name="category" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,{flex:1}]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text></View></Card>
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>HÌNH ẢNH HIỆN TRƯỜNG</Text>
@@ -37,13 +37,14 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>GHI CHÚ NHIỆM VỤ</Text>
-      <Card><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text><Text style={typography.caption}>Nội dung được đọc từ nhiệm vụ được giao.</Text></Card>
+      <Card style={styles.infoCard}><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text></Card>
     </View>
     <View style={styles.ctaWrap}><Button variant="primary" title="Về chi tiết nhiệm vụ" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/></View>
   </SafeAreaScreen>;
 }
 
 const styles = StyleSheet.create({
+  infoCard: { gap: spacing.sm, borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',

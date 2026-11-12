@@ -381,7 +381,9 @@ const styles = StyleSheet.create({
   },
   rowCard: {
     marginBottom: spacing.md,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
   rowHeader: {
     flexDirection: 'row',
@@ -411,7 +413,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   detailCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
   detailTitle: {
     color: colors.neutral,

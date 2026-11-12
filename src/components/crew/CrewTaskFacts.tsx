@@ -38,7 +38,6 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   try {if(!identity)return null;crewReadGuard(identity);}catch{return null;}
   return <Card style={styles.card}>
     <View style={styles.heading}><MaterialIcons name="map" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Hồ sơ và lịch sử</Text></View>
-    <Text style={styles.hint}>Tra cứu dữ liệu tuyến đường và các mốc xử lý đã được ghi nhận.</Text>
     <Button variant="secondary" title={facts ? 'Tải lại vị trí / lịch sử' : 'Xem vị trí / lịch sử'} disabled={busy} loading={busy} onPress={()=>void read()} />
     {error?<Text style={styles.message} accessibilityLiveRegion="polite">{error}</Text>:null}
     {facts ? <Button variant="text" title={showFacts ? 'Thu gọn lịch sử' : 'Xem lịch sử đã tải'} onPress={()=>setShowFacts(v=>!v)} /> : null}
@@ -63,7 +62,7 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   </Card>;
 }
 const styles=StyleSheet.create({
-  card:{gap:spacing.md,marginBottom:spacing.md,borderWidth:1,borderColor:colors.border},
+  card:{gap:spacing.md,marginBottom:spacing.md,borderWidth:1,borderColor:'#E8D9A8',borderRadius:12},
   heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
   message:{padding:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},

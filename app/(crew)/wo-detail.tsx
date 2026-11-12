@@ -205,10 +205,9 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       </Pressable>
       <Card style={[styles.card, styles.hero]}>
         <View style={styles.sectionHeading}><View style={styles.iconBox}><MaterialIcons name="assignment" size={26} color={colors.brandGold} /></View>
-          <View style={styles.flex}><Text style={styles.eyebrow}>CÔNG VIỆC ĐƯỢC GIAO</Text><Text style={typography.titleLg}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
+          <View style={styles.flex}><Text style={typography.titleLg}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
         <View style={styles.chips}><Chip variant={fresh.status === 'Completed' ? 'approved' : 'status-pending'} label={crewStatusLabel(fresh.status)} uppercase={false} /></View>
         <View style={styles.chips}><Chip variant="measure-only" label={crewModeLabel(fresh.rawMode)} uppercase={false} /></View>
-        {fresh.due_label ? <Text style={styles.hint}>Hạn: {crewDateTime(fresh.due_label)}</Text> : null}
       </Card>
       <Card style={styles.taskActionCard}>
         <Text style={typography.titleMd}>Tình trạng hiện tại</Text>
@@ -251,7 +250,6 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         </Pressable>
         {showTechnical ? <View style={{ gap: spacing.sm }}><Text selectable style={styles.hint}>Mã nhiệm vụ: {fresh.id}</Text><Text selectable style={styles.hint}>Dự án: {fresh.projectId}</Text><Text selectable style={styles.hint}>Phiên bản: {fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn: {fresh.status} · {fresh.rawMode}</Text>{record?.rejectionStatus ? <Text style={styles.hint}>Mã phản hồi máy chủ: {record.rejectionStatus}</Text> : null}{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
       </Card>
-      <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
     </SafeAreaScreen>
   );
 }
@@ -471,8 +469,8 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
 const styles = StyleSheet.create({
   backRow: { alignSelf: 'flex-start', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.sm },
   topBar: { padding: spacing.md },
-  card: { marginBottom: spacing.md, gap: spacing.md, borderWidth: 1, borderColor: colors.border },
-  hero: { borderLeftWidth: 4, borderLeftColor: colors.primary },
+  card: { marginBottom: spacing.md, gap: spacing.md, borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg },
+  hero: { backgroundColor: '#FFFCF4' },
   sectionHeading: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconBox: { padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   flex: { flex: 1, minWidth: 0 },
@@ -481,5 +479,5 @@ const styles = StyleSheet.create({
   body: { ...typography.bodyMd, color: colors.neutral },
   hint: { ...typography.caption, color: colors.secondary },
   factRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
-  taskActionCard: { marginBottom: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
+  taskActionCard: { marginBottom: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg },
 });
