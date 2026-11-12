@@ -18,7 +18,7 @@ for(const count of [0,1,2,3])test('D01 detail '+count+' photos has compact refre
  const report={id:'r',description:'QA',createdAt:'2026-11-02T00:00:00Z',routingStatus:'UNASSIGNED',evidence:Array.from({length:count},(_,i)=>({id:'e'+i})),supplements:[],publicUpdates:[]};
  const q={isError:false,isFetching:false,isPending:false,data:{report},refetch(){}};
  const s=screen('app/(reporter)/report-detail.tsx',{modules:{...detailModules,'../../src/api/authApi':{passwordSessionIdentity:()=> 'scope'},'@tanstack/react-query':{useQuery:()=>q}}});s.h.login();s.render();
- const refresh=s.nodes().find(n=>n.props.testID==='refresh-report');assert.ok(refresh);assert.ok(flatten(refresh.props.style).minHeight>=48);assert.ok(flatten(refresh.props.style).minWidth>=48);
+ const refresh=s.nodes().find(n=>n.type==='ReporterHeader').props.rightAction;assert.equal(refresh.props.testID,'refresh-report');assert.ok(flatten(refresh.props.style).minHeight>=48);assert.ok(flatten(refresh.props.style).minWidth>=48);
  assert.ok(s.nodes().find(n=>n.type==='ScrollView').props.refreshControl);assert.equal(s.nodes().filter(n=>n.props.testID==='evidence-cell').length,count);
  for(const cell of s.nodes().filter(n=>n.props.testID==='evidence-cell'))assert.equal(flatten(cell.props.style).width,'48%');
  assert.ok(s.nodes().some(n=>n.props.title==='Bổ sung thông tin'));s.unmount();

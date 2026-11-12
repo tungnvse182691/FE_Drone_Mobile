@@ -47,20 +47,20 @@ export default function ReporterReportDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ReporterHeader title="Chi tiết phản ánh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_TRACK)} />
+      <ReporterHeader title="Chi tiết phản ánh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_TRACK)}
+        rightAction={
+          <Pressable testID="refresh-report" accessibilityRole="button" accessibilityLabel="Làm mới phản ánh"
+            accessibilityState={{ disabled: !enabled || loading, busy: loading }} disabled={!enabled || loading}
+            onPress={load} style={styles.iconButton}>
+            {loading ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
+          </Pressable>
+        }
+      />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.toolbar}>
-          <Text style={[typography.caption, styles.metaText]}>Thông tin phản ánh của bạn</Text>
-          <Pressable testID="refresh-report" accessibilityRole="button" accessibilityLabel="Làm mới phản ánh"
-            accessibilityState={{ disabled: !enabled || loading, busy: loading }} disabled={!enabled || loading}
-            onPress={load} style={styles.iconButton}>
-            {loading ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
-          </Pressable>
-        </View>
         {enabled && query.isPending ? <Text>Đang tải phản ánh…</Text> : null}
         {error ? (
           <View style={styles.errorRow}>
@@ -72,7 +72,7 @@ export default function ReporterReportDetailScreen() {
         {report ? (
           <>
             <Card style={styles.card}>
-              <Text style={[typography.titleMd, styles.sectionTitle]}>Mô tả hiện trạng</Text>
+              <Text accessibilityRole="header" style={[typography.titleMd, styles.sectionTitle]}>Mô tả hiện trạng</Text>
               <ExpandableDescription key={`${scope}:${report.id}`} value={report.description} />
               <Text style={[typography.caption, styles.status]}>
                 {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
@@ -86,7 +86,7 @@ export default function ReporterReportDetailScreen() {
             </Card>
 
             <Card style={styles.card}>
-              <Text style={[typography.titleMd, styles.sectionTitle]}>
+              <Text accessibilityRole="header" style={[typography.titleMd, styles.sectionTitle]}>
                 Ảnh hiện trường ({report.evidence.length})
               </Text>
               {report.evidence.length === 0 ? (
@@ -103,7 +103,7 @@ export default function ReporterReportDetailScreen() {
 
             {report.supplements.length > 0 ? (
               <Card style={styles.card}>
-                <Text style={[typography.titleMd, styles.sectionTitle]}>
+                <Text accessibilityRole="header" style={[typography.titleMd, styles.sectionTitle]}>
                   Thông tin bổ sung ({report.supplements.length})
                 </Text>
                 {report.supplements.map((item) => (
@@ -122,7 +122,7 @@ export default function ReporterReportDetailScreen() {
 
             {report.publicUpdates.length > 0 ? (
               <Card style={styles.card}>
-                <Text style={[typography.titleMd, styles.sectionTitle]}>Cập nhật từ Ban quản lý dự án</Text>
+                <Text accessibilityRole="header" style={[typography.titleMd, styles.sectionTitle]}>Cập nhật từ Ban quản lý dự án</Text>
                 {report.publicUpdates.map((update) => (
                   <View key={update.id} style={styles.evidenceRow}>
                     <MaterialIcons name="campaign" size={16} color={colors.secondary} />
@@ -145,7 +145,7 @@ export default function ReporterReportDetailScreen() {
             ) : null}
 
             <Card style={styles.card}>
-              <Text style={[typography.titleMd, styles.sectionTitle]}>Vị trí & thông tin ảnh</Text>
+              <Text accessibilityRole="header" style={[typography.titleMd, styles.sectionTitle]}>Vị trí & thông tin ảnh</Text>
               {report.evidence.length ? report.evidence.map((item, index) =>
                 <EvidenceMetadata key={`${scope}:${report.id}:${item.id}`} item={item} index={index} />)
                 : <Text style={[typography.caption, styles.metaText]}>Chưa có thông tin vị trí.</Text>}
@@ -197,7 +197,7 @@ function EvidenceMetadata({ item, index }: { item: OwnReportDto['evidence'][numb
       <Text style={[typography.caption, styles.metaText]}>{item.capturedAt ? formatDate(item.capturedAt) : 'Chưa có thời gian chụp'}</Text>
       {item.location ? <Text selectable style={[typography.caption, styles.metaText]}>
         {item.location.latitude}, {item.location.longitude}
-        {item.location.accuracyMeters != null ? ` · Sai số ${item.location.accuracyMeters} m` : ''}
+        {item.location.accuracyMeters != null ? ` · Sai số vị trí ước tính: ${item.location.accuracyMeters} m` : ''}
       </Text> : null}
     </View> : null}
   </View>;
@@ -267,7 +267,6 @@ function formatDate(iso: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.md },
-  toolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   error: { color: colors.error, flex: 1 },
@@ -283,7 +282,7 @@ const styles = StyleSheet.create({
   evidenceCell: { width: '48%', minWidth: 0, gap: spacing.xs },
   metadataButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   metadataContent: { paddingBottom: spacing.sm, gap: spacing.xs },
-  sectionTitle: { color: colors.onSurface },
+  sectionTitle: { color: colors.onSurface, fontSize: 18, lineHeight: 25, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   evidenceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   evidenceText: { flex: 1, gap: 2 },
   previewFrame: { height: 120, minHeight: 48, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', gap: spacing.xs },

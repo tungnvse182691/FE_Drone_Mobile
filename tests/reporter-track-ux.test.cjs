@@ -126,6 +126,6 @@ test('detail presents only published BE updates and retains supplement/evidence 
  const preview=f.s.nodes().find(n=>n.props.publication);
  assert.equal(preview.props.publication.id,update.id);assert.equal(preview.props.reportId,id);assert.equal(preview.props.evidenceId,'public-evidence');
  await f.s.press('Bổ sung thông tin');assert.equal(f.s.nav[0].params.reportId,id);
- const before=f.refreshes();await f.s.tap('refresh-report');assert.equal(f.refreshes(),before+1);f.s.unmount();
+ const before=f.refreshes();f.s.nodes().find(n=>n.type==='ReporterHeader').props.rightAction.props.onPress();assert.equal(f.refreshes(),before+1);f.s.unmount();
  const empty=fixture('report-detail');assert.doesNotMatch(text(empty.s),/Cập nhật từ Ban quản lý dự án|Công bố lúc/);empty.s.unmount();
 });
