@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   },
   itemHash: {
     color: colors.secondary,
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 1,
   },
   statusBadge: {
@@ -505,7 +505,7 @@ const styles = StyleSheet.create({
   },
   queuedText: {
     color: colors.secondary,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   confirmedPill: {
@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
   },
   confirmedText: {
     color: colors.success,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   emptyCard: {

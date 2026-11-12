@@ -28,6 +28,7 @@ export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
   const code = operatorTaskDisplayCode(task.id);
   const segments = task.scope?.reduce((count, scope) => count + (scope.segmentIds?.length ?? 0), 0) ?? 0;
   const status = task.status?.toUpperCase();
+  const ongoing = ['ACCEPTED', 'IN_PROGRESS', 'INPROGRESS'].includes(status);
   const visual = operatorTaskVisual(task.status);
   const icon = status === 'COMPLETED' ? 'check-circle-outline'
     : status === 'SUBMITTED' ? 'task-alt'
@@ -37,6 +38,7 @@ export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
   return <Pressable onPress={onPress} style={styles.touch}
     accessibilityRole="button" accessibilityLabel={`Xem nhiệm vụ ${code}, ${label}`}>
     <Card style={{ ...styles.card, borderLeftWidth: 4, borderLeftColor: visual.rail }}>
+      {ongoing ? <Text testID="operator-current-task" style={styles.currentTask}>NHIỆM VỤ HIỆN TẠI</Text> : null}
       <View style={styles.heading}>
         <Text style={styles.title}>Khảo sát {operatorTaskTargetBand(task)}</Text>
         <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
@@ -64,6 +66,7 @@ export function OperatorTaskSkeleton() {
 
 const styles = StyleSheet.create({
   touch: { minHeight: 48 },
+  currentTask: { ...typography.labelSm, color: colors.secondary },
   card: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, gap: 8 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { ...typography.titleMd, lineHeight: 24, color: colors.neutral, flex: 1, minWidth: 0 },

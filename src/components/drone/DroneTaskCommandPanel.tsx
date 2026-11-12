@@ -128,7 +128,10 @@ export function DroneTaskRecoveryList() {
   useEffect(() => { setRows([]);setDataScope(null);setError(false);lock.current=false;void load(); },[scope.key]);
   if (!scope.key) return null;
   return <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
-    <Text style={typography.titleMd}>Yêu cầu nhiệm vụ đã lưu</Text>
+    <View style={{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:spacing.sm}}>
+      <Text style={typography.titleMd}>Yêu cầu nhiệm vụ đã lưu</Text>
+      <Button variant="text" title="Đọc lại lịch sử yêu cầu" disabled={busy} onPress={()=>void load()} />
+    </View>
     <Text style={typography.caption}>Theo tài khoản và môi trường hiện tại.</Text>
     {dataScope===scope.key && rows.length > 0 ? <Text style={typography.caption}>Mở yêu cầu để kiểm tra hoặc xác nhận gửi lại lệnh gốc.</Text> : null}
     {dataScope===scope.key ? rows.map(row=><Button key={row.taskId} variant="secondary"
@@ -136,6 +139,5 @@ export function DroneTaskRecoveryList() {
       onPress={()=>{if(scope.capture()())router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(row.taskId)}`);}} />):null}
     {dataScope===scope.key && !rows.length ? <Text>Chưa có yêu cầu đã lưu trong phân vùng này.</Text>:null}
     {error?<Text accessibilityRole="alert">Không đọc được lịch sử; dữ liệu vẫn được giữ.</Text>:null}
-    <Button variant="secondary" title="Đọc lại lịch sử yêu cầu" disabled={busy} onPress={()=>void load()} />
   </Card>;
 }

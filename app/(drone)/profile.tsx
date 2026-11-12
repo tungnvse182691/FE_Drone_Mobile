@@ -34,19 +34,21 @@ export default function DroneProfileScreen() {
       {/* Avatar & Personal Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarCircle}>
-          <MaterialIcons name="person" size={44} color={colors.primaryDark} />
+          <MaterialIcons name="person" size={28} color={colors.primaryDark} />
 
         </View>
 
-        <Text style={[typography.titleLg, styles.userName]}>
-          {normalizeName(user?.full_name ?? '') || 'Phi công hiện trường'}
-        </Text>
+        <View style={styles.profileIdentity}>
+          <Text style={[typography.titleMd, styles.userName]}>
+            {normalizeName(user?.full_name ?? '') || 'Phi công hiện trường'}
+          </Text>
 
-        {employeeCode ? <Text style={[typography.caption, styles.userSub]}>Mã NV: {employeeCode}</Text> : null}
+          {employeeCode ? <Text style={[typography.caption, styles.userSub]}>Mã NV: {employeeCode}</Text> : null}
 
-        <View style={styles.roleChip}>
-          <MaterialIcons name="flight-takeoff" size={14} color={colors.primaryDark} />
-          <Text style={styles.roleChipText}>Phi công hiện trường</Text>
+          <View style={styles.roleChip}>
+            <MaterialIcons name="flight-takeoff" size={14} color={colors.primaryDark} />
+            <Text style={styles.roleChipText}>Phi công hiện trường</Text>
+          </View>
         </View>
       </View>
 
@@ -87,19 +89,13 @@ export default function DroneProfileScreen() {
         >
           <View style={styles.menuItemLeft}>
             <MaterialIcons name="sync" size={18} color={colors.secondary} />
-            <Text style={[typography.bodyMd, styles.menuItemTitle]}>Hàng đợi trên thiết bị</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[typography.bodyMd, styles.menuItemTitle]}>Hàng đợi trên thiết bị</Text>
+              <Text style={[typography.caption, styles.menuSubText]}>Dữ liệu được giữ để khôi phục</Text>
+            </View>
           </View>
           <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
         </Pressable>
-
-        <View style={styles.menuDivider} />
-
-        <View style={styles.menuItem}>
-          <View style={styles.menuItemLeft}>
-            <MaterialIcons name="inventory-2" size={18} color={colors.secondary} />
-            <View style={{ flex: 1 }}><Text style={[typography.bodyMd, styles.menuItemTitle]}>Dữ liệu trên thiết bị</Text><Text style={[typography.caption, styles.menuSubText]}>Được giữ để khôi phục</Text></View>
-          </View>
-        </View>
       </Card>
 
       {/* Logout Action */}
@@ -184,12 +180,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileHeader: {
+    flexDirection: 'row',
+    gap: spacing.sm,
     alignItems: 'center',
     paddingVertical: spacing.md,
   },
   avatarCircle: {
-    width: 88,
-    height: 88,
+    width: 48,
+    height: 48,
     borderRadius: radius.full,
     backgroundColor: '#FEF3E2',
     borderWidth: 2,
@@ -197,7 +195,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    marginBottom: spacing.xs,
+    flexShrink: 0,
   },
   verifiedCheck: {
     position: 'absolute',
@@ -213,7 +211,6 @@ const styles = StyleSheet.create({
     borderColor: colors.surface,
   },
   userName: {
-    textAlign: 'center',
     color: colors.neutral,
     marginTop: 2,
   },
@@ -221,6 +218,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     marginTop: 2,
   },
+  profileIdentity: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
   roleChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -333,6 +331,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   logoutBtn: {
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -400,6 +399,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   infoModalFooterBtn: {
+    minHeight: 48,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
