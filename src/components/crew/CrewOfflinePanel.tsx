@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors, spacing, typography } from '../../design-tokens';
+import { colors, radius, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { inspectOfflineDevice, reconcileDeviceIntent } from '../../api/crewOfflineDevice';
@@ -62,18 +62,18 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: spacing.sm, marginBottom: spacing.md },
+  panel: { borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
   description: { ...typography.caption, color: colors.secondary },
   heading: { flexDirection:'row', alignItems:'center', gap: spacing.xs },
   stateRow: { flexDirection:'row', justifyContent:'space-around', borderTopWidth:1, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
   value: { ...typography.titleMd, color: colors.neutral, textAlign:'center' },
   label: { ...typography.caption, color: colors.secondary, textAlign:'center' },
   record: { gap: spacing.xs, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
-  recordTitle: { flexDirection:'row', justifyContent:'space-between', gap: spacing.sm },
+  recordTitle: { flexDirection:'row', flexWrap:'wrap', justifyContent:'space-between', gap: spacing.sm },
   phase: { ...typography.caption, color: colors.secondary },
   error: { color: colors.error },
-  diagnosticToggle: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', minHeight:40 },
+  diagnosticToggle: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', minHeight:48 },
   diagnostics: { gap: spacing.xs, borderTopWidth:1, borderColor:colors.border, paddingTop:spacing.sm },
-  readButton: { alignSelf:'flex-start', minHeight:40, justifyContent:'center' },
+  readButton: { alignSelf:'flex-start', minHeight:48, justifyContent:'center' },
   readLabel: { ...typography.labelSm, color: colors.secondary },
 });

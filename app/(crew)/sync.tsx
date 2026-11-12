@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -269,18 +269,6 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
             </Card>
           ))}
 
-          <Card style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <MaterialIcons name="verified-user" size={24} color={colors.brandGold} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[typography.labelLg, styles.infoTitle]}>Dữ liệu được giữ an toàn</Text>
-                <Text style={[typography.caption, styles.infoDesc]}>Mục chờ vẫn nằm trên thiết bị để đối soát; chưa có thao tác gửi tự động.</Text>
-              </View>
-            </View>
-          </Card>
-
           <Pressable accessibilityRole="button" accessibilityState={{expanded:showTechnical}} onPress={()=>setShowTechnical(v=>!v)} style={styles.technicalToggle}>
             <View><Text style={styles.technicalTitle}>Chi tiết kỹ thuật</Text><Text style={styles.technicalHint}>Nhật ký, thiết bị và chẩn đoán</Text></View><MaterialIcons name={showTechnical?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
           </Pressable>
@@ -348,23 +336,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     minHeight: 56,
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A8',
     padding: 4,
     gap: spacing.xs,
     marginBottom: spacing.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+
   },
   segment: {
     flex: 1,
@@ -389,19 +367,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statusCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     marginBottom: spacing.lg,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
   statusHero: {
     flexDirection: 'row',
@@ -432,6 +402,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   networkText: {
+    flexShrink: 1,
     color: colors.secondary,
   },
   statusDesc: {
@@ -445,7 +416,7 @@ const styles = StyleSheet.create({
   actionLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, gap: spacing.sm },
   smallAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md },
   smallActionText: { ...typography.labelSm, color: colors.secondary },
-  lockedHint: { ...typography.caption, color: colors.secondary, flex: 1, textAlign: 'right' },
+  lockedHint: { ...typography.caption, color: colors.secondary, marginTop: spacing.xs },
   heroDivider: {
     height: 1,
     backgroundColor: colors.border,
@@ -481,19 +452,11 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   itemCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     marginBottom: spacing.sm,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
   itemTop: {
     flexDirection: 'row',
@@ -550,67 +513,18 @@ const styles = StyleSheet.create({
   progressText: {
     color: colors.primaryDark,
   },
-  infoCard: {
-    borderRadius: radius.xl,
-    marginTop: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  infoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: '#FEF9E7',
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    color: colors.neutral,
-  },
-  infoDesc: {
-    color: colors.secondary,
-    marginTop: spacing.xs,
-    lineHeight: 18,
-  },
   cacheCard: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#1A1D20',
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowOffset: { width: 0, height: 8 },
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+
+    borderWidth: 1,
+    borderColor: '#E8D9A8',
   },
-  technicalToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, marginBottom: spacing.sm },
+  technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, marginBottom: spacing.sm },
   technicalTitle: { ...typography.labelLg, color: colors.neutral },
   technicalHint: { ...typography.caption, color: colors.secondary, marginTop: 2 },
   cacheRow: {
