@@ -7,11 +7,10 @@ import {Card} from '../../src/components/Card';
 import {Button} from '../../src/components/Button';
 import {NormalRepairPanel} from '../../src/components/crew/NormalRepairPanel';
 import {CrewTaskBoundary,crewStatusLabel} from './tasks';
-import {colors,spacing,typography} from '../../src/design-tokens';
+import {colors,radius,spacing,typography} from '../../src/design-tokens';
 export default function CrewRepairCompleteScreen(){
  return <CrewTaskBoundary operational={false}>{task=><SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hoàn tất thi công" showBack onBack={()=>router.back()}/>}>
  <Card style={styles.summary}>
- <Text style={styles.eyebrow}>TỔNG QUAN NHIỆM VỤ</Text>
  <Text style={typography.titleLg}>{task.title||'Nhiệm vụ hiện trường'}</Text>
  <Text style={styles.body}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
  <Text style={styles.body}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ')||'Chưa có thông tin tuyến đường'}</Text>
@@ -24,8 +23,7 @@ export default function CrewRepairCompleteScreen(){
 }
 
 const styles=StyleSheet.create({
- summary:{gap:spacing.sm,marginBottom:spacing.md},
- eyebrow:{...typography.labelSm,color:colors.secondary},
+ summary:{borderWidth:1,borderColor:'#E8D9A8',borderRadius:radius.lg,gap:spacing.sm,marginBottom:spacing.md},
  body:{...typography.bodyMd,color:colors.neutral},
  hint:{...typography.caption,color:colors.secondary},
 });

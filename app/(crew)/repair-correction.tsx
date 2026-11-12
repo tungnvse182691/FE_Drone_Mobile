@@ -6,7 +6,7 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import type { CrewRepairAttempt, CrewTask } from '../../src/api/crewApi';
-import { colors, spacing, typography } from '../../src/design-tokens';
+import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskBoundary,crewStatusLabel,useCrewIdentity } from './tasks';
 
 import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord, type RepairIdentity } from '../../src/api/crewRepairDraft';
@@ -24,7 +24,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
   const review = repairReviewPresentation(task.detail?.repairContext?.attempt);
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Bổ sung hồ sơ sửa chữa" showBack onBack={()=>router.back()} />}>
     <View style={{gap:spacing.md}}>
-    <Card style={{gap:spacing.sm}}>
+    <Card style={{gap:spacing.sm,borderWidth:1,borderColor:"#E8D9A8",borderRadius:radius.lg}}>
       <Text style={typography.titleMd}>{review.title}</Text>
       <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
       <Text>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
