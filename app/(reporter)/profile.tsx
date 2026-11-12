@@ -15,7 +15,7 @@ import { useReporterStore } from '../../src/store/reporter';
 import { reporterReportsOptions, reportItemsFromPages, canShowReportPages } from '../../src/api/reporterApi';
 import { fetchProfile, passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
-import { REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
+import { REPORTER_ACCOUNT, REPORTER_REPORT, REPORTER_TRACK } from '../../src/constants/routes';
 
 
 const softShadow = Platform.select({
@@ -86,7 +86,7 @@ export default function ReporterProfileScreen() {
   const displayName = profile ? normalizeName(profile.displayName) : 'Chưa tải hồ sơ';
 
   return (
-    <SafeAreaScreen scroll header={<ReporterHeader title="Hồ sơ cá nhân" />}>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Hồ sơ cá nhân" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_ACCOUNT)} />}>
       <View style={styles.profileHeader}>
         <View style={styles.identityRow}>
           <View style={styles.avatar}>

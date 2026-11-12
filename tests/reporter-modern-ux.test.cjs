@@ -40,8 +40,8 @@ test('UX01 verified evidence chooser is opt-in, hides filenames and keeps sessio
  assert.ok(s.nodes().some(n=>n.props.testID==='remove-photo-0'));assert.equal(s.h.calls.filter(c=>c[0]==='create').length,0);s.unmount();
 });
 
-test('UX03 five navigation labels retain readable case and grow beyond the minimum height',()=>{
- const labels=['Trang chủ','Phản ánh','Ảnh','Tra cứu','Tài khoản'];
+test('UX03 four navigation labels retain readable case and grow beyond the minimum height',()=>{
+ const labels=['Trang chủ','Gửi phản ánh','Phản ánh của tôi','Tài khoản'];
  const s=screen('src/components/BottomNav.tsx',{exportName:'BottomNav',props:{tabs:labels.map((label,i)=>({label,icon:'home',route:'/(reporter)/'+i})),activeRoute:'/(reporter)/0'},modules:{'expo-router':{router:{push(){}}}}});s.render();
  const root=s.nodes()[0],style=flatten(root.props.style);
  assert.equal(style.height,undefined);assert.ok(style.minHeight>=64);

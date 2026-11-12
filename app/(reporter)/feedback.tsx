@@ -4,17 +4,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { Card } from '../../src/components/Card';
 import { colors, spacing, typography } from '../../src/design-tokens';
-import { REPORTER_HOME } from '../../src/constants/routes';
+import { REPORTER_HOME, REPORTER_TRACK } from '../../src/constants/routes';
 
 export default function ReporterFeedbackScreen() {
   const router = useRouter();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ReporterHeader title="Đánh giá phản ánh" />
+      <ReporterHeader title="Đánh giá phản ánh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_TRACK)} />
       <View style={styles.centered}>
         <Card style={styles.card}>
           <MaterialIcons name="construction" size={48} color={colors.brandGold} />

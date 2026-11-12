@@ -258,14 +258,14 @@ export default function ReporterCaptureScreen() {
     );
   };
 
-  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Ảnh hiện trường" />}>
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Ảnh hiện trường" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_REPORT)} />}>
     <Text>{hydrateFailed ? 'Chưa tải được hàng đợi. Ảnh và dữ liệu tải lên vẫn được giữ.' : 'Đang tải hàng đợi của phiên hiện tại...'}</Text>
     {hydrateFailed ? <Button variant="primary" title="Thử tải lại" onPress={() => setHydrateAttempt(value => value + 1)} /> : null}
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
   </SafeAreaScreen>;
 
   return (
-    <SafeAreaScreen scroll header={<ReporterHeader title="Ảnh hiện trường" />}>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Ảnh hiện trường" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_REPORT)} />}>
       <Text style={[typography.caption, styles.subtitle]}>
         Thêm ảnh riêng tư để xác minh. Mỗi phản ánh chọn tối đa 3 ảnh; ảnh cũ vẫn được giữ.
       </Text>

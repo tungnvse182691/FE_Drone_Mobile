@@ -172,7 +172,7 @@ export default function ReporterUploadsScreen() {
     );
   };
 
-  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Trạng thái ảnh" />}>
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Trạng thái ảnh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_REPORT)} />}>
     <View style={styles.card}>
       {!hydrateFailed ? <ActivityIndicator color={colors.neutral} /> : null}
       <Text style={typography.labelLg}>{hydrateFailed ? 'Chưa tải được hàng đợi' : 'Đang đọc trạng thái ảnh'}</Text>
@@ -182,7 +182,7 @@ export default function ReporterUploadsScreen() {
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
   </SafeAreaScreen>;
   return (
-    <SafeAreaScreen scroll header={<ReporterHeader title="Trạng thái ảnh" />}>
+    <SafeAreaScreen scroll header={<ReporterHeader title="Trạng thái ảnh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_REPORT)} />}>
       <View style={styles.gateCard}>
         <Text style={[typography.labelLg, styles.gateTitle]}>Đã xác minh {verifiedCount}/{items.length} ảnh</Text>
         <Text style={[typography.caption, styles.gateText]}>{watching ? `Đang theo dõi ${pending} ảnh chờ xử lý.` : 'Chỉ ảnh đã xác minh mới dùng để gửi phản ánh.'}</Text>

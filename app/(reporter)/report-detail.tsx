@@ -12,7 +12,7 @@ import { getOwnReportReal, downloadReportEvidenceReal, downloadPublicationEviden
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { useAuthStore } from '../../src/store/auth';
-import { REPORTER_REPORT_SUPPLEMENT } from '../../src/constants/routes';
+import { REPORTER_REPORT_SUPPLEMENT, REPORTER_TRACK } from '../../src/constants/routes';
 
 const LOCATION_SOURCE_LABELS: Record<string, string> = {
   CAPTURE: 'Vị trí lúc chụp ảnh',
@@ -47,7 +47,7 @@ export default function ReporterReportDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <ReporterHeader title="Chi tiết phản ánh" />
+      <ReporterHeader title="Chi tiết phản ánh" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_TRACK)} />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}

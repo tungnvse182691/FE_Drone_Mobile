@@ -8,7 +8,7 @@ function layout(pathname){
  const labels=selected.map(n=>n.props.children.flat(Infinity).find(c=>c?.type==='Text').props.children[0]);
  nav.unmount();s.unmount();return labels;
 }
-const routes={home:'Trang chủ',report:'Phản ánh','report-detail':'Tra cứu','report-supplement':'Tra cứu',track:'Tra cứu',feedback:'Tra cứu',uploads:'Ảnh',capture:'Ảnh',account:'Tài khoản',profile:'Tài khoản'};
+const routes={home:'Trang chủ',report:'Gửi phản ánh','report-detail':'Phản ánh của tôi','report-supplement':'Phản ánh của tôi',track:'Phản ánh của tôi',feedback:'Phản ánh của tôi',uploads:'Gửi phản ánh',capture:'Gửi phản ánh',account:'Tài khoản',profile:'Tài khoản'};
 for(const [route,label] of Object.entries(routes))for(const prefix of ['/','/(reporter)/'])test('NAV-01 exact '+prefix+route+' selects '+label,()=>assert.deepEqual(layout(prefix+route),[label]));
 for(const route of ['report-detail-extra','reporter','track-extra','profile-extra','uploads-extra'])test('NAV-01 unknown lookalike '+route+' never matches a tab',()=>assert.deepEqual(layout('/'+route),[]));
 for(const group of ['crew','drone'])test('NAV-01 shared BottomNav preserves every declared '+group+' route exactly',()=>{

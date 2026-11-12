@@ -33,7 +33,7 @@ import {
 import { hasUsableCoordinate } from '../../src/types/position';
 import { useReporterStore, useReporterDraftScope, reporterFailureMessage, reporterProgressLabel, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
-import { REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
+import { REPORTER_REPORT_DETAIL, REPORTER_TRACK } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
   ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
@@ -319,11 +319,11 @@ export default function ReporterReportSupplementScreen() {
 
   const busy = phase === 'loading' || phase === 'submitting';
 
-  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Bổ sung thông tin phản ánh" />}><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Bổ sung thông tin phản ánh" onBack={() => router.canGoBack() ? router.back() : router.replace(reportId ? { pathname: REPORTER_REPORT_DETAIL, params: { reportId } } : REPORTER_TRACK)} />}><Text>Đang tải dữ liệu của phiên hiện tại...</Text></SafeAreaScreen>;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-    <SafeAreaScreen scroll header={<><ReporterHeader title="Bổ sung thông tin phản ánh" />{phase === 'submitting' ? <Text testID="submission-progress" accessibilityLiveRegion="polite" style={[typography.caption, { padding: spacing.md }]}>{submitProgress}</Text> : null}</>}>
+    <SafeAreaScreen scroll header={<><ReporterHeader title="Bổ sung thông tin phản ánh" onBack={() => router.canGoBack() ? router.back() : router.replace(reportId ? { pathname: REPORTER_REPORT_DETAIL, params: { reportId } } : REPORTER_TRACK)} />{phase === 'submitting' ? <Text testID="submission-progress" accessibilityLiveRegion="polite" style={[typography.caption, { padding: spacing.md }]}>{submitProgress}</Text> : null}</>}>
       <Text style={[typography.caption, styles.subtitle]}>Thêm mô tả và ảnh hiện trường cho phản ánh này.</Text>
       {phase === 'failed' ? <Button title="Thử tải lại" variant="secondary" onPress={() => void loadReport()} /> : null}
 

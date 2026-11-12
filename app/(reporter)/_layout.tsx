@@ -22,23 +22,16 @@ import {
 const TABS: NavTab[] = [
   { label: 'Trang chủ', route: REPORTER_HOME, icon: 'home', iconFamily: 'material' },
   {
-    label: 'Phản ánh',
+    label: 'Gửi phản ánh',
     route: REPORTER_REPORT,
     icon: 'add-circle',
     iconFamily: 'material',
-    activeRoutes: [REPORTER_REPORT],
+    activeRoutes: [REPORTER_REPORT, REPORTER_UPLOADS, REPORTER_CAPTURE],
   },
   {
-    label: 'Ảnh',
-    route: REPORTER_UPLOADS,
-    icon: 'photo-library',
-    iconFamily: 'material',
-    activeRoutes: [REPORTER_UPLOADS, REPORTER_CAPTURE],
-  },
-  {
-    label: 'Tra cứu',
+    label: 'Phản ánh của tôi',
     route: REPORTER_TRACK,
-    icon: 'search',
+    icon: 'description',
     iconFamily: 'material',
     activeRoutes: [REPORTER_TRACK, REPORTER_REPORT_DETAIL, REPORTER_REPORT_SUPPLEMENT, REPORTER_FEEDBACK],
   },
@@ -60,7 +53,7 @@ export default function ReporterLayout() {
       Alert.alert('Cần đăng nhập',
         route === REPORTER_UPLOADS
           ? 'Đăng nhập để xem hàng đợi ảnh của tài khoản.'
-          : 'Đăng nhập để tra cứu các phản ánh của tài khoản.',
+          : 'Đăng nhập để xem các phản ánh của tài khoản.',
         [
           { text: 'Hủy', style: 'cancel' },
           { text: 'Đăng nhập', onPress: () => {
