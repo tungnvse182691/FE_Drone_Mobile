@@ -1,7 +1,8 @@
+import { reporterAppearance } from '../../src/components/reporter/appearance';
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,12 +15,6 @@ import { isReporterSession } from '../../src/api/uploads';
 import { Button } from '../../src/components/reporter/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  android: { elevation: 1 },
-  default: {},
-});
 
 const LOAD_ERROR = 'Không tải được danh sách phản ánh. Vui lòng thử lại.';
 
@@ -74,6 +69,8 @@ export default function ReporterTrackScreen() {
           {reports.map((report) => (
             <Pressable
               key={report.id}
+              style={styles.reportTouch}
+              android_ripple={{ color: reporterAppearance.pressed, foreground: true }}
               onPress={() =>
                 router.push({ pathname: REPORTER_REPORT_DETAIL, params: { reportId: report.id } })
               }
@@ -87,13 +84,13 @@ export default function ReporterTrackScreen() {
                   </Text>
                   <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
                 </View>
-                <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
                 <View style={styles.routingChip}>
                   <Text style={[typography.caption, styles.metaText]}>
                     {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
                   </Text>
                 </View>
                 <View style={styles.metaRow}>
+                  <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
                   <MaterialIcons name="photo-library" size={14} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
                     {report.evidence.length} ảnh hiện trường
@@ -136,17 +133,17 @@ const styles = StyleSheet.create({
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   error: { color: colors.error, flex: 1 },
   list: { gap: spacing.md, marginTop: spacing.sm },
+  reportTouch: { borderRadius: radius.lg, overflow: 'hidden' },
   reportCard: {
     gap: spacing.sm,
-    borderRadius: radius.xl,
-    ...softShadow,
+    ...reporterAppearance.card,
   },
   reportHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  reportDate: { color: colors.secondary, flex: 1 },
+  reportDate: { color: colors.secondary, marginRight: spacing.xs },
   description: { color: colors.neutral, flex: 1, fontFamily: 'Roboto-Medium' },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
   metaText: { color: colors.secondary },
