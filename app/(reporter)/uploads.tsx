@@ -1,10 +1,10 @@
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
   UPLOAD_STATE_LABELS,
@@ -24,8 +24,8 @@ import {
 } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -72,6 +72,7 @@ export default function ReporterUploadsScreen() {
   const cancelItem = useUploadsStore(state => state.cancelItem);
   const stopWatch = useUploadsStore((state) => state.stopWatch);
   const scope = useReporterDraftScope();
+  const [showRecovery, setShowRecovery] = useState(false);
   const [hydrateFailed, setHydrateFailed] = useState(false);
   const [hydrateAttempt, setHydrateAttempt] = useState(0);
   const [dataScope, setDataScope] = useState('');
@@ -96,12 +97,13 @@ export default function ReporterUploadsScreen() {
     return (
       <View key={item.id} style={styles.card}>
         <View style={styles.cardHeader}>
+          <Image source={{ uri: item.uriLocal }} style={styles.thumbnail} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
           <MaterialIcons name={stateIcon(item.mediaState)} size={18} color={stateColor(item.mediaState)} />
           <Text style={[typography.labelLg, styles.cardTitle]} numberOfLines={1}>
             Ảnh {index + 1}
           </Text>
           <Text style={[typography.caption, styles.cardMeta]}>
-            {(item.sizeBytes / (1024 * 1024)).toFixed(1)} MB
+            {item.sizeBytes < 1024 * 1024 ? `${Math.max(1, Math.round(item.sizeBytes / 1024))} KB` : `${(item.sizeBytes / (1024 * 1024)).toFixed(1)} MB`}
           </Text>
         </View>
 
@@ -117,17 +119,17 @@ export default function ReporterUploadsScreen() {
           <Text style={[typography.caption, styles.cardError]}>{item.lastErrorMessage}</Text>
         ) : null}
 
-        <View style={styles.progressTrack}>
+        {item.mediaState === 'UPLOADING' && !item.cancelState ? <View style={styles.progressTrack} testID={`uploads-progress-${item.id}`}>
           <View
             style={[
               styles.progressFill,
               {
-                width: `${item.mediaState === 'VERIFIED' ? 100 : ratio}%`,
+                width: `${ratio}%`,
                 backgroundColor: stateColor(item.mediaState),
               },
             ]}
           />
-        </View>
+        </View> : null}
 
         <View style={styles.actions}>
           {(item.mediaState === 'FAILED' || item.lastErrorCode) && !item.cancelState ? (
@@ -165,33 +167,32 @@ export default function ReporterUploadsScreen() {
             </Pressable>
           ) : null}
         </View>
-        <Text style={[typography.caption, styles.cardMeta]} testID={`uploads-retention-${item.id}`}>
-          {UPLOAD_RETENTION_NOTICE}
-        </Text>
+
       </View>
     );
   };
 
-  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Hàng đợi xác minh ảnh" />}>
-    <Text>{hydrateFailed ? 'Chưa tải được hàng đợi. Ảnh và dữ liệu tải lên vẫn được giữ.' : 'Đang tải hàng đợi...'}</Text>
+  if (dataScope !== scope.key) return <SafeAreaScreen header={<ReporterHeader title="Trạng thái ảnh" />}>
+    <View style={styles.card}>
+      {!hydrateFailed ? <ActivityIndicator color={colors.neutral} /> : null}
+      <Text style={typography.labelLg}>{hydrateFailed ? 'Chưa tải được hàng đợi' : 'Đang đọc trạng thái ảnh'}</Text>
+      <Text style={[typography.caption, styles.cardMeta]}>Ảnh và dữ liệu tải lên trên thiết bị vẫn được giữ.</Text>
+    </View>
     {hydrateFailed ? <Button variant="primary" title="Thử tải lại" onPress={() => setHydrateAttempt(value => value + 1)} /> : null}
     <Button title="Về trang chủ" variant="secondary" onPress={() => router.replace('/(reporter)/home')} />
   </SafeAreaScreen>;
   return (
-    <SafeAreaScreen scroll header={<ReporterHeader title="Hàng đợi xác minh ảnh" />}>
-      <Text style={[typography.caption, styles.subtitle]}>
-        {watching
-          ? `Đang theo dõi ${pending} ảnh chờ xử lý · đã xác minh ${verifiedCount}/${items.length}`
-          : 'Chưa tự gửi lại lệnh. Bấm kiểm tra để tiếp tục và đối soát với cùng thông tin tải lên.'}
-      </Text>
-
+    <SafeAreaScreen scroll header={<ReporterHeader title="Trạng thái ảnh" />}>
       <View style={styles.gateCard}>
-        <Text style={[typography.labelLg, styles.gateTitle]}>
-          Chọn ảnh đã xác minh để gửi phản ánh
-        </Text>
-        <Text style={[typography.caption, styles.gateText]}>
-          Ảnh tải lỗi vẫn được giữ để đối soát. Bạn có thể thêm ảnh mới, rồi chọn ảnh đã xác minh trong form; không tự thay ảnh của lệnh đang chờ kết quả.
-        </Text>
+        <Text style={[typography.labelLg, styles.gateTitle]}>Đã xác minh {verifiedCount}/{items.length} ảnh</Text>
+        <Text style={[typography.caption, styles.gateText]}>{watching ? `Đang theo dõi ${pending} ảnh chờ xử lý.` : 'Chỉ ảnh đã xác minh mới dùng để gửi phản ánh.'}</Text>
+        {items.length > 0 ? <>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showRecovery }} testID="uploads-recovery-toggle" onPress={() => setShowRecovery(value => !value)} style={styles.action}>
+            <Text style={[typography.caption, styles.gateTitle]}>{showRecovery ? 'Thu gọn hướng dẫn' : 'Khi ảnh chưa hoàn tất'}</Text>
+            <MaterialIcons name={showRecovery ? 'expand-less' : 'expand-more'} size={20} color={colors.neutral} />
+          </Pressable>
+          {showRecovery ? <Text style={[typography.caption, styles.gateText]}>Chưa tự gửi lại lệnh. Kiểm tra lại dùng cùng thông tin tải lên. Ảnh lỗi được giữ để đối soát; không thay ảnh của lệnh đang chờ kết quả.</Text> : null}
+        </> : null}
       </View>
 
       {!hydrated ? (
@@ -205,6 +206,7 @@ export default function ReporterUploadsScreen() {
       ) : null}
 
       <View style={styles.list}>{items.map(renderRow)}</View>
+      {items.length > 0 ? <Text style={[typography.caption, styles.retention]} testID="uploads-retention">{UPLOAD_RETENTION_NOTICE}</Text> : null}
 
       <View style={styles.footer}>
         <Button variant="secondary" title="Thêm hoặc thay ảnh hiện trường" onPress={() => router.push(REPORTER_CAPTURE)} />
@@ -239,7 +241,7 @@ export default function ReporterUploadsScreen() {
 const styles = StyleSheet.create({
   subtitle: { color: colors.secondary, marginTop: spacing.xs, marginBottom: spacing.lg },
   gateCard: {
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.cardPadding,
     marginBottom: spacing.lg,
@@ -269,8 +271,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   progressFill: { height: 6, borderRadius: radius.full },
-  actions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
-  action: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  thumbnail: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.surfaceAlt },
+  retention: { color: colors.secondary, marginBottom: spacing.md },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.sm },
+  action: { minHeight: 48, paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   actionText: { color: colors.brandGold },
   actionMuted: { color: colors.secondary },
   pressed: { opacity: 0.85 },
