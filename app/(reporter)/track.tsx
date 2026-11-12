@@ -11,13 +11,13 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { reporterReportsOptions, reportItemsFromPages, canShowReportPages } from '../../src/api/reporterApi';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
+  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  android: { elevation: 1 },
   default: {},
 });
 
@@ -34,7 +34,6 @@ export default function ReporterTrackScreen() {
   const { refetch } = query;
   useFocusEffect(useCallback(() => { if (enabled) void refetch(); }, [enabled, refetch]));
   const reports = enabled && canShowReportPages(query) ? reportItemsFromPages(query.data?.pages) : [];
-  const activeEmail = enabled ? user?.phone_or_email : undefined;
   const loading = enabled && query.isFetching && !query.isFetchingNextPage;
   const error = query.isError && enabled ? (canShowReportPages(query) ? 'Không tải thêm được. Đang hiển thị phản ánh đã tải; thử tải thêm hoặc làm mới.' : LOAD_ERROR) : null;
   const load = () => { if (enabled) void query.refetch(); };
@@ -47,9 +46,10 @@ export default function ReporterTrackScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[typography.caption, styles.subtitle]}>
-          Danh sách phản ánh đã gửi bằng email {activeEmail ?? 'chưa xác thực'}.
-        </Text>
+        <View style={styles.toolbar}>
+          <Text style={[typography.caption, styles.subtitle]}>Các phản ánh bạn đã gửi</Text>
+          <Button variant="text" title="Làm mới" loading={loading} onPress={load} disabled={!enabled} />
+        </View>
 
         {error ? (
           <View style={styles.errorRow}>
@@ -58,7 +58,6 @@ export default function ReporterTrackScreen() {
           </View>
         ) : null}
 
-        <Button variant="secondary" title="Làm mới" loading={loading} onPress={load} disabled={!enabled} />
         {!enabled ? <Text>Vui lòng đăng nhập để xem phản ánh của bạn.</Text> : null}
         {enabled && !query.isPending && !error && reports.length === 0 ? (
           <EmptyState
@@ -82,18 +81,17 @@ export default function ReporterTrackScreen() {
             >
               <Card style={styles.reportCard}>
                 <View style={styles.reportHeader}>
-                  <MaterialIcons name="description" size={18} color={colors.brandGold} />
-                  <Text style={[typography.titleMd, styles.reportDate]}>
-                    {formatDate(report.createdAt)}
+                  <Text style={[typography.bodyMd, styles.description]} numberOfLines={2}>
+                    {report.description || 'Chưa có mô tả'}
                   </Text>
                   <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
                 </View>
-                <Text style={[typography.bodyMd, styles.description]} numberOfLines={3}>
-                  {report.description || 'Chưa có mô tả'}
-                </Text>
-                <Text style={[typography.caption, styles.metaText]}>
-                  {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
-                </Text>
+                <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
+                <View style={styles.routingChip}>
+                  <Text style={[typography.caption, styles.metaText]}>
+                    {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
+                  </Text>
+                </View>
                 <View style={styles.metaRow}>
                   <MaterialIcons name="photo-library" size={14} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
@@ -132,7 +130,9 @@ function formatDate(iso: string) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.surfaceAlt },
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.sm },
-  subtitle: { color: colors.secondary, marginBottom: spacing.sm },
+  toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  subtitle: { color: colors.secondary, flex: 1 },
+  routingChip: { alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   error: { color: colors.error, flex: 1 },
   list: { gap: spacing.md, marginTop: spacing.sm },
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   reportDate: { color: colors.secondary, flex: 1 },
-  description: { color: colors.neutral },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  description: { color: colors.neutral, flex: 1, fontFamily: 'Roboto-Medium' },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs },
   metaText: { color: colors.secondary },
 });

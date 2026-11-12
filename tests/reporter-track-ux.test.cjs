@@ -35,7 +35,7 @@ test('own-report cards show bounded description, date, evidence count and routin
  assert.match(text(s),/12\/11\/2026/);assert.match(text(s),/1 ảnh hiện trường/);
  assert.match(text(s),/Đã phân tuyến/);
  const description=s.nodes().find(n=>n.type==='Text'&&n.props.children.includes('Nứt tấm bê tông gần cầu'));
- assert.equal(description.props.numberOfLines,3);
+ assert.equal(description.props.numberOfLines,2);
  assert.doesNotMatch(text(s),/#HH-|89e9b452|%|hoàn thành|tiến độ/i);
  assert.equal(s.nodes().filter(n=>n.type==='InputField'||n.type==='TextInput').length,0);s.unmount();
 });

@@ -5,7 +5,7 @@ import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView,
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '../../src/components/Button';
+import { Button } from '../../src/components/reporter/Button';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { getOwnReportReal, downloadReportEvidenceReal, downloadPublicationEvidenceReal, type OwnReportDto } from '../../src/api/reporterApi';
@@ -72,19 +72,17 @@ export default function ReporterReportDetailScreen() {
         {report ? (
           <>
             <Card style={styles.card}>
-              <Text style={[typography.bodyMd, styles.status]}>
+              <Text style={[typography.titleMd, styles.sectionTitle]}>Mô tả hiện trạng</Text>
+              <ExpandableDescription key={`${scope}:${report.id}`} value={report.description} />
+              <Text style={[typography.caption, styles.status]}>
                 {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
               </Text>
               <View style={styles.metaRow}>
                 <MaterialIcons name="schedule" size={16} color={colors.secondary} />
-                <Text style={[typography.bodyMd, styles.metaText]}>
+                <Text style={[typography.caption, styles.metaText]}>
                   Đã gửi lúc {formatDate(report.createdAt)}
                 </Text>
               </View>
-            </Card>
-            <Card style={styles.card}>
-              <Text style={[typography.titleMd, styles.sectionTitle]}>Mô tả hiện trạng</Text>
-              <ExpandableDescription key={`${scope}:${report.id}`} value={report.description} />
             </Card>
 
             <Card style={styles.card}>
@@ -101,13 +99,6 @@ export default function ReporterReportDetailScreen() {
                   </View>
                 ))}</View>
               )}
-            </Card>
-
-            <Card style={styles.card}>
-              <Text style={[typography.titleMd, styles.sectionTitle]}>Vị trí & thông tin ảnh</Text>
-              {report.evidence.length ? report.evidence.map((item, index) =>
-                <EvidenceMetadata key={`${scope}:${report.id}:${item.id}`} item={item} index={index} />)
-                : <Text style={[typography.caption, styles.metaText]}>Chưa có thông tin vị trí.</Text>}
             </Card>
 
             {report.supplements.length > 0 ? (
@@ -152,6 +143,13 @@ export default function ReporterReportDetailScreen() {
                 ))}
               </Card>
             ) : null}
+
+            <Card style={styles.card}>
+              <Text style={[typography.titleMd, styles.sectionTitle]}>Vị trí & thông tin ảnh</Text>
+              {report.evidence.length ? report.evidence.map((item, index) =>
+                <EvidenceMetadata key={`${scope}:${report.id}:${item.id}`} item={item} index={index} />)
+                : <Text style={[typography.caption, styles.metaText]}>Chưa có thông tin vị trí.</Text>}
+            </Card>
 
             <Button
               variant="primary"
@@ -274,7 +272,7 @@ const styles = StyleSheet.create({
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   error: { color: colors.error, flex: 1 },
   card: { gap: spacing.sm, borderRadius: radius.lg },
-  status: { color: colors.onSurface, fontWeight: '600' },
+  status: { color: colors.onSurface, alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   metaText: { color: colors.secondary, flex: 1 },
   descriptionBlock: { minWidth: 0, flexShrink: 1 },

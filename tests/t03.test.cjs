@@ -67,7 +67,7 @@ test('Reporter home and track summarize descriptions while detail retains them',
  const home=screenHarness(`app/(reporter)/${file}.tsx`);
  {
   const summary=home.nodes().find(n=>n?.type==='Text'&&n.props.children.includes('real report'));
-  assert.ok(summary);assert.equal(summary.props.numberOfLines,file==='home'?2:3);
+  assert.ok(summary);assert.equal(summary.props.numberOfLines,2);
  }
  assert.ok(home.nodes().includes(' ảnh hiện trường'));
  }
