@@ -25,12 +25,12 @@ test('UI06 Detail keeps raw identities and versions in expanded technical conten
  assert.ok(text(s).includes(task.id));assert.match(text(s),/raw-scope-version/);s.unmount();
 });
 
-test('UI06 Upload has honest local evidence placeholders and an explanation without enabling submission',async()=>{
+test('UI06 Upload uses compact file rows without invented preview or location metadata',async()=>{
  const s=drone('upload',{}, {params:{taskId:task.id}});s.render();await s.flush();
- assert.match(text(s),/Chưa có ảnh xem trước/);assert.match(text(s),/Chưa được máy chủ xác minh/);
- assert.match(text(s),/Thời gian ghi hình: Chưa có dữ liệu/);assert.match(text(s),/Tọa độ ghi hình: Chưa có dữ liệu/);
- assert.ok(s.nodes().some(n=>n.props.testID==='dataset-disabled-reason'));
- const submit=s.nodes().find(n=>n.type==='Button'&&n.props.title==='Nộp bộ dữ liệu 4K RGB');assert.equal(submit.props.disabled,true);assert.equal(submit.props.style.backgroundColor,'#C9A227');assert.equal(submit.props.disabledTextStyle.color,'#1A1D20');
+ assert.doesNotMatch(text(s),/Chưa có ảnh xem trước/);assert.match(text(s),/Chưa được máy chủ xác minh/);
+ assert.doesNotMatch(text(s),/Tọa độ ghi hình:|Ghi chú hiện trường/);assert.match(text(s),/Video MP4/);assert.match(text(s),/Dữ liệu GPS · SRT/);
+ assert.ok(s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
+ const submit=s.nodes().find(n=>n.type==='Button'&&n.props.title==='Nộp bộ dữ liệu 4K RGB');assert.equal(submit.props.disabled,true);assert.equal(submit.props.style.backgroundColor,'#C9A227');assert.equal(submit.props.variant,'primary');
  assert.ok(!s.nodes().some(n=>n.type==='MaterialIcons'&&n.props.name==='check-circle'));s.unmount();
 });
 

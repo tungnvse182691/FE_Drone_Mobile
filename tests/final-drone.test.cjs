@@ -46,7 +46,7 @@ test('Drone production upload has no fixture device or unjournalled dispatch',()
   assert.ok(!fs.readFileSync('src/api/droneApi.ts','utf8').includes('FIXTURE_DRONE_DEVICE_ID'));
   assert.ok(!screen.includes('await uploadOperatorFileReal('));
   assert.ok(!screen.includes('await submitOperatorDatasetReal('));
-  assert.match(screen,/DRONE_DATASET_BLOCK_REASON/);
+  assert.match(screen,/orchestrateDroneUpload/);assert.match(screen,/submitDroneDataset/);assert.match(screen,/readOperatorDatasetReadback/);
 });
 test('Drone accept/decline use shared durable panel without direct mutation',()=>{
   for(const [file,transport] of [['request-detail.tsx','acceptOperatorSurveyTaskReal'],['request-decline.tsx','declineOperatorSurveyTaskReal']]) {
@@ -56,15 +56,12 @@ test('Drone accept/decline use shared durable panel without direct mutation',()=
     assert.doesNotMatch(source,/apiClient\.post|handleAcceptTask|handleSubmit/);
   }
 });
-test('Drone blocked production action handlers cannot call upload/dataset/accept/decline transport',async()=>{
-  for(const [file,handler] of [['upload.tsx','handleStartSubmitDataset']]) {
-    const source=fs.readFileSync(`app/(drone)/${file}`,'utf8');
-    const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let expression;
-    const visit=node=>{if(ts.isVariableDeclaration(node)&&node.name.getText(ast)===handler)expression=node.initializer.getText(ast);ts.forEachChild(node,visit);};visit(ast);assert.ok(expression);
-    let notices=0,transport=0;
-    const context={DRONE_TASK_COMMAND_BLOCK_REASON:'blocked-task',DRONE_DATASET_BLOCK_REASON:'blocked-dataset',setAcceptError:()=>notices++,setToast:()=>notices++,setSubmitError:()=>notices++,acceptOperatorSurveyTaskReal:()=>transport++,declineOperatorSurveyTaskReal:()=>transport++,uploadOperatorFileReal:()=>transport++,submitOperatorDatasetReal:()=>transport++};
-    await vm.runInNewContext(`(${expression})()`,context);assert.equal(notices,1);assert.equal(transport,0);
-  }
+const {drone:operatorScreen,id:operatorFixtureId}=require('./package45-drone.test.cjs');
+test('Operator upload guards incomplete input before any transport',async()=>{
+ let writes=0;
+ const s=operatorScreen('upload',{}, {params:{taskId:operatorFixtureId(2)},modules:{'../../src/api/droneDatasetWorkflow':{orchestrateDroneUpload:async()=>writes++,submitDroneDataset:async()=>writes++}}});
+ s.render();await s.flush();const button=s.nodes().find(n=>n.props.title==='Nộp bộ dữ liệu 4K RGB');assert.equal(button.props.disabled,true);
+ await button.props.onPress();await s.flush();assert.equal(writes,0);s.unmount();
 });
 test('Drone dataset read validates source and returns independent coverage status',async()=>{
   const h=harness(); const result=await h.api.readOperatorDatasetReadback(h.api.operatorDatasetScope(),id(4));

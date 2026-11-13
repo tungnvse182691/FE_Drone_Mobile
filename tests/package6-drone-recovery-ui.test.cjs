@@ -27,7 +27,7 @@ test('Drone upload presents local preservation without a fake online/offline swi
  const s=drone('upload');s.render();await s.flush();
  assert.ok(!s.nodes().some(n=>n.props?.accessibilityRole==='radio'));
  assert.doesNotMatch(JSON.stringify(s.nodes()),/CHẾ ĐỘ ĐỒNG BỘ NGOẠI TUYẾN|Trực tuyến \(Wi-Fi\/4G\)/);
- assert.match(JSON.stringify(s.nodes()),/Chưa xác minh kết nối mạng/);s.unmount();
+ assert.match(JSON.stringify(s.nodes()),/Tệp trên thiết bị/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã tải lên thành công/);s.unmount();
 });
 test('Drone upload preserves picker bytes before displaying selection and reopens retained files explicitly',async()=>{
  let writes=0;const d=deferred();
@@ -69,4 +69,43 @@ test('Drone log rejects a late list after actor leaves and returns to the same s
  s.render();s.h.login('DRONE_OPERATOR',id(9));s.h.changeAuth(current);
  d.resolve({items:[{id:id(2),status:'ACCEPTED'}]});await s.flush();
  assert.ok(!s.nodes().some(n=>n.type==='Pressable'&&JSON.stringify(n).includes('00000002')));s.unmount();
+});
+
+test('Operator restores a hashed local file without mislabelling it missing',async()=>{
+ const file={...saved,availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
+ const s=drone('upload',{}, {params:{taskId:id(2)},modules:{'../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})}}});
+ s.render();await s.flush();const button=s.nodes().find(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4');assert.equal(button.props.disabled,false);
+ await button.props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Không tìm thấy tệp/);s.unmount();
+});
+
+test('Operator one press transfers verified video then submits and reads the dataset receipt',async()=>{
+ const file={...saved,taskId:id(2),projectId:id(3),availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
+ const calls=[],pending=deferred();let receipt=null;
+ const task={id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',scope:[{routeVersionId:id(5)}],version:'version'};
+ const s=drone('upload',{
+  getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:'"version"'}),
+  listEligibleOperatorDronesReal:async()=>({items:[{id:id(7),serialNo:'QA'}],nextCursor:null}),
+ },{params:{taskId:id(2),projectId:id(3)},modules:{
+  '../../src/api/droneSelectionJournal':{openDroneSelectionJournal:async()=>({read:async()=>({droneId:id(7)}),close(){}})},
+  '../../src/api/droneTaskJournal':{openDroneUploadJournal:async()=>({read:async()=>receipt?[receipt]:[],close(){}})},
+  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})},
+  '../../src/api/droneDatasetWorkflow':{
+   operatorDatasetScope:()=> 'owner',
+   orchestrateDroneUpload:async plan=>{calls.push(['transfer',plan]);await pending.promise;return {fileId:id(8)};},
+   submitDroneDataset:async plan=>{calls.push(['submit',plan]);return receipt={status:'DATASET_CONFIRMED',receipt:{datasetId:id(9)}};},
+   readOperatorDatasetReadback:async(owner,datasetId)=>{calls.push(['read',owner,datasetId]);return {dataset:{surveyTaskId:id(2)}};},
+  }
+ }});
+ s.render();await s.flush();await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();
+ s.nodes().find(n=>n.props.accessibilityLabel==='Thời gian ghi hình').props.onChangeText('2026-11-14 08:30');await s.flush();
+ const send=()=>s.nodes().find(n=>n.props.title==='Nộp bộ dữ liệu 4K RGB'||n.props.title==='Đang gửi dữ liệu…');
+ assert.equal(send().props.disabled,false);send().props.onPress();await s.flush();
+ assert.equal(send().props.disabled,true);send().props.onPress();await s.flush();assert.equal(calls.length,1);
+ assert.ok(s.nodes().some(n=>n.props.accessibilityLiveRegion==='polite'));
+ assert.ok(!s.nodes().some(n=>n.props.accessibilityRole==='status'),'unsupported Android role must not return');
+ pending.resolve();await s.flush();
+ assert.deepEqual(calls.map(c=>c[0]),['transfer','submit','read']);
+ assert.deepEqual(Array.from(calls[1][1].payload.videoFileIds),[id(8)]);assert.equal(calls[1][1].payload.deviceId,id(7));
+ assert.equal(calls[1][1].ifMatch,'"version"');
+ assert.match(JSON.stringify(s.nodes()),/Máy chủ đã nhận bộ dữ liệu/);s.unmount();
 });

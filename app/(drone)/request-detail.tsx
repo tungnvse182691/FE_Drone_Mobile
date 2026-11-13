@@ -8,7 +8,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
-import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
+import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE, DRONE_UPLOAD } from '../../src/constants/routes';
 import { operatorAppearance } from '../../src/components/drone/appearance';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
@@ -289,6 +289,7 @@ export default function DroneRequestDetailScreen() {
         </Card>
 
         <View style={styles.actionContainer}>
+          {active ? <Button variant="primary" title="Gửi dữ liệu khảo sát" onPress={() => router.push({pathname:DRONE_UPLOAD,params:{taskId:task.id,projectId:task.projectId}})} /> : null}
           <Button
             variant="secondary"
             title="Xem gói công việc"

@@ -1,56 +1,21 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useEffect, useRef, useState } from 'react';
 
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { DRONE_DATASET_BLOCK_REASON } from '../../src/api/droneDatasetWorkflow';
+import { orchestrateDroneUpload, operatorDatasetScope, readOperatorDatasetReadback, submitDroneDataset, replayDroneDataset, type DroneDatasetPlan } from '../../src/api/droneDatasetWorkflow';
+import { openDroneUploadJournal, type DroneUploadIntent } from '../../src/api/droneTaskJournal';
 import { getOperatorSurveyTaskDetailReal, listEligibleOperatorDronesReal, type EligibleDroneDto } from '../../src/api/droneApi';
-import { openDroneLocalFiles, type DroneLocalFile } from '../../src/api/droneLocalFiles';
+import { openDroneLocalFiles, readDroneFileRange, type DroneLocalFile } from '../../src/api/droneLocalFiles';
 import { openDroneSelectionJournal } from '../../src/api/droneSelectionJournal';
 import { useAuthStore } from '../../src/store/auth';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
-  default: {},
-});
-
-type UploadStep = 'LOCAL' | 'QUEUED' | 'UPLOADING' | 'SERVER_CONFIRMED';
-
-interface UploadConfig {
-  code: string;
-  road: string;
-  droneModel: string;
-  defaultVideoName: string;
-  defaultVideoSize: string;
-  defaultSrtName: string;
-  defaultSrtSize: string;
-  videoSha256: string;
-  srtSha256: string;
-  gpsCoord: string;
-  gpsAddress: string;
-}
-
-function evidencePlaceholder() {
-  return <View style={styles.evidencePreview}>
-    <MaterialIcons name="image-not-supported" size={32} color={colors.secondary} />
-    <Text style={[typography.caption, { color: colors.secondary }]}>Chưa có ảnh xem trước</Text>
-  </View>;
-}
-function evidenceMetadata() {
-  return <>
-    <View style={styles.sourceTag}><Text style={[typography.caption, { color: colors.primaryDark }]}>Tệp trên thiết bị</Text></View>
-    <Text style={styles.evidenceMeta}>Thời gian ghi hình: Chưa có dữ liệu</Text>
-    <Text style={styles.evidenceMeta}>Tọa độ ghi hình: Chưa có dữ liệu</Text>
-    <View style={styles.evidenceStatus}><MaterialIcons name="info-outline" size={16} color={colors.secondary} /><Text style={styles.evidenceMeta}>Chưa được máy chủ xác minh</Text></View>
-  </>;
-}
 
 export default function DroneUploadScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string; projectId?: string }>();
@@ -66,12 +31,22 @@ export default function DroneUploadScreen() {
   const [srtSha, setSrtSha] = useState('—');
 
   // Upload workflow state: LOCAL -> QUEUED -> UPLOADING -> SERVER_CONFIRMED
-  const [uploadStep, setUploadStep] = useState<UploadStep>('LOCAL');
+  const [uploadStep, setUploadStep] = useState<'LOCAL' | 'QUEUED' | 'UPLOADING' | 'SERVER_CONFIRMED'>('LOCAL');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [note, setNote] = useState('');
   const [statusMsg] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const sending = useRef(false);
+  const [videoFile, setVideoFile] = useState<DroneLocalFile | null>(null);
+  const [telemetryFile, setTelemetryFile] = useState<DroneLocalFile | null>(null);
+  const [recordedAt, setRecordedAt] = useState('');
+  const [timeOffset, setTimeOffset] = useState('');
+  const [journalReady, setJournalReady] = useState(false);
+  const [transferMessage, setTransferMessage] = useState<string | null>(null);
+  const [pendingDataset, setPendingDataset] = useState<DroneUploadIntent | null>(null);
+  const [received, setReceived] = useState(false);
+  const [verifiedFiles, setVerifiedFiles] = useState<string[]>([]);
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [srtUri, setSrtUri] = useState<string | null>(null);
   const [savedFiles, setSavedFiles] = useState<(DroneLocalFile & {availability: string})[]>([]);
@@ -86,16 +61,6 @@ export default function DroneUploadScreen() {
   const selectionJournalRef = useRef<Awaited<ReturnType<typeof openDroneSelectionJournal>> | null>(null);
   const selectionLoadedRef = useRef(false);
   const selectedDrone = eligibleDrones.find(item => item.id === selectedDroneId);
-  const config: UploadConfig = {
-    code: params.taskId ?? 'Chưa chọn nhiệm vụ máy chủ',
-    road: 'Phạm vi theo gói công việc máy chủ',
-    droneModel: selectedDrone?.serialNo ?? 'Chưa chọn máy bay đủ điều kiện',
-    defaultVideoName: 'Chưa chọn tệp', defaultVideoSize: '—',
-    defaultSrtName: 'Chưa chọn tệp', defaultSrtSize: '—',
-    videoSha256: '—', srtSha256: '—',
-    gpsCoord: 'Chưa đọc tọa độ từ tệp GPS',
-    gpsAddress: 'Vị trí chưa được đối chiếu với gói công việc',
-  };
   const eligibleRequest = useRef(0);
   const [copying, setCopying] = useState(false);
   const picking = useRef(false);
@@ -219,7 +184,7 @@ export default function DroneUploadScreen() {
   };
   const selectDrone = async (drone: EligibleDroneDto) => {
     const isCurrent = scope.capture();
-    if (!isCurrent()) return;
+    if (!isCurrent() || sending.current) return;
     const journal = selectionJournalRef.current;
     if (!journal) {
       setEligibleError('Chưa xác minh được phạm vi nhiệm vụ để lưu lựa chọn máy bay.');
@@ -236,17 +201,19 @@ export default function DroneUploadScreen() {
   };
   const selectFile = (file: DroneLocalFile) => {
     if (file.kind === 'VIDEO') {
+      setVideoFile(file);
       setVideoName(file.name); setVideoUri(file.uri); setVideoSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
-      setVideoSha('Đã lưu trên thiết bị · chưa tính mã băm');
+      setVideoSha(file.checksumSha256 ? 'Đã kiểm tra SHA-256' : 'Chưa kiểm tra SHA-256');
     } else {
+      setTelemetryFile(file);
       setSrtName(file.name); setSrtUri(file.uri); setSrtSize(`${Math.max(1, Math.round(file.size / 1024))} KB`);
-      setSrtSha('Đã lưu trên thiết bị · chưa tính mã băm');
+      setSrtSha(file.checksumSha256 ? 'Đã kiểm tra SHA-256' : 'Chưa kiểm tra SHA-256');
     }
     setUploadStep('LOCAL');
   };
   const restoreFile = async (key: string) => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || !params.taskId || picking.current) return;
+    if (!isCurrent() || !params.taskId || picking.current || sending.current) return;
     let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
     try {
       runtime = await openDroneLocalFiles(params.taskId);
@@ -254,7 +221,7 @@ export default function DroneUploadScreen() {
       const files = await runtime.list();
       if (!isCurrent()) return;
       const file = files.find(f => f.key === key);
-      if (!file || file.availability !== 'LOCAL_UNHASHED') throw Error('file_unavailable');
+      if (!file || !['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)) throw Error('file_unavailable');
       selectFile(file); setSubmitError(null);
     } catch { if (isCurrent()) setSubmitError('Tệp không còn đầy đủ. Giữ lịch sử và chọn lại tệp nguồn.'); }
     finally { runtime?.close(); }
@@ -266,6 +233,8 @@ export default function DroneUploadScreen() {
     setVideoName('Chưa chọn tệp'); setVideoSize('—'); setVideoSha('—');
     setSrtName('Chưa chọn tệp'); setSrtSize('—'); setSrtSha('—');
     setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
+    setVideoFile(null); setTelemetryFile(null); setRecordedAt(''); setTimeOffset(''); setJournalReady(false); setPendingDataset(null); setReceived(false); setVerifiedFiles([]); setTransferMessage(null);
+    void readDatasetIntent();
     setUploadProgress(0); setSubmitError(null);
     setNote('');
     setSavedFiles([]); setFileError(null);
@@ -280,7 +249,7 @@ export default function DroneUploadScreen() {
   // Chọn video 4K RGB từ thẻ nhớ SD
   const pickFile = async (kind: 'VIDEO' | 'TELEMETRY') => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || picking.current) return;
+    if (!isCurrent() || picking.current || sending.current) return;
     if (!params.taskId) { setSubmitError('Chọn nhiệm vụ máy chủ trước khi lưu tệp.'); return; }
     picking.current = true; setCopying(true);
     let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
@@ -307,10 +276,85 @@ export default function DroneUploadScreen() {
   const handlePickVideo = () => pickFile('VIDEO');
   const handlePickSrt = () => pickFile('TELEMETRY');
 
-  // Fail closed BEFORE any upload: no server-rooted active aircraft source or
-  // durable immutable retry journal exists for this screen at the pinned BE.
-  const handleStartSubmitDataset = () => {
-    setSubmitError(DRONE_DATASET_BLOCK_REASON);
+  const readDatasetIntent = async () => {
+    const isCurrent=scope.capture(); if(!isCurrent() || !params.taskId)return;
+    let journal: Awaited<ReturnType<typeof openDroneUploadJournal>> | undefined;
+    try {journal=await openDroneUploadJournal(params.taskId);if(!isCurrent())return;
+      const items=await journal.read('dataset');if(isCurrent()){setPendingDataset(items.at(-1)??null);setJournalReady(true);}
+    } catch {if(isCurrent()){setJournalReady(false);setSubmitError('Chưa đọc được lịch sử nộp. Tệp cũ vẫn được giữ.');}}
+    finally {journal?.close();}
+  };
+  const confirmDataset = async (intent: DroneUploadIntent, isCurrent:()=>boolean) => {
+    if(!isCurrent())throw Error('operator_session_changed');
+    const datasetId=intent.receipt?.datasetId;
+    const owner=operatorDatasetScope();
+    if(typeof datasetId!=='string'||!owner)throw Error('dataset_receipt_missing');
+    const result=await readOperatorDatasetReadback(owner,datasetId);
+    if(!isCurrent())throw Error('operator_session_changed');
+    if(result.dataset.surveyTaskId!==params.taskId)throw Error('dataset_task_mismatch');
+    setReceived(true);setTransferMessage('Máy chủ đã nhận bộ dữ liệu. Phạm vi phủ được đánh giá riêng.');
+  };
+  const submitFailure = (error: unknown) => {
+    const code=(error as Error).message;
+    return code==='drone_upload_verify_pending'?'Máy chủ đang xác minh tệp. Bấm tiếp tục để đọc lại, không tải lại tệp.':
+      code==='telemetry_offset_invalid'?'Nhập độ lệch thời gian SRT; dùng 0 nếu video và SRT cùng mốc.':
+      code==='recorded_at_invalid'?'Nhập thời gian ghi hình theo dạng năm-tháng-ngày giờ:phút.':
+      code==='drone_dataset_intent_not_dispatchable'?'Đã có yêu cầu nộp. Đọc lại trạng thái hoặc gửi lại yêu cầu đã lưu.':
+      code==='operator_session_changed'?'Phiên đã thay đổi. Mở lại nhiệm vụ để tiếp tục.':
+      'Chưa hoàn tất gửi dữ liệu. Tệp và yêu cầu đã lưu vẫn được giữ để tiếp tục an toàn.';
+  };
+  const handleStartSubmitDataset = async () => {
+    const isCurrent=scope.capture();
+    if(!isCurrent()||sending.current||copying||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
+    sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);
+    const guard=()=>{if(!isCurrent()||!mounted.current)throw Error('operator_session_changed');};
+    try {
+      if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(recordedAt))throw Error('recorded_at_invalid');
+      if(telemetryFile && (!/^-?\d+$/.test(timeOffset)||!Number.isSafeInteger(Number(timeOffset))))throw Error('telemetry_offset_invalid');
+      const date=new Date(recordedAt.replace(' ','T')+':00');
+      if(!Number.isFinite(date.getTime()) || date.getFullYear()!==Number(recordedAt.slice(0,4)) || date.getMonth()+1!==Number(recordedAt.slice(5,7)) || date.getDate()!==Number(recordedAt.slice(8,10)))throw Error('recorded_at_invalid');
+      const transfer = async (file: DroneLocalFile) => {
+        const current=await getOperatorSurveyTaskDetailReal(params.taskId!);guard();
+        if(current.data.projectId!==file.projectId||file.taskId!==params.taskId||!file.checksumSha256)throw Error('drone_file_task_invalid');
+        let attempts=0;
+        while(true) {
+          setTransferMessage(`Đang tải ${file.kind==='VIDEO'?'video':'SRT'}…`);setUploadProgress(0);
+          try {
+            const intent=await orchestrateDroneUpload({taskId:params.taskId!,projectId:current.data.projectId,targetId:params.taskId!,taskVersion:current.data.version,
+              file:{id:file.key,uri:file.uri,name:file.name,sizeBytes:file.size,checksumSha256:file.checksumSha256,purpose:file.kind==='VIDEO'?'SURVEY_VIDEO':'TELEMETRY',mediaType:file.kind==='VIDEO'?'video/mp4':'application/x-subrip'},
+              readRange:(offset,length)=>readDroneFileRange(file,offset,length),onProgress:(sent,total)=>{if(isCurrent())setUploadProgress(Math.floor(sent*100/total));}});
+            guard();setVerifiedFiles(previous=>[...new Set([...previous,file.key])]);return intent.fileId!;
+          } catch(error) {
+            guard();if((error as Error).message!=='drone_upload_verify_pending'||++attempts>=20)throw error;
+            setTransferMessage('Đang xác minh tệp trên máy chủ…');await new Promise(resolve=>setTimeout(resolve,1000));guard();
+          }
+        }
+      };
+      const videoId=await transfer(videoFile);guard();
+      const telemetryId=telemetryFile?await transfer(telemetryFile):null;guard();
+      const current=await getOperatorSurveyTaskDetailReal(params.taskId);guard();
+      if(current.data.operatorId!==useAuthStore.getState().user?.id||!['ACCEPTED','IN_PROGRESS'].includes(current.data.status)||current.data.projectId!==videoFile.projectId)throw Error('drone_upload_assignment_changed');
+      // Selection remains server rooted; refresh every page before submission.
+      let cursor: string|null=null,eligible=false,pages=0;
+      do {const page=await listEligibleOperatorDronesReal(params.taskId,cursor,100);guard();eligible=page.items.some(item=>item.id===selectedDroneId);cursor=page.nextCursor;pages++;}while(!eligible&&cursor&&pages<20);
+      if(!eligible)throw Error('drone_device_unavailable');
+      const plan: DroneDatasetPlan={taskId:params.taskId,projectId:current.data.projectId,ifMatch:current.etag,payload:{videoFileIds:[videoId],telemetryFileIds:telemetryId?[telemetryId]:[],deviceId:selectedDroneId,recordedAt:date.toISOString(),scope:current.data.scope,pairs:[{videoFileId:videoId,telemetryFileId:telemetryId,timeOffsetMilliseconds:telemetryId?Number(timeOffset):0}]}};
+      setTransferMessage('Đang nộp bộ dữ liệu…');
+      const result=await submitDroneDataset(plan);guard();setPendingDataset(result);await confirmDataset(result,isCurrent);
+    } catch(error) {if(isCurrent()&&mounted.current)setSubmitError(submitFailure(error));}
+    finally {sending.current=false;if(isCurrent()&&mounted.current){setSubmitting(false);await readDatasetIntent();}}
+  };
+  const handleRetainedDataset = async (replay=false) => {
+    const isCurrent=scope.capture();if(!isCurrent()||sending.current||!pendingDataset)return;
+    sending.current=true;setSubmitting(true);setSubmitError(null);
+    try {
+      let intent=pendingDataset;
+      if(replay)intent=await replayDroneDataset({taskId:intent.taskId,projectId:intent.projectId,ifMatch:intent.ifMatch!,payload:intent.body as unknown as DroneDatasetPlan['payload']});
+      else if(intent.status==='PREPARED')intent=await submitDroneDataset({taskId:intent.taskId,projectId:intent.projectId,ifMatch:intent.ifMatch!,payload:intent.body as unknown as DroneDatasetPlan['payload']});
+      if(!isCurrent())return;
+      setPendingDataset(intent);await confirmDataset(intent,isCurrent);
+    }catch(error){if(isCurrent())setSubmitError(submitFailure(error));}
+    finally{sending.current=false;if(isCurrent()&&mounted.current){setSubmitting(false);await readDatasetIntent();}}
   };
 
   const handleBack = () => {
@@ -323,911 +367,75 @@ export default function DroneUploadScreen() {
 
   if (!scope.key || previewScope !== scope.key) return <SafeAreaScreen><Text>Cần phiên Operator hợp lệ để chọn tệp.</Text></SafeAreaScreen>;
 
-  return (
-    <SafeAreaScreen
-      scroll
-      header={
-        <View style={styles.topBar}>
-          <Pressable
-            style={styles.circleIconButton}
-            onPress={handleBack}
-            accessibilityRole="button"
-            accessibilityLabel="Quay lại"
-          >
-            <MaterialIcons name="arrow-back" size={20} color={colors.secondary} />
-          </Pressable>
-
-          <View style={styles.topBarCenter}>
-            <Text style={[typography.titleMd, styles.topBarTitle]}>Nộp dữ liệu khảo sát 4K RGB</Text>
-            <Text style={[typography.caption, styles.topBarSub]}>{config.code}</Text>
-          </View>
-
-          <View style={styles.codeRightWrap}>
-            <MaterialIcons name="sd-storage" size={20} color={colors.primary} />
-          </View>
-        </View>
-      }
-    >
-
-      <View style={styles.selectorBar}>
-        <Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={() => router.push('/(drone)/requests')} />
+  const fileCard = (kind: 'VIDEO' | 'TELEMETRY', title: string, name: string, size: string, hash: string) => <Card style={styles.card}>
+    <View style={styles.row}><MaterialIcons name={kind==='VIDEO'?'videocam':'subtitles'} size={23} color={colors.secondary}/><Text style={styles.heading}>{title}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} disabled={copying||submitting} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.iconButton}>
+        <MaterialIcons name="folder-open" size={22} color={colors.secondary}/><Text style={typography.caption}>Chọn tệp SD</Text>
+      </Pressable>
+    </View>
+    <View style={styles.fileRow}><MaterialIcons name={kind==='VIDEO'?'movie':'description'} size={30} color={colors.secondary}/><View style={{flex:1,gap:4}}>
+      <Text testID={kind==='VIDEO'?'selected-video':'selected-telemetry'} style={typography.bodyMd}>{name}</Text>
+      <Text style={styles.caption}>{size}{hash!=='—'?` · ${hash}`:''}</Text>
+    </View></View>
+    <Text style={styles.caption}>{verifiedFiles.includes((kind==='VIDEO'?videoFile:telemetryFile)?.key??'')?'Máy chủ đã xác minh tệp':'Chưa được máy chủ xác minh'}</Text>
+  </Card>;
+  return <SafeAreaScreen scroll header={<View style={styles.header}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Quay lại" onPress={handleBack} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.secondary}/></Pressable>
+    <View style={{flex:1}}><Text style={typography.titleMd}>Dữ liệu khảo sát</Text><Text style={styles.caption}>{params.taskId?`Nhiệm vụ ${params.taskId.slice(0,8)}`:'Chọn nhiệm vụ để tiếp tục'}</Text></View>
+  </View>}>
+    {!params.taskId?<Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={()=>router.push('/(drone)/requests')}/>:null}
+    <Card style={styles.card}>
+      <View style={styles.row}><MaterialIcons name="flight" size={23} color={colors.secondary}/><Text style={styles.heading}>Máy bay</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại máy bay đủ điều kiện" disabled={eligibleLoading} onPress={()=>void loadEligibleDrones()} style={styles.iconButton}>
+          {eligibleLoading?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
+        </Pressable>
       </View>
-      <Card style={styles.droneSelectorCard}>
-        <View style={styles.droneSelectorHeader}>
-          <View style={styles.droneSelectorTitleWrap}>
-            <MaterialIcons name="flight" size={18} color={colors.primary} />
-            <Text style={[typography.titleMd, styles.droneSelectorTitle]}>Máy bay đủ điều kiện</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Tải lại máy bay đủ điều kiện"
-            disabled={eligibleLoading}
-            onPress={() => { eligibleRequest.current++; setEligibleDrones([]); setEligibleCursor(null); void loadEligibleDrones(); }}
-            style={styles.smallRefresh}
-          >
-            <MaterialIcons name="refresh" size={18} color={eligibleLoading ? colors.border : colors.secondary} />
-          </Pressable>
-        </View>
-        <Text style={typography.caption}>Danh sách do máy chủ cấp cho đúng nhiệm vụ; chỉ chọn máy bay hiện còn đủ điều kiện.</Text>
-        {eligibleLoading && !eligibleDrones.length ? <Text style={typography.caption}>Đang đọc danh sách…</Text> : null}
-        {eligibleError ? <Text accessibilityRole="alert" style={styles.statusError}>{eligibleError}</Text> : null}
-        {!eligibleLoading && !eligibleError && !eligibleDrones.length ? <Text style={typography.caption}>Chưa có máy bay đủ điều kiện.</Text> : null}
-        <View accessibilityRole="radiogroup" style={styles.droneOptions}>
-          {eligibleDrones.map(drone => {
-            const selected = selectedDroneId === drone.id;
-            return <Pressable
-              key={drone.id}
-              accessibilityRole="radio"
-              accessibilityLabel={`Máy bay ${drone.serialNo}`}
-              accessibilityState={{ checked: selected }}
-              onPress={() => void selectDrone(drone)}
-              style={[styles.droneOption, selected && styles.droneOptionSelected]}
-            >
-              <MaterialIcons name={selected ? 'radio-button-checked' : 'radio-button-unchecked'} size={22} color={selected ? colors.primary : colors.secondary} />
-              <Text style={styles.droneSerial}>{drone.serialNo}</Text>
-              <Text style={styles.droneHint}>Ghi dữ liệu khảo sát</Text>
-            </Pressable>;
-          })}
-        </View>
-        {eligibleCursor ? <Button title="Tải thêm máy bay" variant="secondary" disabled={eligibleLoading} loading={eligibleLoading} onPress={() => void loadEligibleDrones(true)} /> : null}
-        {selectedDroneId ? <Text style={styles.selectedDroneNote}>Đã chọn máy bay từ danh sách máy chủ. Việc nộp bộ dữ liệu vẫn đang khóa cho đến khi đầy đủ đường upload và nhật ký bền vững.</Text> : null}
-      </Card>
-      <Card>
-        <Text style={typography.titleMd}>Tệp đã lưu cho nhiệm vụ</Text>
-        {copying && <Text accessibilityRole="alert">Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text>}
-        <Text style={typography.caption}>MP4 tối đa 8 GiB; SRT tối đa 10 MiB theo giới hạn máy chủ đã đối chiếu.</Text>
-        <Text style={typography.caption}>Cùng tài khoản và máy chủ. Tệp từ phiên cũ cần chọn lại chủ động; chưa tính mã băm, chưa tải lên, chưa được máy chủ xác minh.</Text>
-        {savedFiles.map(file => <View key={file.key} style={styles.savedEvidence}>
-          {evidencePlaceholder()}
-          {evidenceMetadata()}
-          <Text>{file.name} · {file.availability === 'LOCAL_UNHASHED' ? 'Bản sao trên thiết bị' : file.availability === 'INCOMPLETE' ? 'Bản sao chưa đầy đủ' : 'Không tìm thấy tệp trên thiết bị'}</Text>
-          <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={copying || file.availability !== 'LOCAL_UNHASHED'} onPress={() => restoreFile(file.key)} />
-        </View>)}
-        {!savedFiles.length && <Text>Chưa có tệp đã lưu trong phạm vi này.</Text>}
-        {fileError && <Text accessibilityRole="alert">{fileError}</Text>}
-        <Button title="Đọc lại tệp đã lưu" variant="secondary" onPress={refreshFiles} />
-      </Card>
-
-      {/* Target Road Overview Card */}
-      <Card style={styles.contextCard}>
-        <View style={styles.contextLeft}>
-          <View style={styles.contextIcon}>
-            <MaterialIcons name="flight-takeoff" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.contextTextWrap}>
-            <Text style={[typography.caption, styles.contextLabel]}>MỤC TIÊU KHẢO SÁT</Text>
-            <Text style={[typography.titleMd, styles.contextTitle]} numberOfLines={1}>{config.road}</Text>
-            <Text style={[typography.caption, styles.contextDrone]}>{config.droneModel}</Text>
-          </View>
-        </View>
-        <View style={styles.statusBadge}>
-          <Text style={styles.statusBadgeText}>Video 4K RGB</Text>
-        </View>
-      </Card>
-
-      {/* 4-Step Visual Upload Pipeline Indicator */}
-      <Card style={styles.pipelineCard}>
-        <Text style={[typography.labelSm, styles.pipelineTitle]}>QUY TRÌNH TIẾP NHẬN DỮ LIỆU KHẢO SÁT</Text>
-        <View style={styles.stepPipelineRow}>
-          {/* Step 1: LOCAL */}
-          <View style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                uploadStep === 'LOCAL' && styles.stepCircleCurrent,
-                (uploadStep === 'QUEUED' || uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED') &&
-                  styles.stepCircleDone,
-              ]}
-            >
-              <MaterialIcons
-                name={
-                  uploadStep === 'QUEUED' || uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED'
-                    ? 'check'
-                    : 'sd-card'
-                }
-                size={14}
-                color={
-                  uploadStep === 'LOCAL'
-                    ? colors.primaryDark
-                    : uploadStep === 'QUEUED' || uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED'
-                    ? colors.surface
-                    : colors.secondary
-                }
-              />
-            </View>
-            <Text style={[typography.caption, styles.stepLabel]}>LOCAL</Text>
-            <Text style={styles.stepSubLabel}>Thẻ nhớ SD</Text>
-          </View>
-
-          <View
-            style={[
-              styles.stepLine,
-              (uploadStep === 'QUEUED' || uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED') &&
-                styles.stepLineActive,
-            ]}
-          />
-
-          {/* Step 2: QUEUED */}
-          <View style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                uploadStep === 'QUEUED' && styles.stepCircleCurrent,
-                (uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED') && styles.stepCircleDone,
-              ]}
-            >
-              <MaterialIcons
-                name={
-                  uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED' ? 'check' : 'inbox'
-                }
-                size={14}
-                color={
-                  uploadStep === 'QUEUED'
-                    ? colors.primaryDark
-                    : uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED'
-                    ? colors.surface
-                    : colors.secondary
-                }
-              />
-            </View>
-            <Text style={[typography.caption, styles.stepLabel]}>CHUẨN BỊ</Text>
-            <Text style={styles.stepSubLabel}>Kiểm tra tệp</Text>
-          </View>
-
-          <View
-            style={[
-              styles.stepLine,
-              (uploadStep === 'UPLOADING' || uploadStep === 'SERVER_CONFIRMED') && styles.stepLineActive,
-            ]}
-          />
-
-          {/* Step 3: UPLOADING */}
-          <View style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                uploadStep === 'UPLOADING' && styles.stepCircleCurrent,
-                uploadStep === 'SERVER_CONFIRMED' && styles.stepCircleDone,
-              ]}
-            >
-              <MaterialIcons
-                name={uploadStep === 'SERVER_CONFIRMED' ? 'check' : 'cloud-upload'}
-                size={14}
-                color={
-                  uploadStep === 'UPLOADING'
-                    ? colors.primaryDark
-                    : uploadStep === 'SERVER_CONFIRMED'
-                    ? colors.surface
-                    : colors.secondary
-                }
-              />
-            </View>
-            <Text style={[typography.caption, styles.stepLabel]}>UPLOADING</Text>
-            <Text style={styles.stepSubLabel}>
-              {uploadStep === 'UPLOADING' ? `${uploadProgress}%` : 'Đang tải'}
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.stepLine,
-              uploadStep === 'SERVER_CONFIRMED' && styles.stepLineActive,
-            ]}
-          />
-
-          {/* Step 4: SERVER_CONFIRMED */}
-          <View style={styles.stepItem}>
-            <View
-              style={[
-                styles.stepCircle,
-                uploadStep === 'SERVER_CONFIRMED' && styles.stepCircleDone,
-              ]}
-            >
-              <MaterialIcons
-                name="verified"
-                size={14}
-                color={
-                  uploadStep === 'SERVER_CONFIRMED' ? colors.surface : colors.secondary
-                }
-              />
-            </View>
-            <Text style={[typography.caption, styles.stepLabel]}>ĐÃ XÁC MINH</Text>
-            <Text style={styles.stepSubLabel}>Máy chủ</Text>
-          </View>
-        </View>
-
-        {/* Progress Bar when uploading */}
-        {uploadStep === 'UPLOADING' && (
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBarTrack}>
-              <View style={[styles.progressBarFill, { width: `${uploadProgress}%` }]} />
-            </View>
-            <Text style={[typography.caption, styles.progressText]}>
-              Đang đẩy tệp 4K RGB lên máy chủ: {uploadProgress}%
-            </Text>
-          </View>
-        )}
-
-        {/* Success Banner when server confirmed */}
-        {uploadStep === 'SERVER_CONFIRMED' && (
-          <View style={styles.verifiedBanner}>
-            <MaterialIcons name="check-circle" size={18} color={colors.success} />
-            <View style={styles.verifiedBannerContent}>
-              <Text style={styles.verifiedBannerTitle}>
-                Máy chủ đã xác nhận toàn vẹn dữ liệu
-              </Text>
-              <Text style={styles.verifiedBannerSub}>
-                Chỉ xác nhận sau khi có kết quả đọc lại từ máy chủ.
-              </Text>
-            </View>
-          </View>
-        )}
-      </Card>
-
-      {/* File 1: Video 4K RGB */}
-      <Card style={styles.fileCard}>
-        <View style={styles.fileCardHeader}>
-          <View style={styles.fileCardHeaderLeft}>
-            <MaterialIcons name="videocam" size={18} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.fileHeaderTitle]}>
-              1. TỆP VIDEO BAY 4K RGB (.MP4)
-            </Text>
-          </View>
-          <Pressable
-            style={styles.pickFileBtn}
-            onPress={handlePickVideo}
-            disabled={copying}
-            accessibilityRole="button"
-          >
-            <MaterialIcons name="folder-open" size={14} color={colors.neutral} />
-            <Text style={styles.pickFileBtnText}>Chọn tệp SD</Text>
-          </Pressable>
-        </View>
-
-        {evidencePlaceholder()}
-        <View style={styles.fileInfoRow}>
-          <View style={styles.fileIconBox}>
-            <MaterialIcons name="movie" size={24} color={colors.primary} />
-          </View>
-          <View style={styles.fileDetailsGroup}>
-            {evidenceMetadata()}
-            <Text testID="selected-video" style={[typography.titleMd, styles.fileNameText]}>{videoName}</Text>
-            <Text style={[typography.caption, styles.fileSizeText]}>
-              Dung lượng: <Text style={styles.boldText}>{videoSize}</Text> · Chưa kiểm tra thông số video
-            </Text>
-          </View>
-        </View>
-
-        {/* Checksum SHA-256 Card */}
-        <View style={styles.checksumBox}>
-          <MaterialIcons name="info-outline" size={16} color={colors.secondary} />
-          <View style={styles.checksumTextGroup}>
-            <Text style={styles.checksumLabel}>Mã băm SHA-256:</Text>
-            <Text style={styles.checksumHash} numberOfLines={1}>{videoSha}</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* File 2: Phụ đề tọa độ GPS RTK (.SRT) */}
-      <Card style={styles.fileCard}>
-        <View style={styles.fileCardHeader}>
-          <View style={styles.fileCardHeaderLeft}>
-            <MaterialIcons name="subtitles" size={18} color={colors.primary} />
-            <Text style={[typography.labelSm, styles.fileHeaderTitle]}>
-              2. PHỤ ĐỀ TỌA ĐỘ GPS RTK (.SRT)
-            </Text>
-          </View>
-          <Pressable
-            style={styles.pickFileBtn}
-            onPress={handlePickSrt}
-            disabled={copying}
-            accessibilityRole="button"
-          >
-            <MaterialIcons name="folder-open" size={14} color={colors.neutral} />
-            <Text style={styles.pickFileBtnText}>Chọn tệp SD</Text>
-          </Pressable>
-        </View>
-
-        {evidencePlaceholder()}
-        <View style={styles.fileInfoRow}>
-          <View style={styles.fileIconBox}>
-            <MaterialIcons name="description" size={24} color={colors.primary} />
-          </View>
-          <View style={styles.fileDetailsGroup}>
-            {evidenceMetadata()}
-            <Text style={[typography.titleMd, styles.fileNameText]}>{srtName}</Text>
-            <Text style={[typography.caption, styles.fileSizeText]}>
-              Dung lượng: <Text style={styles.boldText}>{srtSize}</Text> · Chưa kiểm tra dữ liệu GPS
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.checksumBox}>
-          <MaterialIcons name="info-outline" size={16} color={colors.secondary} />
-          <View style={styles.checksumTextGroup}>
-            <Text style={styles.checksumLabel}>Mã băm tệp GPS:</Text>
-            <Text style={styles.checksumHash} numberOfLines={1}>{srtSha}</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* GPS Location Card */}
-      <Card style={styles.gpsCard}>
-        <View style={styles.gpsIconBox}>
-          <MaterialIcons name="location-searching" size={20} color={colors.secondary} />
-        </View>
-        <View style={styles.gpsInfo}>
-          <View style={styles.gpsTopRow}>
-            <Text style={[typography.caption, styles.gpsLabel]}>TỌA ĐỘ GPS KHẢO SÁT</Text>
-            <View style={styles.matchedBadge}>
-              <Text style={styles.matchedText}>Chưa đối chiếu vị trí</Text>
-            </View>
-          </View>
-          <Text style={[typography.bodyMd, styles.gpsCoord]}>
-            {config.gpsCoord}
-          </Text>
-          <Text style={[typography.caption, styles.gpsAddress]}>
-            {config.gpsAddress}
-          </Text>
-        </View>
-      </Card>
-
-      {/* Field Note */}
-      <View style={styles.noteContainer}>
-        <Text style={[typography.labelLg, styles.noteLabel]}>
-          Ghi chú hiện trường <Text style={styles.noteOptional}>(không bắt buộc)</Text>
-        </Text>
-        <TextInput
-          style={styles.noteInput}
-          multiline
-          numberOfLines={3}
-          value={note}
-          onChangeText={setNote}
-          placeholder="Ghi nhận điều kiện gió, ánh sáng, tầm nhìn hoặc hiện trạng mặt đường..."
-          placeholderTextColor={colors.secondary}
-        />
-      </View>
-
-      <Text style={typography.caption}>Tệp chọn thành công có bản sao riêng trên thiết bị; chưa checksum, chưa tải lên. Ghi chú chỉ nằm trên màn hình.</Text>
-      {/* No connection probe or sync transport is enabled on this screen. */}
-      <Card style={styles.networkCard}>
-        <View style={styles.networkTitleGroup}>
-          <MaterialIcons name="sd-storage" size={18} color={colors.secondary} />
-          <Text style={[typography.labelSm, styles.networkTitle]}>LƯU TỆP TRÊN THIẾT BỊ</Text>
-        </View>
-        <Text style={typography.caption}>Chưa xác minh kết nối mạng. Lưu bản sao không bật đồng bộ hoặc tải tệp lên máy chủ.</Text>
-      </Card>
-
-      {/* Action CTA Section */}
-      <View style={styles.actionSection}>
-        <Button variant="secondary" title="Chọn nhiệm vụ từ danh sách" onPress={() => router.push('/(drone)/requests')} />
-        {uploadStep === 'SERVER_CONFIRMED' ? (
-          <Button
-            variant="secondary"
-            style={styles.primaryAction}
-            title="Xem nhật ký chuyến bay khảo sát"
-            onPress={() =>
-              router.push({
-                pathname: '/(drone)/log',
-                params: { code: config.code },
-              })
-            }
-          />
-        ) : (
-          <Button
-            variant="secondary"
-            style={styles.primaryAction}
-            disabledTextStyle={{ color: colors.neutral }}
-            icon={<MaterialIcons name="cloud-upload" size={18} color={colors.neutral} />}
-            title={
-              uploadStep === 'UPLOADING'
-                ? `Đang đẩy dữ liệu (${uploadProgress}%)...`
-                : uploadStep === 'QUEUED'
-                ? 'Đang chuẩn bị tệp...'
-                : 'Nộp bộ dữ liệu 4K RGB'
-            }
-            loading={submitting}
-            disabled={true}
-            onPress={handleStartSubmitDataset}
-          />
-        )}
-        <View testID="dataset-disabled-reason" accessibilityRole="alert" style={styles.disabledReason}>
-          <MaterialIcons name="info-outline" size={20} color={colors.secondary} />
-          <Text style={[typography.bodyMd, { color: colors.secondary, flex: 1, textAlign: 'center' }]}>{DRONE_DATASET_BLOCK_REASON}</Text>
-        </View>
-        {submitError && <Text style={[typography.caption, styles.statusError]}>{submitError}</Text>}
-        {statusMsg && <Text style={[typography.caption, styles.statusMsg]}>{statusMsg}</Text>}
-      </View>
-    </SafeAreaScreen>
-  );
+      {eligibleError?<Text accessibilityRole="alert" style={styles.error}>{eligibleError}</Text>:null}
+      {!eligibleLoading&&!eligibleError&&!eligibleDrones.length?<Text style={styles.caption}>Chưa có máy bay đủ điều kiện.</Text>:null}
+      <View accessibilityRole="radiogroup" style={{gap:8}}>{eligibleDrones.map(drone=><Pressable key={drone.id} accessibilityRole="radio" accessibilityLabel={`Máy bay ${drone.serialNo}`} accessibilityState={{checked:selectedDroneId===drone.id}} onPress={()=>void selectDrone(drone)} style={[styles.option,selectedDroneId===drone.id&&styles.selected]}>
+        <MaterialIcons name={selectedDroneId===drone.id?'radio-button-checked':'radio-button-unchecked'} size={22} color={colors.secondary}/><Text style={{...typography.bodyMd,flex:1}}>{drone.serialNo}</Text>
+      </Pressable>)}</View>
+      {eligibleCursor?<Button title="Tải thêm máy bay" variant="secondary" disabled={eligibleLoading} loading={eligibleLoading} onPress={()=>void loadEligibleDrones(true)}/>:null}
+    </Card>
+    {fileCard('VIDEO','Video MP4',videoName,videoSize,videoSha)}
+    {fileCard('TELEMETRY','Dữ liệu GPS · SRT',srtName,srtSize,srtSha)}
+    {copying?<View accessibilityRole="alert" style={styles.notice}><ActivityIndicator color={colors.secondary}/><Text style={styles.noticeText}>Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text></View>:null}
+    <Card style={styles.card}>
+      <View style={styles.row}><MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp trên thiết bị</Text><Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable></View>
+      <Text style={styles.caption}>MP4 tối đa 8 GiB · SRT tối đa 10 MiB</Text>
+      {savedFiles.map(file=><View key={file.key} style={styles.savedFile}><Text style={typography.bodyMd}>{file.name}</Text><Text style={styles.caption}>{file.availability==='LOCAL_READY'?'Đã kiểm tra SHA-256':file.availability==='LOCAL_UNHASHED'?'Chưa kiểm tra SHA-256':file.availability==='INCOMPLETE'?'Bản sao chưa đầy đủ':'Không tìm thấy tệp'}</Text>
+        <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={submitting||copying||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)}/></View>)}
+      {!savedFiles.length?<Text style={styles.caption}>Chưa có tệp đã lưu.</Text>:null}
+      {fileError?<Text accessibilityRole="alert" style={styles.error}>{fileError}</Text>:null}
+    </Card>
+    <Card style={styles.card}><Text style={styles.heading}>Thời gian ghi hình</Text>
+      <TextInput accessibilityLabel="Thời gian ghi hình" placeholder="2026-11-14 08:30" value={recordedAt} editable={!submitting&&!pendingDataset} onChangeText={setRecordedAt} style={styles.input}/>
+      <Text style={styles.caption}>Giờ địa phương của thiết bị · nhập theo tệp ghi hình.</Text>
+      {telemetryFile?<><Text style={typography.bodyMd}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch thời gian SRT" placeholder="0 nếu video và SRT cùng mốc" value={timeOffset} editable={!submitting&&!pendingDataset} onChangeText={setTimeOffset} keyboardType="numbers-and-punctuation" style={styles.input}/></>:null}
+    </Card>
+    {transferMessage?<View accessibilityLiveRegion="polite" style={styles.notice}>{submitting?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name={received?'check-circle-outline':'info-outline'} size={22} color={received?colors.success:colors.secondary}/>}<View style={{flex:1,gap:8}}><Text style={styles.noticeText}>{transferMessage}</Text>{submitting&&transferMessage.startsWith('Đang tải')?<><View style={styles.progressTrack}><View style={[styles.progressFill,{width:`${uploadProgress}%`}]}/></View><Text style={styles.caption}>{uploadProgress}%</Text></>:null}</View></View>:null}
+    {pendingDataset?<Card style={styles.card}><Text style={styles.heading}>Yêu cầu đã lưu</Text><Text style={styles.caption}>{pendingDataset.status==='DATASET_CONFIRMED'?'Đã có biên nhận máy chủ.':'Giữ nguyên tệp và yêu cầu nộp để đối soát.'}</Text>
+      {pendingDataset.status==='DATASET_CONFIRMED'?<Button title="Đọc lại kết quả nộp" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:pendingDataset.status==='DATASET_UNKNOWN'?<Button title="Gửi lại đúng yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset(true)}/>:pendingDataset.status==='PREPARED'?<Button title="Tiếp tục nộp yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:<Text style={styles.caption}>Yêu cầu không được máy chủ chấp nhận. Kiểm tra lại nhiệm vụ trước khi nộp một bộ dữ liệu mới.</Text>}
+    </Card>:<Button title={submitting?'Đang gửi dữ liệu…':'Nộp bộ dữ liệu 4K RGB'} variant="primary" style={styles.primaryAction} loading={submitting} disabled={submitting||copying||!videoFile?.checksumSha256||!selectedDroneId||!recordedAt.trim()||!journalReady} onPress={()=>void handleStartSubmitDataset()}/>}
+    {submitError?<Text accessibilityRole="alert" style={styles.error}>{submitError}</Text>:null}
+  </SafeAreaScreen>;
 }
-
-const styles = StyleSheet.create({
-  evidencePreview: { height: 150, alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginVertical: 12 },
-  sourceTag: { alignSelf: 'flex-start', backgroundColor: '#FEF3E2', borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4, marginBottom: 8 },
-  evidenceMeta: { ...typography.caption, color: colors.secondary, lineHeight: 18 },
-  evidenceStatus: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  savedEvidence: { gap: 8, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 16, paddingTop: 8 },
-  primaryAction: { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary },
-  disabledReason: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginTop: 8 },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.screenMargin,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surfaceAlt,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  circleIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topBarCenter: {
-    alignItems: 'center',
-  },
-  topBarTitle: {
-    color: colors.neutral,
-    fontWeight: '700',
-  },
-  topBarSub: {
-    color: colors.brandGold,
-    fontWeight: '600',
-  },
-  codeRightWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectorBar: {
-    marginBottom: spacing.sm,
-  },
-  droneSelectorCard: { marginBottom: spacing.sm, gap: spacing.xs },
-  droneSelectorHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  droneSelectorTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  droneSelectorTitle: { color: colors.neutral },
-  smallRefresh: { minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
-  droneOptions: { gap: spacing.xs, marginTop: spacing.xs },
-  droneOption: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.xs, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  droneOptionSelected: { borderColor: colors.primary, backgroundColor: '#FEF9E7' },
-  droneSerial: { ...typography.bodyMd, color: colors.neutral, fontWeight: '600', flex: 1 },
-  droneHint: { ...typography.caption, color: colors.secondary },
-  selectedDroneNote: { ...typography.caption, color: colors.secondary, marginTop: spacing.xs },
-  selectorTitle: {
-    color: colors.secondary,
-    marginBottom: spacing.xs,
-  },
-  selectorScroll: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingBottom: 2,
-  },
-  selectorChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  selectorChipActive: {
-    backgroundColor: '#FEF9E7',
-    borderColor: colors.primary,
-  },
-  selectorChipText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.secondary,
-  },
-  selectorChipTextActive: {
-    color: colors.primaryDark,
-  },
-  contextCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  contextLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  contextIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: '#FEF3E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contextTextWrap: {
-    flex: 1,
-  },
-  contextLabel: {
-    color: colors.secondary,
-  },
-  contextTitle: {
-    color: colors.neutral,
-    fontWeight: '700',
-  },
-  contextDrone: {
-    color: colors.secondary,
-    fontSize: 11,
-  },
-  statusBadge: {
-    backgroundColor: '#FEF3E2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  statusBadgeText: {
-    color: colors.primaryDark,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  pipelineCard: {
-    marginBottom: spacing.sm,
-    padding: spacing.sm,
-  },
-  pipelineTitle: {
-    color: colors.secondary,
-    marginBottom: spacing.sm,
-  },
-  stepPipelineRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  stepItem: {
-    alignItems: 'center',
-    width: 60,
-  },
-  stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  stepCircleCurrent: {
-    borderColor: colors.primary,
-    backgroundColor: '#FEF9E7',
-  },
-  stepCircleDone: {
-    borderColor: colors.success,
-    backgroundColor: colors.success,
-  },
-  stepLabel: {
-    fontWeight: '700',
-    fontSize: 10,
-    color: colors.neutral,
-  },
-  stepSubLabel: {
-    fontSize: 9,
-    color: colors.secondary,
-  },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: colors.border,
-    marginHorizontal: 2,
-    marginBottom: 16,
-  },
-  stepLineActive: {
-    backgroundColor: colors.success,
-  },
-  progressContainer: {
-    marginTop: spacing.sm,
-    gap: 4,
-  },
-  progressBarTrack: {
-    height: 6,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.full,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: radius.full,
-  },
-  progressText: {
-    color: colors.primaryDark,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  verifiedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: '#E9F7EC',
-    borderRadius: radius.sm,
-    padding: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  verifiedBannerContent: {
-    flex: 1,
-  },
-  verifiedBannerTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.success,
-  },
-  verifiedBannerSub: {
-    fontSize: 10,
-    color: colors.secondary,
-    marginTop: 1,
-  },
-  fileCard: {
-    borderRadius: 20, borderWidth: 1, borderColor: colors.border,
-    marginBottom: 12,
-    gap: spacing.xs,
-  },
-  fileCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: spacing.xs,
-  },
-  fileCardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  fileHeaderTitle: {
-    color: colors.secondary,
-  },
-  pickFileBtn: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-  },
-  pickFileBtnText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.neutral,
-  },
-  fileInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  fileIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: '#FEF3E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fileDetailsGroup: {
-    flex: 1,
-  },
-  fileNameText: {
-    color: colors.neutral,
-    fontFamily: 'Roboto-Medium',
-  },
-  fileSizeText: {
-    color: colors.secondary,
-    marginTop: 2,
-  },
-  boldText: {
-    fontWeight: 'bold',
-    color: colors.neutral,
-  },
-  checksumBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    padding: spacing.xs,
-  },
-  checksumTextGroup: {
-    flex: 1,
-  },
-  checksumLabel: {
-    fontSize: 10,
-    color: colors.secondary,
-    fontWeight: '500',
-  },
-  checksumHash: {
-    fontSize: 11,
-    fontFamily: 'Roboto',
-    color: colors.secondary,
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  gpsCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-    borderRadius: radius.xl,
-    ...softShadow,
-  },
-  gpsIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: '#E9F7EC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  gpsInfo: {
-    flex: 1,
-  },
-  gpsTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  gpsLabel: {
-    color: colors.secondary,
-  },
-  matchedBadge: {
-    backgroundColor: '#E9F7EC',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  matchedText: {
-    color: colors.success,
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  gpsCoord: {
-    color: colors.neutral,
-    fontWeight: 'bold',
-    fontFamily: 'Roboto',
-    marginTop: 2,
-  },
-  gpsAddress: {
-    color: colors.secondary,
-    marginTop: 2,
-  },
-  noteContainer: {
-    marginBottom: spacing.sm,
-  },
-  noteLabel: {
-    color: colors.secondary,
-    marginBottom: 4,
-  },
-  noteOptional: {
-    color: colors.secondary,
-    fontSize: 12,
-    fontWeight: 'normal',
-  },
-  noteInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    minHeight: 64,
-    color: colors.neutral,
-    textAlignVertical: 'top',
-  },
-  networkCard: {
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    borderRadius: radius.xl,
-    ...softShadow,
-  },
-  networkTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  networkTitle: {
-    color: colors.neutral,
-    fontWeight: '600',
-  },
-  networkToggleRow: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 4,
-  },
-  toggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: radius.sm,
-  },
-  toggleBtnActive: {
-    backgroundColor: colors.surface,
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  networkDot: {
-    width: 7,
-    height: 7,
-    borderRadius: radius.full,
-  },
-  toggleText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.secondary,
-  },
-  toggleTextActive: {
-    color: colors.neutral,
-    fontWeight: '700',
-  },
-  actionSection: {
-    gap: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  statusMsg: {
-    color: colors.primaryDark,
-    textAlign: 'center',
-  },
-  statusError: {
-    color: colors.error,
-    textAlign: 'center',
-  },
+const styles=StyleSheet.create({
+  input:{...typography.bodyMd,borderWidth:1,borderColor:colors.border,borderRadius:10,padding:14,color:colors.secondary,minHeight:52},
+  progressTrack:{height:5,borderRadius:4,backgroundColor:colors.border,overflow:'hidden'},
+  progressFill:{height:5,backgroundColor:colors.primary},
+  header:{flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:spacing.screenMargin,paddingVertical:8,backgroundColor:colors.surface},
+  card:{...operatorAppearance.card,marginBottom:16,gap:12},
+  row:{flexDirection:'row',alignItems:'center',gap:10},
+  heading:{...typography.titleMd,flex:1},
+  caption:{...typography.caption,color:colors.secondary,lineHeight:20},
+  iconButton:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',padding:6,gap:4},
+  fileRow:{flexDirection:'row',gap:12,alignItems:'center',padding:12,backgroundColor:colors.surfaceAlt,borderRadius:10},
+  option:{minHeight:52,borderWidth:1,borderColor:colors.border,borderRadius:10,padding:12,flexDirection:'row',alignItems:'center',gap:12},
+  selected:{borderColor:operatorAppearance.border,backgroundColor:operatorAppearance.pressed},
+  savedFile:{gap:8,borderTopWidth:1,borderTopColor:colors.border,paddingTop:12},
+  notice:{flexDirection:'row',alignItems:'center',gap:10,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt,marginBottom:16},
+  noticeText:{...typography.caption,color:colors.secondary,lineHeight:20,flex:1},
+  error:{...typography.bodyMd,color:colors.error,marginVertical:8},
+  primaryAction:{minHeight:52,borderRadius:12,backgroundColor:colors.primary,borderColor:colors.primary},
 });
