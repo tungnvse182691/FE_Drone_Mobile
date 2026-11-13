@@ -223,6 +223,13 @@ for(const phase of ['none','pending','acknowledged'])test('Crew mounted FIELD ol
  assert.equal(titles.includes('Lưu nháp số đo'),false);assert.equal(posts,0);assert.equal(news,0);assert.equal(reads,0);
  assert.equal(s.nodes().filter(n=>typeof n.type==='function'&&n.type.name==='FieldErrorPanel').length,0,'recovery card already explains the old-session block');
  if(phase==='none') {
+  s.press('Tạo nháp trống cho phiên này');s.render();
+  assert.ok(!s.nodes().some(n=>n.props.title==='Tạo nháp trống cho phiên này'),'confirmation replaces the initial action instead of stacking it');
+  assert.equal(news,0,'opening confirmation does not create a draft');
+  s.press('Hủy');s.render();
+  assert.equal(news,0,'cancel keeps the historical draft untouched');
+  assert.ok(s.nodes().some(n=>n.props.title==='Tạo nháp trống cho phiên này'));
+  assert.ok(!s.nodes().some(n=>n.props.title==='Xác nhận tạo nháp trống'));
   s.press('Tạo nháp trống cho phiên này');s.render();s.press('Xác nhận tạo nháp trống');await s.flush();
   assert.equal(news,1);assert.equal(posts,0);
   assert.ok(!JSON.stringify(s.nodes()).includes('field_previous_session_requires_reconciliation'),'successful new draft clears the stale recovery notice');

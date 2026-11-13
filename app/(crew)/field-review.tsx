@@ -382,17 +382,22 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         {supplementMode||draft?.repairClaim?<Text style={styles.muted}>{supplementMode?'Bổ sung hồ sơ sửa chữa':'Đo kiểm sau sửa chữa'}</Text>:null}</Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<FieldErrorPanel title="Không đọc được hồ sơ" message={error} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
-      {localRecoveryBlocked?<Card style={styles.card}>
-        <View style={styles.resultHeading}><MaterialIcons name="history" size={24} color={colors.primaryDark}/><Text style={[styles.sectionTitle,styles.flex]}>{canStartFreshSession?'Có nháp từ lần đăng nhập trước':'Hồ sơ cần kiểm tra kết quả'}</Text></View>
-        <Text style={styles.muted}>{canStartFreshSession?'Dữ liệu cũ vẫn được giữ trên máy. Có thể bắt đầu hồ sơ mới.':'Kiểm tra kết quả hồ sơ cũ trước khi gửi tiếp.'}</Text>
-        <Button variant="text" title={showRecoveryDetail?'Ẩn giải thích':'Vì sao có thông báo này?'} onPress={()=>setShowRecoveryDetail(v=>!v)}/>
-        {showRecoveryDetail?<Text style={styles.muted}>{localRecoveryError} Ảnh, số đo và lệnh cũ không bị xóa hoặc tự gửi lại.</Text>:null}
+      {localRecoveryBlocked?<Card style={[styles.card,styles.recoveryCard]}>
+        <View style={styles.recoveryHeading}><MaterialIcons name={recoveryDecision?'note-add':'history'} size={22} color={colors.primaryDark}/><Text style={[styles.recoveryTitle,styles.flex]}>{recoveryDecision?(recoveryDecision==='new'?'Tạo hồ sơ mới?':'Gửi lại lệnh gốc?'):canStartFreshSession?'Có nháp từ lần đăng nhập trước':'Hồ sơ cần kiểm tra kết quả'}</Text>
+          {!recoveryDecision?<Pressable accessibilityRole="button" accessibilityLabel={showRecoveryDetail?'Ẩn giải thích':'Vì sao có thông báo này?'} accessibilityState={{expanded:showRecoveryDetail}} onPress={()=>setShowRecoveryDetail(v=>!v)} style={styles.recoveryToggle}><MaterialIcons name={showRecoveryDetail?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>:null}
+        </View>
+        {recoveryDecision?<>
+          <Text style={styles.recoveryCopy} accessibilityRole="alert">{recoveryDecision==='new'?'Nháp và ảnh cũ vẫn được giữ. Hồ sơ mới bắt đầu trống.':'Lệnh có thể được gửi nếu máy chủ chưa nhận. Nội dung, khóa và phiên bản gốc được giữ nguyên.'}</Text>
+          <View style={styles.recoveryActions}><Button variant="text" title="Hủy" disabled={busy} onPress={()=>setRecoveryDecision(null)}/><Button variant="primary" title={recoveryDecision==='new'?'Xác nhận tạo nháp trống':'Xác nhận gửi lại lệnh gốc'} loading={busy} disabled={!serverLoaded} onPress={()=>void recoverHistorical(recoveryDecision)}/></View>
+        </>:<>
+        <Text style={styles.recoveryCopy}>{canStartFreshSession?'Nháp cũ được giữ trên máy. Tạo hồ sơ mới để tiếp tục.':'Kiểm tra kết quả hồ sơ cũ trước khi gửi tiếp.'}</Text>
+        {showRecoveryDetail?<View style={styles.recoveryDetail}><Text style={styles.recoveryCopy}>{localRecoveryError} Ảnh, số đo và lệnh cũ không bị xóa hoặc tự gửi lại.</Text></View>:null}
         {historicalDraft?.command?.phase==='acknowledged'?<><Button variant="secondary" title="Đọc lại kết quả đã lưu" disabled={busy||!serverLoaded} onPress={()=>void recoverHistorical('read')}/></>:null}
         {historicalDraft?.command?.phase==='pending'?<><Button variant="secondary" title="Đối soát lệnh gốc" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('replay')}/></>:null}
         {historicalDraft?.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')))?<Text>Phiên cũ còn lệnh hủy ảnh chưa đối soát. Cần khôi phục đúng phiên và quyền trước khi tiếp tục; không tạo nháp mới hoặc gửi ảnh khác.</Text>:null}
-        {historicalDraft&&!fieldDraftPending(historicalDraft)&&!historicalDraft.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')))?<><Button variant="secondary" title="Tạo nháp trống cho phiên này" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('new')}/></>:null}
+        {canStartFreshSession?<Button variant="secondary" title="Tạo nháp trống cho phiên này" disabled={busy||!serverLoaded} onPress={()=>setRecoveryDecision('new')}/>:null}
         {!historicalDraft?<Text>Chưa đọc được hồ sơ cũ. Thử tải lại hồ sơ.</Text>:null}
-        {recoveryDecision?<View><Text accessibilityRole="alert">{recoveryDecision==='new'?'Sẽ tạo nháp trống mới. Nháp và ảnh phiên cũ được giữ nguyên.':'Có thể thực thi lệnh gốc lần đầu nếu máy chủ chưa nhận; nội dung, khóa và phiên bản gốc được giữ nguyên.'}</Text><Button variant="secondary" title={recoveryDecision==='new'?'Xác nhận tạo nháp trống':'Xác nhận gửi lại lệnh gốc'} disabled={busy||!serverLoaded} onPress={()=>void recoverHistorical(recoveryDecision)}/><Button variant="text" title="Hủy" onPress={()=>setRecoveryDecision(null)}/></View>:null}
+        </>}
       </Card>:null}
       {serverLoaded&&latest?<Card style={styles.card}>
         <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Hồ sơ đã gửi</Text><Text style={styles.muted}>Lần {latest.revision}</Text></View>
@@ -554,6 +559,13 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
 }
 
 const styles = StyleSheet.create({
+  recoveryCard: {gap:spacing.sm},
+  recoveryHeading: {flexDirection:'row',alignItems:'center',gap:spacing.sm},
+  recoveryTitle: {...typography.labelLg,color:colors.neutral,lineHeight:21},
+  recoveryCopy: {...typography.bodyMd,color:colors.secondary},
+  recoveryToggle: {minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'},
+  recoveryDetail: {backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
+  recoveryActions: {flexDirection:'row',flexWrap:'wrap',justifyContent:'flex-end',gap:spacing.sm,marginTop:spacing.sm},
   submitActions:{paddingTop:spacing.md,paddingBottom:spacing.sm,gap:spacing.sm},
   unitRow: {flexDirection:'row',gap:spacing.sm,marginBottom:spacing.sm},
   unitButton: {flex:1},
