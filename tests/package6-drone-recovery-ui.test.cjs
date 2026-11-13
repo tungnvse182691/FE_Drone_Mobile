@@ -58,8 +58,8 @@ test('Drone sync reports read errors without success and can reopen storage afte
  '../../src/offline/upload-queue':{currentQueueIdentity:()=>identity,sameQueueIdentity:()=>true,createQueueReader:()=>({cancel(){},read:async()=>{reads++;if(failRead)throw Error('read');return[];}}),queueChecksumLabel:()=>''}}});
  s.render();await s.flush();failInit=false;
  const button=()=>s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel==='Đọc lại hàng đợi');assert.equal(button().props.disabled,false);
- await button().props.onPress();await s.flush();assert.ok(opens>=2);assert.ok(reads>0);assert.match(JSON.stringify(s.nodes()),/Không đọc được/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã đọc lại dữ liệu/);
- failRead=false;await button().props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes()),/Đã đọc lại dữ liệu/);s.unmount();
+ await button().props.onPress();await s.flush();assert.ok(opens>=2);assert.ok(reads>0);assert.match(JSON.stringify(s.nodes()),/Không đọc được/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã làm mới danh sách/);
+ failRead=false;await button().props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes()),/Đã làm mới danh sách/);s.unmount();
 });
 
 test('Drone log rejects a late list after actor leaves and returns to the same session',async()=>{

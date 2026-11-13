@@ -51,10 +51,10 @@ test('DRONE-ANDROID-01 Sync describes a local queue and gives its summary separa
   s.render(); await s.flush();
   assert.equal(s.nodes().find(n => n.type === 'SafeAreaScreen').props.header.props.subtitle, 'Đồng bộ');
   assert.doesNotMatch(allText(s), /ĐỒNG BỘ NỀN|DANH SÁCH TỆP CHỜ TẢI|Không có tệp nào/);
-  const summary = s.nodes().find(n => n.type === 'Text' && JSON.stringify(n.props.children).includes('Không có mục trong phân vùng này'));
+  const summary = s.nodes().find(n => n.type === 'Text' && JSON.stringify(n.props.children).includes('Không có mục chờ xử lý'));
   const row = s.nodes().find(n => n.type === 'View' && n.props.children?.some?.(child => child?.props?.children?.includes?.(summary)));
   assert.ok(row); assert.equal(row.props.style.flexDirection, 'column');
   s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Đọc lại hàng đợi').props.onPress(); await s.flush();
-  assert.match(allText(s), /không gửi lên máy chủ và không xác minh biên nhận/);
+  assert.match(allText(s), /không gửi dữ liệu/);
   s.unmount();
 });

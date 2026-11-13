@@ -1,18 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
-  default: {},
-});
 import { initDatabase, openDatabase } from '../../src/offline/database';
 import { currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecksumLabel, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
 import { useAuthStore } from '../../src/store/auth';
@@ -150,7 +146,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       let database=db;
       if(!database){database=openDatabase();await initDatabase(database);if(!isCurrent())return;setDb(database);}
       const read=await reload(database);
-      if(read&&active()&&isCurrent())showToast('Đã đọc lại dữ liệu trên thiết bị. Thao tác này không gửi hoặc xác minh biên nhận máy chủ.');
+      if(read&&active()&&isCurrent())showToast('Đã làm mới danh sách trên thiết bị. Chưa gửi dữ liệu lên máy chủ.');
     }catch{if(active()&&isCurrent())setToastMsg('Không mở được kho dữ liệu cục bộ. Có thể thử đọc lại; dữ liệu vẫn được giữ.');}
     finally{if(active()&&isCurrent())setSyncing(false);}
   },[db,reload,showToast,identity,syncing,scope.capture]);
@@ -164,6 +160,9 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         <View style={styles.toast}>
           <MaterialIcons name="info" size={18} color={colors.surface} />
           <Text style={styles.toastText}>{toastMsg}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Đóng thông báo" onPress={() => setToastMsg(null)} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <MaterialIcons name="close" size={20} color={colors.surface} />
+          </Pressable>
         </View>
       )}
 
@@ -212,7 +211,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             <Text style={[typography.bodyMd, styles.summaryCount]}>
               {pendingQueue.length > 0
                 ? `${pendingQueue.length} mục chờ xử lý`
-                : 'Không có mục trong phân vùng này'}
+                : 'Không có mục chờ xử lý'}
             </Text>
           </View>
           <Text style={[typography.caption, styles.totalSize]}>
@@ -233,8 +232,8 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
           {syncing ? <ActivityIndicator color={colors.neutral} /> : <MaterialIcons name="refresh" size={18} color={colors.neutral} />}
           <Text style={styles.operatorReloadText}>{syncing ? 'Đang đọc hàng đợi…' : 'Đọc lại hàng đợi'}</Text>
         </Pressable>
+        <Text style={[typography.caption, styles.reloadNote]}>Làm mới danh sách trên máy, không gửi dữ liệu.</Text>
       </Card>
-      <Text style={[typography.caption, styles.reloadNote]}>Chỉ đọc lại dữ liệu SQLite đang giữ trên thiết bị; không gửi lên máy chủ và không xác minh biên nhận.</Text>
 
       {/* Section Title */}
       {activeItems.length > 0 ? <View style={styles.sectionHeader}>
@@ -297,7 +296,6 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         )}
       </View>
 
-      <Text style={[typography.titleMd, styles.sectionTitle]}>Lệnh và đối soát</Text>
       <DroneTaskRecoveryList />
 
       {/* Safe Local Purge Section */}
@@ -389,8 +387,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     marginBottom: spacing.md,
     gap: spacing.sm,
-    borderRadius: radius.xl,
-    ...softShadow,
+    ...operatorAppearance.card,
   },
   summaryInfo: {
     flexDirection: 'column',
@@ -435,12 +432,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   itemCard: {
+    ...operatorAppearance.card,
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: spacing.sm,
     justifyContent: 'space-between',
     padding: spacing.sm,
-    borderRadius: radius.md,
     borderLeftWidth: 4,
     borderLeftColor: colors.secondary,
   },
@@ -539,13 +536,11 @@ const styles = StyleSheet.create({
   operatorReloadPressed: { backgroundColor: colors.primaryDark },
   operatorReloadDisabled: { opacity: 0.5 },
   operatorReloadText: { ...typography.labelLg, color: colors.neutral },
-  reloadNote: { color: colors.secondary, marginBottom: spacing.md },
+  reloadNote: { color: colors.secondary, lineHeight: 20 },
   purgeCard: {
     marginBottom: spacing.xl,
     gap: spacing.sm,
-    backgroundColor: '#F8F9FA',
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...operatorAppearance.card,
   },
   purgeHeader: {
     flexDirection: 'row',
