@@ -1,8 +1,8 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import { useAuthStore } from '../../src/store/auth';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
@@ -78,6 +78,7 @@ export default function DroneRequestDetailScreen() {
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [workError, setWorkError] = useState<string | null>(null);
   const [workLoading, setWorkLoading] = useState(false);
+  const loadSerial = useRef(0);
   const workSerial = useRef(0);
   const loadWorkPackage = useCallback(async () => {
     const isCurrent = scope.capture(), request = ++workSerial.current;
@@ -96,7 +97,8 @@ export default function DroneRequestDetailScreen() {
   }, [target, scope.key, scope.capture]);
 
   const loadTask = useCallback(async () => {
-    const isCurrent = scope.capture();
+    const currentScope = scope.capture(), request = ++loadSerial.current;
+    const isCurrent = () => currentScope() && request === loadSerial.current;
     if (!isCurrent()) return;
     setDataScope(scope.key);
     setWorkPackage(null);
@@ -120,9 +122,10 @@ export default function DroneRequestDetailScreen() {
     }
   }, [target, scope.key, scope.capture, loadWorkPackage]);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     void loadTask();
-  }, [loadTask]);
+    return () => { loadSerial.current++; workSerial.current++; };
+  }, [loadTask]));
 
   const displayCode = dataScope === scope.key && scope.key && task ? operatorTaskDisplayCode(task.id, params.code) : 'Nhiệm vụ';
   const canOpenDecline = !!scope.key && dataScope === scope.key && !loading && !!task &&
