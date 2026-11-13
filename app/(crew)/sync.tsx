@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -16,6 +16,7 @@ import { useAuthStore } from '../../src/store/auth';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { LocalState, SyncStatus } from '../../src/types/enums';
 import { CrewOfflinePanel } from '../../src/components/crew/CrewOfflinePanel';
+import { CrewLocalDraftPanel } from '../../src/components/crew/CrewLocalDraftPanel';
 
 type SyncSegment = 'pending' | 'done';
 
@@ -95,6 +96,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
   const [showTechnical, setShowTechnical] = useState(false);
   const [panelRefreshSignal, setPanelRefreshSignal] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;reader.cancel();};},[reader]);
   const active=()=>mounted.current&&sameQueueIdentity(identity);
@@ -170,7 +172,11 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
   
 
-  const refresh=()=>{void reload();setPanelRefreshSignal(value=>value+1);};
+  const refresh=async()=>{
+    if(refreshing||!active())return;
+    setRefreshing(true);setPanelRefreshSignal(value=>value+1);
+    try{await reload();}finally{if(active())setRefreshing(false);}
+  };
   const retry=()=>{if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');};
 
 
@@ -181,8 +187,8 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
           <MaterialIcons name="sync" size={22} color={colors.primary} />
           <Text style={[typography.titleLg, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
-          <MaterialIcons name="refresh" size={20} color={colors.secondary} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" accessibilityState={{busy:refreshing,disabled:refreshing}} disabled={refreshing} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
+          {refreshing?<ActivityIndicator size="small" color={colors.secondary}/>:<MaterialIcons name="refresh" size={20} color={colors.secondary} />}
         </Pressable>
       </View>
 
@@ -233,6 +239,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         <Text style={[typography.caption, styles.lockedHint]}>Gửi hàng đợi chưa được mở; dữ liệu chờ vẫn được giữ để đối soát.</Text>
       </Card>
 
+      <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
       <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
       {segment === 'pending' ? (
         <>
