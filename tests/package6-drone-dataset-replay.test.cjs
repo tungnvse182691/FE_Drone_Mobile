@@ -17,10 +17,10 @@ const payload = (overrides = {}) => ({
 });
 const plan = (overrides = {}) => ({ taskId, projectId: id(3), ifMatch: '"AAAAAAAAAAE="', payload: payload(), ...overrides });
 
-function loadWorkflow(journalFactory) {
+function loadWorkflow(journalFactory, suppliedAuth) {
   const auth = { getState: () => ({ token: 'sid', status: 'AUTHENTICATED', user: { id: id(1), role_code: 'DRONE_OPERATOR' } }), subscribe: () => () => {} };
   const deps = {
-    '../store/auth': { useAuthStore: auth },
+    '../store/auth': { useAuthStore: suppliedAuth ?? auth },
     './authApi': { passwordSessionIdentity: token => token ? JSON.stringify([id(1), token]) : null },
     './client': { apiClient: { defaults: { baseURL: 'https://fixture.test' } } },
     './droneTaskJournal': { openDroneUploadJournal: journalFactory },
@@ -103,4 +103,24 @@ test('Drone dataset submission rejects missing or invalid deviceId before networ
   for (const deviceId of [null, 'not-a-uuid', '00000000-0000-0000-0000-000000000000']) {
     await assert.rejects(workflow.prepareDroneDatasetIntent(plan({ payload: payload({ deviceId }) })), /drone_dataset_plan_invalid/);
   }
+});
+
+
+test('Operator dataset persists unknown before POST and ignores a response after session bounce', async () => {
+  const runtime=journalRuntime(),listeners=new Set();
+  const state={token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}};
+  const auth={getState:()=>state,subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}};
+  const workflow=loadWorkflow(runtime.factory,auth);
+  await assert.rejects(workflow.submitDroneDataset(plan(),{submitDataset:async()=>{
+    assert.equal(runtime.intent.status,'DATASET_UNKNOWN');
+    state.status='ANONYMOUS';listeners.forEach(f=>f());state.status='AUTHENTICATED';listeners.forEach(f=>f());
+    return {data:{id:id(90),surveyTaskId:taskId},etag:'"version"'};
+  },readTask:async()=>{throw Error('must not read');}}),/operator_session_changed/);
+  assert.equal(runtime.intent.status,'DATASET_UNKNOWN');assert.equal(listeners.size,0);
+});
+
+test('Operator initial send never implicitly replays an unknown dataset command',async()=>{
+  const runtime=journalRuntime('DATASET_UNKNOWN'),workflow=loadWorkflow(runtime.factory);let sends=0;
+  await assert.rejects(workflow.submitDroneDataset(plan(),{submitDataset:async()=>sends++,readTask:async()=>{}}),/not_dispatchable/);
+  assert.equal(sends,0);assert.equal(runtime.intent.status,'DATASET_UNKNOWN');
 });

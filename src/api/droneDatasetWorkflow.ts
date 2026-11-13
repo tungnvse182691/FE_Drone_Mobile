@@ -253,19 +253,22 @@ function datasetResponseError(status: number, code: string): Error & { response:
   error.response = { status, data: { code } };
   return error;
 }
-async function sendDatasetIntent(journal: Awaited<ReturnType<typeof openDroneUploadJournal>>, intent: DroneUploadIntent, transport: DroneDatasetTransport, replay: boolean): Promise<DroneUploadIntent> {
-  if (intent.kind !== 'DRONE_DATASET_INTENT' || (replay ? intent.status !== 'DATASET_UNKNOWN' : !['PREPARED', 'DATASET_UNKNOWN'].includes(intent.status))) throw Error('drone_dataset_intent_not_dispatchable');
+async function sendDatasetIntent(journal: Awaited<ReturnType<typeof openDroneUploadJournal>>, intent: DroneUploadIntent, transport: DroneDatasetTransport, replay: boolean, guard: () => void): Promise<DroneUploadIntent> {
+  if (intent.kind !== 'DRONE_DATASET_INTENT' || (replay ? intent.status !== 'DATASET_UNKNOWN' : intent.status !== 'PREPARED')) throw Error('drone_dataset_intent_not_dispatchable');
   if (!intent.ifMatch || !intent.body || !isDroneResourceId(intent.projectId)) throw Error('drone_dataset_intent_invalid');
+  guard();
+  await journal.update(intent.key, { status: 'DATASET_UNKNOWN' }); guard();
   try {
-    const response = await transport.submitDataset(intent.taskId, intent.body as unknown as SubmitDatasetRequestDto, intent.ifMatch, intent.key);
+    const response = await transport.submitDataset(intent.taskId, intent.body as unknown as SubmitDatasetRequestDto, intent.ifMatch, intent.key); guard();
     if (!response?.data || !isDroneResourceId(response.data.id) || response.data.surveyTaskId !== intent.taskId || !text(response.etag)) throw Error('drone_dataset_receipt_invalid');
     return journal.update(intent.key, { status: 'DATASET_CONFIRMED', receipt: { datasetId: response.data.id, surveyTaskId: response.data.surveyTaskId, etag: response.etag, replayed: replay } });
   } catch (error) {
+    guard();
     const status = uploadErrorStatus(error);
     if (status === 409) { await journal.update(intent.key, { status: 'CONFLICT', error: { status, code: 'idempotency_key_reused' } }); throw error; }
     if (status === 412) {
       try { await transport.readTask(intent.taskId); } catch { /* readback is evidence only; keep the original 412 */ }
-      await journal.update(intent.key, { status: 'CONFLICT', error: { status, code: 'task_version_changed' } }); throw error;
+      guard(); await journal.update(intent.key, { status: 'CONFLICT', error: { status, code: 'task_version_changed' } }); throw error;
     }
     const uncertain = isUncertain(error);
     await journal.update(intent.key, { status: uncertain ? 'DATASET_UNKNOWN' : 'FAILED', error: { status, code: uncertain ? 'dataset_transport_unknown' : 'dataset_submission_rejected' } });
@@ -273,36 +276,43 @@ async function sendDatasetIntent(journal: Awaited<ReturnType<typeof openDroneUpl
   }
 }
 
-/** Persist the immutable dataset body/key/version. This function does not call the network. */
+const activeDatasets = new Set<string>();
+async function withDatasetJournal<T>(taskId: string, run: (journal: Awaited<ReturnType<typeof openDroneUploadJournal>>, guard: () => void) => Promise<T>): Promise<T> {
+  const scope = operatorDatasetScope(); if (!scope) throw Error('operator_session_invalid');
+  let invalid = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (operatorDatasetScope() !== scope) invalid = true; });
+  const guard = () => { if (invalid) throw Error('operator_session_changed'); requireScope(scope); };
+  const lock = JSON.stringify([scope,taskId]);
+  if (activeDatasets.has(lock)) { unsubscribe(); throw Error('drone_dataset_busy'); }
+  activeDatasets.add(lock);
+  let journal: Awaited<ReturnType<typeof openDroneUploadJournal>> | undefined;
+  try { journal = await openDroneUploadJournal(taskId); guard(); const result = await run(journal,guard); guard(); return result; }
+  finally { journal?.close(); unsubscribe(); activeDatasets.delete(lock); }
+}
+
+/** Persist the immutable dataset body/key/version without network transport. */
 export async function prepareDroneDatasetIntent(plan: DroneDatasetPlan): Promise<DroneUploadIntent> {
   validateDatasetPlan(plan);
-  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
-  const journal = await openDroneUploadJournal(plan.taskId);
-  try { return await journal.prepare(datasetIntentInput(plan)); } finally { journal.close(); }
+  return withDatasetJournal(plan.taskId, async (journal,guard) => { guard(); return journal.prepare(datasetIntentInput(plan)); });
 }
 
-/** Initial dataset submission path for tests/future wiring; UI remains blocked in Part 1. */
+/** Initial send. Unknown outcomes require the separate explicit replay path. */
 export async function submitDroneDataset(plan: DroneDatasetPlan, transport: DroneDatasetTransport = realDroneDatasetTransport): Promise<DroneUploadIntent> {
   validateDatasetPlan(plan);
-  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
-  const journal = await openDroneUploadJournal(plan.taskId);
-  try {
-    const intent = await journal.prepare(datasetIntentInput(plan));
-    return await sendDatasetIntent(journal, intent, transport, false);
-  } finally { journal.close(); }
+  return withDatasetJournal(plan.taskId, async (journal,guard) => {
+    const intent = await journal.prepare(datasetIntentInput(plan)); guard();
+    return sendDatasetIntent(journal,intent,transport,false,guard);
+  });
 }
 
-/** Explicit replay only: uses the stored dataset body, key and original If-Match. */
+/** Explicit replay: stored body, key and original If-Match stay immutable. */
 export async function replayDroneDataset(plan: DroneDatasetPlan, transport: DroneDatasetTransport = realDroneDatasetTransport): Promise<DroneUploadIntent> {
   validateDatasetPlan(plan);
-  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
-  const journal = await openDroneUploadJournal(plan.taskId);
-  try {
-    const intents = await journal.read('dataset');
+  return withDatasetJournal(plan.taskId, async (journal,guard) => {
+    const intents = await journal.read('dataset'); guard();
     if (intents.length !== 1) throw Error('drone_dataset_intent_missing');
     const intent = intents[0];
-    // Replay always uses the stored original If-Match. The caller may have read a newer task version after the lost ACK.
-    if (intent.projectId !== plan.projectId || !sameJson(intent.body, plan.payload)) throw datasetResponseError(409, 'idempotency_key_reused');
-    return await sendDatasetIntent(journal, intent, transport, true);
-  } finally { journal.close(); }
+    if (intent.projectId !== plan.projectId || !sameJson(intent.body,plan.payload)) throw datasetResponseError(409,'idempotency_key_reused');
+    return sendDatasetIntent(journal,intent,transport,true,guard);
+  });
 }
