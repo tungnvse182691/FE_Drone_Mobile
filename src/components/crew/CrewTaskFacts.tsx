@@ -6,6 +6,8 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { readAssignedFieldFacts, currentQueueIdentity, crewReadGuard } from '../../api/crewSafetyWorkflow';
 import { sameQueueIdentity } from '../../offline/upload-queue';
+import { RoadGuardMapLibre } from '../map/RoadGuardMapLibre';
+import { crewRouteCoordinates } from '../../utils/crew-map-geometry';
 
 /** Kind values verified against Candidate3 FieldInspectionWorkflowRepository emit calls. */
 export function crewEventLabel(kind: string): string {
@@ -36,6 +38,7 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
     }} finally {if(n===sequence.current)setBusy(false);}
   };
   try {if(!identity)return null;crewReadGuard(identity);}catch{return null;}
+  const routeCoordinates=facts?.geometry?crewRouteCoordinates(facts.geometry.route):[];
   return <Card style={styles.card}>
     <View style={styles.heading}><MaterialIcons name="map" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Hồ sơ và lịch sử</Text></View>
     <Button variant="secondary" title={facts ? 'Tải lại vị trí / lịch sử' : 'Xem vị trí / lịch sử'} disabled={busy} loading={busy} onPress={()=>void read()} />
@@ -44,6 +47,11 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
     {facts&&showFacts?<View style={styles.group}>
       {facts.geometry?<View style={styles.group}>
         <Text style={typography.bodyMd}>Đã có dữ liệu tuyến đường • {facts.geometry.segments.length} phân đoạn</Text>
+        {routeCoordinates.length?<View style={{gap:spacing.xs}}>
+          <Text style={typography.labelLg}>Tuyến nhiệm vụ</Text>
+          <RoadGuardMapLibre style={{height:260,borderRadius:12,overflow:'hidden'}} center={routeCoordinates[0]} routeCoordinates={routeCoordinates} markers={[]} />
+          <Text style={styles.hint}>Đường tuyến từ hồ sơ máy chủ; chưa phải điểm hư hại để dẫn đường.</Text>
+        </View>:<Text style={styles.hint}>Hồ sơ chưa có đường tuyến WGS84 hỗ trợ hiển thị trên bản đồ.</Text>}
         {showGeometry && <View style={styles.group}><Text selectable style={styles.hint}>Phiên bản tuyến: {facts.geometry.routeVersionId}</Text>
           <Text style={styles.hint}>Hệ tọa độ: {facts.geometry.route.spatialSrid} • {facts.geometry.route.profileStatus}</Text>
           <Text selectable style={styles.hint}>{facts.geometry.route.wkt.slice(0,12000)}{facts.geometry.route.wkt.length>12000?'…':''}</Text>
