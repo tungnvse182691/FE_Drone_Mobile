@@ -11,8 +11,9 @@ import { Chip } from '../../src/components/Chip';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
-import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal,
-  type CrewTask, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
+import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
+  type CrewTask, type FieldTaskGeometry, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
+import { chooseCrewPosition, crewPositionSources } from '../../src/utils/crew-position-proof';
 import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, cancelFieldUpload, uploadAndSubmitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
@@ -164,6 +165,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [rawValues,setRawValues]=useState<Record<string,string>>({});
   const [locationProof,setLocationProof]=useState<FieldPositionProofInput|null>(null);
   const [chainage,setChainage]=useState('');
+  const [positionGeometry,setPositionGeometry]=useState<FieldTaskGeometry|null>(null);
   const [latest,setLatest]=useState<FieldSubmissionViewFact|null>(null);
   const [verifiedTask,setVerifiedTask]=useState<CrewTask['detail']|null>(null);
   const [verifiedEtag,setVerifiedEtag]=useState('');
@@ -225,6 +227,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(!isLatest())return;
       if(!localError)setDraft(saved);
       setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);setServerLoaded(true);
+      setPositionGeometry(null);
+      if(fresh.data.segmentSetId&&!fresh.data.slabId){
+        try{const geometry=await getFieldTaskGeometryReal(task.projectId,task.id);if(isLatest())setPositionGeometry(geometry.data);}
+        catch{/* Geometry may be source_not_ready. Route/slab authority remains the task DTO. */}
+        if(!isLatest())return;
+      }
       await loadRepairRecovery(c,saved?.result?.id);
       if(!isLatest())return;
       if(!refresh&&!localError){setLocationProof(saved?.locationProof??null);setChainage(saved?.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));setRawValues({});}
@@ -241,6 +249,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
   const frozen=!!draft?.command;
+  const positionSources=crewPositionSources(verifiedTask,positionGeometry);
   const normalMeasurement=verifiedTask?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
   const historicalCancelPending=historicalDraft?.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')));
   const canStartFreshSession=!!historicalDraft&&!fieldDraftPending(historicalDraft)&&!historicalCancelPending;
@@ -452,9 +461,16 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </SafeAreaScreen>
         </Modal>
         <Card style={styles.card}><View pointerEvents={busy||frozen?'none':'auto'}>
-<Text style={styles.sectionTitle}>Vị trí quan sát</Text><Text style={styles.muted}>Đối chiếu dấu mốc thực tế (tùy chọn).</Text><View style={styles.choiceRow}>{[['ROUTE_CHAINAGE_MARKINGS_CONFIRMED','Dấu mốc tuyến / lý trình'],['SLAB_MARKINGS_CONFIRMED','Ký hiệu tấm bê tông'],['UNKNOWN','Chưa xác định']].map(([value,label])=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} accessibilityRole="radio" accessibilityState={{selected}} style={[styles.choiceOption,selected&&styles.choiceOptionSelected]} onPress={()=>value==='UNKNOWN'?(setLocationProof(null),setChainage('')):setLocationProof({kind:'POSITION_CHECKLIST',checklist:value})}><Text style={selected?styles.choiceTextSelected:styles.choiceText}>{label}</Text></Pressable>;})}</View>
+<Text style={styles.sectionTitle}>Vị trí quan sát</Text><Text style={styles.muted}>Chọn cách đối chiếu tại hiện trường.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.choiceOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><Text style={selected?styles.choiceTextSelected:styles.choiceText}>{label}</Text></Pressable>;})}</View>
+          {!locationProof?<Text style={styles.muted}>Chưa xác định vị trí: hồ sơ sẽ được ghi nhận còn thiếu thông tin.</Text>:null}
           {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
-            {taskReadOnly?<Text style={styles.muted}>Tuyến: {locationProof.observedRouteVersionId||'Chưa có'} · Lý trình: {chainage||'Chưa có'} m</Text>:<><InputField label="Mã phiên bản tuyến trên hồ sơ đối chiếu" value={locationProof.observedRouteVersionId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedRouteVersionId:value});}}/><InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/></>}
+            {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>}
+          </>:null}
+          {locationProof?.checklist==='SEGMENT_MARKINGS_CONFIRMED'?<>
+            {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<>
+              {positionSources.segments.map(segment=><Button key={segment.id} variant="text" title={`${locationProof.observedSegmentId===segment.id?'✓ ':''}Phân đoạn ${segment.sequence} · ${segment.fromOffsetMeters}–${segment.toOffsetMeters} m`} disabled={busy||frozen} onPress={()=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSegmentId:segment.id});}}/>)}
+              <InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>
+            </>}
           </>:null}
           {locationProof?.checklist==='SLAB_MARKINGS_CONFIRMED'?(taskReadOnly?<Text style={styles.muted}>Ký hiệu tấm: {locationProof.observedSlabId||'Chưa có'}</Text>:<InputField label="Ký hiệu tấm đã đối chiếu thực tế" value={locationProof.observedSlabId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSlabId:value});}}/>):null}
         <Button variant="text" title="Lưu vị trí" disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/></View></Card>
