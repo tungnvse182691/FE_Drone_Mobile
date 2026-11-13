@@ -5,6 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 import { Chip } from '../../src/components/Chip';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
@@ -142,8 +143,8 @@ export default function DroneRequestDeclineScreen() {
           <MaterialIcons name="info-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
             {operatorTaskCanRespond(detail.status)
-              ? 'Từ chối nhiệm vụ. Lý do từ chối được gửi tới PM để điều phối lại. Chỉ gửi sau khi bạn xác nhận; gửi lại giữ nguyên yêu cầu đã lưu.'
-              : 'Trạng thái hiện tại không thể chuẩn bị yêu cầu từ chối mới. Bạn có thể đọc chi tiết nhiệm vụ và kiểm tra yêu cầu đã lưu bên dưới.'}
+              ? 'Lý do từ chối sẽ được gửi tới quản lý.'
+              : 'Nhiệm vụ không còn cho phép từ chối mới. Yêu cầu đã lưu vẫn được giữ.'}
           </Text>
         </View>
 
@@ -255,6 +256,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   noticeText: {
+    lineHeight: 20,
     color: colors.neutral,
     flex: 1,
   },
@@ -272,7 +274,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   card: {
-    borderRadius: radius.xl,
+    ...operatorAppearance.card,
     marginBottom: spacing.md,
   },
   cardHeader: {
@@ -283,6 +285,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   cardCode: {
+    flex: 1,
     color: colors.neutral,
   },
   cardTitle: {
@@ -345,6 +348,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   topBar: {
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -353,8 +361,8 @@ const styles = StyleSheet.create({
     color: colors.neutral,
   },
   backButton: {
-    width: 34,
-    height: 34,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,

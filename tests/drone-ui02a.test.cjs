@@ -90,7 +90,7 @@ test('UI02A Detail hides decline if current source has wrong actor or mismatched
 
 test('UI02A direct Decline route for Submitted explains blocked preparation while retaining independent journal panel', async () => {
   const t = fixture('SUBMITTED'); const s = drone('request-decline', apiFor(t), { params: { taskId: t.id } });
-  s.render(); await s.flush(); assert.match(text(s), /không thể chuẩn bị yêu cầu từ chối/);
+  s.render(); await s.flush(); assert.match(text(s), /không còn cho phép từ chối mới/);
   assert.ok(s.nodes().some(n => n.type === 'DroneTaskCommandPanel' && n.props.operation === 'decline'));
   s.unmount();
 });
