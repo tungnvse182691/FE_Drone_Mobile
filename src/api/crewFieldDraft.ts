@@ -433,7 +433,12 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     c.completed = true; await persist(draft,runtime);
     onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft);
   }
-  for (let poll=0;poll<12;poll++) {
+  // The BE verification worker processes one upload per 30-second round.
+  // Allow three rounds at the runtime's one-second cadence before leaving the
+  // durable session pending. Completed bytes and command keys stay unchanged.
+  const verificationPolls = 91;
+  for (let poll=0;poll<verificationPolls;poll++) {
+    checkCancel();
     session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
     checkCancel();
     if (session.id !== c.upload.id || session.fileId !== c.upload.fileId) throw new Error('field_upload_identity_invalid');
@@ -441,7 +446,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft);
     if (session.status === 'VERIFIED') break;
     if (session.status === 'FAILED') { c.upload=session; c.verified=false; await persist(draft,runtime); throw new Error('field_upload_failed'); }
-    await guarded(draft,runtime,() => runtime.wait());
+    if (poll < verificationPolls-1) await guarded(draft,runtime,() => runtime.wait());
   }
   if (session.status !== 'VERIFIED') throw new Error('field_verification_pending');
   const file = await guarded(draft,runtime,() => runtime.api.getCrewFileMetadata(session.fileId));

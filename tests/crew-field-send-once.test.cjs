@@ -3,6 +3,36 @@ const scope={require:n=>n==='node:test'?{test(){}}:require(n),structuredClone,se
 vm.runInNewContext(fs.readFileSync('tests/t05b.test.cjs','utf8').split("test('T05B initial submission")[0]+';globalThis.fixtures={fieldHarness,measured};',scope);
 const {fieldHarness,measured}=scope.fixtures;
 function photo(h){const d=measured(h);d.captures[0]={...d.captures[0],upload:undefined,verified:false,parts:[],createKey:'create',completeKey:'complete'};return d;}
+
+function delayedVerification(h,readyAfter){
+ const read=h.runtime.api.getCrewUploadSession;let waits=0;
+ h.runtime.wait=async()=>{waits++;};
+ h.runtime.api.getCrewUploadSession=async id=>{const s=await read(id);return s.status==='VERIFIED'&&waits<readyAfter?{...s,status:'VERIFYING'}:s;};
+ return ()=>waits;
+}
+test('FIELD one send survives two 30-second server verification rounds without reuploading',async()=>{
+ const h=fieldHarness(),d=photo(h),waits=delayedVerification(h,60);let puts=0,completes=0;
+ const put=h.runtime.api.putCrewUploadPartBytes,complete=h.runtime.api.completeCrewUpload;
+ h.runtime.api.putCrewUploadPartBytes=async(...args)=>{puts++;return put(...args);};
+ h.runtime.api.completeCrewUpload=async(...args)=>{completes++;return complete(...args);};
+ const result=await h.m.uploadAndSubmitFieldDraft(d,h.runtime);
+ assert.equal(waits(),60);assert.equal(result.command.phase,'confirmed');
+ assert.equal(h.calls.filter(c=>c==='submit').length,1);assert.equal(h.calls.filter(c=>c==='create').length,1);
+ assert.equal(puts,2);assert.equal(completes,1);assert.equal(h.stored().captures[0].completeKey,'complete');
+});
+test('FIELD verification remains bounded and preserves pending upload without submitting',async()=>{
+ const h=fieldHarness(),d=photo(h),waits=delayedVerification(h,Infinity);
+ await assert.rejects(()=>h.m.uploadAndSubmitFieldDraft(d,h.runtime),/field_verification_pending/);
+ assert.ok(waits()>=60&&waits()<120);assert.ok(!h.calls.includes('submit'));
+ assert.equal(h.stored().captures[0].upload.status,'VERIFYING');assert.equal(h.stored().captures[0].verified,false);
+ assert.equal(h.stored().captures[0].completeKey,'complete');
+});
+test('FIELD session change while waiting for verification stops without submitting',async()=>{
+ const h=fieldHarness(),d=photo(h);delayedVerification(h,Infinity);
+ h.runtime.wait=async()=>{h.switch();};
+ await assert.rejects(()=>h.m.uploadAndSubmitFieldDraft(d,h.runtime),/field_session_changed/);
+ assert.ok(!h.calls.includes('submit'));
+});
 test('FIELD one send uploads, verifies then submits and reads back the real receipt',async()=>{
  const h=fieldHarness(),d=photo(h),states=[];
  const result=await h.m.uploadAndSubmitFieldDraft(d,h.runtime,(updated,id)=>states.push({id,parts:updated.captures[0].parts.length,verified:updated.captures[0].verified}));
