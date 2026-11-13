@@ -24,6 +24,7 @@ import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabi
   type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
+import { CrewFastTrackEligibility } from '../../src/components/crew/CrewFastTrackEligibility';
 
 /** Câu tiếng Việt cho lỗi API-081/091/093 — không lộ mã kỹ thuật lên màn hình. */
 function fieldTaskActionMessage(error: unknown, phase: 'journal' | 'read' | 'reconcile' | 'send' | 'replay' = 'send'): string {
@@ -294,6 +295,7 @@ export function FastTrackRepairSummary({ task }: { task: CrewTask }) {
     <Text>Phiên bản checklist: {ctx.checklistVersion}</Text>
     <Text selectable>Phiên bản hạng mục: {ctx.itemVersion}</Text>
     <Text>Thông tin sửa chữa đã được máy chủ cung cấp. Chức năng thi công sửa chữa nhanh chưa được mở trên ứng dụng.</Text>
+    <CrewFastTrackEligibility key={JSON.stringify([task.projectId,task.id,ctx.bindingId,ctx.itemVersion])} projectId={task.projectId} taskId={task.id} />
     <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
   </>;
 }
