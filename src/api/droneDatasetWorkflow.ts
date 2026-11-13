@@ -89,55 +89,99 @@ export type DroneUploadTransport = {
 };
 export type DroneUploadPlan = {
   taskId: string; projectId: string; targetId: string; file: { id: string; uri: string; name: string; sizeBytes: number; checksumSha256: string; purpose: 'SURVEY_VIDEO'|'TELEMETRY'; mediaType: 'video/mp4'|'application/x-subrip' };
-  taskVersion: string; parts: DroneUploadPartInput[];
+  taskVersion: string; parts?: DroneUploadPartInput[];
+  readRange?: (offset: number, length: number) => Promise<Uint8Array>;
+  onProgress?: (sent: number, total: number) => void;
 };
 const realDroneUploadTransport: DroneUploadTransport = { readTask: getOperatorSurveyTaskDetailReal, createSession: createOperatorUploadSessionReal, getSession: getOperatorUploadSessionReal, getPartUrls: getOperatorUploadPartUrlsReal, putPart: putUploadPartBytesDirect, complete: completeOperatorUploadReal, getMetadata: getOperatorFileMetadataReal };
 const uploadErrorStatus = (error: unknown): number | undefined => typeof error === 'object' && error !== null && 'response' in error && typeof (error as { response?: { status?: unknown } }).response?.status === 'number' ? (error as { response: { status: number } }).response.status : undefined;
 const isUncertain = (error: unknown) => uploadErrorStatus(error) === undefined || (uploadErrorStatus(error) ?? 0) >= 500 || [408,429].includes(uploadErrorStatus(error) ?? 0);
 function ensureStatus(status: string, allowed: string[]): void { if (!allowed.includes(status)) throw Error(`drone_upload_state_${status}`); }
 
-/** Isolated upload state machine. It is intentionally not called by upload.tsx or any UI/network hook. */
+const activeUploads = new Set<string>();
+/** Foreground multipart transfer; all commands are retained before sending. */
 export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: DroneUploadTransport = realDroneUploadTransport): Promise<DroneUploadIntent> {
-  if (!isDroneResourceId(plan.taskId) || !isDroneResourceId(plan.projectId) || !isDroneResourceId(plan.targetId) || !text(plan.taskVersion) || !isDroneResourceId(plan.file.id) || !text(plan.file.uri) || !text(plan.file.name) || !Number.isSafeInteger(plan.file.sizeBytes) || plan.file.sizeBytes <= 0 || !/^[a-f0-9]{64}$/.test(plan.file.checksumSha256) || !['SURVEY_VIDEO', 'TELEMETRY'].includes(plan.file.purpose) || !['video/mp4', 'application/x-subrip'].includes(plan.file.mediaType) || !plan.parts.length || plan.parts.some(part => !Number.isSafeInteger(part.partNumber) || part.partNumber < 1 || !Number.isSafeInteger(part.sizeBytes) || part.sizeBytes <= 0)) throw Error('drone_upload_plan_invalid');
-  const orderedParts = [...plan.parts].sort((a, b) => a.partNumber - b.partNumber);
-  if (orderedParts.some((part, index) => part.partNumber !== index + 1) || orderedParts.reduce((sum, part) => sum + part.sizeBytes, 0) !== plan.file.sizeBytes) throw Error('drone_upload_parts_invalid');
-  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
-  const currentTask = await transport.readTask(plan.taskId);
-  const actorId = useAuthStore.getState().user?.id;
-  if (!currentTask || currentTask.data?.id !== plan.taskId || currentTask.data.operatorId !== actorId || currentTask.data.projectId !== plan.projectId || currentTask.data.version !== plan.taskVersion || currentTask.etag !== `"${plan.taskVersion}"`) throw Error('drone_upload_assignment_changed');
-  const journal = await openDroneUploadJournal(plan.taskId);
+  if (!isDroneResourceId(plan.taskId) || !isDroneResourceId(plan.projectId) || plan.targetId !== plan.taskId || !text(plan.taskVersion) || !isDroneResourceId(plan.file.id) || !text(plan.file.uri) || !text(plan.file.name) || !Number.isSafeInteger(plan.file.sizeBytes) || plan.file.sizeBytes <= 0 || !/^[a-f0-9]{64}$/.test(plan.file.checksumSha256) || !(plan.file.purpose === 'SURVEY_VIDEO' ? plan.file.mediaType === 'video/mp4' : plan.file.purpose === 'TELEMETRY' && plan.file.mediaType === 'application/x-subrip') || (!plan.readRange && !plan.parts?.length)) throw Error('drone_upload_plan_invalid');
+  const scope = operatorDatasetScope(); if (!scope) throw Error('operator_session_invalid');
+  let invalid = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (operatorDatasetScope() !== scope) invalid = true; });
+  const guard = () => { if (invalid) throw Error('operator_session_changed'); requireScope(scope); };
+  const lock = JSON.stringify([scope, plan.taskId]);
+  if (activeUploads.has(lock)) { unsubscribe(); throw Error('drone_upload_busy'); }
+  activeUploads.add(lock);
+  let journal: Awaited<ReturnType<typeof openDroneUploadJournal>> | undefined;
   try {
+    const currentTask = await transport.readTask(plan.taskId); guard();
+    const actorId = useAuthStore.getState().user?.id;
+    if (currentTask.data?.id !== plan.taskId || currentTask.data.operatorId !== actorId || currentTask.data.projectId !== plan.projectId || !['ACCEPTED','IN_PROGRESS'].includes(currentTask.data.status) || currentTask.data.version !== plan.taskVersion || currentTask.etag !== `"${plan.taskVersion}"`) throw Error('drone_upload_assignment_changed');
+    journal = await openDroneUploadJournal(plan.taskId); guard();
     const body = { projectId: plan.projectId, targetId: plan.targetId, fileName: plan.file.name, mediaType: plan.file.mediaType, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256 };
-    let intent = await journal.prepare({ kind: 'upload', projectId: plan.projectId, localFileId: plan.file.id, localUri: plan.file.uri, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256, purpose: plan.file.purpose, mimeType: plan.file.mediaType, version: plan.taskVersion, ifMatch: `"${plan.taskVersion}"`, body });
-    ensureStatus(intent.status, ['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING']);
-    if (intent.status === 'COMPLETE_UNKNOWN' && !intent.uploadId) throw Error('drone_upload_session_unknown');
-    if (intent.status === 'PREPARED') {
-      let session: UploadSessionResponseDto;
-      try { session = await transport.createSession({ purpose: plan.file.purpose, projectId: plan.projectId, targetId: plan.targetId, fileName: plan.file.name, mediaType: plan.file.mediaType, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256 }, intent.key); }
-      catch (error) { await journal.update(intent.key, { status: isUncertain(error) ? 'COMPLETE_UNKNOWN' : 'FAILED', error: { status: uploadErrorStatus(error), code: isUncertain(error) ? 'transport_unknown' : 'upload_session_rejected' } }); throw error; }
-      if (!session.id || !session.fileId || !text(session.version) || session.status === 'FAILED') throw Error('drone_upload_session_invalid');
-      intent = await journal.update(intent.key, { status: 'SESSION_CREATED', uploadId: session.id, fileId: session.fileId, version: session.version, ifMatch: `"${session.version}"` });
+    let intent = await journal.prepare({ kind: 'upload', projectId: plan.projectId, localFileId: plan.file.id, localUri: plan.file.uri, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256, purpose: plan.file.purpose, mimeType: plan.file.mediaType, version: plan.taskVersion, ifMatch: `"${plan.taskVersion}"`, body }); guard();
+    ensureStatus(intent.status, ['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
+    const update = async (patch: Parameters<NonNullable<typeof journal>['update']>[1]) => { guard(); intent = await journal!.update(intent.key, patch); guard(); return intent; };
+    // A lost create can be recovered only by replaying its original key/body.
+    if (!intent.uploadId) {
+      try {
+        const created = await transport.createSession({ purpose: plan.file.purpose, ...body }, intent.key); guard();
+        if (!isDroneResourceId(created.id) || !isDroneResourceId(created.fileId) || !text(created.version) || created.status === 'FAILED') throw Error('drone_upload_session_invalid');
+        await update({ status: 'SESSION_CREATED', uploadId: created.id, fileId: created.fileId, version: created.version, ifMatch: `"${created.version}"`, error: null });
+      } catch (error) { guard(); await update({ status: isUncertain(error) ? 'COMPLETE_UNKNOWN' : 'FAILED', error: { status: uploadErrorStatus(error), code: isUncertain(error) ? 'transport_unknown' : 'upload_session_rejected' } }); throw error; }
     }
-    const session = await transport.getSession(intent.uploadId!); if (!session.id || session.id !== intent.uploadId || !text(session.version)) throw Error('drone_upload_session_invalid');
-    const partNumbers = orderedParts.map(part => part.partNumber);
-    const urls: UploadPartUrlsResponseDto = await transport.getPartUrls(intent.uploadId!, partNumbers, intent.key);
-    const byNumber = new Map(urls.parts.map(part => [part.partNumber, part])); const uploaded = [] as Array<{ partNumber: number; etag: string }>;
-    for (const planPart of orderedParts) {
-      const partUrl = byNumber.get(planPart.partNumber); if (!partUrl || !text(partUrl.url) || !text(partUrl.expiresAt)) throw Error('drone_upload_part_url_invalid');
-      const bytes = await planPart.read(); if (bytes.byteLength !== planPart.sizeBytes) throw Error('drone_upload_part_size_changed');
-      try { const etag = await transport.putPart(partUrl.url, bytes, plan.file.mediaType); if (!etag.trim()) throw Error('drone_upload_part_etag_missing'); uploaded.push({ partNumber: planPart.partNumber, etag }); intent = await journal.update(intent.key, { status: 'PARTS_IN_PROGRESS', parts: [...uploaded].map(part => ({ ...part, sizeBytes: plan.parts.find(p => p.partNumber === part.partNumber)!.sizeBytes })) }); }
-      catch (error) { await journal.update(intent.key, { status: isUncertain(error) ? 'COMPLETE_UNKNOWN' : 'FAILED', error: { status: uploadErrorStatus(error), code: isUncertain(error) ? 'part_transport_unknown' : 'part_upload_failed' } }); throw error; }
+    const readSession = async () => {
+      const value = await transport.getSession(intent.uploadId!); guard();
+      if (value.id !== intent.uploadId || value.fileId !== intent.fileId || !text(value.version)) throw Error('drone_upload_session_invalid');
+      if (value.status === 'FAILED') { await update({status:'FAILED',error:{code:value.failureCode ?? 'upload_failed'}}); throw Error('drone_upload_failed'); }
+      return value;
+    };
+    let session = await readSession();
+    // A completion was prepared before POST: never upload its bytes again.
+    if (!['VERIFIED','VERIFYING'].includes(session.status) && intent.completeRequest) {
+      const command = intent.completeRequest;
+      try { guard(); await transport.complete(intent.uploadId!, {parts:command.parts,checksumSha256:command.checksumSha256}, command.version, intent.key); guard(); await update({status:'VERIFY_PENDING'}); }
+      catch (error) { guard(); await update({status:isUncertain(error)?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'complete_transport_unknown'}}); throw error; }
+      session = await readSession();
+    } else if (!['VERIFIED','VERIFYING'].includes(session.status)) {
+      if (intent.status === 'VERIFY_PENDING' || intent.status === 'VERIFIED' || (intent.status === 'COMPLETE_UNKNOWN' && intent.error?.code === 'complete_transport_unknown')) throw Error('drone_upload_completion_requires_review');
+      const partSize = session.partSizeBytes;
+      if (!Number.isSafeInteger(partSize) || partSize <= 0 || partSize > 64 * 1024 ** 2) throw Error('drone_upload_part_size_invalid');
+      const count = Math.ceil(plan.file.sizeBytes / partSize);
+      if (count > 10000) throw Error('drone_upload_parts_invalid');
+      const parts: DroneUploadPartInput[] = Array.from({length:count}, (_,i) => {
+        const offset=i*partSize, sizeBytes=Math.min(partSize,plan.file.sizeBytes-offset);
+        const given=plan.parts?.find(p=>p.partNumber===i+1);
+        if (!plan.readRange && (!given || given.sizeBytes!==sizeBytes)) throw Error('drone_upload_parts_invalid');
+        return {partNumber:i+1,sizeBytes,read:()=>plan.readRange ? plan.readRange(offset,sizeBytes) : given!.read()};
+      });
+      // URL admission can initialize multipart storage and advance its version.
+      const urls = await transport.getPartUrls(intent.uploadId!, parts.map(p=>p.partNumber), intent.key); guard();
+      const byNumber = new Map(urls.parts.map(p=>[p.partNumber,p]));
+      if (byNumber.size !== parts.length || urls.parts.length !== parts.length) throw Error('drone_upload_part_url_invalid');
+      const uploaded: typeof intent.parts = [];
+      for (const part of parts) {
+        guard(); const url=byNumber.get(part.partNumber);
+        if (!url || !/^https?:\/\//.test(url.url) || !text(url.expiresAt)) throw Error('drone_upload_part_url_invalid');
+        const bytes=await part.read(); guard();
+        if (bytes.byteLength!==part.sizeBytes) throw Error('drone_upload_part_size_changed');
+        try {
+          const etag=await transport.putPart(url.url,bytes,plan.file.mediaType); guard();
+          if (!text(etag)) throw Error('drone_upload_part_etag_missing');
+          uploaded.push({partNumber:part.partNumber,sizeBytes:part.sizeBytes,etag});
+          await update({status:'PARTS_IN_PROGRESS',parts:[...uploaded]});
+          plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
+        } catch(error) { guard(); await update({status:isUncertain(error)?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'part_transport_unknown'}}); throw error; }
+      }
+      session=await readSession();
+      const completeRequest={version:session.version,parts:uploaded.map(({partNumber,etag})=>({partNumber,etag})),checksumSha256:plan.file.checksumSha256};
+      await update({status:'COMPLETE_UNKNOWN',completeRequest,version:session.version,ifMatch:`"${session.version}"`});
+      try { guard(); await transport.complete(intent.uploadId!,{parts:completeRequest.parts,checksumSha256:completeRequest.checksumSha256},completeRequest.version,intent.key); guard(); await update({status:'VERIFY_PENDING'}); }
+      catch(error) { guard(); await update({status:isUncertain(error)?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'complete_transport_unknown'}}); throw error; }
+      session=await readSession();
     }
-    let completed: UploadSessionResponseDto;
-    try { completed = await transport.complete(intent.uploadId!, { parts: uploaded, checksumSha256: plan.file.checksumSha256 }, intent.version!, intent.key); }
-    catch (error) { await journal.update(intent.key, { status: isUncertain(error) ? 'COMPLETE_UNKNOWN' : 'FAILED', error: { status: uploadErrorStatus(error), code: isUncertain(error) ? 'complete_transport_unknown' : 'complete_rejected' } }); throw error; }
-    intent = await journal.update(intent.key, { status: completed.status === 'VERIFIED' ? 'VERIFY_PENDING' : 'COMPLETE_UNKNOWN' });
-    if (intent.status === 'COMPLETE_UNKNOWN') intent = await journal.update(intent.key, { status: 'VERIFY_PENDING' });
-    const observed = await transport.getSession(intent.uploadId!); if (observed.status !== 'VERIFIED') throw Error('drone_upload_verify_pending');
-    const metadata: FileMetadataResponseDto = await transport.getMetadata(intent.fileId!);
-    if (metadata.id !== intent.fileId || metadata.status !== 'VERIFIED' || metadata.checksumSha256 !== plan.file.checksumSha256 || metadata.sizeBytes !== plan.file.sizeBytes || metadata.mediaType !== plan.file.mediaType) throw Error('drone_upload_metadata_mismatch');
-    return journal.update(intent.key, { status: 'VERIFIED', receipt: { uploadId: observed.id, fileId: metadata.id, status: metadata.status, checksumSha256: metadata.checksumSha256 } });
-  } finally { journal.close(); }
+    if (session.status!=='VERIFIED') { await update({status:'VERIFY_PENDING'}); throw Error('drone_upload_verify_pending'); }
+    const metadata=await transport.getMetadata(intent.fileId!); guard();
+    if (metadata.id!==intent.fileId || metadata.status!=='VERIFIED' || metadata.checksumSha256!==plan.file.checksumSha256 || metadata.sizeBytes!==plan.file.sizeBytes || metadata.mediaType!==plan.file.mediaType) throw Error('drone_upload_metadata_mismatch');
+    return await update({status:'VERIFIED',receipt:{uploadId:session.id,fileId:metadata.id,status:metadata.status,checksumSha256:metadata.checksumSha256},error:null});
+  } finally { journal?.close(); unsubscribe(); activeUploads.delete(lock); }
 }
 
 export type DroneUploadCancelTransport = {

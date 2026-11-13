@@ -20,6 +20,7 @@ export type DroneUploadIntent = {
   localFileId?: string; localUri?: string; sizeBytes?: number; checksumSha256?: string;
   purpose?: 'SURVEY_VIDEO' | 'TELEMETRY'; mimeType?: 'video/mp4' | 'application/x-subrip';
   body: Record<string, unknown>; uploadId: string | null; fileId: string | null; version: string | null;
+  completeRequest?: { version: string; parts: Array<{partNumber: number; etag: string}>; checksumSha256: string };
   ifMatch: string | null; parts: DroneUploadPart[]; status: DroneUploadIntentStatus;
   updatedAt: string; receipt: Record<string, unknown> | null; error: { status?: number; code: string } | null;
 };
@@ -181,6 +182,7 @@ function assertJournalSafe(value: unknown, key = ''): void {
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 function validateUploadIntent(intent: DroneUploadIntent, owner: { actor: string; environment: string }, taskId: string): void {
   if (intent.schema !== 1 || !uploadKinds.has(intent.kind) || intent.actor !== owner.actor || intent.environment !== owner.environment || intent.taskId !== taskId || !uuid(intent.key) || !uuid(intent.projectId) || typeof intent.session !== 'string' || JSON.parse(intent.session)[0] !== owner.actor || !JSON.parse(intent.session)[1] || !uploadStates.has(intent.status) || !/^[a-f0-9]{64}$/.test(intent.checksumSha256 ?? '') && intent.kind === DRONE_UPLOAD_INTENT_KIND || !Array.isArray(intent.parts)) throw Error('drone_upload_journal_invalid');
+  if (intent.completeRequest && (!version(intent.completeRequest.version) || intent.completeRequest.checksumSha256 !== intent.checksumSha256 || !Array.isArray(intent.completeRequest.parts) || !intent.completeRequest.parts.length || intent.completeRequest.parts.length !== intent.parts.length || intent.parts.reduce((total,part)=>total+part.sizeBytes,0) !== intent.sizeBytes || intent.completeRequest.parts.some((part,index) => !part || part.partNumber !== index+1 || typeof part.etag !== 'string' || !part.etag.trim() || part.etag !== intent.parts[index]?.etag || part.partNumber !== intent.parts[index]?.partNumber))) throw Error('drone_upload_complete_invalid');
   assertJournalSafe(intent.body);
   for (const part of intent.parts) if (!Number.isSafeInteger(part.partNumber) || part.partNumber < 1 || !Number.isSafeInteger(part.sizeBytes) || part.sizeBytes <= 0 || !part.etag.trim() || /https?:\/\//i.test(part.etag)) throw Error('drone_upload_journal_invalid_part');
 }
@@ -218,16 +220,17 @@ export async function openDroneUploadJournal(taskId: string) {
       const body = clone(input.body); const existing = (await readRows()).filter(item => item.kind === kind);
       const same = existing.find(item => JSON.stringify(item.body) === JSON.stringify(body) && item.localFileId === input.localFileId);
       if (same) return clone(same);
-      if (existing.some(item => item.status !== 'FAILED' && item.status !== 'CONFLICT')) throw Error('drone_upload_intent_pending');
+      if (existing.some(item => item.status !== 'FAILED' && item.status !== 'CONFLICT' && !(input.kind === 'upload' && item.status === 'VERIFIED'))) throw Error('drone_upload_intent_pending');
       const now = new Date().toISOString();
       const intent: DroneUploadIntent = { schema: 1, key: randomUUID(), kind, ...owner, taskId, projectId: input.projectId, localFileId: input.localFileId, localUri: input.localUri, sizeBytes: input.sizeBytes, checksumSha256: input.checksumSha256, purpose: input.purpose, mimeType: input.mimeType, body, uploadId: input.uploadId ?? null, fileId: input.fileId ?? null, version: input.version ?? null, ifMatch: input.ifMatch ?? null, parts: [], status: 'PREPARED', updatedAt: now, receipt: null, error: null };
       validateUploadIntent(intent, owner, taskId);
       await db.withExclusiveTransactionAsync(async tx => { guard(); await tx.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', prefix + intent.key, intent.kind, JSON.stringify(intent), now, now); guard(); });
       return clone(intent);
     }),
-    update: (key: string, patch: Partial<Pick<DroneUploadIntent, 'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'>>) => exclusive(async () => {
+    update: (key: string, patch: Partial<Pick<DroneUploadIntent, 'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'|'completeRequest'>>) => exclusive(async () => {
       if (!uuid(key)) throw Error('drone_upload_intent_invalid'); const items = await readRows(); const current = items.find(item => item.key === key); if (!current) throw Error('drone_upload_intent_missing');
       if ('status' in patch && (!patch.status || !uploadStates.has(patch.status))) throw Error('drone_upload_intent_invalid_state');
+      if (current.completeRequest && patch.completeRequest && JSON.stringify(current.completeRequest) !== JSON.stringify(patch.completeRequest)) throw Error('drone_upload_complete_immutable');
       assertJournalSafe(patch); const next = { ...current, ...clone(patch), updatedAt: new Date().toISOString() } as DroneUploadIntent; validateUploadIntent(next, owner, taskId);
       await db.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?', JSON.stringify(next), next.updatedAt, prefix + key, current.kind); guard(); return clone(next);
     }),

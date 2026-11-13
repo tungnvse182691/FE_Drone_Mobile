@@ -215,26 +215,79 @@ test('Drone upload and dataset journals are isolated and reject credential or UR
  const d=await r.prepare({kind:'dataset',projectId:id(3),version:'AAAAAAAAAAE=',ifMatch:'"AAAAAAAAAAE="',body:{videoFileId:id(9),telemetryFileId:id(10)}});assert.equal(d.kind,'DRONE_DATASET_INTENT');
  r.close();f.env('https://other.test');const other=await f.api.openDroneUploadJournal(id(2));assert.equal((await other.read()).length,0);other.close();
 });
-function loadUploadWorkflow(journalFactory, api={}){
- const deps={'../store/auth':{useAuthStore:{getState:()=>({token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}}),subscribe:()=>()=>{}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([id(1),'sid'])},'./client':{apiClient:{defaults:{baseURL:'https://fixture.test'}}},'./droneTaskJournal':{openDroneUploadJournal:journalFactory},'./droneApi':{createOperatorUploadSessionReal:()=>{},getOperatorUploadSessionReal:()=>{},getOperatorUploadPartUrlsReal:()=>{},putUploadPartBytesDirect:()=>{},completeOperatorUploadReal:()=>{},getOperatorFileMetadataReal:()=>{},getOperatorDatasetReal:()=>{},getOperatorDatasetCoverageReal:()=>{},getOperatorSurveyTaskDetailReal:()=>{},...api}};
+function loadUploadWorkflow(journalFactory, api={}, auth){
+ const deps={'../store/auth':{useAuthStore:auth??{getState:()=>({token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}}),subscribe:()=>()=>{}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([id(1),'sid'])},'./client':{apiClient:{defaults:{baseURL:'https://fixture.test'}}},'./droneTaskJournal':{openDroneUploadJournal:journalFactory},'./droneApi':{createOperatorUploadSessionReal:()=>{},getOperatorUploadSessionReal:()=>{},getOperatorUploadPartUrlsReal:()=>{},putUploadPartBytesDirect:()=>{},completeOperatorUploadReal:()=>{},getOperatorFileMetadataReal:()=>{},getOperatorDatasetReal:()=>{},getOperatorDatasetCoverageReal:()=>{},getOperatorSurveyTaskDetailReal:()=>{},...api}};
  const mod={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneDatasetWorkflow.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date,Set,Map,JSON});return mod.exports;
 }
 test('Drone upload orchestration persists before transport and distinguishes complete from verified',async()=>{
  const updates=[],intent={key:id(20),status:'PREPARED',uploadId:null,fileId:null,version:null,ifMatch:null};let prepared=false;
  const journalFactory=async()=>({prepare:async()=>{prepared=true;return {...intent};},update:async(k,p)=>{Object.assign(intent,p);updates.push(p);return {...intent};},close(){}});
- const calls=[];const workflow=loadUploadWorkflow(journalFactory);
- const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(1),version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),createSession:async(p,k)=>{assert.equal(prepared,true);calls.push(['create',k]);return {id:id(21),fileId:id(22),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='};},getSession:async()=>({id:id(21),fileId:id(22),status:'VERIFIED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getPartUrls:async()=>({parts:[{partNumber:1,url:'https://storage.example/part',expiresAt:'2026-11-06T00:00:00Z'}]}),putPart:async(url,bytes)=>{calls.push(['put',bytes.byteLength]);return 'etag-1';},complete:async()=>({id:id(21),fileId:id(22),status:'ACCEPTED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getMetadata:async()=>({id:id(22),status:'VERIFIED',checksumSha256:'a'.repeat(64),mediaType:'video/mp4',sizeBytes:2})};
- const result=await workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(4),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport);
+ let completed=false;const calls=[];const workflow=loadUploadWorkflow(journalFactory);
+ const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),createSession:async(p,k)=>{assert.equal(prepared,true);calls.push(['create',k]);return {id:id(21),fileId:id(22),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='};},getSession:async()=>({id:id(21),fileId:id(22),status:completed?'VERIFIED':'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getPartUrls:async()=>({parts:[{partNumber:1,url:'https://storage.example/part',expiresAt:'2026-11-06T00:00:00Z'}]}),putPart:async(url,bytes)=>{calls.push(['put',bytes.byteLength]);return 'etag-1';},complete:async()=>{completed=true;return ({id:id(21),fileId:id(22),status:'ACCEPTED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='});},getMetadata:async()=>({id:id(22),status:'VERIFIED',checksumSha256:'a'.repeat(64),mediaType:'video/mp4',sizeBytes:2})};
+ const result=await workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport);
  assert.equal(result.status,'VERIFIED');assert.deepEqual(calls.map(c=>c[0]),['create','put']);assert.deepEqual(updates.map(p=>p.status),['SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
 });
 test('Drone upload complete timeout remains UNKNOWN and never claims VERIFIED',async()=>{
  const updates=[],intent={key:id(30),status:'PREPARED',uploadId:null,fileId:null,version:null,ifMatch:null};
  const journalFactory=async()=>({prepare:async()=>({...intent}),update:async(k,p)=>{Object.assign(intent,p);updates.push(p);return {...intent};},close(){}});const workflow=loadUploadWorkflow(journalFactory);let metadataCalls=0;
- const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(1),version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),createSession:async()=>({id:id(31),fileId:id(32),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getSession:async()=>({id:id(31),fileId:id(32),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getPartUrls:async()=>({parts:[{partNumber:1,url:'https://storage.example/part',expiresAt:'2026-11-06T00:00:00Z'}]}),putPart:async()=> 'etag-1',complete:async()=>{throw {response:{status:503}}},getMetadata:async()=>{metadataCalls++;throw Error('must not verify')}};
- await assert.rejects(workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(4),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport));assert.equal(intent.status,'COMPLETE_UNKNOWN');assert.equal(metadataCalls,0);assert.equal(updates.at(-1).status,'COMPLETE_UNKNOWN');
+ const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),createSession:async()=>({id:id(31),fileId:id(32),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getSession:async()=>({id:id(31),fileId:id(32),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getPartUrls:async()=>({parts:[{partNumber:1,url:'https://storage.example/part',expiresAt:'2026-11-06T00:00:00Z'}]}),putPart:async()=> 'etag-1',complete:async()=>{throw {response:{status:503}}},getMetadata:async()=>{metadataCalls++;throw Error('must not verify')}};
+ await assert.rejects(workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport));assert.equal(intent.status,'COMPLETE_UNKNOWN');assert.equal(metadataCalls,0);assert.equal(updates.at(-1).status,'COMPLETE_UNKNOWN');
 });
 test('Drone upload orchestration stops on changed assignment before journal or session mutation',async()=>{
  const workflow=loadUploadWorkflow(async()=>{throw Error('journal must not open');});let sessionCalls=0;
  const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(99),version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),createSession:async()=>{sessionCalls++;throw Error('must not create');},getSession:async()=>{throw Error('must not read');},getPartUrls:async()=>{throw Error('must not read');},putPart:async()=>{throw Error('must not put');},complete:async()=>{throw Error('must not complete');},getMetadata:async()=>{throw Error('must not read');}};
- await assert.rejects(workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(4),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport),/drone_upload_assignment_changed/);assert.equal(sessionCalls,0);
+ await assert.rejects(workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport),/drone_upload_assignment_changed/);assert.equal(sessionCalls,0);
+});
+
+function uploadScenario(initial={}) {
+ const intent={key:id(40),status:'PREPARED',uploadId:null,fileId:null,version:null,ifMatch:null,parts:[],...initial};
+ const calls=[];let phase='CREATED',v='AAAAAAAAAAI=';
+ const workflow=loadUploadWorkflow(async()=>({prepare:async()=>({...intent}),update:async(k,p)=>{Object.assign(intent,p);return {...intent};},close(){}}));
+ const session=()=>({id:id(41),fileId:id(42),status:phase,partSizeBytes:2,version:v,expiresAt:'2026-11-20T00:00:00Z'});
+ const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),
+ createSession:async(body,key)=>{calls.push(['create',key,body]);return session();},getSession:async()=>{calls.push(['get']);return session();},
+ getPartUrls:async(uploadId,numbers)=>{v='AAAAAAAAAAM=';calls.push(['urls',numbers]);return {parts:numbers.map(partNumber=>({partNumber,url:'https://storage.example/part'+partNumber,expiresAt:'2026-11-20T00:00:00Z'}))};},
+ putPart:async(url,bytes)=>{calls.push(['put',Array.from(bytes)]);return 'etag-'+bytes[0];},
+ complete:async(uploadId,body,version,key)=>{calls.push(['complete',body,version,key]);assert.equal(version,v);assert.ok(intent.completeRequest,'command durable before POST');phase='VERIFIED';return session();},
+ getMetadata:async()=>({id:id(42),status:'VERIFIED',checksumSha256:'a'.repeat(64),mediaType:'video/mp4',sizeBytes:5})};
+ const plan={taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:5,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},readRange:async(offset,length)=>Uint8Array.from([1,2,3,4,5].slice(offset,offset+length))};
+ return {workflow,transport,plan,calls,intent,set:(status,version=v)=>{phase=status;v=version;}};
+}
+test('Operator transfer uses server part size and fresh version after URL admission',async()=>{
+ const f=uploadScenario();assert.equal((await f.workflow.orchestrateDroneUpload(f.plan,f.transport)).status,'VERIFIED');
+ assert.deepEqual(f.calls.filter(c=>c[0]==='put').map(c=>c[1]),[[1,2],[3,4],[5]]);
+ assert.equal(f.calls.find(c=>c[0]==='complete')[2],'AAAAAAAAAAM=');
+});
+test('Operator completion timeout retries immutable completion after GET without rePUT',async()=>{
+ const f=uploadScenario(),complete=f.transport.complete;let first=true;
+ f.transport.complete=async(...args)=>{if(first){first=false;f.calls.push(['lost-complete',args]);throw {response:{status:503}};}return complete(...args);};
+ await assert.rejects(f.workflow.orchestrateDroneUpload(f.plan,f.transport));
+ const saved=JSON.stringify(f.intent.completeRequest),puts=f.calls.filter(c=>c[0]==='put').length;
+ await f.workflow.orchestrateDroneUpload(f.plan,f.transport);
+ assert.equal(f.calls.filter(c=>c[0]==='put').length,puts);assert.equal(JSON.stringify(f.intent.completeRequest),saved);
+ assert.deepEqual(f.calls.find(c=>c[0]==='lost-complete')[1].slice(1),f.calls.find(c=>c[0]==='complete').slice(1));
+});
+test('Operator lost completion already verified is read back without another write',async()=>{
+ const f=uploadScenario();f.transport.complete=async()=>{f.set('VERIFIED');throw Error('lost response');};
+ await assert.rejects(f.workflow.orchestrateDroneUpload(f.plan,f.transport));
+ const before=f.calls.filter(c=>['create','urls','put'].includes(c[0])).length;
+ assert.equal((await f.workflow.orchestrateDroneUpload(f.plan,f.transport)).status,'VERIFIED');
+ assert.equal(f.calls.filter(c=>['create','urls','put'].includes(c[0])).length,before);
+});
+test('Operator verified video does not block preparing a separate telemetry upload',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ const input={kind:'upload',projectId:id(3),localFileId:id(7),localUri:'file:///private/video.mp4',sizeBytes:4,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mimeType:'video/mp4',body:{targetId:id(2),fileName:'video.mp4'}};
+ const video=await r.prepare(input);await assert.rejects(r.prepare({...input,localFileId:id(8),body:{fileName:'gps.srt'}}),/pending/);
+ await r.update(video.key,{status:'VERIFIED'});
+ const telemetry=await r.prepare({...input,localFileId:id(8),purpose:'TELEMETRY',mimeType:'application/x-subrip',body:{fileName:'gps.srt'}});
+ assert.notEqual(video.key,telemetry.key);assert.equal((await r.read('upload')).length,2);r.close();
+});
+
+test('Operator transfer stops after session leaves and returns while task GET is pending',async()=>{
+ const listeners=new Set(),state={token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}};
+ const auth={getState:()=>state,subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}};
+ let opened=0;
+ const workflow=loadUploadWorkflow(async()=>{opened++;throw Error('must not open');},{},auth),f=uploadScenario();
+ f.transport.readTask=async()=>{state.status='ANONYMOUS';listeners.forEach(f=>f());state.status='AUTHENTICATED';listeners.forEach(f=>f());return {data:{id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'};};
+ await assert.rejects(workflow.orchestrateDroneUpload(f.plan,f.transport),/operator_session_changed/);assert.equal(opened,0);assert.equal(f.calls.length,0);assert.equal(listeners.size,0);
 });

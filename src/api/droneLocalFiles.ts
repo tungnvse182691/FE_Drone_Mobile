@@ -57,6 +57,24 @@ async function hashFile(file: File, expectedSize: number): Promise<string> {
   if (read !== expectedSize || !file.exists || file.size !== expectedSize) throw Error('drone_file_size_changed');
   return hash.digest();
 }
+/** Read only one bounded multipart range; never materialize the whole video. */
+export async function readDroneFileRange(file: DroneLocalFile, offset: number, length: number): Promise<Uint8Array> {
+  const owner=identity();
+  if (!owner || file.actor!==owner.actor || file.environment!==owner.environment || !file.checksumSha256 || !Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset<0 || length<=0 || length>64*1024**2 || offset+length>file.size) throw Error('drone_file_range_invalid');
+  let invalid=false;
+  const unsubscribe=useAuthStore.subscribe(()=>{if(JSON.stringify(identity())!==JSON.stringify(owner))invalid=true;});
+  const guard=()=>{if(invalid || JSON.stringify(identity())!==JSON.stringify(owner))throw Error('drone_file_session_changed');};
+  let handle: ReturnType<File['open']> | undefined;
+  try {
+    const source=new File(file.uri);
+    if(!source.exists || source.size!==file.size)throw Error('drone_file_size_changed');
+    handle=source.open(); handle.offset=offset;
+    const result=new Uint8Array(length);let read=0;
+    while(read<length){guard();const chunk=await handle.readBytes(length-read);guard();if(!chunk.byteLength || chunk.byteLength>length-read)throw Error('drone_file_size_changed');result.set(chunk,read);read+=chunk.byteLength;}
+    if(!source.exists || source.size!==file.size)throw Error('drone_file_size_changed');
+    guard();return result;
+  } finally {handle?.close();unsubscribe();}
+}
 function identity() {
   const s = useAuthStore.getState(), session = passwordSessionIdentity(s.token), environment = apiClient.defaults.baseURL ?? '';
   if (!session || !uuid(s.user?.id) || JSON.parse(session)[0] !== s.user.id || s.user.role_code !== 'DRONE_OPERATOR' ||
