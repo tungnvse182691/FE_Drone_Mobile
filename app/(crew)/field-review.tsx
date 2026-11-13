@@ -160,6 +160,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [measurements,setMeasurements]=useState<FieldMeasurementInput[]>([]);
   const [showMeasurementChoices,setShowMeasurementChoices]=useState(false);
   const [showMeasurements,setShowMeasurements]=useState(false);
+  const [showPosition,setShowPosition]=useState(false);
   const [editingSampleId,setEditingSampleId]=useState<string|null>(null);
   const [showRecoveryDetail,setShowRecoveryDetail]=useState(false);
   const [rawValues,setRawValues]=useState<Record<string,string>>({});
@@ -295,7 +296,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         if(chainage.trim()!==''&&(!Number.isFinite(Number(chainage.replace(',','.')))||Number(chainage.replace(',','.'))<0))throw Error('field_measurements_required');
         const proof=locationProof?{...locationProof,observedChainageMeters:chainage.trim()===''?null:Number(chainage.replace(',','.'))}:null;
         saved=await saveFieldMeasurements(c,measurements,proof);
-        if(action==='save'&&current(c)){setShowMeasurements(false);setEditingSampleId(null);}
+        if(action==='save'&&current(c)){setShowMeasurements(false);setShowPosition(false);setEditingSampleId(null);}
       }
       if(action==='camera') {
         if(current(c))router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:saved.repairClaim?'AFTER':'BEFORE',...(supplementMode?{supplement:'1'}:{})}});
@@ -460,9 +461,19 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             </Card>
           </SafeAreaScreen>
         </Modal>
-        <Card style={styles.card}><View pointerEvents={busy||frozen?'none':'auto'}>
-<Text style={styles.sectionTitle}>Vị trí quan sát</Text><Text style={styles.muted}>Chọn cách đối chiếu tại hiện trường.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.choiceOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><Text style={selected?styles.choiceTextSelected:styles.choiceText}>{label}</Text></Pressable>;})}</View>
-          {!locationProof?<Text style={styles.muted}>Chưa xác định vị trí: hồ sơ sẽ được ghi nhận còn thiếu thông tin.</Text>:null}
+        <Card style={styles.card}>
+          <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Vị trí quan sát</Text><MaterialIcons name="place" size={24} color={colors.primaryDark}/></View>
+          <View style={styles.positionSummary}><MaterialIcons name={draft.locationProof?"location-on":"location-off"} size={22} color={colors.secondary}/><View style={styles.flex}>
+            <Text style={typography.labelLg}>{positionSources.choices.find(c=>c.value===draft.locationProof?.checklist)?.label??'Chưa xác định'}</Text>
+            <Text style={styles.positionHintText}>{draft.locationProof?.observedChainageMeters!=null?`Lý trình ${draft.locationProof.observedChainageMeters} m`:draft.locationProof?.observedSlabId?`Ký hiệu tấm: ${draft.locationProof.observedSlabId}`:draft.locationProof?'Chưa có dấu mốc quan sát':'Cần bổ sung vị trí hiện trường'}</Text>
+          </View></View>
+          <Button variant="secondary" title={taskReadOnly?'Xem vị trí':'Chỉnh vị trí'} disabled={busy||cancelling} onPress={()=>{setNotice('');setShowErrorDetail(false);setShowPosition(true);}}/>
+        </Card>
+        <Modal visible={showPosition} animationType="slide" onRequestClose={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}>
+          <SafeAreaScreen scroll header={<AppHeader subtitle="Vị trí quan sát" showBack onBack={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}/>}>
+            <Card style={styles.card}><View style={styles.positionEditor} pointerEvents={busy||frozen?'none':'auto'}>
+<Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
+          {!locationProof?<View style={styles.positionHint}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={styles.positionHintText}>Hồ sơ sẽ ghi nhận thiếu vị trí.</Text></View>:null}
           {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
             {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>}
           </>:null}
@@ -473,9 +484,14 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             </>}
           </>:null}
           {locationProof?.checklist==='SLAB_MARKINGS_CONFIRMED'?(taskReadOnly?<Text style={styles.muted}>Ký hiệu tấm: {locationProof.observedSlabId||'Chưa có'}</Text>:<InputField label="Ký hiệu tấm đã đối chiếu thực tế" value={locationProof.observedSlabId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSlabId:value});}}/>):null}
-        <Button variant="text" title="Lưu vị trí" disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/></View></Card>
+
+              {!taskReadOnly?<Button variant="primary" title="Lưu vị trí" loading={busy} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>:null}
+              {notice?<FieldNotice model={fieldNoticeModel(notice,undefined,noticeDetail)} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
+            </View></Card>
+          </SafeAreaScreen>
+        </Modal>
         <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
-          {!draft.captures.length?<Text>Chưa có ảnh nháp của phiên và nhiệm vụ này.</Text>:null}
+          {!draft.captures.length?<Text>Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.</Text>:null}
           <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id);return <View key={c.id} style={styles.photoTile}>
             <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
               <View pointerEvents="none" style={[styles.photoOverlay,feedback.busy&&styles.photoOverlayBusy]} accessible accessibilityLabel={`Ảnh ${index+1}: ${feedback.label}${feedback.percent===null?'':` ${feedback.percent}%`}`} accessibilityState={{busy:feedback.busy}} accessibilityLiveRegion="polite">
@@ -651,6 +667,13 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
+  positionEditor: {gap:spacing.md},
+  positionOption: {minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:radius.md},
+  positionChoiceLabel: {...typography.bodyMd,color:colors.secondary,flex:1},
+  positionChoiceSelected: {fontWeight:'700',color:colors.neutral},
+  positionSummary: {flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.sm,borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
+  positionHint: {flexDirection:'row',alignItems:'flex-start',gap:spacing.xs,padding:spacing.sm,borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
+  positionHintText: {...typography.caption,color:colors.secondary,flexShrink:1},
   choiceOption: {
     minHeight: 48,
     paddingHorizontal: spacing.sm,
