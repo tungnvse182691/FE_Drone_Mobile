@@ -65,7 +65,7 @@ for (const status of ['SUBMITTED', 'SUPPLEMENT_REQUIRED', 'COMPLETED', 'ACCEPTED
   const s = drone('request-detail', apiFor(t), { params: { taskId: t.id }, moduleFactories: routeSpy(routes) });
   s.render(); await s.flush();
   assert.ok(!s.nodes().some(n => n.props.accessibilityLabel === 'Từ chối nhiệm vụ'));
-  s.press('Xem gói công việc (chỉ đọc)'); await s.flush();
+  s.press('Xem gói công việc'); await s.flush();
   assert.match(routes.at(-1), /work-package/); assert.ok(!routes.some(r => /request-decline/.test(r)));
   assert.ok(s.nodes().some(n => n.type === 'DroneTaskCommandPanel'), 'existing journal recovery remains reachable');
   s.unmount();

@@ -17,6 +17,7 @@ import {
   type SurveyTaskWorkPackageDto,
 } from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 
 /**
  * O-05 — Gói công việc (CHỈ ĐỌC).
@@ -46,6 +47,10 @@ function formatCoord(longitude: number, latitude: number): string {
 
 const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
   PLANNED_RENDEZVOUS: 'Theo kế hoạch',
+  MANUAL: 'Do quản lý cung cấp',
+  SURVEY: 'Theo khảo sát',
+  EXIF: 'Theo thông tin ảnh',
+  DERIVED: 'Theo dữ liệu tính toán',
 };
 
 const METADATA_STATUS_LABEL: Record<string, string> = {
@@ -171,12 +176,6 @@ export default function DroneWorkPackageScreen() {
     return (
       <>
         {geometryError ? <Text accessibilityRole="alert">{geometryError}</Text> : null}
-        <View style={styles.notice}>
-          <MaterialIcons name="lock-outline" size={18} color={colors.brandGold} />
-          <Text style={[typography.caption, styles.noticeText]}>
-            Gói chỉ đọc theo phạm vi nhiệm vụ được giao.
-          </Text>
-        </View>
 
         <Card style={styles.scopeCard}>
           <View style={styles.cardHeader}>
@@ -185,7 +184,6 @@ export default function DroneWorkPackageScreen() {
             <Text style={[typography.caption, { color: colors.secondary }]}>{operatorTaskDisplayCode(workPackage.task.id)}</Text>
           </View>
           <Text style={[typography.titleMd, styles.scopeTitle]}>Phạm vi đã ghim</Text>
-          <Text style={styles.groupLabel}>PHẠM VI</Text>
           <View style={styles.infoRow}>
             <MaterialIcons name="layers" size={16} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoLabel]}>Dải mục tiêu</Text>
@@ -196,7 +194,6 @@ export default function DroneWorkPackageScreen() {
             <Text style={[typography.bodyMd, styles.infoLabel]}>Phân đoạn đang xem</Text>
             <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{ref ? `${ref.segmentIds.length}` : '—'}</Text>
           </View>
-          {ref ? <Text style={[typography.caption, styles.scopeNote]}>Đang xem bộ phân đoạn đã ghim của nhiệm vụ.</Text> : null}
         </Card>
 
         <Card style={styles.card}>
@@ -303,24 +300,9 @@ export default function DroneWorkPackageScreen() {
 
         <Card style={styles.card}>
             <View style={styles.cardHeader}><MaterialIcons name="folder-open" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Mục đích tải lên</Text></View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Dữ liệu bay</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              Video khảo sát 4K RGB kèm dữ liệu hành trình/SRT/GPS theo nhiệm vụ.
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={[typography.caption, styles.infoLabel]}>Ghi chú</Text>
-            <Text style={[typography.bodyMd, styles.infoValue]}>
-              Thiếu SRT/GPS thì KHÔNG đạt điều kiện phủ tuyến.
-            </Text>
-          </View>
-        </Card>
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}><MaterialIcons name="perm-media" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Bằng chứng khảo sát</Text></View>
-          <View style={styles.emptyEvidence}>
-            <MaterialIcons name="image-not-supported" size={32} color={colors.secondary} />
-            <Text style={[typography.bodyMd, { color: colors.secondary, textAlign: 'center' }]}>Gói công việc chưa cung cấp danh sách tệp hoặc bộ dữ liệu để hiển thị.</Text>
+          <View style={styles.uploadGuidance}>
+            <Text style={styles.guidanceText}>Video khảo sát 4K RGB và tệp hành trình SRT/GPS.</Text>
+            <Text style={styles.guidanceNote}>Thiếu dữ liệu hành trình thì chưa đủ bằng chứng đánh giá phủ tuyến.</Text>
           </View>
         </Card>
       </>
@@ -353,6 +335,9 @@ export default function DroneWorkPackageScreen() {
 }
 
 const styles = StyleSheet.create({
+  uploadGuidance: { gap: 8, marginTop: 12 },
+  guidanceText: { ...typography.bodyMd, color: colors.neutral },
+  guidanceNote: { ...typography.caption, color: colors.secondary, lineHeight: 18 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   groupLabel: { ...typography.labelSm, color: colors.secondary, marginTop: 16, marginBottom: 4 },
   divider: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 12 },
@@ -384,16 +369,8 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     flex: 1,
   },
-  card: {
-    borderRadius: radius.xl,
-    marginBottom: 12,
-    borderWidth: 1, borderColor: colors.border, elevation: 2,
-  },
-  scopeCard: {
-    borderRadius: radius.xl,
-    marginBottom: 12,
-    borderWidth: 1, borderColor: colors.border, elevation: 2,
-  },
+  card: { ...operatorAppearance.card, marginBottom: 12 },
+  scopeCard: { ...operatorAppearance.card, marginBottom: 12 },
   scopeTitle: {
     color: colors.neutral,
     marginBottom: spacing.sm,
@@ -439,6 +416,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    paddingHorizontal: spacing.screenMargin,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   topBarTitle: {
     color: colors.neutral,

@@ -9,6 +9,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE } from '../../src/constants/routes';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
   getOperatorSurveyTaskDetailReal,
@@ -29,6 +30,10 @@ import { DroneTaskCommandPanel } from '../../src/components/drone/DroneTaskComma
 
 const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
   PLANNED_RENDEZVOUS: 'Theo kế hoạch',
+  MANUAL: 'Điểm tiếp cận do quản lý cung cấp',
+  SURVEY: 'Theo khảo sát',
+  EXIF: 'Theo thông tin ảnh',
+  DERIVED: 'Theo dữ liệu tính toán',
 };
 
 function formatDateTime(iso: string | null): string {
@@ -214,7 +219,6 @@ export default function DroneRequestDetailScreen() {
             <MaterialIcons name="map" size={16} color={colors.brandGold} />
             <Text style={[typography.titleMd, styles.sectionTitle]}>Phạm vi khảo sát</Text>
           </View>
-          <Text style={styles.groupLabel}>PHẠM VI</Text>
           <View style={styles.infoLine}>
             <MaterialIcons name="layers" size={16} color={colors.brandGold} />
             <Text style={styles.infoText}>Dải mục tiêu: <Text style={styles.medium}>{operatorTaskTargetBand(task)}</Text></Text>
@@ -271,7 +275,7 @@ export default function DroneRequestDetailScreen() {
               >
                 <MaterialIcons name="near-me" size={18} color={colors.primary} />
                 <Text style={[typography.labelLg, styles.navMapButtonText]}>
-                  Dẫn đường đến Điểm tiếp cận (Google Maps)
+                  Dẫn đường đến điểm tiếp cận
                 </Text>
               </Pressable>
             </>
@@ -287,17 +291,11 @@ export default function DroneRequestDetailScreen() {
         <View style={styles.actionContainer}>
           <Button
             variant="secondary"
-            title="Xem gói công việc (chỉ đọc)"
+            title="Xem gói công việc"
             icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
             onPress={handleOpenWorkPackage}
             style={styles.workPackageButton}
           />
-
-          <Text style={[typography.caption, styles.syncFootnote]}>
-            {canOpenDecline
-              ? 'Xác nhận trước khi gửi lệnh tiếp nhận hoặc từ chối.'
-              : 'Trạng thái hiện tại không cho phép tiếp nhận hoặc từ chối mới.'}
-          </Text>
         </View>
         <Card style={styles.technicalCard}>
           <Pressable accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật" accessibilityState={{ expanded: technical }} onPress={() => setTechnical(value => !value)} style={styles.technicalToggle}>
@@ -348,7 +346,10 @@ export default function DroneRequestDetailScreen() {
             <Text style={[typography.titleMd, styles.topBarTitle]}>Chi tiết nhiệm vụ</Text>
           </View>
 
-          <View style={styles.headerSpacer} />
+          <Pressable style={styles.circleIconButton} accessibilityRole="button" accessibilityLabel="Làm mới chi tiết nhiệm vụ"
+            disabled={loading} accessibilityState={{ busy: loading, disabled: loading }} onPress={() => void loadTask()}>
+            {loading ? <ActivityIndicator size="small" color={colors.brandGold} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
+          </Pressable>
         </View>
       }
     >
@@ -378,10 +379,9 @@ const styles = StyleSheet.create({
   loadingText: { color: colors.secondary },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.screenMargin, paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
   circleIconButton: { width: 48, height: 48, borderRadius: radius.full, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
-  headerSpacer: { width: 48, height: 48 },
   topBarCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
   topBarTitle: { color: colors.neutral },
-  heroCard: { borderRadius: radius.xl, marginBottom: 12, borderWidth: 1, borderColor: colors.border, elevation: 2 },
+  heroCard: { ...operatorAppearance.card, marginBottom: 12 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   overline: { ...typography.labelSm, color: colors.brandGold, flex: 1, lineHeight: 18 },
   statusChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 6 },
@@ -393,8 +393,8 @@ const styles = StyleSheet.create({
   heroTitle: { color: colors.neutral, marginVertical: 12 },
   codeLabel: { color: colors.secondary },
   sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
-  scopeCard: { borderRadius: radius.xl, marginBottom: 12, borderWidth: 1, borderColor: colors.border, elevation: 2 },
-  accessPointCard: { borderRadius: radius.xl, marginBottom: 12, elevation: 2, borderWidth: 1, borderColor: colors.border },
+  scopeCard: { ...operatorAppearance.card, marginBottom: 12 },
+  accessPointCard: { ...operatorAppearance.card, marginBottom: 12 },
   accessPointHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
   accessPointHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   accessPointHeaderTitle: { flex: 1, color: colors.neutral },
@@ -404,8 +404,8 @@ const styles = StyleSheet.create({
   accessPointCoord: { color: colors.secondary, flex: 1 },
   boldCoord: { fontWeight: '500', color: colors.neutral, fontFamily: 'Roboto' },
   navMapButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.sm, backgroundColor: colors.surface, marginTop: spacing.xs },
-  navMapButtonText: { color: colors.neutral },
-  technicalCard: { borderRadius: radius.xl, marginBottom: -72, borderWidth: 1, borderColor: colors.border },
+  navMapButtonText: { color: colors.neutral, flexShrink: 1, lineHeight: 21, textAlign: 'center' },
+  technicalCard: { ...operatorAppearance.card, marginBottom: 12 },
   techDetailBox: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs, gap: spacing.sm },
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: { gap: spacing.sm, marginBottom: spacing.md },

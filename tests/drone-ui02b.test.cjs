@@ -33,7 +33,7 @@ test('02B Detail keeps technical IDs collapsed, toggles them and preserves Work 
   const back = headerNodes(s.nodes().find(n => n.type === 'SafeAreaScreen').props.header).find(n => n.props.accessibilityLabel === 'Quay lại');
   assert.ok(back.props.style.width >= 48 && back.props.style.height >= 48);
   back.props.onPress(); assert.equal(routes.at(-1), 'back');
-  s.press('Xem gói công việc (chỉ đọc)'); assert.match(routes.at(-1), /work-package/);
+  s.press('Xem gói công việc'); assert.match(routes.at(-1), /work-package/);
   assert.ok(s.nodes().some(n => n.type === 'DroneTaskCommandPanel'));
   const recoveryToggle = () => s.nodes().find(n => n.props.accessibilityLabel === 'Lệnh và đối soát');
   assert.equal(recoveryToggle().props.accessibilityState.expanded, false);
