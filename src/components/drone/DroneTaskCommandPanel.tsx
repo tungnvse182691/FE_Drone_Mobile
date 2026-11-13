@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { openDroneTaskJournal, listDroneTaskCommands } from '../../api/droneTaskJournal';
 import { operatorTaskStatusLabel, operatorTaskDisplayCode } from '../../api/operator-task-view';
@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useOperatorReadScope } from '../../hooks/useOperatorReadScope';
 import { Button } from '../Button';
 import { Card } from '../Card';
+import { operatorAppearance } from './appearance';
 import { typography, spacing, colors } from '../../design-tokens';
 
 type Runtime = Awaited<ReturnType<typeof openDroneTaskJournal>>;
@@ -74,7 +75,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
   // Keep the journal mounted while collapsed. A saved command or a storage
   // failure must remain visible independently of the current task GET/status.
   if (collapsed) return saved && saved.phase !== 'RECEIPT' || error ?
-    <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
+    <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
       <View accessibilityRole="alert" testID="command-recovery-notice">
         <Text style={typography.titleMd}>{saved?.phase === 'PREPARED' ? 'Đã lưu lệnh, chưa gửi' : saved && saved.phase !== 'RECEIPT' ? 'Chưa rõ kết quả lệnh đã gửi' : 'Cần kiểm tra lịch sử yêu cầu'}</Text>
         <Text style={typography.bodyMd}>{error ?? 'Lệnh gốc vẫn được giữ. Mở để kiểm tra; ứng dụng không tự gửi lại.'}</Text>
@@ -83,8 +84,8 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
     </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
   const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Chỉ chuẩn bị yêu cầu khi máy chủ xác nhận nhiệm vụ mới được giao hoặc giao lại cho bạn.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
   const primaryStyle = { flex: 2, minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
-  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,borderRadius:20,borderWidth:1,borderColor:colors.border}}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>Tiếp nhận và phản hồi nhiệm vụ</Text></View>
+  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,...operatorAppearance.card}}>
+    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>{operation==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text></View>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
     {saved ? <>
       <Text style={typography.bodyMd}>{saved.command.operation==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text>
@@ -127,17 +128,18 @@ export function DroneTaskRecoveryList() {
   };
   useEffect(() => { setRows([]);setDataScope(null);setError(false);lock.current=false;void load(); },[scope.key]);
   if (!scope.key) return null;
-  return <Card style={{gap:spacing.sm,marginBottom:spacing.md}}>
+  return <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
     <View style={{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:spacing.sm}}>
-      <Text style={typography.titleMd}>Yêu cầu nhiệm vụ đã lưu</Text>
-      <Button variant="text" title="Đọc lại lịch sử yêu cầu" disabled={busy} onPress={()=>void load()} />
+      <Text style={{...typography.titleMd,flex:1}}>Yêu cầu đã lưu</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại lịch sử yêu cầu" accessibilityState={{busy,disabled:busy}} disabled={busy} onPress={()=>void load()} style={{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center'}}>
+        {busy?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
+      </Pressable>
     </View>
-    <Text style={typography.caption}>Theo tài khoản và môi trường hiện tại.</Text>
-    {dataScope===scope.key && rows.length > 0 ? <Text style={typography.caption}>Mở yêu cầu để kiểm tra hoặc xác nhận gửi lại lệnh gốc.</Text> : null}
+    {dataScope===scope.key && rows.length > 0 ? <Text style={typography.caption}>Chọn yêu cầu để xem kết quả hoặc xác nhận gửi lại.</Text> : null}
     {dataScope===scope.key ? rows.map(row=><Button key={row.taskId} variant="secondary"
       title={`${operatorTaskDisplayCode(row.taskId)} · ${row.operation==='accept'?'Tiếp nhận':'Từ chối'} · ${row.phase==='RECEIPT'?'Có kết quả máy chủ':row.phase==='PREPARED'?'Chưa gửi':'Chưa rõ kết quả'}`}
       onPress={()=>{if(scope.capture()())router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(row.taskId)}`);}} />):null}
-    {dataScope===scope.key && !rows.length ? <Text>Chưa có yêu cầu đã lưu trong phân vùng này.</Text>:null}
+    {dataScope===scope.key && !rows.length ? <Text>Chưa có yêu cầu đã lưu.</Text>:null}
     {error?<Text accessibilityRole="alert">Không đọc được lịch sử; dữ liệu vẫn được giữ.</Text>:null}
   </Card>;
 }
