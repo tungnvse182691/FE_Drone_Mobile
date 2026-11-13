@@ -167,7 +167,10 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
-        copyToCacheDirectory: true,
+        // Read the granted source URI, then captureFieldPhoto preserves it in
+        // this experience's document directory. Expo Go's shared picker cache
+        // is outside the scoped File API permissions.
+        copyToCacheDirectory: false,
       });
       if (activeRef.current && matches(pickedContext) && mode===pickedMode && !res.canceled && res.assets && res.assets.length > 0) {
         await savePhoto(res.assets[0].uri,res.assets[0].mimeType ?? '',false);

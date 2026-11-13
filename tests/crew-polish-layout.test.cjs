@@ -28,5 +28,9 @@ test('Crew profile does not offer a working avatar update; stats remain a loaded
 });
 test('Crew FIELD header stays outside scroll padding and measurement cards retain spacing',()=>{
  const s=screen('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task},modules:{...common,'./tasks':{useCrewIdentity:()=>({}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},'../../src/api/crewFieldDraft':{currentFieldContext:()=>null},'../../src/api/crewApi':{},'expo-crypto':{},'../../src/components/Toast':{Toast:'Toast'}}});s.render();
- const safe=s.nodes().find(n=>n.type==='SafeAreaScreen');assert.equal(safe.props.header.type,'AppHeader');assert.ok(styles('field-review').card.gap>0);s.unmount();
+ const safe=s.nodes().find(n=>n.type==='SafeAreaScreen');
+ const headerChildren=[safe.props.header,...[safe.props.header.props.children].flat(Infinity)].filter(Boolean);
+ assert.ok(headerChildren.some(n=>n.type==='AppHeader'),'branded header remains in the fixed header slot beside the compact notice');
+ assert.ok(!s.nodes().some(n=>n.type==='AppHeader'),'header is not duplicated inside the scrolling content');
+ assert.ok(styles('field-review').card.gap>0);s.unmount();
 });

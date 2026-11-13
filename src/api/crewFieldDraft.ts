@@ -250,6 +250,8 @@ export async function startNewFieldSessionDraft(context: FieldContext): Promise<
 export async function captureFieldPhoto(context: FieldContext, uri: string, purpose: FieldCapture['purpose'],
   mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false): Promise<FieldDraft> {
   return exclusive(context, async () => {
+    let captureStage='read_draft';
+    try {
     const runtime = await openFieldRuntime(context), draft = await loadFieldDraft(context,runtime);
     if (draft.command) throw new Error('field_command_pending');
     const detail = await guarded(context,runtime,() => crew.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
@@ -260,23 +262,32 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
       await verifyRepairClaim(draft,detail.data,runtime);
       if(!camera||!postRepairCapture)throw Error('repair_after_camera_required');
     }
+    captureStage='read_photo';
     const bytes = await guarded(context,runtime,() => runtime.bytes(uri));
     const isJpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
     const isPng = bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((v,i) => bytes[i] === v);
     const actualType = isJpeg ? 'image/jpeg' : isPng ? 'image/png' : null;
     if (!actualType || !bytes.length || bytes.length > 20 * 1024 * 1024 || (mediaType && mediaType !== actualType)) throw new Error('Chỉ nhận JPEG/PNG tối đa 20 MiB, đúng định dạng thực.');
+    captureStage='write_photo';
     const id = runtime.uuid(), directory = new Directory(Paths.document,'crew-field');
     directory.create({ idempotent: true, intermediates: true });
     const temp = new File(directory,`${id}.tmp`);
     await guarded(context,runtime,() => temp.write(bytes));
+    captureStage='hash_photo';
     const checksum = await guarded(context,runtime,() => runtime.hash(new Uint8Array(temp.bytesSync())));
     const file = new File(directory,`${id}.${isJpeg ? 'jpg' : 'png'}`);
+    captureStage='move_photo';
     await guarded(context,runtime,async () => { await temp.move(file); });
     draft.captures.push({ id,uri:file.uri,purpose,mediaType:actualType,checksum,size:bytes.length,
       capturedAt:camera ? new Date().toISOString() : null, coordinates:camera ? coordinates : null,
       createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],localOnly:true,
       postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
+    captureStage='save_draft';
     await persist(draft,runtime); return draft;
+    } catch(error) {
+      if(typeof error==='object'&&error!==null&&Object.isExtensible(error))Object.assign(error,{fieldCaptureStage:captureStage});
+      throw error;
+    }
   });
 }
 async function claimSource(context: FieldContext,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
@@ -409,6 +420,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       checkCancel();
       if (!result.etag) throw new Error('field_part_etag_missing');
       c.parts.push({partNumber:part,etag:result.etag}); await persist(draft,runtime);
+      onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft);
     }
     if (!c.complete) {
       session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(session.id));
@@ -419,11 +431,14 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     await guarded(draft,runtime,() => runtime.api.completeCrewUpload(session.id,c.complete!.parts,c.checksum,c.complete!.version,c.completeKey));
     checkCancel();
     c.completed = true; await persist(draft,runtime);
+    onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft);
   }
   for (let poll=0;poll<12;poll++) {
     session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
     checkCancel();
     if (session.id !== c.upload.id || session.fileId !== c.upload.fileId) throw new Error('field_upload_identity_invalid');
+    c.upload=session; await persist(draft,runtime);
+    onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft);
     if (session.status === 'VERIFIED') break;
     if (session.status === 'FAILED') { c.upload=session; c.verified=false; await persist(draft,runtime); throw new Error('field_upload_failed'); }
     await guarded(draft,runtime,() => runtime.wait());
@@ -431,7 +446,8 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   if (session.status !== 'VERIFIED') throw new Error('field_verification_pending');
   const file = await guarded(draft,runtime,() => runtime.api.getCrewFileMetadata(session.fileId));
   if (file.id !== session.fileId || file.status !== 'VERIFIED' || file.checksumSha256 !== c.checksum || file.mediaType !== c.mediaType || file.sizeBytes !== c.size) throw new Error('field_file_not_verified');
-  c.upload = session; c.verified = true; await persist(draft,runtime); return draft;
+  c.upload = session; c.verified = true; await persist(draft,runtime);
+  onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft); return draft;
 }
 export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,onSession?: (draft: FieldDraft) => void): Promise<FieldDraft> {
   const capture = draft.captures[index]; if (!capture) throw Error('field_capture_missing');
@@ -545,10 +561,32 @@ export async function acknowledgeFieldResult(context: FieldContext): Promise<Fie
   });
 }
 export function measurementTemplate(type: number, sampleId: string): crew.FieldMeasurementInput | null {
-  const names = ['','DepressionDepth','SlabFaultingHeight','ShoulderErosionExtent','Area'];
+  const names = ['','DepressionDepth','SlabFaultingHeight','ShoulderErosionExtent','Area','DepressionLength','DepressionWidth'];
   if (!names[type]) return null;
   return {sampleId,type:names[type],value:null,state:'UNKNOWN',unknownReason:'Chưa đo tại hiện trường',
-    dimension:type===4?'AREA':'LENGTH',unit:type===4?'m²':'cm',instrument:'',method:'',locationReason:'Chưa có tọa độ quan sát'};
+    dimension:type===4?'AREA':'LENGTH',unit:type===4?'m²':type>=5?'m':'cm',instrument:'',method:'',locationReason:'Chưa có tọa độ quan sát'};
+}
+function validateFieldMeasurements(draft: FieldDraft): void {
+  if (!draft.measurements.length || draft.measurements.some(m=>!m.instrument.trim() || !m.method.trim() ||
+    (m.value === null ? m.state!=='UNKNOWN' || !m.unknownReason?.trim() : m.state!=='KNOWN' || !Number.isFinite(m.value) || m.value < 0) ||
+    ((m.latitude == null || m.longitude == null) ? !m.locationReason?.trim() :
+      !Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) || Math.abs(m.latitude)>90 || Math.abs(m.longitude)>180))) throw new Error('field_measurements_required');
+}
+/** A new user intent only. Never replays an existing submission or skips VERIFIED readback. */
+export async function uploadAndSubmitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,onProgress?: (draft: FieldDraft,captureId: string) => void): Promise<FieldDraft> {
+  assertFieldContext(draft,runtime);
+  if(draft.command)throw Error('field_command_pending');
+  validateFieldMeasurements(draft);
+  // Sequential uploads preserve the durable per-draft journal and cancellation lock.
+  for(let index=0;index<draft.captures.length;index++) {
+    assertFieldContext(draft,runtime);
+    const capture=draft.captures[index];
+    if(capture.verified)continue;
+    onProgress?.(JSON.parse(JSON.stringify(draft)) as FieldDraft,capture.id);
+    draft=await uploadFieldCapture(draft,index,runtime,updated=>onProgress?.(updated,capture.id));
+  }
+  assertFieldContext(draft,runtime);
+  return submitFieldDraft(draft,runtime);
 }
 export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,replay=false): Promise<FieldDraft> {
   return exclusive(draft,async()=>{
@@ -565,10 +603,7 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
         if(!after.length||after.some(c=>!c.postRepairCapture||!c.capturedAt||!Number.isFinite(Date.parse(c.capturedAt))||
           Date.parse(c.capturedAt)<Date.parse(source.finishAt)||Date.parse(c.capturedAt)>Date.now()))throw Error('repair_after_camera_required');
       }
-      if (!draft.measurements.length || draft.measurements.some(m=>!m.instrument.trim() || !m.method.trim() ||
-        (m.value === null ? m.state!=='UNKNOWN' || !m.unknownReason?.trim() : m.state!=='KNOWN' || !Number.isFinite(m.value) || m.value < 0) ||
-        ((m.latitude == null || m.longitude == null) ? !m.locationReason?.trim() :
-          !Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) || Math.abs(m.latitude)>90 || Math.abs(m.longitude)>180))) throw new Error('field_measurements_required');
+      validateFieldMeasurements(draft);
       if (draft.captures.some(c=>!c.verified || !c.upload?.fileId)) throw new Error('field_verified_evidence_required');
       for (const capture of draft.captures) {
         if(draft.repairClaim) {
@@ -583,7 +618,9 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
       if (fresh.data.latestSubmissionId) {
         const previous=await guarded(draft,runtime,()=>runtime.api.getFieldSubmissionDetailReal(draft.projectId,draft.taskId,fresh.data.latestSubmissionId!));
         if (previous.data.id !== fresh.data.latestSubmissionId || previous.data.taskId !== draft.taskId) throw new Error('field_lineage_invalid');
-        retained=previous.data.evidence??[];
+        // A revision carries actual files. Unlinked declarations remain in the
+        // immutable parent; carrying them forward would prevent replacing missing evidence.
+        retained=(previous.data.evidence??[]).filter(e=>e.fileId!=null);
         for (const e of retained) {
           if (!e.fileId) throw new Error('field_verified_evidence_required');
           const file=await guarded(draft,runtime,()=>runtime.api.getFieldEvidenceReal(draft.projectId,draft.taskId,e.fileId!));
@@ -681,6 +718,9 @@ export function fieldErrorMessage(error: unknown): string {
   const messages: Record<string,string>={field_previous_session_requires_reconciliation:'Có nháp thuộc phiên đăng nhập cũ. Đã khóa gửi lại để tránh ghi trùng; cần đối soát hồ sơ cũ.',field_session_changed:'Phiên đội sửa chữa đã thay đổi. Đã dừng thao tác.',field_verified_evidence_required:'Cần ảnh đã được máy chủ xác minh trước khi gửi.',field_measurements_required:'Nhập số đo hoặc lý do chưa đo, dụng cụ, phương pháp và lý do thiếu GPS.',field_verification_pending:'Máy chủ đang xác minh ảnh. Tải lại trạng thái; chưa được gửi hồ sơ.',field_command_rejected:'Lệnh đã bị từ chối. Xem lỗi, tải lại rồi xác nhận tạo nháp mới.',field_unknown_outcome_use_reconcile:'Kết quả lệnh cũ chưa xác định. Dùng đối soát hoặc gửi lại đúng lệnh đã lưu.',field_upload_cancel_pending:'Đang hủy hoặc đối soát phiên tải ảnh. Ảnh cục bộ vẫn được giữ.',field_upload_not_cancellable:'Phiên ảnh không còn ở trạng thái cho phép hủy. Đọc lại trạng thái máy chủ.',field_upload_session_missing:'Ảnh chưa có phiên tải để hủy.',field_cancel_receipt_invalid:'Biên nhận hủy không khớp phiên ảnh. Cần đối soát trước khi thao tác tiếp.'};
   if (messages[message]) return messages[message];
   if (message && /[À-ỹ]/.test(message)) return message;
+  const captureStage=(error as {fieldCaptureStage?:string})?.fieldCaptureStage;
+  const captureErrors:Record<string,string>={read_photo:'Không đọc được ảnh đã chọn.',write_photo:'Không ghi được ảnh vào bộ nhớ ứng dụng.',hash_photo:'Không kiểm tra được dữ liệu ảnh đã lưu.',move_photo:'Không hoàn tất được tệp ảnh trên thiết bị.',save_draft:'Không thêm được ảnh vào hồ sơ nháp.'};
+  if(captureStage&&captureErrors[captureStage])return captureErrors[captureStage]+' Ảnh và nháp cũ vẫn được giữ.';
   return 'Chưa xác nhận được thao tác. Nháp và lệnh đã lưu được giữ nguyên; tải lại hoặc đối soát trước khi gửi mới.';
 }
 export async function downloadFieldPhoto(context: FieldContext,fileId: string): Promise<string> {

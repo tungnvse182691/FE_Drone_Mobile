@@ -185,16 +185,16 @@ function fieldScreen(phase,responseId){
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  }});return {s,reconciles};
 }
-test('Crew FIELD supplement photo entry carries mode to camera without any mutation on focus',async()=>{
- const h=harness(),c=h.identity,nav=[];let posts=0;
+test('Crew FIELD supplement saves local edits before camera and carries mode without remote mutation',async()=>{
+ const h=harness(),c=h.identity,nav=[],events=[];let posts=0;
  const draft={...c,captures:[],measurements:[],locationProof:null};
  const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},
-  moduleFactories:{'expo-router':({react})=>({router:{push:value=>nav.push(value)},useLocalSearchParams:()=>({supplement:'1'}),useFocusEffect:fn=>react.useEffect(fn,[fn])})},
+  moduleFactories:{'expo-router':({react})=>({router:{push:value=>{events.push('navigate');nav.push(value);}},useLocalSearchParams:()=>({supplement:'1'}),useFocusEffect:fn=>react.useEffect(fn,[fn])})},
   modules:{'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
    '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:h.task,etag:'"fresh"'})},
-   '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,measurementTemplate:()=>null,fieldDraftPending:()=>false,submitFieldDraft:async()=>{posts++;}},
+   '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,saveFieldMeasurements:async()=>{events.push('save');return draft;},measurementTemplate:()=>null,fieldDraftPending:()=>false,submitFieldDraft:async()=>{posts++;}},
    '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>null},'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'}}});
- s.render();await s.flush();s.press('Chụp / chọn ảnh');assert.equal(nav[0].pathname,'/(crew)/viewfinder');assert.equal(nav[0].params.supplement,'1');assert.equal(posts,0);s.unmount();
+ s.render();await s.flush();assert.deepEqual(events,[]);s.press('Chụp / chọn ảnh');await s.flush();assert.deepEqual(events,['save','navigate']);assert.equal(nav[0].pathname,'/(crew)/viewfinder');assert.equal(nav[0].params.supplement,'1');assert.equal(posts,0);s.unmount();
 });
 for(const phase of ['pending','acknowledged'])test('Crew mounted FIELD '+phase+' exposes only the applicable recovery action',async()=>{
  const f=fieldScreen(phase,phase==='acknowledged'?'server-submission':undefined);f.s.render();await f.s.flush();
@@ -205,20 +205,28 @@ for(const phase of ['pending','acknowledged'])test('Crew mounted FIELD '+phase+'
  f.s.unmount();
 });
 for(const phase of ['none','pending','acknowledged'])test('Crew mounted FIELD old-session '+phase+' offers only safe recovery and keeps GET read-only',async()=>{
- const h=harness(),c=h.identity,old={...c,scope:JSON.stringify([c.actor,'old'])};let posts=0,news=0,reads=0;
+ const h=harness(),c=h.identity,old={...c,scope:JSON.stringify([c.actor,'old'])};let posts=0,news=0,reads=0,created=false;
  const historical={...old,captures:[],measurements:[],locationProof:null,...(phase==='none'?{}:{command:{key:'original',phase,...(phase==='acknowledged'?{responseId:'response'}:{})}})};
  const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},modules:{
   'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
   '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:h.task,etag:'"fresh"'})},
-  '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({recoveryRead:async()=>historical}),loadFieldDraft:async()=>{throw Error('field_previous_session_requires_reconciliation');},fieldErrorMessage:e=>e.message,measurementTemplate:()=>null,fieldDraftPending:d=>['pending','acknowledged'].includes(d.command?.phase),startNewFieldSessionDraft:async()=>{news++;},reconcileFieldDraft:async()=>{posts++;}},
+  '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({recoveryRead:async()=>historical}),loadFieldDraft:async()=>{if(created)return {...c,captures:[],measurements:[]};throw Error('field_previous_session_requires_reconciliation');},fieldErrorMessage:e=>e.message,measurementTemplate:()=>null,fieldDraftPending:d=>['pending','acknowledged'].includes(d.command?.phase),startNewFieldSessionDraft:async()=>{news++;created=true;},reconcileFieldDraft:async()=>{posts++;}},
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  }});s.render();await s.flush();
  const titles=s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
  assert.equal(titles.includes('Tạo nháp trống cho phiên này'),phase==='none');
+ const displayed=s.nodes().filter(n=>n.type==='Text').flatMap(n=>n.props.children).join(' ');
+ assert.match(displayed,phase==='none'?/Có nháp từ lần đăng nhập trước/:/Hồ sơ cần kiểm tra kết quả/);
+ assert.doesNotMatch(displayed,/Đã khóa gửi lại để tránh ghi trùng/);
  assert.equal(titles.includes('Đối soát lệnh gốc'),phase==='pending');
  assert.equal(titles.includes('Đọc lại kết quả đã lưu'),phase==='acknowledged');
  assert.equal(titles.includes('Lưu nháp số đo'),false);assert.equal(posts,0);assert.equal(news,0);assert.equal(reads,0);
  assert.equal(s.nodes().filter(n=>typeof n.type==='function'&&n.type.name==='FieldErrorPanel').length,0,'recovery card already explains the old-session block');
+ if(phase==='none') {
+  s.press('Tạo nháp trống cho phiên này');s.render();s.press('Xác nhận tạo nháp trống');await s.flush();
+  assert.equal(news,1);assert.equal(posts,0);
+  assert.ok(!JSON.stringify(s.nodes()).includes('field_previous_session_requires_reconciliation'),'successful new draft clears the stale recovery notice');
+ }
  s.unmount();
 });
 test('Crew FIELD refresh preserves local editor until GET fails, then fails closed without false empty state',async()=>{
@@ -237,8 +245,8 @@ test('Crew FIELD refresh preserves local editor until GET fails, then fails clos
 });
 test('Crew FIELD cancel is per-photo, requires confirmation and never POSTs on mount',async()=>{
  const h=harness(),c=h.identity;let posts=0,selected=null;
- const first={id:'first',uri:'file://first',purpose:'BEFORE',coordinates:null,upload:{id:'session-first',fileId:'file-first',status:'UPLOADING'}};
- const second={id:'second',uri:'file://second',purpose:'BEFORE',coordinates:null,upload:{id:'session-second',fileId:'file-second',status:'VERIFIED'},verified:true};
+ const first={id:'first',uri:'file://first',purpose:'BEFORE',coordinates:null,parts:[],size:3,upload:{id:'session-first',fileId:'file-first',status:'UPLOADING'}};
+ const second={id:'second',uri:'file://second',purpose:'BEFORE',coordinates:null,parts:[],size:3,upload:{id:'session-second',fileId:'file-second',status:'VERIFIED'},verified:true};
  let draft={...c,captures:[first,second],measurements:[],locationProof:null};
  const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},modules:{
   'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
