@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../Card';
+import { operatorAppearance } from './appearance';
 import { colors, typography } from '../../design-tokens';
 import type { SurveyTaskV2ResponseDto } from '../../api/droneApi';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBand } from '../../api/operator-task-view';
@@ -36,6 +37,7 @@ export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
     : ['ACCEPTED', 'IN_PROGRESS', 'INPROGRESS'].includes(status) ? 'flight-takeoff' : 'schedule';
 
   return <Pressable onPress={onPress} style={styles.touch}
+    android_ripple={{ color: operatorAppearance.pressed }}
     accessibilityRole="button" accessibilityLabel={`Xem nhiệm vụ ${code}, ${label}`}>
     <Card style={{ ...styles.card, borderLeftWidth: 4, borderLeftColor: visual.rail }}>
       {ongoing ? <Text testID="operator-current-task" style={styles.currentTask}>NHIỆM VỤ HIỆN TẠI</Text> : null}
@@ -65,9 +67,9 @@ export function OperatorTaskSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  touch: { minHeight: 48 },
+  touch: { minHeight: 48, borderRadius: 12, overflow: 'hidden' },
   currentTask: { ...typography.labelSm, color: colors.secondary },
-  card: { padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border, gap: 8 },
+  card: { ...operatorAppearance.card, padding: 16, gap: 8 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { ...typography.titleMd, lineHeight: 24, color: colors.neutral, flex: 1, minWidth: 0 },
   status: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9999, backgroundColor: colors.surfaceAlt, maxWidth: '100%' },

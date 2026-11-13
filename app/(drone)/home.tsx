@@ -1,6 +1,6 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useCallback, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -12,12 +12,7 @@ import { colors, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
 import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
-  default: {},
-});
+import { operatorAppearance } from '../../src/components/drone/appearance';
 
 export default function DroneHomeScreen() {
   const user = useAuthStore((state) => state.user);
@@ -89,7 +84,10 @@ export default function DroneHomeScreen() {
       {hasMore ? <Text style={styles.pageNote}>Số liệu của trang đầu đã tải.</Text> : null}
       {/* Section Tasks */}
       <View style={styles.sectionHeader}>
-        <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ khảo sát</Text>
+        <View style={styles.sectionHeading}>
+          <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ khảo sát</Text>
+          {loading && tasks.length > 0 ? <ActivityIndicator size="small" color={colors.brandGold} accessibilityLabel="Đang cập nhật nhiệm vụ" /> : null}
+        </View>
         <AnimatedPressable
           onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
@@ -101,9 +99,8 @@ export default function DroneHomeScreen() {
         </AnimatedPressable>
       </View>
 
-      {loading && tasks.length > 0 ? <Text accessibilityLiveRegion="polite" style={styles.greetingMeta}>Đang cập nhật…</Text> : null}
       {/* Tasks List */}
-      {loadError ? <Text accessibilityRole="alert">{loadError} Danh sách đã tải vẫn được giữ trong phiên này.</Text> : null}
+      {loadError && tasks.length > 0 ? <View style={styles.errorCard}><Text accessibilityRole="alert" style={styles.errorText}>{loadError}</Text></View> : null}
       {loading && tasks.length === 0 ? (
         <OperatorTaskSkeleton />
       ) : loadError && tasks.length === 0 ? (
@@ -134,15 +131,18 @@ export default function DroneHomeScreen() {
 
 const styles = StyleSheet.create({
   greetingHeader: { gap: 4, marginBottom: 16 },
-  greetingName: { color: colors.neutral },
+  greetingName: { color: colors.neutral, lineHeight: 26 },
   greetingMeta: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 24 },
-  metricColumn: { flex: 1, minWidth: 0, gap: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface, borderRadius: 20, paddingVertical: 14, paddingHorizontal: 8, ...softShadow },
+  metricColumn: { ...operatorAppearance.card, flex: 1, minWidth: 0, gap: 4, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 8 },
   metricNumber: { fontFamily: 'Roboto-Medium', fontSize: 28, fontWeight: '500', lineHeight: 36, color: colors.neutral, fontVariant: ['tabular-nums'] },
   metricLabel: { ...typography.caption, lineHeight: 17, minHeight: 34, textAlign: 'center', color: colors.secondary },
   pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary, marginTop: 8 },
   sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: 8 },
   sectionTitle: { color: colors.neutral },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  errorCard: { ...operatorAppearance.card, padding: 12, marginBottom: 12 },
+  errorText: { ...typography.bodyMd, color: colors.secondary },
   seeAllPress: { minHeight: 48, minWidth: 48, flexDirection: 'row', alignItems: 'center', gap: 4 },
   seeAll: { ...typography.caption, color: colors.primaryDark },
   taskList: { gap: 12, paddingBottom: 32 },

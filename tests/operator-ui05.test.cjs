@@ -26,7 +26,9 @@ test('UI05 Requests keeps loaded rows while refreshing and reports an honest fil
  await tap(s,'Lọc trạng thái: Tất cả trạng thái');await tap(s,'Đã nộp (1)');
  assert.match(text(s),/1 trong 2 nhiệm vụ đã tải/);assert.equal(rows(s).length,1);
  rows(s)[0].props.onPress();assert.equal(routes[0].params.taskId,id(2));
- await tap(s,'Làm mới nhiệm vụ');assert.equal(rows(s).length,1);assert.match(text(s),/Đang cập nhật/);
+ await tap(s,'Làm mới nhiệm vụ');assert.equal(rows(s).length,1);
+ assert.ok(s.nodes().some(n=>n.type==='ActivityIndicator'&&n.props.accessibilityLabel==='Đang tải nhiệm vụ'));
+ assert.equal(s.nodes().find(n=>n.props.accessibilityLabel==='Làm mới nhiệm vụ').props.disabled,true);
  d.reject(Error('offline'));await s.flush();assert.equal(rows(s).length,1);assert.ok(s.nodes().some(n=>n.props.accessibilityRole==='alert'));s.unmount();
 });
 test('UI05 first loading, empty and failed reads remain distinct',async()=>{

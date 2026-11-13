@@ -1,7 +1,7 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import { Button } from '../../src/components/Button';
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -10,6 +10,7 @@ import { OperatorTaskRow, OperatorTaskSkeleton } from '../../src/components/dron
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 
 type TabKey = 'pending' | 'ongoing' | 'submitted' | 'supplement' | 'completed' | 'other';
 
@@ -71,8 +72,9 @@ export default function DroneRequestsScreen() {
           <MaterialIcons name={filterOpen ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Làm mới nhiệm vụ"
+          disabled={loading} accessibilityState={{ disabled: loading, busy: loading }}
           style={styles.iconButton} onPress={() => void fetchTasks()}>
-          <MaterialIcons name="refresh" size={24} color={colors.secondary} />
+          {loading ? <ActivityIndicator size="small" color={colors.brandGold} accessibilityLabel="Đang tải nhiệm vụ" /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
         </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Nhật ký lệnh"
           style={styles.iconButton} onPress={() => router.push('/(drone)/log')}>
@@ -96,9 +98,8 @@ export default function DroneRequestsScreen() {
         {selectedKey === 'all' ? `${tasks.length} nhiệm vụ đã tải` : `${filteredRequests.length} trong ${tasks.length} nhiệm vụ đã tải`}
       </Text>
 
-      {loading && tasks.length > 0 ? <Text accessibilityLiveRegion="polite" style={styles.loadingText}>Đang cập nhật…</Text> : null}
       {/* Content */}
-      {error ? <Text accessibilityRole="alert">{error} Danh sách đã tải vẫn được giữ trong phiên này.</Text> : null}
+      {error && tasks.length > 0 ? <View style={styles.errorCard}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text></View> : null}
       {loading && tasks.length === 0 ? (
         <OperatorTaskSkeleton />
       ) : error && tasks.length === 0 ? (
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: operatorAppearance.border,
     borderRadius: radius.md,
     backgroundColor: colors.surface,
   },
@@ -162,7 +163,7 @@ const styles = StyleSheet.create({
   filterMenu: {
     marginTop: spacing.xs,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: operatorAppearance.border,
     borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: colors.surface,
@@ -175,11 +176,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  filterOptionSelected: { backgroundColor: colors.surfaceAlt },
+  filterOptionSelected: { backgroundColor: operatorAppearance.pressed },
   optionLabel: { ...typography.bodyMd, color: colors.neutral, flex: 1 },
   optionLabelSelected: { fontWeight: '600' },
   optionCount: { ...typography.caption, color: colors.secondary },
   resultSummary: { color: colors.secondary, marginVertical: spacing.sm },
-  loadingText: { ...typography.caption, lineHeight: 18, color: colors.secondary, marginBottom: 8 },
+  errorCard: { ...operatorAppearance.card, padding: 12, marginBottom: 12 },
+  errorText: { ...typography.bodyMd, color: colors.secondary },
   listContainer: { gap: 12, paddingBottom: 24 },
 });
