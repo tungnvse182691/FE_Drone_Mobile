@@ -1,6 +1,6 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -14,6 +14,7 @@ import { useAuthStore } from '../../src/store/auth';
 import { apiClient } from '../../src/api/client';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
 import { OperatorTaskRow } from '../../src/components/drone/OperatorTaskRow';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -102,16 +103,19 @@ function DroneLogContent({ scope }: { scope: string }) {
     <View style={styles.sectionHeading}><MaterialIcons name="pending-actions" size={20} color={colors.primary} /><Text style={typography.titleMd}>Lệnh trên thiết bị</Text></View>
     <DroneTaskRecoveryList />
     <Card style={styles.card}>
-      <Text style={typography.titleMd}>Nhiệm vụ được giao</Text>
-      <Text style={typography.caption}>Danh sách nhiệm vụ đã tải. Chọn để xem trạng thái và phạm vi hiện hành.</Text>
+      <View style={styles.sectionHeading}>
+        <Text style={[typography.titleMd, { flex: 1 }]}>Nhiệm vụ được giao</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại danh sách" accessibilityState={{ busy: pages.loading, disabled: pages.loading }} disabled={pages.loading} onPress={() => void pages.refresh()} style={styles.refreshButton}>
+          {pages.loading ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
+        </Pressable>
+      </View>
       {tasks.map(task => <OperatorTaskRow key={task.id} task={task} onPress={() => { if (active()) router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(task.id)}`); }} />)}
       {!tasks.length ? <Text>Chưa có nhiệm vụ trong danh sách đã tải.</Text> : null}
       {listError ? <Text accessibilityRole="alert">{listError}</Text> : null}
-      {pages.nextCursor ? <Button title={listError ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.loadMore()} /> : !pages.loading && !listError ? <Text>Đã tải hết danh sách nhiệm vụ.</Text> : null}
-      <Button title="Đọc lại danh sách" variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.refresh()} />
+      {pages.nextCursor ? <Button title={listError ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.loadMore()} /> : null}
     </Card>
+    <Card style={styles.card}>
     <View style={styles.sectionHeading}><MaterialIcons name="cloud-done" size={20} color={colors.secondary} /><Text style={typography.titleMd}>Kết quả từ máy chủ</Text></View>
-    <Text style={[typography.caption, styles.note]}>Tra cứu trạng thái nhiệm vụ, tệp và bộ dữ liệu. Chưa có nguồn lịch sử chuyến bay.</Text>
     <Button title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
     {advanced ? <>
     <Card style={styles.card}>
@@ -136,6 +140,7 @@ function DroneLogContent({ scope }: { scope: string }) {
     </> : null}
     {busy ? <Text>Đang đọc dữ liệu máy chủ…</Text> : null}
     {error ? <Text accessibilityRole="alert">{error}</Text> : null}
+    </Card>
   </SafeAreaScreen>;
 }
 const styles = StyleSheet.create({
@@ -145,7 +150,8 @@ const styles = StyleSheet.create({
   note: { color: colors.secondary, marginBottom: spacing.sm },
   active: { color: colors.primaryDark },
   taskLink: { minHeight: 48, justifyContent: 'center', paddingRight: spacing.md },
-  card: { marginBottom: spacing.md, gap: spacing.sm, borderRadius: radius.xl },
+  card: { ...operatorAppearance.card, marginBottom: spacing.md, gap: spacing.sm },
+  refreshButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, color: colors.neutral },
   revealIdButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   revealIdText: { color: colors.secondary },

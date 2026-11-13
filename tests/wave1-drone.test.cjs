@@ -108,6 +108,6 @@ test('W1-02 Log loads next page and refresh resets the loaded list',async()=>{
  '../../src/components/drone/DroneDatasetReadbackPanel':{DroneDatasetReadbackPanel:'DroneDatasetReadbackPanel'},
  '../../src/components/drone/DroneTaskCommandPanel':{DroneTaskRecoveryList:'DroneTaskRecoveryList'},
  }});
- f.s.render();await f.s.flush();f.s.press('Tải thêm nhiệm vụ');await f.s.flush();assert.match(text(f.s),/Đã tải hết/);
- f.s.press('Đọc lại danh sách');await f.s.flush();assert.deepEqual(calls,[null,'p2',null]);assert.ok(f.s.nodes().some(n=>n.props.title==='Tải thêm nhiệm vụ'));f.s.unmount();
+ f.s.render();await f.s.flush();f.s.press('Tải thêm nhiệm vụ');await f.s.flush();assert.equal(f.s.nodes().filter(n=>n.type==='OperatorTaskRow').length,2);assert.ok(!f.s.nodes().some(n=>n.props.title==='Tải thêm nhiệm vụ'));
+ f.s.nodes().find(n=>n.props.accessibilityLabel==='Đọc lại danh sách').props.onPress();await f.s.flush();assert.deepEqual(calls,[null,'p2',null]);assert.ok(f.s.nodes().some(n=>n.props.title==='Tải thêm nhiệm vụ'));f.s.unmount();
 });
