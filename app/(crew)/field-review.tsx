@@ -26,7 +26,7 @@ function safeFieldErrorDetail(error: unknown): string {
   const stage=(error as {uploadStage?:unknown})?.uploadStage;
   if (stage === 'upload_put') return status ? `Bước tải bytes trả về HTTP ${status}. URL có chữ ký và lệnh tải vẫn được giữ để đối soát.` : 'Bước tải bytes chưa có kết quả chắc chắn; phiên và lệnh cũ vẫn được giữ.';
   if (status) return `Máy chủ trả về HTTP ${status}. Không tự tạo phiên hoặc gửi lại khi chưa đối soát.`;
-  return 'Không có thêm chi tiết an toàn để hiển thị. Không đưa URL có chữ ký, token hoặc bytes vào giao diện.';
+  return '';
 }
 
 function FieldErrorPanel({title,message,detail,expanded,onToggle,tone='error'}:{title:string;message:string;detail:string;expanded:boolean;onToggle:()=>void;tone?:'error'|'success'|'pending'}) {
@@ -49,7 +49,7 @@ export function fieldNoticeModel(notice: string, result?: FieldDraft['result'], 
   const success=notice.includes('Ảnh đã')||notice.startsWith('Đã lưu');
   const pending=notice.includes('đối soát')||notice.includes('chờ');
   return {title:success?'Đã cập nhật':pending?'Cần đối soát':'Chưa hoàn tất',tone:success?'success' as const:pending?'pending' as const:'error' as const,
-    summary:success?notice:'Mở chi tiết để xem hướng xử lý',detail:[notice,detail].filter(Boolean).join('\n')};
+    summary:success?notice:'Mở chi tiết để xem hướng xử lý',detail:success?'':[notice,detail].filter(Boolean).join('\n')};
 }
 function FieldNotice({model,expanded,onToggle}:{model:ReturnType<typeof fieldNoticeModel>;expanded:boolean;onToggle:()=>void}) {
   const color=model.tone==='success'?colors.success:model.tone==='pending'?colors.warning:colors.error;
@@ -57,9 +57,9 @@ function FieldNotice({model,expanded,onToggle}:{model:ReturnType<typeof fieldNot
     <View style={[styles.noticeBanner,{borderLeftColor:color}]}>
       <MaterialIcons name={model.tone==='success'?'check-circle':model.tone==='pending'?'info-outline':'error-outline'} size={22} color={color}/>
       <View style={styles.flex} accessibilityLiveRegion="polite"><Text style={styles.errorTitle}>{model.title}</Text><Text style={styles.noticeSummary}>{model.summary}</Text></View>
-      <Pressable accessibilityRole="button" accessibilityLabel={expanded?'Ẩn chi tiết thông báo':'Xem chi tiết thông báo'} accessibilityState={{expanded}} onPress={onToggle} style={styles.noticeToggle}><MaterialIcons name={expanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/></Pressable>
+      {model.detail?<Pressable accessibilityRole="button" accessibilityLabel={expanded?'Ẩn chi tiết thông báo':'Xem chi tiết thông báo'} accessibilityState={{expanded}} onPress={onToggle} style={styles.noticeToggle}><MaterialIcons name={expanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/></Pressable>:null}
     </View>
-    {expanded?<ScrollView style={styles.noticeDetails}><Text style={styles.errorDetail}>{model.detail}</Text></ScrollView>:null}
+    {expanded&&model.detail?<ScrollView style={styles.noticeDetails}><Text style={styles.errorDetail}>{model.detail}</Text></ScrollView>:null}
   </View>;
 }
 
@@ -172,6 +172,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [verifiedEtag,setVerifiedEtag]=useState('');
   const [previousMeasurements,setPreviousMeasurements]=useState<FieldMeasurementInput[]>([]);
   const [busy,setBusy]=useState(false), busyRef=useRef(false);
+  const [busyAction,setBusyAction]=useState('');
   const [loading,setLoading]=useState(true), [error,setError]=useState('');
   const [replayConfirmed,setReplayConfirmed]=useState<{key:string;context:string}|null>(null);
   const [repairRecovery,setRepairRecovery]=useState<RepairJournalRecord|null>(null);
@@ -244,7 +245,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     } catch(e){if(isLatest()){setServerLoaded(false);setVerifiedTask(null);setVerifiedEtag('');setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được trạng thái nhiệm vụ từ máy chủ.');}}
     finally{if(isLatest())setLoading(false);}
   },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
-  useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
+  useFocusEffect(useCallback(()=>{active.current=true;setBusy(busyRef.current);setCancelling(cancelRef.current);if(!busyRef.current){setBusyAction('');setUploadingCaptureId(null);}void load();return()=>{active.current=false;};},[load]));
   const block=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi lưu hoặc gửi hồ sơ.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
   const captureBlock=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi thêm ảnh.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
   const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
@@ -273,7 +274,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     if(action==='replay'&&(!replayConfirmed||replayConfirmed.key!==draft?.command?.key||replayConfirmed.context!==JSON.stringify(c)))return;
     if(action==='recover'&&(!repairRecovery||repairRecovery.phase==='CONFIRMED'||
       (['PREPARED','PENDING'].includes(repairRecovery.phase)&&(!repairRecoveryConfirmed||repairRecoveryConfirmed.key!==repairRecovery.key||repairRecoveryConfirmed.context!==JSON.stringify(c)))))return;
-    busyRef.current=true;setBusy(true);setNotice('');setReplayConfirmed(null);
+    busyRef.current=true;setBusy(true);setBusyAction(action);setNotice('');setNoticeDetail('');setShowErrorDetail(false);setReplayConfirmed(null);
     setRepairRecoveryConfirmed(null);
     try {
       const runtime=await openFieldRuntime(c);
@@ -335,12 +336,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       setNotice(fieldErrorMessage(e));
       setNoticeDetail(safeFieldErrorDetail(e));
       try{const saved=await loadFieldDraft(c,await openFieldRuntime(c));if(current(c)){setDraft(saved);await loadRepairRecovery(c,saved.result?.id);}}catch{/* keep explicit error; never reset an unresolved command */}
-    }}finally{busyRef.current=false;if(current(c)){setBusy(false);setUploadingCaptureId(null);}}
+    }}finally{busyRef.current=false;if(current(c)){setBusy(false);setBusyAction('');setUploadingCaptureId(null);}}
   };
   const confirmCancelUpload=()=>{
     const captureId=cancelTarget;setCancelTarget(null);
     if(!captureId||cancelRef.current)return;
-    cancelRef.current=true;setCancelling(true);
+    cancelRef.current=true;setCancelling(true);setNotice('');setNoticeDetail('');setShowErrorDetail(false);
     void (async()=>{
       const c=context();
       try {
@@ -456,7 +457,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             <Button variant="text" title={showMeasurementChoices?'Ẩn loại số đo':'Thêm số đo'} disabled={busy||frozen} onPress={()=>{if(!busy&&!frozen)setShowMeasurementChoices(v=>!v);}}/>
             {showMeasurementChoices?<View style={styles.choiceRow}>{[1,2,3,4,5,6].map(type=>{const template=measurementTemplate(type,'choice');if(!template||measurements.some(m=>m.type===template.type))return null;return <Button key={type} variant="secondary" title={fieldMeasurementTitle(template.type)} disabled={busy||frozen} onPress={()=>{if(busy||frozen)return;const next=measurementTemplate(type,randomUUID());if(next){setMeasurements(values=>values.some(m=>m.type===next.type)?values:[...values,next]);setEditingSampleId(next.sampleId);}setShowMeasurementChoices(false);}}/>;})}</View>:null}
           </View>:null}
-              <Button variant="primary" title="Lưu nháp số đo" loading={busy} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>
+              <Button variant="primary" title="Lưu nháp số đo" loading={busy&&busyAction==='save'} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>
               {notice?<Text accessibilityLiveRegion="polite" style={styles.errorText}>{notice}</Text>:null}
             </Card>
           </SafeAreaScreen>
@@ -485,7 +486,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </>:null}
           {locationProof?.checklist==='SLAB_MARKINGS_CONFIRMED'?(taskReadOnly?<Text style={styles.muted}>Ký hiệu tấm: {locationProof.observedSlabId||'Chưa có'}</Text>:<InputField label="Ký hiệu tấm đã đối chiếu thực tế" value={locationProof.observedSlabId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSlabId:value});}}/>):null}
 
-              {!taskReadOnly?<Button variant="primary" title="Lưu vị trí" loading={busy} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>:null}
+              {!taskReadOnly?<Button variant="primary" title="Lưu vị trí" loading={busy&&busyAction==='save'} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>:null}
               {notice?<FieldNotice model={fieldNoticeModel(notice,undefined,noticeDetail)} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
             </View></Card>
           </SafeAreaScreen>
@@ -513,7 +514,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
-        {!taskReadOnly?<Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/>:null}
+        {!taskReadOnly&&!frozen?<View style={styles.submitActions}><Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy&&busyAction==='submit'} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/></View>:null}
         </>:null}
         {fieldDraftPending(draft)?<Card style={styles.card}>
           <Text>Kết quả thao tác đang được đối soát. Không tạo hồ sơ mới hoặc thay nội dung lệnh đã lưu.</Text>
@@ -531,7 +532,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           }}/>
           {repairRecoveryConfirmed?<View><Text accessibilityRole="alert">Sẽ giữ nguyên khóa, nội dung và phiên bản gốc. Nếu máy chủ chưa nhận lệnh, thao tác này có thể thực thi lần đầu.</Text><Button variant="secondary" title="Xác nhận tiếp tục lệnh bổ sung đã lưu" disabled={busy} onPress={()=>void run('recover')}/><Button variant="text" title="Hủy" onPress={()=>setRepairRecoveryConfirmed(null)}/></View>:null}
         </Card>:null}
-        {evidenceModel.canCapture&&!draft.repairClaim&&draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/>:null}
+        {evidenceModel.canCapture&&!draft.repairClaim&&draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<View style={styles.submitActions}><Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/></View>:null}
         {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title="Về chi tiết để nộp hồ sơ chờ quản lý" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
       </>:null}
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={()=>setDeleteTarget(null)}>
@@ -553,6 +554,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
 }
 
 const styles = StyleSheet.create({
+  submitActions:{paddingTop:spacing.md,paddingBottom:spacing.sm,gap:spacing.sm},
   unitRow: {flexDirection:'row',gap:spacing.sm,marginBottom:spacing.sm},
   unitButton: {flex:1},
   previewBackdrop: {flex:1,backgroundColor:'#111111',padding:spacing.lg,paddingVertical:spacing.xl,justifyContent:'center',gap:spacing.md},
