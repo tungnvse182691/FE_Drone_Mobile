@@ -9,7 +9,7 @@ test('02C Profile wraps menus, preserves queue route and avoids empty fake KPI c
  assert.equal(s.nodes().find(n=>n.type==='SafeAreaScreen').props.header?.props.subtitle,'Hồ sơ');
  assert.doesNotMatch(text(s),/Giờ bay|Sự cố/);
  const queue=s.nodes().find(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('Hàng đợi trên thiết bị'));
- assert.ok(queue.props.style.minHeight>=48);queue.props.onPress();assert.equal(routes.at(-1),'/(drone)/sync');
+ const menuStyle=queue.props.style({pressed:false});assert.ok(menuStyle.some(v=>v?.minHeight>=48));assert.ok(queue.props.style({pressed:true}).some(v=>v?.backgroundColor));queue.props.onPress();assert.equal(routes.at(-1),'/(drone)/sync');
  assert.ok(s.nodes().some(n=>n.type==='Pressable'&&JSON.stringify(n.props.children).includes('Đăng xuất tài khoản')));s.unmount();
 });
 test('02C Sync gives queue priority and keeps UNKNOWN and local ACK distinct without replay',async()=>{

@@ -1,18 +1,13 @@
 import React, { useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
+import { operatorAppearance } from '../../src/components/drone/appearance';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-
-const softShadow = Platform.select({
-  ios: { shadowColor: '#1A1D20', shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
-  android: { elevation: 3 },
-  default: {},
-});
 
 function normalizeName(name: string): string {
   return name.replace(/\s*\([^)]*\)/g, '').trim();
@@ -55,7 +50,8 @@ export default function DroneProfileScreen() {
       {/* Settings Menu List */}
       <Card style={styles.menuCard}>
         <Pressable
-          style={styles.menuItem}
+          style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: operatorAppearance.pressed }]}
+          android_ripple={{ color: operatorAppearance.pressed }}
           onPress={() => setInfoVisible(true)}
           accessibilityRole="button"
         >
@@ -69,7 +65,8 @@ export default function DroneProfileScreen() {
         <View style={styles.menuDivider} />
 
         <Pressable
-          style={styles.menuItem}
+          style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: operatorAppearance.pressed }]}
+          android_ripple={{ color: operatorAppearance.pressed }}
           onPress={() => router.push('/(auth)/force-change-password')}
           accessibilityRole="button"
         >
@@ -83,7 +80,8 @@ export default function DroneProfileScreen() {
         <View style={styles.menuDivider} />
 
         <Pressable
-          style={styles.menuItem}
+          style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: operatorAppearance.pressed }]}
+          android_ripple={{ color: operatorAppearance.pressed }}
           onPress={() => router.push('/(drone)/sync')}
           accessibilityRole="button"
         >
@@ -91,7 +89,7 @@ export default function DroneProfileScreen() {
             <MaterialIcons name="sync" size={18} color={colors.secondary} />
             <View style={{ flex: 1 }}>
               <Text style={[typography.bodyMd, styles.menuItemTitle]}>Hàng đợi trên thiết bị</Text>
-              <Text style={[typography.caption, styles.menuSubText]}>Dữ liệu được giữ để khôi phục</Text>
+              <Text style={[typography.caption, styles.menuSubText]}>Xem tệp và yêu cầu đã lưu</Text>
             </View>
           </View>
           <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
@@ -243,8 +241,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     marginBottom: spacing.sm,
-    borderRadius: radius.xl,
-    ...softShadow,
+    ...operatorAppearance.card,
   },
   statItem: {
     alignItems: 'center',
@@ -295,6 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   menuCard: {
+    ...operatorAppearance.card,
     padding: 0,
     marginBottom: spacing.md,
     overflow: 'hidden',
@@ -357,6 +355,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   infoModalCard: {
+    borderWidth: 1,
+    borderColor: operatorAppearance.border,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
