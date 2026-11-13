@@ -453,7 +453,7 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
       <Text style={typography.titleMd}>Số đo hiện trường</Text>
       <Text style={styles.hint}>Nguồn: hồ sơ đo kiểm trên thiết bị của nhiệm vụ hiện tại; chưa thay cho hồ sơ được máy chủ tiếp nhận.</Text>
       {draft?.measurements.length?draft.measurements.map(m=><View key={m.sampleId}>
-        <Text style={styles.body}>{m.dimension==='AREA'?'Diện tích hư hại':m.type==='SlabFaultingHeight'?'Độ chênh tấm':m.type==='ShoulderErosionExtent'?'Kích thước xói lở':m.dimension==='DEPTH'?'Độ sâu thực tế':'Số đo hiện trường'}: {m.state==='KNOWN'&&typeof m.value==='number'&&Number.isFinite(m.value)&&m.unit?`${m.value} ${m.unit}`:m.unknownReason||'Chưa có giá trị và đơn vị được xác nhận'}</Text>
+        <Text style={styles.body}>{({Area:'Diện tích hư hại',SlabFaultingHeight:'Độ chênh tấm',ShoulderErosionExtent:'Kích thước xói lở',DepressionLength:'Chiều dài chỗ lõm',DepressionWidth:'Chiều rộng chỗ lõm',DepressionDepth:'Độ sâu chỗ lõm'} as Record<string,string>)[m.type]??'Số đo hiện trường'}: {m.state==='KNOWN'&&typeof m.value==='number'&&Number.isFinite(m.value)&&m.unit?`${m.value} ${m.unit}`:m.unknownReason||'Chưa có giá trị và đơn vị được xác nhận'}</Text>
       </View>):<Text style={styles.body}>Chưa có số đo trong hồ sơ đo kiểm hiện tại.</Text>}
     </Card>
     <Card style={styles.card}>

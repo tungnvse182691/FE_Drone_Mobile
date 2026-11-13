@@ -25,6 +25,19 @@ test('C3 FIELD review is state-specific and never granted by presentation when g
 });
 
 const {screen}=require('./helpers/roadfe-screen.cjs');
+test('C3 closeout distinguishes all three depression dimensions without treating LENGTH as depth',()=>{
+ const source=ts.createSourceFile('detail.tsx',fs.readFileSync('app/(crew)/wo-detail.tsx','utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+ const fn=source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='RepairFieldSummary');
+ const render=vm.runInNewContext(ts.transpileModule(fn.getText().replace(/^export /,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText+';RepairFieldSummary',{
+  React:{createElement:(_type,_props,...children)=>children.flat(Infinity).join('')},View:'View',Text:'Text',Card:'Card',styles:{},spacing:{},typography:{},
+ });
+ const result=render({draft:{captures:[],measurements:[
+  {sampleId:'length',type:'DepressionLength',dimension:'LENGTH',state:'KNOWN',value:2,unit:'m'},
+  {sampleId:'width',type:'DepressionWidth',dimension:'LENGTH',state:'KNOWN',value:50,unit:'cm'},
+  {sampleId:'depth',type:'DepressionDepth',dimension:'LENGTH',state:'UNKNOWN',value:null,unit:'mm',unknownReason:'Có nước đọng'},
+ ]}});
+ for(const text of ['Chiều dài chỗ lõm: 2 m','Chiều rộng chỗ lõm: 50 cm','Độ sâu chỗ lõm: Có nước đọng'])assert.ok(result.includes(text),text);
+});
 const common={'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'}};
 function repairOverview(context,history=[]){
  const identity={actor:'actor',scope:'scope',environment:'qa',projectId:'project',taskId:'task'};
