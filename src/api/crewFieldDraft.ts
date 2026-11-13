@@ -258,7 +258,7 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     const reason = crew.fieldCapabilityBlock(detail.data,detail.etag,context.actor,'capture');
     if (reason) throw new Error(reason);
     if (purpose === 'AFTER' && detail.data.purpose !== 'PostRepair') throw new Error('Ảnh sau sửa chỉ hợp lệ với nhiệm vụ sau sửa chữa.');
-    if (purpose==='AFTER'&&detail.data.mode==='NORMAL') {
+    if (purpose==='AFTER'&&['NORMAL','CONDITIONAL_FT'].includes(detail.data.mode??'')) {
       await verifyRepairClaim(draft,detail.data,runtime);
       if(!camera||!postRepairCapture)throw Error('repair_after_camera_required');
     }
@@ -294,7 +294,8 @@ async function claimSource(context: FieldContext,task: crew.FieldTaskViewFact,ru
   const history=await guarded(context,runtime,async()=>runtime.repairHistory ? runtime.repairHistory() : readRepairHistory(context));
   const finish=history.at(-1),start=history.find(row=>row.operation==='start');
   const ctx=task.repairContext;
-  if(!ctx||task.mode!=='NORMAL'||ctx.mode!=='NORMAL'||ctx.status!=='InProgress'||task.purpose!=='PostRepair'||
+  const repairMode=task.mode==='NORMAL'?'NORMAL':task.mode==='CONDITIONAL_FT'?'FAST_TRACK':null;
+  if(!ctx||!repairMode||ctx.mode!==repairMode||ctx.status!=='InProgress'||task.purpose!=='PostRepair'||
     !start?.receipt||!finish?.receipt||start.phase!=='CONFIRMED'||finish.phase!=='CONFIRMED'||finish.operation!=='finish'||
     history.some(row=>row.phase!=='CONFIRMED')||
     !sameResource(finish.identity,context)||!sameResource(start.identity,context)||
@@ -316,7 +317,7 @@ async function verifyRepairClaim(draft: FieldDraft,task: crew.FieldTaskViewFact,
   if(!draft.repairClaim||Object.entries(source).some(([key,value])=>draft.repairClaim![key as keyof typeof source]!==value))throw Error('repair_claim_source_changed');
   return source;
 }
-/** Explicitly select NORMAL claim while keeping all pre-execution evidence and measurements. */
+/** Explicit repair claim from a confirmed finish, retaining pre-execution evidence. */
 export async function prepareFieldRepairClaim(context: FieldContext,runtime?: FieldRuntime): Promise<FieldDraft> {
   const r=runtime??await openFieldRuntime(context);
   return exclusive(context,async()=>{
@@ -350,7 +351,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   checkCancel();
   if (c.purpose === 'AFTER' && response.data.purpose !== 'PostRepair') throw new Error('field_after_not_allowed');
   if(draft.repairClaim)await verifyRepairClaim(draft,response.data,runtime);
-  if(c.purpose==='AFTER'&&response.data.mode==='NORMAL'&&!draft.repairClaim)throw Error('repair_finish_required');
+  if(c.purpose==='AFTER'&&['NORMAL','CONDITIONAL_FT'].includes(response.data.mode??'')&&!draft.repairClaim)throw Error('repair_finish_required');
   const bytes = await guarded(draft,runtime,() => runtime.bytes(c.uri));
   if (bytes.length !== c.size || await guarded(draft,runtime,() => runtime.hash(bytes)) !== c.checksum) throw new Error('field_checksum_mismatch');
   checkCancel();

@@ -18,7 +18,7 @@ import { passwordSessionIdentity } from '../../src/api/authApi';
 import { randomUUID } from 'expo-crypto';
 import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
 import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal,
-  validateCrewTaskDetail, normalRepairBlock, getFieldInspectionTaskDetailReal,
+  validateCrewTaskDetail, repairExecutionBlock, getFieldInspectionTaskDetailReal,
   fastTrackRepairBlock, isRepairItemVersion,
   isConcurrencyConflict, isPreconditionRequired, newIdempotencyKey,
   type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
@@ -266,7 +266,7 @@ export function RepairContractStatus({ task }: { task: CrewTask }) {
   </View>;
 }
 
-/** Pure read-only presentation of the server supplied FastTrack bootstrap. */
+/** Validate the supplied FastTrack context before mounting the explicit repair workflow. */
 export function FastTrackRepairSummary({ task }: { task: CrewTask }) {
   const detail = task.detail;
   if (detail?.mode !== 'CONDITIONAL_FT') return null;
@@ -290,21 +290,17 @@ export function FastTrackRepairSummary({ task }: { task: CrewTask }) {
   </>;
   return <>
     <Text style={typography.titleMd}>Sửa chữa nhanh, có điều kiện</Text>
-    <Text>Trạng thái hạng mục: {ctx.status}</Text>
-    <Text>Kế hoạch sửa chữa: {ctx.repairPlan}</Text>
-    <Text>Phiên bản checklist: {ctx.checklistVersion}</Text>
-    <Text selectable>Phiên bản hạng mục: {ctx.itemVersion}</Text>
-    <Text>Thông tin sửa chữa đã được máy chủ cung cấp. Chức năng thi công sửa chữa nhanh chưa được mở trên ứng dụng.</Text>
-    <CrewFastTrackEligibility key={JSON.stringify([task.projectId,task.id,ctx.bindingId,ctx.itemVersion])} projectId={task.projectId} taskId={task.id} />
-    <Button variant="secondary" title="Thi công sửa chữa nhanh" disabled onPress={() => {}} />
+    <Text style={styles.hint}>Kiểm tra điều kiện trước sửa, ghi nhận thi công và gửi hồ sơ để quản lý đánh giá.</Text>
+    <NormalRepairBootstrap task={task} stage="overview" />
   </>;
 }
 
-/** Explicit NORMAL commands only. Legacy repair content remains unmounted. */
+/** Explicit online repair commands. Legacy repair content remains unmounted. */
 export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; stage?:'all'|'progress'|'closeout'|'overview' }) {
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
   const identity=useCrewIdentity();
-  const assessmentBlock=task.detail&&identity.user&&identity.scope?normalRepairBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên đội sửa chữa hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
+  const assessmentBlock=task.detail&&identity.user&&identity.scope?repairExecutionBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên đội sửa chữa hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
+  const fastTrack=task.detail?.mode==='CONDITIONAL_FT';
   const [storedHistory,setHistory]=useState<RepairJournalRecord[]>([]),[storedDraft,setDraft]=useState<FieldDraft|null>(null);
   const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
   const [showRepairTechnical,setShowRepairTechnical]=useState(false);
@@ -368,7 +364,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     }
   };
   return <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-    <Text style={typography.titleMd}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':'Sửa chữa theo kế hoạch'}</Text>
+    <Text style={typography.titleMd}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
     {stage!=='overview'?<Card style={styles.card}>
       <Text style={typography.labelLg}>MỐC XỬ LÝ ĐÃ ĐỐI SOÁT</Text>
       <Text style={styles.body}>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
@@ -381,7 +377,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       <Text style={styles.hint}>Luồng thi công riêng, theo ngữ cảnh và quyền đã được máy chủ xác nhận.</Text>
       <Button variant="secondary" title="Theo dõi thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})} />
       <Button variant="secondary" title="Hồ sơ hoàn tất thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})} />
-      <Button variant="text" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={()=>router.push({pathname:'/(crew)/repair-correction',params:{id:task.id,projectId:task.projectId}})} />
+      {!fastTrack?<Button variant="text" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={()=>router.push({pathname:'/(crew)/repair-correction',params:{id:task.id,projectId:task.projectId}})} />:null}
     </> : null}
     {stage==='closeout'?<>
       <RepairFieldSummary draft={draft}/>
@@ -417,6 +413,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     </View>)}
     {stage!=='closeout'&&stage!=='overview'?<>
     {assessment&&!ready?<Text>Đánh giá còn thiếu thông tin. Bổ sung số đo hoặc ảnh trong hồ sơ hiện trường rồi chủ động gửi đánh giá mới; lịch sử cũ được giữ nguyên.</Text>:null}
+    {fastTrack?<Card style={styles.card}><CrewFastTrackEligibility key={JSON.stringify([task.projectId,task.id,result.itemVersion,assessment?.key])} projectId={task.projectId} taskId={task.id}/><Text style={styles.hint}>Khi bắt đầu, ứng dụng kiểm tra lại điều kiện với máy chủ. Nếu còn thiếu, thi công chưa được mở.</Text></Card>:null}
     <Button variant="secondary" title="Bắt đầu thi công" disabled={busy||!loaded||!ready||!!pending||!!started||activeHistory.some(c=>c.operation==='start')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('start')}/>
     </>:null}
     {rejectedCommand?<View><Text>Thao tác bị từ chối. Cần đọc lại điều kiện hiện hành và xác nhận giải quyết lệnh cũ trước khi chuẩn bị lệnh mới. Lệnh chưa rõ kết quả không dùng cách này.</Text><Button variant="secondary" title="Kiểm tra để chuẩn bị lại thao tác bị từ chối" disabled={busy||!loaded} onPress={()=>{const i=currentRepairIdentity(task.projectId,task.id);if(i)setConfirmation({identity:i,key:rejectedCommand.key,kind:'resolve'});}}/></View>:null}

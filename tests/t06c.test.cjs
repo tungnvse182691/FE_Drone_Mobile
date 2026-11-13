@@ -203,7 +203,7 @@ function screen(file,name,states,overrides={}){
  const draft={...identity,captures:[],measurements:[]};
  const deps={react:React,'react-native':{StyleSheet:{create:v=>v}},'expo-router':{router:{push:v=>routes.push(v)},useFocusEffect:f=>f(),useIsFocused:()=>true,useLocalSearchParams:()=>({mode:'AFTER'})},
  '../../src/design-tokens':{colors:{},radius:{},spacing:{},typography:{}},'./tasks':{useCrewIdentity:()=>({user:{id:ids.actor},scope:'session'})},
- '../../src/api/crewApi':{normalRepairBlock:()=>null,fieldCapabilityBlock:()=>null},
+ '../../src/api/crewApi':{repairExecutionBlock:()=>null,fieldCapabilityBlock:()=>null},
  '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:{status:'InProgress'},reload:async()=>{}})},
  '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>identity,sameRepairIdentity:()=>true},
  '../../src/api/crewFieldDraft':{prepareFieldRepairClaim:async()=>{calls.push('claim');return draft;},currentFieldContext:()=>identity,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft},

@@ -252,7 +252,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
   const frozen=!!draft?.command;
   const positionSources=crewPositionSources(verifiedTask,positionGeometry);
-  const normalMeasurement=verifiedTask?.mode==='NORMAL'&&!draft?.repairClaim&&!supplementMode;
+  const normalMeasurement=(verifiedTask?.mode==='NORMAL'||verifiedTask?.mode==='CONDITIONAL_FT')&&!draft?.repairClaim&&!supplementMode;
   const historicalCancelPending=historicalDraft?.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')));
   const canStartFreshSession=!!historicalDraft&&!fieldDraftPending(historicalDraft)&&!historicalCancelPending;
   const recoverHistorical=async(action:'new'|'read'|'replay')=>{
@@ -513,7 +513,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {evidenceModel.canCapture?<Button variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen||cancelling} onPress={()=>void run('camera')}/>:null}
         </Card>
         {block?<Text>{block}</Text>:null}
-        {normalMeasurement?<Text>Với sửa chữa theo kế hoạch, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
+        {normalMeasurement?<Text>Trước khi sửa chữa, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}
         {!taskReadOnly&&!frozen?<View style={styles.submitActions}><Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy&&busyAction==='submit'} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/></View>:null}
         </>:null}
         {fieldDraftPending(draft)?<Card style={styles.card}>

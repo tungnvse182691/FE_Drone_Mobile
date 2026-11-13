@@ -46,14 +46,15 @@ test('G03 FastTrack block is read-only and rejects missing context without infer
   assert.match(block(task({ repairContext: context({ mode: 'NORMAL' }) }), ids.project, ids.task, ids.actor), /không hợp lệ/i);
 });
 
-test('G03 detail UI exposes plan/checklist/item version only for valid read context and keeps execution disabled', () => {
+test('G03 detail mounts explicit online workflow only after validating FastTrack context', () => {
   const source = fs.readFileSync('app/(crew)/wo-detail.tsx', 'utf8');
   assert.match(source, /Sửa chữa nhanh, có điều kiện/);
-  assert.match(source, /Kế hoạch sửa chữa/);
-  assert.match(source, /Phiên bản checklist/);
+  assert.match(source, /Phương án:/);
+  assert.match(source, /Phiên bản bộ kiểm tra/);
   assert.match(source, /Phiên bản hạng mục/);
   assert.match(source, /Chưa có ngữ cảnh sửa chữa nhanh hiện hành/);
-  assert.match(source, /Chức năng thi công sửa chữa nhanh tiếp tục được khóa|chưa được mở/);
+  assert.match(source, /<NormalRepairBootstrap task=\{task\} stage="overview"/);
+  assert.match(source, /chưa có đủ thông tin phân công hạng mục/i);
 });
 
 test('G03 does not replace task ETag with repair item version or add repair mutation', () => {

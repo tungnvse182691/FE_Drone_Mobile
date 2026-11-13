@@ -391,6 +391,28 @@ export function normalRepairBlock(task: FieldTaskViewFact, etag: string, actorId
   return 'Kết thúc, nộp và bổ sung sửa chữa chưa được mở.';
 }
 
+/** Online execution admission. FastTrack has its own context; eligibility is checked separately before start. */
+export function repairExecutionBlock(task: FieldTaskViewFact, etag: string, actorId: string,
+  capability: NormalRepairCapability): string | null {
+  if (task.mode !== 'CONDITIONAL_FT') return normalRepairBlock(task, etag, actorId, capability);
+  try {
+    validateCrewTaskDetail(task, etag, task.projectId, task.id, actorId);
+    validateFastTrackRepairContext(task, task.projectId, task.id, actorId, etag);
+  } catch { return 'Chưa xác minh được phân công sửa chữa nhanh hiện hành.'; }
+  if (!isRepairItemVersion(task.version)) return 'Phiên bản nhiệm vụ không hợp lệ.';
+  const context = task.repairContext!;
+  if (capability === 'bootstrap') return null;
+  if (!isCrewResourceId(task.firstStartOriginId)) return 'Cần bắt đầu nhiệm vụ trước khi thi công.';
+  if (capability === 'assessment' || capability === 'start') {
+    return context.status === 'Assigned' && task.status === 'InProgress' ? null : 'Nhiệm vụ hoặc hạng mục chưa ở bước đánh giá trước sửa.';
+  }
+  if (capability === 'finish' || capability === 'attempt') {
+    return context.status === 'InProgress' && task.purpose === 'PostRepair' &&
+      task.status === (capability === 'attempt' ? 'Submitted' : 'InProgress') ? null : 'Chưa đủ mốc thi công và hồ sơ sau sửa để thực hiện bước này.';
+  }
+  return 'Bổ sung sửa chữa nhanh chưa được mở.';
+}
+
 /** Inspect both durable row kind and payload kind; a FIELD alias cannot hide repair work. */
 export function isLegacyRepairQueueEntry(kind: unknown, payload: unknown): boolean {
   const body = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
@@ -540,6 +562,7 @@ export interface RepairEligibilityReadView {
   policyState: string;
   missingReasons: string[];
   version: string;
+  assessmentId?: string | null;
 }
 
 // -----------------------------------------------------------------------------

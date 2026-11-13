@@ -17,7 +17,7 @@ export default function CrewRepairCompleteScreen(){
  <Text style={styles.body}>{crewStatusLabel(task.status)}</Text>
  <Text style={styles.hint}>Thi công xong, gửi hồ sơ và được quản lý xác nhận là các bước riêng biệt.</Text>
  </Card>
- {task.detail?.mode==='NORMAL'?<NormalRepairPanel task={task} stage="closeout"/>:<Card style={styles.summary}><Text style={styles.body}>Chưa có ngữ cảnh sửa chữa theo kế hoạch phù hợp. Chức năng thi công chưa khả dụng.</Text></Card>}
+ {(task.detail?.mode==='NORMAL'||task.detail?.mode==='CONDITIONAL_FT')?<NormalRepairPanel task={task} stage="closeout"/>:<Card style={styles.summary}><Text style={styles.body}>Chưa có ngữ cảnh sửa chữa theo kế hoạch phù hợp. Chức năng thi công chưa khả dụng.</Text></Card>}
  <Button title="Về chi tiết nhiệm vụ" variant="secondary" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>
  </SafeAreaScreen>}</CrewTaskBoundary>;
 }

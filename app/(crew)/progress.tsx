@@ -17,7 +17,7 @@ export default function CrewRepairProgressScreen(){
  <Text style={styles.body}>{crewStatusLabel(task.status)}</Text>
  <Text style={styles.hint}>Các mốc dưới đây dựa trên biên nhận máy chủ. Không tự bắt đầu thi công khi mở màn hình.</Text>
  </Card>
- {task.detail?.mode==='NORMAL'?<NormalRepairPanel task={task} stage="progress"/>:<Card style={styles.summary}><Text style={styles.body}>Chưa có ngữ cảnh sửa chữa theo kế hoạch phù hợp. Chức năng thi công chưa khả dụng.</Text></Card>}
+ {(task.detail?.mode==='NORMAL'||task.detail?.mode==='CONDITIONAL_FT')?<NormalRepairPanel task={task} stage="progress"/>:<Card style={styles.summary}><Text style={styles.body}>Chưa có ngữ cảnh sửa chữa theo kế hoạch phù hợp. Chức năng thi công chưa khả dụng.</Text></Card>}
  <Button title="Về chi tiết nhiệm vụ" variant="secondary" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>
  </SafeAreaScreen>}</CrewTaskBoundary>;
 }

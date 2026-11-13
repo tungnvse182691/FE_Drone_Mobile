@@ -55,7 +55,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const [ready, setReady] = useState(false);
   const [postRepairCapture,setPostRepairCapture]=useState(false);
   const [cameraShooting, setCameraShooting] = useState(false);
-  const normalAfter=mode==='after'&&task.detail?.mode==='NORMAL';
+  const normalAfter=mode==='after'&&(task.detail?.mode==='NORMAL'||task.detail?.mode==='CONDITIONAL_FT');
   const afterBlocked=normalAfter&&(!draft?.repairClaim||!postRepairCapture);
   const activeRef=useRef(false),savingRef=useRef(false),pickerRef=useRef(false),cameraShootingRef=useRef(false);
   const handleShootingChange = useCallback((value: boolean) => { cameraShootingRef.current = value; setCameraShooting(value); }, []);

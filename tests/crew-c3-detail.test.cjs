@@ -33,7 +33,7 @@ function repairOverview(context,history=[]){
   '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:context,reload:async()=>{}})},
   '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>identity,sameRepairIdentity:(a,b)=>a?.actor===b?.actor},
   '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>history,readRepairFieldDraft:async()=>null,dispatchRepair:async()=>{mutations++;},repairErrorMessage:()=>''},
-  '../../src/api/crewFieldDraft':{},'expo-crypto':{},'../../src/offline/database':{},'../../src/api/authApi':{},'../../src/api/crewApi':{normalRepairBlock:()=>null},
+  '../../src/api/crewFieldDraft':{},'expo-crypto':{},'../../src/offline/database':{},'../../src/api/authApi':{},'../../src/api/crewApi':{repairExecutionBlock:()=>null},
   './tasks':{useCrewIdentity:()=>({scope:'scope',user:{id:'actor'}})},
  },moduleFactories:{'expo-router':({react})=>({useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{push:()=>{}}})}});
  // Run the actual focus effect through the screen harness so persisted journal is loaded.

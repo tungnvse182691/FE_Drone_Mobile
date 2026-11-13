@@ -32,7 +32,7 @@ export function timestamp(value: unknown): value is string {
 export async function fresh(i: RepairIdentity,r: RepairRuntime,expected?: RepairCommandIdentity) {
   const response=await guarded(i,r,()=>r.api.getFieldInspectionTaskDetailReal(i.projectId,i.taskId));
   r.api.validateCrewTaskDetail(response.data,response.etag,i.projectId,i.taskId,i.actor);
-  const block=r.api.normalRepairBlock(response.data,response.etag,i.actor,'bootstrap');
+  const block=r.api.repairExecutionBlock(response.data,response.etag,i.actor,'bootstrap');
   if(block)throw Error(block);
   const ctx=response.data.repairContext!;
   if(expected && (expected.assignmentId!==response.data.assignmentId || expected.packageId!==ctx.packageId ||
