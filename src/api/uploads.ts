@@ -336,7 +336,9 @@ export function uploadErrorMessage(error: unknown): string | null {
  * Client riêng cho storage: KHÔNG dùng `apiClient` để tránh interceptor gắn bearer
  * RoadGuard + Idempotency-Key lên presigned URL của nhà cung cấp lưu trữ.
  */
-const storageClient = axios.create({ timeout: 120000 });
+// An 8 MiB part can exceed two minutes on a slow field connection.
+// Keep a finite transfer deadline; AbortSignal still cancels on session changes.
+const storageClient = axios.create({ timeout: 10 * 60 * 1000 });
 
 async function putRawBytesToStorageUrl(
   url: string,
@@ -344,7 +346,10 @@ async function putRawBytesToStorageUrl(
   contentType: string,
   signal?: AbortSignal,
 ): Promise<{ eTag: string }> {
-  const response = await storageClient.put(url, bytes, {
+  // Axios transforms a typed-array view into its entire backing buffer.
+  // Copy the selected part so adjacent parts are never sent with this request.
+  const partBuffer = new Uint8Array(bytes).buffer;
+  const response = await storageClient.put(url, partBuffer, {
     headers: { 'Content-Type': contentType },
     signal,
   });
