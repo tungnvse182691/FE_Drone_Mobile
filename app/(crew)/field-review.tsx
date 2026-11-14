@@ -429,7 +429,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </View>
       </Modal>
       {draft&&serverLoaded&&!localRecoveryBlocked?<>
-        {!taskReadOnly?<>
+        {!taskReadOnly&&!frozen?<>
         <Card style={styles.card}>
           <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Số đo hiện trường</Text><MaterialIcons name="straighten" size={24} color={colors.primaryDark}/></View>
           {measurements.map(m=><View key={m.sampleId} style={styles.resultHeading}><Text style={[typography.bodyMd,styles.flex]}>{fieldMeasurementTitle(m.type)}</Text><Text style={styles.resultValue}>{m.value===null?'Chưa đo':`${m.value} ${m.unit}`}</Text></View>)}
@@ -498,7 +498,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </SafeAreaScreen>
         </Modal>
         <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
-          {!draft.captures.length?<Text>Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.</Text>:null}
+          {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.'}</Text>:null}
           <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id);return <View key={c.id} style={styles.photoTile}>
             <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
               <View pointerEvents="none" style={[styles.photoOverlay,feedback.busy&&styles.photoOverlayBusy]} accessible accessibilityLabel={`Ảnh ${index+1}: ${feedback.label}${feedback.percent===null?'':` ${feedback.percent}%`}`} accessibilityState={{busy:feedback.busy}} accessibilityLiveRegion="polite">
@@ -516,7 +516,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </View>;})}</View>
           {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
           {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
-          {evidenceModel.canCapture?<Button variant="secondary" title="Chụp / chọn ảnh" disabled={busy||frozen||cancelling} onPress={()=>void run('camera')}/>:null}
+          {evidenceModel.canCapture&&!frozen?<Button variant="secondary" title="Chụp / chọn ảnh" disabled={busy||cancelling} onPress={()=>void run('camera')}/>:null}
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Text>Trước khi sửa chữa, lưu số đo và tải ảnh lên để đánh giá trước sửa tại chi tiết nhiệm vụ. Chỉ lập hồ sơ sửa chữa sau khi kết thúc thi công; hồ sơ đo kiểm không thay cho hồ sơ sửa chữa.</Text>:null}

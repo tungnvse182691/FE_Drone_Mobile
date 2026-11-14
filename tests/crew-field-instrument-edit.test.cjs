@@ -35,7 +35,7 @@ async function mounted(instrument, command = null, initial = {}, status, submiss
     },
   });
   s.render(); await s.flush();
-  if(status!=='Submitted') {s.press('Chỉnh số đo');s.render();s.press(`Sửa ${{DepressionDepth:'Độ sâu chỗ lõm'}[initial.type]??'Diện tích hư hại'}`);s.render();}
+  if(status!=='Submitted'&&!command) {s.press('Chỉnh số đo');s.render();s.press(`Sửa ${{DepressionDepth:'Độ sâu chỗ lõm'}[initial.type]??'Diện tích hư hại'}`);s.render();}
   return {s,calls,saved:()=>saved,input:()=>s.nodes().find(n=>n.type==='InputField'&&n.props.label==='Dụng cụ đo thực tế')};
 }
 
@@ -102,13 +102,12 @@ test('FIELD DepressionDepth is displayed as depth, never as length merely becaus
   assert.match(text,/Độ sâu/);assert.doesNotMatch(text,/Chiều dài/);
   h.s.unmount();
 });
-test('FIELD pending command freezes edits and save even if handlers are invoked',async()=>{
+test('FIELD pending command exposes reconciliation without editable draft controls',async()=>{
   const command={phase:'pending',key:'immutable-key',version:'original-version',body:{measurements:[{instrument:'RULER'}]}};
   const h=await mounted('RULER',command), before=JSON.stringify(h.saved());
-  h.s.input('Dụng cụ đo thực tế','Không được ghi');
-  assert.equal(h.input().props.value,'RULER');
-  assert.equal(h.s.nodes().find(n=>n.type==='Button'&&n.props.title==='Lưu nháp số đo').props.disabled,true);
-  h.s.press('Lưu nháp số đo'); await h.s.flush();
+  assert.equal(h.input(),undefined);
+  assert.equal(h.s.nodes().some(n=>n.type==='Button'&&['Chỉnh số đo','Chỉnh vị trí','Lưu nháp số đo','Chụp / chọn ảnh'].includes(n.props.title)),false);
+  assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Đối soát / gửi lại đúng lệnh đã lưu'));
   assert.equal(h.calls.length,0); assert.equal(JSON.stringify(h.saved()),before);
   h.s.unmount();
 });

@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
-async function mounted(){
+async function mounted(options={}){
  const context={actor:'crew',scope:'session',environment:'test',projectId:'project',taskId:'task'};
  let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0;
- let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN'}],captures:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
+ let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN'}],captures:options.emptyCaptures?[]:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
  const s=screen('app/(crew)/field-review.tsx',{
  expose:'CrewFieldReviewScreenContent,fieldNoticeModel,safeFieldErrorDetail',exportName:'CrewFieldReviewScreenContent',
  props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY'}},
@@ -12,7 +12,7 @@ async function mounted(){
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},
- '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:submitted?'Submitted':'InProgress',requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:'receipt',taskId:'task',readiness:'READY',measurements:draft.measurements,evidence:[]}})},
+ '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:'READY',measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
  '../../src/api/crewFieldDraft':{currentFieldContext:()=>context,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>structuredClone(draft),measurementTemplate:()=>draft.measurements[0],fieldDraftPending:d=>d.command?.phase==='pending',fieldErrorMessage:e=>e.message,
  saveFieldMeasurements:async()=>{if(waitSave)await waitSave.promise;if(failSave)throw Error('Lưu chưa thành công');return structuredClone(draft);},acknowledgeFieldResult:async()=>({...draft,command:null}),
  uploadAndSubmitFieldDraft:async()=>{submitted=true;draft={...draft,command:{phase:'confirmed'},result:{id:'receipt',taskId:'task',readiness:'READY'}};return structuredClone(draft);},
@@ -35,7 +35,16 @@ test('FIELD saving measurements never shows submit spinner and success drops old
 });
 test('FIELD confirmed frozen command hides redundant disabled submit',async()=>{
  const h=await mounted();h.setCommand({phase:'confirmed'});await h.focus();
+ assert.equal(h.s.nodes().some(n=>n.type==='Button'&&['Chỉnh số đo','Chỉnh vị trí','Chụp / chọn ảnh'].includes(n.props.title)),false);
  assert.equal(h.submit(),undefined);assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Đã xem kết quả — tạo nháp mới'));h.s.unmount();
+});
+
+test('FIELD supplement with retained server evidence does not claim there are no photos',async()=>{
+ const h=await mounted({previous:true,emptyCaptures:true});
+ const text=h.s.nodes().filter(n=>n.type==='Text').map(n=>JSON.stringify(n.props.children)).join(' ');
+ assert.equal(text.includes('Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.'),false);
+ assert.ok(text.includes('Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.'));
+ assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Gửi bổ sung đo kiểm'&&!n.props.disabled));h.s.unmount();
 });
 
 test('FIELD confirmed send refreshes task and receipt immediately without another user refresh',async()=>{
