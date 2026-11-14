@@ -85,7 +85,9 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
   if(!scope.key)return <Text>Cần phiên Operator hợp lệ.</Text>;
   // Keep the journal mounted while collapsed. A saved command or a storage
   // failure must remain visible independently of the current task GET/status.
-  if (collapsed) return saved && saved.phase !== 'RECEIPT' || error ?
+  // A failed assignment read is not a pending command. Only a real unresolved
+  // row or an unreadable journal needs the collapsed recovery notice.
+  if (collapsed) return (saved && saved.phase !== 'RECEIPT') || (error && !ready) ?
     <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
       <View accessibilityRole="alert" testID="command-recovery-notice">
         <Text style={typography.titleMd}>{saved?.phase === 'PREPARED' ? 'Đã lưu lệnh, chưa gửi' : saved && saved.phase !== 'RECEIPT' ? 'Chưa rõ kết quả lệnh đã gửi' : 'Cần kiểm tra lịch sử yêu cầu'}</Text>

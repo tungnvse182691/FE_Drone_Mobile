@@ -27,6 +27,14 @@ for(const row of [null,{phase:'RECEIPT',command:{operation:'accept',payload:{}}}
 test('UI03 collapsed journal read failure remains visible and retryable',async()=>{
  const s=panel(null,{open:async()=>{throw Error('storage');}});s.render();await s.flush();assert.ok(s.nodes().some(n=>n.props?.testID==='command-recovery-notice'));assert.match(text(s),/Không đọc được/);assert.equal(s.posts(),0);s.unmount();
 });
+
+test('Revoked assignment with an empty readable journal does not invent a pending command',async()=>{
+ const s=panel(null,{open:async()=>({read:async()=>null,readCurrent:async()=>{throw {response:{status:403}};},close(){}})});
+ s.render();await s.flush();
+ assert.ok(!s.nodes().some(n=>n.props?.testID==='command-recovery-notice'));
+ assert.ok(!s.nodes().some(n=>n.props?.title==='Xem lệnh cần đối soát'));
+ assert.equal(s.posts(),0);s.unmount();
+});
 test('UI03 scope change hides previous pending before new journal resolves',async()=>{
  const d=deferred();let calls=0;const s=panel(null,{open:async()=>({read:()=>++calls===1?Promise.resolve({phase:'PREPARED',command:{operation:'accept',payload:{}}}):d.promise,close(){}})});
  s.render();await s.flush();s.scope.key='scope-b';s.render();await s.flush();assert.doesNotMatch(text(s),/Đã lưu lệnh, chưa gửi/);d.resolve(null);await s.flush();s.unmount();
