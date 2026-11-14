@@ -8,6 +8,7 @@ import { crewReadGuard, currentQueueIdentity, readAssignedRepairFacts } from '..
 import { sameQueueIdentity } from '../../offline/upload-queue';
 import { crewHistoryTime } from './CrewTaskFacts';
 import { CrewSafetyInstallation } from './CrewSafetyInstallation';
+import { CrewSafetyCheck } from './CrewSafetyCheck';
 
 /** Current assigned Crew read projection. Mutations use separate durable command flows. */
 export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:string}) {
@@ -16,6 +17,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[expanded,setExpanded]=useState(false);
   const [loaded,setLoaded]=useState(false);
   const [installation,setInstallation]=useState<null|{projectId:string;packageId:string;itemId:string;measureId:string}>(null);
+  const [check,setCheck]=useState<typeof installation>(null);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
@@ -52,6 +54,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
               {m.firstCheckDueAt?<Text style={styles.hint}>Hạn kiểm tra: {crewHistoryTime(m.firstCheckDueAt)}</Text>:null}
               <Text style={styles.hint}>{m.checks.length} lần kiểm tra · {new Set((m.eligibleEvidenceLinks??[]).map(l=>l.fileId)).size} ảnh đủ điều kiện</Text>
               {!m.installedAt?<Button variant="secondary" title="Xác nhận lắp đặt" onPress={()=>setInstallation({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
+              {m.installedAt?<Button variant="secondary" title="Kiểm tra an toàn" onPress={()=>setCheck({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
               {m.warnings.some(w=>!m.acknowledgements.some(a=>a.warningId===w.id))?<Text style={styles.warning}>Có cảnh báo cần xác nhận</Text>:null}
             </View>
           </View>)}
@@ -66,6 +69,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
       </View>:null}
     </>:null}
     {installation?<CrewSafetyInstallation identity={identity} resource={installation} onClose={()=>setInstallation(null)} onSaved={()=>void read()}/>:null}
+    {check?<CrewSafetyCheck identity={identity} resource={check} taskId={taskId} onClose={()=>setCheck(null)} onSaved={()=>void read()}/>:null}
   </Card>;
 }
 const styles=StyleSheet.create({

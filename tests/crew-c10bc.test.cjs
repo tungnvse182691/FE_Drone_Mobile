@@ -44,7 +44,6 @@ test('C10BC undelivered safety actions never POST or prepare a substitute comman
  let writes=0;
  const a=load('src/api/crewSafetyDraft.ts',{'./crewSafetyWorkflow':{crewReadGuard:()=>{}},'./client':{apiClient:{post:async()=>writes++}},'./crewOfflineJournal':{openOfflineJournal:async()=>{writes++;}}});
  await assert.rejects(a.prepareSafetyIntent({}, {}, {kind:'review-request'}),/review_request_not_integrated/);
- await assert.rejects(a.prepareSafetyIntent({}, {}, {kind:'check'}),/safety_check_not_integrated/);
  await assert.rejects(a.dispatchSafetyIntent({identity:{}}),/BE_FIXTURE_BLOCKED/);
  assert.equal(writes,0);
 });

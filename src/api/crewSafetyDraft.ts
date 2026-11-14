@@ -8,9 +8,16 @@ export async function prepareSafetyIntent(identity:QueueIdentity,resource:Repair
   crewReadGuard(identity);
   // Current BE has these sources; their dedicated command flows are separate checkpoints.
   if(command.kind==='review-request')throw Error('review_request_not_integrated');
-  if(command.kind==='check')throw Error('safety_check_not_integrated');
   const copy=JSON.parse(JSON.stringify(command)) as SafetyCommand,r={...resource};
   const before=await readSafetyMeasure(identity,r);crewReadGuard(identity);
+  if(copy.kind==='check') {
+    if(!before.data.installedAt)throw Error('safety_installation_required');
+    // Validate syntax before looking up the server-owned evidence link mapping.
+    safetyRequest(r,copy);
+    const files=copy.evidenceIds.map(id=>before.data.eligibleEvidenceLinks?.find(l=>l.evidenceLinkId.toLowerCase()===id.toLowerCase())?.fileId.toLowerCase());
+    if(files.some(id=>!id))throw Error('safety_evidence_not_current');
+    if(new Set(files).size!==files.length)throw Error('safety_duplicate_file');
+  }
   if(copy.kind==='installation'&&before.data.installedAt!==null)throw Error('safety_already_installed');
   if(copy.kind==='installation'&&(!Number.isFinite(Date.parse(copy.firstCheckDueAt))||Date.parse(copy.firstCheckDueAt)<=Date.now()||
     Date.parse(copy.firstCheckDueAt)>Date.now()+24*3600000))throw Error('safety_due_date_range');
@@ -18,14 +25,15 @@ export async function prepareSafetyIntent(identity:QueueIdentity,resource:Repair
     before.data.acknowledgements.some(a=>a.warningId===copy.warningId)))throw Error('safety_warning_not_current');
   const request=safetyRequest(r,copy),journal=await openOfflineJournal(identity);
   return journal.prepare({id:uuidv4(),identity,projectId:r.projectId,path:request.path,key:uuidv4(),body:JSON.stringify(request.body),
-    proof:{kind:'safety',resource:r,command:copy,ifMatch:before.etag,versionSource:'SAFETY_MONITORING'}});
+    proof:{kind:'safety',resource:r,command:copy,ifMatch:before.etag,versionSource:'SAFETY_MONITORING',
+      ...(copy.kind==='check'?{priorCheckIds:before.data.checks.map(c=>c.id)}:{})}});
 }
-/** API154 exact transport. Other mutation UIs are delivered in separate checkpoints. */
+/** Exact API153/154 transport. Other mutation UIs are delivered in separate checkpoints. */
 export async function dispatchSafetyIntent(record:OfflineJournalRecord) {
   crewReadGuard(record.identity);
-  if((record.proof?.command as SafetyCommand|undefined)?.kind!=='installation')throw Error('BE_FIXTURE_BLOCKED');
+  if(!['installation','check'].includes((record.proof?.command as SafetyCommand|undefined)?.kind??''))throw Error('BE_FIXTURE_BLOCKED');
   const c=record.proof.command as SafetyCommand,r=record.proof.resource as RepairSafetyResource;
-  if(record.proof.kind!=='safety'||record.proof.versionSource!=='SAFETY_MONITORING'||c.kind==='review-request'||c.kind==='check')throw Error('safety_source_gap');
+  if(record.proof.kind!=='safety'||record.proof.versionSource!=='SAFETY_MONITORING'||c.kind==='review-request')throw Error('safety_source_gap');
   const request=safetyRequest(r,c);
   if(record.projectId!==r.projectId||record.path!==request.path||record.body!==JSON.stringify(request.body)||!/^"[A-Za-z0-9+/]{11}="$/.test(String(record.proof.ifMatch)))throw Error('safety_intent_invalid');
   const j=await openOfflineJournal(record.identity),pending=await j.transition(record,'IN_FLIGHT');
@@ -54,6 +62,14 @@ export async function reconcileSafetyIntent(record:OfflineJournalRecord) {
   if(c.kind==='installation') {
     if(!receipt.installedAt||actual.data.installedAt!==receipt.installedAt||!actual.data.firstCheckDueAt||
       Date.parse(actual.data.firstCheckDueAt)!==Date.parse(c.firstCheckDueAt))throw Error('safety_installation_readback_mismatch');
+  }else if(c.kind==='check') {
+    const prior=record.proof.priorCheckIds;
+    const sameEvidence=(ids:string[])=>Array.isArray(ids)&&ids.length===c.evidenceIds.length&&
+      [...ids].map(id=>id.toLowerCase()).sort().join(',')===c.evidenceIds.map(id=>id.toLowerCase()).sort().join(',');
+    const matches=(check:SafetyView['checks'][number])=>check.actorId===record.identity.actor&&check.result===c.result&&
+      check.findings===c.findings&&sameEvidence(check.evidenceLinkIds);
+    const candidates=Array.isArray(prior)?receipt.checks?.filter(check=>!prior.includes(check.id)&&matches(check)):[];
+    if(candidates?.length!==1||!actual.data.checks.some(check=>check.id===candidates[0].id&&matches(check)))throw Error('safety_check_readback_mismatch');
   }else if(c.kind==='acknowledgement') {
     const ack=receipt.acknowledgements?.find(a=>a.warningId===c.warningId&&a.actorId===record.identity.actor);
     if(!ack||!actual.data.acknowledgements.some(a=>a.id===ack.id&&a.warningId===c.warningId&&a.actorId===record.identity.actor))throw Error('safety_ack_readback_mismatch');
