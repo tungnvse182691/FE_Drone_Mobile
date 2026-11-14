@@ -89,6 +89,7 @@ export default function ReporterReportScreen() {
   const submitted = useRef(false);
   const photoMeta = useRef<Map<string, DraftPhoto>>(new Map());
   const queueItems = useUploadsStore(state => state.items);
+  const busyPhotoIds = useUploadsStore(state => state.busyItemIds);
   const draftLocked = useReporterStore(state => Boolean(state.pendingDraft?.submitRequested || state.pendingDraft?.request || state.pendingDraft?.photos.some(photo => photo.itemId)));
   const scope = useReporterDraftScope();
   const [dataScope, setDataScope] = useState('');
@@ -380,7 +381,7 @@ export default function ReporterReportScreen() {
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
-                <PhotoUploadStatus item={photoItem(uri)} index={index} />
+                <PhotoUploadStatus item={photoItem(uri)} index={index} active={busyPhotoIds.includes(photoItem(uri)?.id ?? '')} />
                 <Pressable
                   onPress={() => updatePhotos((current) => current.filter((_, i) => i !== index))}
                   style={styles.photoRemove}
@@ -508,7 +509,7 @@ export default function ReporterReportScreen() {
           <View style={styles.submitWrapper}>
             <Button
               variant="primary"
-              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
+              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : submitProgress?.phase === 'uploading' ? `Đang tải ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verifying' ? `Đang xác minh ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verified' ? 'Đang chuẩn bị gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
               style={styles.submitButton}
               onPress={handleSubmit}
               loading={submitting}

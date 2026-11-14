@@ -5,7 +5,7 @@ import { uploadedRatio, type UploadQueueItem } from '../../store/uploads';
 import { colors, radius, typography } from '../../design-tokens';
 
 /** Presentation only: confirmed parts measure transfer, never server verification. */
-export function PhotoUploadStatus({ item, index }: { item?: UploadQueueItem; index: number }) {
+export function PhotoUploadStatus({ item, index, active = false }: { item?: UploadQueueItem; index: number; active?: boolean }) {
   const [reduceMotion, setReduceMotion] = useState(true);
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -20,12 +20,12 @@ export function PhotoUploadStatus({ item, index }: { item?: UploadQueueItem; ind
     }).catch(() => {});
     return () => { active = false; subscription.remove(); };
   }, []);
-  const blocked = !!item?.cancelState || !!item?.lastErrorCode;
+  const blocked = !!item?.cancelState || (!active && !!item?.lastErrorCode);
   const verified = !blocked && item?.mediaState === 'VERIFIED';
   const checking = item?.mediaState === 'COMPLETE_REQUESTED' || item?.mediaState === 'VERIFYING';
-  const transferring = item?.mediaState === 'SESSION_CREATED' || item?.mediaState === 'UPLOADING';
+  const transferring = active || item?.mediaState === 'SESSION_CREATED' || item?.mediaState === 'UPLOADING';
   const busy = !blocked && (checking || transferring);
-  const failed = blocked || item?.mediaState === 'FAILED';
+  const failed = blocked || (!active && item?.mediaState === 'FAILED');
   const label = failed ? 'Cần kiểm tra' : verified ? 'Đã xác minh' : checking ? 'Đang kiểm tra' : transferring ? 'Đang tải' : 'Chờ tải';
   const ratio = !blocked && item?.mediaState === 'UPLOADING' && item.sizeBytes > 0 && item.partSizeBytes > 0
     ? Math.max(0, Math.min(1, uploadedRatio(item))) : undefined;

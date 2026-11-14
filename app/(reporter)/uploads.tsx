@@ -83,7 +83,7 @@ export default function ReporterUploadsScreen() {
         <View style={styles.cardHeader}>
           <View style={styles.preview}>
           <Image source={{ uri: item.uriLocal }} style={styles.thumbnail} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
-          <PhotoUploadStatus item={item} index={index} />
+          <PhotoUploadStatus item={item} index={index} active={busy} />
           </View>
           <View style={styles.cardBody}>
           <Text style={[typography.labelLg, styles.cardTitle]} numberOfLines={1}>
@@ -95,6 +95,7 @@ export default function ReporterUploadsScreen() {
         <Text style={[typography.caption, styles.cardMeta]}>
           {item.cancelState === 'CONFIRMED' ? 'Đã hủy phiên tải' :
             item.cancelState ? 'Cần kiểm tra kết quả hủy' :
+            busy ? 'Đang xử lý ảnh…' :
             item.lastErrorCode || item.mediaState === 'FAILED' ? 'Chưa hoàn tất. Kiểm tra lại bên dưới.' :
             item.mediaState === 'VERIFIED' ? 'Có thể dùng cho phản ánh' :
             item.mediaState === 'VERIFYING' || item.mediaState === 'COMPLETE_REQUESTED' ? 'Đang kiểm tra ảnh trên máy chủ' :

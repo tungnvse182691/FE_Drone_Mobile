@@ -78,6 +78,7 @@ export default function ReporterReportSupplementScreen() {
   const submittingRef = useRef(false);
   const [submitProgress, setSubmitProgress] = useState<ReporterSubmissionProgress | null>(null);
   const queueItems = useUploadsStore(state => state.items);
+  const busyPhotoIds = useUploadsStore(state => state.busyItemIds);
   const metadata = useRef<Map<string, DraftPhoto>>(new Map());
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -420,7 +421,8 @@ export default function ReporterReportSupplementScreen() {
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh bổ sung ${index + 1}`} />
-                <PhotoUploadStatus index={index} item={queueItems.find(item => item.partitionId === reporterContext().partition && (item.id === metadata.current.get(uri)?.itemId || item.uriLocal === uri))} />
+                <PhotoUploadStatus index={index} item={queueItems.find(item => item.partitionId === reporterContext().partition && (item.id === metadata.current.get(uri)?.itemId || item.uriLocal === uri))}
+                  active={queueItems.some(item => item.partitionId === reporterContext().partition && (item.id === metadata.current.get(uri)?.itemId || item.uriLocal === uri) && busyPhotoIds.includes(item.id))} />
                 <Pressable
                   onPress={() => handleRemovePhoto(index)}
                   style={styles.photoRemove}
@@ -467,7 +469,7 @@ export default function ReporterReportSupplementScreen() {
           </Text> : null}
           <Button
             variant="primary"
-            title={phase === 'submitting' ? (submitProgress?.phase === 'readback' ? 'Đang đối soát…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi bổ sung'}
+            title={phase === 'submitting' ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : submitProgress?.phase === 'uploading' ? `Đang tải ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verifying' ? `Đang xác minh ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verified' ? 'Đang chuẩn bị gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi bổ sung'}
             onPress={() => void submit()}
             loading={phase === 'submitting'}
             disabled={!description.trim() || photos.length === 0 || busy || phase === 'conflict'}
