@@ -32,16 +32,18 @@ export default function ReporterHomeScreen() {
 
   const recoveryScope = useReporterDraftScope();
   const [history, setHistory] = useState<{ scope: string; rows: HistoricalReporterCommand[] } | null>(null);
-  const [historyMessage, setHistoryMessage] = useState('');
+  const [historyMessage, setHistoryMessage] = useState<{ scope: string; text: string } | null>(null);
+  const [expandedHistoryScope, setExpandedHistoryScope] = useState<string | null>(null);
+  const historyExpanded = expandedHistoryScope === recoveryScope.key;
   const [checking, setChecking] = useState(false);
   useFocusEffect(useCallback(() => {
     let active = true;
     const current = recoveryScope.capture();
-    setHistory(null); setHistoryMessage(''); setChecking(false);
+    setHistory(null); setHistoryMessage(null); setChecking(false); setExpandedHistoryScope(null);
     if (enabled) void listHistoricalReporterCommands().then(rows => {
       if (active && current()) setHistory({ scope: recoveryScope.key, rows });
     }).catch(() => {
-      if (active && current()) setHistoryMessage('Chưa kiểm tra được lệnh của phiên trước. Dữ liệu cũ vẫn được giữ.');
+      if (active && current()) setHistoryMessage({ scope: recoveryScope.key, text: 'Chưa tải được nội dung gửi trước. Ảnh và nội dung vẫn được giữ trên máy.' });
     });
     return () => { active = false; };
   }, [enabled, recoveryScope.key]));
@@ -51,11 +53,11 @@ export default function ReporterHomeScreen() {
     setChecking(true);
     try {
       const result = await checkHistoricalReporterCommand(id);
-      if (current()) setHistoryMessage(result.resourceReadable
-        ? 'Đã đọc được phản ánh theo quyền hiện tại. Chưa có xác nhận riêng cho lệnh này từ máy chủ; chưa xác nhận hoàn tất và không tự gửi lại.'
-        : 'Chưa có mã phản ánh để đối soát. Cần xác nhận lệnh từ máy chủ; lệnh và ảnh vẫn được giữ, không tự gửi lại.');
+      if (current()) setHistoryMessage({ scope: recoveryScope.key, text: result.resourceReadable
+        ? 'Đã tìm thấy phản ánh. Chưa xác nhận lần gửi này đã hoàn tất; ứng dụng không tự gửi lại.'
+        : 'Chưa xác nhận đã gửi. Nội dung và ảnh vẫn được giữ trên máy; ứng dụng không tự gửi lại.' });
     } catch {
-      if (current()) setHistoryMessage('Chưa đối soát được lệnh theo quyền hiện tại. Lệnh và ảnh vẫn được giữ.');
+      if (current()) setHistoryMessage({ scope: recoveryScope.key, text: 'Chưa kiểm tra được lúc này. Nội dung và ảnh vẫn được giữ trên máy. Hãy thử lại sau.' });
     } finally { if (current()) setChecking(false); }
   };
 
@@ -102,13 +104,38 @@ export default function ReporterHomeScreen() {
         />
       </View>
 
-      {enabled && history?.scope === recoveryScope.key && history.rows.length ? <Card>
-        <Text style={typography.titleMd}>Lệnh gửi trước cần kiểm tra</Text>
-        {history.rows.map((command, index) => <Button key={command.id} variant="secondary"
-          title={`Kiểm tra lệnh ${command.kind === 'supplement' ? 'bổ sung' : 'phản ánh'} ${index + 1}`}
-          disabled={checking} onPress={() => void inspect(command.id)} />)}
+      {enabled && history?.scope === recoveryScope.key && history.rows.length ? <Card style={styles.recoveryCard}>
+        <Pressable testID="reporter-recovery-toggle" accessibilityRole="button"
+          accessibilityLabel="Nội dung cần kiểm tra" accessibilityState={{ expanded: historyExpanded }}
+          onPress={() => setExpandedHistoryScope(historyExpanded ? null : recoveryScope.key)}
+          style={({ pressed }) => [styles.recoveryHeader, pressed && styles.pressed]}>
+          <MaterialIcons name="history" size={22} color={colors.secondary} />
+          <View style={styles.recoveryText}>
+            <Text style={[typography.bodyMd, styles.recoveryTitle]}>Nội dung cần kiểm tra</Text>
+            <Text style={[typography.caption, styles.hintText]}>{history.rows.length} lần gửi từ phiên trước</Text>
+          </View>
+          <MaterialIcons name={historyExpanded ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} />
+        </Pressable>
+        {historyExpanded ? <View style={styles.recoveryDetails}>
+          <Text style={[typography.caption, styles.recoveryCopy]}>Nội dung và ảnh vẫn được giữ. Kiểm tra trạng thái để tránh gửi trùng.</Text>
+          {history.rows.map((command, index) => <Pressable key={command.id}
+            testID={`reporter-recovery-${command.id}`} accessibilityRole="button"
+            accessibilityLabel={`Kiểm tra ${command.kind === 'supplement' ? 'bổ sung ảnh' : 'phản ánh'} ${index + 1}`}
+            accessibilityState={{ disabled: checking, busy: checking }} disabled={checking}
+            style={({ pressed }) => [styles.recoveryItem, pressed && styles.pressed]}
+            onPress={() => void inspect(command.id)}>
+            <MaterialIcons name={command.kind === 'supplement' ? 'add-photo-alternate' : 'description'} size={20} color={colors.secondary} />
+            <Text style={[typography.bodyMd, styles.recoveryText, styles.recoveryCopy]}>{command.kind === 'supplement' ? 'Bổ sung ảnh' : 'Phản ánh'} {index + 1}</Text>
+            <Text style={[typography.caption, styles.recoveryCopy]}>{checking ? 'Đang kiểm tra…' : 'Kiểm tra'}</Text>
+          </Pressable>)}
+          {historyMessage?.scope === recoveryScope.key ? <View style={styles.recoveryResult} testID="reporter-recovery-result" accessibilityLiveRegion="polite">
+            <Text style={[typography.caption, styles.recoveryCopy]}>{historyMessage.text}</Text>
+          </View> : null}
+        </View> : null}
       </Card> : null}
-      {enabled && historyMessage ? <Text style={typography.caption}>{historyMessage}</Text> : null}
+      {enabled && historyMessage?.scope === recoveryScope.key && history?.scope !== recoveryScope.key ? <Card style={styles.recoveryCard}>
+        <Text style={[typography.caption, styles.recoveryCopy]}>{historyMessage.text}</Text>
+      </Card> : null}
       <View style={styles.sectionRow}>
         <Text style={[typography.titleMd, styles.sectionTitle]}>Phản ánh gần đây</Text>
         {enabled ? <Pressable accessibilityRole="button" accessibilityLabel="Làm mới phản ánh"
@@ -300,6 +327,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pressed: { backgroundColor: reporterAppearance.pressed },
+  recoveryCard: { ...reporterAppearance.card, padding: spacing.sm, marginBottom: spacing.md },
+  recoveryHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, minHeight: 56, borderRadius: radius.md },
+  recoveryText: { flex: 1, minWidth: 0 },
+  recoveryTitle: { color: colors.onSurface, fontFamily: 'Roboto-Medium' },
+  recoveryCopy: { color: colors.secondary },
+  recoveryDetails: { paddingHorizontal: spacing.sm, gap: spacing.sm, paddingBottom: spacing.sm },
+  recoveryItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48, paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: reporterAppearance.border },
+  recoveryResult: { backgroundColor: reporterAppearance.pressed, borderRadius: radius.md, padding: spacing.sm },
   refreshButton: { width: 48, minHeight: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   hintCard: {
