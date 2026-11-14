@@ -422,7 +422,7 @@ const styles = StyleSheet.create({
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: { gap: spacing.sm, marginBottom: spacing.md },
   workPackageButton: { width: '100%', backgroundColor: colors.surfaceAlt, borderColor: colors.neutral },
-  rejectButton: { flex: 1, minHeight: 52, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: spacing.sm, backgroundColor: colors.surface },
-  rejectButtonText: { color: colors.neutral, textAlign: 'center', lineHeight: 21 },
+  rejectButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.sm, backgroundColor: colors.surface },
+  rejectButtonText: { color: colors.neutral, textAlign: 'center', lineHeight: 21, flexShrink: 1 },
   syncFootnote: { textAlign: 'center', color: colors.secondary, marginTop: spacing.xs },
 });

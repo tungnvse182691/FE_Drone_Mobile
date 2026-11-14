@@ -94,7 +94,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
       <Button variant="secondary" title="Xem lệnh cần đối soát" onPress={() => onExpand?.()} />
     </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
   const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Chỉ chuẩn bị yêu cầu khi máy chủ xác nhận nhiệm vụ mới được giao hoặc giao lại cho bạn.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
-  const primaryStyle = { flex: 2, minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
+  const primaryStyle = { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
   return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,...operatorAppearance.card}}>
     <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>{operation==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text></View>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
@@ -108,12 +108,12 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
       </>:null}
     </>:<>
       {operation==='decline'?<TextInput accessibilityLabel="Lý do từ chối" value={reason} editable={!busy&&ready} onChangeText={setReason} multiline placeholder="Nhập lý do thực tế" style={{...typography.bodyMd,minHeight:96,borderWidth:1,borderColor:colors.border,borderRadius:12,padding:16,color:colors.neutral,textAlignVertical:'top'}}/>:null}
-      <View style={{flexDirection:'row',alignItems:'stretch',gap:8}}>
-      {children ? <View style={{flex:1}}>{children}</View> : null}
-      {children ? <Pressable accessibilityRole="button" accessibilityLabel="Chuẩn bị tiếp nhận nhiệm vụ" accessibilityState={{disabled:busy||!ready||!canPrepare}} disabled={busy||!ready||!canPrepare} onPress={()=>void run('prepare')} style={{...primaryStyle,alignItems:'center',justifyContent:'center',padding:12,opacity:busy||!ready||!canPrepare?0.5:1}}>
+      <View style={{alignItems:'stretch',gap:spacing.sm}}>
+      {children ? <Pressable accessibilityRole="button" accessibilityLabel="Chuẩn bị tiếp nhận nhiệm vụ" accessibilityState={{disabled:busy||!ready||!canPrepare}} disabled={busy||!ready||!canPrepare} onPress={()=>void run('prepare')} style={{...primaryStyle,flexDirection:'row',gap:spacing.xs,alignItems:'center',justifyContent:'center',padding:12,opacity:busy||!ready||!canPrepare?0.5:1}}>
         <MaterialIcons name="assignment-turned-in" size={18} color={colors.neutral} />
-        <Text style={{...typography.labelLg,color:colors.neutral,textAlign:'center',lineHeight:21}}>Chuẩn bị tiếp nhận nhiệm vụ</Text>
+        <Text style={{...typography.labelLg,color:colors.neutral,textAlign:'center',lineHeight:21,flexShrink:1}}>Chuẩn bị tiếp nhận nhiệm vụ</Text>
       </Pressable> : <Button variant="secondary" style={primaryStyle} disabledTextStyle={{color:colors.neutral}} icon={<MaterialIcons name={operation==='accept'?'assignment-turned-in':'save'} size={18} color={colors.neutral} />} title={operation==='accept'?'Chuẩn bị tiếp nhận nhiệm vụ':'Lưu yêu cầu từ chối để xác nhận'} disabled={busy||!ready||!canPrepare||(operation==='decline'&&!reason.trim())} onPress={()=>void run('prepare')} />}
+      {children ? <View>{children}</View> : null}
       </View>
     </>}
     {disabledReason ? <View testID="command-disabled-reason" style={{flexDirection:'row',alignItems:'center',gap:8,padding:12,borderRadius:12,backgroundColor:colors.surfaceAlt}}><MaterialIcons name="info-outline" size={18} color={colors.secondary} /><Text style={{...typography.caption,color:colors.secondary,textAlign:'center',flex:1}}>{disabledReason}</Text></View> : null}
