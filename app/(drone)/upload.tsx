@@ -406,6 +406,14 @@ export default function DroneUploadScreen() {
 
   if (!scope.key || previewScope !== scope.key) return <SafeAreaScreen><Text>Cần phiên Operator hợp lệ để chọn tệp.</Text></SafeAreaScreen>;
 
+  const submitRequirement = copying ? 'Đang sao lưu tệp, vui lòng chờ.'
+    : draftLoading ? 'Đang khôi phục bản nháp, vui lòng chờ.'
+    : !videoFile?.checksumSha256 ? 'Chọn video MP4 trước khi nộp.'
+    : !selectedDroneId ? 'Chọn máy bay thực hiện khảo sát trước khi nộp.'
+    : !recordedAt.trim() ? 'Nhập thời gian ghi hình theo tệp video trước khi nộp.'
+    : !journalReady ? 'Chưa mở được lịch sử nộp. Hãy mở lại màn này để thử lại; bản nháp vẫn được giữ.'
+    : null;
+
   const fileCard = (kind: 'VIDEO' | 'TELEMETRY', title: string, name: string, size: string, hash: string) => <Card style={styles.card}>
     <View style={styles.row}><MaterialIcons name={kind==='VIDEO'?'videocam':'subtitles'} size={23} color={colors.secondary}/><Text style={styles.heading}>{title}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} disabled={copying||submitting||draftLoading} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.iconButton}>
@@ -472,7 +480,10 @@ export default function DroneUploadScreen() {
     </View>:null}
     </Card></View>:null}
     {!submitting?<>
-    {!pendingDataset?<Button title="Nộp bộ dữ liệu 4K RGB" variant="primary" style={styles.primaryAction} disabled={copying||draftLoading||!videoFile?.checksumSha256||!selectedDroneId||!recordedAt.trim()||!journalReady} onPress={()=>void handleStartSubmitDataset()}/>:null}
+    {!pendingDataset?<>
+      {submitRequirement?<View testID="dataset-submit-requirement" accessibilityLiveRegion="polite" style={styles.notice}><MaterialIcons name="info-outline" size={20} color={colors.secondary}/><Text style={styles.noticeText}>{submitRequirement}</Text></View>:null}
+      <Button title="Nộp bộ dữ liệu 4K RGB" variant="primary" style={styles.primaryAction} disabled={submitRequirement!==null} onPress={()=>void handleStartSubmitDataset()}/>
+    </>:null}
     {submitError?<Text accessibilityRole="alert" style={styles.error}>{submitError}</Text>:null}
     </>:null}
   </SafeAreaScreen>;

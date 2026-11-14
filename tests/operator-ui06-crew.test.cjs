@@ -31,6 +31,8 @@ test('UI06 Upload uses compact file rows without invented preview or location me
  assert.doesNotMatch(text(s),/Tọa độ ghi hình:|Ghi chú hiện trường/);assert.match(text(s),/Video MP4/);assert.match(text(s),/Dữ liệu GPS · SRT/);
  assert.ok(s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
  const submit=s.nodes().find(n=>n.type==='Button'&&n.props.title==='Nộp bộ dữ liệu 4K RGB');assert.equal(submit.props.disabled,true);assert.equal(submit.props.style.backgroundColor,'#C9A227');assert.equal(submit.props.variant,'primary');
+ const reason=s.nodes().find(n=>n.props.testID==='dataset-submit-requirement');assert.ok(reason,'disabled dataset submission must explain the next requirement');
+ assert.match(text(s),/Chọn video MP4 trước khi nộp\./);
  assert.ok(!s.nodes().some(n=>n.type==='MaterialIcons'&&n.props.name==='check-circle'));s.unmount();
 });
 
