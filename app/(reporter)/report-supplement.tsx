@@ -393,7 +393,16 @@ export default function ReporterReportSupplementScreen() {
       {report ? (
         <>
           <View style={styles.card} pointerEvents={busy || draftLocked ? "none" : "auto"}>
-          <InputField
+          {draftLocked ? (
+            <View testID="supplement-frozen-content" style={styles.frozenContent}>
+              <Text style={[typography.labelLg, styles.sectionLabel]}>Nội dung bổ sung</Text>
+              <Text style={[typography.bodyMd, styles.cardTitle]}>{description}</Text>
+              <View style={styles.frozenNote}>
+                <MaterialIcons name="lock-outline" size={18} color={colors.secondary} />
+                <Text style={[typography.caption, styles.frozenNoteText]}>Nội dung và ảnh được giữ nguyên để tiếp tục lần gửi này.</Text>
+              </View>
+            </View>
+          ) : <InputField
             onPressIn={() => useReporterKeyboard.getState().setOpening(true)}
             onFocus={() => useReporterKeyboard.getState().setOpening(true)}
             onBlur={() => useReporterKeyboard.getState().setOpening(false)}
@@ -409,9 +418,8 @@ export default function ReporterReportSupplementScreen() {
             multiline
             numberOfLines={5}
             testID="supplement-description-input"
-          />
+          />}
           </View>
-          {draftLocked ? <Text style={typography.caption}>Đang giữ nguyên nội dung và điều kiện của lần gửi trước.</Text> : null}
 
           <View style={styles.card}>
           <Text style={[typography.labelLg, styles.sectionLabel]}>
@@ -423,7 +431,7 @@ export default function ReporterReportSupplementScreen() {
                 <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh bổ sung ${index + 1}`} />
                 <PhotoUploadStatus index={index} item={queueItems.find(item => item.partitionId === reporterContext().partition && (item.id === metadata.current.get(uri)?.itemId || item.uriLocal === uri))}
                   active={queueItems.some(item => item.partitionId === reporterContext().partition && (item.id === metadata.current.get(uri)?.itemId || item.uriLocal === uri) && busyPhotoIds.includes(item.id))} />
-                <Pressable
+                {!busy && !draftLocked ? <Pressable
                   onPress={() => handleRemovePhoto(index)}
                   style={styles.photoRemove}
                   accessibilityRole="button"
@@ -433,11 +441,11 @@ export default function ReporterReportSupplementScreen() {
                   <View style={styles.photoRemoveBadge}>
                     <MaterialIcons name="close" size={16} color={colors.secondary} />
                   </View>
-                </Pressable>
+                </Pressable> : null}
               </View>
             ))}
           </View>
-          <View style={styles.photoActions} pointerEvents={busy || draftLocked ? "none" : "auto"}>
+          {!busy && !draftLocked ? <View style={styles.photoActions}>
             {photos.length < MAX_PHOTOS ? (
               <Pressable
                 onPress={() => void handleOpenCam()}
@@ -462,8 +470,14 @@ export default function ReporterReportSupplementScreen() {
                 <Text style={[typography.caption, styles.photoAddText]}>Thư viện</Text>
               </Pressable>
             ) : null}
+          </View> : null}
           </View>
-          </View>
+          {error ? (
+            <View style={styles.errorRow} accessibilityRole="alert">
+              <MaterialIcons name="error-outline" size={20} color={colors.error} />
+              <Text style={[typography.caption, styles.errorText]}>{error}</Text>
+            </View>
+          ) : null}
           {busy || phase === 'conflict' || !description.trim() || photos.length === 0 ? <Text testID="supplement-disabled-reason" style={[typography.caption, styles.sectionLabel]}>
             {phase === 'conflict' ? 'Cần xem lại xung đột trước khi gửi.' : busy ? 'Đang xử lý, vui lòng chờ.' : !description.trim() ? 'Nhập nội dung bổ sung để tiếp tục.' : 'Chọn ít nhất một ảnh bổ sung.'}
           </Text> : null}
@@ -499,7 +513,7 @@ export default function ReporterReportSupplementScreen() {
         </View>
       ) : null}
 
-      {error ? (
+      {error && !report ? (
         <View style={styles.errorRow}>
           <MaterialIcons name="error-outline" size={16} color={colors.error} />
           <Text style={[typography.caption, styles.errorText]}>{error}</Text>
@@ -569,6 +583,9 @@ const styles = StyleSheet.create({
   cardTitle: { color: colors.neutral, flex: 1 },
   cardText: { color: colors.secondary },
   cardMeta: { color: colors.secondary },
+  frozenContent: { gap: spacing.sm },
+  frozenNote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingTop: spacing.sm },
+  frozenNoteText: { color: colors.secondary, flex: 1 },
   conflictCard: {
     backgroundColor: '#FFF8E6',
     borderRadius: radius.lg,
@@ -618,7 +635,7 @@ const styles = StyleSheet.create({
   doneWrapper: { marginTop: spacing.md },
   noticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
   noticeText: { color: colors.info, flex: 1 },
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
+  errorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
   errorText: { color: colors.error, flex: 1 },
   busyText: { color: colors.secondary, marginTop: spacing.sm },
   cameraModal: { flex: 1, backgroundColor: colors.neutral },

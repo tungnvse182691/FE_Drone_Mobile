@@ -19,3 +19,13 @@ for(const [phase,label] of [['uploading','Đang tải ảnh 1/2…'],['verifying
  s.reporter.useReporterStore.getState().submitPendingDraft=async options=>{options.onProgress({phase,index:1,total:2,elapsedMs:1000});await gate.promise;throw {code:'verification_timeout'};};
  const send=s.press('Gửi bổ sung');await s.flush();assert.equal(s.nodes().find(n=>n.type==='Button'&&n.props.loading).props.title,label);gate.resolve();await send;await s.flush();s.unmount();
 });
+
+test('frozen supplement presents a read-only summary without photo editing controls',async()=>{
+ const s=screen('app/(reporter)/report-supplement.tsx',{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[],createdAt:'2026-10-30'},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'content://qa/supplement.png',name:'supplement.png',mimeType:'image/png'}]})});
+ s.h.login();s.render();await s.flush();s.input('Nội dung bổ sung','QA retained content');await s.tap('pick-photo');await s.flush();
+ s.reporter.useReporterStore.getState().submitPendingDraft=async()=>{throw {code:'ERR_NETWORK'};};
+ await s.press('Gửi bổ sung');await s.flush();
+ assert.ok(s.nodes().some(n=>n.props.testID==='supplement-frozen-content'));
+ assert.equal(s.nodes().filter(n=>['add-photo','pick-photo','remove-photo-0'].includes(n.props.testID)).length,0);
+ assert.ok(s.nodes().some(n=>n.type==='Text'&&[n.props.children].flat().includes('QA retained content')));s.unmount();
+});
