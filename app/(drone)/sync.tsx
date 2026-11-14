@@ -167,7 +167,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       )}
 
       {/* Switcher */}
-      <View style={styles.headerRow}>
+      {outboxRows.length > 0 ? <View style={styles.headerRow}>
         <Text style={[typography.labelSm, styles.headerTitle]}>HÀNG ĐỢI TRÊN THIẾT BỊ</Text>
         <View style={styles.tabToggle}>
           <Pressable
@@ -196,7 +196,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             </Text>
           </Pressable>
         </View>
-      </View>
+      </View> : null}
 
       {/* Summary & Single CTA */}
       <Card style={styles.summaryCard}>
@@ -214,11 +214,11 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
                 : 'Không có mục chờ xử lý'}
             </Text>
           </View>
-          <Text style={[typography.caption, styles.totalSize]}>
+          {outboxRows.length > 0 ? <Text style={[typography.caption, styles.totalSize]}>
             {pendingQueue.length > 0
               ? `${pendingQueue.length} mục được giữ trên thiết bị`
               : `${completedQueue.length} mục ghi nhận cục bộ`}
-          </Text>
+          </Text> : null}
         </View>
 
         <Pressable
@@ -299,7 +299,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       <DroneTaskRecoveryList />
 
       {/* Safe Local Purge Section */}
-      <Card style={styles.purgeCard}>
+      {outboxRows.length > 0 ? <Card style={styles.purgeCard}>
         <View style={styles.purgeHeader}>
           <MaterialIcons name="inventory-2" size={20} color={colors.secondary} />
           <Text style={[typography.labelSm, styles.purgeTitle]}>
@@ -324,7 +324,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
               : 'Vì sao dữ liệu vẫn được giữ?'}
           </Text>
         </Pressable>
-      </Card>
+      </Card> : null}
     </SafeAreaScreen>
   );
 }

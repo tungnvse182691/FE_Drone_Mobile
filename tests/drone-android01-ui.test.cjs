@@ -42,19 +42,27 @@ test('DRONE-ANDROID-01 advanced task lookup displays Vietnamese status without c
 
 test('DRONE-ANDROID-01 Sync describes a local queue and gives its summary separate vertical space', async () => {
   const identity = { actor: id(1), environment: 'fixture', session: 'fixture', role: 'DRONE_OPERATOR' };
+  let rows = [];
   const s = drone('sync', {}, { expose: 'DroneSyncContent', exportName: 'DroneSyncContent', props: { identity }, modules: {
     'expo-sqlite': {},
     '../../src/components/drone/DroneTaskCommandPanel': { DroneTaskRecoveryList: 'DroneTaskRecoveryList' },
     '../../src/offline/database': { openDatabase: () => ({}), initDatabase: async () => {} },
-    '../../src/offline/upload-queue': { currentQueueIdentity: () => identity, sameQueueIdentity: () => true, createQueueReader: () => ({ cancel() {}, read: async () => [] }), queueChecksumLabel: () => '' },
+    '../../src/offline/upload-queue': { currentQueueIdentity: () => identity, sameQueueIdentity: () => true, createQueueReader: () => ({ cancel() {}, read: async () => rows }), queueChecksumLabel: () => '' },
   } });
   s.render(); await s.flush();
   assert.equal(s.nodes().find(n => n.type === 'SafeAreaScreen').props.header.props.subtitle, 'Đồng bộ');
   assert.doesNotMatch(allText(s), /ĐỒNG BỘ NỀN|DANH SÁCH TỆP CHỜ TẢI|Không có tệp nào/);
+  assert.equal(s.nodes().filter(n => n.props.accessibilityRole === 'tab').length, 0);
+  assert.doesNotMatch(allText(s), /0 mục ghi nhận cục bộ|BẢO TOÀN DỮ LIỆU TRÊN THIẾT BỊ/);
+  assert.ok(s.nodes().some(n => n.type === 'DroneTaskRecoveryList'));
   const summary = s.nodes().find(n => n.type === 'Text' && JSON.stringify(n.props.children).includes('Không có mục chờ xử lý'));
   const row = s.nodes().find(n => n.type === 'View' && n.props.children?.some?.(child => child?.props?.children?.includes?.(summary)));
   assert.ok(row); assert.equal(row.props.style.flexDirection, 'column');
   s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Đọc lại hàng đợi').props.onPress(); await s.flush();
   assert.match(allText(s), /không gửi dữ liệu/);
+  rows = [{ id: 'retained', kind: 'submit_dataset', status: 'UNKNOWN_OUTCOME', attempt: 1 }];
+  await s.nodes().find(n => n.props.accessibilityLabel === 'Đọc lại hàng đợi').props.onPress(); await s.flush();
+  assert.equal(s.nodes().filter(n => n.props.accessibilityRole === 'tab').length, 2);
+  assert.match(allText(s), /Chưa rõ kết quả|BẢO TOÀN DỮ LIỆU TRÊN THIẾT BỊ/);
   s.unmount();
 });
