@@ -94,7 +94,6 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
   const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
-  const [showTechnical, setShowTechnical] = useState(false);
   const [panelRefreshSignal, setPanelRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
@@ -235,18 +234,23 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
           <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.pending}</Text><Text style={styles.stateLabel}>Chờ xử lý</Text></View>
           <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.done}</Text><Text style={styles.stateLabel}>Đã xác nhận</Text></View>
         </View>
-        <Text style={[typography.bodyMd, styles.statusDesc]}>Dữ liệu chỉ được tính là đã đồng bộ khi có biên nhận máy chủ hợp lệ.</Text>
-        <Text style={[typography.caption, styles.lockedHint]}>Gửi hàng đợi chưa được mở; dữ liệu chờ vẫn được giữ để đối soát.</Text>
+        {counts.pending > 0 ? (
+          <View style={styles.queueNotice}>
+            <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
+            <Text style={styles.queueNoticeText}>Chưa thể gửi các mục này. Dữ liệu vẫn được giữ trên máy.</Text>
+          </View>
+        ) : null}
       </Card>
 
       <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
       <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
       {segment === 'pending' ? (
         <>
-          <View style={styles.sectionHeader}>
-            <Text style={[typography.labelSm, styles.sectionTitle]}>MỤC CẦN TẢI LÊN</Text>
-            <Text style={[typography.caption, styles.sectionHint]}>Chưa xác nhận đã gửi</Text>
-          </View>
+          {visibleItems.length > 0 ? (
+            <View style={styles.sectionHeader}>
+              <Text style={[typography.labelLg, styles.sectionTitle]}>Mục chờ gửi ({visibleItems.length})</Text>
+            </View>
+          ) : null}
 
           {visibleItems.map((item) => (
             <Card key={item.id ?? item.name} style={styles.itemCard}>
@@ -276,21 +280,6 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
             </Card>
           ))}
 
-          <Pressable accessibilityRole="button" accessibilityState={{expanded:showTechnical}} onPress={()=>setShowTechnical(v=>!v)} style={styles.technicalToggle}>
-            <View><Text style={styles.technicalTitle}>Chi tiết kỹ thuật</Text><Text style={styles.technicalHint}>Nhật ký, thiết bị và chẩn đoán</Text></View><MaterialIcons name={showTechnical?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
-          </Pressable>
-          {showTechnical?<Card style={styles.cacheCard}>
-            <View style={styles.cacheRow}>
-              <View style={styles.cacheIcon}>
-                <MaterialIcons name="storage" size={24} color={colors.brandGold} />
-              </View>
-              <View style={styles.cacheContent}>
-                <Text style={[typography.labelLg, styles.cacheTitle]}>Bộ nhớ đệm hiện trường</Text>
-                <Text style={[typography.caption, styles.cacheDesc]}>Chưa đo dung lượng thiết bị</Text>
-              </View>
-            </View>
-
-          </Card>:null}
         </>
       ) : counts.done > 0 ? (
         <EmptyState
@@ -412,10 +401,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     color: colors.secondary,
   },
-  statusDesc: {
-    color: colors.secondary,
-    marginTop: spacing.sm,
-  },
+  queueNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md, padding: spacing.sm, borderRadius: radius.md, backgroundColor: '#FFFBF0' },
+  queueNoticeText: { ...typography.caption, color: colors.secondary, flex: 1 },
   stateGrid: { flexDirection: 'row', marginTop: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm },
   stateCell: { flex: 1, alignItems: 'center', gap: 2 },
   stateValue: { ...typography.titleLg, color: colors.neutral },
@@ -423,7 +410,6 @@ const styles = StyleSheet.create({
   actionLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, gap: spacing.sm },
   smallAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md },
   smallActionText: { ...typography.labelSm, color: colors.secondary },
-  lockedHint: { ...typography.caption, color: colors.secondary, marginTop: spacing.xs },
   heroDivider: {
     height: 1,
     backgroundColor: colors.border,
@@ -453,9 +439,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionTitle: {
-    color: colors.secondary,
-  },
-  sectionHint: {
     color: colors.secondary,
   },
   itemCard: {
@@ -519,46 +502,6 @@ const styles = StyleSheet.create({
   },
   progressText: {
     color: colors.primaryDark,
-  },
-  cacheCard: {
-    borderRadius: radius.lg,
-    marginTop: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-
-    borderWidth: 1,
-    borderColor: '#E8D9A8',
-  },
-  technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, marginBottom: spacing.sm },
-  technicalTitle: { ...typography.labelLg, color: colors.neutral },
-  technicalHint: { ...typography.caption, color: colors.secondary, marginTop: 2 },
-  cacheRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  cacheIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: '#FEF9E7',
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cacheContent: {
-    flex: 1,
-  },
-  cacheTitle: {
-    color: colors.neutral,
-  },
-  cacheDesc: {
-    color: colors.secondary,
-    marginTop: 2,
   },
   cleanupBtn: {
     paddingHorizontal: spacing.md,
