@@ -8,6 +8,22 @@ test('HARDEN map top level navigation never opens arbitrary external URLs',()=>{
 test('HARDEN map ignores invalid coordinates and reports unavailable honest fallback',()=>{const {s,web}=map({markers:[{id:'bad',title:'bad',coordinate:[NaN,100]}]});assert.ok(!web.source.html.includes('"id":"bad"'));web.onError();s.render();assert.ok(!JSON.stringify(s.nodes()).includes('Cầu Bà Lát'));});
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 
+test('Selected route framing excludes distant markers on load and recenter, while default retains both',()=>{
+ for(const fitTo of ['route','all']){
+  const {web}=map({fitTo,markers:[{id:'access',title:'Access',coordinate:[108,11]}],routeCoordinates:[[106,10],[106.01,10.02]]});
+  const fitted=[],errors=[];
+  class Bounds{constructor(){this.points=[];}extend(p){this.points.push(p);return this;}}
+  class Map{on(event,fn){if(event==='load')fn();}addSource(){}addLayer(){}fitBounds(b){fitted.push(b.points);}}
+  const element=()=>({style:{},appendChild(){},addEventListener(){}});
+  class Popup{setDOMContent(){return this;}}
+  class Marker{setLngLat(){return this;}setPopup(){return this;}addTo(){return this;}}
+  const window={ReactNativeWebView:{postMessage:m=>errors.push(m)}};
+  vm.runInNewContext(web.source.html.match(/<script>\s*([\s\S]*?)<\/script>/)[1],{window,document:{createElement:element},maplibregl:{Map,LngLatBounds:Bounds,Popup,Marker}});
+  assert.equal(errors.length,0);window.recenter();assert.equal(fitted.length,2);
+  for(const points of fitted)assert.equal(JSON.stringify(points),fitTo==='route'?'[[106,10],[106.01,10.02]]':'[[108,11],[106,10],[106.01,10.02]]');
+ }
+});
+
 test('Map reload starts a fresh WebView even when no error has been reported',()=>{
  const {s}=map();
  const current=()=>s.nodes().find(n=>n.type==='WebView');

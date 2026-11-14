@@ -21,6 +21,8 @@ export interface RoadGuardMapProps {
   zoom?: number;
   markers?: MapMarker[];
   routeCoordinates?: [number, number][]; // [lng, lat][]
+  /** Limit camera framing to the selected route; markers remain at their real coordinates. */
+  fitTo?: 'all' | 'route';
   onMarkerPress?: (markerId: string) => void;
   style?: StyleProp<ViewStyle>;
   interactive?: boolean;
@@ -33,6 +35,7 @@ export function RoadGuardMapLibre({
   zoom = 15,
   markers = [],
   routeCoordinates = [],
+  fitTo = 'all',
   onMarkerPress,
   style,
   interactive = true,
@@ -222,6 +225,7 @@ export function RoadGuardMapLibre({
 
       var markers = ${markersJson};
       var route = ${routeJson};
+      var frameMarkers = ${fitTo === 'route'} && route.length > 1 ? [] : markers;
 
       map.on('load', function() {
         // Draw Navigation Route Line
@@ -293,10 +297,10 @@ export function RoadGuardMapLibre({
             .addTo(map);
         });
 
-        // Auto-fit bounds so BOTH vehicle and destination are in full view!
-        if (markers.length > 0 || route.length > 1) {
+        // Frame the selected content without moving any source coordinate.
+        if (frameMarkers.length > 0 || route.length > 1) {
           var bounds = new maplibregl.LngLatBounds();
-          markers.forEach(function(m) { bounds.extend(m.coordinate); });
+          frameMarkers.forEach(function(m) { bounds.extend(m.coordinate); });
           if (route && route.length > 0) {
             route.forEach(function(c) { bounds.extend(c); });
           }
@@ -320,11 +324,9 @@ export function RoadGuardMapLibre({
       };
       window.recenter = function() {
         if (!window.mapInstance) return;
-        var markers = ${markersJson};
-        var route = ${routeJson};
-        if (markers.length > 0 || route.length > 1) {
+        if (frameMarkers.length > 0 || route.length > 1) {
           var bounds = new maplibregl.LngLatBounds();
-          markers.forEach(function(m) { bounds.extend(m.coordinate); });
+          frameMarkers.forEach(function(m) { bounds.extend(m.coordinate); });
           if (route && route.length > 0) {
             route.forEach(function(c) { bounds.extend(c); });
           }
@@ -346,7 +348,7 @@ export function RoadGuardMapLibre({
 </body>
 </html>
     `;
-  }, [center, zoom, markers, routeCoordinates, layerType, interactive, onMarkerPress]);
+  }, [center, zoom, markers, routeCoordinates, layerType, interactive, onMarkerPress, fitTo]);
 
   // Handle message from WebView (e.g. marker click)
   const handleMessage = (event: {nativeEvent:{data:string;url:string}}) => {

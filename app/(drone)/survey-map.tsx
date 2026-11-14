@@ -53,7 +53,7 @@ export default function DroneSurveyMapScreen() {
           </View> : null}
           <View testID="survey-map-canvas" style={styles.canvas}>
             {center ? <RoadGuardMapLibre key={`${scopeKey}:${accessFocused ? 'access' : selected?.id ?? 'access'}`} style={styles.canvas}
-              center={center} routeCoordinates={coordinates}
+              center={center} routeCoordinates={coordinates} fitTo="route"
               markers={access ? [{ id: 'access-point', title: 'Điểm tiếp cận', label: 'Điểm tiếp cận', type: 'survey', coordinate: access }] : []} />
               : <View style={styles.center}><EmptyState icon="location-off" title="Chưa có vị trí bản đồ" message="Nhiệm vụ chưa có điểm tiếp cận hoặc hình học WGS84." /></View>}
           </View>

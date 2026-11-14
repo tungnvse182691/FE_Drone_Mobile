@@ -25,7 +25,7 @@ test('Operator dedicated map reads every pinned ref and switches only assigned s
   {params:{taskId:task.id},modules:{'../../src/components/map/RoadGuardMapLibre':{RoadGuardMapLibre:'RoadGuardMapLibre'}}});
  const text=()=>JSON.stringify(s.nodes());
  s.render();await s.flush();assert.deepEqual(calls,[id(4),id(8)]);
- let map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.ok(map);assert.equal(JSON.stringify(map.props.routeCoordinates),'[[106,10],[106.01,10]]');
+ let map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.ok(map);assert.equal(map.props.fitTo,'route');assert.equal(JSON.stringify(map.props.routeCoordinates),'[[106,10],[106.01,10]]');
  assert.ok(!s.nodes().some(n=>n.type==='SafeAreaScreen'), 'map must not sit in the work package scroll view');
  await s.tap('map-segment-'+id(10));await s.flush();map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.equal(JSON.stringify(map.props.routeCoordinates),'[[108,10],[108.01,10]]');
  s.h.changeAuth({status:'SIGNED_OUT',user:null,token:null});s.render();await s.flush();assert.ok(!s.nodes().some(n=>n.type==='RoadGuardMapLibre'));s.unmount();
