@@ -9,7 +9,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
-import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE, DRONE_UPLOAD } from '../../src/constants/routes';
+import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE, DRONE_UPLOAD, DRONE_REQUESTS } from '../../src/constants/routes';
 import { operatorAppearance } from '../../src/components/drone/appearance';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
@@ -223,6 +223,28 @@ export default function DroneRequestDetailScreen() {
           </View>
         </Card>
 
+        {canOpenDecline && scope.key && target ? <>
+            <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+              onResolved={() => void loadTask()}
+              collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
+              {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
+                <MaterialIcons name="cancel" size={18} color={colors.secondary} />
+                <Text style={[typography.labelLg, styles.rejectButtonText]}>Từ chối nhiệm vụ</Text>
+              </Pressable> : null}
+            </DroneTaskCommandPanel>
+        </> : null}
+
+        {status === 'SUPPLEMENTREQUIRED' ? <Card style={styles.scopeCard}>
+          <Text style={typography.titleMd}>Khảo sát bổ sung</Text>
+          <Text style={[typography.bodyMd, styles.supplementText]}>Quản lý yêu cầu khảo sát bổ sung. Tiếp tục trên nhiệm vụ được giao mới.</Text>
+          <Button variant="secondary" title={task.supplementTaskId ? 'Mở nhiệm vụ bổ sung' : 'Xem nhiệm vụ được giao'}
+            onPress={() => {
+              if (!scope.capture()()) return;
+              if (task.supplementTaskId) router.push({ pathname: '/(drone)/request-detail', params: { taskId: task.supplementTaskId } });
+              else router.push(DRONE_REQUESTS);
+            }} />
+        </Card> : null}
+
         <Card style={styles.scopeCard}>
           <View style={styles.headerTitleRow}>
             <MaterialIcons name="map" size={16} color={colors.brandGold} />
@@ -319,21 +341,13 @@ export default function DroneRequestDetailScreen() {
             <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
             <Text style={typography.caption}>Phạm vi được ghim theo nhiệm vụ; xem các phân đoạn ở Gói công việc.</Text>
           </View> : null}
-          {scope.key && target ? <>
-            <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
-              onResolved={() => void loadTask()}
-              collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
-              {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
-                <MaterialIcons name="cancel" size={18} color={colors.secondary} />
-                <Text style={[typography.labelLg, styles.rejectButtonText]}>Từ chối nhiệm vụ</Text>
-              </Pressable> : null}
-            </DroneTaskCommandPanel>
+          {!canOpenDecline && scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+            onResolved={() => void loadTask()} collapsed={!commandsExpanded} onExpand={() => setCommandsExpanded(true)} /> : null}
             {!canOpenDecline ? <Pressable accessibilityRole="button" accessibilityLabel="Lệnh và đối soát" accessibilityState={{ expanded: commandsExpanded }} onPress={() => setCommandsExpanded(value => !value)} style={styles.technicalToggle}>
               <MaterialIcons name="history" size={20} color={colors.secondary} />
               <Text style={[typography.labelSm, { flex: 1 }]}>Lệnh và đối soát trên thiết bị</Text>
               <MaterialIcons name={commandsExpanded ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
             </Pressable> : null}
-          </> : null}
         </Card>
       </>
     );
@@ -405,6 +419,7 @@ const styles = StyleSheet.create({
   heroTitle: { color: colors.neutral, marginVertical: 12 },
   codeLabel: { color: colors.secondary },
   sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
+  supplementText: { color: colors.secondary, marginVertical: spacing.sm },
   scopeCard: { ...operatorAppearance.card, marginBottom: 12 },
   accessPointCard: { ...operatorAppearance.card, marginBottom: 12 },
   accessPointHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },

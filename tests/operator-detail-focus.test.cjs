@@ -17,3 +17,21 @@ test('Operator detail rereads real task status on return from upload', async () 
   assert.equal(reads,2); assert.match(JSON.stringify(s.nodes()),/Đã nộp/);
   assert.ok(!s.nodes().some(n=>n.props.title==='Gửi dữ liệu khảo sát')); s.unmount();
 });
+
+test('Operator supplement task follows the server link or returns to assigned tasks without inferring a child', async () => {
+  for (const supplementTaskId of [null, id(4)]) {
+    const navigation=[];
+    const task = {id:id(2),projectId:id(3),operatorId:id(1),status:'SUPPLEMENT_REQUIRED',version:'v2',scope:[],supplementTaskId};
+    const s = drone('request-detail', {
+      getOperatorSurveyTaskDetailReal: async () => ({data:task,etag:'"v2"'}),
+      getOperatorWorkPackageReal: async () => ({data:{task,geometryRefs:[]}}),
+    }, {params:{taskId:task.id}, moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],router:{push:value=>navigation.push(value)}})}});
+    s.render(); await s.flush();
+    assert.ok(!s.nodes().some(n=>n.props.title==='Gửi dữ liệu khảo sát'));
+    const action=s.nodes().find(n=>n.props.title===(supplementTaskId?'Mở nhiệm vụ bổ sung':'Xem nhiệm vụ được giao'));
+    assert.ok(action,'supplement-required must explain how to continue');
+    action.props.onPress();
+    assert.equal(JSON.stringify(navigation.at(-1)),JSON.stringify(supplementTaskId ? {pathname:'/(drone)/request-detail',params:{taskId:supplementTaskId}} : '/(drone)/requests'));
+    s.unmount();
+  }
+});
