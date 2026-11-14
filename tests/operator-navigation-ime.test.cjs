@@ -2,6 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { screen } = require('./helpers/roadfe-screen.cjs');
 
+test('Operator focused map hides navigation without unmounting Stack',()=>{
+ for(const route of ['/survey-map','/(drone)/survey-map']) {
+  const s=screen('app/(drone)/_layout.tsx',{modules:{'expo-router':{Stack:'Stack',usePathname:()=>route},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});
+  s.render();assert.equal(s.nodes().filter(n=>n.type==='Stack').length,1);
+  assert.ok(!s.nodes().some(n=>n.type==='BottomNav'));
+  s.unmount();
+ }
+});
+
 test('Operator navigation stays below resized viewport and preserves Stack during keyboard transitions', async () => {
   const listeners = new Map(); let removed = 0;
   const s = screen('app/(drone)/_layout.tsx', {

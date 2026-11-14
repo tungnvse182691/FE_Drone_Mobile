@@ -18,16 +18,30 @@ test('Operator map limits geometry to assigned segments and rejects metric fallb
  const copy=structuredClone(gp);copy.segmentSet.routeVersionId=id(99);
  assert.throws(()=>m.operatorMapSegments(ref,copy),/geometry_source_mismatch/);
 });
-test('Operator map reads every pinned ref and updates selected geometry metadata',async()=>{
+test('Operator dedicated map reads every pinned ref and switches only assigned segments',async()=>{
  const calls=[];const second={routeVersionId:id(8),segmentSetId:id(9),segmentIds:[id(10)]};
  const gp2={...gp,route:{routeVersionId:id(8),versionNo:8},segmentSet:{...gp.segmentSet,id:id(9),routeVersionId:id(8),segments:[{id:id(10),sequence:3,wgs84Geometry:shape([[108,10],[108.01,10]])}]}};
- const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref,second]}}),getOperatorGeometryPackageReal:async(p,r)=>{calls.push(r.routeVersionId);return {data:r.routeVersionId===id(4)?gp:gp2};}},
+ const s=drone('survey-map',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref,second]}}),getOperatorGeometryPackageReal:async(p,r)=>{calls.push(r.routeVersionId);return {data:r.routeVersionId===id(4)?gp:gp2};}},
   {params:{taskId:task.id},modules:{'../../src/components/map/RoadGuardMapLibre':{RoadGuardMapLibre:'RoadGuardMapLibre'}}});
  const text=()=>JSON.stringify(s.nodes());
  s.render();await s.flush();assert.deepEqual(calls,[id(4),id(8)]);
  let map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.ok(map);assert.equal(JSON.stringify(map.props.routeCoordinates),'[[106,10],[106.01,10]]');
- assert.match(text(),/Phiên bản tuyến: ",4/);
+ assert.ok(!s.nodes().some(n=>n.type==='SafeAreaScreen'), 'map must not sit in the work package scroll view');
  await s.tap('map-segment-'+id(10));await s.flush();map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.equal(JSON.stringify(map.props.routeCoordinates),'[[108,10],[108.01,10]]');
- assert.match(text(),/Phiên bản tuyến: ",8/);
  s.h.changeAuth({status:'SIGNED_OUT',user:null,token:null});s.render();await s.flush();assert.ok(!s.nodes().some(n=>n.type==='RoadGuardMapLibre'));s.unmount();
+});
+
+test('Work package opens a dedicated map instead of embedding gesture content',async()=>{
+ const nav=[];
+ const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref]}}),getOperatorGeometryPackageReal:async()=>({data:gp})},
+ {params:{taskId:task.id},modules:{'expo-router':{router:{push:p=>nav.push(p)},useLocalSearchParams:()=>({taskId:task.id})}}});
+ s.render();await s.flush();assert.ok(!s.nodes().some(n=>n.type==='RoadGuardMapLibre'));
+ await s.tap('open-survey-map');assert.equal(nav[0].pathname,'/(drone)/survey-map');assert.equal(nav[0].params.taskId,task.id);s.unmount();
+});
+
+test('Map can focus a server-provided access point and return to the pinned line',async()=>{
+ const s=drone('survey-map',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref],accessPoint:{point:{longitude:108.33333333333333,latitude:15.883333333333333}}}}),getOperatorGeometryPackageReal:async()=>({data:gp})},{params:{taskId:task.id}});
+ s.render();await s.flush();await s.tap('focus-map-access');await s.flush();
+ let map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.equal(JSON.stringify(map.props.center),'[108.33333333333333,15.883333333333333]');assert.equal(map.props.routeCoordinates.length,0);
+ await s.tap('map-segment-'+id(6));await s.flush();map=s.nodes().find(n=>n.type==='RoadGuardMapLibre');assert.equal(map.props.routeCoordinates.length,2);s.unmount();
 });

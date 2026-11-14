@@ -44,6 +44,7 @@ export default function DroneLayout() {
   const activeRoute = normalizedPath.startsWith('/(drone)')
     ? normalizedPath
     : `/(drone)${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
+  const focusedMap = activeRoute === '/(drone)/survey-map';
 
   return (
     <View style={styles.container} onLayout={({ nativeEvent: { layout } }) => {
@@ -52,10 +53,10 @@ export default function DroneLayout() {
         return previous.width === layout.width && previous.height === height ? previous : { width: layout.width, height };
       });
     }}>
-      <View style={[styles.stackArea, { marginBottom: keyboardVisible ? 0 : navigationHeight }]}>
+      <View style={[styles.stackArea, { marginBottom: keyboardVisible || focusedMap ? 0 : navigationHeight }]}>
         <Stack screenOptions={{ headerShown: false }} />
       </View>
-      {!keyboardVisible ? <View testID="operator-navigation-dock" pointerEvents="box-none"
+      {!keyboardVisible && !focusedMap ? <View testID="operator-navigation-dock" pointerEvents="box-none"
         style={[styles.navigationDock, { height: viewport.height || '100%' }]}>
         <SafeAreaView edges={['bottom']} onLayout={event => setNavigationHeight(event.nativeEvent.layout.height)}>
           <BottomNav tabs={DRONE_TABS} activeRoute={activeRoute} appearance="crew" />

@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs');
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
+const {drone: scopedDrone}=require('./package45-drone.test.cjs');
 const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 const task=n=>({id:id(n),operatorId:id(99),projectId:id(98),status:n%2?'ACCEPTED':'COMPLETED',scope:[],version:'v1'});
 // These online screen cases exercise pagination/errors. SQLite fallback and
@@ -61,7 +62,7 @@ test('W1-04 integrity PASSED has its own label while coverage remains UNKNOWN',a
 test('W1-06 accuracy is a position precision, including zero and unavailable values',async()=>{
  const source=fs.readFileSync('app/(drone)/work-package.tsx','utf8');assert.match(source,/Độ chính xác vị trí/);assert.doesNotMatch(source,/Bán kính an toàn|Theo quy định an toàn hiện trường/);
  for(const accuracyMeters of [0,3.5,null,-1,NaN]){
- const f=drone('app/(drone)/work-package.tsx',{getOperatorWorkPackageReal:async()=>({data:{task:task(1),geometryRefs:[],accessPoint:{point:{latitude:10,longitude:106},accuracyMeters}}})});
+ const f={s:scopedDrone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task:task(1),geometryRefs:[],accessPoint:{point:{latitude:10,longitude:106},accuracyMeters}}})})};
  f.s.render();await f.s.flush();assert.match(text(f.s),new RegExp(Number.isFinite(accuracyMeters)&&accuracyMeters>=0?String(accuracyMeters)+' m':'Chưa có dữ liệu độ chính xác'));f.s.unmount();
  }
 });

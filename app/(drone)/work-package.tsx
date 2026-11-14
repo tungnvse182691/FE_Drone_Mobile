@@ -1,7 +1,8 @@
-import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
-import { readOperatorSnapshot, operatorCachedNotice } from '../../src/api/operatorOfflineCache';
+import { useOperatorWorkPackage } from '../../src/hooks/useOperatorWorkPackage';
+import { DRONE_SURVEY_MAP } from '../../src/constants/routes';
+import { operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import { operatorTaskDisplayCode, operatorTaskTargetBand } from '../../src/api/operator-task-view';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,17 +10,11 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
-import { messageFor } from '../../src/api/errorCatalog';
-import { parseProblemDetails } from '../../src/api/problemDetails';
 import {
-  getOperatorGeometryPackageReal,
-  getOperatorWorkPackageReal,
   type GeometryPackageViewDto,
-  type SurveyTaskWorkPackageDto,
 } from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { operatorAppearance } from '../../src/components/drone/appearance';
-import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
 import { operatorMapSegments } from '../../src/api/operatorMapGeometry';
 
 /**
@@ -85,80 +80,14 @@ function segmentMetadata(segment: GeometryPackageViewDto['segmentSet']['segments
   return parts.join(' · ');
 }
 
-function operatorErrorMessage(error: unknown): string {
-  const response = (error as { response?: { data?: unknown; status?: number } }).response;
-  const code = parseProblemDetails(response?.data).code;
-  if (code) {
-    return messageFor(code);
-  }
-  const parsed = parseProblemDetails(response?.data);
-  return 'Không đọc được gói công việc. Vui lòng thử lại.';
-}
-
 export default function DroneWorkPackageScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
-  const scope = useOperatorReadScope(target);
-  const [dataScope, setDataScope] = useState<string | null>(null);
-
-  const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
-  const [geometries, setGeometries] = useState<GeometryPackageViewDto[]>([]);
-  const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [geometryError, setGeometryError] = useState<string | null>(null);
+  const { workPackage, geometries, loading, geometryError, error, cachedAt, reload: load } = useOperatorWorkPackage(target);
   const [technicalExpanded, setTechnicalExpanded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [cachedAt, setCachedAt] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    setDataScope(scope.key);
-    setWorkPackage(null);
-    setGeometries([]);
-    setSelectedSegment(null);
-    setLoading(true);
-    setError(null);
-    setCachedAt(null);
-    setGeometryError(null);
-    try {
-      const wp = await readOperatorSnapshot(`work:${target}`, () => getOperatorWorkPackageReal(target));
-      if (!isCurrent()) return;
-      setWorkPackage(wp.data);
-      setCachedAt(wp.cachedAt);
-      if (wp.data.geometryRefs?.length && wp.data.task.projectId) {
-        const loaded: GeometryPackageViewDto[] = [];
-        for (const ref of wp.data.geometryRefs) {
-          try {
-            const gp = await readOperatorSnapshot(`geometry:${target}:${ref.routeVersionId}:${ref.segmentSetId}`, () => getOperatorGeometryPackageReal(wp.data.task.projectId, {
-              routeVersionId: ref.routeVersionId,
-              segmentSetId: ref.segmentSetId,
-            }));
-            if (!isCurrent()) return;
-            if (gp.data.projectId !== wp.data.task.projectId || gp.data.route.routeVersionId !== ref.routeVersionId || gp.data.segmentSet.id !== ref.segmentSetId || gp.data.segmentSet.routeVersionId !== ref.routeVersionId) throw Error('geometry_source_mismatch');
-            operatorMapSegments(ref, gp.data);
-            loaded.push(gp.data);
-            if (gp.cachedAt) setCachedAt(gp.cachedAt);
-          } catch { if (isCurrent()) setGeometryError('Chưa đọc được hình học đã ghim. Thông tin nhiệm vụ vẫn được giữ.'); }
-        }
-        if (!isCurrent()) return;
-        setGeometries(loaded);
-      }
-    } catch (err) {
-      if (!isCurrent()) return;
-      setError(operatorErrorMessage(err));
-      setWorkPackage(null);
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  }, [target, scope.key, scope.capture]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   const renderBody = () => {
-    if (!scope.key || dataScope !== scope.key || loading) {
+    if (loading) {
       return (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.primary} />
@@ -188,11 +117,9 @@ export default function DroneWorkPackageScreen() {
       const source = geometries.find(value => value.route.routeVersionId === entry.routeVersionId && value.segmentSet.id === entry.segmentSetId);
       return source ? operatorMapSegments(entry, source) : [];
     });
-    const selected = segments.find(segment => segment.id === selectedSegment) ?? segments[0];
+    const selected = segments[0];
     const ref = workPackage.geometryRefs.find(entry => entry.segmentIds.includes(selected?.id ?? '')) ?? workPackage.geometryRefs[0];
     const geometry = geometries.find(entry => entry.route.routeVersionId === ref?.routeVersionId && entry.segmentSet.id === ref?.segmentSetId);
-    const coordinates = selected?.coordinates ?? [];
-    const accessCoordinate: [number, number] | null = accessPoint ? [accessPoint.point.longitude, accessPoint.point.latitude] : null;
 
     return (
       <>
@@ -219,24 +146,16 @@ export default function DroneWorkPackageScreen() {
         </Card>
 
         <Card style={styles.card}>
-          <View style={styles.cardHeader}><MaterialIcons name="map" size={18} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Bản đồ khảo sát</Text></View>
-          {segments.length > 0 ? <View style={styles.segmentChoices}>
-            {segments.map((segment, index) => <Pressable key={segment.id} testID={`map-segment-${segment.id}`}
-              accessibilityRole="button" accessibilityState={{ selected: selected?.id === segment.id }}
-              onPress={() => setSelectedSegment(segment.id)}
-              style={[styles.segmentChoice, selected?.id === segment.id && styles.segmentActive]}>
-              <Text style={typography.labelSm}>Đoạn {segment.sequence ?? index + 1}</Text>
-            </Pressable>)}
-          </View> : null}
-          {coordinates.length > 0 || accessCoordinate ? <View style={styles.mapFrame}>
-            <RoadGuardMapLibre key={`${scope.key}:${selected?.id ?? 'access'}`} style={{ flex: 1 }}
-              center={coordinates[0] ?? accessCoordinate!} routeCoordinates={coordinates}
-              markers={accessCoordinate ? [{ id: 'access-point', title: 'Điểm tiếp cận', label: 'Điểm tiếp cận', type: 'survey', coordinate: accessCoordinate }] : []} />
-          </View> : null}
-          {coordinates.length === 0 ? <View style={styles.mapNotice}>
-            <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
-            <Text style={styles.mapNoticeText}>{accessCoordinate ? 'Đang hiển thị điểm tiếp cận. Phân đoạn chưa có hình học WGS84.' : 'Chưa có tọa độ WGS84 để hiển thị bản đồ.'}</Text>
-          </View> : null}
+          <Pressable testID="open-survey-map" accessibilityRole="button" accessibilityLabel="Mở bản đồ khảo sát"
+            onPress={() => router.push({ pathname: DRONE_SURVEY_MAP, params: { taskId: target } })}
+            style={({ pressed }) => [styles.mapEntry, pressed && styles.pressed]}>
+            <View style={styles.mapEntryIcon}><MaterialIcons name="map" size={26} color={colors.brandGold} /></View>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[typography.titleMd, { color: colors.neutral }]}>Mở bản đồ</Text>
+              <Text style={[typography.caption, { color: colors.secondary }]}>Phân đoạn khảo sát và điểm tiếp cận</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={colors.secondary} />
+          </Pressable>
         </Card>
 
         <Card style={styles.card}>
@@ -378,7 +297,8 @@ export default function DroneWorkPackageScreen() {
 }
 
 const styles = StyleSheet.create({
-  mapFrame: { height: 320, overflow: 'hidden', borderRadius: 12, marginTop: 12 },
+  mapEntry: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mapEntryIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   mapNotice: { flexDirection: 'row', gap: 8, padding: 12, marginTop: 12, backgroundColor: colors.surfaceAlt, borderRadius: 10 },
   mapNoticeText: { ...typography.caption, color: colors.secondary, flex: 1, lineHeight: 19 },
   segmentChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },

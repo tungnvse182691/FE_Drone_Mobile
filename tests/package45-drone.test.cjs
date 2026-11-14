@@ -10,7 +10,11 @@ function drone(file,api={},extra={}) {
   // module mock crash during module/effect evaluation.
   const defaultDroneApi={getOperatorSurveyTaskDetailReal:async()=>{throw Error('detail_not_mocked');}};
   let s;
-  s=screen(`app/(drone)/${file}.tsx`,{...extra,moduleFactories:{'../../src/hooks/useOperatorTaskPages':({react,modules})=>{
+  s=screen(`app/(drone)/${file}.tsx`,{...extra,moduleFactories:{'../../src/hooks/useOperatorWorkPackage':({react})=>{
+    const mod={exports:{}};
+    require('node:vm').runInNewContext(require('typescript').transpileModule(require('node:fs').readFileSync('src/hooks/useOperatorWorkPackage.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>n==='react'?react:n==='../api/droneApi'?api:n==='./useOperatorReadScope'?{useOperatorReadScope:(...a)=>s.h.load('src/hooks/useOperatorReadScope.ts').useOperatorReadScope(...a)}:n==='../api/operatorOfflineCache'?{readOperatorSnapshot:(...a)=>s.h.load('src/api/operatorOfflineCache.ts').readOperatorSnapshot(...a)}:n==='../api/operatorMapGeometry'?{operatorMapSegments:(...a)=>s.h.load('src/api/operatorMapGeometry.ts').operatorMapSegments(...a)}:n==='../api/errorCatalog'?{messageFor:(...a)=>s.h.load('src/api/errorCatalog.ts').messageFor(...a)}:{parseProblemDetails:(...a)=>s.h.load('src/api/problemDetails.ts').parseProblemDetails(...a)}});
+    return mod.exports;
+  },'../../src/hooks/useOperatorTaskPages':({react,modules})=>{
     const mod={exports:{}};
     require('node:vm').runInNewContext(require('typescript').transpileModule(require('node:fs').readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='../api/droneApi'?api:n==='../api/operatorOfflineCache'?{readOperatorSnapshot:(...a)=>s.h.load('src/api/operatorOfflineCache.ts').readOperatorSnapshot(...a),operatorCachedNotice:(...a)=>s.h.load('src/api/operatorOfflineCache.ts').operatorCachedNotice(...a)}:{useOperatorReadScope:(...a)=>s.h.load('src/hooks/useOperatorReadScope.ts').useOperatorReadScope(...a)}});
     return mod.exports;
