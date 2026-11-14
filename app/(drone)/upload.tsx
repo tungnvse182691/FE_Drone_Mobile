@@ -15,6 +15,7 @@ import { openDroneUploadJournal, type DroneUploadIntent } from '../../src/api/dr
 import { getOperatorSurveyTaskDetailReal, listEligibleOperatorDronesReal, type EligibleDroneDto } from '../../src/api/droneApi';
 import { openDroneLocalFiles, readDroneFileRange, type DroneLocalFile } from '../../src/api/droneLocalFiles';
 import { openDroneSelectionJournal } from '../../src/api/droneSelectionJournal';
+import { openOperatorUploadDraft } from '../../src/api/operatorUploadDraft';
 import { useAuthStore } from '../../src/store/auth';
 
 export default function DroneUploadScreen() {
@@ -42,6 +43,9 @@ export default function DroneUploadScreen() {
   const [telemetryFile, setTelemetryFile] = useState<DroneLocalFile | null>(null);
   const [recordedAt, setRecordedAt] = useState('');
   const [timeOffset, setTimeOffset] = useState('');
+  const [draftMessage, setDraftMessage] = useState<string | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const savingDraft = useRef(false);
   const [journalReady, setJournalReady] = useState(false);
   const [transferMessage, setTransferMessage] = useState<string | null>(null);
   const [pendingDataset, setPendingDataset] = useState<DroneUploadIntent | null>(null);
@@ -200,6 +204,7 @@ export default function DroneUploadScreen() {
     }
   };
   const selectFile = (file: DroneLocalFile) => {
+    setDraftMessage(null);
     if (file.kind === 'VIDEO') {
       setVideoFile(file);
       setVideoName(file.name); setVideoUri(file.uri); setVideoSize(`${(file.size / (1024 * 1024)).toFixed(1)} MB`);
@@ -213,7 +218,7 @@ export default function DroneUploadScreen() {
   };
   const restoreFile = async (key: string) => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || !params.taskId || picking.current || sending.current) return;
+    if (!isCurrent() || !params.taskId || picking.current || sending.current || draftLoading) return;
     let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
     try {
       runtime = await openDroneLocalFiles(params.taskId);
@@ -228,6 +233,39 @@ export default function DroneUploadScreen() {
   };
 
   const [previewScope, setPreviewScope] = useState(scope.key);
+  const restoreDraft = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent() || !params.taskId) return;
+    setDraftLoading(true);
+    let draft: Awaited<ReturnType<typeof openOperatorUploadDraft>> | undefined;
+    let files: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
+    try {
+      draft = await openOperatorUploadDraft(params.taskId); if (!isCurrent()) return;
+      const saved = await draft.read(); if (!isCurrent() || !saved) return;
+      files = await openDroneLocalFiles(params.taskId); if (!isCurrent()) return;
+      const local = await files.list(); if (!isCurrent()) return;
+      for (const [key, kind] of [[saved.videoKey,'VIDEO'],[saved.telemetryKey,'TELEMETRY']] as const) {
+        const file = local.find(f => f.key === key && f.kind === kind && ['LOCAL_READY','LOCAL_UNHASHED'].includes(f.availability));
+        if (file) selectFile(file);
+      }
+      setRecordedAt(saved.recordedAt); setTimeOffset(saved.timeOffset);
+      const missing = [saved.videoKey,saved.telemetryKey].some(key => key && !local.some(f => f.key === key && ['LOCAL_READY','LOCAL_UNHASHED'].includes(f.availability)));
+      setDraftMessage(missing ? 'Đã mở nháp. Có tệp chưa đầy đủ; chọn lại tệp nguồn.' : 'Đã mở nháp trên máy. Chưa gửi lên máy chủ.');
+    } catch { if (isCurrent()) setDraftMessage('Chưa mở được nháp. Dữ liệu đã lưu vẫn được giữ.'); }
+    finally { draft?.close(); files?.close(); if (isCurrent()) setDraftLoading(false); }
+  };
+  const saveDraft = async () => {
+    const isCurrent = scope.capture();
+    if (!isCurrent() || !params.taskId || savingDraft.current || draftLoading || sending.current || copying || pendingDataset) return;
+    savingDraft.current = true;
+    let draft: Awaited<ReturnType<typeof openOperatorUploadDraft>> | undefined;
+    try {
+      draft = await openOperatorUploadDraft(params.taskId); if (!isCurrent()) return;
+      await draft.save({recordedAt,timeOffset,videoKey:videoFile?.key ?? null,telemetryKey:telemetryFile?.key ?? null});
+      if (isCurrent()) setDraftMessage('Đã lưu nháp trên máy. Chưa gửi lên máy chủ.');
+    } catch { if (isCurrent()) setDraftMessage('Chưa lưu được nháp. Giữ màn này và thử lại.'); }
+    finally { draft?.close(); savingDraft.current = false; }
+  };
   useEffect(() => {
     setPreviewScope(scope.key);
     setVideoName('Chưa chọn tệp'); setVideoSize('—'); setVideoSha('—');
@@ -238,6 +276,7 @@ export default function DroneUploadScreen() {
     setUploadProgress(0); setSubmitError(null);
     setNote('');
     setSavedFiles([]); setFileError(null);
+    setDraftMessage(null); void restoreDraft();
     eligibleRequest.current++;
     setEligibleDrones([]); setEligibleCursor(null); setEligibleError(null); setSelectedDrone(null);
     // Copy ownership outlives scope changes. Keep its generic busy indicator;
@@ -305,7 +344,7 @@ export default function DroneUploadScreen() {
   };
   const handleStartSubmitDataset = async () => {
     const isCurrent=scope.capture();
-    if(!isCurrent()||sending.current||copying||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
+    if(!isCurrent()||sending.current||copying||draftLoading||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
     sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);
     const guard=()=>{if(!isCurrent()||!mounted.current)throw Error('operator_session_changed');};
     try {
@@ -369,7 +408,7 @@ export default function DroneUploadScreen() {
 
   const fileCard = (kind: 'VIDEO' | 'TELEMETRY', title: string, name: string, size: string, hash: string) => <Card style={styles.card}>
     <View style={styles.row}><MaterialIcons name={kind==='VIDEO'?'videocam':'subtitles'} size={23} color={colors.secondary}/><Text style={styles.heading}>{title}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} disabled={copying||submitting} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.iconButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} disabled={copying||submitting||draftLoading} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.iconButton}>
         <MaterialIcons name="folder-open" size={22} color={colors.secondary}/><Text style={typography.caption}>Chọn tệp SD</Text>
       </Pressable>
     </View>
@@ -404,19 +443,21 @@ export default function DroneUploadScreen() {
       <View style={styles.row}><MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp trên thiết bị</Text><Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable></View>
       <Text style={styles.caption}>MP4 tối đa 8 GiB · SRT tối đa 10 MiB</Text>
       {savedFiles.map(file=><View key={file.key} style={styles.savedFile}><Text style={typography.bodyMd}>{file.name}</Text><Text style={styles.caption}>{file.availability==='LOCAL_READY'?'Đã kiểm tra SHA-256':file.availability==='LOCAL_UNHASHED'?'Chưa kiểm tra SHA-256':file.availability==='INCOMPLETE'?'Bản sao chưa đầy đủ':'Không tìm thấy tệp'}</Text>
-        <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={submitting||copying||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)}/></View>)}
+        <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)}/></View>)}
       {!savedFiles.length?<Text style={styles.caption}>Chưa có tệp đã lưu.</Text>:null}
       {fileError?<Text accessibilityRole="alert" style={styles.error}>{fileError}</Text>:null}
     </Card>
     <Card style={styles.card}><Text style={styles.heading}>Thời gian ghi hình</Text>
-      <TextInput accessibilityLabel="Thời gian ghi hình" placeholder="2026-11-14 08:30" value={recordedAt} editable={!submitting&&!pendingDataset} onChangeText={setRecordedAt} style={styles.input}/>
+      <TextInput accessibilityLabel="Thời gian ghi hình" placeholder="2026-11-14 08:30" value={recordedAt} editable={!submitting&&!pendingDataset&&!draftLoading} onChangeText={v=>{setRecordedAt(v);setDraftMessage(null);}} style={styles.input}/>
       <Text style={styles.caption}>Giờ địa phương của thiết bị · nhập theo tệp ghi hình.</Text>
-      {telemetryFile?<><Text style={typography.bodyMd}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch thời gian SRT" placeholder="0 nếu video và SRT cùng mốc" value={timeOffset} editable={!submitting&&!pendingDataset} onChangeText={setTimeOffset} keyboardType="numbers-and-punctuation" style={styles.input}/></>:null}
+      {telemetryFile?<><Text style={typography.bodyMd}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch thời gian SRT" placeholder="0 nếu video và SRT cùng mốc" value={timeOffset} editable={!submitting&&!pendingDataset&&!draftLoading} onChangeText={v=>{setTimeOffset(v);setDraftMessage(null);}} keyboardType="numbers-and-punctuation" style={styles.input}/></>:null}
+      {!pendingDataset?<Button title="Lưu nháp trên máy" variant="secondary" disabled={submitting||copying||draftLoading||!params.taskId} onPress={()=>void saveDraft()}/>:null}
+      {draftMessage?<Text accessibilityLiveRegion="polite" style={styles.caption}>{draftMessage}</Text>:null}
     </Card>
     {transferMessage?<View accessibilityLiveRegion="polite" style={styles.notice}>{submitting?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name={received?'check-circle-outline':'info-outline'} size={22} color={received?colors.success:colors.secondary}/>}<View style={{flex:1,gap:8}}><Text style={styles.noticeText}>{transferMessage}</Text>{submitting&&transferMessage.startsWith('Đang tải')?<><View style={styles.progressTrack}><View style={[styles.progressFill,{width:`${uploadProgress}%`}]}/></View><Text style={styles.caption}>{uploadProgress}%</Text></>:null}</View></View>:null}
     {pendingDataset?<Card style={styles.card}><Text style={styles.heading}>Yêu cầu đã lưu</Text><Text style={styles.caption}>{pendingDataset.status==='DATASET_CONFIRMED'?'Đã có biên nhận máy chủ.':'Giữ nguyên tệp và yêu cầu nộp để đối soát.'}</Text>
       {pendingDataset.status==='DATASET_CONFIRMED'?<Button title="Đọc lại kết quả nộp" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:pendingDataset.status==='DATASET_UNKNOWN'?<Button title="Gửi lại đúng yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset(true)}/>:pendingDataset.status==='PREPARED'?<Button title="Tiếp tục nộp yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:<Text style={styles.caption}>Yêu cầu không được máy chủ chấp nhận. Kiểm tra lại nhiệm vụ trước khi nộp một bộ dữ liệu mới.</Text>}
-    </Card>:<Button title={submitting?'Đang gửi dữ liệu…':'Nộp bộ dữ liệu 4K RGB'} variant="primary" style={styles.primaryAction} loading={submitting} disabled={submitting||copying||!videoFile?.checksumSha256||!selectedDroneId||!recordedAt.trim()||!journalReady} onPress={()=>void handleStartSubmitDataset()}/>}
+    </Card>:<Button title={submitting?'Đang gửi dữ liệu…':'Nộp bộ dữ liệu 4K RGB'} variant="primary" style={styles.primaryAction} loading={submitting} disabled={submitting||copying||draftLoading||!videoFile?.checksumSha256||!selectedDroneId||!recordedAt.trim()||!journalReady} onPress={()=>void handleStartSubmitDataset()}/>}
     {submitError?<Text accessibilityRole="alert" style={styles.error}>{submitError}</Text>:null}
   </SafeAreaScreen>;
 }
