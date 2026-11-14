@@ -147,3 +147,35 @@ test('bare Auth login stays independent of authenticated interceptor and retries
   const h=harness();h.bareClient.defaults.adapter=async c=>{h.record(c);throw h.fail(c,503);};
   await h.bareClient.post('/auth/android/login',{fixture:true}).catch(()=>{});assert.equal(h.calls.length,1);assert.equal(h.calls[0].auth,undefined);assert.equal(h.timers.length,0);assert.deepEqual(h.events,[]);
 });
+
+for(const action of ['accept','reject','start']) test(`Crew ${action} resumes after token refresh with immutable command`,async()=>{
+  const h=harness();h.login('CREW','crew-session');
+  h.apiClient.defaults.adapter=async c=>{h.record(c);if(h.calls.length===1)throw h.fail(c,401,'token_expired');return h.ok(c);};
+  h.bareClient.defaults.adapter=async c=>({...h.ok(c),data:{accessToken:token('CREW','crew-session',2),refreshToken:'fixture-rotated',user:{id:'CREW'}}});
+  const url=`/projects/72f84201-c001-4000-8000-000000000001/field-inspection-tasks/837f8fd7-755a-4694-b49e-bcfe191801f8/${action}`;
+  await h.apiClient.post(url,{reason:'fixture',originId:'fixture-origin'},{headers:{'Idempotency-Key':'fixture-key','If-Match':'"AAAAAAACA0Q="'}});
+  assert.equal(h.calls.length,2);assert.equal(h.calls[0].url,h.calls[1].url);
+  for(const k of ['body','key','match'])assert.equal(h.calls[0][k],h.calls[1][k]);
+  assert.equal(h.calls[1].auth,`Bearer ${token('CREW','crew-session',2)}`);
+});
+
+for(const headers of [{},{'Idempotency-Key':'fixture-key'},{'If-Match':'"AAAAAAACA0Q="'}]) test(`Crew refresh never replays incomplete command headers ${JSON.stringify(headers)}`,async()=>{
+  const h=harness();h.apiClient.defaults.adapter=async c=>{h.record(c);throw h.fail(c,401,'token_expired');};
+  h.bareClient.defaults.adapter=async c=>({...h.ok(c),data:{accessToken:token('A','session-A',2),refreshToken:'fixture-rotated',user:{id:'A'}}});
+  await h.apiClient.post('/projects/72f84201-c001-4000-8000-000000000001/field-inspection-tasks/837f8fd7-755a-4694-b49e-bcfe191801f8/accept',{reason:'fixture'},{headers}).catch(()=>{});
+  assert.equal(h.calls.length,1);
+});
+
+test('Crew token refresh cannot replay into another login',async()=>{
+  const h=harness(),gate=deferred();h.apiClient.defaults.adapter=async c=>{h.record(c);throw h.fail(c,401,'token_expired');};
+  h.bareClient.defaults.adapter=async c=>{await gate.promise;return {...h.ok(c),data:{accessToken:token('A','session-A',2),refreshToken:'fixture-rotated',user:{id:'A'}}};};
+  const request=h.apiClient.post('/projects/72f84201-c001-4000-8000-000000000001/field-inspection-tasks/837f8fd7-755a-4694-b49e-bcfe191801f8/accept',{reason:'fixture'},{headers:{'Idempotency-Key':'fixture-key','If-Match':'"AAAAAAACA0Q="'}}).catch(e=>e);
+  await h.until(()=>h.events.includes('refresh'));h.login('B','session-B');gate.resolve();
+  assert.equal((await request).code,'auth_session_changed');assert.equal(h.calls.length,1);
+});
+
+test('Crew ambiguous transport failure remains with command journal',async()=>{
+  const h=harness();h.apiClient.defaults.adapter=async c=>{h.record(c);throw h.fail(c,503);};
+  await h.apiClient.post('/projects/72f84201-c001-4000-8000-000000000001/field-inspection-tasks/837f8fd7-755a-4694-b49e-bcfe191801f8/accept',{reason:'fixture'},{headers:{'Idempotency-Key':'fixture-key','If-Match':'"AAAAAAACA0Q="'}}).catch(()=>{});
+  assert.equal(h.calls.length,1);assert.equal(h.timers.length,0);
+});

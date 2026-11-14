@@ -252,6 +252,17 @@ function mayReplay(config: RetriableConfig): boolean {
     /^\/reporter-evidence\/uploads(?:\/[^/]+\/(?:part-urls|complete))?$/.test(path);
 }
 
+function mayReplayAfterRefresh(config: RetriableConfig): boolean {
+  if (mayReplay(config)) return true;
+  // API-081/091/093 share FIELD's serializable idempotency receipt. Limit
+  // this extension to auth recovery; ambiguous transport outcomes stay in the journal.
+  const headers = AxiosHeaders.from(config.headers);
+  return config.method?.toUpperCase() === 'POST' &&
+    Boolean(String(headers.get('Idempotency-Key') ?? '').trim()) &&
+    /^"[A-Za-z0-9+/]{11}="$/.test(String(headers.get('If-Match') ?? '')) &&
+    /^\/projects\/[0-9a-f-]{36}\/field-inspection-tasks\/[0-9a-f-]{36}\/(?:accept|reject|start)$/i.test(config.url ?? '');
+}
+
 function readErrorCode(error: unknown): string | null {
   if (!(error instanceof AxiosError)) {
     return null;
@@ -409,7 +420,7 @@ apiClient.interceptors.response.use(
       if (refreshable && config.__sessionIdentity && !config.__authRetried && isRefreshEligible(config.url)) {
         const current = bridge.getAccessToken();
         if (config.__tokenAtSend && current && current !== config.__tokenAtSend) {
-          if (!mayReplay(config)) throw error;
+          if (!mayReplayAfterRefresh(config)) throw error;
           config.__authRetried = true;
           const headers = AxiosHeaders.from(config.headers);
           headers.set('Authorization', `Bearer ${current}`);
@@ -421,7 +432,7 @@ apiClient.interceptors.response.use(
         const token = await refreshAccessToken(config.__sessionIdentity);
         if (!isCurrentSession(config)) throw sessionChanged(config);
         if (token) {
-          if (!mayReplay(config)) throw error;
+          if (!mayReplayAfterRefresh(config)) throw error;
           const headers = AxiosHeaders.from(config.headers);
           headers.set('Authorization', `Bearer ${token}`);
           config.headers = headers;
