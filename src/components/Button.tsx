@@ -25,7 +25,7 @@ const baseButtonStyle = {
   minHeight: 48,
 };
 
-export function Button({ variant, onPress, disabled, loading, title, icon, style, disabledStyle, disabledTextStyle }: ButtonProps) {
+export function Button({ variant, onPress, disabled, loading = false, title, icon, style, disabledStyle, disabledTextStyle }: ButtonProps) {
   const explicitlyDisabled = !!disabled;
   const isDisabled = explicitlyDisabled || !!loading;
 
@@ -34,6 +34,7 @@ export function Button({ variant, onPress, disabled, loading, title, icon, style
       onPress={onPress}
       disabled={isDisabled}
       accessibilityRole="button"
+      accessibilityLabel={title}
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.base,
