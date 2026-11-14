@@ -129,3 +129,29 @@ test('detail presents only published BE updates and retains supplement/evidence 
  const before=f.refreshes();f.s.nodes().find(n=>n.type==='ReporterHeader').props.rightAction.props.onPress();assert.equal(f.refreshes(),before+1);f.s.unmount();
  const empty=fixture('report-detail');assert.doesNotMatch(text(empty.s),/Cập nhật từ Ban quản lý dự án|Công bố lúc/);empty.s.unmount();
 });
+
+for(const file of ['track','report-detail']){
+ for(const [status,label] of [['NOT_STARTED','Chưa sửa'],['IN_PROGRESS','Đang sửa'],['ACCEPTED','Đã nghiệm thu']]){
+  test(`${file} displays only the current published repair milestone: ${status}`,()=>{
+   const r=report({repairProgress:{status,publishedAt:'2026-11-13T09:30:00Z'}});
+   const {s}=fixture(file,{data:file==='track'?{pages:[{items:[r],nextCursor:null}]}:{report:r}});
+   assert.match(text(s),new RegExp(label));
+   if(file==='report-detail')assert.match(text(s),/Công bố lúc .*13\/11\/2026/);
+   s.unmount();
+  });
+ }
+ test(`${file} clears withdrawn progress even when publication history says accepted`,()=>{
+  const r=report({repairProgress:{status:'ACCEPTED',publishedAt:'2026-11-13T09:30:00Z'},publicUpdates:[{id:'old',summary:'Đã nghiệm thu',publishedAt:'2026-11-13T09:30:00Z',evidenceIds:[]}]});
+  const f=fixture(file,{data:file==='track'?{pages:[{items:[r],nextCursor:null}]}:{report:r}});
+  assert.ok(f.s.nodes().some(n=>n.props.testID==='repair-progress'));
+  r.repairProgress=null;f.s.render();
+  assert.ok(!f.s.nodes().some(n=>n.props.testID==='repair-progress'));f.s.unmount();
+ });
+ for(const repairProgress of [null,undefined,{status:'FUTURE',publishedAt:'2026-11-13T09:30:00Z'},{status:'ACCEPTED',publishedAt:'invalid'}]){
+  test(`${file} has no invented milestone for ${JSON.stringify(repairProgress)}`,()=>{
+   const r=report({repairProgress});
+   const {s}=fixture(file,{data:file==='track'?{pages:[{items:[r],nextCursor:null}]}:{report:r}});
+   assert.ok(!s.nodes().some(n=>n.props.testID==='repair-progress'));s.unmount();
+  });
+ }
+}

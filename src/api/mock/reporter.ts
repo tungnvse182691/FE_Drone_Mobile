@@ -96,6 +96,8 @@ export interface OwnReportDto {
   version: string | null;
   evidence: OwnReportEvidenceDto[];
   routingStatus: string | null;
+  /** API-215/217: current PM publication; absent on older deployments. */
+  repairProgress?: { status: string; publishedAt: string } | null;
   publicUpdates: OwnReportUpdateDto[];
   supplements: OwnReportSupplementDto[];
 }

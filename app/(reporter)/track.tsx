@@ -15,6 +15,7 @@ import { isReporterSession } from '../../src/api/uploads';
 import { Button } from '../../src/components/reporter/Button';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT, REPORTER_REPORT_DETAIL } from '../../src/constants/routes';
+import { publishedRepairProgress } from '../../src/api/reporterProgress';
 
 const LOAD_ERROR = 'Không tải được danh sách phản ánh. Vui lòng thử lại.';
 
@@ -66,7 +67,9 @@ export default function ReporterTrackScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {reports.map((report) => (
+          {reports.map((report) => {
+            const progress = publishedRepairProgress(report.repairProgress);
+            return (
             <Pressable
               key={report.id}
               style={styles.reportTouch}
@@ -89,6 +92,10 @@ export default function ReporterTrackScreen() {
                     {report.routingStatus === 'UNASSIGNED' ? 'Chưa phân tuyến' : report.routingStatus === 'ASSIGNED' ? 'Đã phân tuyến' : 'Chưa có thông tin phân tuyến'}
                   </Text>
                 </View>
+                {progress ? <View testID="repair-progress" style={[styles.progressChip, { borderColor: colors[progress.tone] }]}>
+                  <MaterialIcons name={progress.tone === 'success' ? 'check-circle' : 'construction'} size={16} color={colors[progress.tone]} />
+                  <Text style={[typography.caption, { color: colors[progress.tone], flexShrink: 1 }]}>{progress.label}</Text>
+                </View> : null}
                 <View style={styles.metaRow}>
                   <Text style={[typography.caption, styles.reportDate]}>{formatDate(report.createdAt)}</Text>
                   <MaterialIcons name="photo-library" size={14} color={colors.secondary} />
@@ -103,7 +110,7 @@ export default function ReporterTrackScreen() {
                 </View>
               </Card>
             </Pressable>
-          ))}
+          );})}
         </View>
         {enabled && query.hasNextPage ? <Button variant="secondary" title="Tải thêm phản ánh" loading={query.isFetchingNextPage} disabled={query.isFetching} onPress={() => void query.fetchNextPage()} /> : null}
       </ScrollView>
@@ -130,6 +137,7 @@ const styles = StyleSheet.create({
   content: { padding: spacing.screenMargin, paddingBottom: spacing.xl, gap: spacing.sm },
   refreshButton: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   routingChip: { alignSelf: 'flex-start', backgroundColor: colors.surfaceAlt, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.full },
+  progressChip: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: 1, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 6, maxWidth: '100%' },
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   error: { color: colors.error, flex: 1 },
   list: { gap: spacing.md, marginTop: spacing.sm },

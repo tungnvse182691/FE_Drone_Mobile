@@ -53,6 +53,11 @@ function screenHarness(imageResult={}){
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../app/(reporter)/report-detail.tsx'),'utf8')+'\nexport { EvidencePreview };',{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,require:name=>{
     if(name==='react')return react;
+    if(name.endsWith('/api/reporterProgress')){
+      const progress={exports:{}};
+      const js=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/api/reporterProgress.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+      vm.runInNewContext(js,{module:progress,exports:progress.exports});return progress.exports;
+    }
     if(name==='react-native')return {Platform:{select:o=>o.default},StyleSheet:{create:o=>o},View:'View',Text:'Text',Image:'Image',ScrollView:'ScrollView'};
     if(name==='expo-router')return {useRouter:()=>({push(){}}),useLocalSearchParams:()=>({reportId}),useFocusEffect:fn=>focus.push(fn)};
     if(name==='@tanstack/react-query')return {useQuery:config=>{configs.push(config);return {data:config.queryKey[0]==='reporter-detail'?{report:source}:'data:image/png;base64,iVBORw==',isError:false,refetch:async()=>calls.push('refetch'),...(config.queryKey[0]==='reporter-detail'?{}:imageResult)};}};

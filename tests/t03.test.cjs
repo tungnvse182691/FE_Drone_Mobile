@@ -115,6 +115,7 @@ function screenHarness(file,overrides={}){
     const js=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
     vm.runInNewContext(js,{module,exports:module.exports,require:name=>{
       if(name in stubs)return stubs[name];
+      if(name.endsWith('/api/reporterProgress'))return load('src/api/reporterProgress.ts');
       if(name.endsWith('/store/reporterRecovery'))return {listHistoricalReporterCommands:async()=>[],checkHistoricalReporterCommand:async()=>({status:'BE_RECEIPT_REQUIRED'})};
       if(name.endsWith('/store/auth'))return {useAuthStore:auth};
       if(name.endsWith('/store/reporter'))return {useReporterStore:selector=>selector({clearSession(){}}),useReporterDraftScope:()=>({key:'scope',capture:()=>()=>true})};

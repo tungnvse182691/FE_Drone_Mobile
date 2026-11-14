@@ -13,6 +13,7 @@ import { passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_SUPPLEMENT, REPORTER_TRACK } from '../../src/constants/routes';
+import { publishedRepairProgress } from '../../src/api/reporterProgress';
 
 const LOCATION_SOURCE_LABELS: Record<string, string> = {
   CAPTURE: 'Vị trí lúc chụp ảnh',
@@ -42,6 +43,7 @@ export default function ReporterReportDetailScreen() {
   // A failed ownership check must hide previously loaded detail and its controls.
   const report = enabled && !query.isError ? query.data?.report : undefined;
   const loading = enabled && query.isFetching;
+  const progress = publishedRepairProgress(report?.repairProgress);
   const error = !enabled ? 'Vui lòng đăng nhập và chọn phản ánh của bạn.' : query.isError ? LOAD_ERROR : null;
   const load = () => { if (enabled) void query.refetch(); };
 
@@ -71,6 +73,13 @@ export default function ReporterReportDetailScreen() {
 
         {report ? (
           <>
+            {progress ? <Card style={styles.card}>
+              <View testID="repair-progress" style={styles.metaRow}>
+                <MaterialIcons name={progress.tone === 'success' ? 'check-circle' : 'construction'} size={22} color={colors[progress.tone]} />
+                <Text accessibilityRole="header" style={[typography.titleMd, { color: colors[progress.tone], flexShrink: 1 }]}>{progress.label}</Text>
+              </View>
+              <Text style={[typography.caption, styles.metaText]}>Công bố lúc {formatDate(progress.publishedAt)}</Text>
+            </Card> : null}
             <Card style={styles.card}>
               <Text accessibilityRole="header" style={[typography.titleMd, styles.sectionTitle]}>Mô tả hiện trạng</Text>
               <ExpandableDescription key={`${scope}:${report.id}`} value={report.description} />
