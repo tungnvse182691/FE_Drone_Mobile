@@ -21,8 +21,14 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
   const refresh=useCallback(async()=>{
     if(running.current||!sameQueueIdentity(identity))return;running.current=true;setBusy(true);setError('');const n=++sequence.current;
     try {
-      const p=await inspectOfflineDevice(identity),j=await openOfflineJournal(identity),rows=await j.list();
-      if(n===sequence.current&&sameQueueIdentity(identity)){setProbe(p);setRecords(rows);}
+      const j=await openOfflineJournal(identity),rows=await j.list();
+      if(n!==sequence.current||!sameQueueIdentity(identity))return;
+      setRecords(rows);
+      // Native capability is diagnostic; it must not hide durable online commands.
+      try {
+        const p=await inspectOfflineDevice(identity);
+        if(n===sequence.current&&sameQueueIdentity(identity))setProbe(p);
+      }catch {if(n===sequence.current&&sameQueueIdentity(identity))setProbe(null);}
     }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Không đọc được thông tin thiết bị hoặc nhật ký; dữ liệu được giữ nguyên.');}
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   },[identity]);
@@ -53,7 +59,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     <View style={styles.stateRow}><View><Text style={styles.value}>{records.length}</Text><Text style={styles.label}>Đã lưu</Text></View><View><Text style={styles.value}>{pending}</Text><Text style={styles.label}>Chờ đối soát</Text></View><View><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View></View>
     <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
     {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
-    {records.length===0?<Text style={styles.description}>Chưa có lệnh cần đối soát.</Text>:records.map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác thiết bị'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
+    {records.length===0?<Text style={styles.description}>Chưa có lệnh cần đối soát.</Text>:records.map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
       {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
     </View>)}
     <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
