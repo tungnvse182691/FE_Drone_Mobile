@@ -2,15 +2,19 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 const task=n=>({id:id(n),operatorId:id(99),projectId:id(98),status:n%2?'ACCEPTED':'COMPLETED',scope:[],version:'v1'});
+// These online screen cases exercise pagination/errors. SQLite fallback and
+// session isolation are covered by operator-offline-cache.test.cjs.
+const onlineSnapshots={readOperatorSnapshot:async(_resource,read)=>({...await read(),cachedAt:null}),operatorCachedNotice:()=>null};
 function drone(file,api={},extra={}){
  let current=true;
  const capture=()=>()=>current;
  const readScope={useOperatorReadScope:()=>({key:current?'actor-A':null,capture})};
  const s=screen(file,{params:{taskId:id(1)},...extra,moduleFactories:{'../../src/hooks/useOperatorTaskPages':({react,modules})=>{
-   const m={exports:{}};require('node:vm').runInNewContext(require('typescript').transpileModule(fs.readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:m,exports:m.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='./useOperatorReadScope'?readScope:{...api}});return m.exports;
+   const m={exports:{}};require('node:vm').runInNewContext(require('typescript').transpileModule(fs.readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:m,exports:m.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='./useOperatorReadScope'?readScope:n==='../api/operatorOfflineCache'?onlineSnapshots:{...api}});return m.exports;
  },...extra.moduleFactories},modules:{
   '../../src/hooks/useOperatorReadScope':readScope,
   '../../src/api/droneApi':api,
+  '../../src/api/operatorOfflineCache':onlineSnapshots,
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
   '../../src/components/drone/OperatorTaskRow':{OperatorTaskRow:'OperatorTaskRow',OperatorTaskSkeleton:'OperatorTaskSkeleton'},
   '../../src/components/Chip':{Chip:'Chip'},'../../src/components/EmptyState':{EmptyState:'EmptyState'},
@@ -65,6 +69,7 @@ function pagesHarness(read){
  const capture=()=>{const generation=epoch;return ()=>!!key&&generation===epoch;};
  const s=screen('src/hooks/useOperatorTaskPages.ts',{exportName:'useOperatorTaskPages',modules:{
   './useOperatorReadScope':{useOperatorReadScope:()=>({key,capture})},'../api/droneApi':{listOperatorSurveyTasksReal:read},
+  '../api/operatorOfflineCache':onlineSnapshots,
  }});s.render();return {s,state:()=>s.nodes()[0],switch:k=>{key=k;epoch++;s.render();},bounce:()=>{epoch++;}};
 }
 test('W1-02 cursor pages 1/2/3 dedupe and stop without loading everything',async()=>{
@@ -79,6 +84,11 @@ test('W1-02 page 2 failure retains page 1 and retries same cursor once even on d
  await f.s.flush();await f.state().loadMore();await f.s.flush();assert.equal(f.state().tasks.length,1);assert.ok(f.state().error);
  fail=false;const send=f.state().loadMore();f.state().loadMore();await f.s.flush();assert.equal(f.state().loading,true);
  d.resolve({items:[task(2)],nextCursor:null});await send;await f.s.flush();assert.equal(f.state().tasks.length,2);assert.equal(f.state().error,null);assert.deepEqual(calls,[null,'p2','p2']);f.s.unmount();
+});
+test('Operator pagination removes displayed tasks after explicit access denial',async()=>{
+ const f=pagesHarness(async cursor=>{if(cursor)throw {response:{status:403}};return {items:[task(1)],nextCursor:'p2'};});
+ await f.s.flush();assert.equal(f.state().tasks.length,1);
+ await f.state().loadMore();await f.s.flush();assert.equal(f.state().tasks.length,0);assert.equal(f.state().nextCursor,null);assert.match(f.state().error,/Không còn quyền/);f.s.unmount();
 });
 for(const nextCursor of ['p2','',undefined,42])test('W1-02 repeated or malformed cursor stops safe: '+String(nextCursor),async()=>{
  let calls=0;const f=pagesHarness(async cursor=>{calls++;return cursor?{items:[task(2)],nextCursor}:{items:[task(1)],nextCursor:'p2'};});

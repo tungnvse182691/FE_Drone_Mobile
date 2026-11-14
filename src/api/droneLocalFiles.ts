@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/auth';
 import { passwordSessionIdentity } from './authApi';
 import { apiClient } from './client';
 import { getOperatorSurveyTaskDetailReal } from './droneApi';
+import { readOperatorSnapshot } from './operatorOfflineCache';
 
 type Kind = 'VIDEO' | 'TELEMETRY';
 export type DroneLocalFile = { schema: 1; key: string; actor: string; environment: string; session: string;
@@ -124,9 +125,11 @@ export async function openDroneLocalFiles(taskId: string) {
       const maximum = kind === 'VIDEO' ? 8 * 1024 ** 3 : 10 * 1024 ** 2;
       if (!source.exists || !Number.isSafeInteger(size) || size <= 0 || size > maximum ||
         (asset.size !== undefined && asset.size !== size)) throw Error('drone_file_size_invalid');
-      const current = await getOperatorSurveyTaskDetailReal(taskId); guard();
+      // A cached assignment is provenance for preserving bytes only. Upload and
+      // dataset journals still require a fresh authorized task read before POST.
+      const current = await readOperatorSnapshot(`task:${taskId}`, () => getOperatorSurveyTaskDetailReal(taskId)); guard();
       const t = current.data;
-      if (t.id !== taskId || t.operatorId !== owner.actor || !uuid(t.projectId) || !version(t.version) || current.etag !== `"${t.version}"`) throw Error('drone_file_task_invalid');
+      if (t.id !== taskId || t.operatorId !== owner.actor || !uuid(t.projectId) || !version(t.version) || (!current.cachedAt && current.etag !== `"${t.version}"`)) throw Error('drone_file_task_invalid');
       directory.create({ idempotent: true, intermediates: true }); guard();
       const key = randomUUID();
       const record: DroneLocalFile = {schema:1,key,...owner,taskId,projectId:t.projectId,taskVersion:t.version,kind,name:asset.name,size,...paths(key,kind),checksumSha256:null};

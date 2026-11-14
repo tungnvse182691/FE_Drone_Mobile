@@ -4,19 +4,22 @@ const {DatabaseSync}=require('node:sqlite'),{randomUUID}=require('node:crypto');
 const {pathToFileURL,fileURLToPath}=require('node:url');
 const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
 function fixture(){
- const root=fs.mkdtempSync(path.resolve('.cache/drone-files-')),dbPath=path.join(root,'draft.db');let disk,sourceSize;
- const reopen=()=>{disk?.close();disk=new DatabaseSync(dbPath);disk.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');};reopen();
- const db={runAsync:async(sql,...args)=>disk.prepare(sql).run(...args),getAllAsync:async(sql,...args)=>disk.prepare(sql).all(...args)};
+ const root=fs.mkdtempSync(path.resolve('.cache/drone-files-')),dbPath=path.join(root,'draft.db');let disk,sourceSize,offline=false;
+ const reopen=()=>{disk?.close();disk=new DatabaseSync(dbPath);disk.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT); CREATE TABLE IF NOT EXISTS task_cache(id TEXT PRIMARY KEY,kind TEXT,data TEXT,cached_at TEXT)');};reopen();
+ const db={getFirstAsync:async(sql,...args)=>disk.prepare(sql).get(...args),runAsync:async(sql,...args)=>disk.prepare(sql).run(...args),getAllAsync:async(sql,...args)=>disk.prepare(sql).all(...args)};
  const listeners=new Set();let actor=id(1),sid='A',env='https://fixture.test',copy=async(from,to)=>fs.copyFileSync(from,to,fs.constants.COPYFILE_EXCL);
  const docs=pathToFileURL(root+path.sep).href;
  class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}open(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return {get offset(){return offset;},set offset(v){offset=v;},readBytes:async length=>{const chunk=Uint8Array.from(bytes.subarray(offset,offset+Math.min(length,2)));offset+=chunk.length;return chunk;},close(){}};}readableStream(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return new ReadableStream({pull(controller){if(offset>=bytes.length){controller.close();return;}const end=Math.min(offset+2,bytes.length);controller.enqueue(Uint8Array.from(bytes.subarray(offset,end)));offset=end;}});}}
  class Directory extends File {create(){fs.mkdirSync(fileURLToPath(this.uri),{recursive:true});}}
  const task={id:id(2),projectId:id(3),operatorId:actor,version:'AAAAAAAAAAE='};
- const deps={'expo-file-system':{File,Directory,Paths:{document:{uri:docs}}},'expo-crypto':{randomUUID},'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../store/auth':{useAuthStore:{getState:()=>({token:sid,status:'AUTHENTICATED',user:{id:actor,role_code:'DRONE_OPERATOR'}}),subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([actor,sid])},'./client':{apiClient:{defaults:{get baseURL(){return env;}}}},'./droneApi':{getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:`"${task.version}"`})}};
+ const deps={'expo-file-system':{File,Directory,Paths:{document:{uri:docs}}},'expo-crypto':{randomUUID},'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../store/auth':{useAuthStore:{getState:()=>({token:sid,status:'AUTHENTICATED',user:{id:actor,role_code:'DRONE_OPERATOR'}}),subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([actor,sid])},'./client':{apiClient:{defaults:{get baseURL(){return env;}}}},'./droneApi':{getOperatorSurveyTaskDetailReal:async()=>{if(offline)throw {request:{}};return {data:task,etag:`"${task.version}"`};}}};
+ const cached={exports:{}};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/operatorOfflineCache.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:cached,exports:cached.exports,require:n=>n==='../hooks/useOperatorReadScope'?{operatorReadScope:()=>JSON.stringify([env,actor,sid])}:deps[n],Date});
+ deps['./operatorOfflineCache']=cached.exports;
  const mod={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneLocalFiles.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date});
  const source=path.join(root,'source.mp4');fs.writeFileSync(source,Buffer.from([1,2,3,4]));
- return {api:mod.exports,reopen,task,source,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n};
+ return {api:mod.exports,reopen,task,source,offline:()=>offline=true,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n};
 }
 test('Drone private copy and immutable ownership survive restart/relogin without upload or fake checksum',async()=>{
  const f=fixture(),r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',f.asset);r.close();
@@ -58,4 +61,10 @@ test('Operator native range reader handles short reads and rejects invalid bound
  assert.deepEqual(Array.from(await f.api.readDroneFileRange(saved,1,3)),[2,3,4]);
  for(const [offset,length] of [[-1,2],[0,0],[3,2],[0,65*1024**2]])await assert.rejects(f.api.readDroneFileRange(saved,offset,length));
  fs.writeFileSync(fileURLToPath(saved.uri),Buffer.from([1]));await assert.rejects(f.api.readDroneFileRange(saved,0,2),/size_changed/);r.close();
+});
+
+test('Operator can preserve a new file offline from an already downloaded assignment after restart',async()=>{
+ const f=fixture();let r=await f.api.openDroneLocalFiles(id(2));await r.preserve('VIDEO',f.asset);r.close();
+ f.reopen();f.offline();r=await f.api.openDroneLocalFiles(id(2));const saved=await r.preserve('VIDEO',f.asset);
+ assert.ok(saved.checksumSha256);assert.equal((await r.list()).length,2);assert.equal(saved.taskVersion,f.task.version);r.close();
 });

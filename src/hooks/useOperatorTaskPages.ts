@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useOperatorReadScope } from './useOperatorReadScope';
 import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../api/droneApi';
+import { readOperatorSnapshot, operatorCachedNotice } from '../api/operatorOfflineCache';
 
 /** Bounded, explicit GET pages. Refresh supersedes in-flight reads, never commands. */
 export function useOperatorTaskPages() {
@@ -19,7 +20,7 @@ export function useOperatorTaskPages() {
     const previous = reset ? [] : state.items, seen = reset ? [] : state.seen;
     setState(s => ({ ...s, ...(visible ? {} : {items: [], nextCursor: null, seen: []}), scope: scope.key, loading: true, error: null }));
     try {
-      const page = await listOperatorSurveyTasksReal(cursor, 50);
+      const page = await readOperatorSnapshot(`tasks:${cursor ?? ''}`, () => listOperatorSurveyTasksReal(cursor, 50));
       if (request !== serial.current || !isCurrent()) return;
       if (!Array.isArray(page.items) || !(page.nextCursor === null || typeof page.nextCursor === 'string' && page.nextCursor.trim()))
         throw Error('invalid_page');
@@ -27,10 +28,12 @@ export function useOperatorTaskPages() {
       const repeated = !!page.nextCursor && consumed.includes(page.nextCursor);
       const items = [...new Map([...previous, ...page.items].map(item => [item.id.toLowerCase(), item])).values()];
       setState({scope: scope.key, items, nextCursor: repeated ? null : page.nextCursor, seen: consumed,
-        loading: false, error: repeated ? 'Máy chủ trả con trỏ trang lặp. Vui lòng làm mới danh sách.' : null});
-    } catch {
+        loading: false, error: repeated ? 'Máy chủ trả con trỏ trang lặp. Vui lòng làm mới danh sách.' : operatorCachedNotice(page.cachedAt)});
+    } catch (error) {
+      const denied = [401,403,404].includes((error as {response?: {status?: number}}).response?.status ?? 0);
       if (request === serial.current && isCurrent()) setState(s => ({ ...s, loading: false,
-        error: 'Chưa tải được trang nhiệm vụ. Danh sách đã tải được giữ lại; vui lòng thử lại.' }));
+        ...(denied ? {items: [], nextCursor: null, seen: []} : {}),
+        error: denied ? 'Không còn quyền đọc danh sách nhiệm vụ. Vui lòng kiểm tra lại phiên đăng nhập.' : 'Chưa tải được trang nhiệm vụ. Danh sách đã tải được giữ lại; vui lòng thử lại.' }));
     } finally { if (request === serial.current) busy.current = false; }
   }, [scope.key, scope.capture, visible, state.nextCursor, state.items, state.seen]);
   // Focus depends only on identity, not each newly loaded page.

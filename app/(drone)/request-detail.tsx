@@ -1,4 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import { readOperatorSnapshot, operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import { useAuthStore } from '../../src/store/auth';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -73,6 +74,8 @@ export default function DroneRequestDetailScreen() {
   const [task, setTask] = useState<SurveyTaskV2ResponseDto | null>(null);
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
   const [etag, setEtag] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [workCachedAt, setWorkCachedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
@@ -83,10 +86,10 @@ export default function DroneRequestDetailScreen() {
   const loadWorkPackage = useCallback(async () => {
     const isCurrent = scope.capture(), request = ++workSerial.current;
     if (!isCurrent()) return;
-    setWorkLoading(true); setWorkError(null); setWorkPackage(null);
+    setWorkLoading(true); setWorkError(null); setWorkPackage(null); setWorkCachedAt(null);
     try {
-      const work = await getOperatorWorkPackageReal(target);
-      if (isCurrent() && request === workSerial.current) setWorkPackage(work.data);
+      const work = await readOperatorSnapshot(`work:${target}`, () => getOperatorWorkPackageReal(target));
+      if (isCurrent() && request === workSerial.current) { setWorkPackage(work.data); setWorkCachedAt(work.cachedAt); }
     } catch (error) {
       if (!isCurrent() || request !== workSerial.current) return;
       const status = (error as {response?: {status?: number}}).response?.status;
@@ -103,13 +106,15 @@ export default function DroneRequestDetailScreen() {
     setDataScope(scope.key);
     setWorkPackage(null);
     setTask(null);
+    setEtag(null); setCachedAt(null);
     setLoading(true);
     setLoadError(null);
     try {
-      const detail = await getOperatorSurveyTaskDetailReal(target);
+      const detail = await readOperatorSnapshot(`task:${target}`, () => getOperatorSurveyTaskDetailReal(target));
       if (!isCurrent()) return;
       setTask(detail.data);
       setEtag(detail.etag);
+      setCachedAt(detail.cachedAt);
       await loadWorkPackage();
     } catch (error) {
       if (!isCurrent()) return;
@@ -203,6 +208,7 @@ export default function DroneRequestDetailScreen() {
     const pastel = warning || active ? '#FEF3E2' : status === 'COMPLETED' ? '#E9F7EC' : failure ? '#FDECEC' : colors.surfaceAlt;
     return (
       <>
+        {cachedAt || workCachedAt ? <Card style={styles.scopeCard}><Text style={typography.bodyMd}>{operatorCachedNotice(cachedAt ?? workCachedAt)}</Text></Card> : null}
         <Card style={{ ...styles.heroCard, ...(attention ? { borderLeftWidth: 4, borderLeftColor: colors.primary } : {}) }}>
           <View style={styles.headerTitleRow}>
             <MaterialIcons name="assignment" size={16} color={colors.brandGold} />

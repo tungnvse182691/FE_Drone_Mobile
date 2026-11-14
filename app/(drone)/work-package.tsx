@@ -1,4 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import { readOperatorSnapshot, operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import { operatorTaskDisplayCode, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -104,6 +105,7 @@ export default function DroneWorkPackageScreen() {
   const [geometryError, setGeometryError] = useState<string | null>(null);
   const [technicalExpanded, setTechnicalExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const isCurrent = scope.capture();
@@ -113,21 +115,24 @@ export default function DroneWorkPackageScreen() {
     setGeometry(null);
     setLoading(true);
     setError(null);
+    setCachedAt(null);
     setGeometryError(null);
     try {
-      const wp = await getOperatorWorkPackageReal(target);
+      const wp = await readOperatorSnapshot(`work:${target}`, () => getOperatorWorkPackageReal(target));
       if (!isCurrent()) return;
       setWorkPackage(wp.data);
+      setCachedAt(wp.cachedAt);
       const ref = wp.data.geometryRefs?.[0];
       if (ref && wp.data.task.projectId) {
         try {
-        const gp = await getOperatorGeometryPackageReal(wp.data.task.projectId, {
+        const gp = await readOperatorSnapshot(`geometry:${target}:${ref.routeVersionId}:${ref.segmentSetId}`, () => getOperatorGeometryPackageReal(wp.data.task.projectId, {
           routeVersionId: ref.routeVersionId,
           segmentSetId: ref.segmentSetId,
-        });
+        }));
         if (!isCurrent()) return;
         if (gp.data.projectId !== wp.data.task.projectId || gp.data.route.routeVersionId !== ref.routeVersionId || gp.data.segmentSet.id !== ref.segmentSetId || gp.data.segmentSet.routeVersionId !== ref.routeVersionId) throw Error('geometry_source_mismatch');
         setGeometry(gp.data);
+        if (gp.cachedAt) setCachedAt(gp.cachedAt);
         } catch { if (isCurrent()) setGeometryError('Chưa đọc được hình học đã ghim. Thông tin nhiệm vụ vẫn được giữ.'); }
       }
     } catch (err) {
@@ -175,6 +180,7 @@ export default function DroneWorkPackageScreen() {
 
     return (
       <>
+        {cachedAt ? <Card style={styles.card}><Text style={typography.bodyMd}>{operatorCachedNotice(cachedAt)}</Text></Card> : null}
         {geometryError ? <Text accessibilityRole="alert">{geometryError}</Text> : null}
 
         <Card style={styles.scopeCard}>
@@ -242,7 +248,7 @@ export default function DroneWorkPackageScreen() {
             <View style={styles.cardHeader}><MaterialIcons name="map" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Gói hình học tuyến</Text></View>
             <Text style={styles.groupLabel}>PHÂN ĐOẠN ĐÃ GHIM</Text>
             <View style={styles.chipRow}>
-              <Chip variant="status-pending" label={geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
+              <Chip variant="status-pending" label={cachedAt ? "Phiên bản đã lưu" : geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
             </View>
             <Text style={[typography.caption, styles.noticeText]}>Phiên bản tuyến: {geometry.route.versionNo}</Text>
             {geometry.segmentSet.segments.filter(segment => ref?.segmentIds.includes(segment.id)).map(segment => (

@@ -1,4 +1,5 @@
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
+import { readOperatorSnapshot, operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
@@ -35,10 +36,11 @@ export default function DroneHomeScreen() {
     setLoading(true);
     setLoadError(null);
     try {
-      const page = await listOperatorSurveyTasksReal(null, 50);
+      const page = await readOperatorSnapshot('tasks:', () => listOperatorSurveyTasksReal(null, 50));
       if (!isCurrent()) return;
       setTasks([...new Map((page.items || []).map(item => [item.id.toLowerCase(), item])).values()]);
       setHasMore(!!page.nextCursor);
+      setLoadError(operatorCachedNotice(page.cachedAt));
     } catch {
       if (!isCurrent()) return;
       setLoadError('Không thể tải danh sách nhiệm vụ. Vui lòng kiểm tra kết nối.');

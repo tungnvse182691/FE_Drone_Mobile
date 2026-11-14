@@ -12,7 +12,7 @@ function drone(file,api={},extra={}) {
   let s;
   s=screen(`app/(drone)/${file}.tsx`,{...extra,moduleFactories:{'../../src/hooks/useOperatorTaskPages':({react,modules})=>{
     const mod={exports:{}};
-    require('node:vm').runInNewContext(require('typescript').transpileModule(require('node:fs').readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='../api/droneApi'?api:{useOperatorReadScope:(...a)=>s.h.load('src/hooks/useOperatorReadScope.ts').useOperatorReadScope(...a)}});
+    require('node:vm').runInNewContext(require('typescript').transpileModule(require('node:fs').readFileSync('src/hooks/useOperatorTaskPages.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>n==='react'?react:n==='expo-router'?modules[n]:n==='../api/droneApi'?api:n==='../api/operatorOfflineCache'?{readOperatorSnapshot:(...a)=>s.h.load('src/api/operatorOfflineCache.ts').readOperatorSnapshot(...a),operatorCachedNotice:(...a)=>s.h.load('src/api/operatorOfflineCache.ts').operatorCachedNotice(...a)}:{useOperatorReadScope:(...a)=>s.h.load('src/hooks/useOperatorReadScope.ts').useOperatorReadScope(...a)}});
     return mod.exports;
   },...extra.moduleFactories},modules:{
     '../../src/components/drone/OperatorTaskRow':{OperatorTaskRow:'OperatorTaskRow',OperatorTaskSkeleton:'OperatorTaskSkeleton'},
