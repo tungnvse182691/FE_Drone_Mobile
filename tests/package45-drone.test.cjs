@@ -21,6 +21,7 @@ function drone(file,api={},extra={}) {
     '../../src/components/AnimatedPressable':component('AnimatedPressable'), '../../src/components/Toast':component('Toast'),
     '../../src/components/drone/DroneDatasetReadbackPanel':component('DroneDatasetReadbackPanel'),
     '../../src/components/drone/DroneTaskCommandPanel':component('DroneTaskCommandPanel'),
+    '../../src/components/map/RoadGuardMapLibre':component('RoadGuardMapLibre'),
     '../../src/api/droneApi':{...defaultDroneApi,...api},...extra.modules,
   }}); s.h.login('DRONE_OPERATOR',id(1)); return s;
 }

@@ -19,6 +19,8 @@ import {
 } from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { operatorAppearance } from '../../src/components/drone/appearance';
+import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
+import { operatorMapSegments } from '../../src/api/operatorMapGeometry';
 
 /**
  * O-05 — Gói công việc (CHỈ ĐỌC).
@@ -100,7 +102,8 @@ export default function DroneWorkPackageScreen() {
   const [dataScope, setDataScope] = useState<string | null>(null);
 
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
-  const [geometry, setGeometry] = useState<GeometryPackageViewDto | null>(null);
+  const [geometries, setGeometries] = useState<GeometryPackageViewDto[]>([]);
+  const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [geometryError, setGeometryError] = useState<string | null>(null);
   const [technicalExpanded, setTechnicalExpanded] = useState(false);
@@ -112,7 +115,8 @@ export default function DroneWorkPackageScreen() {
     if (!isCurrent()) return;
     setDataScope(scope.key);
     setWorkPackage(null);
-    setGeometry(null);
+    setGeometries([]);
+    setSelectedSegment(null);
     setLoading(true);
     setError(null);
     setCachedAt(null);
@@ -122,24 +126,28 @@ export default function DroneWorkPackageScreen() {
       if (!isCurrent()) return;
       setWorkPackage(wp.data);
       setCachedAt(wp.cachedAt);
-      const ref = wp.data.geometryRefs?.[0];
-      if (ref && wp.data.task.projectId) {
-        try {
-        const gp = await readOperatorSnapshot(`geometry:${target}:${ref.routeVersionId}:${ref.segmentSetId}`, () => getOperatorGeometryPackageReal(wp.data.task.projectId, {
-          routeVersionId: ref.routeVersionId,
-          segmentSetId: ref.segmentSetId,
-        }));
+      if (wp.data.geometryRefs?.length && wp.data.task.projectId) {
+        const loaded: GeometryPackageViewDto[] = [];
+        for (const ref of wp.data.geometryRefs) {
+          try {
+            const gp = await readOperatorSnapshot(`geometry:${target}:${ref.routeVersionId}:${ref.segmentSetId}`, () => getOperatorGeometryPackageReal(wp.data.task.projectId, {
+              routeVersionId: ref.routeVersionId,
+              segmentSetId: ref.segmentSetId,
+            }));
+            if (!isCurrent()) return;
+            if (gp.data.projectId !== wp.data.task.projectId || gp.data.route.routeVersionId !== ref.routeVersionId || gp.data.segmentSet.id !== ref.segmentSetId || gp.data.segmentSet.routeVersionId !== ref.routeVersionId) throw Error('geometry_source_mismatch');
+            operatorMapSegments(ref, gp.data);
+            loaded.push(gp.data);
+            if (gp.cachedAt) setCachedAt(gp.cachedAt);
+          } catch { if (isCurrent()) setGeometryError('Chưa đọc được hình học đã ghim. Thông tin nhiệm vụ vẫn được giữ.'); }
+        }
         if (!isCurrent()) return;
-        if (gp.data.projectId !== wp.data.task.projectId || gp.data.route.routeVersionId !== ref.routeVersionId || gp.data.segmentSet.id !== ref.segmentSetId || gp.data.segmentSet.routeVersionId !== ref.routeVersionId) throw Error('geometry_source_mismatch');
-        setGeometry(gp.data);
-        if (gp.cachedAt) setCachedAt(gp.cachedAt);
-        } catch { if (isCurrent()) setGeometryError('Chưa đọc được hình học đã ghim. Thông tin nhiệm vụ vẫn được giữ.'); }
+        setGeometries(loaded);
       }
     } catch (err) {
       if (!isCurrent()) return;
       setError(operatorErrorMessage(err));
       setWorkPackage(null);
-      setGeometry(null);
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -171,17 +179,25 @@ export default function DroneWorkPackageScreen() {
       );
     }
 
-    const ref = workPackage.geometryRefs[0];
     const point = workPackage.accessPoint?.point;
     const accessPoint = point && Number.isFinite(point.latitude) && Math.abs(point.latitude) <= 90 && Number.isFinite(point.longitude) && Math.abs(point.longitude) <= 180 ? workPackage.accessPoint : null;
     const accessSourceLabel = accessPoint
       ? ACCESS_POINT_SOURCE_LABEL[accessPoint.source]
       : undefined;
+    const segments = workPackage.geometryRefs.flatMap(entry => {
+      const source = geometries.find(value => value.route.routeVersionId === entry.routeVersionId && value.segmentSet.id === entry.segmentSetId);
+      return source ? operatorMapSegments(entry, source) : [];
+    });
+    const selected = segments.find(segment => segment.id === selectedSegment) ?? segments[0];
+    const ref = workPackage.geometryRefs.find(entry => entry.segmentIds.includes(selected?.id ?? '')) ?? workPackage.geometryRefs[0];
+    const geometry = geometries.find(entry => entry.route.routeVersionId === ref?.routeVersionId && entry.segmentSet.id === ref?.segmentSetId);
+    const coordinates = selected?.coordinates ?? [];
+    const accessCoordinate: [number, number] | null = accessPoint ? [accessPoint.point.longitude, accessPoint.point.latitude] : null;
 
     return (
       <>
         {cachedAt ? <Card style={styles.card}><Text style={typography.bodyMd}>{operatorCachedNotice(cachedAt)}</Text></Card> : null}
-        {geometryError ? <Text accessibilityRole="alert">{geometryError}</Text> : null}
+        {geometryError ? <Card style={styles.card}><Text style={styles.mapNoticeText} accessibilityRole="alert">{geometryError}</Text></Card> : null}
 
         <Card style={styles.scopeCard}>
           <View style={styles.cardHeader}>
@@ -197,9 +213,30 @@ export default function DroneWorkPackageScreen() {
           </View>
           <View style={styles.infoRow}>
             <MaterialIcons name="route" size={16} color={colors.brandGold} />
-            <Text style={[typography.bodyMd, styles.infoLabel]}>Phân đoạn đang xem</Text>
-            <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{ref ? `${ref.segmentIds.length}` : '—'}</Text>
+            <Text style={[typography.bodyMd, styles.infoLabel]}>Phân đoạn đã tải</Text>
+            <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{`${segments.length}`}</Text>
           </View>
+        </Card>
+
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}><MaterialIcons name="map" size={18} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Bản đồ khảo sát</Text></View>
+          {segments.length > 0 ? <View style={styles.segmentChoices}>
+            {segments.map((segment, index) => <Pressable key={segment.id} testID={`map-segment-${segment.id}`}
+              accessibilityRole="button" accessibilityState={{ selected: selected?.id === segment.id }}
+              onPress={() => setSelectedSegment(segment.id)}
+              style={[styles.segmentChoice, selected?.id === segment.id && styles.segmentActive]}>
+              <Text style={typography.labelSm}>Đoạn {segment.sequence ?? index + 1}</Text>
+            </Pressable>)}
+          </View> : null}
+          {coordinates.length > 0 || accessCoordinate ? <View style={styles.mapFrame}>
+            <RoadGuardMapLibre key={`${scope.key}:${selected?.id ?? 'access'}`} style={{ flex: 1 }}
+              center={coordinates[0] ?? accessCoordinate!} routeCoordinates={coordinates}
+              markers={accessCoordinate ? [{ id: 'access-point', title: 'Điểm tiếp cận', label: 'Điểm tiếp cận', type: 'survey', coordinate: accessCoordinate }] : []} />
+          </View> : null}
+          {coordinates.length === 0 ? <View style={styles.mapNotice}>
+            <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
+            <Text style={styles.mapNoticeText}>{accessCoordinate ? 'Đang hiển thị điểm tiếp cận. Phân đoạn chưa có hình học WGS84.' : 'Chưa có tọa độ WGS84 để hiển thị bản đồ.'}</Text>
+          </View> : null}
         </Card>
 
         <Card style={styles.card}>
@@ -341,6 +378,12 @@ export default function DroneWorkPackageScreen() {
 }
 
 const styles = StyleSheet.create({
+  mapFrame: { height: 320, overflow: 'hidden', borderRadius: 12, marginTop: 12 },
+  mapNotice: { flexDirection: 'row', gap: 8, padding: 12, marginTop: 12, backgroundColor: colors.surfaceAlt, borderRadius: 10 },
+  mapNoticeText: { ...typography.caption, color: colors.secondary, flex: 1, lineHeight: 19 },
+  segmentChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  segmentChoice: { paddingHorizontal: 12, minHeight: 44, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  segmentActive: { backgroundColor: colors.surfaceAlt, borderColor: colors.brandGold },
   uploadGuidance: { gap: 8, marginTop: 12 },
   guidanceText: { ...typography.bodyMd, color: colors.neutral },
   guidanceNote: { ...typography.caption, color: colors.secondary, lineHeight: 18 },

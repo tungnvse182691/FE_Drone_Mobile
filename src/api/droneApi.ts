@@ -97,7 +97,7 @@ export interface WidthProfileItemDto {
 }
 
 export interface GeometryShapeDto {
-  geometryType: string;
+  type: string;
   coordinates: unknown;
 }
 

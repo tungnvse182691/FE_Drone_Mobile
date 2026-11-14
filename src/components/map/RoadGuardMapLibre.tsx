@@ -266,7 +266,9 @@ export function RoadGuardMapLibre({
             container.appendChild(node('div','vehicle-puck'));
           } else {
             container.className='custom-defect-container';
-            var pin=node('div','custom-defect-pin');pin.appendChild(node('div','custom-defect-icon','!'));
+            var pin=node('div','custom-defect-pin');
+            if(m.type==='survey')pin.style.background='#C9A227';
+            pin.appendChild(node('div','custom-defect-icon',m.type==='survey'?'↗':'!'));
             container.appendChild(pin);
             container.appendChild(node('div','custom-defect-label',m.label||m.title||'Vị trí lỗi'));
           }
@@ -277,7 +279,7 @@ export function RoadGuardMapLibre({
           button.addEventListener('click',function(){
             if(window.ReactNativeWebView)window.ReactNativeWebView.postMessage(JSON.stringify({type:'MARKER_CLICK',id:m.id}));
           });
-          popupContent.appendChild(button);
+          if (${typeof onMarkerPress === 'function'}) popupContent.appendChild(button);
           var popup=new maplibregl.Popup({offset:25,closeButton:false}).setDOMContent(popupContent);
 
           new maplibregl.Marker({ element: container, anchor: m.type === 'vehicle' ? 'center' : 'bottom' })
@@ -287,7 +289,7 @@ export function RoadGuardMapLibre({
         });
 
         // Auto-fit bounds so BOTH vehicle and destination are in full view!
-        if (markers && markers.length > 0) {
+        if (markers.length > 0 || route.length > 1) {
           var bounds = new maplibregl.LngLatBounds();
           markers.forEach(function(m) { bounds.extend(m.coordinate); });
           if (route && route.length > 0) {
@@ -315,7 +317,7 @@ export function RoadGuardMapLibre({
         if (!window.mapInstance) return;
         var markers = ${markersJson};
         var route = ${routeJson};
-        if (markers && markers.length > 0) {
+        if (markers.length > 0 || route.length > 1) {
           var bounds = new maplibregl.LngLatBounds();
           markers.forEach(function(m) { bounds.extend(m.coordinate); });
           if (route && route.length > 0) {
@@ -339,7 +341,7 @@ export function RoadGuardMapLibre({
 </body>
 </html>
     `;
-  }, [center, zoom, markers, routeCoordinates, layerType, interactive]);
+  }, [center, zoom, markers, routeCoordinates, layerType, interactive, onMarkerPress]);
 
   // Handle message from WebView (e.g. marker click)
   const handleMessage = (event: {nativeEvent:{data:string;url:string}}) => {

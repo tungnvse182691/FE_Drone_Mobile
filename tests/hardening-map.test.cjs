@@ -7,6 +7,16 @@ test('HARDEN map bridge accepts only current marker and trusted local document',
 test('HARDEN map top level navigation never opens arbitrary external URLs',()=>{const {web}=map();assert.equal(typeof web.onShouldStartLoadWithRequest,'function');for(const url of ['https://evil.example','javascript:alert(1)','file:///secret','https://unpkg.com/'])assert.equal(web.onShouldStartLoadWithRequest({url,isTopFrame:true}),false);assert.equal(web.onShouldStartLoadWithRequest({url:'about:blank',isTopFrame:true}),true);});
 test('HARDEN map ignores invalid coordinates and reports unavailable honest fallback',()=>{const {s,web}=map({markers:[{id:'bad',title:'bad',coordinate:[NaN,100]}]});assert.ok(!web.source.html.includes('"id":"bad"'));web.onError();s.render();assert.ok(!JSON.stringify(s.nodes()).includes('Cầu Bà Lát'));});
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
+test('Map route without markers fits and recenters to all route points',()=>{
+ const {web}=map({markers:[],routeCoordinates:[[106,10],[106.01,10.02]]});const fitted=[],errors=[];
+ const script=web.source.html.match(/<script>\s*([\s\S]*?)<\/script>/)[1];
+ const window={ReactNativeWebView:{postMessage:m=>errors.push(m)}};
+ class Bounds{constructor(){this.points=[];}extend(p){this.points.push(p);return this;}}
+ class Map{on(event,fn){if(event==='load')fn();}addSource(){}addLayer(){}fitBounds(b){fitted.push(b.points);}flyTo(){throw Error('unexpected default center');}}
+ vm.runInNewContext(script,{window,maplibregl:{Map,LngLatBounds:Bounds}});
+ assert.equal(errors.length,0);window.recenter();assert.equal(fitted.length,2);
+ for(const points of fitted)assert.equal(JSON.stringify(points),'[[106,10],[106.01,10.02]]');
+});
 test('HARDEN installed WebView whitelist wrapper never calls Linking for rejected navigation',async()=>{
  const {web}=map(),opened=[],decisions=[];const module={exports:{}};
  const source=ts.transpileModule(fs.readFileSync('node_modules/react-native-webview/src/WebViewShared.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;

@@ -284,7 +284,7 @@ export default function DroneRequestDetailScreen() {
               >
                 <MaterialIcons name="near-me" size={18} color={colors.primary} />
                 <Text style={[typography.labelLg, styles.navMapButtonText]}>
-                  Dẫn đường đến điểm tiếp cận
+                  Dẫn đường bằng Google Maps
                 </Text>
               </Pressable>
             </>
@@ -301,7 +301,7 @@ export default function DroneRequestDetailScreen() {
           {active ? <Button variant="primary" title="Gửi dữ liệu khảo sát" onPress={() => router.push({pathname:DRONE_UPLOAD,params:{taskId:task.id,projectId:task.projectId}})} /> : null}
           <Button
             variant="secondary"
-            title="Xem gói công việc"
+            title="Bản đồ và gói công việc"
             icon={<MaterialIcons name="folder-open" size={18} color={colors.neutral} />}
             onPress={handleOpenWorkPackage}
             style={styles.workPackageButton}
