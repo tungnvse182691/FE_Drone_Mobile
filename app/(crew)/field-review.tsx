@@ -332,6 +332,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       setNotice(saved.command?.phase==='confirmed'?'Đã đọc lại và xác nhận hồ sơ từ máy chủ. '+(saved.result?.readiness==='READY'?'Đủ thông tin theo đánh giá máy chủ; chưa phải nghiệm thu.':'Hồ sơ còn thiếu thông tin; chưa được nghiệm thu.'):
         action==='upload'?'Ảnh đã được máy chủ xác minh.':saved.command?'Chưa xác nhận kết quả. Lệnh gốc được giữ nguyên.':'Đã lưu nháp cục bộ.');
       if(action==='new')await load();
+      else if(saved.command?.phase==='confirmed')await load(true);
     }catch(e){if(current(c)){
       setNotice(fieldErrorMessage(e));
       setNoticeDetail(safeFieldErrorDetail(e));
