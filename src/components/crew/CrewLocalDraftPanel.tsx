@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { groupCrewLocalDrafts, readCrewLocalDrafts, type CrewLocalDraftSummary } from '../../api/crewLocalDrafts';
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
-import { colors, spacing, typography } from '../../design-tokens';
+import { colors, radius, spacing, typography } from '../../design-tokens';
 
 export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueIdentity;refreshSignal?:number}) {
   const [rows,setRows]=useState<CrewLocalDraftSummary[]>([]),[error,setError]=useState('');
@@ -38,6 +39,25 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
       {versions>1?<Text style={typography.caption}>{versions} bản lưu được giữ trên máy</Text>:null}
       <Button variant="text" title="Mở hồ sơ" onPress={()=>{if(sameQueueIdentity(identity))router.push({pathname:'/(crew)/field-review',params:{id:row.taskId,projectId:row.projectId}});}}/>
     </View>)}
-    {groups.length>3?<Button variant="text" title={expanded?'Thu gọn':`Xem thêm ${groups.length-3} nhiệm vụ`} onPress={()=>setExpanded(value=>!value)}/>:null}
+    {groups.length>3?<Pressable
+      accessibilityRole="button"
+      accessibilityLabel={expanded?'Thu gọn':`Xem thêm ${groups.length-3} nhiệm vụ`}
+      accessibilityState={{expanded}}
+      onPress={()=>setExpanded(value=>!value)}
+      style={({pressed})=>[styles.expandButton,pressed&&styles.expandButtonPressed]}
+    >
+      <Text style={styles.expandLabel}>{expanded?'Thu gọn':`Xem thêm ${groups.length-3} nhiệm vụ`}</Text>
+      <MaterialIcons name={expanded?'expand-less':'expand-more'} size={22} color={colors.brandGold}/>
+    </Pressable>:null}
   </Card>;
 }
+
+const styles=StyleSheet.create({
+  expandButton:{
+    minHeight:48,marginTop:spacing.sm,paddingVertical:12,paddingHorizontal:spacing.md,
+    flexDirection:'row',alignItems:'center',justifyContent:'center',gap:spacing.sm,
+    borderWidth:1,borderColor:'#D8C58A',borderRadius:radius.full,backgroundColor:'#FFFBF0',
+  },
+  expandButtonPressed:{backgroundColor:'#F3E8C7'},
+  expandLabel:{...typography.labelLg,color:colors.secondary,flexShrink:1,textAlign:'center'},
+});
