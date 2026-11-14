@@ -10,6 +10,8 @@ import { crewHistoryTime } from './CrewTaskFacts';
 import { CrewSafetyInstallation } from './CrewSafetyInstallation';
 import { CrewSafetyCheck } from './CrewSafetyCheck';
 import { CrewSafetyAcknowledgement } from './CrewSafetyAcknowledgement';
+import { CrewReviewRequest } from './CrewReviewRequest';
+import type { ReviewResource } from '../../api/crewReviewRequest';
 
 /** Current assigned Crew read projection. Mutations use separate durable command flows. */
 export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:string}) {
@@ -20,6 +22,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
   const [installation,setInstallation]=useState<null|{projectId:string;packageId:string;itemId:string;measureId:string}>(null);
   const [check,setCheck]=useState<typeof installation>(null);
   const [ack,setAck]=useState<null|{resource:NonNullable<typeof installation>;warningId:string}>(null);
+  const [review,setReview]=useState<ReviewResource|null>(null);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
@@ -67,6 +70,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
         <View style={styles.section}><Text style={typography.labelLg}>Quyết định cuối</Text>
           <Text style={typography.bodyMd}>{decision?(decision.result==='CONFIRMED'?'Đã xác nhận kết quả':'Đã có quyết định từ quản lý'):'Chưa có quyết định cuối đang hiệu lực.'}</Text>
           {decision?<Text style={styles.hint}>{crewHistoryTime(decision.at)}</Text>:null}
+          {decision?<Button variant="secondary" title="Yêu cầu xem xét lại" onPress={()=>setReview({projectId,taskId,packageId:facts.context.packageId,itemId:facts.context.itemId})}/>:null}
         </View>
         {requests.length?<View style={styles.section}><Text style={typography.labelLg}>Yêu cầu xem xét đã gửi</Text>{requests.map(r=><View key={r.requestId} style={styles.request}>
           <Text style={typography.bodyMd}>{r.reason}</Text><Text style={styles.hint}>{crewHistoryTime(r.at)}{decision&&r.decisionId!==decision.decisionId?' · Quyết định trước':''}</Text>
@@ -76,6 +80,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
     {installation?<CrewSafetyInstallation identity={identity} resource={installation} onClose={()=>setInstallation(null)} onSaved={()=>void read()}/>:null}
     {check?<CrewSafetyCheck identity={identity} resource={check} taskId={taskId} onClose={()=>setCheck(null)} onSaved={()=>void read()}/>:null}
     {ack?<CrewSafetyAcknowledgement identity={identity} resource={ack.resource} warningId={ack.warningId} onClose={()=>setAck(null)} onSaved={()=>void read()}/>:null}
+    {review?<CrewReviewRequest identity={identity} resource={review} onClose={()=>setReview(null)} onSaved={()=>void read()}/>:null}
   </Card>;
 }
 const styles=StyleSheet.create({

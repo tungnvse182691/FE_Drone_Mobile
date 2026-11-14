@@ -30,6 +30,16 @@ test('Safety journal blocks a second pending command for the same measure across
 });
 test('C10BC journal rejects cyclic proof and rolled back write preserves row count',async()=>{const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),proof={};proof.self=proof;await assert.rejects(j.prepare({...h.intent(),proof}),/invalid/);assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,0);});
 
+test('Review journal serializes pending requests per item across sessions and allows another item',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),itemId=randomUUID();
+ const first={...h.intent(),proof:{kind:'review-request',resource:{itemId}}};await j.prepare(first);
+ await assert.rejects(j.prepare({...first,id:randomUUID(),key:randomUUID()}),/review_pending_command/);
+ h.switch();const newer=await h.m.openOfflineJournal(h.current(),h.db);
+ await assert.rejects(newer.prepare({...first,identity:h.current(),id:randomUUID(),key:randomUUID()}),/review_pending_command/);
+ await newer.prepare({...first,identity:h.current(),id:randomUUID(),key:randomUUID(),proof:{kind:'review-request',resource:{itemId:randomUUID()}}});
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,2);h.raw.close();
+});
+
 test('FINAL real SQLite checkpoints persist partial origins across reopen without modifying command or phase',async()=>{
  const path=require('node:path'),os=require('node:os'),filename=path.join(os.tmpdir(),'roadfe-checkpoint-'+randomUUID()+'.sqlite');
  const h=fixture(filename),j=await h.m.openOfflineJournal(h.i,h.db),intent=h.intent();

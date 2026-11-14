@@ -81,6 +81,9 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
         if(copy.proof.kind==='safety'&&records.some(r=>r.proof.kind==='safety'&&
           (r.proof.resource as {measureId?:string})?.measureId===(copy.proof.resource as {measureId?:string})?.measureId&&
           !['RECONCILED','REJECTED','CONFLICT'].includes(r.phase)))throw Error('safety_pending_command');
+        if(copy.proof.kind==='review-request'&&records.some(r=>r.proof.kind==='review-request'&&
+          (r.proof.resource as {itemId?:string})?.itemId===(copy.proof.resource as {itemId?:string})?.itemId&&
+          !['RECONCILED','REJECTED','CONFLICT'].includes(r.phase)))throw Error('review_pending_command');
         const now=new Date().toISOString();
         await tx.runAsync('INSERT INTO local_draft (id,kind,payload,created_at,updated_at) VALUES (?,?,?,?,?)',prefix+copy.id,KIND,JSON.stringify(result),now,now);guard();
       });guard();return result;
