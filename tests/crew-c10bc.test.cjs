@@ -40,11 +40,11 @@ test('C10BC safety DTO validates exact kinds, evidence-link IDs, dates and warni
  assert.throws(()=>a.safetyRequest(r,{kind:'acknowledgement',warningId:'fake',reason:'x'}));
 });
 
-test('C10BC safety source gaps and fixture gate never POST or prepare a substitute command',async()=>{
+test('C10BC undelivered safety actions never POST or prepare a substitute command',async()=>{
  let writes=0;
  const a=load('src/api/crewSafetyDraft.ts',{'./crewSafetyWorkflow':{crewReadGuard:()=>{}},'./client':{apiClient:{post:async()=>writes++}},'./crewOfflineJournal':{openOfflineJournal:async()=>{writes++;}}});
- await assert.rejects(a.prepareSafetyIntent({}, {}, {kind:'review-request'}),/READBACK_GAP/);
- await assert.rejects(a.prepareSafetyIntent({}, {}, {kind:'check'}),/BE_EVIDENCE_LINK_SOURCE_GAP/);
+ await assert.rejects(a.prepareSafetyIntent({}, {}, {kind:'review-request'}),/review_request_not_integrated/);
+ await assert.rejects(a.prepareSafetyIntent({}, {}, {kind:'check'}),/safety_check_not_integrated/);
  await assert.rejects(a.dispatchSafetyIntent({identity:{}}),/BE_FIXTURE_BLOCKED/);
  assert.equal(writes,0);
 });

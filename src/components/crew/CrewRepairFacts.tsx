@@ -7,6 +7,7 @@ import { colors, spacing, typography } from '../../design-tokens';
 import { crewReadGuard, currentQueueIdentity, readAssignedRepairFacts } from '../../api/crewSafetyWorkflow';
 import { sameQueueIdentity } from '../../offline/upload-queue';
 import { crewHistoryTime } from './CrewTaskFacts';
+import { CrewSafetyInstallation } from './CrewSafetyInstallation';
 
 /** Current assigned Crew read projection. Mutations use separate durable command flows. */
 export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:string}) {
@@ -14,6 +15,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
   const [facts,setFacts]=useState<Awaited<ReturnType<typeof readAssignedRepairFacts>>>(null);
   const [busy,setBusy]=useState(false),[error,setError]=useState(''),[expanded,setExpanded]=useState(false);
   const [loaded,setLoaded]=useState(false);
+  const [installation,setInstallation]=useState<null|{projectId:string;packageId:string;itemId:string;measureId:string}>(null);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
@@ -49,6 +51,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
             <View style={styles.flex}><Text style={typography.labelLg}>Biện pháp {index+1} · {m.installedAt?'Đã lắp đặt':'Chưa lắp đặt'}</Text>
               {m.firstCheckDueAt?<Text style={styles.hint}>Hạn kiểm tra: {crewHistoryTime(m.firstCheckDueAt)}</Text>:null}
               <Text style={styles.hint}>{m.checks.length} lần kiểm tra · {new Set((m.eligibleEvidenceLinks??[]).map(l=>l.fileId)).size} ảnh đủ điều kiện</Text>
+              {!m.installedAt?<Button variant="secondary" title="Xác nhận lắp đặt" onPress={()=>setInstallation({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
               {m.warnings.some(w=>!m.acknowledgements.some(a=>a.warningId===w.id))?<Text style={styles.warning}>Có cảnh báo cần xác nhận</Text>:null}
             </View>
           </View>)}
@@ -62,6 +65,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
         </View>)}</View>:null}
       </View>:null}
     </>:null}
+    {installation?<CrewSafetyInstallation identity={identity} resource={installation} onClose={()=>setInstallation(null)} onSaved={()=>void read()}/>:null}
   </Card>;
 }
 const styles=StyleSheet.create({

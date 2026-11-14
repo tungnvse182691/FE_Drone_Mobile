@@ -4,26 +4,26 @@ import { openOfflineJournal, type OfflineJournalRecord } from './crewOfflineJour
 import type { QueueIdentity } from '../offline/upload-queue';
 import { uuidv4 } from '../utils/uuid';
 
-/** No disposable safety fixture has been authorized/verified. UI mutations remain disabled. */
-export const SAFETY_MUTATION_ACCEPTANCE_VERIFIED=false;
 export async function prepareSafetyIntent(identity:QueueIdentity,resource:RepairSafetyResource,command:SafetyCommand) {
   crewReadGuard(identity);
-  // API150 lacks Crew current-decision + request-head readback; API153 expects FIELD evidence-LINK IDs, not file IDs.
-  if(command.kind==='review-request')throw Error('READBACK_GAP');
-  if(command.kind==='check')throw Error('BE_EVIDENCE_LINK_SOURCE_GAP');
+  // Current BE has these sources; their dedicated command flows are separate checkpoints.
+  if(command.kind==='review-request')throw Error('review_request_not_integrated');
+  if(command.kind==='check')throw Error('safety_check_not_integrated');
   const copy=JSON.parse(JSON.stringify(command)) as SafetyCommand,r={...resource};
   const before=await readSafetyMeasure(identity,r);crewReadGuard(identity);
   if(copy.kind==='installation'&&before.data.installedAt!==null)throw Error('safety_already_installed');
+  if(copy.kind==='installation'&&(!Number.isFinite(Date.parse(copy.firstCheckDueAt))||Date.parse(copy.firstCheckDueAt)<=Date.now()||
+    Date.parse(copy.firstCheckDueAt)>Date.now()+24*3600000))throw Error('safety_due_date_range');
   if(copy.kind==='acknowledgement'&&(!before.data.warnings.some(w=>w.id===copy.warningId&&w.intendedActorId===identity.actor)||
     before.data.acknowledgements.some(a=>a.warningId===copy.warningId)))throw Error('safety_warning_not_current');
   const request=safetyRequest(r,copy),journal=await openOfflineJournal(identity);
   return journal.prepare({id:uuidv4(),identity,projectId:r.projectId,path:request.path,key:uuidv4(),body:JSON.stringify(request.body),
     proof:{kind:'safety',resource:r,command:copy,ifMatch:before.etag,versionSource:'SAFETY_MONITORING'}});
 }
-/** API154/155 exact transport. API150/153 stay source-blocked before journaling or POST. */
+/** API154 exact transport. Other mutation UIs are delivered in separate checkpoints. */
 export async function dispatchSafetyIntent(record:OfflineJournalRecord) {
   crewReadGuard(record.identity);
-  if(!SAFETY_MUTATION_ACCEPTANCE_VERIFIED)throw Error('BE_FIXTURE_BLOCKED');
+  if((record.proof?.command as SafetyCommand|undefined)?.kind!=='installation')throw Error('BE_FIXTURE_BLOCKED');
   const c=record.proof.command as SafetyCommand,r=record.proof.resource as RepairSafetyResource;
   if(record.proof.kind!=='safety'||record.proof.versionSource!=='SAFETY_MONITORING'||c.kind==='review-request'||c.kind==='check')throw Error('safety_source_gap');
   const request=safetyRequest(r,c);
@@ -34,7 +34,14 @@ export async function dispatchSafetyIntent(record:OfflineJournalRecord) {
     const response=await apiClient.post(record.path,record.body,{headers:{'If-Match':String(record.proof.ifMatch),'Idempotency-Key':record.key,'Content-Type':'application/json'},transformRequest:[data=>data]});
     crewReadGuard(record.identity);
     return await j.transition(pending,'RECEIVED',response.data);
-  }catch(e){try{crewReadGuard(record.identity);await j.transition(pending,'UNKNOWN_OUTCOME');}catch{/* Preserve old owner journal. */}throw e;}
+  }catch(e){try{
+    crewReadGuard(record.identity);
+    const response=(e as {response?:{status?:number;data?:{code?:unknown}}}).response;
+    const status=response?.status,code=typeof response?.data?.code==='string'?response.data.code:'unknown';
+    if(status===409||status===412)await j.transition(pending,'CONFLICT',{status,code});
+    else if(status&&[400,403,404,422,428].includes(status))await j.transition(pending,'REJECTED',{status,code});
+    else await j.transition(pending,'UNKNOWN_OUTCOME');
+  }catch{/* Preserve old owner journal. */}throw e;}
 }
 
 export async function reconcileSafetyIntent(record:OfflineJournalRecord) {

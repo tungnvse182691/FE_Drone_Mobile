@@ -77,6 +77,10 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       await db.withExclusiveTransactionAsync(async tx=>{
         guard();const records=await rows(tx),old=records.find(r=>r.id===copy.id||r.key===copy.key);
         if(old){if(immutableBytes(old)!==immutableBytes(copy))throw Error('offline_immutable_conflict');result=old;return;}
+        // Serialize safety writes per measure inside the durable transaction, including older sessions.
+        if(copy.proof.kind==='safety'&&records.some(r=>r.proof.kind==='safety'&&
+          (r.proof.resource as {measureId?:string})?.measureId===(copy.proof.resource as {measureId?:string})?.measureId&&
+          !['RECONCILED','REJECTED','CONFLICT'].includes(r.phase)))throw Error('safety_pending_command');
         const now=new Date().toISOString();
         await tx.runAsync('INSERT INTO local_draft (id,kind,payload,created_at,updated_at) VALUES (?,?,?,?,?)',prefix+copy.id,KIND,JSON.stringify(result),now,now);guard();
       });guard();return result;

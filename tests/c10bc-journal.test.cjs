@@ -19,6 +19,15 @@ test('C10BC SQLite close/reopen preserves IN_FLIGHT bytes/key and isolates actor
  h.setCurrent({...h.i,scope:'new-session'});const newer=await h.m.openOfflineJournal(h.current(),h.db);assert.equal((await newer.list())[0].phase,'IN_FLIGHT');await assert.rejects(newer.transition(r,'UNKNOWN_OUTCOME'),/session/);
  h.raw.close();fs.unlinkSync(filename);
 });
+
+test('Safety journal blocks a second pending command for the same measure across sessions',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),measureId=randomUUID();
+ const first={...h.intent(),proof:{kind:'safety',resource:{measureId}}};await j.prepare(first);
+ await assert.rejects(j.prepare({...first,id:randomUUID(),key:randomUUID()}),/safety_pending_command/);
+ h.switch();const newer=await h.m.openOfflineJournal(h.current(),h.db);
+ await assert.rejects(newer.prepare({...first,identity:h.current(),id:randomUUID(),key:randomUUID()}),/safety_pending_command/);
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);h.raw.close();
+});
 test('C10BC journal rejects cyclic proof and rolled back write preserves row count',async()=>{const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),proof={};proof.self=proof;await assert.rejects(j.prepare({...h.intent(),proof}),/invalid/);assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,0);});
 
 test('FINAL real SQLite checkpoints persist partial origins across reopen without modifying command or phase',async()=>{
