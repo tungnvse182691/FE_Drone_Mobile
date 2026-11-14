@@ -11,6 +11,7 @@ import {
   Roboto_700Bold,
 } from '@expo-google-fonts/roboto';
 import { colors } from '../src/design-tokens';
+import { Button } from '../src/components/Button';
 import { useAuthStore } from '../src/store/auth';
 import {
   PUBLIC_ROUTE_GROUP,
@@ -99,6 +100,8 @@ export function authGuardDestination(session: MobileSession, segments: string[],
 }
 
 function AuthGuard({ children }: { children: ReactNode }) {
+  const authReady = useAuthStore((state) => state.authReady);
+  const authRestoreError = useAuthStore((state) => state.authRestoreError);
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
   const status = useAuthStore((state) => state.status);
@@ -118,6 +121,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
   }, [isWebOnlyRole]);
 
   useEffect(() => {
+    if (authReady === false) return;
     const destination = authGuardDestination({ user, token, status }, segments, !!forcedChangeUsername);
     let cancelled=false;
     setRestoreError(false);
@@ -144,11 +148,25 @@ function AuthGuard({ children }: { children: ReactNode }) {
       })();
     } else if (destination) router.replace(destination as any);
     return ()=>{cancelled=true;};
-  }, [user, token, status, forcedChangeUsername, segments, router, restoreRetry]);
+  }, [authReady, user, token, status, forcedChangeUsername, segments, router, restoreRetry]);
 
   return (
     <View style={styles.guardRoot}>
       {children}
+      {authReady === false ? (
+        <View style={styles.loading} accessibilityLiveRegion="polite">
+          <Image source={require('../assets/logo_hoanghai.png')} style={styles.loadingLogo} resizeMode="contain" />
+          {authRestoreError ? <View style={styles.sessionRecovery}>
+            <Text style={styles.sessionTitle}>Chưa kết nối được phiên đăng nhập</Text>
+            <Text style={styles.sessionDescription}>Kiểm tra kết nối rồi thử lại. Nội dung đang gửi được giữ trên máy.</Text>
+            <Button variant="primary" title="Thử lại" onPress={() => { void useAuthStore.getState().restoreRefreshToken(); }} />
+            <Button variant="text" title="Đến màn đăng nhập" onPress={() => {
+              useAuthStore.getState().dismissAuthRestore();
+              router.replace('/(auth)');
+            }} />
+          </View> : <ActivityIndicator size="large" color={colors.primary} />}
+        </View>
+      ) : null}
       {restoreError ? <View accessibilityLiveRegion="polite">
         <Text>Chưa khôi phục được lệnh đang gửi. Dữ liệu được giữ nguyên; vui lòng thử lại.</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Thử khôi phục lệnh đang gửi" onPress={()=>setRestoreRetry(n=>n+1)}><Text>Thử khôi phục lệnh đang gửi</Text></Pressable>
@@ -177,4 +195,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 120,
   },
+  sessionRecovery: { width: '100%', maxWidth: 400, paddingHorizontal: 24, gap: 16 },
+  sessionTitle: { fontFamily: 'Roboto-Bold', fontSize: 20, lineHeight: 28, color: colors.secondary, textAlign: 'center' },
+  sessionDescription: { fontFamily: 'Roboto', fontSize: 15, lineHeight: 22, color: colors.secondary, textAlign: 'center' },
 });

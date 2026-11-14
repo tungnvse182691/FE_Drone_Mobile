@@ -179,3 +179,16 @@ test('Crew ambiguous transport failure remains with command journal',async()=>{
   await h.apiClient.post('/projects/72f84201-c001-4000-8000-000000000001/field-inspection-tasks/837f8fd7-755a-4694-b49e-bcfe191801f8/accept',{reason:'fixture'},{headers:{'Idempotency-Key':'fixture-key','If-Match':'"AAAAAAACA0Q="'}}).catch(()=>{});
   assert.equal(h.calls.length,1);assert.equal(h.timers.length,0);
 });
+
+test('durable refresh transport timeout never logs out or sends an unkeyed fallback',async()=>{
+ const h=harness();h.configureAuthBridge({rotateCredentials:async()=>{throw h.fail({},undefined);}});
+ h.apiClient.defaults.adapter=async c=>{h.record(c);throw h.fail(c,401,'token_expired');};
+ h.bareClient.defaults.adapter=async c=>{throw Error('unkeyed fallback forbidden');};
+ await h.apiClient.get('/me').catch(()=>{});
+ assert.deepEqual(h.events,['refresh']);assert.equal(h.calls.length,1);
+});
+test('durable refresh definitive rejection ends only the current session',async()=>{
+ const h=harness();h.configureAuthBridge({rotateCredentials:async()=>{throw h.fail({},401,'refresh_token_invalid');}});
+ h.apiClient.defaults.adapter=async c=>{throw h.fail(c,401,'token_expired');};
+ await h.apiClient.get('/me').catch(()=>{});assert.deepEqual(h.events,['refresh','logout']);
+});

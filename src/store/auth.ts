@@ -6,11 +6,15 @@ import { RoleCode } from '../types/enums';
 import { appStorage } from './storage';
 import {
   configureAuthBridge,
+  API_BASE_URL,
+  bareClient,
   type AuthActorWire,
   type TokenPair,
 } from '../api/client';
 import { mapProfileRole } from '../types/roleAdapter';
-import { logoutReal } from '../api/authApi';
+import { logoutReal, passwordSessionIdentity } from '../api/authApi';
+import { uuidv4 } from '../utils/uuid';
+import { createSecureSession } from './secureSession';
 
 export type AuthStatus =
   | 'SIGNED_OUT'
@@ -29,6 +33,9 @@ type PersistedAuth = {
 };
 
 interface AuthState {
+  authReady: boolean;
+  authRestoreError: boolean;
+  dismissAuthRestore: () => void;
   forcedChangeUsername: string | null;
   beginForcedPasswordChange: (username: string) => void;
   status: AuthStatus;
@@ -55,31 +62,19 @@ function stripCredentials(user: User | null): PersistedUser | null {
   return safe;
 }
 
-async function persistRefreshSecret(token: string | null): Promise<void> {
-  try {
-    if (!(await SecureStore.isAvailableAsync())) {
-      return;
-    }
-    if (token) {
-      await SecureStore.setItemAsync(REFRESH_SECRET_KEY, token);
-    } else {
-      await SecureStore.deleteItemAsync(REFRESH_SECRET_KEY);
-    }
-  } catch {
-    return;
-  }
-}
-
-async function readRefreshSecret(): Promise<string | null> {
-  try {
-    if (!(await SecureStore.isAvailableAsync())) {
-      return null;
-    }
-    return await SecureStore.getItemAsync(REFRESH_SECRET_KEY);
-  } catch {
-    return null;
-  }
-}
+const secureSession = createSecureSession({
+  read: async () => await SecureStore.isAvailableAsync() ? SecureStore.getItemAsync(REFRESH_SECRET_KEY) : null,
+  write: async (value) => {
+    if (!await SecureStore.isAvailableAsync()) throw new Error('auth_secure_store_unavailable');
+    if (value) await SecureStore.setItemAsync(REFRESH_SECRET_KEY, value);
+    else await SecureStore.deleteItemAsync(REFRESH_SECRET_KEY);
+  },
+  identity: passwordSessionIdentity,
+  key: uuidv4,
+  refresh: async (refreshToken, key) => (await bareClient.post<TokenPair>(
+    '/auth/android/refresh', { refreshToken }, { headers: { 'Idempotency-Key': key } },
+  )).data,
+});
 
 export function buildUserFromActor(
   actor: AuthActorWire,
@@ -106,6 +101,9 @@ export function buildUserFromActor(
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
+      authReady: false,
+      authRestoreError: false,
+      dismissAuthRestore: () => set({ authReady: true, authRestoreError: false }),
       forcedChangeUsername: null,
       // Ephemeral routing context only; never contains a password or grants a session.
       beginForcedPasswordChange: (username) => set({ forcedChangeUsername: username.trim() }),
@@ -127,6 +125,8 @@ export const useAuthStore = create<AuthState>()(
           must_change_password: mustChangePassword,
         };
         set({
+          authReady: true,
+          authRestoreError: false,
           forcedChangeUsername: null,
           status: 'AUTHENTICATED',
           user: nextUser,
@@ -134,12 +134,15 @@ export const useAuthStore = create<AuthState>()(
           token: accessToken,
           refreshToken,
         });
-        void persistRefreshSecret(refreshToken);
+        if (pair) void secureSession.save(pair, API_BASE_URL).catch(() => undefined);
+        else void secureSession.clear().catch(() => undefined);
       },
 
       logout: () => {
         const accessToken = get().token;
         set({
+          authReady: true,
+          authRestoreError: false,
           forcedChangeUsername: null,
           status: 'SIGNED_OUT',
           user: null,
@@ -147,7 +150,7 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           refreshToken: null,
         });
-        void persistRefreshSecret(null);
+        void secureSession.clear().catch(() => undefined);
         if (accessToken) {
           // API-007: báo server thu hồi phiên (best-effort — phiên local luôn kết thúc ngay,
           // lỗi mạng không được chặn người dùng đăng xuất).
@@ -183,7 +186,6 @@ export const useAuthStore = create<AuthState>()(
             user: nextUser,
           };
         });
-        void persistRefreshSecret(get().refreshToken);
       },
 
       beginOtp: () => set({ status: 'OTP_PENDING' }),
@@ -204,9 +206,23 @@ export const useAuthStore = create<AuthState>()(
         ),
 
       restoreRefreshToken: async () => {
-        const secret = await readRefreshSecret();
-        if (secret) {
-          set({ refreshToken: secret });
+        const owner = get().user;
+        if (get().token) { set({ authReady: true }); return; }
+        set({ authReady: false, authRestoreError: false });
+        try {
+          const pair = owner ? await secureSession.restore(API_BASE_URL, owner.id) : null;
+          if (get().user !== owner || get().token) return;
+          if (pair) get().applyTokenPair(pair);
+          set({ authReady: true });
+        } catch (error) {
+          if (get().user !== owner || get().token) return;
+          const status = (error as { response?: { status?: number } })?.response?.status;
+          if (status === 401 || status === 403) {
+            get().logout();
+          } else {
+            // Keep the exact pending rotation for retry after timeout/restart.
+            set({ authRestoreError: true });
+          }
         }
       },
     }),
@@ -245,6 +261,10 @@ export function initAuthBridge(): void {
     onTokenPair: (pair) => useAuthStore.getState().applyTokenPair(pair),
     onSessionEnded: () => useAuthStore.getState().logout(),
     onPasswordChangeRequired: () => useAuthStore.getState().requirePasswordChange(),
+    rotateCredentials: async () => {
+      const owner = useAuthStore.getState().user;
+      return owner ? secureSession.restore(API_BASE_URL, owner.id) : null;
+    },
   });
 }
 

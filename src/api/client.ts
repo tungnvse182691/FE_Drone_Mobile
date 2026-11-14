@@ -88,6 +88,7 @@ export interface AuthBridge {
   onTokenPair: (pair: TokenPair) => void;
   onSessionEnded: () => void;
   onPasswordChangeRequired: () => void;
+  rotateCredentials?: () => Promise<TokenPair | null>;
 }
 
 /**
@@ -345,13 +346,22 @@ async function refreshAccessToken(expected?: SessionIdentity): Promise<string | 
   flight.promise = (async () => {
     try {
       bridge.onRefreshStart();
-      const response = await bareClient.post<TokenPair>(ANDROID_REFRESH_PATH, { refreshToken });
-      const pair = response.data;
+      const pair = bridge.rotateCredentials
+        ? await bridge.rotateCredentials()
+        : (await bareClient.post<TokenPair>(ANDROID_REFRESH_PATH, { refreshToken })).data;
+      if (!pair) return null;
       if (!stillOwnsCredentials() || !sameSession(identity, tokenIdentity(pair.accessToken)) ||
           !pair.refreshToken || (pair.user && pair.user.id !== identity.subject)) return null;
       bridge.onTokenPair(pair);
       return bridge.getAccessToken() === pair.accessToken ? pair.accessToken : null;
-    } catch {
+    } catch (error) {
+      // A transport failure has no receipt. Keep the pending secure rotation;
+      // do not turn an unknown refresh outcome into logout/credential deletion.
+      if (bridge.rotateCredentials) {
+        const status = (error as AxiosError)?.response?.status;
+        if ((status === 401 || status === 403) && stillOwnsCredentials()) bridge.onSessionEnded();
+        throw error;
+      }
       return null;
     } finally {
       if (refreshInFlight === flight) refreshInFlight = null;

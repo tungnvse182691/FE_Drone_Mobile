@@ -7,11 +7,13 @@ import { colors } from '../src/design-tokens';
 
 export default function RootIndex() {
   const user = useAuthStore((state) => state.user);
-  // Token chỉ nằm trong memory (không persist), nên cold start luôn phải đăng nhập lại.
+  const authReady = useAuthStore((state) => state.authReady);
+  // Keep access tokens in memory; RootLayout restores the same server session.
   const token = useAuthStore((state) => state.token);
   const router = useRouter();
 
   useEffect(() => {
+    if (authReady === false) return;
     if (!user || !token) {
       router.replace('/(auth)');
       return;
@@ -24,7 +26,7 @@ export default function RootIndex() {
 
     const home = ROLE_HOMES[user.role_code];
     router.replace(home ? (home as any) : ('/(auth)' as any));
-  }, [user, token]);
+  }, [authReady, user, token]);
 
   return (
     <View style={styles.loading}>
