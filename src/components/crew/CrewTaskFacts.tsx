@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../design-tokens';
 import { Button } from '../Button';
@@ -27,10 +27,11 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showGeometry,setShowGeometry]=useState(false);
   const [showFacts,setShowFacts]=useState(false);
+  const [showAllHistory,setShowAllHistory]=useState(false);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
-    if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);setShowGeometry(false);
+    if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);setShowGeometry(false);setShowAllHistory(false);
     try {const result=await readAssignedFieldFacts(identity,projectId,taskId);crewReadGuard(identity);if(n===sequence.current){setFacts(result);setShowFacts(true);}}
     catch(e) {if(n===sequence.current && sameQueueIdentity(identity)) {
       const status=(e as {response?:{status?:number}})?.response?.status;
@@ -39,32 +40,41 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   };
   try {if(!identity)return null;crewReadGuard(identity);}catch{return null;}
   const routeCoordinates=facts?.geometry?crewRouteCoordinates(facts.geometry.route):[];
+  const events=facts?.history.events??[];
+  const visibleEvents=showAllHistory?events:events.slice(0,3);
   return <Card style={styles.card}>
-    <View style={styles.heading}><MaterialIcons name="map" size={22} color={colors.brandGold} /><Text style={typography.titleMd}>Hồ sơ và lịch sử</Text></View>
-    <Button variant="secondary" title={facts ? 'Tải lại vị trí / lịch sử' : 'Xem vị trí / lịch sử'} disabled={busy} loading={busy} onPress={()=>void read()} />
+    <View style={styles.heading}><View style={styles.iconBox}><MaterialIcons name="map" size={22} color={colors.brandGold} /></View><Text style={[typography.titleMd,styles.flex]}>Vị trí và lịch sử</Text>
+      {facts?<Pressable accessibilityRole="button" accessibilityLabel="Tải lại vị trí và lịch sử" accessibilityState={{disabled:busy,busy}} disabled={busy} style={styles.refresh} onPress={()=>void read()}>
+        <MaterialIcons name="refresh" size={24} color={colors.brandGold}/>
+      </Pressable>:busy?<ActivityIndicator size="small" color={colors.brandGold}/>:null}
+    </View>
+    {!facts?<Button variant="secondary" title="Xem vị trí / lịch sử" disabled={busy} loading={busy} onPress={()=>void read()} />:null}
     {error?<Text style={styles.message} accessibilityLiveRegion="polite">{error}</Text>:null}
-    {facts ? <Button variant="text" title={showFacts ? 'Thu gọn lịch sử' : 'Xem lịch sử đã tải'} onPress={()=>setShowFacts(v=>!v)} /> : null}
+    {facts ? <Pressable accessibilityRole="button" accessibilityLabel={showFacts?'Thu gọn hồ sơ':'Xem hồ sơ đã tải'} accessibilityState={{expanded:showFacts}} style={({pressed})=>[styles.disclosure,pressed&&styles.pressed]} onPress={()=>setShowFacts(v=>!v)}>
+      <Text style={[typography.labelLg,styles.flex]}>{showFacts?'Thu gọn hồ sơ':'Xem hồ sơ đã tải'}</Text><MaterialIcons name={showFacts?'expand-less':'expand-more'} size={22} color={colors.brandGold}/>
+    </Pressable> : null}
     {facts&&showFacts?<View style={styles.group}>
       {facts.geometry?<View style={styles.group}>
-        <Text style={typography.bodyMd}>Đã có dữ liệu tuyến đường • {facts.geometry.segments.length} phân đoạn</Text>
+        <View style={styles.locationSummary}><MaterialIcons name="route" size={22} color={colors.brandGold}/><View style={styles.flex}><Text style={typography.labelLg}>Dữ liệu tuyến đường</Text><Text style={styles.hint}>{facts.geometry.segments.length} phân đoạn</Text></View></View>
         {routeCoordinates.length?<View style={{gap:spacing.xs}}>
           <Text style={typography.labelLg}>Tuyến nhiệm vụ</Text>
           <RoadGuardMapLibre style={{height:260,borderRadius:12,overflow:'hidden'}} center={routeCoordinates[0]} routeCoordinates={routeCoordinates} markers={[]} />
           <Text style={styles.hint}>Đường tuyến từ hồ sơ máy chủ; chưa phải điểm hư hại để dẫn đường.</Text>
-        </View>:<Text style={styles.hint}>Hồ sơ chưa có đường tuyến WGS84 hỗ trợ hiển thị trên bản đồ.</Text>}
-        {showGeometry && <View style={styles.group}><Text selectable style={styles.hint}>Phiên bản tuyến: {facts.geometry.routeVersionId}</Text>
-          <Text style={styles.hint}>Hệ tọa độ: {facts.geometry.route.spatialSrid} • {facts.geometry.route.profileStatus}</Text>
-          <Text selectable style={styles.hint}>{facts.geometry.route.wkt.slice(0,12000)}{facts.geometry.route.wkt.length>12000?'…':''}</Text>
-          {facts.geometry.route.wkt.length>12000?<Text style={styles.hint}>Bản xem được giới hạn; dữ liệu nguồn không bị thay đổi.</Text>:null}</View>}
-      </View>:<View style={styles.message}><Text style={typography.bodyMd}>Vị trí chưa sẵn sàng</Text><Text style={styles.hint}>Chưa thể hiển thị tuyến đường. Lịch sử nhiệm vụ vẫn có thể xem bên dưới.</Text></View>}
-        <Pressable accessibilityRole="button" accessibilityState={{expanded:showGeometry}} style={styles.heading} onPress={()=>setShowGeometry(v=>!v)}>
-          <Text style={[styles.hint,{flex:1}]}>Chi tiết kỹ thuật vị trí</Text><MaterialIcons name={showGeometry?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
-        </Pressable>
-      <Text style={typography.titleMd}>Lịch sử xử lý</Text>
-      <Text style={styles.hint}>{facts.history.assignments.length} lần phân công trong dữ liệu đã tải</Text>
-      {facts.history.events.length===0?<Text style={styles.hint}>Chưa có sự kiện được ghi nhận.</Text>:facts.history.events.map(e=><View key={e.id} style={styles.event}>
-        <MaterialIcons name="history" size={18} color={colors.secondary}/><View style={{flex:1}}><Text style={typography.bodyMd}>{crewEventLabel(e.kind)}</Text><Text style={styles.hint}>{crewHistoryTime(e.occurredAt)} (giờ Việt Nam)</Text>{showGeometry ? <Text selectable style={styles.hint}>Mã sự kiện: {e.id} · Loại nguồn: {e.kind} · Nội dung nguồn: {e.reason || 'Chưa có'}</Text> : null}</View>
+        </View>:<View style={styles.message}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={[styles.hint,styles.flex]}>Chưa có tọa độ phù hợp để hiển thị bản đồ.</Text></View>}
+      </View>:<View style={styles.message}><MaterialIcons name="location-off" size={20} color={colors.secondary}/><View style={styles.flex}><Text style={typography.labelLg}>Vị trí chưa sẵn sàng</Text><Text style={styles.hint}>Bạn vẫn có thể xem lịch sử bên dưới.</Text></View></View>}
+      <View style={styles.historyHeading}><MaterialIcons name="history" size={20} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Lịch sử xử lý</Text><Text style={styles.hint}>{events.length} sự kiện</Text></View>
+      {events.length===0?<Text style={styles.hint}>Chưa có sự kiện được ghi nhận.</Text>:visibleEvents.map(e=><View key={e.id} style={styles.event}>
+        <View style={styles.eventDot}/><View style={styles.flex}><Text style={typography.bodyMd}>{crewEventLabel(e.kind)}</Text><Text style={styles.hint}>{crewHistoryTime(e.occurredAt)}</Text>{e.reason&&['REJECTED','SUPPLEMENT','REVIEWED'].includes(e.kind)?<Text style={styles.hint}>{e.reason}</Text>:null}</View>
       </View>)}
+      {events.length>3?<Pressable accessibilityRole="button" accessibilityState={{expanded:showAllHistory}} style={styles.disclosure} onPress={()=>setShowAllHistory(v=>!v)}><Text style={[typography.labelLg,styles.flex]}>{showAllHistory?'Thu gọn sự kiện':`Xem thêm ${events.length-3} sự kiện`}</Text><MaterialIcons name={showAllHistory?'expand-less':'expand-more'} size={22} color={colors.brandGold}/></Pressable>:null}
+      {facts.geometry?<>
+        <Pressable accessibilityRole="button" accessibilityState={{expanded:showGeometry}} style={styles.technicalToggle} onPress={()=>setShowGeometry(v=>!v)}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={[styles.hint,styles.flex]}>Thông tin kỹ thuật vị trí</Text><MaterialIcons name={showGeometry?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>
+        {showGeometry && <View style={styles.technical}>
+          <Text style={styles.hint}>Phiên bản tuyến</Text><Text selectable style={styles.technicalValue}>{facts.geometry.routeVersionId}</Text>
+          <Text style={styles.hint}>Hệ tọa độ nguồn</Text><Text selectable style={styles.technicalValue}>{facts.geometry.route.spatialSrid} · {facts.geometry.route.profileStatus}</Text>
+          <Text style={styles.hint}>Hình học tuyến (WKT)</Text><Text selectable style={styles.technicalValue}>{facts.geometry.route.wkt.slice(0,12000)}{facts.geometry.route.wkt.length>12000?'…':''}</Text>
+        </View>}
+      </>:null}
     </View>:null}
 
   </Card>;
@@ -72,8 +82,19 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
 const styles=StyleSheet.create({
   card:{gap:spacing.md,marginBottom:spacing.md,borderWidth:1,borderColor:'#E8D9A8',borderRadius:12},
   heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
+  flex:{flex:1,minWidth:0},
   hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
-  message:{padding:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
-  event:{flexDirection:'row',gap:spacing.sm,borderLeftWidth:2,borderLeftColor:colors.border,paddingLeft:spacing.sm},
+  iconBox:{width:36,height:36,borderRadius:10,backgroundColor:'#FFF9EA',alignItems:'center',justifyContent:'center'},
+  refresh:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:24},
+  disclosure:{minHeight:48,paddingHorizontal:spacing.md,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:'#FFFCF4',borderRadius:12},
+  pressed:{backgroundColor:'#F6ECCD'},
+  locationSummary:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:'#FFFCF4',borderRadius:12},
+  message:{flexDirection:'row',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:8},
+  historyHeading:{flexDirection:'row',alignItems:'center',gap:spacing.sm,marginTop:spacing.md,marginBottom:spacing.sm},
+  event:{flexDirection:'row',gap:spacing.md,paddingBottom:spacing.md,paddingLeft:spacing.sm},
+  eventDot:{width:8,height:8,borderRadius:4,backgroundColor:colors.brandGold,marginTop:6},
+  technicalToggle:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderTopWidth:1,borderColor:colors.border,marginTop:spacing.sm},
+  technical:{padding:spacing.md,gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
+  technicalValue:{...typography.bodyMd,color:colors.secondary,flexShrink:1,marginBottom:spacing.sm},
   unavailable:{gap:spacing.sm,borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.md},
 });

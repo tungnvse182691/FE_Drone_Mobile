@@ -56,7 +56,7 @@ function repairOverview(context,history=[]){
 for(const context of [null,{repairPlan:'Keep backend text',itemId:'item',bindingId:'binding',status:'Assigned'}])test('C3 repair overview retains valid links and visible pending recovery with context '+!!context,async()=>{
  const f=repairOverview(context,[{key:'stable',phase:'UNKNOWN_OUTCOME',operation:'start'}]);
  f.s.render();await f.s.flush();
- const titles=f.s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
+ const titles=f.s.nodes().filter(n=>n.type==='Button'||n.props.accessibilityRole==='button').map(n=>n.props.title??n.props.accessibilityLabel);
  for(const title of ['Theo dõi thi công','Hồ sơ hoàn tất thi công','Kiểm tra yêu cầu bổ sung sửa chữa'])assert.equal(titles.includes(title),!!context);
  assert.ok(titles.includes('Đối soát / gửi lại lệnh đã lưu'));
  assert.ok(!titles.includes('Bắt đầu thi công'));

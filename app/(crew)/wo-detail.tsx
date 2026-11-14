@@ -245,7 +245,9 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       {fresh.detail?.repairContext?<CrewRepairFacts key={JSON.stringify([scope,task.projectId,task.id,fresh.detail.repairContext.bindingId])} projectId={task.projectId} taskId={task.id}/>:null}
       <Card style={styles.taskActionCard}>
         <Text style={typography.titleMd}>Hồ sơ liên quan</Text>
-        <Button variant="text" title="Khuyết tật thuộc nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Khuyết tật thuộc nhiệm vụ" style={({pressed})=>[styles.linkRow,pressed&&styles.linkPressed]} onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})}>
+          <MaterialIcons name="report-problem" size={22} color={colors.brandGold}/><Text style={[styles.body,styles.flex]}>Khuyết tật thuộc nhiệm vụ</Text><MaterialIcons name="chevron-right" size={22} color={colors.secondary}/>
+        </Pressable>
       </Card>
       {fresh.detail?.mode === 'NORMAL' ? <Card style={styles.taskActionCard}><NormalRepairBootstrap task={fresh} stage="overview" /></Card> : null}
       {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={styles.taskActionCard}><FastTrackRepairSummary task={fresh} /></Card> : null}
@@ -253,7 +255,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
           <MaterialIcons name="info-outline" size={20} color={colors.secondary} /><Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
         </Pressable>
-        {showTechnical ? <View style={{ gap: spacing.sm }}><Text selectable style={styles.hint}>Mã nhiệm vụ: {fresh.id}</Text><Text selectable style={styles.hint}>Dự án: {fresh.projectId}</Text><Text selectable style={styles.hint}>Phiên bản: {fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn: {fresh.status} · {fresh.rawMode}</Text>{record?.rejectionStatus ? <Text style={styles.hint}>Mã phản hồi máy chủ: {record.rejectionStatus}</Text> : null}{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
+        {showTechnical ? <View style={styles.technicalPanel}><Text style={styles.hint}>Mã nhiệm vụ</Text><Text selectable style={styles.body}>{fresh.id}</Text><Text style={styles.hint}>Dự án</Text><Text selectable style={styles.body}>{fresh.projectId}</Text><Text style={styles.hint}>Phiên bản</Text><Text selectable style={styles.body}>{fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn</Text><Text style={styles.body}>{fresh.status} · {fresh.rawMode}</Text>{record?.rejectionStatus ? <Text style={styles.hint}>Mã phản hồi máy chủ: {record.rejectionStatus}</Text> : null}{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
       </Card>
     </SafeAreaScreen>
   );
@@ -367,8 +369,11 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       }
     }
   };
-  return <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-    <Text style={typography.titleMd}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
+  return <View style={{ gap: spacing.sm }}>
+    <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[typography.titleMd,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại ngữ cảnh sửa chữa" accessibilityState={{disabled:busy||result.status==='loading',busy:busy||result.status==='loading'}} disabled={busy||result.status==='loading'} style={styles.refreshButton} onPress={()=>{void result.reload();void load();}}>
+        {busy||result.status==='loading'?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}</Pressable>
+    </View>
     {stage!=='overview'?<Card style={styles.card}>
       <Text style={typography.labelLg}>MỐC XỬ LÝ ĐÃ ĐỐI SOÁT</Text>
       <Text style={styles.body}>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
@@ -378,10 +383,15 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       <Text style={styles.hint}>Biên nhận đã đối soát không thay cho kết quả nghiệm thu của quản lý dự án.</Text>
     </Card>:null}
     {stage==='overview' && result.repairContext ? <>
-      <Text style={styles.hint}>Luồng thi công riêng, theo ngữ cảnh và quyền đã được máy chủ xác nhận.</Text>
-      <Button variant="secondary" title="Theo dõi thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})} />
-      <Button variant="secondary" title="Hồ sơ hoàn tất thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})} />
-      {!fastTrack?<Button variant="text" title="Kiểm tra yêu cầu bổ sung sửa chữa" onPress={()=>router.push({pathname:'/(crew)/repair-correction',params:{id:task.id,projectId:task.projectId}})} />:null}
+      <View style={styles.linkGroup}>
+        {([
+          {title:'Theo dõi thi công',icon:'construction',path:'/(crew)/progress'},
+          {title:'Hồ sơ hoàn tất thi công',icon:'task-alt',path:'/(crew)/complete'},
+          ...(!fastTrack?[{title:'Kiểm tra yêu cầu bổ sung sửa chữa',icon:'playlist-add-check',path:'/(crew)/repair-correction'}] as const:[]),
+        ] as const).map(link=><Pressable key={link.path} accessibilityRole="button" accessibilityLabel={link.title} style={({pressed})=>[styles.linkRow,pressed&&styles.linkPressed]} onPress={()=>router.push({pathname:link.path,params:{id:task.id,projectId:task.projectId}})}>
+          <MaterialIcons name={link.icon} size={22} color={colors.brandGold}/><Text style={[styles.body,styles.flex]}>{link.title}</Text><MaterialIcons name="chevron-right" size={22} color={colors.secondary}/>
+        </Pressable>)}
+      </View>
     </> : null}
     {stage==='closeout'?<>
       <RepairFieldSummary draft={draft}/>
@@ -391,13 +401,13 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {result.status === 'error' ? <Text>Không xác nhận được ngữ cảnh sửa chữa. Vui lòng tải lại.</Text> : null}
     {result.status === 'ready' && !result.repairContext ? <Text>Chưa có hạng mục sửa chữa được liên kết hợp lệ với nhiệm vụ này. Các thao tác sửa chữa chưa khả dụng.</Text> : null}
     {result.repairContext ? <>
-      <Text style={styles.body}>Phương án: {result.repairContext.repairPlan || 'Chưa có hướng dẫn'}</Text>
+      <View style={styles.planPanel}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{result.repairContext.repairPlan || 'Chưa có hướng dẫn'}</Text></View>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: showRepairTechnical }} style={styles.sectionHeading} onPress={()=>setShowRepairTechnical(v=>!v)}><Text style={[styles.hint,styles.flex]}>Chi tiết kỹ thuật sửa chữa</Text><MaterialIcons name={showRepairTechnical?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
-      {showRepairTechnical ? <View style={{gap:spacing.xs}}>
-        <Text selectable style={styles.hint}>Hạng mục: {result.repairContext.itemId}</Text>
-        <Text selectable style={styles.hint}>Liên kết phân công: {result.repairContext.bindingId}</Text>
-        <Text selectable style={styles.hint}>Phiên bản hạng mục: {result.itemVersion}</Text>
-        <Text style={styles.hint}>Trạng thái nguồn: {result.repairContext.status} · Phiên bản bộ kiểm tra: {result.repairContext.checklistVersion}</Text>
+      {showRepairTechnical ? <View style={styles.technicalPanel}>
+        <Text style={styles.hint}>Hạng mục</Text><Text selectable style={styles.body}>{result.repairContext.itemId}</Text>
+        <Text style={styles.hint}>Liên kết phân công</Text><Text selectable style={styles.body}>{result.repairContext.bindingId}</Text>
+        <Text style={styles.hint}>Phiên bản hạng mục</Text><Text selectable style={styles.body}>{result.itemVersion}</Text>
+        <Text style={styles.hint}>Trạng thái nguồn</Text><Text style={styles.body}>{result.repairContext.status}</Text><Text style={styles.hint}>Phiên bản bộ kiểm tra</Text><Text selectable style={styles.body}>{result.repairContext.checklistVersion}</Text>
       </View> : null}
     </> : null}
 
@@ -444,7 +454,6 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {stage==='progress'&&finished?<Button variant="secondary" title="Mở hồ sơ sau thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {stage==='closeout'&&!finished?<Button variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {notice?<Text accessibilityLiveRegion="polite">{notice}</Text>:null}
-    <Button variant="secondary" title="Tải lại ngữ cảnh sửa chữa" disabled={busy} loading={result.status === 'loading'} onPress={() => {void result.reload();void load();}} />
   </View>;
 }
 
@@ -484,4 +493,9 @@ const styles = StyleSheet.create({
   hint: { ...typography.caption, color: colors.secondary },
   factRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
   taskActionCard: { marginBottom: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg },
+  linkGroup:{borderWidth:1,borderColor:'#E8D9A8',borderRadius:radius.lg,overflow:'hidden'},
+  linkRow:{minHeight:56,padding:spacing.md,flexDirection:'row',alignItems:'center',gap:spacing.sm,backgroundColor:'#FFFCF4'},
+  linkPressed:{backgroundColor:'#F6ECCD'},
+  planPanel:{gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:radius.md,marginTop:spacing.sm},
+  technicalPanel:{padding:spacing.md,gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:radius.md},
 });
