@@ -7,6 +7,23 @@ test('HARDEN map bridge accepts only current marker and trusted local document',
 test('HARDEN map top level navigation never opens arbitrary external URLs',()=>{const {web}=map();assert.equal(typeof web.onShouldStartLoadWithRequest,'function');for(const url of ['https://evil.example','javascript:alert(1)','file:///secret','https://unpkg.com/'])assert.equal(web.onShouldStartLoadWithRequest({url,isTopFrame:true}),false);assert.equal(web.onShouldStartLoadWithRequest({url:'about:blank',isTopFrame:true}),true);});
 test('HARDEN map ignores invalid coordinates and reports unavailable honest fallback',()=>{const {s,web}=map({markers:[{id:'bad',title:'bad',coordinate:[NaN,100]}]});assert.ok(!web.source.html.includes('"id":"bad"'));web.onError();s.render();assert.ok(!JSON.stringify(s.nodes()).includes('Cầu Bà Lát'));});
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
+
+test('Map reload starts a fresh WebView even when no error has been reported',()=>{
+ const {s}=map();
+ const current=()=>s.nodes().find(n=>n.type==='WebView');
+ const oldKey=current().props.key;
+ s.nodes().find(n=>n.props?.accessibilityLabel==='Thử tải lại bản đồ').props.onPress();s.render();
+ assert.notEqual(current().props.key,oldKey);
+});
+
+test('Map WebView failure shows fallback and retry creates a fresh document',()=>{
+ const {s,web}=map();const oldKey=web.key;
+ web.onError();s.render();
+ assert.equal(s.nodes().some(n=>n.type==='WebView'),false);
+ s.nodes().find(n=>n.props?.accessibilityLabel==='Thử tải lại bản đồ').props.onPress();s.render();
+ assert.equal(s.nodes().some(n=>n.type==='WebView'),true);
+ assert.notEqual(s.nodes().find(n=>n.type==='WebView').props.key,oldKey);
+});
 test('Map route without markers fits and recenters to all route points',()=>{
  const {web}=map({markers:[],routeCoordinates:[[106,10],[106.01,10.02]]});const fitted=[],errors=[];
  const script=web.source.html.match(/<script>\s*([\s\S]*?)<\/script>/)[1];

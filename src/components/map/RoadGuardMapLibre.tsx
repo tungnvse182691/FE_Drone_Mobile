@@ -42,6 +42,11 @@ export function RoadGuardMapLibre({
   const webViewRef = useRef<WebView>(null);
   const [layerType, setLayerType] = useState<'streets' | 'satellite'>('streets');
   const [loadError, setLoadError] = useState(false);
+  const [reloadRevision, setReloadRevision] = useState(0);
+  const reloadMap = () => {
+    setLoadError(false);
+    setReloadRevision(revision => revision + 1);
+  };
 
   const validMarkers=mapMarkers(markers);
   // Generate HTML for MapLibre GL JS (Official WebGL Engine)
@@ -361,6 +366,7 @@ export function RoadGuardMapLibre({
     <View style={[styles.container, style]}>
       {!loadError ? (
         <WebView<{}>
+          key={reloadRevision}
           ref={webViewRef}
           // Intercept ALL URLs: WebView otherwise opens non-whitelisted schemes via Linking.
           originWhitelist={['*']}
@@ -403,11 +409,11 @@ export function RoadGuardMapLibre({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Thử tải lại bản đồ"
-              onPress={() => setLoadError(false)}
+              onPress={reloadMap}
               style={({ pressed }) => [styles.controlBtn, pressed && styles.pressed]}
             >
               <MaterialIcons
-                name={loadError ? 'wifi' : 'cloud-off'}
+                name="refresh"
                 size={18}
                 color={loadError ? colors.warning : colors.neutral}
               />
