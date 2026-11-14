@@ -453,7 +453,20 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater, transport
       }
     }
     for (const range of missingParts) {
-      const partUrl = urlByPartNumber.get(range.partNumber);
+      let partUrl = urlByPartNumber.get(range.partNumber);
+      // Earlier parts may consume the remaining URL lifetime on a slow link.
+      // Persist a new command identity only after the previous URL has expired.
+      if (partUrl?.expiresAt && Date.parse(partUrl.expiresAt) <= Date.now()) {
+        current = await update({ partETags: { ...current.partETags, _urlsKey: uuidv4(), _urlsExpireAt: '' } });
+        const refreshed = await transport.requestPartUrls(uploadId,
+          { partNumbers: parts.map(part => part.partNumber) }, current.partETags._urlsKey);
+        const expiries = (refreshed.parts ?? []).map(part => part.expiresAt).filter((value): value is string => Boolean(value));
+        if (expiries.length) current = await update({ partETags: { ...current.partETags, _urlsExpireAt: expiries.sort()[0] } });
+        urlByPartNumber.clear();
+        for (const part of refreshed.parts ?? []) if (typeof part.partNumber === 'number') urlByPartNumber.set(part.partNumber, part);
+        partUrl = urlByPartNumber.get(range.partNumber);
+        if (partUrl?.expiresAt && Date.parse(partUrl.expiresAt) <= Date.now()) throw { code: 'upload_storage_unavailable', status: 503 };
+      }
       if (!partUrl?.url) {
         throw {
           code: 'upload_storage_unavailable',
@@ -639,7 +652,8 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     const context = reporterContext();
     if (start.partitionId !== context.partition || get().partitionId !== context.partition) return;
     if (start.cancelState || cancelGates.has(id)) return;
-    if (start.mediaState === 'FAILED' && mode !== 'observe') {
+    const storageRejected = start.lastErrorStage === 'upload_put' && start.lastErrorStatus === 403;
+    if (start.mediaState === 'FAILED' && mode !== 'observe' && !storageRejected) {
       return;
     }
     if (mode === 'observe' && !start.fileId) return;
@@ -683,8 +697,15 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     try {
       // Foreground observation and FAILED reconciliation are GET-only. In particular,
       // a timeout must not cause the watcher to replay a mutation without user intent.
-      let current = mode === 'observe' || start.mediaState === 'VERIFIED'
-        ? await pollVerification(start, update, transport) : await runPipeline(start, update, transport);
+      let source = start;
+      if (mode === 'explicit' && start.mediaState === 'FAILED' && storageRejected) {
+        const session = await transport.getSession(start.uploadId!);
+        if (session.id !== start.uploadId || session.fileId !== start.fileId || session.status?.toUpperCase() !== 'UPLOADING' ||
+            (session.expiresAt && Date.parse(session.expiresAt) <= Date.now())) throw { code: 'source_not_ready' };
+        source = await update({ mediaState: Object.keys(start.partETags).some(key => /^\d+$/.test(key)) ? 'UPLOADING' : 'SESSION_CREATED' });
+      }
+      let current = mode === 'observe' || source.mediaState === 'VERIFIED'
+        ? await pollVerification(source, update, transport) : await runPipeline(source, update, transport);
       if (mode === 'explicit' && (current.mediaState === 'COMPLETE_REQUESTED' || current.mediaState === 'VERIFYING')) {
         await pollVerification(current, update, transport);
       }
@@ -692,7 +713,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       const latest = get().items.find(item => item.id === id) ?? start;
       const status = (error as { response?: { status?: number }; status?: number }).response?.status ?? (error as { status?: number }).status;
       await update({
-        mediaState: status && [400, 403, 409, 412, 422, 428].includes(status) ? 'FAILED' : latest.mediaState,
+        mediaState: (stage as UploadFailureStage) !== 'upload_put' && status && [400, 403, 409, 412, 422, 428].includes(status) ? 'FAILED' : latest.mediaState,
         attempt: start.attempt + 1,
         lastErrorCode: uploadErrorCode(error) ?? 'upload_validation_failed',
         lastErrorStage: stage,
@@ -721,7 +742,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     }
     // Never reset FAILED to LOCAL_READY or clear its identity/version/ETags. A
     // server-verified matching file can recover; other rejections need new evidence.
-    await get().advanceItem(id, current.mediaState === 'FAILED' ? 'observe' : 'explicit');
+    await get().advanceItem(id, current.mediaState === 'FAILED' && !(current.lastErrorStage === 'upload_put' && current.lastErrorStatus === 403) ? 'observe' : 'explicit');
   },
 
   async cancelItem(id) {

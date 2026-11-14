@@ -139,6 +139,7 @@ export function reporterFailureMessage(error: unknown): string {
   const code = e.response?.data?.code ?? e.code;
   if (code === 'verification_timeout') return 'Máy chủ chưa xác minh xong ảnh trong thời gian theo dõi. Chưa gửi phản ánh; ảnh và lệnh vẫn được giữ. Bạn có thể kiểm tra lại sau.';
   if (code === 'submission_paused') return 'Đã dừng theo dõi khi rời màn hình hoặc ứng dụng. Lệnh và ảnh được giữ; không tự gửi lại khi quay về.';
+  if (e.stage === 'upload_put' && status === 403) return 'Đường tải ảnh bị từ chối hoặc đã hết hạn. Ảnh vẫn được giữ; thử lại để kiểm tra đường tải mới.';
   if (status === 401 || code === 'auth_unauthorized') return 'Vui lòng đăng nhập lại. Nháp và ảnh vẫn được giữ.';
   if (status === 403 || code === 'access_forbidden') return 'Tài khoản không có quyền gửi nháp này.';
   if (status === 412 || code === 'concurrency_conflict') return 'Phiên bản đã thay đổi. Nháp được giữ nguyên; cần kiểm tra trước khi gửi lại.';

@@ -304,6 +304,7 @@ export const UPLOAD_FAILURE_STAGES = ['local_read', 'local_persist', 'upload_cre
   'upload_part_urls', 'upload_put', 'upload_complete', 'upload_verify'] as const;
 export type UploadFailureStage = typeof UPLOAD_FAILURE_STAGES[number];
 export function uploadFailureMessage(code: string | null, status: number | undefined, stage?: UploadFailureStage): string {
+  if (stage === 'upload_put' && status === 403) return 'Đường tải ảnh bị từ chối hoặc đã hết hạn. Ảnh vẫn được giữ; thử lại để kiểm tra đường tải mới.';
   if (status === 401) return 'Vui lòng đăng nhập lại để tiếp tục tải ảnh.';
   if (status === 403) return 'Tài khoản không có quyền tải ảnh này.';
   if (status === 412) return 'Phiên tải đã thay đổi. Cần kiểm tra phiên bản trước khi gửi lại.';
