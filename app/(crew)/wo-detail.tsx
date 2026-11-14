@@ -337,6 +337,16 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
   const started=history.find(c=>c.operation==='start'&&c.phase==='CONFIRMED');
   const finished=history.find(c=>c.operation==='finish'&&c.phase==='CONFIRMED');
   const intake=history.find(c=>c.operation==='attempt'&&c.phase==='CONFIRMED');
+  // Current API-080 decision takes precedence over historical intake readiness.
+  const currentContext=result.status==='ready'?result.repairContext:null;
+  const finalConfirmed=currentContext?.status==='Confirmed'&&currentContext.finalDecision?.result==='CONFIRMED';
+  const pmAccepted=currentContext?.attempt?.review?.decision==='ACCEPT';
+  const closeoutMessage=finalConfirmed?'Đã nghiệm thu. Hạng mục đã có xác nhận cuối từ người có thẩm quyền.':
+    pmAccepted?'PM đã chấp nhận hồ sơ. Đang chờ xác nhận nghiệm thu cuối.':
+    currentContext?.attempt?.review?.decision==='SUPPLEMENT'?'Quản lý yêu cầu bổ sung hồ sơ. Mở yêu cầu bổ sung để xem nội dung.':
+    !currentContext?'Tải lại để xem kết quả đánh giá mới nhất.':
+    intake?'Đã tiếp nhận hồ sơ. Đang chờ quản lý đánh giá.':
+    finished?'Đã kết thúc thi công. Cần gửi hồ sơ để quản lý đánh giá.':'Chưa kết thúc thi công.';
   const activeHistory=history.filter(c=>!c.rejectionResolved);
   const rejectedCommand=activeHistory.find(c=>c.phase==='REJECTED');
   const rejected=!!rejectedCommand;
@@ -379,8 +389,8 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       <Text style={styles.body}>{assessment?'✓ Đã đối soát đánh giá trước sửa':'Đánh giá trước sửa: chờ xác nhận'}</Text>
       <Text style={styles.body}>{started?'✓ Đã đối soát bắt đầu thi công':'Bắt đầu thi công: chờ xác nhận'}</Text>
       <Text style={styles.body}>{finished?'✓ Đã đối soát kết thúc thi công':'Kết thúc thi công: chờ xác nhận'}</Text>
-      <Text style={styles.body}>{intake?'✓ Đã tiếp nhận hồ sơ, chờ quản lý đánh giá':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
-      <Text style={styles.hint}>Biên nhận đã đối soát không thay cho kết quả nghiệm thu của quản lý dự án.</Text>
+      <Text style={styles.body}>{intake?'✓ Đã tiếp nhận hồ sơ':'Tiếp nhận hồ sơ: chờ gửi và đối soát'}</Text>
+      <Text style={styles.hint}>{closeoutMessage}</Text>
     </Card>:null}
     {stage==='overview' && result.repairContext ? <>
       <View style={styles.linkGroup}>
@@ -401,8 +411,8 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {result.status === 'error' ? <Text>Không xác nhận được ngữ cảnh sửa chữa. Vui lòng tải lại.</Text> : null}
     {result.status === 'ready' && !result.repairContext ? <Text>Chưa có hạng mục sửa chữa được liên kết hợp lệ với nhiệm vụ này. Các thao tác sửa chữa chưa khả dụng.</Text> : null}
     {result.repairContext ? <>
-      <View style={styles.planPanel}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{result.repairContext.repairPlan || 'Chưa có hướng dẫn'}</Text></View>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: showRepairTechnical }} style={styles.sectionHeading} onPress={()=>setShowRepairTechnical(v=>!v)}><Text style={[styles.hint,styles.flex]}>Chi tiết kỹ thuật sửa chữa</Text><MaterialIcons name={showRepairTechnical?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
+      <Card style={styles.card}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{result.repairContext.repairPlan || 'Chưa có hướng dẫn'}</Text></Card>
+      <Button variant="secondary" title={showRepairTechnical?'Thu gọn lịch sử và thông tin kỹ thuật':'Xem lịch sử và thông tin kỹ thuật'} onPress={()=>setShowRepairTechnical(v=>!v)}/>
       {showRepairTechnical ? <View style={styles.technicalPanel}>
         <Text style={styles.hint}>Hạng mục</Text><Text selectable style={styles.body}>{result.repairContext.itemId}</Text>
         <Text style={styles.hint}>Liên kết phân công</Text><Text selectable style={styles.body}>{result.repairContext.bindingId}</Text>
@@ -418,13 +428,13 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {assessmentBlock&&!started?<Text>{assessmentBlock}</Text>:null}
     <Button variant="secondary" title="Gửi đánh giá trước sửa" disabled={busy||!loaded||!sourceReady||!!assessmentBlock||!!pending||(!!activeHistory.length&&assessment?.receipt?.data.readiness!=='INCOMPLETE')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('assessment')}/>
     </>:null}
-    {history.map(c=><View key={c.key}>
+    {history.filter(c=>showRepairTechnical||c.phase!=='CONFIRMED').map(c=><Card key={c.key} style={styles.card}>
       <Text style={styles.body}>{{assessment:'Đánh giá',start:'Bắt đầu',finish:'Kết thúc thi công',attempt:'Nộp hồ sơ',supplement:'Bổ sung'}[c.operation]}: {{PREPARED:'Đã lưu lệnh',PENDING:'Đang chờ xác nhận',IN_FLIGHT:'Đang gửi',UNKNOWN_OUTCOME:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã ghi nhận',CONFIRMED:'Đã đối soát',REJECTED:'Bị từ chối'}[c.phase] ?? 'Cần đối soát'}</Text>
       {c.receipt?<><Text style={styles.hint}>Biên nhận máy chủ đã lưu.</Text>{showRepairTechnical ? <Text selectable style={styles.hint}>Mã biên nhận: {String(c.receipt.data.id??c.receipt.data.attemptId)}</Text> : null}<Text>{(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='READY'?'Đủ thông tin theo máy chủ':(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='INCOMPLETE'?'Còn thiếu thông tin':'Đã ghi nhận mốc thi công'}</Text>
         {showRepairTechnical&&Array.isArray(c.receipt.data.missingReasons)?c.receipt.data.missingReasons.map(r=><Text key={String(r)}>{String(r)}</Text>):null}</>:null}
       {c.phase==='REJECTED'&&c.rejectionResolved?<Text>Đã giải quyết bằng chứng từ chối; lệnh gốc được giữ trong lịch sử.</Text>:null}
       {c.phase==='REJECTED'&&!c.rejectionResolved?<Text>Máy chủ đã từ chối thao tác. Lịch sử được giữ nguyên; cần kiểm tra quyền và điều kiện trước khi tiếp tục.</Text>:null}
-    </View>)}
+    </Card>)}
     {stage!=='closeout'&&stage!=='overview'?<>
     {assessment&&!ready?<Text>Đánh giá còn thiếu thông tin. Bổ sung số đo hoặc ảnh trong hồ sơ hiện trường rồi chủ động gửi đánh giá mới; lịch sử cũ được giữ nguyên.</Text>:null}
     {fastTrack?<Card style={styles.card}><CrewFastTrackEligibility key={JSON.stringify([task.projectId,task.id,result.itemVersion,assessment?.key])} projectId={task.projectId} taskId={task.id}/><Text style={styles.hint}>Khi bắt đầu, ứng dụng kiểm tra lại điều kiện với máy chủ. Nếu còn thiếu, thi công chưa được mở.</Text></Card>:null}
@@ -444,12 +454,17 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     <Button variant="secondary" title="Kết thúc thi công" disabled={busy||!loaded||!started||!!finished||!!pending||rejected||activeHistory.some(c=>c.operation==='finish')||result.status!=='ready'||result.repairContext?.status!=='InProgress'} onPress={()=>void run('finish')}/>
     </>:null}
     {stage!=='progress'&&stage!=='overview'?<>
-    {finished?<Text>Đã thi công xong theo biên nhận máy chủ. Hồ sơ chưa được quản lý xác nhận.</Text>:null}
+    <Card style={styles.card}>
+    <Text style={typography.titleMd}>{finalConfirmed?'Đã nghiệm thu':pmAccepted?'Hồ sơ đã được chấp nhận':'Nộp hồ sơ sau thi công'}</Text>
+    <Text style={styles.body}>{closeoutMessage}</Text>
+    {!finalConfirmed&&!pmAccepted?<>
     <Button variant="secondary" title="Chụp ảnh sau sửa / lập hồ sơ sửa chữa" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||!!draft?.command} onPress={()=>void run('claim')}/>
+    </>:null}
     {draft?.repairClaim?<Button variant="secondary" title="Xem hồ sơ sửa chữa đã lưu" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>:null}
+    {!finalConfirmed&&!pmAccepted?<>
     <Button variant="secondary" title="Nộp hồ sơ chờ quản lý đánh giá" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||draft?.command?.phase!=='confirmed'||!draft?.repairClaim} onPress={()=>void run('attempt')}/>
-    {intake?<Text>Đã gửi hồ sơ vào tiếp nhận. Đang chờ quản lý đánh giá; chưa được quản lý xác nhận.</Text>:null}
-    <Text>Gửi hồ sơ không đồng nghĩa đã được nghiệm thu. Theo dõi kết quả đánh giá của người quản lý.</Text>
+    </>:null}
+    </Card>
     </>:null}
     {stage==='progress'&&finished?<Button variant="secondary" title="Mở hồ sơ sau thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {stage==='closeout'&&!finished?<Button variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}

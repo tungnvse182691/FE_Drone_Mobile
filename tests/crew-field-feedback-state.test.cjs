@@ -12,7 +12,7 @@ async function mounted(options={}){
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},
- '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:'READY',measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
+ '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
  '../../src/api/crewFieldDraft':{currentFieldContext:()=>context,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>structuredClone(draft),measurementTemplate:()=>draft.measurements[0],fieldDraftPending:d=>d.command?.phase==='pending',fieldErrorMessage:e=>e.message,
  saveFieldMeasurements:async()=>{if(waitSave)await waitSave.promise;if(failSave)throw Error('Lưu chưa thành công');return structuredClone(draft);},acknowledgeFieldResult:async()=>({...draft,command:null}),
  uploadAndSubmitFieldDraft:async()=>{submitted=true;draft={...draft,command:{phase:'confirmed'},result:{id:'receipt',taskId:'task',readiness:'READY'}};return structuredClone(draft);},
@@ -53,5 +53,21 @@ test('FIELD confirmed send refreshes task and receipt immediately without anothe
  assert.ok(h.detailReads()>reads,'must reload task after confirmed send');
  assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Nhiệm vụ: Đã nộp'));
  assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Chỉnh số đo'),false);
+ h.s.unmount();
+});
+
+test('FIELD final decision takes precedence over historical FIELD readiness without rewriting it',async()=>{
+ const h=await mounted({previous:true,completed:true,incomplete:true,repairContext:{status:'Confirmed',finalDecision:{result:'CONFIRMED'}}});
+ assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Sửa chữa: Đã nghiệm thu'));
+ assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Kết quả lúc nộp: Cần bổ sung thông tin'));
+ const banner=h.s.nodes()[0].props.header.props.children[1];
+ assert.equal(banner.props.model.title,'Đã nghiệm thu');
+ assert.match(banner.props.model.detail,/Ảnh sau sửa chưa liên kết/);
+ h.s.unmount();
+});
+
+test('FIELD Completed alone never implies final repair acceptance',async()=>{
+ const h=await mounted({previous:true,completed:true,incomplete:true});
+ assert.equal(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Sửa chữa: Đã nghiệm thu'),false);
  h.s.unmount();
 });

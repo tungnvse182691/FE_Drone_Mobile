@@ -39,10 +39,10 @@ test('C3 closeout distinguishes all three depression dimensions without treating
  for(const text of ['Chiều dài chỗ lõm: 2 m','Chiều rộng chỗ lõm: 50 cm','Độ sâu chỗ lõm: Có nước đọng'])assert.ok(result.includes(text),text);
 });
 const common={'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'}};
-function repairOverview(context,history=[]){
+function repairOverview(context,history=[],stage='overview'){
  const identity={actor:'actor',scope:'scope',environment:'qa',projectId:'project',taskId:'task'};
  let mutations=0;
- const s=screen('app/(crew)/wo-detail.tsx',{exportName:'NormalRepairBootstrap',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL'}},stage:'overview'},modules:{...common,
+ const s=screen('app/(crew)/wo-detail.tsx',{exportName:'NormalRepairBootstrap',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL'}},stage},modules:{...common,
   '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:context,reload:async()=>{}})},
   '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>identity,sameRepairIdentity:(a,b)=>a?.actor===b?.actor},
   '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>history,readRepairFieldDraft:async()=>null,dispatchRepair:async()=>{mutations++;},repairErrorMessage:()=>''},
@@ -64,5 +64,28 @@ for(const context of [null,{repairPlan:'Keep backend text',itemId:'item',binding
  await f.s.press('Đối soát / gửi lại lệnh đã lưu');await f.s.flush();
  assert.ok(f.s.nodes().some(n=>n.props.accessibilityRole==='alert'));
  assert.ok(f.s.nodes().some(n=>n.props.title==='Xác nhận đối soát lệnh gốc'));
+ assert.equal(f.mutations,0);f.s.unmount();
+});
+
+
+test('C3 closeout uses current final confirmation rather than stale intake',async()=>{
+ const f=repairOverview({status:'Confirmed',finalDecision:{decisionId:'decision',result:'CONFIRMED',at:'2026-11-15T00:00:00Z'},attempt:{review:{decision:'ACCEPT'}}},[
+  {key:'finish',phase:'CONFIRMED',operation:'finish',receipt:{data:{id:'finish'}}},
+  {key:'intake',phase:'CONFIRMED',operation:'attempt',receipt:{data:{attemptId:'attempt',intakeReadiness:'INCOMPLETE'}}},
+ ],'closeout');
+ f.s.render();await f.s.flush();
+ const text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.match(text,/Đã nghiệm thu/);
+ assert.doesNotMatch(text,/Hồ sơ chưa được quản lý xác nhận|Đang chờ quản lý đánh giá; chưa được quản lý xác nhận/);
+ assert.equal(f.mutations,0);f.s.unmount();
+});
+
+
+for(const context of [null,{status:'Confirmed',finalDecision:null},{status:'Submitted',attempt:{review:{decision:'ACCEPT'}}}])test('C3 never infers final confirmation from intake or PM review: '+JSON.stringify(context),async()=>{
+ const f=repairOverview(context,[{key:'intake',phase:'CONFIRMED',operation:'attempt',receipt:{data:{intakeReadiness:'INCOMPLETE'}}}],'closeout');
+ f.s.render();await f.s.flush();
+ const text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.doesNotMatch(text,/Đã nghiệm thu/);
+ if(context?.attempt)assert.match(text,/PM đã chấp nhận hồ sơ/);
  assert.equal(f.mutations,0);f.s.unmount();
 });

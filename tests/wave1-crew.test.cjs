@@ -11,7 +11,10 @@ function reviewedScreen(stage,rows){
 test('W1-01 restored history reaches Progress/Complete without authorizing new start after PM review',async()=>{
  for(const stage of ['progress','closeout']){
  const f=reviewedScreen(stage,[{key:'assessment',operation:'assessment',phase:'CONFIRMED',receipt:{data:{readiness:'READY'}}}]);
- f.s.render();await f.s.flush();assert.ok(JSON.stringify(f.s.nodes()).includes('Biên nhận máy chủ đã lưu.'));
+ f.s.render();await f.s.flush();
+ assert.ok(!JSON.stringify(f.s.nodes()).includes('Biên nhận máy chủ đã lưu.'));
+ await f.s.press('Xem lịch sử và thông tin kỹ thuật');await f.s.flush();
+ assert.ok(JSON.stringify(f.s.nodes()).includes('Biên nhận máy chủ đã lưu.'));
  if(stage==='progress')assert.equal(f.s.nodes().find(n=>n.props.title==='Bắt đầu thi công').props.disabled,true);
  assert.equal(f.posts(),0);f.s.unmount();
  }
