@@ -4,7 +4,7 @@ import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord } f
 import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepareRepairAttempt, dispatchRepair, resolveRepairRejection, readRepairFieldDraft, readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
 import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -98,7 +98,7 @@ export function crewDetailPresentation(status: string | null | undefined, comman
     InProgress: { summary: 'Đang đo kiểm. Tiếp tục ghi nhận số đo và bằng chứng hiện trường.', commands: [], fieldLabel: 'Tác nghiệp hiện trường' },
     Submitted: { summary: 'Đã gửi hồ sơ đo kiểm, chưa phải xác nhận hoàn tất sửa chữa. Xem hồ sơ và theo dõi phản hồi.', commands: [], fieldLabel: 'Xem hồ sơ đã gửi' },
     SupplementRequired: { summary: 'Nhiệm vụ cần bổ sung hồ sơ. Xem yêu cầu và kiểm tra điều kiện trước khi bổ sung.', commands: [], fieldLabel: 'Xem hồ sơ cần bổ sung' },
-    Completed: { summary: 'Nhiệm vụ đo kiểm đã hoàn thành. Có thể xem kết quả và lịch sử xử lý.', commands: [], fieldLabel: 'Xem kết quả đo kiểm' },
+    Completed: { summary: 'Nhiệm vụ đã hoàn thành. Xem hồ sơ và kết quả xử lý bên dưới.', commands: [], fieldLabel: 'Xem hồ sơ kết quả' },
     Rejected: { summary: 'Nhiệm vụ đã bị từ chối. Xem thông tin và lịch sử xử lý.', commands: [] },
     Cancelled: { summary: 'Nhiệm vụ đã hủy. Thông tin và lịch sử được giữ để tra cứu.', commands: [] },
   };
@@ -124,7 +124,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
     setRecord(result);
     if (result.task && result.etag) setFresh(previous => ({ ...previous, detail: result.task, status: result.task!.status ?? '', version: result.task!.version!, etag: result.etag }));
     setNotice(result.phase === 'rejected' ? 'Máy chủ từ chối lệnh. Tải lại dữ liệu trước khi thử một lệnh mới.' :
-      result.phase === 'confirmed' && result.readbackStatus === 200 ? 'Đã xác nhận trạng thái và phiên bản bằng dữ liệu mới từ máy chủ.' :
+      result.phase === 'confirmed' && result.readbackStatus === 200 ? '' :
       result.phase === 'acknowledged' ? 'Máy chủ đã ghi nhận lệnh; chưa đối chiếu được dữ liệu đọc lại. Giữ biên nhận để đối soát.' :
       'Chưa xác định được kết quả lệnh. Giữ nguyên lệnh cũ; tải lại để đối soát.');
   }, [scope]);
@@ -165,7 +165,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         if (currentCrewScope() !== scope) return;
         validateCrewTaskDetail(response.data, response.etag, task.projectId, task.id, actor);
         setFresh(previous => ({ ...previous, detail: response.data, status: response.data.status ?? '', version: response.data.version!, etag: response.etag }));
-        setNotice('Đã tải lại dữ liệu nhiệm vụ từ máy chủ.');
+        setNotice('');
         setReady(true);
         return;
       }
@@ -212,11 +212,14 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <View style={styles.chips}><Chip variant="measure-only" label={crewModeLabel(fresh.rawMode)} uppercase={false} /></View>
       </Card>
       <Card style={styles.taskActionCard}>
-        <Text style={typography.titleMd}>Tình trạng hiện tại</Text>
+        <View style={styles.sectionHeading}>
+          <Text style={[typography.titleMd,styles.flex]}>Tình trạng hiện tại</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Tải lại / đối soát" accessibilityState={{disabled:busy,busy}} testID="crew-detail-refresh" disabled={busy} style={styles.refreshButton} onPress={()=>void run()}>
+            {busy?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}
+          </Pressable>
+        </View>
         <Text style={styles.body}>{presentation.summary}</Text>
-        {fresh.detail?.latestSubmissionId ? <Text style={styles.hint}>Có hồ sơ đã gửi. Nội dung và mức độ đầy đủ được xác nhận riêng khi mở hồ sơ.</Text> : null}
         {!ready ? <Text style={styles.hint}>Đang kiểm tra nhật ký thao tác. Nếu chưa hoàn tất, chọn tải lại / đối soát.</Text> : null}
-        {busy ? <Text style={styles.hint}>Đang xử lý thao tác. Vui lòng chờ kết quả.</Text> : null}
         {pending ? <Text accessibilityRole="alert" style={styles.body}>Còn thao tác chưa đối soát xong. Giữ nguyên lệnh và kiểm tra kết quả trước khi thao tác tiếp.</Text> : null}
         {presentation.commands.includes('accept') ? <Button variant="primary" title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} /> : null}
         {presentation.commands.includes('reject') ? <>
@@ -227,7 +230,6 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {presentation.fieldLabel ? <Button variant="primary" title={presentation.fieldLabel} disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} /> : null}
         {!presentation.commands.length && !presentation.fieldLabel && fieldBlock ? <Text style={styles.hint}>Thao tác hiện trường chưa khả dụng với trạng thái hoặc điều kiện hiện tại.</Text> : null}
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
-        <Button variant="text" title="Tải lại / đối soát" disabled={busy} onPress={() => void run()} />
         {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
       </Card>
       <Card style={styles.card}>
@@ -236,7 +238,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <View style={styles.factRow}><MaterialIcons name="event" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
         {fresh.wo_code ? <Text style={styles.body}>Lệnh công tác: {fresh.wo_code}</Text> : null}
         <View style={styles.factRow}><MaterialIcons name="place" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Vị trí hiện trường</Text><Text style={styles.body}>{[fresh.route_code, fresh.section_name, fresh.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text>
-          <Text style={styles.hint}>{fresh.coordinates ? `${fresh.coordinates.latitude}, ${fresh.coordinates.longitude}` : 'Chưa có tọa độ để dẫn đường. Bạn vẫn có thể xem nhiệm vụ.'}</Text></View></View>
+          <Text style={styles.hint}>{fresh.coordinates ? `${fresh.coordinates.latitude}, ${fresh.coordinates.longitude}` : 'Chưa có tọa độ dẫn đường'}</Text></View></View>
         {fresh.coordinates ? <Button variant="secondary" title="Dẫn đường" onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } })} /> : null}
       </Card>
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
@@ -473,6 +475,7 @@ const styles = StyleSheet.create({
   card: { marginBottom: spacing.md, gap: spacing.md, borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg },
   hero: { backgroundColor: '#FFFCF4' },
   sectionHeading: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  refreshButton: { minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: '#FFF8E5' },
   iconBox: { padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
   flex: { flex: 1, minWidth: 0 },
   eyebrow: { ...typography.labelSm, color: colors.secondary, marginBottom: spacing.xs },

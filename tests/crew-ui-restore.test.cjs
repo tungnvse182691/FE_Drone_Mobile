@@ -81,7 +81,7 @@ test('Crew inbox renders loading, empty and HTTP failures with safe retry and cu
 test('Patch11 actual detail action reasons track loading, busy, pending and retain rejection text',()=>{
  const {s}=detailScreen(task('NewAssigned'));s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Đang kiểm tra nhật ký/);
  s.slots[2]=true;s.render();const input=s.nodes().find(n=>n.type==='InputField');assert.ok(input);input.props.onChangeText('Lý do đã nhập');s.render();assert.equal(s.nodes().find(n=>n.type==='InputField').props.value,'Lý do đã nhập');
- s.slots[3]=true;s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Đang xử lý thao tác/);
+ s.slots[3]=true;s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));const refresh=s.nodes().find(n=>n.props?.testID==='crew-detail-refresh');assert.equal(refresh.props.disabled,true);assert.equal(refresh.props.accessibilityState.busy,true);assert.ok(s.nodes().some(n=>n.type==='ActivityIndicator'));
  s.slots[3]=false;s.slots[1]={phase:'pending',scope:'fixture-scope'};s.render();assert.ok(!s.nodes().some(n=>n.type==='InputField'));assert.match(textNodes(s),/Còn thao tác chưa đối soát/);
  s.slots[1]=null;s.render();assert.equal(s.nodes().find(n=>n.type==='InputField').props.value,'Lý do đã nhập');assert.equal(s.h.calls.length,0);s.unmount();
 });

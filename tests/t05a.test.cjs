@@ -122,7 +122,7 @@ test('T05A real UI enables accept without GPS and keeps GPS/repair locked',async
  assert.equal(h.button(h.render(),'Bắt đầu nhiệm vụ').disabled,false);
 });
 test('T05A UI reload without journal performs real detail GET',async()=>{
- const h=uiHarness();h.render();await h.settle();await h.button(h.render(),'Tải lại / đối soát').onPress();await h.settle();assert.equal(h.calls.at(-1)[0],'GET');
+ const h=uiHarness();h.render();await h.settle();const refresh=h.nodes(h.render()).find(n=>n.props?.testID==='crew-detail-refresh');assert.equal(refresh.props.accessibilityLabel,'Tải lại / đối soát');await refresh.props.onPress();await h.settle();assert.equal(h.calls.at(-1)[0],'GET');
 });
 test('T05A UI session change before click sends no command',async()=>{
  const h=uiHarness();h.render();await h.settle();const press=h.button(h.render(),'Nhận nhiệm vụ').onPress;h.auth.token=null;await press();await h.settle();assert.equal(h.calls.length,0);
