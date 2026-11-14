@@ -103,6 +103,15 @@ export function validateCrewTaskDetail(item: FieldTaskViewFact, etag: string, pr
         !['SUPPLEMENT', 'ACCEPT'].includes(attempt.review.decision))))) {
     throw new Error('crew_repair_attempt_invalid');
   }
+  const decision = item.repairContext?.finalDecision;
+  const requests = item.repairContext?.reviewRequests;
+  if ((decision != null && (!isCrewResourceId(decision.decisionId) || typeof decision.result !== 'string' ||
+      !decision.result.trim() || !Number.isFinite(Date.parse(decision.at)))) ||
+      (requests != null && (!Array.isArray(requests) || requests.some(r => !isCrewResourceId(r.requestId) ||
+        !isCrewResourceId(r.decisionId) || typeof r.reason !== 'string' || !Number.isFinite(Date.parse(r.at))) ||
+        new Set(requests.map(r => r.requestId.toLowerCase())).size !== requests.length))) {
+    throw new Error('crew_repair_decision_invalid');
+  }
 }
 
 /** Validate the additive FastTrack read projection without granting execution authority. */
@@ -347,6 +356,8 @@ export interface CrewRepairContext {
   repairPlan: string;
   checklistVersion: string;
   attempt?: CrewRepairAttempt | null;
+  finalDecision?: { decisionId: string; result: string; at: string } | null;
+  reviewRequests?: { requestId: string; decisionId: string; reason: string; at: string }[] | null;
 }
 
 export interface CrewRepairAttempt {

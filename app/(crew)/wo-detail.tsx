@@ -1,4 +1,5 @@
 import { useRepairBootstrap } from '../../src/hooks/useRepairBootstrap';
+import { CrewRepairFacts } from '../../src/components/crew/CrewRepairFacts';
 import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
 import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepareRepairAttempt, dispatchRepair, resolveRepairRejection, readRepairFieldDraft, readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
 import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
@@ -239,6 +240,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {fresh.coordinates ? <Button variant="secondary" title="Dẫn đường" onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } })} /> : null}
       </Card>
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
+      {fresh.detail?.repairContext?<CrewRepairFacts key={JSON.stringify([scope,task.projectId,task.id,fresh.detail.repairContext.bindingId])} projectId={task.projectId} taskId={task.id}/>:null}
       <Card style={styles.taskActionCard}>
         <Text style={typography.titleMd}>Hồ sơ liên quan</Text>
         <Button variant="text" title="Khuyết tật thuộc nhiệm vụ" onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})} />

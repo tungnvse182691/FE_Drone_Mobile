@@ -28,6 +28,7 @@ export interface SafetyView {
   checks:{id:string;actorId:string;at:string;result:string;findings:string;evidenceLinkIds:string[]}[];
   warnings:{id:string;sourceCheckId:string;intendedActorId:string;serverReceivedAt:string;originalDueAt:string;reason:string}[];
   acknowledgements:{id:string;warningId:string;actorId:string;at:string;afterOriginalDue:boolean}[];
+  eligibleEvidenceLinks?: {evidenceLinkId:string;fileId:string}[] | null;
 }
 export interface RepairSafetyResource {projectId:string;packageId:string;itemId:string;measureId:string}
 function itemPath(r:{projectId:string;packageId:string;itemId:string}):string {
@@ -42,9 +43,40 @@ function measurePath(r:RepairSafetyResource):string {
 export async function readSafetyMeasure(identity:QueueIdentity,r:RepairSafetyResource) {
   crewReadGuard(identity);const response=await apiClient.get<SafetyView>(measurePath(r));crewReadGuard(identity);
   const v=response.data,etag=String(response.headers.etag??'');
+  const links=v.eligibleEvidenceLinks;
   if(v.id!==r.measureId||v.projectId!==r.projectId||v.responsibleActorId!==identity.actor||!api.isRepairItemVersion(v.version)||
-    etag!==`"${v.version}"`||!Array.isArray(v.checks)||!Array.isArray(v.warnings)||!Array.isArray(v.acknowledgements))throw Error('safety_readback_invalid');
+    etag!==`"${v.version}"`||!Array.isArray(v.checks)||!Array.isArray(v.warnings)||!Array.isArray(v.acknowledgements)||
+    (links!=null&&(!Array.isArray(links)||links.some(l=>!api.isCrewResourceId(l.evidenceLinkId)||!api.isCrewResourceId(l.fileId))||
+      new Set(links.map(l=>l.evidenceLinkId.toLowerCase())).size!==links.length)))throw Error('safety_readback_invalid');
   return {data:v,etag};
+}
+
+/** Crew-only discovery from f547f64. Empty means no currently assigned unresolved measure. */
+export async function listCrewSafetyMeasures(identity:QueueIdentity,r:Omit<RepairSafetyResource,'measureId'>):Promise<string[]> {
+  crewReadGuard(identity);
+  const response=await apiClient.get<{measureIds:string[]}>(itemPath(r)+'/safety-measures');crewReadGuard(identity);
+  const ids=response.data?.measureIds;
+  if(!Array.isArray(ids)||!ids.every(api.isCrewResourceId)||new Set(ids.map(id=>id.toLowerCase())).size!==ids.length)throw Error('safety_list_invalid');
+  return ids;
+}
+
+/** Read API080 twice: never attach monitoring or decisions to a replaced assignment/binding. */
+export async function readAssignedRepairFacts(identity:QueueIdentity,projectId:string,taskId:string) {
+  crewReadGuard(identity);
+  const before=await api.getFieldInspectionTaskDetailReal(projectId,taskId);crewReadGuard(identity);
+  api.validateCrewTaskDetail(before.data,before.etag,projectId,taskId,identity.actor);
+  const context=before.data.repairContext;
+  if(!context)return null;
+  if(![context.packageId,context.itemId,context.bindingId].every(api.isCrewResourceId)||!api.isRepairItemVersion(context.itemVersion))throw Error('crew_repair_source_invalid');
+  const source=JSON.stringify([before.etag,before.data.assignmentId,context]);
+  const resource={projectId,packageId:context.packageId,itemId:context.itemId};
+  const ids=await listCrewSafetyMeasures(identity,resource);
+  const measures:Awaited<ReturnType<typeof readSafetyMeasure>>[]=[];
+  for(const measureId of ids)measures.push(await readSafetyMeasure(identity,{...resource,measureId}));
+  const after=await api.getFieldInspectionTaskDetailReal(projectId,taskId);crewReadGuard(identity);
+  api.validateCrewTaskDetail(after.data,after.etag,projectId,taskId,identity.actor);
+  if(source!==JSON.stringify([after.etag,after.data.assignmentId,after.data.repairContext]))throw Error('crew_repair_source_changed');
+  return {context,measures};
 }
 export type SafetyCommand = {kind:'review-request';reason:string} | {kind:'installation';firstCheckDueAt:string;reason:string} |
   {kind:'check';result:'Safe'|'NeedsReplacement'|'Danger';findings:string;evidenceIds:string[]} | {kind:'acknowledgement';warningId:string;reason:string};
@@ -64,7 +96,4 @@ export function safetyRequest(r:RepairSafetyResource,c:SafetyCommand) {
   if(!api.isCrewResourceId(c.warningId))throw Error('safety_warning_source_required');
   return {path:path+`/warnings/${c.warningId}/acknowledgement`,body:{reason:text(c.reason)}};
 }
-/** There is no Crew measure list or current decision/review-request read head in audited bootstrap. */
-export const CREW_REVIEW_GATE='READBACK_GAP: chưa có nguồn quyết định hiện hành và GET review request cho Crew.';
-export const CREW_SAFETY_GATE='BE_DISCOVERY_GAP: chưa có danh sách measure/warning từ nguồn Crew. Cần định danh máy chủ đã xác nhận.';
 export { currentQueueIdentity };

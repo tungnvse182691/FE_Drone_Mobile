@@ -21,3 +21,9 @@ test('C10BC mounted sync hides stale identity and ignores late probe after unmou
    assert.equal(h.nodes(tree).filter(n=>n.props.title===label||n.props.onPress&&n.children.join('').includes(label)).length,0);
  h.unmount();active=false;resolve({deviceId:null,capability:{}});await wait();assert.equal(reads,1);assert.equal(h.render(),null);
 });
+
+test('Crew repair facts shows compact authoritative safety/decision readback and hides it after session change',async()=>{
+ let active=true,reads=0;const identity={actor:'crew',scope:'A'},facts={context:{finalDecision:{decisionId:'new',result:'CONFIRMED',at:'2026-11-14T00:00:00Z'},reviewRequests:[{requestId:'request',decisionId:'old',reason:'Kiểm tra lại',at:'2026-11-13T00:00:00Z'}]},measures:[{data:{id:'measure',installedAt:null,firstCheckDueAt:null,checks:[],warnings:[],acknowledgements:[],eligibleEvidenceLinks:[]}}]};
+ const h=mount('src/components/crew/CrewRepairFacts.tsx','CrewRepairFacts',{'../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>identity,crewReadGuard:()=>{if(!active)throw Error('session');},readAssignedRepairFacts:async()=>{reads++;return facts;}},'../../offline/upload-queue':{sameQueueIdentity:()=>active},'./CrewTaskFacts':{crewHistoryTime:v=>v}},{projectId:'project',taskId:'task'});
+ let tree=h.render();assert.equal(reads,0);h.nodes(tree).find(n=>n.props.title==='Xem hồ sơ phụ trách').props.onPress();await wait();tree=h.render();assert.equal(reads,1);assert.match(JSON.stringify(tree),/Đã xác nhận kết quả/);assert.match(JSON.stringify(tree),/Quyết định trước/);assert.match(JSON.stringify(tree),/Chưa lắp đặt/);active=false;assert.equal(h.render(),null);h.unmount();
+});

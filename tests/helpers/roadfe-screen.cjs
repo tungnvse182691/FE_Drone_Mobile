@@ -68,6 +68,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/reporter/PhotoUploadStatus'))return{PhotoUploadStatus:'PhotoUploadStatus'};
     if(name.endsWith('/components/ReporterHeader'))return{ReporterHeader:'ReporterHeader'};
     if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
+    if(name.endsWith('/crew/CrewRepairFacts'))return{CrewRepairFacts:'CrewRepairFacts'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};
     if(name.endsWith('/components/InputField'))return{InputField:'InputField'};
     if(name.endsWith('/components/SafeAreaScreen'))return{SafeAreaScreen:'SafeAreaScreen'};
