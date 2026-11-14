@@ -9,6 +9,7 @@ import { sameQueueIdentity } from '../../offline/upload-queue';
 import { crewHistoryTime } from './CrewTaskFacts';
 import { CrewSafetyInstallation } from './CrewSafetyInstallation';
 import { CrewSafetyCheck } from './CrewSafetyCheck';
+import { CrewSafetyAcknowledgement } from './CrewSafetyAcknowledgement';
 
 /** Current assigned Crew read projection. Mutations use separate durable command flows. */
 export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:string}) {
@@ -18,6 +19,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
   const [loaded,setLoaded]=useState(false);
   const [installation,setInstallation]=useState<null|{projectId:string;packageId:string;itemId:string;measureId:string}>(null);
   const [check,setCheck]=useState<typeof installation>(null);
+  const [ack,setAck]=useState<null|{resource:NonNullable<typeof installation>;warningId:string}>(null);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
@@ -55,7 +57,10 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
               <Text style={styles.hint}>{m.checks.length} lần kiểm tra · {new Set((m.eligibleEvidenceLinks??[]).map(l=>l.fileId)).size} ảnh đủ điều kiện</Text>
               {!m.installedAt?<Button variant="secondary" title="Xác nhận lắp đặt" onPress={()=>setInstallation({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
               {m.installedAt?<Button variant="secondary" title="Kiểm tra an toàn" onPress={()=>setCheck({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
-              {m.warnings.some(w=>!m.acknowledgements.some(a=>a.warningId===w.id))?<Text style={styles.warning}>Có cảnh báo cần xác nhận</Text>:null}
+              {m.warnings.filter(w=>w.intendedActorId===identity.actor&&!m.acknowledgements.some(a=>a.warningId===w.id)).map(w=><View key={w.id} style={styles.warningCard}>
+                <Text style={styles.warning}>Cảnh báo cần tiếp nhận</Text><Text style={styles.hint}>{w.reason}</Text>
+                <Button variant="secondary" title="Tiếp nhận cảnh báo" onPress={()=>setAck({resource:{projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id},warningId:w.id})}/>
+              </View>)}
             </View>
           </View>)}
         </View>
@@ -70,6 +75,7 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
     </>:null}
     {installation?<CrewSafetyInstallation identity={identity} resource={installation} onClose={()=>setInstallation(null)} onSaved={()=>void read()}/>:null}
     {check?<CrewSafetyCheck identity={identity} resource={check} taskId={taskId} onClose={()=>setCheck(null)} onSaved={()=>void read()}/>:null}
+    {ack?<CrewSafetyAcknowledgement identity={identity} resource={ack.resource} warningId={ack.warningId} onClose={()=>setAck(null)} onSaved={()=>void read()}/>:null}
   </Card>;
 }
 const styles=StyleSheet.create({
@@ -80,4 +86,5 @@ const styles=StyleSheet.create({
   row:{flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,paddingVertical:spacing.xs},
   hint:{...typography.caption,color:colors.secondary},notice:{...typography.bodyMd,padding:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
   warning:{...typography.caption,color:colors.secondary,fontWeight:'700'},request:{gap:spacing.xs,paddingVertical:spacing.xs},
+  warningCard:{padding:spacing.sm,gap:spacing.sm,borderRadius:8,borderWidth:1,borderColor:'#F1C8C4',backgroundColor:'#FFF5F4'},
 });

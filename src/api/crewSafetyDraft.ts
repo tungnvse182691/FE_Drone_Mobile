@@ -28,10 +28,10 @@ export async function prepareSafetyIntent(identity:QueueIdentity,resource:Repair
     proof:{kind:'safety',resource:r,command:copy,ifMatch:before.etag,versionSource:'SAFETY_MONITORING',
       ...(copy.kind==='check'?{priorCheckIds:before.data.checks.map(c=>c.id)}:{})}});
 }
-/** Exact API153/154 transport. Other mutation UIs are delivered in separate checkpoints. */
+/** Exact API153/154/155 transport. Review requests use their own item version source. */
 export async function dispatchSafetyIntent(record:OfflineJournalRecord) {
   crewReadGuard(record.identity);
-  if(!['installation','check'].includes((record.proof?.command as SafetyCommand|undefined)?.kind??''))throw Error('BE_FIXTURE_BLOCKED');
+  if(!['installation','check','acknowledgement'].includes((record.proof?.command as SafetyCommand|undefined)?.kind??''))throw Error('BE_FIXTURE_BLOCKED');
   const c=record.proof.command as SafetyCommand,r=record.proof.resource as RepairSafetyResource;
   if(record.proof.kind!=='safety'||record.proof.versionSource!=='SAFETY_MONITORING'||c.kind==='review-request')throw Error('safety_source_gap');
   const request=safetyRequest(r,c);
