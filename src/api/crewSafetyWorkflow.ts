@@ -20,7 +20,7 @@ export async function readAssignedFieldFacts(identity:QueueIdentity,projectId:st
   const after=await api.getFieldInspectionTaskDetailReal(projectId,taskId);crewReadGuard(identity);
   api.validateCrewTaskDetail(after.data,after.etag,projectId,taskId,identity.actor);
   if(after.etag!==before.etag||after.data.assignmentId!==before.data.assignmentId)throw Error('crew_task_changed');
-  return {geometry:geometry?.data??null,geometryUnavailable,history};
+  return {geometry:geometry?.data??null,geometryUnavailable,history,defectTarget:before.data.defectTarget??null};
 }
 export interface SafetyView {
   id:string;projectId:string;defectId:string;formalObligationId:string;safetyObligationId:string;responsibleActorId:string;

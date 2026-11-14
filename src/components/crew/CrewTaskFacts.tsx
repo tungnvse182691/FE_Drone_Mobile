@@ -7,7 +7,7 @@ import { Card } from '../Card';
 import { readAssignedFieldFacts, currentQueueIdentity, crewReadGuard } from '../../api/crewSafetyWorkflow';
 import { sameQueueIdentity } from '../../offline/upload-queue';
 import { RoadGuardMapLibre } from '../map/RoadGuardMapLibre';
-import { crewRouteCoordinates } from '../../utils/crew-map-geometry';
+import { crewDefectCoordinates, crewRouteCoordinates } from '../../utils/crew-map-geometry';
 
 /** Kind values verified against Candidate3 FieldInspectionWorkflowRepository emit calls. */
 export function crewEventLabel(kind: string): string {
@@ -28,10 +28,11 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   const [showGeometry,setShowGeometry]=useState(false);
   const [showFacts,setShowFacts]=useState(false);
   const [showAllHistory,setShowAllHistory]=useState(false);
+  const [selectedSegment,setSelectedSegment]=useState<string|null>(null);
   const sequence=useRef(0);
   React.useEffect(()=>()=>{sequence.current++;},[]);
   const read=async()=>{
-    if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);setShowGeometry(false);setShowAllHistory(false);
+    if(!identity||busy)return;const n=++sequence.current;setBusy(true);setError('');setFacts(null);setShowGeometry(false);setShowAllHistory(false);setSelectedSegment(null);
     try {const result=await readAssignedFieldFacts(identity,projectId,taskId);crewReadGuard(identity);if(n===sequence.current){setFacts(result);setShowFacts(true);}}
     catch(e) {if(n===sequence.current && sameQueueIdentity(identity)) {
       const status=(e as {response?:{status?:number}})?.response?.status;
@@ -39,7 +40,10 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
     }} finally {if(n===sequence.current)setBusy(false);}
   };
   try {if(!identity)return null;crewReadGuard(identity);}catch{return null;}
-  const routeCoordinates=facts?.geometry?crewRouteCoordinates(facts.geometry.route):[];
+  const target=crewDefectCoordinates(facts?.defectTarget);
+  const geometrySource=selectedSegment?facts?.geometry?.segments.find(s=>s.id===selectedSegment):facts?.geometry?.route;
+  const routeCoordinates=geometrySource?crewRouteCoordinates(geometrySource):[];
+  const center=routeCoordinates[0]??(target?[target.longitude,target.latitude] as [number,number]:null);
   const events=facts?.history.events??[];
   const visibleEvents=showAllHistory?events:events.slice(0,3);
   return <Card style={styles.card}>
@@ -54,14 +58,14 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
       <Text style={[typography.labelLg,styles.flex]}>{showFacts?'Thu gọn hồ sơ':'Xem hồ sơ đã tải'}</Text><MaterialIcons name={showFacts?'expand-less':'expand-more'} size={22} color={colors.brandGold}/>
     </Pressable> : null}
     {facts&&showFacts?<View style={styles.group}>
-      {facts.geometry?<View style={styles.group}>
-        <View style={styles.locationSummary}><MaterialIcons name="route" size={22} color={colors.brandGold}/><View style={styles.flex}><Text style={typography.labelLg}>Dữ liệu tuyến đường</Text><Text style={styles.hint}>{facts.geometry.segments.length} phân đoạn</Text></View></View>
-        {routeCoordinates.length?<View style={{gap:spacing.xs}}>
-          <Text style={typography.labelLg}>Tuyến nhiệm vụ</Text>
-          <RoadGuardMapLibre style={{height:260,borderRadius:12,overflow:'hidden'}} center={routeCoordinates[0]} routeCoordinates={routeCoordinates} markers={[]} />
-          <Text style={styles.hint}>Đường tuyến từ hồ sơ máy chủ; chưa phải điểm hư hại để dẫn đường.</Text>
-        </View>:<View style={styles.message}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={[styles.hint,styles.flex]}>Chưa có tọa độ phù hợp để hiển thị bản đồ.</Text></View>}
-      </View>:<View style={styles.message}><MaterialIcons name="location-off" size={20} color={colors.secondary}/><View style={styles.flex}><Text style={typography.labelLg}>Vị trí chưa sẵn sàng</Text><Text style={styles.hint}>Bạn vẫn có thể xem lịch sử bên dưới.</Text></View></View>}
+      <View style={styles.group}>
+        <View style={styles.locationSummary}><MaterialIcons name="route" size={22} color={colors.brandGold}/><View style={styles.flex}><Text style={typography.labelLg}>Bản đồ nhiệm vụ</Text><Text style={styles.hint}>{target?'Điểm hư hại từ hồ sơ nhiệm vụ':'Chưa có vị trí hư hại'}</Text></View></View>
+        {facts.geometry?<View style={styles.mapChoices}>
+          {[{id:null,label:'Tuyến'},...facts.geometry.segments.map(s=>({id:s.id,label:`Đoạn ${s.sequence}`}))].map(choice=><Pressable key={choice.id??'route'} accessibilityRole="button" accessibilityState={{selected:selectedSegment===choice.id}} onPress={()=>setSelectedSegment(choice.id)} style={[styles.mapChoice,selectedSegment===choice.id&&styles.mapChoiceActive]}><Text style={typography.labelSm}>{choice.label}</Text></Pressable>)}
+        </View>:null}
+        {center?<RoadGuardMapLibre style={{height:260,borderRadius:12,overflow:'hidden'}} center={center} routeCoordinates={routeCoordinates} markers={target?[{id:'defect-target',title:'Vị trí hư hại',coordinate:[target.longitude,target.latitude],type:'defect'}]:[]} />:null}
+        {!routeCoordinates.length?<View style={styles.message}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={[styles.hint,styles.flex]}>{facts.geometry?'Chưa có hình học bản đồ cho phần đang chọn.':'Tuyến chưa sẵn sàng. Bạn vẫn có thể xem lịch sử.'}</Text></View>:null}
+      </View>
       <View style={styles.historyHeading}><MaterialIcons name="history" size={20} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Lịch sử xử lý</Text><Text style={styles.hint}>{events.length} sự kiện</Text></View>
       {events.length===0?<Text style={styles.hint}>Chưa có sự kiện được ghi nhận.</Text>:visibleEvents.map(e=><View key={e.id} style={styles.event}>
         <View style={styles.eventDot}/><View style={styles.flex}><Text style={typography.bodyMd}>{crewEventLabel(e.kind)}</Text><Text style={styles.hint}>{crewHistoryTime(e.occurredAt)}</Text>{e.reason&&['REJECTED','SUPPLEMENT','REVIEWED'].includes(e.kind)?<Text style={styles.hint}>{e.reason}</Text>:null}</View>
@@ -84,6 +88,9 @@ const styles=StyleSheet.create({
   heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   flex:{flex:1,minWidth:0},
   hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
+  mapChoices:{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm},
+  mapChoice:{minHeight:48,paddingHorizontal:spacing.md,justifyContent:'center',borderWidth:1,borderColor:'#E8D9A8',borderRadius:12},
+  mapChoiceActive:{backgroundColor:'#F6ECCD',borderColor:colors.brandGold},
   iconBox:{width:36,height:36,borderRadius:10,backgroundColor:'#FFF9EA',alignItems:'center',justifyContent:'center'},
   refresh:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:24},
   disclosure:{minHeight:48,paddingHorizontal:spacing.md,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:'#FFFCF4',borderRadius:12},

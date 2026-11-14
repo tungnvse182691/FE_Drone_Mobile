@@ -22,6 +22,15 @@ test('T04 absent presentation data stays absent, no invented WO/GPS/defect',()=>
 test('T04 unknown mode is not silently mapped to measure-only',()=>{
  const t=harness().api.crewTaskFromWire({...wire(),mode:'NORMAL'});assert.equal(t.task_mode,'UNKNOWN');assert.equal(t.rawMode,'NORMAL');
 });
+
+test('Crew navigation reads only API-080 defectTarget and does not grant repair authority',()=>{
+ const {api}=harness();
+ for(const target of [null,undefined,{longitude:181,latitude:10},{longitude:106,latitude:'10'}])
+  assert.equal(api.crewTaskFromWire(wire(),{defectTarget:target}).coordinates,null);
+ const task=api.crewTaskFromWire(wire(),{defectTarget:{longitude:106.5,latitude:10.5}},'"version"');
+ assert.equal(JSON.stringify(task.coordinates),JSON.stringify({longitude:106.5,latitude:10.5}));
+ assert.ok(api.crewTaskActionBlock(task));
+});
 for(const missing of ['projectId','id','version','crewId'])test('T04 missing '+missing+' fails identity validation',()=>{
  const {api}=harness();api.validateCrewTaskIdentity(wire(),actor);assert.throws(()=>api.validateCrewTaskIdentity({...wire(),[missing]:''},actor));
 });

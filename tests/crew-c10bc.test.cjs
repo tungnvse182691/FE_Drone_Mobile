@@ -17,11 +17,11 @@ test('C10BC assigned read refuses account switch and stale geometry version',asy
 });
 
 test('C10BC unavailable geometry does not suppress authorized empty history',async()=>{
- const i={actor,role:'REPAIR_CREW'},detail={assignmentId:randomUUID()};let history=0;
+ const i={actor,role:'REPAIR_CREW'},detail={assignmentId:randomUUID(),defectTarget:{longitude:106.5,latitude:10.5}};let history=0;
  const a=load('src/api/crewSafetyWorkflow.ts',{'../offline/upload-queue':{sameQueueIdentity:()=>true},'./crewApi':{
  validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:detail,etag:'same'}),
  getFieldTaskGeometryReal:async()=>{throw {response:{status:409}};},getFieldTaskHistoryReal:async()=>{history++;return {events:[],assignments:[]};}}});
- const r=await a.readAssignedFieldFacts(i,project,task);assert.equal(r.geometry,null);assert.equal(r.geometryUnavailable,true);assert.equal(r.history.events.length,0);assert.equal(history,1);
+ const r=await a.readAssignedFieldFacts(i,project,task);assert.equal(r.geometry,null);assert.equal(r.geometryUnavailable,true);assert.equal(r.history.events.length,0);assert.equal(history,1);assert.equal(r.defectTarget,detail.defectTarget);
 });
 test('C10BC safety accepts monitoring ETag only, rejects wrong responsible actor',async()=>{
  let body={id:randomUUID(),projectId:project,responsibleActorId:actor,version,checks:[],warnings:[],acknowledgements:[]},tag=`"${version}"`;

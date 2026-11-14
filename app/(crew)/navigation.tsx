@@ -107,9 +107,9 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
           markers={[
             {
               id: `defect-${task.id}`,
-              title: defectTypeLabel(task.defect_type_code),
-              label: defectTypeLabel(task.defect_type_code),
-              subtitle: `${task.chainage} • Tuyến ${task.route_code} • ${task.section_name}`,
+              title: defectTypeLabel(task.defect_type_code) || 'Vị trí hư hại',
+              label: defectTypeLabel(task.defect_type_code) || 'Vị trí hư hại',
+              subtitle: [task.chainage,task.route_code,task.section_name].filter(Boolean).join(' • '),
               coordinate: [task.coordinates.longitude, task.coordinates.latitude],
               type: 'defect',
             },

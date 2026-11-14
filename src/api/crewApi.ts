@@ -36,6 +36,7 @@ import { apiClient } from './client';
 import { parseProblemDetails, type ParsedProblemDetails } from './problemDetails';
 import type { CrewFieldTaskCard } from './mock/field-tasks';
 import type { TaskMode } from '../types/enums';
+import type { CrewWgs84Line } from '../utils/crew-map-geometry';
 
 export interface CrewProject { projectId:string; projectCode:string; name:string; status:string }
 /** API-049: Crew coverage is restricted by active task/binding, not all memberships. */
@@ -62,8 +63,8 @@ export function isCrewResourceId(value: unknown): value is string {
 export interface FieldTaskGeometry {
   schemaVersion: number; taskId: string; projectId: string; routeVersionId: string; segmentSetId: string;
   layoutRevisionId: string | null; slabId: string | null; mapPublicationId: string | null; crsProfileRevisionId: string | null;
-  route: { spatialSrid: number; wkt: string; profileStatus: string };
-  segments: {id:string;sequence:number;fromOffsetMeters:number|null;toOffsetMeters:number|null;startStationMeters:number|null;endStationMeters:number|null;spatialSrid:number|null;wkt:string|null}[];
+  route: { spatialSrid: number; wkt: string; profileStatus: string; wgs84Geometry?:CrewWgs84Line|null };
+  segments: {id:string;sequence:number;fromOffsetMeters:number|null;toOffsetMeters:number|null;startStationMeters:number|null;endStationMeters:number|null;spatialSrid:number|null;wkt:string|null;wgs84Geometry?:CrewWgs84Line|null}[];
   layout: unknown;
 }
 export interface FieldTaskHistory {
@@ -150,11 +151,15 @@ export function fastTrackRepairBlock(
 }
 export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: FieldTaskViewFact, etag?: string): CrewTask {
   const rawMode = detail?.mode ?? item.mode;
+  const target = detail?.defectTarget;
+  const coordinates = target && typeof target.longitude === 'number' && Number.isFinite(target.longitude) && Math.abs(target.longitude) <= 180 &&
+    typeof target.latitude === 'number' && Number.isFinite(target.latitude) && Math.abs(target.latitude) <= 90
+    ? { longitude: target.longitude, latitude: target.latitude } : null;
   return {
     id: item.id, projectId: item.projectId, version: detail?.version ?? item.version, crewId: item.crewId,
     status: detail?.status ?? item.status, rawMode,
     task_mode: (['MEASURE_ONLY','INSPECT_AND_REPAIR','INSPECT_ONLY'].includes(rawMode) ? rawMode : 'UNKNOWN') as CrewTask['task_mode'],
-    wo_code: '', title: '', defect_type_code: '', coordinates: null,
+    wo_code: '', title: '', defect_type_code: '', coordinates,
     route_code: '', section_name: '', chainage: '', locality: '', due_label: detail?.dueAt ?? '',
     due_urgency: 'normal', distance_label: '', defect_location: '', description: detail?.instructions ?? '',
     repair_method: '', safety_note: '', batch_size: item.defectIds.length, detail, etag,
@@ -433,6 +438,7 @@ export function isLegacyRepairQueueEntry(kind: unknown, payload: unknown): boole
 
 /** Chi tiết nhiệm vụ hiện trường từ GET /projects/{projectId}/field-inspection-tasks/{taskId} (API-080). */
 export interface FieldTaskViewFact {
+  defectTarget?: {longitude:number;latitude:number}|null;
   id: string;
   projectId: string;
   defectId: string;
