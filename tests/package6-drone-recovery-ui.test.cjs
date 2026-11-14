@@ -80,10 +80,10 @@ test('Operator restores a hashed local file without mislabelling it missing',asy
 
 test('Operator one press transfers verified video then submits and reads the dataset receipt',async()=>{
  const file={...saved,taskId:id(2),projectId:id(3),availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
- const calls=[],pending=deferred();let receipt=null;
+ const calls=[],pending=deferred(),preflight=deferred();let receipt=null,holdPreflight=false;
  const task={id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',scope:[{routeVersionId:id(5)}],version:'version'};
  const s=drone('upload',{
-  getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:'"version"'}),
+  getOperatorSurveyTaskDetailReal:async()=>{if(holdPreflight)await preflight.promise;return {data:task,etag:'"version"'};},
   listEligibleOperatorDronesReal:async()=>({items:[{id:id(7),serialNo:'QA'}],nextCursor:null}),
  },{params:{taskId:id(2),projectId:id(3)},modules:{
   '../../src/api/droneSelectionJournal':{openDroneSelectionJournal:async()=>({read:async()=>({droneId:id(7)}),close(){}})},
@@ -99,13 +99,24 @@ test('Operator one press transfers verified video then submits and reads the dat
  s.render();await s.flush();await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();
  s.nodes().find(n=>n.props.accessibilityLabel==='Thời gian ghi hình').props.onChangeText('2026-11-14 08:30');await s.flush();
  const send=()=>s.nodes().find(n=>n.props.title==='Nộp bộ dữ liệu 4K RGB'||n.props.title==='Đang gửi dữ liệu…');
- assert.equal(send().props.disabled,false);send().props.onPress();await s.flush();
- assert.equal(send().props.disabled,true);send().props.onPress();await s.flush();assert.equal(calls.length,1);
+ assert.equal(send().props.disabled,false);holdPreflight=true;const submit=send().props.onPress;submit();await s.flush();
+ assert.ok(s.nodes().some(n=>n.props.testID==='dataset-transfer-card'),'preflight must not leave a blank screen');
+ assert.match(JSON.stringify(s.nodes()),/Đang chuẩn bị gửi/);
+ assert.equal(s.nodes().filter(n=>n.type==='ActivityIndicator').length,1);
+ preflight.resolve();await s.flush();
+ assert.equal(send(),undefined);submit();await s.flush();assert.equal(calls.length,1);
+ assert.ok(s.nodes().some(n=>n.props.testID==='dataset-transfer-card'));
+ assert.ok(!s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
+ assert.ok(!s.nodes().some(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4'));
+ assert.equal(s.nodes().filter(n=>n.type==='ActivityIndicator').length,0,'byte progress must not show a second spinner');
+ const progress=s.nodes().find(n=>n.props.accessibilityRole==='progressbar');assert.equal(progress.props.accessibilityValue.now,0);
  assert.ok(s.nodes().some(n=>n.props.accessibilityLiveRegion==='polite'));
  assert.ok(!s.nodes().some(n=>n.props.accessibilityRole==='status'),'unsupported Android role must not return');
  pending.resolve();await s.flush();
  assert.deepEqual(calls.map(c=>c[0]),['transfer','submit','read']);
  assert.deepEqual(Array.from(calls[1][1].payload.videoFileIds),[id(8)]);assert.equal(calls[1][1].payload.deviceId,id(7));
  assert.equal(calls[1][1].ifMatch,'"version"');
- assert.match(JSON.stringify(s.nodes()),/Máy chủ đã nhận bộ dữ liệu/);s.unmount();
+ assert.match(JSON.stringify(s.nodes()),/Máy chủ đã nhận bộ dữ liệu/);
+ assert.ok(!s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
+ assert.equal(s.nodes().filter(n=>n.type==='ActivityIndicator').length,0);s.unmount();
 });

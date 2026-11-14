@@ -345,7 +345,7 @@ export default function DroneUploadScreen() {
   const handleStartSubmitDataset = async () => {
     const isCurrent=scope.capture();
     if(!isCurrent()||sending.current||copying||draftLoading||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
-    sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);
+    sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);setTransferMessage('Đang chuẩn bị gửi…');
     const guard=()=>{if(!isCurrent()||!mounted.current)throw Error('operator_session_changed');};
     try {
       if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(recordedAt))throw Error('recorded_at_invalid');
@@ -385,7 +385,7 @@ export default function DroneUploadScreen() {
   };
   const handleRetainedDataset = async (replay=false) => {
     const isCurrent=scope.capture();if(!isCurrent()||sending.current||!pendingDataset)return;
-    sending.current=true;setSubmitting(true);setSubmitError(null);
+    sending.current=true;setSubmitting(true);setSubmitError(null);setTransferMessage('Đang đọc lại kết quả nộp…');
     try {
       let intent=pendingDataset;
       if(replay)intent=await replayDroneDataset({taskId:intent.taskId,projectId:intent.projectId,ifMatch:intent.ifMatch!,payload:intent.body as unknown as DroneDatasetPlan['payload']});
@@ -422,6 +422,7 @@ export default function DroneUploadScreen() {
     <Pressable accessibilityRole="button" accessibilityLabel="Quay lại" onPress={handleBack} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.secondary}/></Pressable>
     <View style={{flex:1}}><Text style={typography.titleMd}>Dữ liệu khảo sát</Text><Text style={styles.caption}>{params.taskId?`Nhiệm vụ ${params.taskId.slice(0,8)}`:'Chọn nhiệm vụ để tiếp tục'}</Text></View>
   </View>}>
+    {!submitting&&!received&&!pendingDataset?<>
     {!params.taskId?<Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={()=>router.push('/(drone)/requests')}/>:null}
     <Card style={styles.card}>
       <View style={styles.row}><MaterialIcons name="flight" size={23} color={colors.secondary}/><Text style={styles.heading}>Máy bay</Text>
@@ -454,11 +455,26 @@ export default function DroneUploadScreen() {
       {!pendingDataset?<Button title="Lưu nháp trên máy" variant="secondary" disabled={submitting||copying||draftLoading||!params.taskId} onPress={()=>void saveDraft()}/>:null}
       {draftMessage?<Text accessibilityLiveRegion="polite" style={styles.caption}>{draftMessage}</Text>:null}
     </Card>
-    {transferMessage?<View accessibilityLiveRegion="polite" style={styles.notice}>{submitting?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name={received?'check-circle-outline':'info-outline'} size={22} color={received?colors.success:colors.secondary}/>}<View style={{flex:1,gap:8}}><Text style={styles.noticeText}>{transferMessage}</Text>{submitting&&transferMessage.startsWith('Đang tải')?<><View style={styles.progressTrack}><View style={[styles.progressFill,{width:`${uploadProgress}%`}]}/></View><Text style={styles.caption}>{uploadProgress}%</Text></>:null}</View></View>:null}
-    {pendingDataset?<Card style={styles.card}><Text style={styles.heading}>Yêu cầu đã lưu</Text><Text style={styles.caption}>{pendingDataset.status==='DATASET_CONFIRMED'?'Đã có biên nhận máy chủ.':'Giữ nguyên tệp và yêu cầu nộp để đối soát.'}</Text>
+    </>:null}
+    {transferMessage||pendingDataset?<View testID="dataset-transfer-card" accessibilityLiveRegion="polite"><Card style={[styles.card,styles.transferCard,received&&styles.transferComplete]}>
+      <View style={styles.row}>
+        <View style={[styles.transferIcon,received&&styles.completeIcon]}><MaterialIcons name={received?'check-circle-outline':'cloud-upload'} size={28} color={received?colors.success:colors.primary}/></View>
+        <View style={styles.transferCopy}><Text style={styles.heading}>{received?'Đã gửi dữ liệu':submitting?'Đang gửi khảo sát':pendingDataset?'Yêu cầu nộp đã lưu':'Cần tiếp tục gửi'}</Text>{videoFile?<Text numberOfLines={1} ellipsizeMode="middle" style={styles.caption}>{videoName}</Text>:null}</View>
+      </View>
+      <View style={styles.transferStatus}>
+        {submitting&&!transferMessage?.startsWith('Đang tải')?<ActivityIndicator size="small" color={colors.primary}/>:null}
+        <Text style={styles.noticeText}>{transferMessage??'Đọc lại kết quả để kiểm tra trạng thái mới nhất.'}</Text>
+        {submitting&&transferMessage?.startsWith('Đang tải')?<Text style={styles.percentage}>{uploadProgress}%</Text>:null}
+      </View>
+      {submitting&&transferMessage?.startsWith('Đang tải')?<View accessibilityRole="progressbar" accessibilityLabel="Tiến trình tải tệp" accessibilityValue={{min:0,max:100,now:uploadProgress}} style={styles.progressTrack}><View style={[styles.progressFill,{width:`${uploadProgress}%`}]}/></View>:null}
+    {pendingDataset&&!submitting?<View style={styles.recoveryActions}>
       {pendingDataset.status==='DATASET_CONFIRMED'?<Button title="Đọc lại kết quả nộp" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:pendingDataset.status==='DATASET_UNKNOWN'?<Button title="Gửi lại đúng yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset(true)}/>:pendingDataset.status==='PREPARED'?<Button title="Tiếp tục nộp yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:<Text style={styles.caption}>Yêu cầu không được máy chủ chấp nhận. Kiểm tra lại nhiệm vụ trước khi nộp một bộ dữ liệu mới.</Text>}
-    </Card>:<Button title={submitting?'Đang gửi dữ liệu…':'Nộp bộ dữ liệu 4K RGB'} variant="primary" style={styles.primaryAction} loading={submitting} disabled={submitting||copying||draftLoading||!videoFile?.checksumSha256||!selectedDroneId||!recordedAt.trim()||!journalReady} onPress={()=>void handleStartSubmitDataset()}/>}
+    </View>:null}
+    </Card></View>:null}
+    {!submitting?<>
+    {!pendingDataset?<Button title="Nộp bộ dữ liệu 4K RGB" variant="primary" style={styles.primaryAction} disabled={copying||draftLoading||!videoFile?.checksumSha256||!selectedDroneId||!recordedAt.trim()||!journalReady} onPress={()=>void handleStartSubmitDataset()}/>:null}
     {submitError?<Text accessibilityRole="alert" style={styles.error}>{submitError}</Text>:null}
+    </>:null}
   </SafeAreaScreen>;
 }
 const styles=StyleSheet.create({
@@ -479,4 +495,12 @@ const styles=StyleSheet.create({
   noticeText:{...typography.caption,color:colors.secondary,lineHeight:20,flex:1},
   error:{...typography.bodyMd,color:colors.error,marginVertical:8},
   primaryAction:{minHeight:52,borderRadius:12,backgroundColor:colors.primary,borderColor:colors.primary},
+  recoveryActions:{gap:12},
+  transferCard:{padding:20,gap:20},
+  transferCopy:{flex:1,gap:4},
+  transferIcon:{width:52,height:52,borderRadius:16,backgroundColor:operatorAppearance.pressed,alignItems:'center',justifyContent:'center'},
+  transferStatus:{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt},
+  percentage:{...typography.bodyMd,color:colors.secondary,fontWeight:'700'},
+  transferComplete:{borderColor:colors.success},
+  completeIcon:{backgroundColor:colors.surfaceAlt},
 });
