@@ -13,8 +13,9 @@ import { typography, spacing, colors } from '../../design-tokens';
 type Runtime = Awaited<ReturnType<typeof openDroneTaskJournal>>;
 type Saved = Awaited<ReturnType<Runtime['read']>>;
 /** One dispatcher for detail/decline/recovery. Opening the panel never posts. */
-export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand, children}: {
+export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand, onResolved, children}: {
   taskId: string; operation: 'accept' | 'decline'; collapsed?: boolean; onExpand?: () => void;
+  onResolved?: () => void;
   children?: React.ReactNode;
 }) {
   const scope = useOperatorReadScope(taskId);
@@ -50,6 +51,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
     if (dataScope !== scope.key || !runtime || !ready || lock.current || !isCurrent()) return;
     if (action==='prepare' && !canPrepare) return;
     lock.current=true;setBusy(true);setError(null);
+    let resolvedStatus: string | null = null;
     try {
       if (action === 'prepare') await runtime.prepare(operation,reason);
       if (action === 'dispatch' && saved) await runtime.dispatch(saved.command.key,true);
@@ -65,9 +67,18 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
         'Máy chủ báo xung đột. Lệnh gốc được giữ nguyên; đọc lại nhiệm vụ để kiểm tra. Không tạo lệnh mới tự động.' :
         'Chưa xác nhận được kết quả. Kiểm tra lịch sử bên dưới trước khi quyết định gửi lại đúng lệnh.');
     } finally {
-      try { const row=await runtime.read(); if(isCurrent())setSaved(row); }
+      try { const row=await runtime.read(); if(isCurrent()) {
+        setSaved(row);
+        // Only the durable, validated receipt resolves a command. A current
+        // task GET or a transport response alone must not announce success.
+        if (action==='dispatch' && row?.phase==='RECEIPT' && row.receipt) resolvedStatus=row.receipt.data.status;
+      } }
       catch { if(isCurrent()){setReady(false);setError('Không đọc được lịch sử yêu cầu; thao tác gửi được khóa để bảo toàn dữ liệu.');} }
       if(isCurrent()){lock.current=false;setBusy(false);}
+    }
+    if (resolvedStatus && isCurrent()) {
+      setCurrent(operatorTaskStatusLabel(resolvedStatus));setCanPrepare(false);
+      onResolved?.();
     }
   };
   if (dataScope !== scope.key) return <Text>Đang khôi phục lịch sử yêu cầu…</Text>;

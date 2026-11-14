@@ -321,6 +321,7 @@ export default function DroneRequestDetailScreen() {
           </View> : null}
           {scope.key && target ? <>
             <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+              onResolved={() => void loadTask()}
               collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
               {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
                 <MaterialIcons name="cancel" size={18} color={colors.secondary} />
@@ -366,6 +367,7 @@ export default function DroneRequestDetailScreen() {
       {renderBody()}
       {scope.key && target && (!task || loadError) ? <>
         <DroneTaskCommandPanel key={scope.key} taskId={target} operation="accept"
+          onResolved={() => void loadTask()}
           collapsed={!canOpenDecline && !commandsExpanded} onExpand={() => setCommandsExpanded(true)} >
           {canOpenDecline ? <Pressable style={styles.rejectButton} onPress={handleOpenDecline} accessibilityRole="button" accessibilityLabel="Từ chối nhiệm vụ">
             <MaterialIcons name="cancel" size={18} color={colors.secondary} />

@@ -4,7 +4,7 @@ const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const {drone,id,task}=require('./package45-drone.test.cjs');
 const text=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).join('')).join('\n');
 function panel(row, options={}) {
- let posts=0,opened=0;const props={taskId:task.id,operation:'accept',collapsed:true,onExpand:()=>opened++};
+ let posts=0,opened=0;const props={taskId:task.id,operation:'accept',collapsed:true,onExpand:()=>opened++,...options.props};
  const scope={key:'scope-a',capture:()=>{const key=scope.key;return()=>key===scope.key;}};
  const s=screen('src/components/drone/DroneTaskCommandPanel.tsx',{exportName:'DroneTaskCommandPanel',props,modules:{
   '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>scope},
@@ -34,6 +34,40 @@ test('UI03 scope change hides previous pending before new journal resolves',asyn
 test('UI03 Submitted detail delegates collapsed rendering to live command panel',async()=>{
  const s=drone('request-detail',{getOperatorSurveyTaskDetailReal:async()=>({data:{...task,status:'SUBMITTED'}}),getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[]}})},{params:{taskId:task.id}});
  s.render();await s.flush();const p=s.nodes().find(n=>n.type==='DroneTaskCommandPanel');assert.equal(p.props.collapsed,true);p.props.onExpand();await s.flush();assert.equal(s.nodes().find(n=>n.type==='DroneTaskCommandPanel').props.collapsed,false);s.unmount();
+});
+
+test('Operator receipt updates the visible status and refreshes task detail only after durable receipt',async()=>{
+ let refreshes=0;
+ let row={phase:'PREPARED',command:{operation:'accept',key:id(8),payload:{}}};
+ const s=panel(null,{props:{collapsed:false,onResolved:()=>refreshes++},open:async()=>({
+  read:async()=>row,close(){},
+  dispatch:async()=>{row={...row,phase:'RECEIPT',receipt:{data:{...task,status:'ACCEPTED'}}};},
+ })});
+ s.render();await s.flush();assert.equal(refreshes,0);
+ await s.press('Xác nhận gửi lệnh đã lưu');await s.flush();
+ assert.equal(refreshes,1);assert.match(text(s),/Trạng thái hiện hành: ACCEPTED/);s.unmount();
+});
+
+test('Operator unknown command result never announces a resolved task',async()=>{
+ let refreshes=0;
+ const row={phase:'UNKNOWN_OUTCOME',command:{operation:'accept',key:id(8),payload:{}}};
+ const s=panel(null,{props:{collapsed:false,onResolved:()=>refreshes++},open:async()=>({
+  read:async()=>row,close(){},dispatch:async()=>{throw Error('timeout');},
+ })});
+ s.render();await s.flush();await s.press('Xác nhận gửi lệnh đã lưu');await s.flush();
+ assert.equal(refreshes,0);assert.match(text(s),/Chưa xác nhận được kết quả/);s.unmount();
+});
+
+test('Operator detail reads current task after command resolution and exposes upload for accepted task',async()=>{
+ let reads=0;
+ const s=drone('request-detail',{
+  getOperatorSurveyTaskDetailReal:async()=>({data:{...task,status:++reads===1?'NEW_ASSIGNED':'ACCEPTED'},etag:`"${task.version}"`}),
+  getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[]}}),
+ },{params:{taskId:task.id}});
+ s.render();await s.flush();assert.equal(reads,1);
+ const command=s.nodes().find(n=>n.type==='DroneTaskCommandPanel');
+ assert.equal(typeof command.props.onResolved,'function');command.props.onResolved();await s.flush();
+ assert.equal(reads,2);assert.ok(s.nodes().some(n=>n.type==='Button'&&n.props.title==='Gửi dữ liệu khảo sát'));s.unmount();
 });
 test('UI03 multi-ref package counts only displayed pinned geometry and identifies its version',async()=>{
  const ref={routeVersionId:id(4),segmentSetId:id(5),segmentIds:[id(6)]};
