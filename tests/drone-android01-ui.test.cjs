@@ -3,6 +3,24 @@ const assert = require('node:assert/strict');
 const { drone, id } = require('./package45-drone.test.cjs');
 const allText = s => JSON.stringify(s.nodes().filter(n => n.type === 'Text'));
 
+test('Operator decline summary follows validated receipt without refetching a revoked assignment', async () => {
+  let reads = 0;
+  const task = { id: id(2), projectId: id(3), operatorId: id(1), scope: [], status: 'NEW_ASSIGNED', version: 'v1' };
+  const s = drone('request-decline', {
+    getOperatorSurveyTaskDetailReal: async () => { reads++; return { data: task }; },
+    getOperatorWorkPackageReal: async () => ({ data: { task } }),
+  }, { params: { taskId: task.id } });
+  s.render(); await s.flush();
+  assert.equal(s.nodes().find(n => n.type === 'Chip').props.label, 'Mới giao');
+  const panel = s.nodes().find(n => n.type === 'DroneTaskCommandPanel');
+  assert.equal(typeof panel.props.onResolved, 'function');
+  panel.props.onResolved('REJECTED'); await s.flush();
+  assert.equal(s.nodes().find(n => n.type === 'Chip').props.label, 'Đã từ chối');
+  assert.match(allText(s), /không còn cho phép từ chối mới/);
+  assert.equal(reads, 1);
+  s.unmount();
+});
+
 test('DRONE-ANDROID-01 Home names the task-list shortcut honestly and keeps its destination', async () => {
   const routes = [];
   const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [], nextCursor: null }) }, {

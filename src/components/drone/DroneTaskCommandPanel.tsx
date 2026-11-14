@@ -15,7 +15,7 @@ type Saved = Awaited<ReturnType<Runtime['read']>>;
 /** One dispatcher for detail/decline/recovery. Opening the panel never posts. */
 export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand, onResolved, children}: {
   taskId: string; operation: 'accept' | 'decline'; collapsed?: boolean; onExpand?: () => void;
-  onResolved?: () => void;
+  onResolved?: (status: string) => void;
   children?: React.ReactNode;
 }) {
   const scope = useOperatorReadScope(taskId);
@@ -78,7 +78,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
     }
     if (resolvedStatus && isCurrent()) {
       setCurrent(operatorTaskStatusLabel(resolvedStatus));setCanPrepare(false);
-      onResolved?.();
+      onResolved?.(resolvedStatus);
     }
   };
   if (dataScope !== scope.key) return <Text>Đang khôi phục lịch sử yêu cầu…</Text>;

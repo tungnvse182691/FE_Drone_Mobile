@@ -74,6 +74,7 @@ export default function DroneRequestDeclineScreen() {
   const [workPackage, setWorkPackage] = useState<SurveyTaskWorkPackageDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<{ scope: string | null; status: string } | null>(null);
   const loadDetail = useCallback(async () => {
     const isCurrent = scope.capture();
     if (!isCurrent()) return;
@@ -135,14 +136,15 @@ export default function DroneRequestDeclineScreen() {
         />
       );
     }
-
-
+    // A decline receipt remains authoritative when BE revokes assignment GET.
+    // Keep this display status separate from the old task/version source.
+    const status = resolved?.scope === scope.key ? resolved.status : detail.status;
     return (
       <>
         <View style={styles.notice}>
           <MaterialIcons name="info-outline" size={18} color={colors.brandGold} />
           <Text style={[typography.caption, styles.noticeText]}>
-            {operatorTaskCanRespond(detail.status)
+            {operatorTaskCanRespond(status)
               ? 'Lý do từ chối sẽ được gửi tới quản lý.'
               : 'Nhiệm vụ không còn cho phép từ chối mới. Yêu cầu đã lưu vẫn được giữ.'}
           </Text>
@@ -154,8 +156,8 @@ export default function DroneRequestDeclineScreen() {
               {operatorTaskDisplayCode(detail.id)}
             </Text>
             <Chip
-              variant={detail.status === 'REJECTED' ? 'rejected' : 'status-pending'}
-              label={operatorTaskStatusLabel(detail.status)}
+              variant={status === 'REJECTED' ? 'rejected' : 'status-pending'}
+              label={operatorTaskStatusLabel(status)}
               uppercase={false}
             />
           </View>
@@ -225,7 +227,9 @@ export default function DroneRequestDeclineScreen() {
         }
       >
         {renderBody()}
-        {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="decline" /> : null}
+        {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="decline" onResolved={status => {
+          if (scope.capture()()) setResolved({ scope: scope.key, status });
+        }} /> : null}
       </SafeAreaScreen>
     </View>
   );
