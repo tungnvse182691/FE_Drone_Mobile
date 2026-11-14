@@ -21,6 +21,7 @@ interface InputFieldProps {
   onPressIn?: () => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  trailingAction?: React.ReactNode;
 }
 
 export function InputField({
@@ -42,6 +43,7 @@ export function InputField({
   onPressIn,
   onFocus,
   onBlur,
+  trailingAction,
 }: InputFieldProps) {
   return (
     <View style={styles.container}>
@@ -76,6 +78,7 @@ export function InputField({
           onBlur={onBlur}
         />
         {unit ? <Text style={[typography.labelSm, styles.unit]}>{unit}</Text> : null}
+        {trailingAction}
       </View>
       {error ? <Text style={[typography.caption, styles.error]}>{error}</Text> : null}
     </View>

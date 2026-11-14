@@ -3,6 +3,22 @@ const assert=require('node:assert/strict');
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const flat=s=>Array.isArray(s)?Object.assign({},...s.filter(Boolean).map(flat)):s??{};
 
+test('Login password visibility preserves input and conceals again before dispatch or leaving',async()=>{
+ const pending=deferred();let submitted;
+ const s=screen('app/(auth)/index.tsx',{login:async(...args)=>{submitted=args;return pending.promise;}});
+ s.render();await s.flush();s.input('Email hoặc Số điện thoại','fixture@example.test');s.input('Mật khẩu','synthetic-only');
+ const password=()=>s.nodes().find(n=>n.type==='InputField'&&n.props.label==='Mật khẩu');
+ const toggle=label=>password().props.trailingAction.props.accessibilityLabel===label&&password().props.trailingAction.props.onPress();
+ assert.equal(password().props.secureTextEntry,true);
+ assert.equal(password().props.trailingAction.props.accessibilityRole,'button');
+ toggle('Hiện mật khẩu');await s.flush();assert.equal(password().props.secureTextEntry,false);assert.equal(password().props.value,'synthetic-only');
+ toggle('Ẩn mật khẩu');await s.flush();assert.equal(password().props.secureTextEntry,true);
+ toggle('Hiện mật khẩu');await s.flush();s.blur();await s.flush();assert.equal(password().props.secureTextEntry,true);
+ toggle('Hiện mật khẩu');await s.flush();const login=s.press('Đăng nhập');await s.flush();
+ assert.equal(password().props.secureTextEntry,true);assert.deepEqual(submitted,['fixture@example.test','synthetic-only']);
+ pending.resolve({});await login;await s.flush();s.unmount();
+});
+
 test('LOGIN-UI-01 retains the card and passive decoration with LOGIN-BRAND-02 prominent branding',()=>{
  const s=screen('app/(auth)/index.tsx');s.render();
  assert.equal(flat(s.nodes()[0].props.style).backgroundColor,'#F8F9FA');

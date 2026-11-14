@@ -30,6 +30,7 @@ import {
 export default function LoginScreen() {
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const login = useAuthStore((state) => state.login);
@@ -42,7 +43,7 @@ export default function LoginScreen() {
     active.current = true;
     generation.current++;
     const unsubscribe = useAuthStore.subscribe?.(() => { generation.current++; });
-    return () => { active.current = false; generation.current++; unsubscribe?.(); setRecoveryOpen(false); setRecoveryEmail(''); setRecoveryMessage(''); };
+    return () => { active.current = false; generation.current++; unsubscribe?.(); setShowPassword(false); setRecoveryOpen(false); setRecoveryEmail(''); setRecoveryMessage(''); };
   }, []));
   const captureAttempt = () => {
     const attempt = generation.current;
@@ -83,6 +84,7 @@ export default function LoginScreen() {
     busy.current = true;
     const isCurrent = captureAttempt();
     setLoading(true);
+    setShowPassword(false);
     setError(null);
     try {
       // Wire: `AuthTokenResponseDto` camelCase trần — map sang `User` domain ở đây.
@@ -197,7 +199,20 @@ export default function LoginScreen() {
                 if (error) setError(null);
               }}
               placeholder="Nhập mật khẩu"
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              autoCorrect={false}
+              trailingAction={
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  accessibilityState={{ disabled: loading }}
+                  disabled={loading}
+                  onPress={() => setShowPassword(visible => !visible)}
+                  style={({ pressed }) => [styles.passwordToggle, pressed && styles.reporterCardPressed]}
+                >
+                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color={colors.secondary} />
+                </Pressable>
+              }
             />
 
             {error ? (
@@ -286,6 +301,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  passwordToggle: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
   safe: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
