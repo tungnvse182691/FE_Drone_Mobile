@@ -2,6 +2,27 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { screen } = require('./helpers/roadfe-screen.cjs');
 
+test('Operator cold-start system-bar resize keeps navigation labels inside the viewport', async () => {
+  const s = screen('app/(drone)/_layout.tsx', {
+    modules: {
+      'expo-router': {Stack: 'Stack', usePathname: () => '/request-detail'},
+      '../../src/components/BottomNav': {BottomNav: 'BottomNav'},
+      'react-native-safe-area-context': {SafeAreaView: 'SafeAreaView', useSafeAreaInsets: () => ({top: 41, bottom: 24, left: 0, right: 0})},
+    },
+  });
+  s.render();
+  const layout = async height => {
+    s.nodes().find(n => n.type === 'View' && n.props.onLayout).props.onLayout({nativeEvent: {layout: {width: 412, height}}});
+    await s.flush();
+  };
+  await layout(892); await layout(868);
+  assert.equal(s.nodes().find(n => n.props.testID === 'operator-navigation-dock').props.style[1].height, 868);
+  await layout(520);
+  assert.equal(s.nodes().find(n => n.props.testID === 'operator-navigation-dock').props.style[1].height, 868,
+    'keyboard resize must still clip navigation before the JS keyboard event');
+  s.unmount();
+});
+
 test('Operator focused map hides navigation without unmounting Stack',()=>{
  for(const route of ['/survey-map','/(drone)/survey-map']) {
   const s=screen('app/(drone)/_layout.tsx',{modules:{'expo-router':{Stack:'Stack',usePathname:()=>route},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});

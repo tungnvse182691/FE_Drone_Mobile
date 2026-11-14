@@ -1,7 +1,7 @@
 import React from 'react';
 import { Stack, usePathname } from 'expo-router';
 import { Keyboard, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav } from '../../src/components/BottomNav';
 
 const DRONE_TABS = [
@@ -31,6 +31,7 @@ const DRONE_TABS = [
 ];
 
 export default function DroneLayout() {
+  const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = React.useState(() => Keyboard.isVisible());
   const [viewport, setViewport] = React.useState({ width: 0, height: 0 });
   const [navigationHeight, setNavigationHeight] = React.useState(0);
@@ -49,7 +50,11 @@ export default function DroneLayout() {
   return (
     <View style={styles.container} onLayout={({ nativeEvent: { layout } }) => {
       setViewport(previous => {
-        const height = previous.width === layout.width ? Math.max(previous.height, layout.height) : layout.height;
+        // Preserve the full viewport during an IME resize, but not the small
+        // system-bar correction Android delivers after a cold start.
+        const shrink = previous.height - layout.height;
+        const keyboardResize = previous.width === layout.width && shrink > insets.top + insets.bottom;
+        const height = keyboardResize ? previous.height : layout.height;
         return previous.width === layout.width && previous.height === height ? previous : { width: layout.width, height };
       });
     }}>

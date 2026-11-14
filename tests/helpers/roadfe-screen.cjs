@@ -42,7 +42,7 @@ function screen(file, options = {}) {
     react, 'react-native':native,
     'expo-router':{useRouter:()=>({push:p=>nav.push(p),replace:p=>nav.push(p)}),useLocalSearchParams:()=>params,
       useFocusEffect:fn=>react.useEffect(()=>{const cleanup=fn();focus.push(cleanup);return cleanup;},[fn])},
-    'react-native-safe-area-context':{SafeAreaView:'SafeAreaView'}, '@expo/vector-icons':{MaterialIcons:'MaterialIcons'},
+    'react-native-safe-area-context':{SafeAreaView:'SafeAreaView',useSafeAreaInsets:()=>({top:0,bottom:0,left:0,right:0})}, '@expo/vector-icons':{MaterialIcons:'MaterialIcons'},
     'expo-camera':{CameraView:'CameraView',useCameraPermissions:()=>[{granted:true},async()=>({granted:true})]},
     'expo-document-picker':{getDocumentAsync:options.pick ?? (async()=>({canceled:true}))},
     'expo-image-picker':{requestCameraPermissionsAsync:async()=>({granted:true}),requestMediaLibraryPermissionsAsync:async()=>({granted:true}),launchCameraAsync:options.camera??(async()=>({canceled:true})),launchImageLibraryAsync:options.library??(async()=>({canceled:true}))},
