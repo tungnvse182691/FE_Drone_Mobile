@@ -191,7 +191,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
         </Pressable>
       </View>
 
-      <View style={styles.segments}>
+      {outboxRows.length > 0 ? <><View style={styles.segments}>
         {(Object.keys(SEGMENT_LABELS) as SyncSegment[]).map((key) => {
           const active = key === segment;
           return (
@@ -240,11 +240,11 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
             <Text style={styles.queueNoticeText}>Chưa thể gửi các mục này. Dữ liệu vẫn được giữ trên máy.</Text>
           </View>
         ) : null}
-      </Card>
+      </Card></> : null}
 
       <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
       <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
-      {segment === 'pending' ? (
+      {outboxRows.length === 0 ? null : segment === 'pending' ? (
         <>
           {visibleItems.length > 0 ? (
             <View style={styles.sectionHeader}>
