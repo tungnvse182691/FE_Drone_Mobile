@@ -324,6 +324,28 @@ function uploadScenario(initial={}) {
  const plan={taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:5,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},readRange:async(offset,length)=>Uint8Array.from([1,2,3,4,5].slice(offset,offset+length))};
  return {workflow,transport,plan,calls,intent,set:(status,version=v)=>{phase=status;v=version;}};
 }
+
+for(const purpose of ['SURVEY_VIDEO','TELEMETRY']) test(`Operator ${purpose} verification survives workflow restart without writes`,async()=>{
+ const f=uploadScenario({uploadId:id(41),fileId:id(42),status:'VERIFY_PENDING'});
+ if(purpose==='TELEMETRY')Object.assign(f.plan.file,{purpose,mediaType:'application/x-subrip',name:'qa.srt'});
+ f.transport.getMetadata=async()=>({id:id(42),status:'VERIFIED',checksumSha256:'a'.repeat(64),mediaType:f.plan.file.mediaType,sizeBytes:5});
+ f.set('VERIFYING');
+ await assert.rejects(f.workflow.orchestrateDroneUpload(f.plan,f.transport),/drone_upload_verify_pending/);
+ const restarted=loadUploadWorkflow(async()=>({prepare:async()=>({...f.intent}),update:async(k,p)=>{Object.assign(f.intent,p);return {...f.intent};},close(){}}));
+ await assert.rejects(restarted.orchestrateDroneUpload(f.plan,f.transport),/drone_upload_verify_pending/);
+ f.set('VERIFIED');assert.equal((await restarted.orchestrateDroneUpload(f.plan,f.transport)).status,'VERIFIED');
+ assert.equal(f.calls.filter(c=>['create','urls','put','complete'].includes(c[0])).length,0);
+ assert.equal(f.intent.uploadId,id(41));assert.equal(f.intent.key,id(40));
+});
+
+for(const status of [401,403,409,412])test(`Operator part HTTP ${status} retains identity and confirmed parts`,async()=>{
+ const f=uploadScenario({uploadId:id(41),fileId:id(42),status:'PARTS_IN_PROGRESS',parts:[{partNumber:1,sizeBytes:2,etag:'first-part'}]});
+ f.set('UPLOADING');f.transport.putPart=async()=>{throw {response:{status}};};
+ await assert.rejects(f.workflow.orchestrateDroneUpload(f.plan,f.transport));
+ assert.equal(f.intent.uploadId,id(41));assert.equal(f.intent.fileId,id(42));assert.equal(f.intent.key,id(40));
+ assert.equal(f.intent.parts[0].etag,'first-part');assert.equal(f.intent.parts.length,1);
+ assert.equal(f.intent.error.status,status);assert.equal(f.calls.filter(c=>['create','complete'].includes(c[0])).length,0);
+});
 test('Operator storage diagnostics persist safely without changing command or uploaded parts',async()=>{
  for(const [input,expected] of [['SignatureDoesNotMatch','SignatureDoesNotMatch'],['AccessDenied','AccessDenied'],['secret-url-token','UNKNOWN']]){
   const f=uploadScenario({uploadId:id(41),fileId:id(42),status:'PARTS_IN_PROGRESS',parts:[{partNumber:1,sizeBytes:2,etag:'first-part'}]});
