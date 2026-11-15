@@ -73,7 +73,8 @@ test('DRONE-ANDROID-01 Sync describes a local queue and gives its summary separa
   assert.equal(s.nodes().filter(n => n.props.accessibilityRole === 'tab').length, 0);
   assert.doesNotMatch(allText(s), /0 mục ghi nhận cục bộ|BẢO TOÀN DỮ LIỆU TRÊN THIẾT BỊ/);
   assert.ok(s.nodes().some(n => n.type === 'DroneTaskRecoveryList'));
-  const summary = s.nodes().find(n => n.type === 'Text' && JSON.stringify(n.props.children).includes('Không có mục chờ xử lý'));
+  assert.ok(s.nodes().some(n => n.type === 'DroneUploadRecoveryList'));
+  const summary = s.nodes().find(n => n.type === 'Text' && JSON.stringify(n.props.children).includes('Dữ liệu lưu trên thiết bị'));
   const row = s.nodes().find(n => n.type === 'View' && n.props.children?.some?.(child => child?.props?.children?.includes?.(summary)));
   assert.ok(row); assert.equal(row.props.style.flexDirection, 'column');
   s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === 'Đọc lại hàng đợi').props.onPress(); await s.flush();

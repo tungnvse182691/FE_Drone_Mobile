@@ -14,6 +14,7 @@ import { currentQueueIdentity, sameQueueIdentity, createQueueReader, queueChecks
 import { useAuthStore } from '../../src/store/auth';
 import { LocalState } from '../../src/types/enums';
 import { DroneTaskRecoveryList } from '../../src/components/drone/DroneTaskCommandPanel';
+import { DroneUploadRecoveryList } from '../../src/components/drone/DroneUploadRecoveryList';
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 
 /** Map `LocalState` → nhãn tiếng Việt + nhóm hiển thị. Không suy diễn trạng thái từ timer. */
@@ -211,7 +212,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             <Text style={[typography.bodyMd, styles.summaryCount]}>
               {pendingQueue.length > 0
                 ? `${pendingQueue.length} mục chờ xử lý`
-                : 'Không có mục chờ xử lý'}
+                : 'Dữ liệu lưu trên thiết bị'}
             </Text>
           </View>
           {outboxRows.length > 0 ? <Text style={[typography.caption, styles.totalSize]}>
@@ -296,6 +297,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         )}
       </View>
 
+      <DroneUploadRecoveryList />
       <DroneTaskRecoveryList />
 
       {/* Safe Local Purge Section */}

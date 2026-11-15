@@ -37,7 +37,52 @@ test('Drone mismatched receipt and HTTP conflict stay unresolved and retain comm
 });
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const capture=()=>()=>true;
+test('Upload recovery inventory is scoped, durable and read only, with no local paths exposed',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ const item=await r.prepare({kind:'dataset',projectId:id(3),body:{videoFileId:id(9)}});
+ await r.update(item.key,{status:'DATASET_UNKNOWN'});r.close();f.reopen();
+ const before=JSON.stringify(f.rows());
+ const rows=await f.api.listDroneUploadRecovery();
+ assert.equal(rows.length,1);assert.equal(rows[0].taskId,id(2));assert.equal(rows[0].status,'DATASET_UNKNOWN');
+ assert.equal(rows[0].kind,'DRONE_DATASET_INTENT');assert.equal(rows[0].localUri,undefined);
+ assert.equal(JSON.stringify(f.rows()),before);assert.equal(f.posts.length,0);
+ f.env('https://other.test');assert.equal((await f.api.listDroneUploadRecovery()).length,0);f.env('https://fixture.test');
+ f.change({user:{id:id(8),role_code:'DRONE_OPERATOR'}});assert.equal((await f.api.listDroneUploadRecovery()).length,0);
+ f.change({user:{id:id(1),role_code:'DRONE_OPERATOR'},token:'sid-B'});
+ assert.equal((await f.api.listDroneUploadRecovery()).length,1);
+ await f.db.runAsync('UPDATE local_draft SET payload = ?',JSON.stringify({...item,status:'invented'}));
+ await assert.rejects(f.api.listDroneUploadRecovery());assert.equal(f.rows().length,1);
+});
 function panel(runtime){return screen('src/components/drone/DroneTaskCommandPanel.tsx',{exportName:'DroneTaskCommandPanel',props:{taskId:id(2),operation:'accept'},modules:{'../../api/droneTaskJournal':{openDroneTaskJournal:async()=>runtime},'../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Button':{Button:'Button'},'../Card':{Card:'Card'},'../../design-tokens':{typography:{},spacing:{},colors:{}}}});}
+test('Upload recovery opens UNKNOWN for review without dispatch and collapses confirmed history',async()=>{
+ let reads=0;
+ const s=screen('src/components/drone/DroneUploadRecoveryList.tsx',{exportName:'DroneUploadRecoveryList',modules:{
+  '../../api/droneTaskJournal':{listDroneUploadRecovery:async()=>{reads++;return [
+   {taskId:id(2),key:id(7),kind:'DRONE_DATASET_INTENT',status:'DATASET_UNKNOWN',partCount:0},
+   {taskId:id(3),key:id(8),kind:'DRONE_DATASET_INTENT',status:'DATASET_CONFIRMED',partCount:0}];}},
+  '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Card':{Card:'Card'},
+  '../../design-tokens':{typography:{},spacing:{},colors:{}}
+ }});
+ s.render();await s.flush();assert.equal(reads,1);
+ const row=s.nodes().find(n=>n.props.testID===`upload-recovery-${id(7)}`);assert.ok(row);
+ assert.ok(!s.nodes().some(n=>n.props.testID===`upload-recovery-${id(8)}`));
+ row.props.onPress();assert.deepEqual(s.nav,[`/(drone)/upload?taskId=${id(2)}`]);
+ await s.tap('upload-history-toggle');await s.flush();assert.ok(s.nodes().some(n=>n.props.testID===`upload-recovery-${id(8)}`));
+ s.unmount();
+});
+test('Recovery moves only verified files explicitly linked to a confirmed dataset into history',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ const upload=await r.prepare({kind:'upload',projectId:id(3),localFileId:id(8),localUri:'file:///private.mp4',sizeBytes:4,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mimeType:'video/mp4',body:{fileName:'private.mp4'}});
+ await r.update(upload.key,{status:'VERIFIED',fileId:id(9)});
+ const dataset=await r.prepare({kind:'dataset',projectId:id(3),body:{videoFileIds:[id(10)]}});
+ await r.update(dataset.key,{status:'DATASET_CONFIRMED',receipt:{datasetId:id(11),surveyTaskId:id(2)}});
+ assert.equal((await f.api.listDroneUploadRecovery()).find(row=>row.key===upload.key).includedInDataset,false);
+ // Correct the isolated fixture payload to exercise matching membership without a new command.
+ const row=f.rows().find(row=>row.kind==='DRONE_DATASET_INTENT');const value=JSON.parse(row.payload);value.body.videoFileIds=[id(9)];
+ await f.db.runAsync('UPDATE local_draft SET payload = ? WHERE id = ?',JSON.stringify(value),row.id);
+ assert.equal((await f.api.listDroneUploadRecovery()).find(row=>row.key===upload.key).includedInDataset,true);
+ r.close();assert.equal(f.posts.length,0);
+});
 test('Drone command panel saves intent first, sends only after explicit confirmation',async()=>{
  let sends=0,saved=null;const runtime={close(){},read:async()=>saved,prepare:async()=>{saved={command:{key:id(9),operation:'accept',payload:{}},phase:'PREPARED'};return saved.command;},dispatch:async(key,confirmed)=>{assert.equal(key,id(9));assert.equal(confirmed,true);sends++;saved={...saved,phase:'UNKNOWN_OUTCOME'};},readCurrent:async()=>({status:'NEW_ASSIGNED'})};
  const s=panel(runtime);s.render();await s.flush();await s.press('Chuẩn bị tiếp nhận nhiệm vụ');await s.flush();assert.equal(sends,0);

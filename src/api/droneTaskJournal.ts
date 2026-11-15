@@ -173,6 +173,38 @@ export async function listDroneTaskCommands() {
 }
 
 const uploadKinds = new Set([DRONE_UPLOAD_INTENT_KIND, DRONE_DATASET_INTENT_KIND]);
+/** Local inventory only. Opening a row never dispatches its retained command. */
+export async function listDroneUploadRecovery() {
+  const owner = identity();
+  if (!owner) throw Error('drone_session_invalid');
+  let invalidated = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (JSON.stringify(identity()) !== JSON.stringify(owner)) invalidated = true; });
+  const guard = () => { if (invalidated || JSON.stringify(identity()) !== JSON.stringify(owner)) throw Error('drone_session_changed'); };
+  try {
+    const db = openDatabase(); await initDatabase(db); guard();
+    const prefix = 'drone-upload-v1:' + JSON.stringify([owner.environment,owner.actor]).slice(0,-1) + ',';
+    const rows = await db.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE substr(id, 1, ?) = ? AND kind IN (?, ?)',prefix.length,prefix,DRONE_UPLOAD_INTENT_KIND,DRONE_DATASET_INTENT_KIND); guard();
+    const taskIds = [...new Set(rows.map(row => {
+      const item = JSON.parse(row.payload) as DroneUploadIntent;
+      if (item.actor !== owner.actor || item.environment !== owner.environment || !uuid(item.taskId)) throw Error('drone_upload_journal_invalid');
+      return item.taskId;
+    }))];
+    const result = [];
+    for (const taskId of taskIds) {
+      guard(); const journal = await openDroneUploadJournal(taskId);
+      try {
+        const items = await journal.read(); guard();
+        const submittedFiles = new Set(items.filter(item=>item.kind===DRONE_DATASET_INTENT_KIND && item.status==='DATASET_CONFIRMED' && uuid(item.receipt?.datasetId) && item.receipt?.surveyTaskId===taskId)
+          .flatMap(item=>Array.isArray(item.body.videoFileIds)?item.body.videoFileIds:[]));
+        for (const item of items) result.push({taskId,key:item.key,kind:item.kind,status:item.status,
+          includedInDataset:item.kind===DRONE_UPLOAD_INTENT_KIND && item.status==='VERIFIED' && submittedFiles.has(item.fileId),
+          cancelled:item.cancelRequest?.phase === 'CONFIRMED' && item.error?.code === 'upload_cancelled',
+          cancelUnknown:item.cancelRequest?.phase === 'UNKNOWN',partCount:item.parts.length});
+      } finally { journal.close(); }
+    }
+    guard(); return result;
+  } finally { unsubscribe(); }
+}
 const uploadStates = new Set<DroneUploadIntentStatus>(['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED','DATASET_UNKNOWN','DATASET_CONFIRMED','CONFLICT','FAILED']);
 const forbiddenJournalKey = /token|password|otp|authorization|presigned|signedurl|signed_url/i;
 function assertJournalSafe(value: unknown, key = ''): void {
