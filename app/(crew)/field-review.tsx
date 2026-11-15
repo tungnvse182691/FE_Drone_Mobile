@@ -3,6 +3,7 @@ import { ActivityIndicator, Image, Keyboard, Modal, Pressable, ScrollView, Style
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -447,7 +448,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {measurements.map(m=><View key={m.sampleId} style={styles.resultHeading}><Text style={[typography.bodyMd,styles.flex]}>{fieldMeasurementTitle(m.type)}</Text><Text style={styles.resultValue}>{m.value===null?'Chưa đo':`${m.value} ${m.unit}`}</Text></View>)}
           <Button variant="secondary" title="Chỉnh số đo" disabled={busy||cancelling} onPress={()=>{if(!busy&&!cancelling){setShowMeasurements(true);setEditingSampleId(null);}}}/>
         </Card>
-        <Modal visible={showMeasurements} animationType="slide" onRequestClose={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}>
+        <Modal visible={showMeasurements} presentationStyle="fullScreen" animationType="slide" onRequestClose={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}>
+          <SafeAreaProvider>
           <SafeAreaScreen scroll keyboardAware header={<AppHeader subtitle="Số đo hiện trường" showBack onBack={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}/>}>
             <Card style={styles.card}>
               <Text style={styles.sectionTitle}>Số đo hiện trường</Text>
@@ -483,6 +485,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               {notice?<Text accessibilityLiveRegion="polite" style={styles.muted}>{notice}</Text>:null}
             </Card>
           </SafeAreaScreen>
+          </SafeAreaProvider>
         </Modal>
         <Card style={styles.card}>
           <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Vị trí quan sát</Text><MaterialIcons name="place" size={24} color={colors.primaryDark}/></View>
@@ -492,7 +495,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </View></View>
           <Button variant="secondary" title={taskReadOnly?'Xem vị trí':'Chỉnh vị trí'} disabled={busy||cancelling} onPress={()=>{setNotice('');setShowErrorDetail(false);setShowPosition(true);}}/>
         </Card>
-        <Modal visible={showPosition} animationType="slide" onRequestClose={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}>
+        <Modal visible={showPosition} presentationStyle="fullScreen" animationType="slide" onRequestClose={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}>
+          <SafeAreaProvider>
           <SafeAreaScreen scroll keyboardAware header={<AppHeader subtitle="Vị trí quan sát" showBack onBack={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}/>}>
             <Card style={styles.card}><View style={styles.positionEditor} pointerEvents={busy||frozen?'none':'auto'}>
 <Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
@@ -512,6 +516,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               {notice?<FieldNotice model={fieldNoticeModel(notice,undefined,noticeDetail)} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
             </View></Card>
           </SafeAreaScreen>
+          </SafeAreaProvider>
         </Modal>
         <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
           {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.'}</Text>:null}

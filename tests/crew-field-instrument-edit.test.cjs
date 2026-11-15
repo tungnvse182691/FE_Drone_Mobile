@@ -18,6 +18,7 @@ async function mounted(instrument, command = null, initial = {}, status, submiss
     expose:'CrewFieldReviewScreenContent', exportName:'CrewFieldReviewScreenContent',
     props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY',detail:{mode:'FIELD'}}},
     modules:{
+      'react-native-safe-area-context':{SafeAreaProvider:'SafeAreaProvider'},
       '../../src/components/AppHeader':{AppHeader:'AppHeader'},
       '../../src/components/Card':{Card:'Card'}, '../../src/components/Chip':{Chip:'Chip'},
       '../../src/components/Toast':{Toast:'Toast'}, 'expo-crypto':{randomUUID:()=> `new-sample-${++nextId}`},
@@ -121,4 +122,15 @@ test('FIELD choosing a length unit retains the entered value and sample identity
   const m=h.calls.at(-1).measurements[0];
   assert.equal(m.unit,'mm');assert.equal(m.value,4);assert.equal(m.sampleId,'sample');
   h.s.unmount();
+});
+
+for(const editor of ['measurements','position'])test('FIELD '+editor+' modal owns safe area without changing saved measurements or proof',async()=>{
+ const h=await mounted('Thước hiện trường');
+ if(editor==='position'){h.s.press('Lưu nháp số đo');await h.s.flush();h.s.press('Chỉnh vị trí');h.s.render();}
+ const modal=h.s.nodes().find(n=>n.type==='Modal'&&n.props.visible===true&&!n.props.transparent);assert.ok(modal);assert.equal(modal.props.presentationStyle,'fullScreen');
+ const provider=modal.props.children.flat(Infinity).find(n=>n.type==='SafeAreaProvider');assert.ok(provider,'native modal needs local safe area measurement');
+ const safe=provider.props.children.flat(Infinity).find(n=>n.type==='SafeAreaScreen');assert.ok(safe);assert.equal(safe.props.keyboardAware,true);assert.equal(safe.props.scroll,true);
+ const before=JSON.stringify(h.saved());const count=h.calls.length;
+ await safe.props.header.props.onBack();await h.s.flush();
+ assert.equal(h.calls.length,count+1);assert.equal(JSON.stringify(h.saved()),before,'layout must preserve stored measurements, proof and command');h.s.unmount();
 });
