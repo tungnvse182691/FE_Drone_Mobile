@@ -69,6 +69,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/components/ReporterHeader'))return{ReporterHeader:'ReporterHeader'};
     if(name.endsWith('/components/OperatorLocalTasks'))return{OperatorLocalTasks:'OperatorLocalTasks'};
     if(name.endsWith('/drone/DroneUploadRecoveryList'))return{DroneUploadRecoveryList:'DroneUploadRecoveryList'};
+    if(name.endsWith('/drone/OperatorLocalFiles'))return{OperatorLocalFiles:'OperatorLocalFiles'};
     if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
     if(name.endsWith('/crew/CrewRepairFacts'))return{CrewRepairFacts:'CrewRepairFacts'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};

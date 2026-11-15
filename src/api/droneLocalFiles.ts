@@ -101,6 +101,34 @@ export async function openDroneLocalFiles(taskId: string) {
   const unsubscribe = useAuthStore.subscribe(() => { if (JSON.stringify(identity()) !== JSON.stringify(owner)) invalid = true; });
   const guard = () => { if (closed || invalid || JSON.stringify(identity()) !== JSON.stringify(owner)) throw Error('drone_file_session_changed'); };
   const close = () => { closed = true; unsubscribe(); };
+  return openFileStore(taskId,owner,guard,close,()=>readOperatorSnapshot(`task:${taskId}`, () => getOperatorSurveyTaskDetailReal(taskId)));
+}
+
+/** Secure local recovery only. Cache grants provenance for copying bytes, never upload authority. */
+export async function openLocalDroneFiles(taskId: string) {
+  const state=useAuthStore.getState(), user=state.user;
+  const scope=await state.operatorLocalReadScope();
+  if(!scope || !user || useAuthStore.getState().user!==user || !uuid(taskId))throw Error('drone_file_session_invalid');
+  const [environment,session]=JSON.parse(scope), [actor]=JSON.parse(session);
+  if(environment!==apiClient.defaults.baseURL || actor!==user.id || user.role_code!=='DRONE_OPERATOR')throw Error('drone_file_session_invalid');
+  const owner={environment,session,actor};
+  let closed=false,invalid=false;
+  const unsubscribe=useAuthStore.subscribe(()=>{invalid=true;});
+  const guard=()=>{if(closed||invalid||useAuthStore.getState().user!==user||apiClient.defaults.baseURL!==environment)throw Error('drone_file_session_changed');};
+  const close=()=>{closed=true;unsubscribe();};
+  return openFileStore(taskId,owner,guard,close,async()=>{
+    guard();const db=openDatabase();await initDatabase(db);guard();
+    const resource=`task:${taskId}`,key=JSON.stringify(['operator_read_v1',scope,resource]);
+    const row=await db.getFirstAsync<{data:string;cached_at:string}>('SELECT data, cached_at FROM task_cache WHERE id = ? AND kind = ?',key,'operator_read_v1');guard();
+    if(!row||!Number.isFinite(Date.parse(row.cached_at)))throw Error('drone_file_cached_task_missing');
+    const saved=JSON.parse(row.data);
+    if(saved.schema!==1||saved.scope!==scope||saved.resource!==resource||!saved.value?.data)throw Error('drone_file_cached_task_invalid');
+    return {data:saved.value.data,etag:null,cachedAt:row.cached_at};
+  });
+}
+
+async function openFileStore(taskId:string,owner:{actor:string;session:string;environment:string},guard:()=>void,close:()=>void,
+  sourceTask:()=>Promise<{data:Awaited<ReturnType<typeof getOperatorSurveyTaskDetailReal>>['data'];etag:string|null;cachedAt:string|null}>) {
   let db: ReturnType<typeof openDatabase>;
   try { db = openDatabase(); await initDatabase(db); guard(); } catch (e) { close(); throw e; }
   const prefix = 'drone-source-v1:' + JSON.stringify([owner.environment,owner.actor,taskId]) + ':';
@@ -149,7 +177,7 @@ export async function openDroneLocalFiles(taskId: string) {
         (asset.size !== undefined && asset.size !== size)) throw Error('drone_file_size_invalid');
       // A cached assignment is provenance for preserving bytes only. Upload and
       // dataset journals still require a fresh authorized task read before POST.
-      const current = await readOperatorSnapshot(`task:${taskId}`, () => getOperatorSurveyTaskDetailReal(taskId)); guard();
+      const current = await sourceTask(); guard();
       const t = current.data;
       if (t.id !== taskId || t.operatorId !== owner.actor || !uuid(t.projectId) || !version(t.version) || (!current.cachedAt && current.etag !== `"${t.version}"`)) throw Error('drone_file_task_invalid');
       directory.create({ idempotent: true, intermediates: true }); guard();

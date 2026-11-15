@@ -18,10 +18,26 @@ function fixture(options={}){
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/operatorOfflineCache.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:cached,exports:cached.exports,require:n=>n==='../hooks/useOperatorReadScope'?{operatorReadScope:()=>JSON.stringify([env,actor,sid])}:deps[n],Date});
  deps['./operatorOfflineCache']=cached.exports;
  const mod={exports:{}};
+ let localUser;
+ const localScope=()=>JSON.stringify([env,JSON.stringify([actor,sid]),'']);
+ const originalGetState=deps['../store/auth'].useAuthStore.getState;
+ deps['../store/auth'].useAuthStore.getState=()=>localUser?{user:localUser,token:null,status:'RESTORING',operatorLocalReadScope:async()=>localScope()}:originalGetState();
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneLocalFiles.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date});
  const source=path.join(root,'source.mp4');fs.writeFileSync(source,Buffer.from([1,2,3,4]));
- return {api:mod.exports,reopen,task,source,offline:()=>offline=true,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n};
+ return {api:mod.exports,reopen,task,source,offline:()=>offline=true,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n,
+  cold:()=>{offline=true;localUser={id:actor,role_code:'DRONE_OPERATOR'};},cacheLocal:()=>{const scope=localScope(),resource=`task:${task.id}`;disk.prepare('INSERT OR REPLACE INTO task_cache VALUES (?,?,?,?)').run(JSON.stringify(['operator_read_v1',scope,resource]),'operator_read_v1',JSON.stringify({schema:1,scope,resource,value:{data:task}}),new Date().toISOString());}};
 }
+test('Cold local recovery reselects and preserves bytes using only the secure owner cache',async()=>{
+ const f=fixture();let r=await f.api.openDroneLocalFiles(id(2));const saved=await r.preserve('VIDEO',f.asset);r.close();f.reopen();f.cacheLocal();f.cold();
+ r=await f.api.openLocalDroneFiles(id(2));assert.equal((await r.list())[0].key,saved.key);
+ const another=await r.preserve('VIDEO',f.asset);assert.equal(another.checksumSha256,saved.checksumSha256);
+ await assert.rejects(f.api.readDroneFileRange(another,0,4),'local read scope cannot dispatch byte transport');
+ f.change();await assert.rejects(r.list(),/session_changed/);r.close();assert.equal(f.rows().length,2);
+});
+test('Cold recovery cannot attach a file without the exact cached task source',async()=>{
+ const f=fixture();f.cold();const r=await f.api.openLocalDroneFiles(id(2));
+ await assert.rejects(r.preserve('VIDEO',f.asset),/cached_task_missing/);assert.equal(f.rows().length,0);r.close();
+});
 test('Drone private copy and immutable ownership survive restart/relogin without upload or fake checksum',async()=>{
  const f=fixture(),r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',f.asset);r.close();
  assert.equal(fs.readFileSync(fileURLToPath(saved.uri)).toString('hex'),'01020304');

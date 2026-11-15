@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/auth';
 import { loadLocalOperatorTasks, loadLocalOperatorWork, type LocalOperatorTask, type LocalOperatorWork } from '../offline/operatorLocalTasks';
 import { openLocalOperatorUploadDraft, type OperatorUploadDraft } from '../api/operatorUploadDraft';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../api/operator-task-view';
+import { OperatorLocalFiles } from './drone/OperatorLocalFiles';
 
 /** Local reading/editing only: no role routes, API calls or command dispatch. */
 export function OperatorLocalTasks({ onClose }: { onClose: () => void }) {
@@ -123,10 +124,11 @@ function OperatorLocalTaskDetail({task,onBack}:{task:LocalOperatorTask;onBack:()
         <TextInput accessibilityLabel="Thời gian ghi hình ngoại tuyến" value={draft.recordedAt} editable={!!runtime&&!saving} maxLength={32} placeholder="2026-11-15 08:30" onChangeText={recordedAt=>{setDraft(d=>({...d,recordedAt}));setDirty(true);setMessage(null);}} style={styles.input}/>
         {draft.telemetryKey?<><Text style={styles.description}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch SRT ngoại tuyến" value={draft.timeOffset} editable={!!runtime&&!saving} maxLength={32} keyboardType="numbers-and-punctuation" onChangeText={timeOffset=>{setDraft(d=>({...d,timeOffset}));setDirty(true);setMessage(null);}} style={styles.input}/></>:null}
         <Text style={styles.caption}>{draft.videoKey?'Lựa chọn video đã lưu được giữ lại.':'Chưa có video trong nháp.'} {draft.telemetryKey?'Lựa chọn SRT đã lưu được giữ lại.':''}</Text>
+        {runtime?<OperatorLocalFiles taskId={task.id} onSelect={file=>{if(!activeRef.current||saveLock.current)return;setDraft(d=>({...d,[file.kind==='VIDEO'?'videoKey':'telemetryKey']:file.key}));setDirty(true);setMessage(null);}}/>:null}
         <Button variant="primary" title="Lưu nháp trên máy" loading={saving} disabled={!runtime||loading||saving} onPress={()=>void save()}/>
         {message?<Text accessibilityLiveRegion="polite" style={styles.description}>{message}</Text>:null}
       </View>
-      <Text style={styles.caption}>Kết nối lại và khôi phục phiên để chọn tệp, kiểm tra phân công và tiếp tục gửi dữ liệu.</Text>
+      <Text style={styles.caption}>Kết nối lại và khôi phục phiên để kiểm tra phân công trước khi gửi dữ liệu.</Text>
     </ScrollView>
   </SafeAreaView>;
 }
