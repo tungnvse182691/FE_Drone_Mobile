@@ -1,10 +1,42 @@
 import { initDatabase, openDatabase } from './database';
+import type { SurveyTaskWorkPackageDto } from '../api/droneApi';
 
 export interface LocalOperatorTask {
   id: string;
   status: string;
   cachedAt: string;
   segmentCount: number;
+}
+
+export interface LocalOperatorWork {
+  taskId: string;
+  cachedAt: string;
+  dueAt: string | null;
+  access: [number, number] | null;
+  segmentCount: number;
+  bands: string[];
+}
+
+/** Local projection of API-225 only; no ETag, server version or write capability. */
+export async function loadLocalOperatorWork(scope: string, taskId: string, current: () => boolean): Promise<LocalOperatorWork | null> {
+  const [, identity] = JSON.parse(scope), [actor] = JSON.parse(identity);
+  const resource = `work:${taskId}`, id = JSON.stringify(['operator_read_v1', scope, resource]);
+  const check = () => { if (!actor || !current()) throw Error('local_session_changed'); };
+  check();
+  const db = openDatabase(); await initDatabase(db); check();
+  const row = await db.getFirstAsync<{data: string; cached_at: string}>('SELECT data, cached_at FROM task_cache WHERE id = ? AND kind = ?', id, 'operator_read_v1');
+  check();
+  if (!row) return null;
+  try {
+    const saved = JSON.parse(row.data), work = saved.value?.data as SurveyTaskWorkPackageDto;
+    if (saved.schema !== 1 || saved.scope !== scope || saved.resource !== resource || !Number.isFinite(Date.parse(row.cached_at)) ||
+        work?.task?.id !== taskId || work.task.operatorId !== actor || !Array.isArray(work.geometryRefs) || !Array.isArray(work.task.scope)) return null;
+    const point = work.accessPoint?.point;
+    const access: [number, number] | null = point && Number.isFinite(point.longitude) && Math.abs(point.longitude)<=180 && Number.isFinite(point.latitude) && Math.abs(point.latitude)<=90 ? [point.longitude,point.latitude] : null;
+    return {taskId,cachedAt:row.cached_at,dueAt:work.dueAt && Number.isFinite(Date.parse(work.dueAt)) ? work.dueAt : null,access,
+      segmentCount:work.geometryRefs.reduce((sum,ref)=>sum+(Array.isArray(ref.segmentIds)?ref.segmentIds.length:0),0),
+      bands:[...new Set(work.task.scope.map(b=>b.targetBand).filter(b=>typeof b==='string'))]};
+  } catch { return null; }
 }
 
 /** Projection of already authorized GETs. No tokens, versions, ETags or mutation payloads. */

@@ -19,6 +19,26 @@ export async function openOperatorUploadDraft(taskId: string) {
   const unsubscribe = useAuthStore.subscribe(() => { if (operatorReadScope() !== scope) invalid = true; });
   const guard = () => { if (closed || invalid || operatorReadScope() !== scope) throw Error('operator_draft_session_changed'); };
   const close = () => { closed = true; unsubscribe(); };
+  return openDraft(taskId, actor, environment, guard, close);
+}
+
+/** SecureStore-bound local editing only. Does not restore auth or expose any dispatcher. */
+export async function openLocalOperatorUploadDraft(taskId: string) {
+  const state = useAuthStore.getState(), owner = state.user;
+  const scope = await state.operatorLocalReadScope();
+  if (!scope || !owner || useAuthStore.getState().user !== owner || !uuid(taskId)) throw Error('operator_draft_scope_invalid');
+  const [environment, identity] = JSON.parse(scope);
+  if (environment !== apiClient.defaults.baseURL || JSON.parse(identity)[0] !== owner.id) throw Error('operator_draft_scope_invalid');
+  let closed = false, invalid = false;
+  const unsubscribe = useAuthStore.subscribe(() => { invalid = true; });
+  const guard = () => {
+    if (closed || invalid || useAuthStore.getState().user !== owner || apiClient.defaults.baseURL !== environment) throw Error('operator_draft_session_changed');
+  };
+  const close = () => { closed = true; unsubscribe(); };
+  return openDraft(taskId, owner.id, environment, guard, close);
+}
+
+async function openDraft(taskId: string, actor: string, environment: string, guard: () => void, close: () => void) {
   const id = JSON.stringify([KIND, environment, actor, taskId]);
   let db: ReturnType<typeof openDatabase>;
   try { db = openDatabase(); await initDatabase(db); guard(); } catch (error) { close(); throw error; }

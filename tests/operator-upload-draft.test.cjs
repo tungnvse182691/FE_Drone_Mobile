@@ -4,10 +4,11 @@ const task='12345678-1111-4111-8111-111111111111';
 function fixture(){
  const disk=new DatabaseSync(':memory:');disk.exec('CREATE TABLE local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
  let actor='actor-A',session='session-A',environment='https://fixture.test';const listeners=new Set();
+ let user={id:actor};
  const db={runAsync:async(sql,...a)=>disk.prepare(sql).run(...a),getFirstAsync:async(sql,...a)=>disk.prepare(sql).get(...a)};
- const deps={'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../hooks/useOperatorReadScope':{operatorReadScope:()=>session?JSON.stringify([environment,session]):null},'../store/auth':{useAuthStore:{getState:()=>({user:{id:actor}}),subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn);}}},'./client':{apiClient:{defaults:{get baseURL(){return environment;}}}}};
+ const deps={'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../hooks/useOperatorReadScope':{operatorReadScope:()=>session?JSON.stringify([environment,session]):null},'../store/auth':{useAuthStore:{getState:()=>({user,operatorLocalReadScope:async()=>!session?JSON.stringify([environment,JSON.stringify([actor,'secure-session']),'']):null}),subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn);}}},'./client':{apiClient:{defaults:{get baseURL(){return environment;}}}}};
  const load=()=>{const mod={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/operatorUploadDraft.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:mod,exports:mod.exports,require:n=>deps[n],Date});return mod.exports;};
- return {load,disk,change:(a=actor,s=session,e=environment)=>{actor=a;session=s;environment=e;listeners.forEach(fn=>fn());}};
+ return {load,disk,change:(a=actor,s=session,e=environment)=>{actor=a;user={id:actor};session=s;environment=e;listeners.forEach(fn=>fn());}};
 }
 const draft={recordedAt:'2026-11-14 08:30',timeOffset:'0',videoKey:task,telemetryKey:null};
 test('Operator upload draft persists input and local file references across runtime and same-account relogin',async()=>{
@@ -26,4 +27,13 @@ test('Operator upload draft is isolated by actor/environment/task and keeps orig
 test('Operator draft rejects malformed file references and corrupt disk payload without deleting it',async()=>{
  const f=fixture(),r=await f.load().openOperatorUploadDraft(task);await assert.rejects(r.save({...draft,videoKey:'file:///unsafe'}));
  await r.save(draft);f.disk.exec("UPDATE local_draft SET payload='broken'");await assert.rejects(r.read());assert.equal(f.disk.prepare('SELECT count(*) AS n FROM local_draft').get().n,1);r.close();
+});
+test('cold offline local editing keeps existing file keys and is invalidated by account bounce',async()=>{
+ const f=fixture(),online=await f.load().openOperatorUploadDraft(task);await online.save(draft);online.close();
+ f.change('actor-A',null);const local=await f.load().openLocalOperatorUploadDraft(task);
+ const saved=await local.read();assert.equal(saved.videoKey,task);
+ await local.save({...saved,timeOffset:'123'});local.close();
+ const restarted=await f.load().openLocalOperatorUploadDraft(task);assert.equal((await restarted.read()).timeOffset,'123');
+ f.change('B',null);f.change('actor-A',null);await assert.rejects(restarted.save(draft));restarted.close();
+ f.change('actor-A','session-A');const restored=await f.load().openOperatorUploadDraft(task);assert.equal((await restored.read()).timeOffset,'123');restored.close();
 });
