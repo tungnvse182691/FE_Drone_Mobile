@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { openDroneTaskJournal, listDroneTaskCommands } from '../../api/droneTaskJournal';
 import { operatorTaskStatusLabel, operatorTaskDisplayCode } from '../../api/operator-task-view';
@@ -131,6 +131,7 @@ export function DroneTaskRecoveryList() {
   const [rows,setRows] = useState<Awaited<ReturnType<typeof listDroneTaskCommands>>>([]);
   const [dataScope,setDataScope] = useState<string | null>(null), [error,setError] = useState(false);
   const [busy,setBusy] = useState(false);
+  const [historyExpanded,setHistoryExpanded] = useState(false);
   const lock = useRef(false);
   const load = async () => {
     const isCurrent = scope.capture(); if (!isCurrent() || lock.current) return;
@@ -139,20 +140,56 @@ export function DroneTaskRecoveryList() {
     catch { if(isCurrent())setError(true); }
     finally { if(isCurrent()){lock.current=false;setBusy(false);} }
   };
-  useEffect(() => { setRows([]);setDataScope(null);setError(false);lock.current=false;void load(); },[scope.key]);
+  useEffect(() => { setRows([]);setDataScope(null);setError(false);setHistoryExpanded(false);lock.current=false;void load(); },[scope.key]);
   if (!scope.key) return null;
+  const visible = dataScope===scope.key ? rows : [];
+  const pending = visible.filter(row=>row.phase!=='RECEIPT');
+  const history = visible.filter(row=>row.phase==='RECEIPT');
+  const renderRow = (row: typeof rows[number]) => {
+    const action=row.operation==='accept'?'Tiếp nhận':'Từ chối';
+    const status=row.phase==='RECEIPT'?'Có kết quả máy chủ':row.phase==='PREPARED'?'Đã lưu, chưa gửi':'Chưa rõ kết quả';
+    return <Pressable key={row.taskId} testID={`saved-task-${row.taskId}`} accessibilityRole="button"
+      accessibilityLabel={`Nhiệm vụ ${operatorTaskDisplayCode(row.taskId)}, ${action}, ${status}`}
+      onPress={()=>{if(scope.capture()())router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(row.taskId)}`);}}
+      style={({pressed})=>[recoveryStyles.row,pressed&&recoveryStyles.pressed]}>
+      <View style={recoveryStyles.icon}><MaterialIcons name={row.operation==='accept'?'assignment-turned-in':'assignment-return'} size={22} color={colors.secondary}/></View>
+      <View style={recoveryStyles.copy}>
+        <Text style={recoveryStyles.title}>{action} · {operatorTaskDisplayCode(row.taskId)}</Text>
+        <Text style={recoveryStyles.subtitle}>{status}</Text>
+      </View>
+      <MaterialIcons name="chevron-right" size={24} color={colors.secondary}/>
+    </Pressable>;
+  };
   return <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
     <View style={{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:spacing.sm}}>
-      <Text style={{...typography.titleMd,flex:1}}>Yêu cầu đã lưu</Text>
+      <Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>Yêu cầu đã lưu</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại lịch sử yêu cầu" accessibilityState={{busy,disabled:busy}} disabled={busy} onPress={()=>void load()} style={{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center'}}>
         {busy?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
       </Pressable>
     </View>
-    {dataScope===scope.key && rows.length > 0 ? <Text style={typography.caption}>Chọn yêu cầu để xem kết quả hoặc xác nhận gửi lại.</Text> : null}
-    {dataScope===scope.key ? rows.map(row=><Button key={row.taskId} variant="secondary"
-      title={`${operatorTaskDisplayCode(row.taskId)} · ${row.operation==='accept'?'Tiếp nhận':'Từ chối'} · ${row.phase==='RECEIPT'?'Có kết quả máy chủ':row.phase==='PREPARED'?'Chưa gửi':'Chưa rõ kết quả'}`}
-      onPress={()=>{if(scope.capture()())router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(row.taskId)}`);}} />):null}
+    {pending.length ? <Text style={recoveryStyles.subtitle}>Cần kiểm tra ({pending.length}) · Chạm để xem yêu cầu</Text> : dataScope===scope.key && history.length ? <Text style={recoveryStyles.subtitle}>Không có yêu cầu cần đối soát.</Text> : null}
+    {pending.map(renderRow)}
+    {history.length ? <>
+      <Pressable testID="task-history-toggle" accessibilityRole="button" accessibilityLabel="Lịch sử yêu cầu" accessibilityState={{expanded:historyExpanded}}
+        onPress={()=>setHistoryExpanded(value=>!value)} style={({pressed})=>[recoveryStyles.historyToggle,pressed&&recoveryStyles.pressed]}>
+        <MaterialIcons name="history" size={22} color={colors.secondary}/>
+        <Text style={recoveryStyles.historyLabel}>Lịch sử ({history.length})</Text>
+        <MaterialIcons name={historyExpanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
+      </Pressable>
+      {historyExpanded ? history.map(renderRow) : null}
+    </> : null}
     {dataScope===scope.key && !rows.length ? <Text>Chưa có yêu cầu đã lưu.</Text>:null}
     {error?<Text accessibilityRole="alert">Không đọc được lịch sử; dữ liệu vẫn được giữ.</Text>:null}
   </Card>;
 }
+
+const recoveryStyles = StyleSheet.create({
+  row: {minHeight:72,flexDirection:'row',alignItems:'center',gap:12,paddingVertical:12,paddingHorizontal:4,borderBottomWidth:1,borderBottomColor:colors.border},
+  icon: {width:40,height:40,borderRadius:10,backgroundColor:colors.surfaceAlt,alignItems:'center',justifyContent:'center'},
+  copy: {flex:1,minWidth:0,gap:4},
+  title: {...typography.bodyMd,color:colors.neutral,fontFamily:'Roboto-Medium',flexShrink:1},
+  subtitle: {...typography.caption,color:colors.secondary,lineHeight:19,flexShrink:1},
+  historyToggle: {minHeight:52,flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:8,borderRadius:8,backgroundColor:colors.surfaceAlt},
+  historyLabel: {...typography.bodyMd,color:colors.secondary,flex:1},
+  pressed: {backgroundColor:operatorAppearance.pressed},
+});

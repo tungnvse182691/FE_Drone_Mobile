@@ -121,9 +121,26 @@ test('Drone recovery list links owned stored tasks without UUID input or dispatc
   '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Button':{Button:'Button'},'../Card':{Card:'Card'},'../../design-tokens':{typography:{},spacing:{},colors:{}}
  }});
  s.render();await s.flush();assert.equal(calls,1);
- const link=s.nodes().find(n=>n.type==='Button'&&n.props.title.includes('Chưa rõ kết quả'));assert.ok(link);
+ const link=s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel?.includes('Chưa rõ kết quả'));assert.ok(link);
  link.props.onPress();assert.deepEqual(s.nav,[`/(drone)/request-detail?taskId=${id(2)}`]);
  assert.ok(!s.nodes().some(n=>n.type==='TextInput'));s.unmount();
+});
+
+test('Drone recovery separates pending actions from collapsed history and opens rows without replay',async()=>{
+ const rows=[{taskId:id(2),operation:'accept',phase:'UNKNOWN_OUTCOME'},{taskId:id(3),operation:'decline',phase:'RECEIPT'}];
+ const s=screen('src/components/drone/DroneTaskCommandPanel.tsx',{exportName:'DroneTaskRecoveryList',modules:{
+  '../../api/droneTaskJournal':{listDroneTaskCommands:async()=>rows},
+  '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Button':{Button:'Button'},'../Card':{Card:'Card'},'../../design-tokens':{typography:{},spacing:{},colors:{}}
+ }});
+ s.render();await s.flush();
+ assert.ok(s.nodes().some(n=>n.props.testID===`saved-task-${id(2)}`));
+ assert.ok(!s.nodes().some(n=>n.props.testID===`saved-task-${id(3)}`));
+ assert.ok(!s.nodes().some(n=>n.type==='Button'),'history uses list rows, not long outlined buttons');
+ await s.tap('task-history-toggle');await s.flush();
+ const row=s.nodes().find(n=>n.props.testID===`saved-task-${id(3)}`);assert.ok(row);
+ assert.ok(row.props.style({pressed:false})[0].minHeight>=64);
+ row.props.onPress();assert.deepEqual(s.nav,[`/(drone)/request-detail?taskId=${id(3)}`]);
+ await s.tap('task-history-toggle');await s.flush();assert.ok(!s.nodes().some(n=>n.props.testID===`saved-task-${id(3)}`));s.unmount();
 });
 
 test('Drone panel locks double confirmation while original POST is unresolved',async()=>{
