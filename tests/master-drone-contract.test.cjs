@@ -126,3 +126,29 @@ test('cancel timeout preserves request and must not mark upload failed', async (
   assert.equal(h.getUpdated().cancelRequest.phase,'UNKNOWN');
   assert.equal(h.getUpdated().error.code,'cancel_unknown');
 });
+
+for (const status of ['UPLOADING', 'FAILED', 'VERIFYING', 'VERIFIED']) test(`unknown cancel reconciles ${status} without another POST`, async () => {
+  let writes = 0, reads = 0;
+  const intent = {key:id(20),kind:'DRONE_UPLOAD_INTENT',taskId:id(11),uploadId:id(5),status:'PARTS_IN_PROGRESS',cancelRequest:{requestedAt:'2026-11-15T01:00:00Z',phase:'UNKNOWN'}};
+  const h = loadCancelWorkflow({intent,
+    cancel:async()=>{writes++;throw Error('must not replay');},
+    getSession:async uploadId=>{reads++;return {id:uploadId,status};},
+  });
+  await assert.rejects(h.api.cancelOperatorUploadSession(h.taskId,id(5)), /cancel_readback_pending|upload_not_cancellable/);
+  assert.equal(writes,0);assert.equal(reads,1);
+  assert.equal(intent.cancelRequest.requestedAt,'2026-11-15T01:00:00Z');
+  assert.notEqual(intent.error?.code,'upload_cancelled');
+  assert.equal(intent.cancelRequest.phase,['VERIFYING','VERIFIED'].includes(status)?'REJECTED':'UNKNOWN');
+});
+
+test('overlapping cancel actions share the upload lock and send only one POST',async()=>{
+  let release, writes=0;
+  const wait=new Promise(resolve=>{release=resolve;});
+  const h=loadCancelWorkflow({intent:{key:id(20),kind:'DRONE_UPLOAD_INTENT',taskId:id(11),uploadId:id(5),status:'PARTS_IN_PROGRESS'},
+    cancel:async uploadId=>{writes++;await wait;return {id:uploadId,status:'FAILED',failureCode:'upload_cancelled'};},
+    getSession:async uploadId=>({id:uploadId,status:'FAILED'}),
+  });
+  const first=h.api.cancelOperatorUploadSession(h.taskId,id(5));
+  await assert.rejects(h.api.cancelOperatorUploadSession(h.taskId,id(5)),/drone_upload_busy/);
+  release();await first;assert.equal(writes,1);
+});

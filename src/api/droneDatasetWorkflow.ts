@@ -240,6 +240,17 @@ export async function cancelOperatorUploadSession(
     const items = await journal.read('upload'); guard();
     const intent = items.find(item => item.kind === 'DRONE_UPLOAD_INTENT' && item.taskId === taskId && item.uploadId === uploadId);
     if (!intent) throw Error('drone_upload_cancel_intent_missing');
+    if (intent.cancelRequest?.phase === 'UNKNOWN') {
+      // Reconciliation is read-only. GET does not expose the cancellation reason,
+      // so FAILED alone cannot confirm a lost API-237 response.
+      const observed = await transport.getSession(uploadId); guard();
+      if (observed.id !== uploadId) throw Error('drone_upload_session_invalid');
+      if (observed.status === 'VERIFIED' || observed.status === 'VERIFYING') {
+        await journal.update(intent.key, { status:'VERIFY_PENDING', cancelRequest:{...intent.cancelRequest,phase:'REJECTED'}, error:{code:'upload_not_cancellable'} }); guard();
+        throw Error('upload_not_cancellable');
+      }
+      throw Error('cancel_readback_pending');
+    }
     const request = { requestedAt: intent.cancelRequest?.requestedAt ?? new Date().toISOString(), phase: 'UNKNOWN' as const };
     await journal.update(intent.key,{cancelRequest:request}); guard();
     try {

@@ -403,9 +403,10 @@ export default function DroneUploadScreen() {
   const handleCancelUpload = (intent: DroneUploadIntent) => {
     const isCurrent=scope.capture();
     if(!isCurrent()||sending.current||!intent.uploadId)return;
-    Alert.alert('Hủy phiên tải lên?', 'Các phần trên máy chủ sẽ không được nộp. Tệp gốc và nháp vẫn được giữ trên thiết bị.',[
+    const reconcile=intent.cancelRequest?.phase==='UNKNOWN';
+    Alert.alert(reconcile?'Kiểm tra kết quả hủy?':'Hủy phiên tải lên?', reconcile?'Đọc trạng thái phiên đã lưu trên máy chủ. Tệp gốc và nháp vẫn được giữ trên thiết bị.':'Các phần trên máy chủ sẽ không được nộp. Tệp gốc và nháp vẫn được giữ trên thiết bị.',[
       {text:'Giữ phiên',style:'cancel'},
-      {text:'Hủy tải lên',style:'destructive',onPress:()=>{void (async()=>{
+      {text:reconcile?'Đọc trạng thái':'Hủy tải lên',style:reconcile?'default':'destructive',onPress:()=>{void (async()=>{
         if(!isCurrent()||sending.current)return;
         sending.current=true;setSubmitting(true);setSubmitError(null);setTransferPhase(null);setTransferMessage('Đang kiểm tra kết quả hủy…');
         try {
