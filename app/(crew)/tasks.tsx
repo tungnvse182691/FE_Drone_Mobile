@@ -20,7 +20,7 @@ import {
   getFieldInspectionTaskDetailReal, isCrewResourceId, validateCrewTaskDetail,
   type CrewTask, type OperationalCrewTask,
 } from '../../src/api/crewApi';
-import { RoleCode, TaskMode } from '../../src/types/enums';
+import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
@@ -141,15 +141,19 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
   return <React.Fragment key={`${inbox.environment}:${inbox.scope}:${projectId}:${id}`}>{props.operational === false ? props.children(task) : isOperational(task) ? props.children(task) : null}</React.Fragment>;
 }
 
-export type TaskModeFilter = 'ALL' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
+export type TaskModeFilter = 'ALL' | 'NORMAL' | 'CONDITIONAL_FT' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
 
 export const TASK_MODE_FILTERS: { key: TaskModeFilter; label: string }[] = [
   { key: 'ALL', label: 'Tất cả' },
+  { key: 'NORMAL', label: 'Sửa chữa theo kế hoạch' },
+  { key: 'CONDITIONAL_FT', label: 'Sửa chữa nhanh có điều kiện' },
   { key: 'INSPECT_AND_REPAIR', label: 'Đo kiểm và xem xét sửa chữa' },
   { key: 'MEASURE_ONLY', label: 'Chỉ đo kiểm' },
 ];
 
-export const TASK_MODE_CHIP: Record<TaskMode | 'UNKNOWN', { variant: ChipVariant; label: string }> = {
+export const TASK_MODE_CHIP: Record<CrewTask['task_mode'], { variant: ChipVariant; label: string }> = {
+  NORMAL: { variant: 'status-pending', label: 'Sửa chữa theo kế hoạch' },
+  CONDITIONAL_FT: { variant: 'fast-track', label: 'Sửa chữa nhanh có điều kiện' },
   UNKNOWN: { variant: 'status-pending', label: 'Chưa xác định chế độ' },
   INSPECT_AND_REPAIR: { variant: 'fast-track', label: 'Đo kiểm và xem xét sửa chữa' },
   MEASURE_ONLY: { variant: 'measure-only', label: 'Chỉ đo kiểm' },

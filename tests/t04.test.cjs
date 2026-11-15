@@ -20,7 +20,7 @@ test('T04 absent presentation data stays absent, no invented WO/GPS/defect',()=>
  assert.equal(t.title,'');assert.equal(t.task_mode,'MEASURE_ONLY');assert.ok(api.crewTaskActionBlock(t));
 });
 test('T04 unknown mode is not silently mapped to measure-only',()=>{
- const t=harness().api.crewTaskFromWire({...wire(),mode:'NORMAL'});assert.equal(t.task_mode,'UNKNOWN');assert.equal(t.rawMode,'NORMAL');
+ const t=harness().api.crewTaskFromWire({...wire(),mode:'UNRECOGNIZED_MODE'});assert.equal(t.task_mode,'UNKNOWN');assert.equal(t.rawMode,'UNRECOGNIZED_MODE');
 });
 
 test('Crew navigation reads only API-080 defectTarget and does not grant repair authority',()=>{

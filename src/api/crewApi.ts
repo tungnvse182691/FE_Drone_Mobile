@@ -50,7 +50,7 @@ export async function listCrewProjectsReal(params:{cursor?:string;limit?:number}
 /** UI projection: unknown fields stay absent; never manufacture business facts. */
 export type CrewTask = Omit<CrewFieldTaskCard, 'coordinates' | 'task_mode' | 'defect_type_code'> & {
   projectId: string; version: string; crewId: string; status: string; rawMode: string;
-  task_mode: TaskMode | 'UNKNOWN'; defect_type_code: string;
+  task_mode: TaskMode | 'NORMAL' | 'CONDITIONAL_FT' | 'UNKNOWN'; defect_type_code: string;
   coordinates: { latitude: number; longitude: number } | null;
   detail?: FieldTaskViewFact; etag?: string;
 };
@@ -158,7 +158,7 @@ export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: Field
   return {
     id: item.id, projectId: item.projectId, version: detail?.version ?? item.version, crewId: item.crewId,
     status: detail?.status ?? item.status, rawMode,
-    task_mode: (['MEASURE_ONLY','INSPECT_AND_REPAIR','INSPECT_ONLY'].includes(rawMode) ? rawMode : 'UNKNOWN') as CrewTask['task_mode'],
+    task_mode: (['MEASURE_ONLY','NORMAL','CONDITIONAL_FT','INSPECT_AND_REPAIR','INSPECT_ONLY'].includes(rawMode) ? rawMode : 'UNKNOWN') as CrewTask['task_mode'],
     wo_code: '', title: '', defect_type_code: '', coordinates,
     route_code: '', section_name: '', chainage: '', locality: '', due_label: detail?.dueAt ?? '',
     due_urgency: 'normal', distance_label: '', defect_location: '', description: detail?.instructions ?? '',
