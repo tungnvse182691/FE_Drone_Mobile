@@ -589,18 +589,8 @@ export async function putUploadPartBytesDirect(
   bytes: ArrayBuffer | Blob | Uint8Array,
   mediaType: string,
 ): Promise<string> {
-  const res = await axios.put(url, bytes, {
-    headers: {
-      'Content-Type': mediaType,
-      'Content-Length': bytes instanceof ArrayBuffer ? bytes.byteLength : (bytes as Uint8Array).length,
-    },
-    transformRequest: [(data) => data],
-  });
-  const etag = res.headers?.etag || res.headers?.ETag;
-  if (!etag) {
-    throw new Error('Storage không trả về ETag sau khi tải phần tệp lên.');
-  }
-  return etag;
+  const { putDroneStorageBytes } = await import('./droneStorageTransfer');
+  return putDroneStorageBytes(url, bytes, mediaType);
 }
 
 /**

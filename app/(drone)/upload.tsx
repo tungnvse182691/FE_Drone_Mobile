@@ -387,7 +387,7 @@ export default function DroneUploadScreen() {
       const plan: DroneDatasetPlan={taskId:params.taskId,projectId:current.data.projectId,ifMatch:current.etag,payload:{videoFileIds:[videoId],telemetryFileIds:telemetryId?[telemetryId]:[],deviceId:selectedDroneId,recordedAt:date.toISOString(),scope:current.data.scope,pairs:[{videoFileId:videoId,telemetryFileId:telemetryId,timeOffsetMilliseconds:telemetryId?Number(timeOffset):0}]}};
       setTransferMessage('Đang nộp bộ dữ liệu…');
       const result=await submitDroneDataset(plan);guard();setPendingDataset(result);await confirmDataset(result,isCurrent);
-    } catch(error) {if(isCurrent()&&mounted.current)setSubmitError(submitFailure(error));}
+    } catch(error) {if(isCurrent()&&mounted.current){setSubmitError(submitFailure(error));setTransferMessage('Tệp và tiến trình đã lưu trên thiết bị.');}}
     finally {sending.current=false;if(isCurrent()&&mounted.current){setSubmitting(false);await readDatasetIntent();}}
   };
   const handleRetainedDataset = async (replay=false) => {

@@ -242,7 +242,7 @@ test('Drone upload orchestration persists before transport and distinguishes com
  let completed=false;const calls=[];const workflow=loadUploadWorkflow(journalFactory);
  const transport={readTask:async()=>({data:{id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',version:'AAAAAAAAAAE='},etag:'"AAAAAAAAAAE="'}),createSession:async(p,k)=>{assert.equal(prepared,true);calls.push(['create',k]);return {id:id(21),fileId:id(22),status:'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='};},getSession:async()=>({id:id(21),fileId:id(22),status:completed?'VERIFIED':'CREATED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='}),getPartUrls:async()=>({parts:[{partNumber:1,url:'https://storage.example/part',expiresAt:'2026-11-06T00:00:00Z'}]}),putPart:async(url,bytes)=>{calls.push(['put',bytes.byteLength]);return 'etag-1';},complete:async()=>{completed=true;return ({id:id(21),fileId:id(22),status:'ACCEPTED',partSizeBytes:2,expiresAt:'2026-11-06T00:00:00Z',version:'AAAAAAAAAAI='});},getMetadata:async()=>({id:id(22),status:'VERIFIED',checksumSha256:'a'.repeat(64),mediaType:'video/mp4',sizeBytes:2})};
  const result=await workflow.orchestrateDroneUpload({taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:2,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},parts:[{partNumber:1,sizeBytes:2,read:async()=>Uint8Array.from([1,2])}]},transport);
- assert.equal(result.status,'VERIFIED');assert.deepEqual(calls.map(c=>c[0]),['create','put']);assert.deepEqual(updates.map(p=>p.status),['SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
+ assert.equal(result.status,'VERIFIED');assert.deepEqual(calls.map(c=>c[0]),['create','put']);assert.deepEqual(updates.map(p=>p.status).filter(Boolean),['SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
 });
 test('Drone upload complete timeout remains UNKNOWN and never claims VERIFIED',async()=>{
  const updates=[],intent={key:id(30),status:'PREPARED',uploadId:null,fileId:null,version:null,ifMatch:null};
@@ -274,6 +274,24 @@ test('Operator transfer uses server part size and fresh version after URL admiss
  const f=uploadScenario();assert.equal((await f.workflow.orchestrateDroneUpload(f.plan,f.transport)).status,'VERIFIED');
  assert.deepEqual(f.calls.filter(c=>c[0]==='put').map(c=>c[1]),[[1,2],[3,4],[5]]);
  assert.equal(f.calls.find(c=>c[0]==='complete')[2],'AAAAAAAAAAM=');
+});
+
+test('Operator resumes storage 403 with the same upload and retained part receipts',async()=>{
+ const f=uploadScenario({status:'FAILED',uploadId:id(41),fileId:id(42),error:{status:403,code:'part_transport_unknown'},parts:[{partNumber:1,sizeBytes:2,etag:'etag-1'}]});
+ f.set('UPLOADING');
+ assert.equal((await f.workflow.orchestrateDroneUpload(f.plan,f.transport)).status,'VERIFIED');
+ assert.equal(f.calls.filter(c=>c[0]==='create').length,0);
+ assert.deepEqual(f.calls.filter(c=>c[0]==='put').map(c=>c[1]),[[3,4],[5]]);
+ assert.equal(f.calls.find(c=>c[0]==='complete')[1].parts.length,3);
+});
+
+test('Operator persists URL admission before POST and renews an expired admission with a new key',async()=>{
+ const f=uploadScenario({uploadId:id(41),fileId:id(42),status:'PARTS_IN_PROGRESS',partUrlRequest:{generation:0,expiresAt:'2020-01-01T00:00:00Z'}});
+ f.set('UPLOADING');let key;
+ const original=f.transport.getPartUrls;
+ f.transport.getPartUrls=async(uploadId,numbers,k)=>{assert.ok(f.intent.partUrlRequest);assert.equal(f.intent.partUrlRequest.generation,1);key=k;return original(uploadId,numbers,k);};
+ await f.workflow.orchestrateDroneUpload(f.plan,f.transport);
+ assert.equal(key,id(40)+':parts:1');
 });
 test('Operator completion timeout retries immutable completion after GET without rePUT',async()=>{
  const f=uploadScenario(),complete=f.transport.complete;let first=true;

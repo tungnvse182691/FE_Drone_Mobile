@@ -117,7 +117,8 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
     journal = await openDroneUploadJournal(plan.taskId); guard();
     const body = { projectId: plan.projectId, targetId: plan.targetId, fileName: plan.file.name, mediaType: plan.file.mediaType, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256 };
     let intent = await journal.prepare({ kind: 'upload', projectId: plan.projectId, localFileId: plan.file.id, localUri: plan.file.uri, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256, purpose: plan.file.purpose, mimeType: plan.file.mediaType, version: plan.taskVersion, ifMatch: `"${plan.taskVersion}"`, body }); guard();
-    ensureStatus(intent.status, ['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
+    const recoverStorageFailure = intent.status === 'FAILED' && intent.error?.code === 'part_transport_unknown' && intent.error.status === 403 && !!intent.uploadId && !intent.completeRequest;
+    if (!recoverStorageFailure) ensureStatus(intent.status, ['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
     const update = async (patch: Parameters<NonNullable<typeof journal>['update']>[1]) => { guard(); intent = await journal!.update(intent.key, patch); guard(); return intent; };
     // A lost create can be recovered only by replaying its original key/body.
     if (!intent.uploadId) {
@@ -134,6 +135,10 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
       return value;
     };
     let session = await readSession();
+    if (recoverStorageFailure) {
+      if (session.status !== 'UPLOADING') throw Error('drone_upload_completion_requires_review');
+      await update({status:'PARTS_IN_PROGRESS',error:null});
+    }
     // A completion was prepared before POST: never upload its bytes again.
     if (!['VERIFIED','VERIFYING'].includes(session.status) && intent.completeRequest) {
       const command = intent.completeRequest;
@@ -153,22 +158,35 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
         return {partNumber:i+1,sizeBytes,read:()=>plan.readRange ? plan.readRange(offset,sizeBytes) : given!.read()};
       });
       // URL admission can initialize multipart storage and advance its version.
-      const urls = await transport.getPartUrls(intent.uploadId!, parts.map(p=>p.partNumber), intent.key); guard();
-      const byNumber = new Map(urls.parts.map(p=>[p.partNumber,p]));
-      if (byNumber.size !== parts.length || urls.parts.length !== parts.length) throw Error('drone_upload_part_url_invalid');
-      const uploaded: typeof intent.parts = [];
+      let byNumber = new Map<number, {partNumber:number;url:string;expiresAt:string}>();
+      const admit = async (renew = false) => {
+        const previous = intent.partUrlRequest;
+        const expired = previous?.expiresAt && Date.parse(previous.expiresAt) <= Date.now() + 60000;
+        const generation = previous ? previous.generation + (renew || expired ? 1 : 0) : 0;
+        await update({partUrlRequest:{generation,...(!renew && !expired && previous?.expiresAt ? {expiresAt:previous.expiresAt} : {})}});
+        const urls = await transport.getPartUrls(intent.uploadId!, parts.map(p=>p.partNumber), `${intent.key}:parts:${generation}`); guard();
+        byNumber = new Map(urls.parts.map(p=>[p.partNumber,p]));
+        if (byNumber.size !== parts.length || urls.parts.length !== parts.length || parts.some(p=>!byNumber.has(p.partNumber)) || urls.parts.some(p=>!Number.isFinite(Date.parse(p.expiresAt)))) throw Error('drone_upload_part_url_invalid');
+        await update({partUrlRequest:{generation,expiresAt:new Date(Math.min(...urls.parts.map(p=>Date.parse(p.expiresAt)))).toISOString()}});
+      };
+      await admit();
+      const uploaded: typeof intent.parts = [...(intent.parts ?? [])];
+      if (new Set(uploaded.map(p=>p.partNumber)).size !== uploaded.length || uploaded.some(p=>parts[p.partNumber-1]?.sizeBytes !== p.sizeBytes || !text(p.etag))) throw Error('drone_upload_part_receipt_invalid');
+      plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
       for (const part of parts) {
-        guard(); const url=byNumber.get(part.partNumber);
-        if (!url || !/^https?:\/\//.test(url.url) || !text(url.expiresAt)) throw Error('drone_upload_part_url_invalid');
+        guard(); if (uploaded.some(p=>p.partNumber===part.partNumber)) continue;
         const bytes=await part.read(); guard();
         if (bytes.byteLength!==part.sizeBytes) throw Error('drone_upload_part_size_changed');
+        if (Date.parse(intent.partUrlRequest!.expiresAt!) <= Date.now()+60000) await admit(true);
+        const url=byNumber.get(part.partNumber);
+        if (!url || !/^https?:\/\//.test(url.url) || !text(url.expiresAt)) throw Error('drone_upload_part_url_invalid');
         try {
           const etag=await transport.putPart(url.url,bytes,plan.file.mediaType); guard();
           if (!text(etag)) throw Error('drone_upload_part_etag_missing');
           uploaded.push({partNumber:part.partNumber,sizeBytes:part.sizeBytes,etag});
           await update({status:'PARTS_IN_PROGRESS',parts:[...uploaded]});
           plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
-        } catch(error) { guard(); await update({status:isUncertain(error)?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'part_transport_unknown'}}); throw error; }
+        } catch(error) { guard(); await update({status:isUncertain(error)||uploadErrorStatus(error)===403?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'part_transport_unknown'}}); throw error; }
       }
       session=await readSession();
       const completeRequest={version:session.version,parts:uploaded.map(({partNumber,etag})=>({partNumber,etag})),checksumSha256:plan.file.checksumSha256};
