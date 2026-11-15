@@ -19,6 +19,7 @@ Environment: roadguard-crew-sandbox-api:crew-85879fe, API 18181; Pixel_6_Pro And
 - `npm run typecheck`: exit 0 (`.cache/operator-final-typecheck.log`). `git diff --check`: exit 0.
 - ANDROID_E2E_VERIFIED for checksum recovery only: after force-stop/reopen, selected the retained QA-operator-interruption-20261115.mp4 (51,449,564 bytes) previously showing unverified local checksum. Observed it selected with 49.1 MB and “Đã kiểm tra SHA-256”; saved the draft, force-stopped/reopened and observed the same selected file, checksum label, drone and recordedAt. No storage reset or SQLite changes on device. Node reference-vector parity is separate from this native observation.
 - The QA video is synthetic and does not demonstrate real flight, GPS or survey coverage.
+- Additional Android interruption audit: started sending that QA video, disabled WiFi/data, observed “Cần tiếp tục gửi”; restored network and force-stopped/reopened. The selected file, checksum label, device and recordedAt survived. Resumed from this task's upload screen, not a historical unknown command. Transfer reached 16%; after the multipart-read change, reopened and resumed again, also reached 16%. Full completion/VERIFIED/dataset readback for this large file is NOT_RUN to completion; performance remains unresolved. MinIO health from Android's 10.0.2.2:19101 returned HTTP 200. Do not claim the bounded-read change resolves total transfer latency. Network is restored and the app remains on the QA transfer screen.
 
 ## Current API audit
 
