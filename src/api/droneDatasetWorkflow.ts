@@ -92,6 +92,7 @@ export type DroneUploadPlan = {
   taskVersion: string; parts?: DroneUploadPartInput[];
   readRange?: (offset: number, length: number) => Promise<Uint8Array>;
   onProgress?: (sent: number, total: number) => void;
+  shouldPause?: () => boolean;
 };
 const realDroneUploadTransport: DroneUploadTransport = { readTask: getOperatorSurveyTaskDetailReal, createSession: createOperatorUploadSessionReal, getSession: getOperatorUploadSessionReal, getPartUrls: getOperatorUploadPartUrlsReal, putPart: putUploadPartBytesDirect, complete: completeOperatorUploadReal, getMetadata: getOperatorFileMetadataReal };
 const uploadErrorStatus = (error: unknown): number | undefined => typeof error === 'object' && error !== null && 'response' in error && typeof (error as { response?: { status?: unknown } }).response?.status === 'number' ? (error as { response: { status: number } }).response.status : undefined;
@@ -117,6 +118,9 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
     journal = await openDroneUploadJournal(plan.taskId); guard();
     const body = { projectId: plan.projectId, targetId: plan.targetId, fileName: plan.file.name, mediaType: plan.file.mediaType, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256 };
     let intent = await journal.prepare({ kind: 'upload', projectId: plan.projectId, localFileId: plan.file.id, localUri: plan.file.uri, sizeBytes: plan.file.sizeBytes, checksumSha256: plan.file.checksumSha256, purpose: plan.file.purpose, mimeType: plan.file.mediaType, version: plan.taskVersion, ifMatch: `"${plan.taskVersion}"`, body }); guard();
+    if (intent.cancelRequest?.phase === 'UNKNOWN') throw Error('drone_upload_cancel_pending');
+    const pause = () => { guard(); if (plan.shouldPause?.()) throw Error('drone_upload_paused'); };
+    pause();
     const recoverStorageFailure = intent.status === 'FAILED' && intent.error?.code === 'part_transport_unknown' && intent.error.status === 403 && !!intent.uploadId && !intent.completeRequest;
     if (!recoverStorageFailure) ensureStatus(intent.status, ['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED']);
     const update = async (patch: Parameters<NonNullable<typeof journal>['update']>[1]) => { guard(); intent = await journal!.update(intent.key, patch); guard(); return intent; };
@@ -174,8 +178,9 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
       if (new Set(uploaded.map(p=>p.partNumber)).size !== uploaded.length || uploaded.some(p=>parts[p.partNumber-1]?.sizeBytes !== p.sizeBytes || !text(p.etag))) throw Error('drone_upload_part_receipt_invalid');
       plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
       for (const part of parts) {
-        guard(); if (uploaded.some(p=>p.partNumber===part.partNumber)) continue;
+        pause(); if (uploaded.some(p=>p.partNumber===part.partNumber)) continue;
         const bytes=await part.read(); guard();
+        pause();
         if (bytes.byteLength!==part.sizeBytes) throw Error('drone_upload_part_size_changed');
         if (Date.parse(intent.partUrlRequest!.expiresAt!) <= Date.now()+60000) await admit(true);
         const url=byNumber.get(part.partNumber);
@@ -188,6 +193,7 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
           plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
         } catch(error) { guard(); await update({status:isUncertain(error)||uploadErrorStatus(error)===403?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'part_transport_unknown'}}); throw error; }
       }
+      pause();
       session=await readSession();
       const completeRequest={version:session.version,parts:uploaded.map(({partNumber,etag})=>({partNumber,etag})),checksumSha256:plan.file.checksumSha256};
       await update({status:'COMPLETE_UNKNOWN',completeRequest,version:session.version,ifMatch:`"${session.version}"`});
@@ -221,30 +227,44 @@ export async function cancelOperatorUploadSession(
   transport: DroneUploadCancelTransport = realDroneUploadCancelTransport,
 ): Promise<DroneUploadIntent> {
   if (!isDroneResourceId(taskId) || !isDroneResourceId(uploadId)) throw Error('drone_upload_cancel_input_invalid');
-  if (!operatorDatasetScope()) throw Error('operator_session_invalid');
-  const journal = await openDroneUploadJournal(taskId);
+  const scope = operatorDatasetScope(); if (!scope) throw Error('operator_session_invalid');
+  let invalid = false;
+  const unsubscribe = useAuthStore.subscribe(() => { if (operatorDatasetScope() !== scope) invalid = true; });
+  const guard = () => { if (invalid) throw Error('operator_session_changed'); requireScope(scope); };
+  const lock = JSON.stringify([scope,taskId]);
+  if (activeUploads.has(lock)) { unsubscribe(); throw Error('drone_upload_busy'); }
+  activeUploads.add(lock);
+  let journal: Awaited<ReturnType<typeof openDroneUploadJournal>> | undefined;
   try {
-    const items = await journal.read('upload');
-    const intent = items.find(item => item.uploadId === uploadId);
+    journal = await openDroneUploadJournal(taskId); guard();
+    const items = await journal.read('upload'); guard();
+    const intent = items.find(item => item.kind === 'DRONE_UPLOAD_INTENT' && item.taskId === taskId && item.uploadId === uploadId);
     if (!intent) throw Error('drone_upload_cancel_intent_missing');
+    const request = { requestedAt: intent.cancelRequest?.requestedAt ?? new Date().toISOString(), phase: 'UNKNOWN' as const };
+    await journal.update(intent.key,{cancelRequest:request}); guard();
     try {
-      const receipt = await transport.cancel(uploadId);
+      const receipt = await transport.cancel(uploadId); guard();
       if (receipt.id !== uploadId || receipt.status !== 'FAILED' || receipt.failureCode !== 'upload_cancelled') throw Error('drone_upload_cancel_receipt_invalid');
-      return journal.update(intent.key, { status: 'FAILED', error: { status: 200, code: 'upload_cancelled' } });
+      const observed = await transport.getSession(uploadId); guard();
+      // API-234 exposes status, while cancellation reason belongs to API-237's receipt.
+      if (observed.id !== uploadId || observed.status !== 'FAILED') throw Error('cancel_readback_pending');
+      return await journal.update(intent.key, { status: 'FAILED', cancelRequest:{...request,phase:'CONFIRMED'}, error: { status: 200, code: 'upload_cancelled' } });
     } catch (error) {
+      guard();
       const status = uploadErrorStatus(error);
       if (status === 409) {
-        const observed = await transport.getSession(uploadId);
+        const observed = await transport.getSession(uploadId); guard();
+        if (observed.id !== uploadId) throw Error('drone_upload_session_invalid');
         const nextStatus = observed.status === 'VERIFIED' ? 'VERIFY_PENDING' : intent.status;
-        const next = await journal.update(intent.key, { status: nextStatus, error: { status, code: 'upload_not_cancellable' } });
+        const next = await journal.update(intent.key, { status: nextStatus, cancelRequest:{...request,phase:'REJECTED'}, error: { status, code: 'upload_not_cancellable' } });
         throw Object.assign(new Error('upload_not_cancellable'), { response: { status, data: { code: 'upload_not_cancellable' } }, intent: next });
       }
       const code = status === 401 ? 'cancel_auth_required' : status === 403 ? 'cancel_access_forbidden' : status === 404 ? 'upload_session_not_found' : isUncertain(error) ? 'cancel_unknown' : 'cancel_rejected';
-      await journal.update(intent.key, { error: { status, code } });
+      await journal.update(intent.key, { cancelRequest:{...request,phase:isUncertain(error)?'UNKNOWN':'REJECTED'}, error: { status, code } });
       throw error;
     }
   } finally {
-    journal.close();
+    journal?.close(); unsubscribe(); activeUploads.delete(lock);
   }
 }
 

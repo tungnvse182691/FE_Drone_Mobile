@@ -553,9 +553,10 @@ export async function getOperatorUploadSessionReal(
 }
 
 /** API-237: cancel one Operator-owned upload session. No body or mutation headers. */
-export async function cancelOperatorUploadReal(uploadId: string): Promise<UploadSessionResponseDto> {
+export type UploadCancelResponseDto = { id: string; status: 'FAILED'; failureCode: 'upload_cancelled' };
+export async function cancelOperatorUploadReal(uploadId: string): Promise<UploadCancelResponseDto> {
   if (!isDroneResourceId(uploadId)) throw Error('invalid_upload_id');
-  const res = await apiClient.post<UploadSessionResponseDto>(
+  const res = await apiClient.post<UploadCancelResponseDto>(
     `/uploads/${encodeURIComponent(uploadId)}/cancel`,
   );
   if (!res.data || res.data.id !== uploadId || res.data.status !== 'FAILED' || res.data.failureCode !== 'upload_cancelled') {

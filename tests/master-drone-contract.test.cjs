@@ -44,14 +44,14 @@ test('eligible drone GET rejects invalid task ids and unsafe limits before HTTP'
   assert.equal(h.calls.length, 0);
 });
 
-function loadCancelWorkflow({ cancel, getSession, intent }) {
+function loadCancelWorkflow({ cancel, getSession, intent, onUpdate, onRead }) {
   let updated;
   const module = { exports: {} };
   const actor = id(10);
   const taskId = id(11);
   const journal = {
-    read: async () => intent ? [intent] : [],
-    update: async (_key, patch) => { updated = patch; return { ...intent, ...patch }; },
+    read: async () => { onRead?.(); return intent ? [intent] : []; },
+    update: async (_key, patch) => { updated = patch; Object.assign(intent, patch); onUpdate?.(patch); return { ...intent }; },
     close: () => {},
   };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneDatasetWorkflow.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
@@ -81,12 +81,13 @@ function loadCancelWorkflow({ cancel, getSession, intent }) {
 test('operator cancel marks only the matching upload journal as cancelled', async () => {
   const h = loadCancelWorkflow({
     cancel: async uploadId => ({ id: uploadId, status: 'FAILED', failureCode: 'upload_cancelled' }),
-    getSession: async () => ({ status: 'UPLOADING' }),
+    getSession: async uploadId => ({ id: uploadId, status: 'FAILED' }),
     intent: { key: id(20), kind: 'DRONE_UPLOAD_INTENT', taskId: id(11), uploadId: id(5), status: 'PARTS_IN_PROGRESS' },
   });
   const result = await h.api.cancelOperatorUploadSession(h.taskId, id(5));
   assert.equal(result.status, 'FAILED');
-  assert.deepEqual(JSON.parse(JSON.stringify(h.getUpdated())), { status: 'FAILED', error: { status: 200, code: 'upload_cancelled' } });
+  assert.equal(h.getUpdated().error.code, 'upload_cancelled');
+  assert.equal(h.getUpdated().cancelRequest.phase, 'CONFIRMED');
 });
 
 test('operator cancel 409 reads the session and never claims cancellation', async () => {
@@ -98,5 +99,30 @@ test('operator cancel 409 reads the session and never claims cancellation', asyn
   });
   await assert.rejects(h.api.cancelOperatorUploadSession(h.taskId, id(5)), /upload_not_cancellable/);
   assert.equal(cancelCalls, 1); assert.equal(readCalls, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(h.getUpdated())), { status: 'PARTS_IN_PROGRESS', error: { status: 409, code: 'upload_not_cancellable' } });
+  assert.equal(h.getUpdated().status, 'PARTS_IN_PROGRESS');
+  assert.equal(h.getUpdated().error.code, 'upload_not_cancellable');
+});
+
+test('cancel persists unknown outcome before POST and requires authorized readback', async () => {
+  let durable = false, reads = 0;
+  const h = loadCancelWorkflow({
+    onUpdate: patch => { if (patch.cancelRequest?.phase === 'UNKNOWN') durable = true; },
+    cancel: async uploadId => { assert.equal(durable, true); return {id:uploadId,status:'FAILED',failureCode:'upload_cancelled'}; },
+    getSession: async uploadId => { reads++; return {id:uploadId,status:'UPLOADING'}; },
+    intent: {key:id(20),kind:'DRONE_UPLOAD_INTENT',taskId:id(11),uploadId:id(5),status:'PARTS_IN_PROGRESS'},
+  });
+  await assert.rejects(h.api.cancelOperatorUploadSession(h.taskId,id(5)), /cancel_readback_pending/);
+  assert.equal(reads,1);
+  assert.equal(h.getUpdated().cancelRequest.phase,'UNKNOWN');
+  assert.notEqual(h.getUpdated().error?.code,'upload_cancelled');
+});
+
+test('cancel timeout preserves request and must not mark upload failed', async () => {
+  const h = loadCancelWorkflow({
+    cancel: async () => { throw Error('timeout'); }, getSession: async () => { throw Error('not called'); },
+    intent:{key:id(20),kind:'DRONE_UPLOAD_INTENT',taskId:id(11),uploadId:id(5),status:'PARTS_IN_PROGRESS'},
+  });
+  await assert.rejects(h.api.cancelOperatorUploadSession(h.taskId,id(5)), /timeout/);
+  assert.equal(h.getUpdated().cancelRequest.phase,'UNKNOWN');
+  assert.equal(h.getUpdated().error.code,'cancel_unknown');
 });

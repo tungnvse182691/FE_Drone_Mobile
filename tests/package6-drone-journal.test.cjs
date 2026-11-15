@@ -318,6 +318,29 @@ test('Operator verified video does not block preparing a separate telemetry uplo
  assert.notEqual(video.key,telemetry.key);assert.equal((await r.read('upload')).length,2);r.close();
 });
 
+test('Operator keeps cancelled history and creates a new session only after confirmed cancellation',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ const input={kind:'upload',projectId:id(3),localFileId:id(7),localUri:'file:///private/video.mp4',sizeBytes:4,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mimeType:'video/mp4',body:{targetId:id(2),fileName:'video.mp4'}};
+ const first=await r.prepare(input);
+ await r.update(first.key,{cancelRequest:{requestedAt:new Date().toISOString(),phase:'UNKNOWN'}});
+ assert.equal((await r.prepare(input)).key,first.key);
+ await r.update(first.key,{status:'FAILED',cancelRequest:{requestedAt:new Date().toISOString(),phase:'CONFIRMED'},error:{status:200,code:'upload_cancelled'}});
+ const second=await r.prepare(input);
+ assert.notEqual(second.key,first.key);assert.equal((await r.read('upload')).length,2);r.close();
+});
+
+test('Operator pause retains uploaded part receipts and does not complete or create another session',async()=>{
+ const f=uploadScenario();let pause=false;
+ const put=f.transport.putPart;
+ f.transport.putPart=async(...args)=>{const etag=await put(...args);pause=true;return etag;};
+ f.plan.shouldPause=()=>pause;
+ await assert.rejects(f.workflow.orchestrateDroneUpload(f.plan,f.transport),/drone_upload_paused/);
+ assert.equal(f.intent.parts.length,1);assert.equal(f.calls.filter(c=>c[0]==='complete').length,0);
+ pause=false;
+ await f.workflow.orchestrateDroneUpload({...f.plan,shouldPause:()=>false},f.transport);
+ assert.equal(f.calls.filter(c=>c[0]==='create').length,1);assert.equal(f.calls.filter(c=>c[0]==='put').length,3);
+});
+
 test('Operator transfer stops after session leaves and returns while task GET is pending',async()=>{
  const listeners=new Set(),state={token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}};
  const auth={getState:()=>state,subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}};
