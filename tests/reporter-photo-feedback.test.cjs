@@ -51,8 +51,9 @@ for(const [state,label,busy,verified] of [['LOCAL_READY','Chờ tải',false,fal
  const item={mediaState:state,sizeBytes:100,partSizeBytes:50,partETags:{'1':'etag'},cancelState:null};
  const s=photoScreen('src/components/reporter/PhotoUploadStatus.tsx',{exportName:'PhotoUploadStatus',props:{item,index:0}});s.render();
  const root=s.nodes().find(n=>n.props.testID==='photo-state-0');assert.match(root.props.accessibilityLabel,new RegExp(label));assert.equal(root.props.accessibilityState.busy,busy);
- assert.equal(s.nodes().some(n=>n.type==='ActivityIndicator'),busy&&state!=='UPLOADING');
+ assert.equal(s.nodes().some(n=>n.type==='ActivityIndicator'),busy&&state==='SESSION_CREATED');
  assert.equal(s.nodes().some(n=>n.props.name==='check-circle'),verified);
+ if(state==='COMPLETE_REQUESTED'||state==='VERIFYING'){assert.equal(s.nodes().find(n=>n.props.accessibilityRole==='progressbar').props.accessibilityValue.now,100);assert.ok(!s.nodes().some(n=>n.props.name==='check-circle'));}
  if(state==='UPLOADING'){const bar=s.nodes().find(n=>n.props.accessibilityRole==='progressbar');assert.equal(bar.props.accessibilityValue.now,50);}
  s.unmount();
 });

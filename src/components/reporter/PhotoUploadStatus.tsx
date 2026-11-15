@@ -29,7 +29,8 @@ export function PhotoUploadStatus({ item, index, active = false, progressPercent
   const label = failed ? 'Cần kiểm tra' : verified ? 'Đã xác minh' : checking ? 'Đang kiểm tra' : transferring ? 'Đang tải' : 'Chờ tải';
   const ratio = !blocked && item?.mediaState === 'UPLOADING' && item.sizeBytes > 0 && item.partSizeBytes > 0
     ? Math.max(0, Math.min(1, uploadedRatio(item))) : undefined;
-  const percent = !blocked && !checking && !verified && transferring && Number.isFinite(progressPercent)
+  // Completion requested means all bytes transferred, not server verification success.
+  const percent = !blocked && checking ? 100 : !blocked && !verified && transferring && Number.isFinite(progressPercent)
     ? Math.max(0, Math.min(100, Math.floor(progressPercent!)))
     : ratio === undefined ? undefined : Math.floor(ratio * 100);
   useEffect(() => {
@@ -41,7 +42,7 @@ export function PhotoUploadStatus({ item, index, active = false, progressPercent
     return () => animation.stop();
   }, [label, reduceMotion, fade]);
   return <View pointerEvents="none" testID={`photo-state-${index}`} accessible
-    accessibilityLabel={`Ảnh ${index + 1}: ${label}${percent === undefined ? '' : ` ${percent}%`}`}
+    accessibilityLabel={`Ảnh ${index + 1}: ${checking && !blocked ? 'Đã tải 100% · Đang kiểm tra' : `${label}${percent === undefined ? '' : ` ${percent}%`}`}`}
     accessibilityState={{ busy }} accessibilityLiveRegion="polite"
     style={[styles.overlay, busy && styles.busy]}>
     <Animated.View style={[styles.content, { opacity: fade }]}>

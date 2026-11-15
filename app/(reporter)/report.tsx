@@ -509,11 +509,11 @@ export default function ReporterReportScreen() {
           <View style={styles.submitWrapper}>
             <Button
               variant="primary"
-              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : submitProgress?.phase === 'uploading' ? `Đang tải ảnh ${submitProgress.index}/${submitProgress.total}${submitProgress.uploadPercent === undefined ? '…' : ` · ${submitProgress.uploadPercent}%`}` : submitProgress?.phase === 'verifying' ? `Đang xác minh ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verified' ? 'Đang chuẩn bị gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
+              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : submitProgress?.phase === 'uploading' ? `Đang tải ảnh ${submitProgress.index}/${submitProgress.total}${submitProgress.uploadPercent === undefined ? '…' : ` · ${submitProgress.uploadPercent}%`}` : submitProgress?.phase === 'verifying' ? `Đã tải ảnh · Đang xác minh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verified' ? 'Đang chuẩn bị gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
               style={styles.submitButton}
               onPress={handleSubmit}
               loading={submitting}
-              progressPercent={submitProgress?.phase === 'uploading' ? submitProgress.uploadPercent : undefined}
+              progressPercent={submitProgress ? (submitProgress.phase === 'uploading' ? submitProgress.uploadPercent : 100) : undefined}
               disabled={!restored || submitting}
             />
             {!submitError && !submitting && !isReporterSession(useAuthStore.getState()) ? <Text style={[typography.caption, styles.submitHint]}>Đăng nhập để gửi phản ánh.</Text> : null}
