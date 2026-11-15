@@ -6,6 +6,7 @@ import { useReporterKeyboard } from '../../src/components/reporter/keyboardVisib
 import { BottomNav, NavTab } from '../../src/components/BottomNav';
 import { useAuthStore } from '../../src/store/auth';
 import { isReporterSession } from '../../src/api/uploads';
+import { startNewReporterForm } from '../../src/store/uploads';
 import {
   PUBLIC_ROUTE_GROUP,
   REPORTER_ACCOUNT,
@@ -58,6 +59,7 @@ export default function ReporterLayout() {
     return () => { show.remove(); hide.remove(); useReporterKeyboard.getState().setOpening(false); };
   }, []);
   const navigate = (route: string) => {
+    if (route === REPORTER_REPORT) startNewReporterForm();
     const session = useAuthStore.getState();
     if ((route === REPORTER_UPLOADS || route === REPORTER_TRACK) && !isReporterSession(session)) {
       Alert.alert('Cần đăng nhập',

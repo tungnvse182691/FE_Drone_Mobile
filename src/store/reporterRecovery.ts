@@ -19,7 +19,7 @@ async function candidates() {
   const rows = await getDraftsByKind<ReporterDraft>(db, 'reporter_pending_v1');
   assertReporterContext(context);
   return { context, rows: rows.filter(({ payload: p }) => p && !p.retired && p.ownerId === context.ownerId &&
-    p.provenance?.environment === context.environment && p.provenance.session && p.provenance.session !== context.session &&
+    p.provenance?.environment === context.environment && p.provenance.session &&
     (p.submitRequested || p.request || p.resultReportId || p.commandOutcome || p.photos?.some(photo => photo.itemId))) };
 }
 
@@ -37,7 +37,8 @@ export async function openHistoricalReporterCommand(id: string, isCurrent: () =>
   if (!row) throw { code: 'access_forbidden', status: 403 };
   const draft = row.payload;
   const partition = `reporter-v2:${JSON.stringify([context.environment, context.ownerId, draft.provenance.session])}`;
-  if (row.id !== `reporter-pending-v3:${partition}` && row.id !== `reporter-pending-v2:${partition}`)
+  if (row.id !== `reporter-pending-v3:${partition}` && row.id !== `reporter-pending-v2:${partition}` &&
+      !row.id.startsWith(`reporter-command-v1:${partition}:`))
     throw { code: 'source_not_ready' };
   if (draft.targetReportId) {
     const found = await getOwnReportReal(draft.targetReportId);
@@ -46,7 +47,7 @@ export async function openHistoricalReporterCommand(id: string, isCurrent: () =>
   }
   assertReporterContext(context);
   if (!isCurrent()) throw { code: 'submission_paused' };
-  openReporterRecoveryPartition(context, draft.provenance.session!);
+  openReporterRecoveryPartition(context, draft.provenance.session!, row.id);
   const openedContext = reporterContext();
   const stillCurrent = () => { try { assertReporterContext(openedContext); return true; } catch { return false; } };
   return draft.targetReportId ? { kind: 'supplement', reportId: draft.targetReportId, isCurrent: stillCurrent }

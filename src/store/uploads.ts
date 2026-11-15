@@ -33,7 +33,7 @@ import { passwordSessionIdentity } from '../api/authApi';
 let reporterContextEpoch = 0;
 // Explicit, memory-only access to one previous storage partition. Authentication
 // stays bound to the current login; neither journals nor their provenance move.
-let recoveryAccess: { ownerId: string; environment: string; session: string; storageSession: string; epoch: number } | null = null;
+let recoveryAccess: { ownerId: string; environment: string; session: string; storageSession: string; epoch: number; draftStorageKey?: string } | null = null;
 /** Continuity/provenance only; never grants authority. No token is persisted. */
 export function reporterContext() {
   const auth = useAuthStore.getState();
@@ -47,11 +47,11 @@ export function reporterContext() {
   const storageSession = matches ? access.storageSession : session;
   // Visiting another environment permanently revokes this recovery grant (ABA safe).
   if (access && !matches) recoveryAccess = null;
-  return { ownerId, environment, session, storageSession, epoch: reporterContextEpoch,
+  return { ownerId, environment, session, storageSession, draftStorageKey: matches ? access.draftStorageKey : undefined, epoch: reporterContextEpoch,
     partition: `reporter-v2:${JSON.stringify([environment, ownerId, storageSession])}` };
 }
 /** Called only after live /me and persisted same-owner/environment validation. */
-export function openReporterRecoveryPartition(context: ReturnType<typeof reporterContext>, storageSession: string) {
+export function openReporterRecoveryPartition(context: ReturnType<typeof reporterContext>, storageSession: string, draftStorageKey?: string) {
   assertReporterContext(context);
   if (!context.ownerId || !context.session || !storageSession) throw { code: 'access_forbidden', status: 403 };
   if (activeUploadControllers.size || useUploadsStore.getState().busyItemIds.length ||
@@ -59,7 +59,7 @@ export function openReporterRecoveryPartition(context: ReturnType<typeof reporte
   useUploadsStore.getState().stopWatch();
   reporterContextEpoch++;
   recoveryAccess = { ownerId: context.ownerId, environment: context.environment, session: context.session,
-    storageSession, epoch: reporterContextEpoch };
+    storageSession, draftStorageKey, epoch: reporterContextEpoch };
   useUploadsStore.setState({ items: [], hydrated: false, partitionId: reporterContext().partition });
 }
 export function closeReporterRecoveryPartition() {
@@ -70,9 +70,24 @@ export function closeReporterRecoveryPartition() {
   for (const controller of activeUploadControllers.values()) controller.abort();
   useUploadsStore.setState({ items: [], hydrated: false, partitionId: reporterContext().partition });
 }
+/** New-form navigation selects an empty slot without changing existing drafts.
+ * No HTTP, file deletion, or durable command is created until the user sends. */
+export function startNewReporterForm() {
+  closeReporterRecoveryPartition();
+  const context = reporterContext();
+  if (!context.ownerId || !context.session) return;
+  reporterContextEpoch++;
+  recoveryAccess = { ownerId: context.ownerId, environment: context.environment, session: context.session,
+    storageSession: context.session, epoch: reporterContextEpoch,
+    draftStorageKey: `reporter-command-v1:${context.partition}:${uuidv4()}` };
+  useUploadsStore.getState().stopWatch();
+  for (const controller of activeUploadControllers.values()) controller.abort();
+  useUploadsStore.setState({ items: [], hydrated: false, partitionId: '' });
+}
 export function assertReporterContext(context: ReturnType<typeof reporterContext>) {
   const live = reporterContext();
-  if (live.partition !== context.partition || live.epoch !== context.epoch) throw { code: 'auth_unauthorized', status: 401 };
+  if (live.partition !== context.partition || live.epoch !== context.epoch || live.draftStorageKey !== context.draftStorageKey)
+    throw { code: 'auth_unauthorized', status: 401 };
 }
 function requestedPartition(requested?: string) {
   const context = reporterContext();

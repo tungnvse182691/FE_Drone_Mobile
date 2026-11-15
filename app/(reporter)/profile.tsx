@@ -13,6 +13,7 @@ import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
+import { startNewReporterForm } from '../../src/store/uploads';
 import { reporterReportsOptions, reportItemsFromPages, canShowReportPages } from '../../src/api/reporterApi';
 import { fetchProfile, passwordSessionIdentity } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
@@ -135,7 +136,7 @@ export default function ReporterProfileScreen() {
         <AnimatedPressable
           style={styles.menuItem}
           android_ripple={{ color: reporterAppearance.pressed, foreground: true }}
-          onPress={() => router.push(REPORTER_REPORT)}
+          onPress={() => { startNewReporterForm(); router.push(REPORTER_REPORT); }}
           accessibilityRole="button"
         >
           <View style={styles.menuIconWrap}>

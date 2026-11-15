@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {harness,deferred}=require('./helpers/roadfe-screen.cjs');
+const {harness,screen,deferred}=require('./helpers/roadfe-screen.cjs');
 
 function fixture(){
  let h;
@@ -68,4 +68,51 @@ test('recovery access is revoked after logout and account ABA; disk remains unch
  relogin(h,'other');relogin(h);
  assert.throws(()=>uploads.assertReporterContext(captured));assert.equal(await store.getState().restoreStartedCommand(),null);
  assert.equal(JSON.stringify([...h.rows]),before);
+});
+
+test('a fresh form never restores or overwrites a historical or current pending command',async()=>{
+ const {h,store,recovery,uploads}=fixture();
+ const old=await store.getState().savePendingDraft(input);relogin(h);
+ await recovery.openHistoricalReporterCommand(old.id);
+ const before=JSON.stringify([...h.rows]);
+ uploads.startNewReporterForm();
+ assert.equal(await store.getState().restoreStartedCommand(),null);
+ assert.equal(JSON.stringify([...h.rows]),before);
+ const next=await store.getState().savePendingDraft({...input,description:'New report'});
+ assert.notEqual(next.commandKey,old.commandKey);
+ const nextBytes=JSON.stringify([...h.rows]);uploads.startNewReporterForm();
+ assert.equal(await store.getState().restoreStartedCommand(),null);
+ assert.equal(JSON.stringify([...h.rows]),nextBytes,'new form does not delete or rewrite older attempts');
+ const entries=await recovery.listHistoricalReporterCommands();
+ assert.deepEqual(new Set(entries.map(e=>e.id)),new Set([old.id,next.id]));
+ await recovery.openHistoricalReporterCommand(next.id);
+ assert.equal((await store.getState().restoreStartedCommand()).commandKey,next.commandKey);
+ await recovery.openHistoricalReporterCommand(old.id);
+ assert.equal((await store.getState().restoreStartedCommand()).commandKey,old.commandKey);
+});
+
+test('fresh-form pending selections survive cold restart and require explicit opening',async()=>{
+ const f=fixture();f.uploads.startNewReporterForm();const draft=await f.store.getState().savePendingDraft(input);
+ const next=fixture();for(const [key,value] of f.h.rows)next.h.rows.set(key,value);
+ assert.equal(await next.store.getState().restoreStartedCommand(),null);
+ const entries=await next.recovery.listHistoricalReporterCommands();assert.equal(entries.length,1);
+ await next.recovery.openHistoricalReporterCommand(draft.id);
+ assert.equal((await next.store.getState().restoreStartedCommand()).commandKey,draft.commandKey);
+});
+
+test('bottom Send tab selects a fresh form, preserving the old pending entry on disk',async()=>{
+ const nav=[];const s=screen('app/(reporter)/_layout.tsx',{modules:{
+  'expo-router':{Stack:'Stack',usePathname:()=>'/home',useRouter:()=>({push:r=>nav.push(r)})},
+  '../../src/components/BottomNav':{BottomNav:'BottomNav'}
+ }});s.h.login();await s.reporter.useReporterStore.getState().savePendingDraft(input);
+ const before=JSON.stringify([...s.h.rows]);s.render();
+ s.nodes().find(n=>n.type==='BottomNav').props.onNavigate('/(reporter)/report');
+ assert.equal(await s.reporter.useReporterStore.getState().restoreStartedCommand(),null);
+ assert.equal(JSON.stringify([...s.h.rows]),before);assert.deepEqual(nav,['/(reporter)/report']);s.unmount();
+});
+
+test('environment ABA revokes a selected same-session draft slot',async()=>{
+ const {h,uploads}=fixture();uploads.startNewReporterForm();const context=uploads.reporterContext();
+ h.client.defaults.baseURL='other';uploads.reporterContext();h.client.defaults.baseURL=context.environment;
+ assert.throws(()=>uploads.assertReporterContext(context));
 });

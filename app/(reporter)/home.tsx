@@ -1,6 +1,6 @@
 import { reporterAppearance } from '../../src/components/reporter/appearance';
 import { listHistoricalReporterCommands, openHistoricalReporterCommand, type HistoricalReporterCommand } from '../../src/store/reporterRecovery';
-import { closeReporterRecoveryPartition } from '../../src/store/uploads';
+import { startNewReporterForm } from '../../src/store/uploads';
 import { useReporterDraftScope } from '../../src/store/reporter';
 import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -93,7 +93,7 @@ export default function ReporterHomeScreen() {
           primary
           title="Gửi phản ánh"
           description="Ảnh hiện trường · Mô tả · Vị trí"
-          onPress={() => { closeReporterRecoveryPartition(); router.push(REPORTER_REPORT); }}
+          onPress={() => { startNewReporterForm(); router.push(REPORTER_REPORT); }}
           testID="reporter-action-report"
         />
         <ActionCard
@@ -113,7 +113,7 @@ export default function ReporterHomeScreen() {
           <MaterialIcons name="history" size={22} color={colors.secondary} />
           <View style={styles.recoveryText}>
             <Text style={[typography.bodyMd, styles.recoveryTitle]}>Nội dung cần kiểm tra</Text>
-            <Text style={[typography.caption, styles.hintText]}>{history.rows.length} lần gửi từ phiên trước</Text>
+            <Text style={[typography.caption, styles.hintText]}>{history.rows.length} lần gửi cần kiểm tra</Text>
           </View>
           <MaterialIcons name={historyExpanded ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} />
         </Pressable>

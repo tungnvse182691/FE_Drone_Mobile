@@ -49,7 +49,7 @@ type DraftInput = Pick<ReporterDraft, 'description' | 'photos' | 'coords'> &
   Pick<Partial<ReporterDraft>, 'targetReportId' | 'ifMatch' | 'submitRequested'>;
 
 type ReporterContext = ReturnType<typeof reporterContext>;
-const draftKey = (context: ReporterContext) => `reporter-pending-v3:${context.partition}`;
+const draftKey = (context: ReporterContext) => context.draftStorageKey ?? `reporter-pending-v3:${context.partition}`;
 export function isStartedReporterCommand(draft: ReporterDraft): boolean {
   return Boolean(draft.submitRequested || draft.request || draft.resultReportId || draft.commandOutcome || draft.photos.some(photo => photo.itemId));
 }
@@ -91,7 +91,8 @@ async function readPending(context: ReporterContext): Promise<ReporterDraft | nu
   const db = await draftDb();
   phase = 'draft_read';
   assertReporterContext(context);
-  const draft = await getDraft<ReporterDraft>(db, draftKey(context)) ?? await getDraft<ReporterDraft>(db, `reporter-pending-v2:${context.partition}`);
+  const draft = await getDraft<ReporterDraft>(db, draftKey(context)) ?? (context.draftStorageKey ? null
+    : await getDraft<ReporterDraft>(db, `reporter-pending-v2:${context.partition}`));
   assertReporterContext(context);
   if (hasDraftContent(draft)) return provenanceMatches(draft, context) ? draft : null;
   // Same device/environment is not ownership proof. No guest claim contract exists;
