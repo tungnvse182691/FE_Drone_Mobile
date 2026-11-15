@@ -48,6 +48,7 @@ export default function ReporterRegisterScreen() {
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [reporterType, setReporterType] = useState<ReporterTypeValue>('CITIZEN');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -183,7 +184,19 @@ export default function ReporterRegisterScreen() {
                 if (error) setError(null);
               }}
               placeholder="Tối thiểu 8 ký tự"
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              autoCorrect={false}
+              trailingAction={
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                  disabled={loading}
+                  onPress={() => setShowPassword(visible => !visible)}
+                  style={styles.passwordToggle}
+                >
+                  <MaterialIcons name={showPassword ? 'visibility-off' : 'visibility'} size={24} color={colors.secondary} />
+                </Pressable>
+              }
             />
 
             <Text style={[typography.labelSm, styles.typeLabel]}>BẠN THAM GIA VỚI VAI TRÒ</Text>
@@ -241,6 +254,7 @@ export default function ReporterRegisterScreen() {
 }
 
 const styles = StyleSheet.create({
+  passwordToggle: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   safe: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
