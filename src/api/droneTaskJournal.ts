@@ -199,7 +199,8 @@ export async function listDroneUploadRecovery() {
         for (const item of items) result.push({taskId,key:item.key,kind:item.kind,status:item.status,
           includedInDataset:item.kind===DRONE_UPLOAD_INTENT_KIND && item.status==='VERIFIED' && submittedFiles.has(item.fileId),
           cancelled:item.cancelRequest?.phase === 'CONFIRMED' && item.error?.code === 'upload_cancelled',
-          cancelUnknown:item.cancelRequest?.phase === 'UNKNOWN',partCount:item.parts.length});
+          cancelUnknown:item.cancelRequest?.phase === 'UNKNOWN',partCount:item.parts.length,
+          transportInterrupted:item.kind===DRONE_UPLOAD_INTENT_KIND && item.error?.code==='part_transport_unknown' && !item.completeRequest});
       } finally { journal.close(); }
     }
     guard(); return result;

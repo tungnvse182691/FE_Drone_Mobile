@@ -54,6 +54,15 @@ test('Upload recovery inventory is scoped, durable and read only, with no local 
  await assert.rejects(f.api.listDroneUploadRecovery());assert.equal(f.rows().length,1);
 });
 function panel(runtime){return screen('src/components/drone/DroneTaskCommandPanel.tsx',{exportName:'DroneTaskCommandPanel',props:{taskId:id(2),operation:'accept'},modules:{'../../api/droneTaskJournal':{openDroneTaskJournal:async()=>runtime},'../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Button':{Button:'Button'},'../Card':{Card:'Card'},'../../design-tokens':{typography:{},spacing:{},colors:{}}}});}
+test('Recovery distinguishes interrupted part transport from a frozen completion command',async()=>{
+ const f=fixture(),r=await f.api.openDroneUploadJournal(id(2));
+ const item=await r.prepare({kind:'upload',projectId:id(3),localFileId:id(8),localUri:'file:///private.mp4',sizeBytes:4,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mimeType:'video/mp4',body:{fileName:'private.mp4'}});
+ await r.update(item.key,{status:'COMPLETE_UNKNOWN',error:{code:'part_transport_unknown'}});
+ assert.equal((await f.api.listDroneUploadRecovery())[0].transportInterrupted,true);
+ await r.update(item.key,{parts:[{partNumber:1,sizeBytes:4,etag:'"part"'}],completeRequest:{version:'AAAAAAAAAAE=',parts:[{partNumber:1,etag:'"part"'}],checksumSha256:'a'.repeat(64)}});
+ assert.equal((await f.api.listDroneUploadRecovery())[0].transportInterrupted,false);
+ r.close();assert.equal(f.posts.length,0);
+});
 test('Upload recovery opens UNKNOWN for review without dispatch and collapses confirmed history',async()=>{
  let reads=0;
  const s=screen('src/components/drone/DroneUploadRecoveryList.tsx',{exportName:'DroneUploadRecoveryList',modules:{

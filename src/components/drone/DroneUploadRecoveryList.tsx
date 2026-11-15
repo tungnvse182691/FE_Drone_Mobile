@@ -10,7 +10,7 @@ import { colors, spacing, typography } from '../../design-tokens';
 import { operatorAppearance } from './appearance';
 
 type Row = Awaited<ReturnType<typeof listDroneUploadRecovery>>[number];
-const statusLabel = (row: Row) => row.cancelUnknown ? 'Cần đối soát yêu cầu hủy' : row.cancelled ? 'Máy chủ đã xác nhận hủy' : row.includedInDataset ? 'Tệp thuộc hồ sơ đã nộp' : ({
+const statusLabel = (row: Row) => row.cancelUnknown ? 'Cần đối soát yêu cầu hủy' : row.cancelled ? 'Máy chủ đã xác nhận hủy' : row.includedInDataset ? 'Tệp thuộc hồ sơ đã nộp' : row.transportInterrupted ? 'Truyền tệp gián đoạn · Các phần đã tải được giữ' : ({
   PREPARED:'Đã lưu yêu cầu', SESSION_CREATED:'Đã mở phiên tải', PARTS_IN_PROGRESS:'Tải tệp chưa hoàn tất',
   COMPLETE_UNKNOWN:'Cần đối soát hoàn tất tải', VERIFY_PENDING:'Chờ máy chủ xác minh tệp',
   VERIFIED:'Tệp đã xác minh · Chưa xác nhận nộp hồ sơ', DATASET_UNKNOWN:'Cần đối soát hồ sơ đã gửi',
