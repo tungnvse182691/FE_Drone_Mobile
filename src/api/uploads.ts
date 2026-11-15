@@ -275,6 +275,7 @@ export interface UploadTransport {
     bytes: Uint8Array,
     contentType: string,
     signal?: AbortSignal,
+    onProgress?: (loadedBytes: number) => void,
   ): Promise<StoredPartResult>;
   completeUpload(
     uploadId: string,
@@ -346,6 +347,7 @@ async function putRawBytesToStorageUrl(
   bytes: Uint8Array,
   contentType: string,
   signal?: AbortSignal,
+  onProgress?: (loadedBytes: number) => void,
 ): Promise<{ eTag: string }> {
   // Axios transforms a typed-array view into its entire backing buffer.
   // Copy the selected part so adjacent parts are never sent with this request.
@@ -353,6 +355,7 @@ async function putRawBytesToStorageUrl(
   const response = await storageClient.put(url, partBuffer, {
     headers: { 'Content-Type': contentType },
     signal,
+    onUploadProgress: onProgress ? event => onProgress(event.loaded) : undefined,
   });
   const headers = response.headers as Record<string, unknown>;
   const rawETag = headers.etag ?? headers.ETag ?? headers['x-etag'];
@@ -385,11 +388,11 @@ export const httpUploadTransport: UploadTransport = {
     return response.data;
   },
 
-  async putPart(part, bytes, contentType, signal) {
+  async putPart(part, bytes, contentType, signal, onProgress) {
     if (!part.url || typeof part.partNumber !== 'number') {
       throw { code: 'upload_storage_unavailable', status: 503 };
     }
-    const { eTag } = await putRawBytesToStorageUrl(part.url, bytes, contentType, signal);
+    const { eTag } = await putRawBytesToStorageUrl(part.url, bytes, contentType, signal, onProgress);
     return { partNumber: part.partNumber, eTag };
   },
 

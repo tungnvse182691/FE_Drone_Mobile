@@ -381,7 +381,7 @@ export default function ReporterReportScreen() {
             {photos.map((uri, index) => (
               <View key={`${uri}-${index}`} style={styles.photoWrapper}>
                 <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
-                <PhotoUploadStatus item={photoItem(uri)} index={index} active={busyPhotoIds.includes(photoItem(uri)?.id ?? '')} />
+                <PhotoUploadStatus progressPercent={submitting && submitProgress?.phase === 'uploading' ? submitProgress.photoPercentages?.[photoItem(uri)?.id ?? ''] : undefined} item={photoItem(uri)} index={index} active={busyPhotoIds.includes(photoItem(uri)?.id ?? '')} />
                 <Pressable
                   onPress={() => updatePhotos((current) => current.filter((_, i) => i !== index))}
                   style={styles.photoRemove}
@@ -509,10 +509,11 @@ export default function ReporterReportScreen() {
           <View style={styles.submitWrapper}>
             <Button
               variant="primary"
-              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : submitProgress?.phase === 'uploading' ? `Đang tải ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verifying' ? `Đang xác minh ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verified' ? 'Đang chuẩn bị gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
+              title={submitting ? (submitProgress?.phase === 'readback' ? 'Đang xác nhận…' : submitProgress?.phase === 'submitting' ? 'Đang gửi…' : submitProgress?.phase === 'uploading' ? `Đang tải ảnh ${submitProgress.index}/${submitProgress.total}${submitProgress.uploadPercent === undefined ? '…' : ` · ${submitProgress.uploadPercent}%`}` : submitProgress?.phase === 'verifying' ? `Đang xác minh ảnh ${submitProgress.index}/${submitProgress.total}…` : submitProgress?.phase === 'verified' ? 'Đang chuẩn bị gửi…' : 'Đang chuẩn bị ảnh…') : 'Gửi phản ánh'}
               style={styles.submitButton}
               onPress={handleSubmit}
               loading={submitting}
+              progressPercent={submitProgress?.phase === 'uploading' ? submitProgress.uploadPercent : undefined}
               disabled={!restored || submitting}
             />
             {!submitError && !submitting && !isReporterSession(useAuthStore.getState()) ? <Text style={[typography.caption, styles.submitHint]}>Đăng nhập để gửi phản ánh.</Text> : null}

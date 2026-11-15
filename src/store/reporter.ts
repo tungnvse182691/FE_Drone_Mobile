@@ -6,7 +6,7 @@ import type { CreateReporterReportRequestDto } from '../api/mock/reporter';
 import { openDatabase, initDatabase, saveDraft, getDraft } from '../offline/database';
 import { File } from 'expo-file-system';
 import { useAuthStore } from './auth';
-import { useUploadsStore, reporterContext, assertReporterContext } from './uploads';
+import { useUploadsStore, reporterContext, assertReporterContext, uploadedRatio } from './uploads';
 import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, strongUploadETag, uploadFailureMessage, UPLOAD_FAILURE_STAGES, type UploadFailureStage } from '../api/uploads';
 import { reporterPhotoFailureMessage } from '../api/reporterLocalMedia';
 import { submitReportReal, submitReportSupplementReal, getOwnReportReal } from '../api/reporterApi';
@@ -54,7 +54,7 @@ export function isStartedReporterCommand(draft: ReporterDraft): boolean {
   return Boolean(draft.submitRequested || draft.request || draft.resultReportId || draft.commandOutcome || draft.photos.some(photo => photo.itemId));
 }
 const provenanceMatches = (draft: ReporterDraft, context: ReporterContext) => draft.ownerId === context.ownerId &&
-  draft.provenance?.environment === context.environment && draft.provenance?.session === context.session;
+  draft.provenance?.environment === context.environment && draft.provenance?.session === context.storageSession;
 // Hold the native handle for the store lifetime. Serialize initialization and
 // retry initialization failures on that handle; never delete/recreate the DB.
 let draftDatabase: ReturnType<typeof openDatabase> | undefined;
@@ -115,6 +115,7 @@ export const GUEST_DRAFT_NOTICE = 'Nháp khách được giữ riêng trên thi�
  * Token refresh may invalidate UI work conservatively; it never moves pending data. */
 export function useReporterDraftScope() {
   useAuthStore(state => state);
+  useUploadsStore(state => state.partitionId);
   const context = reporterContext();
   const mounted = useRef(true);
   const generation = useRef(0);
@@ -138,7 +139,7 @@ export function reporterFailureMessage(error: unknown): string {
   const status = e.response?.status ?? e.status;
   const code = e.response?.data?.code ?? e.code;
   if (code === 'verification_timeout') return 'Máy chủ chưa xác minh xong ảnh trong thời gian theo dõi. Chưa gửi phản ánh; ảnh và lệnh vẫn được giữ. Bạn có thể kiểm tra lại sau.';
-  if (code === 'submission_paused') return 'Đã dừng theo dõi khi rời màn hình hoặc ứng dụng. Lệnh và ảnh được giữ; không tự gửi lại khi quay về.';
+  if (code === 'submission_paused') return 'Lần gửi đã tạm dừng khi ứng dụng bị gián đoạn. Ảnh và nội dung đã được giữ. Khi có mạng, bấm nút gửi để tiếp tục kiểm tra và gửi.';
   if (e.stage === 'upload_put' && status === 403) return 'Đường tải ảnh bị từ chối hoặc đã hết hạn. Ảnh vẫn được giữ; thử lại để kiểm tra đường tải mới.';
   if (status === 401 || code === 'auth_unauthorized') return 'Vui lòng đăng nhập lại. Nháp và ảnh vẫn được giữ.';
   if (status === 403 || code === 'access_forbidden') return 'Tài khoản không có quyền gửi nháp này.';
@@ -156,6 +157,8 @@ export function reporterFailureMessage(error: unknown): string {
   if (code === 'draft_locked') return 'Lần gửi trước chưa được xác nhận. Giữ nguyên nội dung và bấm gửi lại để kiểm tra.';
   if (status === 400 || status === 422) return 'Thông tin hoặc điều kiện gửi chưa hợp lệ. Nháp được giữ nguyên.';
   if (status === 409) return 'Yêu cầu xung đột với dữ liệu máy chủ. Nháp và khóa lệnh được giữ nguyên.';
+  if (!status && ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT'].includes(code ?? ''))
+    return 'Chưa xác nhận kết quả gửi do kết nối bị gián đoạn. Nội dung và ảnh đã được giữ. Kiểm tra mạng rồi bấm nút gửi để đối soát và tiếp tục lần gửi trước.';
   if (status === 503) return 'Dịch vụ tạm thời không sẵn sàng. Chưa xác nhận kết quả; vui lòng thử lại.';
   return 'Chưa xác nhận kết quả gửi. Nháp được giữ nguyên; bấm gửi lại để kiểm tra với cùng khóa lệnh.';
 }
@@ -165,10 +168,12 @@ export interface ReporterSubmissionProgress {
   index: number;
   total: number;
   elapsedMs: number;
+  uploadPercent?: number;
+  photoPercentages?: Record<string, number>;
 }
 export function reporterProgressLabel(progress: ReporterSubmissionProgress): string {
   switch (progress.phase) {
-    case 'uploading': return `Đang tải ảnh ${progress.index}/${progress.total}…`;
+    case 'uploading': return `Đang tải ảnh ${progress.index}/${progress.total}${progress.uploadPercent === undefined ? '…' : ` · ${progress.uploadPercent}%`}`;
     case 'verifying': return `Đang chờ máy chủ xác minh ảnh ${progress.index}/${progress.total} · ${Math.floor(progress.elapsedMs / 1000)} giây. Phản ánh chưa được gửi.`;
     case 'verified': return 'Ảnh đã xác minh. Đang chuẩn bị gửi…';
     case 'submitting': return 'Đang gửi phản ánh…';
@@ -254,7 +259,7 @@ export const useReporterStore = create<ReporterSessionState>()(
         if (previous && previous.targetReportId !== input.targetReportId) throw { code: 'draft_locked' };
         const draft: ReporterDraft = {
           id: previous?.id ?? uuidv4(), commandKey: previous?.commandKey ?? uuidv4(), ownerId: previous?.ownerId ?? ownerId,
-          provenance: { environment: context.environment, session: context.session },
+          provenance: { environment: context.environment, session: context.storageSession },
           description: input.description, photos: input.photos.map(photo => ({ ...photo,
             itemId: previous?.photos.find(p => p.uri === photo.uri)?.itemId ?? photo.itemId })),
           coords: input.coords, targetReportId: input.targetReportId, ifMatch: input.ifMatch ?? previous?.ifMatch,
@@ -381,14 +386,29 @@ export const useReporterStore = create<ReporterSessionState>()(
           }
           // Persist every photo binding serially before starting independent transfers.
           // Settle both workers before rejecting; no orphan worker may keep dispatching.
+          const transferred = new Map<string, number>();
+          const photoItems = draft.photos.map(photo => useUploadsStore.getState().items.find(item => item.id === photo.itemId));
+          const totalBytes = photoItems.reduce((sum, item) => sum + (item?.sizeBytes ?? 0), 0);
+          for (const item of photoItems) if (item) transferred.set(item.id, uploadedRatio(item) * item.sizeBytes);
+          const uploadProgress = (index: number) => {
+            assertActive();
+            const loaded = [...transferred.values()].reduce((sum, value) => sum + value, 0);
+            options.onProgress?.({ phase: 'uploading', index, total: draft!.photos.length, elapsedMs: 0,
+              ...(totalBytes > 0 ? { uploadPercent: Math.floor(Math.min(1, loaded / totalBytes) * 100) } : {}),
+              photoPercentages: Object.fromEntries(photoItems.filter(item => item && item.sizeBytes > 0).map(item =>
+                [item!.id, Math.floor(Math.min(1, (transferred.get(item!.id) ?? 0) / item!.sizeBytes) * 100)])),
+            });
+          };
           for (let start = 0; start < draft.photos.length && !draft.resultReportId; start += 2) {
             const uploadStarted = Date.now();
             const batch = draft.photos.slice(start, start + 2);
             const results = await Promise.allSettled(batch.map(async (photo, offset) => {
               assertActive();
-              progress('uploading', start + offset + 1, draft!.photos.length);
+              uploadProgress(start + offset + 1);
               const id = photo.itemId!;
-              await queue.advanceItem(id, 'explicit', assertActive);
+              await queue.advanceItem(id, 'explicit', assertActive, loaded => {
+                transferred.set(id, loaded); uploadProgress(start + offset + 1);
+              });
               assertActive();
               const item = useUploadsStore.getState().items.find(p => p.id === id);
               if (item?.lastErrorCode && !(item.lastErrorStage === 'upload_verify' &&

@@ -31,6 +31,9 @@ import { apiClient } from '../api/client';
 import { passwordSessionIdentity } from '../api/authApi';
 
 let reporterContextEpoch = 0;
+// Explicit, memory-only access to one previous storage partition. Authentication
+// stays bound to the current login; neither journals nor their provenance move.
+let recoveryAccess: { ownerId: string; environment: string; session: string; storageSession: string; epoch: number } | null = null;
 /** Continuity/provenance only; never grants authority. No token is persisted. */
 export function reporterContext() {
   const auth = useAuthStore.getState();
@@ -38,8 +41,34 @@ export function reporterContext() {
   const ownerId = isReporterSession(auth) ? auth.user!.id : null;
   const session = ownerId ? passwordSessionIdentity(auth.token) : null;
   if (ownerId && (!session || JSON.parse(session)[0] !== ownerId)) throw { code: 'auth_unauthorized', status: 401 };
-  return { ownerId, environment, session, epoch: reporterContextEpoch,
-    partition: `reporter-v2:${JSON.stringify([environment, ownerId, session])}` };
+  const access = recoveryAccess;
+  const matches = access && access.ownerId === ownerId && access.environment === environment &&
+    access.session === session && access.epoch === reporterContextEpoch;
+  const storageSession = matches ? access.storageSession : session;
+  // Visiting another environment permanently revokes this recovery grant (ABA safe).
+  if (access && !matches) recoveryAccess = null;
+  return { ownerId, environment, session, storageSession, epoch: reporterContextEpoch,
+    partition: `reporter-v2:${JSON.stringify([environment, ownerId, storageSession])}` };
+}
+/** Called only after live /me and persisted same-owner/environment validation. */
+export function openReporterRecoveryPartition(context: ReturnType<typeof reporterContext>, storageSession: string) {
+  assertReporterContext(context);
+  if (!context.ownerId || !context.session || !storageSession) throw { code: 'access_forbidden', status: 403 };
+  if (activeUploadControllers.size || useUploadsStore.getState().busyItemIds.length ||
+      useUploadsStore.getState().cancelBusyItemIds.length) throw { code: 'draft_locked' };
+  useUploadsStore.getState().stopWatch();
+  reporterContextEpoch++;
+  recoveryAccess = { ownerId: context.ownerId, environment: context.environment, session: context.session,
+    storageSession, epoch: reporterContextEpoch };
+  useUploadsStore.setState({ items: [], hydrated: false, partitionId: reporterContext().partition });
+}
+export function closeReporterRecoveryPartition() {
+  if (!recoveryAccess) return;
+  recoveryAccess = null;
+  reporterContextEpoch++;
+  useUploadsStore.getState().stopWatch();
+  for (const controller of activeUploadControllers.values()) controller.abort();
+  useUploadsStore.setState({ items: [], hydrated: false, partitionId: reporterContext().partition });
 }
 export function assertReporterContext(context: ReturnType<typeof reporterContext>) {
   const live = reporterContext();
@@ -537,7 +566,13 @@ async function pollVerification(item: UploadQueueItem, update: ItemUpdater, tran
       lastErrorStatus: undefined,
     });
   }
-  return update({ mediaState: item.mediaState === 'FAILED' ? 'FAILED' : 'VERIFYING', serverStatus: metadata.status });
+  // A new successful read of this completed upload supersedes the previous
+  // interrupted attempt's diagnostic. Pending is still NOT verified or sent.
+  const recovered = metadata.id === item.fileId && status !== 'UNKNOWN' &&
+    (item.mediaState === 'COMPLETE_REQUESTED' || item.mediaState === 'VERIFYING');
+  return update({ mediaState: item.mediaState === 'FAILED' ? 'FAILED' : 'VERIFYING', serverStatus: metadata.status,
+    ...(recovered ? { lastErrorCode: null, lastErrorMessage: null, lastErrorStage: undefined, lastErrorStatus: undefined } : {}),
+  });
 }
 
 /** No authoritative cancellation/retirement or atomic cross-draft reference proof yet.
@@ -555,7 +590,8 @@ interface UploadsState {
   setPartition(partitionId: string): void;
   hydrate(partitionId?: string): Promise<void>;
   enqueuePhoto(input: EnqueuePhotoInput): Promise<string>;
-  advanceItem(id: string, mode?: 'explicit' | 'observe', beforeRequest?: () => void): Promise<void>;
+  advanceItem(id: string, mode?: 'explicit' | 'observe', beforeRequest?: () => void,
+    onProgress?: (loadedBytes: number, totalBytes: number) => void): Promise<void>;
   advanceAll(mode?: 'explicit' | 'observe'): Promise<void>;
   retryItem(id: string): Promise<void>;
   cancelItem(id: string): Promise<void>;
@@ -645,7 +681,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     return item.id;
   },
 
-  async advanceItem(id, mode = 'explicit', beforeRequest) {
+  async advanceItem(id, mode = 'explicit', beforeRequest, onProgress) {
     const start = get().items.find((item) => item.id === id);
     const auth = useAuthStore.getState();
     if (!isReporterSession(auth) || !start) return;
@@ -665,6 +701,16 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
     activeUploadControllers.set(id, controller);
 
     let stage: UploadFailureStage = 'local_read';
+    // Transient UI observation only. Never persist native progress as a receipt.
+    const reportBytes = (item: UploadQueueItem, inFlight = 0) => {
+      try {
+        assertReporterContext(context); beforeRequest?.();
+        if (get().partitionId !== start.partitionId || controller.signal.aborted || cancelGates.has(id)) return;
+        const confirmed = uploadedRatio(item) * item.sizeBytes;
+        onProgress?.(Math.min(item.sizeBytes, confirmed + inFlight), item.sizeBytes);
+      } catch { /* Ignore events from interrupted or stale screens/sessions. */ }
+    };
+    reportBytes(start);
     const update: ItemUpdater = async (patch) => {
       assertReporterContext(context);
       if (get().partitionId !== start.partitionId) throw { status: 401 };
@@ -679,6 +725,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       if (get().partitionId !== start.partitionId) throw { status: 401 };
       if (cancelGates.has(id)) throw { code: 'upload_cancel_pending' };
       set((state) => ({ items: state.items.map((item) => (item.id === id ? next : item)) }));
+      reportBytes(next);
       return next;
     };
 
@@ -689,8 +736,15 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       if (cancelGates.has(id) || controller.signal.aborted) throw { code: 'upload_cancel_pending' };
       stage = ({ createSession: 'upload_create', getSession: 'upload_session', requestPartUrls: 'upload_part_urls',
         putPart: 'upload_put', completeUpload: 'upload_complete', getFileMetadata: 'upload_verify' } as Record<string, UploadFailureStage>)[name];
-      const result = await (method as (...values: unknown[]) => unknown)(
-        ...args, ...(name === 'putPart' ? [controller.signal] : []));
+      if (name === 'putPart') {
+        const item = get().items.find(item => item.id === id) ?? start;
+        const partBytes = (args[1] as Uint8Array).byteLength;
+        args[3] = controller.signal;
+        args[4] = (loaded: number) => {
+          if (Number.isFinite(loaded)) reportBytes(item, Math.max(0, Math.min(loaded, partBytes * 0.99)));
+        };
+      }
+      const result = await (method as (...values: unknown[]) => unknown)(...args);
       assertReporterContext(context);
       return result;
     }])) as unknown as UploadTransport;
@@ -869,6 +923,7 @@ useAuthStore.subscribe?.((state, previous) => {
   if (state.user?.id !== previous.user?.id || passwordSessionIdentity(state.token) !== passwordSessionIdentity(previous.token) ||
       isReporterSession(state) !== isReporterSession(previous)) {
     reporterContextEpoch++;
+    recoveryAccess = null;
     useUploadsStore.getState().stopWatch();
     for (const controller of activeUploadControllers.values()) controller.abort();
     activeUploadControllers.clear();

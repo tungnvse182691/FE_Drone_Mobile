@@ -1,5 +1,6 @@
 import { reporterAppearance } from '../../src/components/reporter/appearance';
-import { listHistoricalReporterCommands, checkHistoricalReporterCommand, type HistoricalReporterCommand } from '../../src/store/reporterRecovery';
+import { listHistoricalReporterCommands, openHistoricalReporterCommand, type HistoricalReporterCommand } from '../../src/store/reporterRecovery';
+import { closeReporterRecoveryPartition } from '../../src/store/uploads';
 import { useReporterDraftScope } from '../../src/store/reporter';
 import React, { useCallback, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -52,10 +53,10 @@ export default function ReporterHomeScreen() {
     const current = recoveryScope.capture();
     setChecking(true);
     try {
-      const result = await checkHistoricalReporterCommand(id);
-      if (current()) setHistoryMessage({ scope: recoveryScope.key, text: result.resourceReadable
-        ? 'Đã tìm thấy phản ánh. Chưa xác nhận lần gửi này đã hoàn tất; ứng dụng không tự gửi lại.'
-        : 'Chưa xác nhận đã gửi. Nội dung và ảnh vẫn được giữ trên máy; ứng dụng không tự gửi lại.' });
+      const result = await openHistoricalReporterCommand(id, current);
+      if (result.isCurrent()) router.push(result.kind === 'supplement'
+        ? { pathname: '/(reporter)/report-supplement', params: { reportId: result.reportId! } }
+        : REPORTER_REPORT);
     } catch {
       if (current()) setHistoryMessage({ scope: recoveryScope.key, text: 'Chưa kiểm tra được lúc này. Nội dung và ảnh vẫn được giữ trên máy. Hãy thử lại sau.' });
     } finally { if (current()) setChecking(false); }
@@ -92,7 +93,7 @@ export default function ReporterHomeScreen() {
           primary
           title="Gửi phản ánh"
           description="Ảnh hiện trường · Mô tả · Vị trí"
-          onPress={() => router.push(REPORTER_REPORT)}
+          onPress={() => { closeReporterRecoveryPartition(); router.push(REPORTER_REPORT); }}
           testID="reporter-action-report"
         />
         <ActionCard

@@ -1,4 +1,4 @@
-import { reporterContext, assertReporterContext } from './uploads';
+import { reporterContext, assertReporterContext, openReporterRecoveryPartition } from './uploads';
 import { fetchMe } from '../api/authApi';
 import { getOwnReportReal } from '../api/reporterApi';
 import { openDatabase, initDatabase, getDraftsByKind } from '../offline/database';
@@ -27,6 +27,30 @@ async function candidates() {
 export async function listHistoricalReporterCommands(): Promise<HistoricalReporterCommand[]> {
   const { rows } = await candidates();
   return rows.map(row => ({ id: row.payload.id, kind: row.payload.targetReportId ? 'supplement' : 'create' }));
+}
+
+/** Explicit user choice; read and authenticate only. Sending requires a second
+ * action in the existing form, with the original body, key and upload ledger. */
+export async function openHistoricalReporterCommand(id: string, isCurrent: () => boolean = () => true): Promise<{ kind: 'create' | 'supplement'; reportId?: string; isCurrent: () => boolean }> {
+  const { context, rows } = await candidates();
+  const row = rows.find(row => row.payload.id === id);
+  if (!row) throw { code: 'access_forbidden', status: 403 };
+  const draft = row.payload;
+  const partition = `reporter-v2:${JSON.stringify([context.environment, context.ownerId, draft.provenance.session])}`;
+  if (row.id !== `reporter-pending-v3:${partition}` && row.id !== `reporter-pending-v2:${partition}`)
+    throw { code: 'source_not_ready' };
+  if (draft.targetReportId) {
+    const found = await getOwnReportReal(draft.targetReportId);
+    assertReporterContext(context);
+    if (found.report.id !== draft.targetReportId) throw { code: 'access_forbidden', status: 403 };
+  }
+  assertReporterContext(context);
+  if (!isCurrent()) throw { code: 'submission_paused' };
+  openReporterRecoveryPartition(context, draft.provenance.session!);
+  const openedContext = reporterContext();
+  const stillCurrent = () => { try { assertReporterContext(openedContext); return true; } catch { return false; } };
+  return draft.targetReportId ? { kind: 'supplement', reportId: draft.targetReportId, isCurrent: stillCurrent }
+    : { kind: 'create', isCurrent: stillCurrent };
 }
 
 export async function checkHistoricalReporterCommand(id: string): Promise<{ status: 'BE_RECEIPT_REQUIRED'; resourceReadable: boolean }> {

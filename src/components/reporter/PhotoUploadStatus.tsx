@@ -5,7 +5,7 @@ import { uploadedRatio, type UploadQueueItem } from '../../store/uploads';
 import { colors, radius, typography } from '../../design-tokens';
 
 /** Presentation only: confirmed parts measure transfer, never server verification. */
-export function PhotoUploadStatus({ item, index, active = false }: { item?: UploadQueueItem; index: number; active?: boolean }) {
+export function PhotoUploadStatus({ item, index, active = false, progressPercent }: { item?: UploadQueueItem; index: number; active?: boolean; progressPercent?: number }) {
   const [reduceMotion, setReduceMotion] = useState(true);
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -29,7 +29,9 @@ export function PhotoUploadStatus({ item, index, active = false }: { item?: Uplo
   const label = failed ? 'Cần kiểm tra' : verified ? 'Đã xác minh' : checking ? 'Đang kiểm tra' : transferring ? 'Đang tải' : 'Chờ tải';
   const ratio = !blocked && item?.mediaState === 'UPLOADING' && item.sizeBytes > 0 && item.partSizeBytes > 0
     ? Math.max(0, Math.min(1, uploadedRatio(item))) : undefined;
-  const percent = ratio === undefined ? undefined : Math.floor(ratio * 100);
+  const percent = !blocked && !checking && !verified && transferring && Number.isFinite(progressPercent)
+    ? Math.max(0, Math.min(100, Math.floor(progressPercent!)))
+    : ratio === undefined ? undefined : Math.floor(ratio * 100);
   useEffect(() => {
     fade.stopAnimation();
     if (reduceMotion) { fade.setValue(1); return; }
