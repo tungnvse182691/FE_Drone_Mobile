@@ -236,13 +236,12 @@ export default function DroneRequestDetailScreen() {
 
         {status === 'SUPPLEMENTREQUIRED' ? <Card style={styles.scopeCard}>
           <Text style={typography.titleMd}>Khảo sát bổ sung</Text>
-          <Text style={[typography.bodyMd, styles.supplementText]}>Quản lý yêu cầu khảo sát bổ sung. Tiếp tục trên nhiệm vụ được giao mới.</Text>
-          <Button variant="secondary" title={task.supplementTaskId ? 'Mở nhiệm vụ bổ sung' : 'Xem nhiệm vụ được giao'}
+          <Text style={[typography.bodyMd, styles.supplementText]}>{task.supplementTaskId ? 'Quản lý yêu cầu khảo sát bổ sung. Mở nhiệm vụ được liên kết để xem phân công hiện tại.' : 'Quản lý yêu cầu khảo sát bổ sung. Kiểm tra danh sách nhiệm vụ được giao để xem các lượt anh có quyền truy cập.'}</Text>
+          {task.supplementTaskId ? <Button variant="secondary" title="Mở nhiệm vụ bổ sung"
             onPress={() => {
               if (!scope.capture()()) return;
               if (task.supplementTaskId) router.push({ pathname: '/(drone)/request-detail', params: { taskId: task.supplementTaskId } });
-              else router.push(DRONE_REQUESTS);
-            }} />
+            }} /> : null}
         </Card> : null}
 
         <Card style={styles.scopeCard}>
