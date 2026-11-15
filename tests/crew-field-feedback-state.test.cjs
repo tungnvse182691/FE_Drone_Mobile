@@ -15,7 +15,15 @@ async function mounted(options={}){
  '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
  '../../src/api/crewFieldDraft':{currentFieldContext:()=>context,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>structuredClone(draft),measurementTemplate:()=>draft.measurements[0],fieldDraftPending:d=>d.command?.phase==='pending',fieldErrorMessage:e=>e.message,
  saveFieldMeasurements:async()=>{if(waitSave)await waitSave.promise;if(failSave)throw Error('Lưu chưa thành công');return structuredClone(draft);},acknowledgeFieldResult:async()=>({...draft,command:null}),
- uploadAndSubmitFieldDraft:async()=>{submitted=true;draft={...draft,command:{phase:'confirmed'},result:{id:'receipt',taskId:'task',readiness:'READY'}};return structuredClone(draft);},
+ uploadAndSubmitFieldDraft:async(d,r,onProgress)=>{
+  if(options.transfer){
+   draft.captures[0]={...draft.captures[0],upload:{status:'UPLOADING',partSizeBytes:3}};
+   onProgress(structuredClone(draft),'photo',37);await options.transfer.promise;
+   draft.captures[0]={...draft.captures[0],completed:true,parts:[{partNumber:1}],upload:{status:'VERIFYING',partSizeBytes:3}};
+   onProgress(structuredClone(draft),'photo');await options.verification.promise;
+  }
+  submitted=true;draft={...draft,command:{phase:'confirmed'},result:{id:'receipt',taskId:'task',readiness:'READY'}};return structuredClone(draft);
+ },
  },
  }});
  s.render();await s.flush();
@@ -82,4 +90,33 @@ test('FIELD Completed alone never implies final repair acceptance',async()=>{
  const h=await mounted({previous:true,completed:true,incomplete:true});
  assert.equal(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Sửa chữa: Đã nghiệm thu'),false);
  h.s.unmount();
+});
+
+
+test('FIELD progress stays 100 during verification without claiming VERIFIED',()=>{
+ const fs=require('node:fs'),vm=require('node:vm');const scope={require,setTimeout,clearTimeout,Uint8Array,AbortController,URL};
+ vm.runInNewContext(fs.readFileSync('tests/t05b.test.cjs','utf8').split("test('T05B FIELD")[0]+";globalThis.e=load('app/(crew)/field-review.tsx',{'react-native':{StyleSheet:{create:x=>x}}});",scope);const e=scope.e;
+ const c={parts:[{partNumber:1}],size:3,completed:true,upload:{status:'VERIFYING',partSizeBytes:3}};
+ const feedback=e.fieldPhotoFeedback(c,true);
+ assert.equal(feedback.percent,100);assert.equal(feedback.verified,false);
+ assert.equal(e.fieldPhotoFeedback({...c,completed:false,parts:[],upload:{status:'UPLOADING',partSizeBytes:3}},true,37).percent,37);
+});
+
+test('FIELD labels submitted snapshot separately from unsent supplement',async()=>{
+ const h=await mounted({previous:true});
+ const text=h.s.nodes().filter(n=>n.type==='Text').map(n=>JSON.stringify(n.props.children)).join(' ');
+ assert.match(text,/Thông tin bên dưới là bản bổ sung đang soạn/);
+ h.s.unmount();
+});
+
+test('FIELD screen shows transport percent then keeps 100 while waiting for verification',async()=>{
+ const transfer=deferred(),verification=deferred(),h=await mounted({transfer,verification});
+ h.s.press('Gửi hồ sơ đo kiểm');await h.s.flush();
+ const progress=()=>h.s.nodes().filter(n=>n.props?.accessibilityRole==='progressbar');
+ assert.ok(progress().some(n=>n.props.accessibilityValue.now===37));
+ transfer.resolve();await h.s.flush();
+ assert.ok(progress().some(n=>n.props.accessibilityValue.now===100));
+ assert.ok(h.s.nodes().some(n=>n.props?.accessibilityLabel==='Ảnh 1: Đang kiểm tra 100%'));
+ assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Gửi hồ sơ đo kiểm'&&!n.props.disabled),false);
+ verification.resolve();await h.s.flush();h.s.unmount();
 });

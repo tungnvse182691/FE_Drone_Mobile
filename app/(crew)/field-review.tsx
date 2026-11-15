@@ -45,7 +45,7 @@ export function fieldNoticeModel(notice: string, result?: FieldDraft['result'], 
     const missing=fieldMissingReasonLabels(result.missingReasons);
     return {title:'Đã gửi hồ sơ',tone:result.readiness==='INCOMPLETE'?'pending' as const:'success' as const,
       summary:result.readiness==='INCOMPLETE'?(missing[0]??'Cần bổ sung thông tin'):'Máy chủ đã nhận hồ sơ',
-      detail:[...missing,'Hồ sơ đã được đọc lại từ máy chủ; chưa phải xác nhận nghiệm thu.'].join('\n')};
+      detail:[...missing,...(result.missingReasons?.includes('POSITION_CHECKLIST_INSUFFICIENT')?['Máy chủ chưa đối chiếu được tấm, phân đoạn hoặc lý trình với nguồn của nhiệm vụ. Cần kiểm tra đúng dấu mốc và phạm vi tuyến; không dùng số ví dụ cho mọi nhiệm vụ.']:[]),'Hồ sơ đã được đọc lại từ máy chủ; chưa phải xác nhận nghiệm thu.'].join('\n')};
   }
   const success=notice.includes('Ảnh đã')||notice.startsWith('Đã lưu');
   const pending=notice.includes('đối soát')||notice.includes('chờ');
@@ -136,13 +136,13 @@ export function fieldEvidenceStatus(capture: { verified?: boolean; completed?: b
   return { label: `Máy chủ trả mã chưa có diễn giải: ${safeStatus}`, variant: 'status-pending' as const };
 }
 
-export function fieldPhotoFeedback(capture: FieldDraft['captures'][number], active: boolean) {
+export function fieldPhotoFeedback(capture: FieldDraft['captures'][number], active: boolean, transferPercent?: number) {
   const blocked=!!capture.cancelState||capture.upload?.status==='FAILED';
   const verified=!blocked&&!!capture.verified;
   const checking=!verified&&(capture.completed||capture.upload?.status==='VERIFYING'||capture.upload?.status==='VERIFIED');
   const partSize=capture.upload?.partSizeBytes??0;
   const confirmed=capture.parts.reduce((sum,part)=>sum+Math.max(0,Math.min(partSize,capture.size-(part.partNumber-1)*partSize)),0);
-  const percent=active&&!blocked&&!checking&&partSize>0&&capture.size>0?Math.min(100,Math.floor(100*confirmed/capture.size)):null;
+  const percent=blocked||verified?null:checking?100:active&&Number.isFinite(transferPercent)?Math.max(0,Math.min(100,Math.floor(transferPercent!))):active&&partSize>0&&capture.size>0?Math.min(100,Math.floor(100*confirmed/capture.size)):null;
   return {verified,busy:active&&!blocked&&!verified,label:blocked?'Cần kiểm tra':verified?'Đã xác minh':checking?'Đang kiểm tra':active?'Đang tải':'Chờ tải',percent};
 }
 
@@ -192,6 +192,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const loadSequence=useRef(0);
   const context=()=>currentFieldContext(task.projectId,task.id);
   const current=(c: NonNullable<ReturnType<typeof context>>)=>active.current&&JSON.stringify(context())===JSON.stringify(c);
+  const [transferProgress,setTransferProgress]=useState<{captureId:string;percent:number}|null>(null);
   const loadRepairRecovery=useCallback(async(c:NonNullable<ReturnType<typeof context>>,fieldSubmissionId?:string)=>{
     const sequence=loadSequence.current;
     if(!supplementMode){setRepairRecovery(null);return;}
@@ -278,7 +279,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     if(action==='replay'&&(!replayConfirmed||replayConfirmed.key!==draft?.command?.key||replayConfirmed.context!==JSON.stringify(c)))return;
     if(action==='recover'&&(!repairRecovery||repairRecovery.phase==='CONFIRMED'||
       (['PREPARED','PENDING'].includes(repairRecovery.phase)&&(!repairRecoveryConfirmed||repairRecoveryConfirmed.key!==repairRecovery.key||repairRecoveryConfirmed.context!==JSON.stringify(c)))))return;
-    busyRef.current=true;setBusy(true);setBusyAction(action);setNotice('');setNoticeDetail('');setShowErrorDetail(false);setReplayConfirmed(null);
+    busyRef.current=true;setBusy(true);setBusyAction(action);setTransferProgress(null);setNotice('');setNoticeDetail('');setShowErrorDetail(false);setReplayConfirmed(null);
     setRepairRecoveryConfirmed(null);
     try {
       const runtime=await openFieldRuntime(c);
@@ -311,10 +312,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         const index=saved.captures.findIndex(capture=>capture.id===fileId);
         if(index<0)throw Error('field_capture_missing');
         setUploadingCaptureId(fileId??null);
-        saved=await uploadFieldCapture(saved,index,runtime,updated=>{if(current(c))setDraft(updated);});
+        saved=await uploadFieldCapture(saved,index,runtime,(updated,percent)=>{if(current(c)){setDraft(updated);setTransferProgress(percent===undefined?null:{captureId:fileId!,percent});}});
       }
       if(action==='submit') {
-        saved=await uploadAndSubmitFieldDraft(saved,runtime,(updated,captureId)=>{if(current(c)){setUploadingCaptureId(captureId);setDraft(updated);}});
+        saved=await uploadAndSubmitFieldDraft(saved,runtime,(updated,captureId,percent)=>{if(current(c)){setUploadingCaptureId(captureId);setDraft(updated);setTransferProgress(percent===undefined?null:{captureId,percent});}});
         if(current(c))setUploadingCaptureId(null);
         if(supplementMode&&saved.command?.phase==='confirmed') {
           const repairIdentity=currentRepairIdentity(task.projectId,task.id);
@@ -414,6 +415,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       </Card>:null}
       {serverLoaded&&latest?<Card style={styles.card}>
         <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Hồ sơ đã gửi</Text><Text style={styles.muted}>Lần {latest.revision}</Text></View>
+        {!frozen&&!taskReadOnly?<Text style={styles.muted}>Đây là kết quả lần gửi trước. Thông tin bên dưới là bản bổ sung đang soạn; chỉ cập nhật vào hồ sơ sau khi gửi và được máy chủ nhận.</Text>:null}
         {(latest.measurements??[]).map(m=><View key={m.sampleId} style={styles.measurementResult}>
           <View style={styles.resultHeading}><Text style={[typography.labelLg,styles.flex]}>{fieldMeasurementTitle(m.type)}</Text><Text style={styles.resultValue}>{m.value==null?'Chưa đo':`${m.value} ${m.unit}`}</Text></View>
           {m.value==null&&m.unknownReason?<Text style={styles.muted}>{m.unknownReason}</Text>:null}
@@ -499,7 +501,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <SafeAreaProvider>
           <SafeAreaScreen scroll keyboardAware header={<AppHeader subtitle="Vị trí quan sát" showBack onBack={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}/>}>
             <Card style={styles.card}><View style={styles.positionEditor} pointerEvents={busy||frozen?'none':'auto'}>
-<Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
+<Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><Text style={styles.muted}>Lý trình là khoảng cách tính bằng mét từ đầu tuyến của nhiệm vụ. Nhập theo dấu mốc thực tế, không phải khoảng cách từ điện thoại đến chỗ hư hại. Lưu vị trí mới chỉ lưu nháp; gửi hồ sơ để máy chủ kiểm tra.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
           {!locationProof?<View style={styles.positionHint}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={styles.positionHintText}>Hồ sơ sẽ ghi nhận thiếu vị trí.</Text></View>:null}
           {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
             {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>}
@@ -520,10 +522,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </Modal>
         <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
           {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.'}</Text>:null}
-          <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id);return <View key={c.id} style={styles.photoTile}>
+          <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id,transferProgress?.captureId===c.id?transferProgress.percent:undefined);return <View key={c.id} style={styles.photoTile}>
             <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
               <View pointerEvents="none" style={[styles.photoOverlay,feedback.busy&&styles.photoOverlayBusy]} accessible accessibilityLabel={`Ảnh ${index+1}: ${feedback.label}${feedback.percent===null?'':` ${feedback.percent}%`}`} accessibilityState={{busy:feedback.busy}} accessibilityLiveRegion="polite">
-                {feedback.busy?<ActivityIndicator size="large" color={colors.surface}/>:feedback.verified?<View style={styles.verifiedBadge}><MaterialIcons name="check-circle" size={24} color={colors.success}/></View>:null}
+                {feedback.busy?(feedback.percent===null?<ActivityIndicator size="large" color={colors.surface}/>:<View style={styles.photoProgressRing} accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:feedback.percent}}><View style={[styles.ringHalf,styles.ringRight]}><View style={[styles.ringArc,styles.arcRight,{transform:[{rotate:`${Math.min(feedback.percent,50)*3.6-135}deg`}]}]}/></View><View style={[styles.ringHalf,styles.ringLeft]}><View style={[styles.ringArc,styles.arcLeft,{transform:[{rotate:`${Math.max(0,feedback.percent-50)*3.6+45}deg`}]}]}/></View><Text style={styles.ringText}>{feedback.percent}%</Text></View>):feedback.verified?<View style={styles.verifiedBadge}><MaterialIcons name="check-circle" size={24} color={colors.success}/></View>:null}
                 <View style={styles.photoCaption}><Text style={styles.photoStatus}>{feedback.label}{feedback.percent===null?'':` · ${feedback.percent}%`}</Text></View>
                 {feedback.percent!==null?<View style={styles.progressTrack} accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:feedback.percent}}><View style={[styles.progressFill,{width:`${feedback.percent}%`}]}/></View>:null}
               </View>
@@ -711,6 +713,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
+  photoProgressRing: {width:56,height:56,borderRadius:28,borderWidth:3,borderColor:'rgba(255,255,255,0.3)',backgroundColor:'rgba(26,29,32,0.72)',alignItems:'center',justifyContent:'center'},
+  ringHalf: {position:'absolute',top:-3,width:28,height:56,overflow:'hidden'},
+  ringRight: {right:-3}, ringLeft: {left:-3},
+  ringArc: {position:'absolute',width:56,height:56,borderRadius:28,borderWidth:3,borderColor:'transparent',borderTopColor:colors.surface,borderRightColor:colors.surface},
+  arcRight: {right:0}, arcLeft: {left:0},
+  ringText: {...typography.labelSm,color:colors.surface},
   positionEditor: {gap:spacing.md},
   positionOption: {minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:radius.md},
   positionChoiceLabel: {...typography.bodyMd,color:colors.secondary,flex:1},

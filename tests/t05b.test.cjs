@@ -189,3 +189,23 @@ test('T05B complete FIELD link resolves params with the same configured identity
 });
 
 test('T05B definitive part URL conflict archives old intent and prepares durable renewal without changing file/complete command',async()=>{const h=fieldHarness(),d=measured(h);d.captures[0]={...d.captures[0],upload:undefined,verified:false,createKey:'create',completeKey:'complete',parts:[]};let old;h.runtime.api.requestCrewUploadPartUrls=async(_,ns,key)=>{old=key;throw {response:{status:409}};};await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime));const c=h.stored().captures[0];assert.equal(c.retiredPartCommands[0].key,old);assert.notEqual(c.partCommands[1].key,old);assert.equal(c.completeKey,'complete');assert.equal(c.createKey,'create');});
+
+
+test('FIELD byte progress is transient and bounded to whole file',async()=>{
+ const h=fieldHarness(),d=measured(h);d.captures[0]={...d.captures[0],upload:undefined,verified:false,createKey:'create',completeKey:'complete',parts:[]};
+ const seen=[];
+ h.runtime.api.putCrewUploadPartBytes=async(url,bytes,type,signal,onProgress)=>{assert.equal(typeof onProgress,'function');onProgress(bytes.length/2);onProgress(bytes.length);return {etag:'etag'};};
+ await h.m.uploadFieldCapture(d,0,h.runtime,(updated,percent)=>{if(percent!==undefined)seen.push(percent);});
+ assert.ok(seen.some(x=>x>0&&x<66));assert.ok(seen.includes(100));
+ assert.equal(JSON.stringify(h.stored()).includes('transferPercent'),false);
+});
+
+test('FIELD suppresses late transport progress after session switch and preserves upload identity',async()=>{
+ const h=fieldHarness(),d=measured(h);d.captures[0]={...d.captures[0],upload:undefined,verified:false,createKey:'create',completeKey:'complete',parts:[]};
+ const seen=[];
+ h.runtime.api.putCrewUploadPartBytes=async(url,bytes,type,signal,onProgress)=>{onProgress(1);h.switch();onProgress(bytes.length);return {etag:'etag'};};
+ await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime,(updated,percent)=>{if(percent!==undefined)seen.push(percent);}));
+ assert.deepEqual(seen,[33]);
+ const saved=h.stored().captures[0];assert.equal(saved.createKey,'create');assert.equal(saved.completeKey,'complete');
+ assert.equal(saved.parts.length,0);assert.equal(saved.verified,false);assert.equal(h.calls.includes('submit'),false);
+});

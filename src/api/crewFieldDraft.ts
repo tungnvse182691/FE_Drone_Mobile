@@ -341,7 +341,7 @@ async function freshTask(draft: FieldDraft,runtime: FieldRuntime,capability: 'ca
   if (origin.id !== response.data.firstStartOriginId || origin.taskId !== draft.taskId || !runtime.api.isCrewResourceId(origin.id)) throw new Error('field_start_origin_invalid');
   return response;
 }
-async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,controller: AbortController,onSession?: (draft: FieldDraft) => void): Promise<FieldDraft> {
+async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,controller: AbortController,onSession?: (draft: FieldDraft, transferPercent?: number) => void): Promise<FieldDraft> {
   assertFieldContext(draft,runtime);
   const c = draft.captures[index]; if (!c) throw new Error('field_capture_missing');
   const key = captureKey(draft,c.id);
@@ -409,7 +409,13 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       checkCancel();
       let result: Awaited<ReturnType<typeof runtime.api.putCrewUploadPartBytes>>;
       try {
-        result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType,controller.signal));
+        result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType,controller.signal,loaded => {
+          // Transport progress is presentation only: never write it into the durable ledger.
+          if (!sameContext(draft,runtime.current()) || controller.signal.aborted || cancelGates.has(key)) return;
+          const confirmed = c.parts.reduce((sum,p) => sum + Math.max(0,Math.min(session.partSizeBytes,c.size-(p.partNumber-1)*session.partSizeBytes)),0);
+          const partBytes = Math.min(session.partSizeBytes,c.size-(part-1)*session.partSizeBytes);
+          if (Number.isFinite(loaded) && c.size > 0) onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft,Math.min(100,Math.floor(100*(confirmed+Math.max(0,Math.min(partBytes,loaded)))/c.size)));
+        }));
       } catch (error) {
         // Keep the original transport error and annotate only the failed stage.
         // The signed URL, checksum, journal key and replay identity remain unchanged.
@@ -455,7 +461,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   c.upload = session; c.verified = true; await persist(draft,runtime);
   onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft); return draft;
 }
-export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,onSession?: (draft: FieldDraft) => void): Promise<FieldDraft> {
+export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,onSession?: (draft: FieldDraft, transferPercent?: number) => void): Promise<FieldDraft> {
   const capture = draft.captures[index]; if (!capture) throw Error('field_capture_missing');
   const key = captureKey(draft,capture.id),controller = new AbortController();
   if (cancelGates.has(key) || capture.cancelState) throw Error('field_upload_cancel_pending');
@@ -579,7 +585,7 @@ function validateFieldMeasurements(draft: FieldDraft): void {
       !Number.isFinite(m.latitude) || !Number.isFinite(m.longitude) || Math.abs(m.latitude)>90 || Math.abs(m.longitude)>180))) throw new Error('field_measurements_required');
 }
 /** A new user intent only. Never replays an existing submission or skips VERIFIED readback. */
-export async function uploadAndSubmitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,onProgress?: (draft: FieldDraft,captureId: string) => void): Promise<FieldDraft> {
+export async function uploadAndSubmitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,onProgress?: (draft: FieldDraft,captureId: string,transferPercent?: number) => void): Promise<FieldDraft> {
   assertFieldContext(draft,runtime);
   if(draft.command)throw Error('field_command_pending');
   validateFieldMeasurements(draft);
@@ -589,7 +595,7 @@ export async function uploadAndSubmitFieldDraft(draft: FieldDraft,runtime: Field
     const capture=draft.captures[index];
     if(capture.verified)continue;
     onProgress?.(JSON.parse(JSON.stringify(draft)) as FieldDraft,capture.id);
-    draft=await uploadFieldCapture(draft,index,runtime,updated=>onProgress?.(updated,capture.id));
+    draft=await uploadFieldCapture(draft,index,runtime,(updated,percent)=>onProgress?.(updated,capture.id,percent));
   }
   assertFieldContext(draft,runtime);
   return submitFieldDraft(draft,runtime);

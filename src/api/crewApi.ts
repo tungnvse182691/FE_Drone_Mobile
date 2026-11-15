@@ -1132,10 +1132,12 @@ export async function putCrewUploadPartBytes(
   bytes: Uint8Array,
   contentType: string,
   signal?: AbortSignal,
+  onProgress?: (loadedBytes: number) => void,
 ): Promise<{ etag: string }> {
   const response = await storageClient.put(presignedUrl, bytes, {
     headers: { 'Content-Type': contentType },
     signal,
+    onUploadProgress: onProgress ? event => { if (Number.isFinite(event.loaded)) onProgress(Math.max(0, Math.min(bytes.length, event.loaded))); } : undefined,
   });
   const rawEtag =
     (response.headers as Record<string, string | undefined>)['etag'] ??
