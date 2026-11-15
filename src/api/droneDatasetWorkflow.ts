@@ -96,6 +96,10 @@ export type DroneUploadPlan = {
 };
 const realDroneUploadTransport: DroneUploadTransport = { readTask: getOperatorSurveyTaskDetailReal, createSession: createOperatorUploadSessionReal, getSession: getOperatorUploadSessionReal, getPartUrls: getOperatorUploadPartUrlsReal, putPart: putUploadPartBytesDirect, complete: completeOperatorUploadReal, getMetadata: getOperatorFileMetadataReal };
 const uploadErrorStatus = (error: unknown): number | undefined => typeof error === 'object' && error !== null && 'response' in error && typeof (error as { response?: { status?: unknown } }).response?.status === 'number' ? (error as { response: { status: number } }).response.status : undefined;
+function safeStorageCode(error: unknown): string {
+  const code = typeof error === 'object' && error !== null && 'storageCode' in error ? error.storageCode : undefined;
+  return typeof code === 'string' && /^(AccessDenied|SignatureDoesNotMatch|RequestExpired|ExpiredToken|InvalidAccessKeyId|RequestTimeTooSkewed|InvalidToken|NoSuchUpload)$/.test(code) ? code : 'UNKNOWN';
+}
 const isUncertain = (error: unknown) => uploadErrorStatus(error) === undefined || (uploadErrorStatus(error) ?? 0) >= 500 || [408,429].includes(uploadErrorStatus(error) ?? 0);
 function ensureStatus(status: string, allowed: string[]): void { if (!allowed.includes(status)) throw Error(`drone_upload_state_${status}`); }
 
@@ -191,7 +195,7 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
           uploaded.push({partNumber:part.partNumber,sizeBytes:part.sizeBytes,etag});
           await update({status:'PARTS_IN_PROGRESS',parts:[...uploaded]});
           plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
-        } catch(error) { guard(); await update({status:isUncertain(error)||uploadErrorStatus(error)===403?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'part_transport_unknown'}}); throw error; }
+        } catch(error) { guard(); await update({status:isUncertain(error)||uploadErrorStatus(error)===403?'COMPLETE_UNKNOWN':'FAILED',error:{status:uploadErrorStatus(error),code:'part_transport_unknown',storageCode:safeStorageCode(error)}}); throw error; }
       }
       pause();
       session=await readSession();

@@ -24,7 +24,7 @@ export type DroneUploadIntent = {
   partUrlRequest?: { generation: number; expiresAt?: string };
   cancelRequest?: { requestedAt: string; phase: 'UNKNOWN' | 'CONFIRMED' | 'REJECTED' };
   ifMatch: string | null; parts: DroneUploadPart[]; status: DroneUploadIntentStatus;
-  updatedAt: string; receipt: Record<string, unknown> | null; error: { status?: number; code: string } | null;
+  updatedAt: string; receipt: Record<string, unknown> | null; error: { status?: number; code: string; storageCode?: string } | null;
 };
 type UploadInput = Omit<DroneUploadIntent, 'schema'|'key'|'kind'|'actor'|'environment'|'session'|'taskId'|'updatedAt'|'uploadId'|'fileId'|'version'|'ifMatch'|'parts'|'status'|'receipt'|'error'> & { kind: 'upload'|'dataset'; uploadId?: string|null; fileId?: string|null; version?: string|null; ifMatch?: string|null };
 // A task may be open in detail, decline and recovery screens at once. Keep the

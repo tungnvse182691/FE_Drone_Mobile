@@ -324,6 +324,17 @@ function uploadScenario(initial={}) {
  const plan={taskId:id(2),projectId:id(3),targetId:id(2),taskVersion:'AAAAAAAAAAE=',file:{id:id(5),uri:'file:///video.mp4',name:'video.mp4',sizeBytes:5,checksumSha256:'a'.repeat(64),purpose:'SURVEY_VIDEO',mediaType:'video/mp4'},readRange:async(offset,length)=>Uint8Array.from([1,2,3,4,5].slice(offset,offset+length))};
  return {workflow,transport,plan,calls,intent,set:(status,version=v)=>{phase=status;v=version;}};
 }
+test('Operator storage diagnostics persist safely without changing command or uploaded parts',async()=>{
+ for(const [input,expected] of [['SignatureDoesNotMatch','SignatureDoesNotMatch'],['AccessDenied','AccessDenied'],['secret-url-token','UNKNOWN']]){
+  const f=uploadScenario({uploadId:id(41),fileId:id(42),status:'PARTS_IN_PROGRESS',parts:[{partNumber:1,sizeBytes:2,etag:'first-part'}]});
+  f.set('UPLOADING');f.transport.putPart=async()=>{throw {response:{status:403},storageCode:input,request:{url:'secret-url-token'}};};
+  await assert.rejects(f.workflow.orchestrateDroneUpload(f.plan,f.transport));
+  assert.equal(f.intent.error.storageCode,expected);assert.equal(f.intent.status,'COMPLETE_UNKNOWN');
+  assert.equal(f.intent.key,id(40));assert.equal(f.intent.uploadId,id(41));assert.equal(f.intent.parts[0].etag,'first-part');
+  assert.ok(!JSON.stringify(f.intent.error).includes('secret-url-token'));
+ }
+});
+
 test('Operator transfer uses server part size and fresh version after URL admission',async()=>{
  const f=uploadScenario();assert.equal((await f.workflow.orchestrateDroneUpload(f.plan,f.transport)).status,'VERIFIED');
  assert.deepEqual(f.calls.filter(c=>c[0]==='put').map(c=>c[1]),[[1,2],[3,4],[5]]);
