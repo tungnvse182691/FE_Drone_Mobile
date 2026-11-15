@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from './Button';
 import { colors, spacing, typography } from '../design-tokens';
@@ -41,24 +42,31 @@ export function OperatorLocalTasks({ onClose }: { onClose: () => void }) {
   }, [owner, onClose]);
   if (selected) return <OperatorLocalTaskDetail task={selected} onBack={()=>setSelected(null)} />;
   return <SafeAreaView style={styles.root}>
-    <View style={styles.header}>
-      <Text style={typography.titleLg}>Nhiệm vụ đã tải</Text>
-      <Text style={styles.description}>Bản lưu trên máy</Text>
+    <View style={styles.toolbar}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại kết nối" onPress={onClose} style={styles.backButton}>
+        <MaterialIcons name="arrow-back" size={24} color={colors.secondary}/>
+      </Pressable>
+      <View style={styles.toolbarTitle}><Text style={styles.title}>Nhiệm vụ đã tải</Text><Text style={styles.caption}>Bản lưu trên thiết bị</Text></View>
+      {!loading&&!error?<Text style={styles.count}>{tasks.length}</Text>:null}
     </View>
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.description}>Kết nối lại để cập nhật phân công và tiếp tục gửi dữ liệu.</Text>
+    <ScrollView contentContainerStyle={styles.detailContent}>
+      <View style={styles.notice}><MaterialIcons name="cloud-off" size={18} color={colors.secondary}/><Text style={styles.noticeText}>Xem và lưu nháp trên máy. Kết nối lại để cập nhật phân công và gửi dữ liệu.</Text></View>
       {loading ? <ActivityIndicator color={colors.primary} /> : null}
       {error ? <Text style={styles.description}>Chưa đọc được bản lưu của tài khoản này. Dữ liệu vẫn được giữ trên máy.</Text> : null}
       {!loading && !error && !tasks.length ? <Text style={styles.description}>Chưa có nhiệm vụ đã tải cho phiên đăng nhập này.</Text> : null}
-      {tasks.map(task => <View key={task.id} style={styles.card}>
-        <Text style={typography.labelLg}>Nhiệm vụ {operatorTaskDisplayCode(task.id)}</Text>
-        <Text style={styles.description}>{operatorTaskStatusLabel(task.status)}</Text>
-        <Text style={styles.description}>{task.segmentCount} đoạn khảo sát</Text>
-        <Text style={styles.caption}>Đã tải: {new Date(task.cachedAt).toLocaleString('vi-VN')}</Text>
-        <Button variant="secondary" title={`Mở nhiệm vụ ${operatorTaskDisplayCode(task.id)}`} onPress={()=>setSelected(task)} />
-      </View>)}
+      {tasks.map(task => <Pressable key={task.id} accessibilityRole="button"
+        accessibilityLabel={`Mở nhiệm vụ ${operatorTaskDisplayCode(task.id)}, ${operatorTaskStatusLabel(task.status)}`}
+        onPress={()=>setSelected(task)} style={({pressed})=>[styles.taskRow,pressed&&styles.taskPressed]}>
+        <View style={styles.taskIcon}><MaterialIcons name="assignment" size={24} color={colors.secondary}/></View>
+        <View style={styles.taskText}>
+          <Text style={styles.taskTitle}>Nhiệm vụ {operatorTaskDisplayCode(task.id)}</Text>
+          <Text style={styles.description}>{operatorTaskStatusLabel(task.status)} · {task.segmentCount} đoạn</Text>
+          <Text style={styles.caption}>Đã tải {new Date(task.cachedAt).toLocaleString('vi-VN')}</Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={24} color={colors.secondary}/>
+      </Pressable>)}
     </ScrollView>
-    <View style={styles.footer}><Button variant="primary" title="Quay lại kết nối" onPress={onClose} /></View>
+    <View style={styles.saveBar}><Button variant="secondary" title="Quay lại kết nối" onPress={onClose} /></View>
   </SafeAreaView>;
 }
 
@@ -110,36 +118,69 @@ function OperatorLocalTaskDetail({task,onBack}:{task:LocalOperatorTask;onBack:()
     return()=>subscription.remove();
   },[dirty,onBack]);
   return <SafeAreaView style={styles.root}>
-    <View style={styles.header}><Button variant="text" title="Quay lại nhiệm vụ đã tải" onPress={back}/><Text style={typography.titleLg}>Nhiệm vụ {operatorTaskDisplayCode(task.id)}</Text><Text style={styles.caption}>Ngoại tuyến · Phân công chưa được cập nhật</Text></View>
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-      <View style={styles.card}><Text style={typography.titleMd}>Gói công việc đã tải</Text>
-        {loading?<ActivityIndicator/>:work?<>
-          <Text style={styles.description}>{work.segmentCount} đoạn khảo sát</Text>
-          <Text style={styles.description}>Hạn bay: {work.dueAt?new Date(work.dueAt).toLocaleString('vi-VN'):'Chưa có thời hạn'}</Text>
-          <Text style={styles.description}>{work.access?`Điểm tiếp cận: ${work.access[1].toFixed(6)}, ${work.access[0].toFixed(6)}`:'Chưa có điểm tiếp cận trong bản lưu.'}</Text>
-        </>:<Text style={styles.description}>Gói công việc chưa được tải cho nhiệm vụ này.</Text>}
-      </View>
-      <View style={styles.card}><Text style={typography.titleMd}>Nháp dữ liệu khảo sát</Text>
-        <Text style={styles.description}>Thời gian ghi hình</Text>
-        <TextInput accessibilityLabel="Thời gian ghi hình ngoại tuyến" value={draft.recordedAt} editable={!!runtime&&!saving} maxLength={32} placeholder="2026-11-15 08:30" onChangeText={recordedAt=>{setDraft(d=>({...d,recordedAt}));setDirty(true);setMessage(null);}} style={styles.input}/>
-        {draft.telemetryKey?<><Text style={styles.description}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch SRT ngoại tuyến" value={draft.timeOffset} editable={!!runtime&&!saving} maxLength={32} keyboardType="numbers-and-punctuation" onChangeText={timeOffset=>{setDraft(d=>({...d,timeOffset}));setDirty(true);setMessage(null);}} style={styles.input}/></>:null}
-        <Text style={styles.caption}>{draft.videoKey?'Lựa chọn video đã lưu được giữ lại.':'Chưa có video trong nháp.'} {draft.telemetryKey?'Lựa chọn SRT đã lưu được giữ lại.':''}</Text>
-        {runtime?<OperatorLocalFiles taskId={task.id} onSelect={file=>{if(!activeRef.current||saveLock.current)return;setDraft(d=>({...d,[file.kind==='VIDEO'?'videoKey':'telemetryKey']:file.key}));setDirty(true);setMessage(null);}}/>:null}
+    <View style={styles.toolbar}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại nhiệm vụ đã tải" disabled={saving} onPress={back} style={styles.backButton}>
+        <MaterialIcons name="arrow-back" size={24} color={colors.secondary}/>
+      </Pressable>
+      <View style={styles.toolbarTitle}><Text style={styles.title}>Nháp khảo sát</Text><Text style={styles.caption}>Nhiệm vụ {operatorTaskDisplayCode(task.id)}</Text></View>
+      <View style={styles.offlineBadge}><MaterialIcons name="cloud-off" size={14} color={colors.secondary}/><Text style={styles.caption}>Ngoại tuyến</Text></View>
+    </View>
+    <KeyboardAvoidingView style={styles.body} behavior={Platform.OS==='ios'?'padding':undefined}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.detailContent}>
+        <View style={styles.notice}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={styles.noticeText}>Lưu trên máy. Kết nối lại để cập nhật phân công và gửi dữ liệu.</Text></View>
+        <View style={styles.detailCard}>
+          <Text style={styles.sectionTitle}>Gói công việc</Text>
+          {loading?<ActivityIndicator/>:work?<>
+            <View style={styles.summaryRow}><Text style={styles.caption}>Phạm vi</Text><Text style={styles.summaryValue}>{work.segmentCount} đoạn khảo sát</Text></View>
+            <View style={styles.summaryRow}><Text style={styles.caption}>Hạn bay</Text><Text style={styles.summaryValue}>{work.dueAt?new Date(work.dueAt).toLocaleString('vi-VN'):'Chưa có thời hạn'}</Text></View>
+            <View style={styles.summaryRow}><Text style={styles.caption}>Điểm tiếp cận</Text><Text style={styles.summaryValue}>{work.access?`${work.access[1].toFixed(6)}, ${work.access[0].toFixed(6)}`:'Chưa có trong bản lưu'}</Text></View>
+          </>:<Text style={styles.description}>Chưa có gói công việc trong bản lưu.</Text>}
+        </View>
+        <View style={styles.detailCard}>
+          <Text style={styles.sectionTitle}>Tệp khảo sát</Text>
+          {runtime?<OperatorLocalFiles taskId={task.id} selectedVideoKey={draft.videoKey} selectedTelemetryKey={draft.telemetryKey} onSelect={file=>{if(!activeRef.current||saveLock.current)return;setDraft(d=>({...d,[file.kind==='VIDEO'?'videoKey':'telemetryKey']:file.key}));setDirty(true);setMessage(null);}}/>:<Text style={styles.caption}>Đang mở tệp đã lưu…</Text>}
+        </View>
+        <View style={styles.detailCard}>
+          <Text style={styles.sectionTitle}>Thông tin ghi hình</Text>
+          <View style={styles.field}>
+            <Text style={styles.description}>Thời gian ghi hình</Text>
+            <TextInput accessibilityLabel="Thời gian ghi hình ngoại tuyến" value={draft.recordedAt} editable={!!runtime&&!saving} maxLength={32} placeholder="2026-11-15 08:30" onChangeText={recordedAt=>{setDraft(d=>({...d,recordedAt}));setDirty(true);setMessage(null);}} style={styles.input}/>
+          </View>
+          {draft.telemetryKey?<View style={styles.field}><Text style={styles.description}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch SRT ngoại tuyến" value={draft.timeOffset} editable={!!runtime&&!saving} maxLength={32} keyboardType="numbers-and-punctuation" onChangeText={timeOffset=>{setDraft(d=>({...d,timeOffset}));setDirty(true);setMessage(null);}} style={styles.input}/></View>:null}
+        </View>
+      </ScrollView>
+      <View style={styles.saveBar}>
+        <Text accessibilityLiveRegion="polite" style={styles.caption}>{message??(dirty?'Có thay đổi chưa lưu':'Bản nháp trên thiết bị · Chưa gửi')}</Text>
         <Button variant="primary" title="Lưu nháp trên máy" loading={saving} disabled={!runtime||loading||saving} onPress={()=>void save()}/>
-        {message?<Text accessibilityLiveRegion="polite" style={styles.description}>{message}</Text>:null}
       </View>
-      <Text style={styles.caption}>Kết nối lại và khôi phục phiên để kiểm tra phân công trước khi gửi dữ liệu.</Text>
-    </ScrollView>
+    </KeyboardAvoidingView>
   </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, width: '100%', backgroundColor: colors.surface },
-  header: { padding: spacing.lg, gap: spacing.xs },
-  content: { padding: spacing.lg, paddingTop: 0, gap: spacing.md },
   description: { ...typography.bodyMd, color: colors.secondary },
   caption: { ...typography.caption, color: colors.secondary },
-  card: { padding: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt, borderRadius: 16 },
   input: {...typography.bodyMd,color:colors.neutral,borderWidth:1,borderColor:colors.border,borderRadius:8,minHeight:52,padding:12,backgroundColor:colors.surface},
-  footer: { padding: spacing.lg },
+  count:{...typography.labelLg,color:colors.secondary,padding:spacing.md},
+  taskRow:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,minHeight:100,borderWidth:1,borderColor:colors.border,borderRadius:12},
+  taskPressed:{backgroundColor:colors.surfaceAlt},
+  taskIcon:{width:40,height:40,alignItems:'center',justifyContent:'center',borderRadius:8,backgroundColor:colors.surfaceAlt},
+  taskText:{flex:1,minWidth:0,gap:spacing.xs},
+  taskTitle:{...typography.labelLg,color:colors.neutral},
+  body:{flex:1},
+  toolbar:{flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingHorizontal:spacing.sm,paddingVertical:spacing.sm,borderBottomWidth:1,borderBottomColor:colors.border},
+  backButton:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center'},
+  toolbarTitle:{flex:1,minWidth:0,gap:spacing.xs},
+  title:{...typography.titleMd,color:colors.neutral},
+  offlineBadge:{flexDirection:'row',alignItems:'center',gap:spacing.xs,padding:spacing.sm,flexShrink:1},
+  detailContent:{padding:spacing.md,gap:spacing.md},
+  notice:{flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,padding:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
+  noticeText:{...typography.caption,color:colors.secondary,flex:1},
+  detailCard:{padding:spacing.md,gap:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:12,backgroundColor:colors.surface},
+  sectionTitle:{...typography.titleMd,color:colors.neutral},
+  summaryRow:{flexDirection:'row',alignItems:'flex-start',gap:spacing.md,justifyContent:'space-between'},
+  summaryValue:{...typography.bodyMd,color:colors.secondary,flex:1,textAlign:'right'},
+  field:{gap:spacing.sm},
+  saveBar:{padding:spacing.md,gap:spacing.sm,borderTopWidth:1,borderTopColor:colors.border,backgroundColor:colors.surface},
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { openLocalDroneFiles, type DroneLocalFile } from '../../api/droneLocalFiles';
 import { useAuthStore } from '../../store/auth';
@@ -7,7 +8,7 @@ import { Button } from '../Button';
 import { colors, spacing, typography } from '../../design-tokens';
 
 /** Local bytes only. Selecting a file never dispatches an upload. */
-export function OperatorLocalFiles({taskId,onSelect}:{taskId:string;onSelect:(file:DroneLocalFile)=>void}) {
+export function OperatorLocalFiles({taskId,selectedVideoKey,selectedTelemetryKey,onSelect}:{taskId:string;selectedVideoKey?:string|null;selectedTelemetryKey?:string|null;onSelect:(file:DroneLocalFile)=>void}) {
   const runtime=useRef<Awaited<ReturnType<typeof openLocalDroneFiles>>|null>(null);
   const active=useRef(false),lock=useRef(false);
   const [files,setFiles]=useState<Awaited<ReturnType<NonNullable<typeof runtime.current>['list']>>>([]);
@@ -38,7 +39,7 @@ export function OperatorLocalFiles({taskId,onSelect}:{taskId:string;onSelect:(fi
       }
       if(!active.current)return;
       const rows=await store.list();if(!active.current)return;
-      setFiles(rows);onSelect(file);setMessage('Đã chọn tệp. Lưu nháp để giữ lựa chọn.');
+      setFiles(rows);onSelect(file);
     }catch(error){if(active.current){
       const code=error instanceof Error?error.message:'';
       setMessage(['drone_file_cached_task_missing','drone_file_cached_task_invalid','drone_file_task_invalid'].includes(code)
@@ -50,15 +51,44 @@ export function OperatorLocalFiles({taskId,onSelect}:{taskId:string;onSelect:(fi
     }}
     finally{lock.current=false;if(active.current)setBusy(false);}
   };
-  return <View style={{gap:spacing.sm}}>
-    <Text style={typography.labelLg}>Tệp trên thiết bị</Text>
+  return <View style={styles.container}>
     {loading||busy?<ActivityIndicator color={colors.primary}/>:null}
-    {files.map(file=><View key={file.key} style={{gap:spacing.xs}}>
-      <Button variant="secondary" title={`Dùng ${file.kind==='VIDEO'?'video':'SRT'}: ${file.name}`} disabled={busy||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void select(file.key)}/>
-      {!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)?<Text style={typography.caption}>Tệp chưa đầy đủ hoặc không còn đọc được. Chọn lại tệp để tiếp tục.</Text>:null}
-    </View>)}
-    <Button variant="secondary" title="Thêm video MP4" disabled={loading||busy||!runtime.current} onPress={()=>void select(undefined,'VIDEO')}/>
-    <Button variant="secondary" title="Thêm tệp SRT" disabled={loading||busy||!runtime.current} onPress={()=>void select(undefined,'TELEMETRY')}/>
-    {message?<Text accessibilityLiveRegion="polite" style={typography.bodyMd}>{message}</Text>:null}
+    {!loading&&!files.length?<Text style={styles.support}>Chưa có tệp. Thêm video MP4 hoặc tệp SRT từ thiết bị.</Text>:null}
+    {files.map(file=>{
+      const ready=['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability);
+      const selected=file.key===(file.kind==='VIDEO'?selectedVideoKey:selectedTelemetryKey);
+      const kind=file.kind==='VIDEO'?'Video':'SRT';
+      const size=Number.isFinite(file.size)?(file.size>=1024**2?`${(file.size/1024**2).toFixed(1)} MB`:`${file.size} B`):'';
+      return <Pressable key={file.key} testID={`local-file-${file.key}`} accessibilityRole="button"
+        accessibilityLabel={`Dùng ${kind.toLowerCase()}: ${file.name}`}
+        accessibilityState={{selected,disabled:busy||!ready}}
+        disabled={busy||!ready} onPress={()=>void select(file.key)}
+        style={({pressed})=>[styles.file,selected&&styles.selected,pressed&&styles.pressed]}>
+        <View style={styles.fileIcon}><MaterialIcons name={file.kind==='VIDEO'?'videocam':'description'} size={24} color={colors.secondary}/></View>
+        <View style={styles.fileText}>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="middle">{file.name}</Text>
+          <Text style={styles.support}>{!ready?'Tệp không còn đọc được · Chọn lại':`${kind}${size?` · ${size}`:''}${selected?' · Đã chọn':''}`}</Text>
+        </View>
+        <MaterialIcons name={selected?'check-circle':'radio-button-unchecked'} size={22} color={selected?colors.success:colors.secondary}/>
+      </Pressable>;
+    })}
+    <View style={styles.actions}>
+      <Button style={styles.action} variant="secondary" title="Thêm video MP4" disabled={loading||busy||!runtime.current} onPress={()=>void select(undefined,'VIDEO')}/>
+      <Button style={styles.action} variant="secondary" title="Thêm tệp SRT" disabled={loading||busy||!runtime.current} onPress={()=>void select(undefined,'TELEMETRY')}/>
+    </View>
+    {message?<Text accessibilityLiveRegion="polite" style={styles.support}>{message}</Text>:null}
   </View>;
 }
+
+const styles=StyleSheet.create({
+  container:{gap:spacing.sm},
+  file:{flexDirection:'row',alignItems:'center',gap:spacing.sm,minHeight:72,padding:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:12,backgroundColor:colors.surface},
+  selected:{borderColor:colors.success},
+  pressed:{backgroundColor:colors.surfaceAlt},
+  fileIcon:{width:36,height:40,alignItems:'center',justifyContent:'center',backgroundColor:colors.surfaceAlt,borderRadius:8},
+  fileText:{flex:1,minWidth:0,gap:spacing.xs},
+  name:{...typography.labelLg,color:colors.neutral},
+  support:{...typography.caption,color:colors.secondary},
+  actions:{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm,marginTop:spacing.xs},
+  action:{flexGrow:1,flexBasis:140},
+});
