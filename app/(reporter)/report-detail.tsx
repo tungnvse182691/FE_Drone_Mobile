@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/reporter/Button';
 import { Card } from '../../src/components/Card';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -243,18 +243,28 @@ function EvidencePreview({ scope, reportId, evidenceId, publication }: {
       {!requested ? <><MaterialIcons name="image" size={28} color={colors.secondary} /><Text style={[typography.caption, styles.link]}>Xem ảnh</Text></> :
       query.isError || imageError ? <><MaterialIcons name="refresh" size={22} color={colors.error} /><Text accessibilityLiveRegion="polite" style={styles.previewError}>Không tải được {label}. Thử lại</Text></> : <>
         {!query.isFetching && query.data ? <Image source={{ uri: query.data }}
-          style={styles.previewImage} resizeMode="contain" accessibilityLabel={publication ? 'Ảnh bằng chứng được chia sẻ cho phản ánh này' : 'Ảnh bằng chứng riêng tư'}
+          style={styles.previewImage} resizeMode="cover" accessibilityLabel={publication ? 'Ảnh bằng chứng được chia sẻ cho phản ánh này' : 'Ảnh bằng chứng riêng tư'}
           onLoad={() => setImageLoaded(true)} onError={() => setImageError(true)} /> : null}
         {query.isFetching || !imageLoaded ? <View style={styles.previewLoading}><ActivityIndicator color={colors.secondary} /><Text accessibilityLiveRegion="polite" style={typography.caption}>Đang tải ảnh…</Text></View> : null}
       </>}
     </Pressable>
-    {requested && expanded && !query.isError && !imageError && query.data ? <Modal visible onRequestClose={() => setExpanded(false)} animationType="fade">
-      <SafeAreaView style={styles.imageModal}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Đóng ảnh" onPress={() => setExpanded(false)} style={styles.iconButton}>
-          <MaterialIcons name="close" size={24} color={colors.onSurface} />
-        </Pressable>
-        <Image source={{ uri: query.data }} resizeMode="contain" style={styles.fullImage} onError={() => { setImageError(true); setExpanded(false); }} />
-      </SafeAreaView>
+    {requested && expanded && !query.isError && !imageError && query.data ? <Modal visible presentationStyle="fullScreen" onRequestClose={() => setExpanded(false)} animationType="fade">
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.imageModal} edges={['top', 'bottom', 'left', 'right']}>
+          <View testID="evidence-viewer-toolbar" style={styles.viewerToolbar}>
+            <Pressable testID="close-evidence-viewer" accessibilityRole="button" accessibilityLabel="Quay lại chi tiết phản ánh"
+              onPress={() => setExpanded(false)} style={styles.viewerBack}>
+              <MaterialIcons name="arrow-back" size={24} color={colors.onSurface} />
+              <Text style={[typography.labelLg, styles.viewerBackLabel]}>Quay lại</Text>
+            </Pressable>
+            <Text style={[typography.bodyMd, styles.viewerTitle]} numberOfLines={1}>Ảnh hiện trường</Text>
+          </View>
+          <View style={styles.viewerCanvas}>
+            <Image testID="evidence-full-image" source={{ uri: query.data }} resizeMode="contain" style={styles.fullImage}
+              accessibilityLabel="Ảnh hiện trường đầy đủ" onError={() => { setImageError(true); setExpanded(false); }} />
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal> : null}
   </View>;
 }
@@ -299,5 +309,10 @@ const styles = StyleSheet.create({
   previewLoading: { position: 'absolute', alignItems: 'center', gap: spacing.xs, backgroundColor: colors.surfaceAlt, padding: spacing.xs },
   previewError: { color: colors.error, padding: spacing.xs, textAlign: 'center', ...typography.caption },
   imageModal: { flex: 1, backgroundColor: colors.surface },
-  fullImage: { flex: 1, width: '100%' },
+  viewerToolbar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border },
+  viewerBack: { minHeight: 48, minWidth: 48, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radius.md },
+  viewerBackLabel: { color: colors.onSurface },
+  viewerTitle: { flex: 1, color: colors.secondary },
+  viewerCanvas: { flex: 1, minHeight: 0, backgroundColor: colors.surfaceAlt },
+  fullImage: { flex: 1, minHeight: 0, width: '100%' },
 });

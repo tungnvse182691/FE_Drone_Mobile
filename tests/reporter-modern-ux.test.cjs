@@ -118,3 +118,21 @@ test('D02 pending send keeps progress compact without a growing header',async()=
  const scroll=s.nodes().find(n=>n.type==='ScrollView');assert.ok(!JSON.stringify(scroll).includes('submission-progress'));
  assert.equal(s.nodes().find(n=>n.type==='InputField').props.value,'QA progress');release();await send;await s.flush();s.unmount();
 });
+
+for(const publication of [undefined,{id:'p',report:{id:'r'}}])test('photo viewer keeps back navigation in a modal safe area and uncropped full image '+!!publication,async()=>{
+ const query={isFetching:false,isError:false,data:'data:image/png;base64,qa'};
+ const s=screen('app/(reporter)/report-detail.tsx',{expose:'EvidencePreview',exportName:'EvidencePreview',props:{scope:'a/s1',reportId:'r',evidenceId:'e',publication},modules:{'../../src/components/Card':{Card:'Card'},'@tanstack/react-query':{useQuery:()=>query},'react-native-safe-area-context':{SafeAreaProvider:'SafeAreaProvider',SafeAreaView:'SafeAreaView'}}});
+ s.render();s.nodes().find(n=>n.type==='Pressable').props.onPress();await s.flush();
+ s.nodes().find(n=>n.type==='Image').props.onLoad();await s.flush();
+ assert.equal(s.nodes().find(n=>n.type==='Image').props.resizeMode,'cover','thumbnail fills its frame');
+ s.nodes().find(n=>n.type==='Pressable').props.onPress();await s.flush();
+ const modal=()=>s.nodes().find(n=>n.type==='Modal');assert.ok(modal());assert.equal(modal().props.presentationStyle,'fullScreen');
+ const provider=s.nodes().find(n=>n.type==='SafeAreaProvider');assert.ok(provider,'modal needs its own safe area measurement');
+ const safe=provider.props.children.flat(Infinity).find(n=>n.type==='SafeAreaView');assert.deepEqual(Array.from(safe.props.edges),['top','bottom','left','right']);
+ const back=s.nodes().find(n=>n.props.testID==='close-evidence-viewer');assert.ok(back);assert.equal(back.props.accessibilityRole,'button');assert.equal(back.props.accessibilityLabel,'Quay lại chi tiết phản ánh');assert.ok(flatten(back.props.style).minHeight>=48);
+ const toolbar=s.nodes().find(n=>n.props.testID==='evidence-viewer-toolbar');assert.ok(toolbar);assert.notEqual(flatten(toolbar.props.style).position,'absolute');
+ assert.equal(s.nodes().find(n=>n.props.testID==='evidence-full-image').props.resizeMode,'contain');
+ back.props.onPress();await s.flush();assert.ok(!modal(),'back closes viewer without leaving report');
+ s.nodes().find(n=>n.type==='Pressable').props.onPress();await s.flush();modal().props.onRequestClose();await s.flush();assert.ok(!modal(),'Android back also closes viewer');
+ s.nodes().find(n=>n.type==='Pressable').props.onPress();await s.flush();s.blur();await s.flush();assert.ok(!modal(),'blur clears private viewer');s.unmount();
+});
