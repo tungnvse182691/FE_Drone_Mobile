@@ -303,7 +303,7 @@ export default function CrewTasksScreen() {
 
                   <View style={styles.taskFooter}>
                     <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
                     </View>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
