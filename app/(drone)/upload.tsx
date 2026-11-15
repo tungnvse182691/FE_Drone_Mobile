@@ -34,6 +34,7 @@ export default function DroneUploadScreen() {
   // Upload workflow state: LOCAL -> QUEUED -> UPLOADING -> SERVER_CONFIRMED
   const [uploadStep, setUploadStep] = useState<'LOCAL' | 'QUEUED' | 'UPLOADING' | 'SERVER_CONFIRMED'>('LOCAL');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [transferPhase, setTransferPhase] = useState<'UPLOAD' | 'VERIFY' | null>(null);
   const [note, setNote] = useState('');
   const [statusMsg] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -281,7 +282,7 @@ export default function DroneUploadScreen() {
     setVideoName('Chưa chọn tệp'); setVideoSize('—'); setVideoSha('—');
     setSrtName('Chưa chọn tệp'); setSrtSize('—'); setSrtSha('—');
     setVideoUri(null); setSrtUri(null); setUploadStep('LOCAL');
-    setVideoFile(null); setTelemetryFile(null); setRecordedAt(''); setTimeOffset(''); setJournalReady(false); setPendingDataset(null); setReceived(false); setVerifiedFiles([]); setTransferMessage(null);
+    setVideoFile(null); setTelemetryFile(null); setRecordedAt(''); setTimeOffset(''); setJournalReady(false); setPendingDataset(null); setReceived(false); setVerifiedFiles([]); setTransferMessage(null); setTransferPhase(null);
     void readDatasetIntent();
     setUploadProgress(0); setSubmitError(null);
     setNote('');
@@ -360,7 +361,7 @@ export default function DroneUploadScreen() {
     const isCurrent=scope.capture();
     if(!isCurrent()||sending.current||copying||draftLoading||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
     pauseRequested.current=false;setPausePending(false);
-    sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);setTransferMessage('Đang chuẩn bị gửi…');
+    sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);setTransferPhase(null);setTransferMessage('Đang chuẩn bị gửi…');
     const guard=()=>{if(!isCurrent()||!mounted.current)throw Error('operator_session_changed');};
     try {
       if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(recordedAt))throw Error('recorded_at_invalid');
@@ -371,16 +372,17 @@ export default function DroneUploadScreen() {
         const current=await getOperatorSurveyTaskDetailReal(params.taskId!);guard();
         if(current.data.projectId!==file.projectId||file.taskId!==params.taskId||!file.checksumSha256)throw Error('drone_file_task_invalid');
         let attempts=0;
+        const fileLabel=file.kind==='VIDEO'?'video':'SRT';
+        setTransferPhase('UPLOAD');setTransferMessage(`Đang tải ${fileLabel}…`);setUploadProgress(0);
         while(true) {
-          setTransferMessage(`Đang tải ${file.kind==='VIDEO'?'video':'SRT'}…`);setUploadProgress(0);
           try {
             const intent=await orchestrateDroneUpload({taskId:params.taskId!,projectId:current.data.projectId,targetId:params.taskId!,taskVersion:current.data.version,
               file:{id:file.key,uri:file.uri,name:file.name,sizeBytes:file.size,checksumSha256:file.checksumSha256,purpose:file.kind==='VIDEO'?'SURVEY_VIDEO':'TELEMETRY',mediaType:file.kind==='VIDEO'?'video/mp4':'application/x-subrip'},
               readRange:(offset,length)=>readDroneFileRange(file,offset,length),shouldPause:()=>pauseRequested.current,onProgress:(sent,total)=>{if(isCurrent())setUploadProgress(Math.floor(sent*100/total));}});
-            guard();setVerifiedFiles(previous=>[...new Set([...previous,file.key])]);return intent.fileId!;
+            guard();setVerifiedFiles(previous=>[...new Set([...previous,file.key])]);setUploadProgress(100);setTransferPhase(null);setTransferMessage(`Máy chủ đã xác minh ${fileLabel}`);return intent.fileId!;
           } catch(error) {
             guard();if((error as Error).message!=='drone_upload_verify_pending'||++attempts>=20)throw error;
-            setTransferMessage('Đang xác minh tệp trên máy chủ…');await new Promise(resolve=>setTimeout(resolve,1000));guard();
+            setTransferPhase('VERIFY');setUploadProgress(100);setTransferMessage(`Đã tải ${fileLabel} · Đang chờ máy chủ xác minh`);await new Promise(resolve=>setTimeout(resolve,1000));guard();
           }
         }
       };
@@ -393,7 +395,7 @@ export default function DroneUploadScreen() {
       do {const page=await listEligibleOperatorDronesReal(params.taskId,cursor,100);guard();eligible=page.items.some(item=>item.id===selectedDroneId);cursor=page.nextCursor;pages++;}while(!eligible&&cursor&&pages<20);
       if(!eligible)throw Error('drone_device_unavailable');
       const plan: DroneDatasetPlan={taskId:params.taskId,projectId:current.data.projectId,ifMatch:current.etag,payload:{videoFileIds:[videoId],telemetryFileIds:telemetryId?[telemetryId]:[],deviceId:selectedDroneId,recordedAt:date.toISOString(),scope:current.data.scope,pairs:[{videoFileId:videoId,telemetryFileId:telemetryId,timeOffsetMilliseconds:telemetryId?Number(timeOffset):0}]}};
-      setTransferMessage('Đang nộp bộ dữ liệu…');
+      setTransferPhase(null);setTransferMessage('Đang nộp bộ dữ liệu…');
       const result=await submitDroneDataset(plan);guard();setPendingDataset(result);await confirmDataset(result,isCurrent);
     } catch(error) {if(isCurrent()&&mounted.current){setSubmitError(submitFailure(error));setTransferMessage('Tệp và tiến trình đã lưu trên thiết bị.');}}
     finally {sending.current=false;if(isCurrent()&&mounted.current){setSubmitting(false);setPausePending(false);await readDatasetIntent();}}
@@ -405,7 +407,7 @@ export default function DroneUploadScreen() {
       {text:'Giữ phiên',style:'cancel'},
       {text:'Hủy tải lên',style:'destructive',onPress:()=>{void (async()=>{
         if(!isCurrent()||sending.current)return;
-        sending.current=true;setSubmitting(true);setSubmitError(null);setTransferMessage('Đang kiểm tra kết quả hủy…');
+        sending.current=true;setSubmitting(true);setSubmitError(null);setTransferPhase(null);setTransferMessage('Đang kiểm tra kết quả hủy…');
         try {
           await cancelOperatorUploadSession(intent.taskId,intent.uploadId!);
           if(isCurrent())setTransferMessage('Máy chủ đã xác nhận hủy. Tệp gốc vẫn được giữ trên thiết bị.');
@@ -420,7 +422,7 @@ export default function DroneUploadScreen() {
   };
   const handleRetainedDataset = async (replay=false) => {
     const isCurrent=scope.capture();if(!isCurrent()||sending.current||!pendingDataset)return;
-    sending.current=true;setSubmitting(true);setSubmitError(null);setTransferMessage('Đang đọc lại kết quả nộp…');
+    sending.current=true;setSubmitting(true);setSubmitError(null);setTransferPhase(null);setTransferMessage('Đang đọc lại kết quả nộp…');
     try {
       let intent=pendingDataset;
       if(replay)intent=await replayDroneDataset({taskId:intent.taskId,projectId:intent.projectId,ifMatch:intent.ifMatch!,payload:intent.body as unknown as DroneDatasetPlan['payload']});
@@ -505,12 +507,12 @@ export default function DroneUploadScreen() {
         <View style={styles.transferCopy}><Text style={styles.heading}>{received?'Đã gửi dữ liệu':submitting?'Đang gửi khảo sát':pendingDataset?'Yêu cầu nộp đã lưu':'Cần tiếp tục gửi'}</Text>{videoFile?<Text numberOfLines={1} ellipsizeMode="middle" style={styles.caption}>{videoName}</Text>:null}</View>
       </View>
       <View style={styles.transferStatus}>
-        {submitting&&!transferMessage?.startsWith('Đang tải')?<ActivityIndicator size="small" color={colors.primary}/>:null}
+        {submitting&&transferPhase!=='UPLOAD'?<ActivityIndicator size="small" color={colors.primary}/>:null}
         <Text style={styles.noticeText}>{transferMessage??'Đọc lại kết quả để kiểm tra trạng thái mới nhất.'}</Text>
-        {submitting&&transferMessage?.startsWith('Đang tải')?<Text style={styles.percentage}>{uploadProgress}%</Text>:null}
+        {submitting&&transferPhase!==null?<Text style={styles.percentage}>{uploadProgress}%</Text>:null}
       </View>
-      {submitting&&transferMessage?.startsWith('Đang tải')?<View accessibilityRole="progressbar" accessibilityLabel="Tiến trình tải tệp" accessibilityValue={{min:0,max:100,now:uploadProgress}} style={styles.progressTrack}><View style={[styles.progressFill,{width:`${uploadProgress}%`}]}/></View>:null}
-      {submitting&&transferMessage?.startsWith('Đang tải')?<Button title={pausePending?'Đang dừng…':'Dừng tải lên'} variant="secondary" disabled={pausePending} onPress={()=>{pauseRequested.current=true;setPausePending(true);}}/>:null}
+      {submitting&&transferPhase!==null?<View accessibilityRole="progressbar" accessibilityLabel="Tiến trình tải tệp" accessibilityValue={{min:0,max:100,now:uploadProgress}} style={styles.progressTrack}><View style={[styles.progressFill,{width:`${uploadProgress}%`}]}/></View>:null}
+      {submitting&&transferPhase==='UPLOAD'?<Button title={pausePending?'Đang dừng…':'Dừng tải lên'} variant="secondary" disabled={pausePending} onPress={()=>{pauseRequested.current=true;setPausePending(true);}}/>:null}
     {pendingDataset&&!submitting?<View style={styles.recoveryActions}>
       {pendingDataset.status==='DATASET_CONFIRMED'?<Button title="Đọc lại kết quả nộp" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:pendingDataset.status==='DATASET_UNKNOWN'?<Button title="Gửi lại đúng yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset(true)}/>:pendingDataset.status==='PREPARED'?<Button title="Tiếp tục nộp yêu cầu đã lưu" variant="secondary" loading={submitting} disabled={submitting} onPress={()=>void handleRetainedDataset()}/>:<Text style={styles.caption}>Yêu cầu không được máy chủ chấp nhận. Kiểm tra lại nhiệm vụ trước khi nộp một bộ dữ liệu mới.</Text>}
     </View>:null}

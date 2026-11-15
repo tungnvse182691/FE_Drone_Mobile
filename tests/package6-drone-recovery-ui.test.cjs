@@ -2,6 +2,38 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {drone,id}=require('./package45-drone.test.cjs');
 const {deferred}=require('./helpers/roadfe-screen.cjs');
 const saved={key:id(8),kind:'VIDEO',name:'retained.mp4',size:4,uri:'file:///private/retained.mp4',availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
+
+test('Operator verification polls retain completed byte progress without restarting upload UI',async()=>{
+ const file={...saved,taskId:id(2),projectId:id(3)};
+ const pending=deferred();let polls=0;
+ const task={id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',scope:[],version:'version'};
+ const s=drone('upload',{
+  getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:'"version"'}),
+  listEligibleOperatorDronesReal:async()=>({items:[{id:id(7)}],nextCursor:null}),
+ },{params:{taskId:id(2),projectId:id(3)},modules:{
+  '../../src/api/droneSelectionJournal':{openDroneSelectionJournal:async()=>({read:async()=>({droneId:id(7)}),close(){}})},
+  '../../src/api/droneTaskJournal':{openDroneUploadJournal:async()=>({read:async()=>[],close(){}})},
+  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})},
+  '../../src/api/droneDatasetWorkflow':{
+   orchestrateDroneUpload:async plan=>{polls++;if(polls===1){plan.onProgress(4,4);throw Error('drone_upload_verify_pending');}await pending.promise;return {fileId:id(8)};},
+   submitDroneDataset:async()=>({status:'DATASET_CONFIRMED',receipt:{datasetId:id(9)}}),
+   operatorDatasetScope:()=> 'owner',
+   readOperatorDatasetReadback:async()=>({dataset:{surveyTaskId:id(2)}}),
+  }
+ }});
+ try {
+  s.render();await s.flush();await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();
+  s.nodes().find(n=>n.props.accessibilityLabel==='Thời gian ghi hình').props.onChangeText('2026-11-14 08:30');await s.flush();
+  s.press('Nộp bộ dữ liệu 4K RGB');await s.flush();
+  const progress=()=>s.nodes().find(n=>n.props.accessibilityRole==='progressbar');
+  assert.equal(progress()?.props.accessibilityValue.now,100,'verification retains the completed upload bar');
+  assert.match(JSON.stringify(s.nodes()),/Đã tải video/);
+  await new Promise(resolve=>setTimeout(resolve,1100));await s.flush();
+  assert.equal(polls,2);assert.equal(progress()?.props.accessibilityValue.now,100);
+  assert.doesNotMatch(JSON.stringify(s.nodes()),/Đang tải video/);
+  assert.match(JSON.stringify(s.nodes()),/Đang chờ máy chủ xác minh/);
+ } finally {pending.resolve();await s.flush();s.unmount();}
+});
 test('Operator finishes interrupted checksum before selecting retained bytes and blocks duplicate actions',async()=>{
  const pending=deferred();let hashes=0;
  const file={...saved,availability:'LOCAL_UNHASHED',checksumSha256:null};
