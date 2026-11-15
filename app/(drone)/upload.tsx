@@ -488,7 +488,7 @@ export default function DroneUploadScreen() {
     {copying?<View accessibilityRole="alert" style={styles.notice}><ActivityIndicator color={colors.secondary}/><Text style={styles.noticeText}>Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text></View>:null}
     <Card style={styles.card}>
       <View style={styles.row}><MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp trên thiết bị</Text><Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable></View>
-      <Text style={styles.caption}>MP4 tối đa 8 GiB · SRT tối đa 10 MiB</Text>
+      <Text style={styles.caption}>Giới hạn mỗi tệp: video khoảng 8,6 GB · SRT khoảng 10,5 MB</Text>
       {savedFiles.map(file=><View key={file.key} style={styles.savedFile}><Text style={typography.bodyMd}>{file.name}</Text><Text style={styles.caption}>{file.availability==='LOCAL_READY'?'Đã kiểm tra SHA-256':file.availability==='LOCAL_UNHASHED'?'Chưa kiểm tra SHA-256':file.availability==='INCOMPLETE'?'Bản sao chưa đầy đủ':'Không tìm thấy tệp'}</Text>
         <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)}/></View>)}
       {!savedFiles.length?<Text style={styles.caption}>Chưa có tệp đã lưu.</Text>:null}
