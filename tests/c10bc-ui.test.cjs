@@ -3,9 +3,9 @@ const wait=async()=>{for(let n=0;n<5;n++)await new Promise(r=>setImmediate(r));}
 const mapModule={exports:{}};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/utils/crew-map-geometry.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mapModule,exports:mapModule.exports});
 function mount(file,name,deps,props){let cursor=0,first=true;const slots=[],effects=[],cleanups=[];
- deps={'../../utils/crew-map-geometry':mapModule.exports,'../map/RoadGuardMapLibre':{RoadGuardMapLibre:'RoadGuardMapLibre'},...deps};
+ deps={'../../constants/routes':{CREW_TASK_MAP:'/(crew)/task-map'},'../../utils/crew-map-geometry':mapModule.exports,'../map/RoadGuardMapLibre':{RoadGuardMapLibre:'RoadGuardMapLibre'},...deps};
  const react={createElement:(type,p,...children)=>({type,props:p??{},children}),useState:initial=>{const n=cursor++;if(first)slots[n]=typeof initial==='function'?initial():initial;return [slots[n],v=>slots[n]=typeof v==='function'?v(slots[n]):v];},useRef:initial=>{const n=cursor++;if(first)slots[n]={current:initial};return slots[n];},useEffect:f=>{cursor++;if(first)effects.push(f);},useCallback:f=>f};
- const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module:m,exports:m.exports,require:n=>n==='react'?react:n==='react-native'?{Text:'Text',View:'View',Pressable:'Pressable',StyleSheet:{create:x=>x}}:n==='expo-router'?{useFocusEffect:f=>{if(first)effects.push(f);}}:n==='../Card'?{Card:'Card'}:n==='../Button'?{Button:'Button'}:n==='../../design-tokens'?{colors:{},spacing:{},radius:{},typography:{}}:n==='@expo/vector-icons'?{MaterialIcons:'MaterialIcons'}:deps[n]});
+ const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module:m,exports:m.exports,require:n=>n==='react'?react:n==='react-native'?{Text:'Text',View:'View',Pressable:'Pressable',ScrollView:'ScrollView',ActivityIndicator:'ActivityIndicator',StyleSheet:{create:x=>x}}:n==='expo-router'?{router:{back(){},push(){}},useFocusEffect:f=>{if(first)effects.push(f);}}:n==='../Card'?{Card:'Card'}:n==='../Button'?{Button:'Button'}:n==='../../design-tokens'?{colors:{},spacing:{},radius:{},typography:{}}:n==='@expo/vector-icons'?{MaterialIcons:'MaterialIcons'}:deps[n]});
  const render=()=>{cursor=0;const tree=m.exports[name](props);if(first){first=false;for(const e of effects)cleanups.push(e());}return tree;};
  const nodes=(tree)=>!tree?[]:Array.isArray(tree)?tree.flatMap(nodes):typeof tree==='object'?[tree,...tree.children.flatMap(nodes)]:[];
  return {render,nodes,unmount:()=>cleanups.forEach(f=>f?.())};
@@ -31,11 +31,11 @@ test('Crew repair facts shows compact authoritative safety/decision readback and
  let tree=h.render();assert.equal(reads,0);h.nodes(tree).find(n=>n.props.title==='Xem hồ sơ phụ trách').props.onPress();await wait();tree=h.render();assert.equal(reads,1);assert.match(JSON.stringify(tree),/Đã xác nhận kết quả/);assert.match(JSON.stringify(tree),/Quyết định trước/);assert.match(JSON.stringify(tree),/Chưa lắp đặt/);active=false;assert.equal(h.render(),null);h.unmount();
 });
 
-test('Crew facts keeps explicit target when route unavailable and selects segments without joining gaps',async()=>{
+test('Crew dedicated map keeps explicit target when route unavailable and selects segments without joining gaps',async()=>{
  const identity={actor:'crew',role:'REPAIR_CREW'};
  const make=async facts=>{
-  const h=mount('src/components/crew/CrewTaskFacts.tsx','CrewTaskFacts',{'../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>identity,crewReadGuard:()=>{},readAssignedFieldFacts:async()=>facts},'../../offline/upload-queue':{sameQueueIdentity:()=>true}},{projectId:'project',taskId:'task'});
-  let tree=h.render();h.nodes(tree).find(n=>n.props.title==='Xem vị trí / lịch sử').props.onPress();await wait();return h;
+  const h=mount('src/components/crew/CrewTaskMap.tsx','CrewTaskMap',{'react-native-safe-area-context':{SafeAreaView:'SafeAreaView'},'../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>identity,crewReadGuard:()=>{},readAssignedFieldFacts:async()=>facts},'../../offline/upload-queue':{sameQueueIdentity:()=>true}},{projectId:'project',taskId:'task'});
+  h.render();await wait();return h;
  };
  const base={history:{events:[],assignments:[]},defectTarget:{longitude:106.5,latitude:10.5}};
  const h=await make({...base,geometry:null,geometryUnavailable:true});
@@ -44,4 +44,32 @@ test('Crew facts keeps explicit target when route unavailable and selects segmen
  const s=await make({...base,geometry:{route:line([[106,10],[106.1,10]]),segments:[{id:'one',sequence:1,...line([[106,10],[106.01,10]])},{id:'two',sequence:2,...line([[107,11],[107.01,11]])}]}});
  let tree=s.render();s.nodes(tree).find(n=>n.type==='Pressable'&&JSON.stringify(n.children).includes('Đoạn 2')).props.onPress();
  map=s.nodes(s.render()).find(n=>n.type==='RoadGuardMapLibre');assert.equal(JSON.stringify(map.props.routeCoordinates),'[[107,11],[107.01,11]]');s.unmount();
+});
+
+test('Crew detail links to dedicated map without mounting an inline map',()=>{
+ const s=fs.readFileSync('src/components/crew/CrewTaskFacts.tsx','utf8');
+ assert.doesNotMatch(s,/<RoadGuardMapLibre/);assert.match(s,/CREW_TASK_MAP/);assert.match(s,/Mở bản đồ/);
+ assert.match(fs.readFileSync('app/(crew)/task-map.tsx','utf8'),/CrewTaskBoundary operational=\{false\}/);
+ assert.match(fs.readFileSync('app/(crew)/_layout.tsx','utf8'),/activeRoute === '\/\(crew\)\/task-map'/);
+});
+
+test('Crew repair plan localizes only the exact known QA text and retains arbitrary business content',()=>{
+ const file='app/(crew)/wo-detail.tsx',source=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+ const fn=source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='crewRepairPlanLabel');assert.ok(fn);
+ const label=vm.runInNewContext(ts.transpileModule(fn.getText().replace(/^export /,''),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+';crewRepairPlanLabel');
+ assert.match(label('QA concrete surface repair with safety boundary'),/bê tông/);
+ assert.doesNotMatch(label('QA concrete surface repair with safety boundary'),/QA concrete/);
+ assert.equal(label('Custom approved plan'),'Custom approved plan');assert.equal(label(null),'Chưa có hướng dẫn');
+});
+
+test('Crew dedicated map suppresses stale session data and late read after unmount',async()=>{
+ let active=true,resolve;const identity={actor:'crew',scope:'A'},pending=new Promise(r=>resolve=r);
+ const h=mount('src/components/crew/CrewTaskMap.tsx','CrewTaskMap',{'react-native-safe-area-context':{SafeAreaView:'SafeAreaView'},'../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>identity,crewReadGuard:()=>{if(!active)throw Error('session');},readAssignedFieldFacts:()=>pending},'../../offline/upload-queue':{sameQueueIdentity:()=>active}},{projectId:'project',taskId:'task'});
+ h.render();h.unmount();active=false;resolve({geometry:null,history:{events:[]},defectTarget:{longitude:106,latitude:10}});await wait();assert.equal(h.render(),null);
+});
+
+test('Crew dedicated map renders forbidden reads without a map',async()=>{
+ const identity={actor:'crew'};
+ const h=mount('src/components/crew/CrewTaskMap.tsx','CrewTaskMap',{'react-native-safe-area-context':{SafeAreaView:'SafeAreaView'},'../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>identity,crewReadGuard:()=>{},readAssignedFieldFacts:async()=>{throw {response:{status:403}};}},'../../offline/upload-queue':{sameQueueIdentity:()=>true}},{projectId:'project',taskId:'task'});
+ h.render();await wait();const tree=h.render();assert.match(JSON.stringify(tree),/Không có quyền đọc nhiệm vụ/);assert.equal(h.nodes(tree).some(n=>n.type==='RoadGuardMapLibre'),false);h.unmount();
 });

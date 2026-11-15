@@ -15,6 +15,7 @@ const CREW_TABS = [
       '/(crew)/tasks',
       '/(crew)/wo-detail',
       '/(crew)/navigation',
+      '/(crew)/task-map',
       '/(crew)/progress',
       '/(crew)/report-defect',
       '/(crew)/viewfinder',
@@ -36,7 +37,7 @@ export default function CrewLayout() {
     : `/(crew)${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
 
   return (
-    <CrewScreenShell hideDock={activeRoute === '/(crew)/viewfinder'}>
+    <CrewScreenShell hideDock={activeRoute === '/(crew)/viewfinder' || activeRoute === '/(crew)/task-map'}>
       <View style={styles.stackArea}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="field-review" dangerouslySingular={(_name, params) => params?.projectId && params?.id ? `${params.projectId}:${params.id}:${params.supplement === '1' ? 'supplement' : 'normal'}` : undefined} />

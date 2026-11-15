@@ -33,6 +33,7 @@ export const AUTH_REGISTER = '/(auth)/register';
 export const AUTH_FORCE_CHANGE_PASSWORD = '/(auth)/force-change-password';
 
 export const CREW_HOME = '/(crew)/home';
+export const CREW_TASK_MAP = '/(crew)/task-map';
 export const CREW_TASKS = '/(crew)/tasks';
 export const CREW_WO_DETAIL = '/(crew)/wo-detail';
 export const CREW_REPAIR_CORRECTION = '/(crew)/repair-correction';

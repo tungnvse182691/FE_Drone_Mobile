@@ -58,6 +58,13 @@ function fieldTaskActionMessage(error: unknown, phase: 'journal' | 'read' | 'rec
   return context + ' Dữ liệu đã lưu được giữ nguyên. Vui lòng kiểm tra lại trước khi tiếp tục.';
 }
 
+/** Localize this known sandbox fixture only; preserve authored repair instructions. */
+export function crewRepairPlanLabel(value?: string | null): string {
+  if (value === 'QA concrete surface repair with safety boundary')
+    return 'Phương án thử nghiệm: sửa chữa bề mặt bê tông, có khoanh vùng an toàn.';
+  return value || 'Chưa có hướng dẫn';
+}
+
 export default function CrewWoDetailScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewFieldActions task={task} />}</CrewTaskBoundary>;
 }
@@ -411,7 +418,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {result.status === 'error' ? <Text>Không xác nhận được ngữ cảnh sửa chữa. Vui lòng tải lại.</Text> : null}
     {result.status === 'ready' && !result.repairContext ? <Text>Chưa có hạng mục sửa chữa được liên kết hợp lệ với nhiệm vụ này. Các thao tác sửa chữa chưa khả dụng.</Text> : null}
     {result.repairContext ? <>
-      <Card style={styles.card}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{result.repairContext.repairPlan || 'Chưa có hướng dẫn'}</Text></Card>
+      <Card style={styles.card}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{crewRepairPlanLabel(result.repairContext.repairPlan)}</Text></Card>
       <Button variant="secondary" title={showRepairTechnical?'Thu gọn lịch sử và thông tin kỹ thuật':'Xem lịch sử và thông tin kỹ thuật'} onPress={()=>setShowRepairTechnical(v=>!v)}/>
       {showRepairTechnical ? <View style={styles.technicalPanel}>
         <Text style={styles.hint}>Hạng mục</Text><Text selectable style={styles.body}>{result.repairContext.itemId}</Text>
