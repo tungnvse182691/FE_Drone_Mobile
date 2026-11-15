@@ -67,6 +67,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/api/idempotency'))return{getOrCreateCommandKey:()=> 'fixture-command-key',clearCommandKey(){}};
     if(name.endsWith('/reporter/PhotoUploadStatus'))return{PhotoUploadStatus:'PhotoUploadStatus'};
     if(name.endsWith('/components/ReporterHeader'))return{ReporterHeader:'ReporterHeader'};
+    if(name.endsWith('/components/OperatorLocalTasks'))return{OperatorLocalTasks:'OperatorLocalTasks'};
     if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
     if(name.endsWith('/crew/CrewRepairFacts'))return{CrewRepairFacts:'CrewRepairFacts'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};

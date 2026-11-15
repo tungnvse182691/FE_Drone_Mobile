@@ -36,6 +36,22 @@ export function createSecureSession(deps: Dependencies) {
     return { version: 1, environment, actor: pair.user.id, identity, refreshToken: pair.refreshToken, pendingKey: null };
   };
   return {
+    /** Local snapshot partition only; never an authenticated session or HTTP credential. */
+    async localIdentity(environment: string, actor: string): Promise<string | null> {
+      const generation = epoch;
+      await writes;
+      const raw = await deps.read();
+      if (epoch !== generation || !raw) return null;
+      try {
+        const saved = JSON.parse(raw) as Credential;
+        const identity = JSON.parse(saved.identity);
+        return saved.version === 1 && saved.environment === environment && saved.actor === actor &&
+          Array.isArray(identity) && identity[0] === actor && typeof identity[1] === 'string' && !!identity[1] &&
+          typeof saved.refreshToken === 'string' && !!saved.refreshToken &&
+          (saved.pendingKey === null || typeof saved.pendingKey === 'string' && !!saved.pendingKey)
+          ? saved.identity : null;
+      } catch { return null; }
+    },
     save(pair: TokenPair, environment: string) {
       epoch += 1;
       return write(credential(pair, environment));

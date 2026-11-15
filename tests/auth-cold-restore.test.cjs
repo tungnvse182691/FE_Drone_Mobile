@@ -44,3 +44,20 @@ test('logout during actual cold bootstrap ignores late response',async()=>{
  h.store.getState().logout();h.login('B');resolve(pair());await pending;await new Promise(r=>setImmediate(r));
  assert.equal(h.store.getState().user.id,'B');assert.equal(JSON.parse(h.disk.value).actor,'B');
 });
+test('offline scope reads SecureStore continuity without granting session or changing pending replay',async()=>{
+ const h=harness({value:null},async()=>{throw {request:{},code:'ERR_NETWORK'};});
+ const operatorPair={...pair(),user:{...pair().user,role:'DroneOperator'}};
+ h.store.getState().login({id:'A',role_code:'DRONE_OPERATOR'},operatorPair);
+ await new Promise(r=>setImmediate(r));
+ h.store.setState({token:null,status:'VERIFIED_NEEDS_LOGIN'});
+ await h.store.getState().restoreRefreshToken();
+ const before=h.disk.value, calls=h.calls.length;
+ assert.equal(await h.store.getState().operatorLocalReadScope(),JSON.stringify(['fixture-env',JSON.stringify(['A','session']),'']));
+ assert.equal(h.store.getState().token,null);assert.equal(h.store.getState().authReady,false);
+ assert.equal(h.disk.value,before);assert.equal(h.calls.length,calls);
+ h.store.setState({user:{id:'B',role_code:'DRONE_OPERATOR'}});
+ assert.equal(await h.store.getState().operatorLocalReadScope(),null);
+ h.store.setState({user:{id:'A',role_code:'REPORTER'}});
+ assert.equal(await h.store.getState().operatorLocalReadScope(),null);
+ h.store.getState().logout();assert.equal(await h.store.getState().operatorLocalReadScope(),null);
+});

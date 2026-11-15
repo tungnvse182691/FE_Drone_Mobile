@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
@@ -12,6 +12,7 @@ import {
 } from '@expo-google-fonts/roboto';
 import { colors } from '../src/design-tokens';
 import { Button } from '../src/components/Button';
+import { OperatorLocalTasks } from '../src/components/OperatorLocalTasks';
 import { useAuthStore } from '../src/store/auth';
 import {
   PUBLIC_ROUTE_GROUP,
@@ -110,6 +111,8 @@ function AuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [showWebOnlyToast, setShowWebOnlyToast] = useState(false);
   const [restoreError,setRestoreError]=useState(false),[restoreRetry,setRestoreRetry]=useState(0);
+  const [showLocalTasks, setShowLocalTasks] = useState(false);
+  const closeLocalTasks = useCallback(() => setShowLocalTasks(false), []);
 
   const isWebOnlyRole = !!user && !ROLE_HOMES[user.role_code];
 
@@ -155,16 +158,21 @@ function AuthGuard({ children }: { children: ReactNode }) {
       {children}
       {authReady === false ? (
         <View style={styles.loading} accessibilityLiveRegion="polite">
+          {showLocalTasks && authRestoreError && user?.role_code === 'DRONE_OPERATOR' ?
+            <OperatorLocalTasks onClose={closeLocalTasks} /> : <>
           <Image source={require('../assets/logo_hoanghai.png')} style={styles.loadingLogo} resizeMode="contain" />
           {authRestoreError ? <View style={styles.sessionRecovery}>
             <Text style={styles.sessionTitle}>Chưa kết nối được phiên đăng nhập</Text>
             <Text style={styles.sessionDescription}>Kiểm tra kết nối rồi thử lại. Nội dung đang gửi được giữ trên máy.</Text>
             <Button variant="primary" title="Thử lại" onPress={() => { void useAuthStore.getState().restoreRefreshToken(); }} />
+            {user?.role_code === 'DRONE_OPERATOR' && !user.must_change_password ?
+              <Button variant="text" title="Xem nhiệm vụ đã tải" onPress={() => setShowLocalTasks(true)} /> : null}
             <Button variant="text" title="Đến màn đăng nhập" onPress={() => {
               useAuthStore.getState().dismissAuthRestore();
               router.replace('/(auth)');
             }} />
           </View> : <ActivityIndicator size="large" color={colors.primary} />}
+          </>}
         </View>
       ) : null}
       {restoreError ? <View accessibilityLiveRegion="polite">

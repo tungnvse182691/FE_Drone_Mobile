@@ -12,6 +12,14 @@ function harness(disk={value:null}, options={}) {
   });return {manager,disk,calls};
 }
 const pair={accessToken:'A:session:1',refreshToken:'original',user:{id:'A'}};
+test('local read identity uses secure actor/environment continuity without rotating credentials',async()=>{
+ const h=harness();await h.manager.save(pair,'env');const before=h.disk.value;
+ assert.equal(await h.manager.localIdentity('env','A'),JSON.stringify(['A','session']));
+ assert.equal(await h.manager.localIdentity('other','A'),null);
+ assert.equal(await h.manager.localIdentity('env','B'),null);
+ assert.equal(h.calls.length,0);assert.equal(h.disk.value,before);
+ await h.manager.clear();assert.equal(await h.manager.localIdentity('env','A'),null);
+});
 test('cold refresh persists key before HTTP and rotates credential before returning',async()=>{
  const h=harness();await h.manager.save(pair,'env');
  const next=await h.manager.restore('env','A');

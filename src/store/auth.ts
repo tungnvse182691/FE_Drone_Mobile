@@ -52,6 +52,7 @@ interface AuthState {
   beginRefresh: () => void;
   requirePasswordChange: () => void;
   restoreRefreshToken: () => Promise<void>;
+  operatorLocalReadScope: () => Promise<string | null>;
 }
 
 function stripCredentials(user: User | null): PersistedUser | null {
@@ -204,6 +205,15 @@ export const useAuthStore = create<AuthState>()(
             ? { user: { ...state.user, must_change_password: true } }
             : {},
         ),
+
+      operatorLocalReadScope: async () => {
+        const owner = get().user;
+        if (!get().authRestoreError || get().authReady || get().token ||
+            owner?.role_code !== RoleCode.DRONE_OPERATOR || owner.must_change_password) return null;
+        const identity = await secureSession.localIdentity(API_BASE_URL, owner.id);
+        if (!identity || get().user !== owner || !get().authRestoreError || get().authReady || get().token) return null;
+        return JSON.stringify([API_BASE_URL, identity, '']);
+      },
 
       restoreRefreshToken: async () => {
         const owner = get().user;
