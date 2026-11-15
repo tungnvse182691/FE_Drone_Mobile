@@ -26,6 +26,18 @@ test('FIELD camera navigation clears busy when returning to the editor',async()=
  const h=await mounted();h.s.press('Chụp / chọn ảnh');await h.s.flush();await h.focus();
  assert.equal(h.submit().props.loading,false);assert.equal(h.submit().props.disabled,false);h.s.unmount();
 });
+
+test('FIELD measurement rows keep value beside the edit action and opt into keyboard insets',async()=>{
+ const h=await mounted();h.s.press('Chỉnh số đo');h.s.render();
+ assert.ok(h.s.nodes().some(n=>n.type==='SafeAreaScreen'&&n.props.keyboardAware===true));
+ const row=()=>h.s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel==='Sửa Độ sâu chỗ lõm');
+ assert.ok(row());assert.equal(row().props.accessibilityState.expanded,false);
+ assert.match(JSON.stringify(row().props.children),/5 cm/);
+ row().props.onPress();h.s.render();assert.equal(row().props.accessibilityState.expanded,true);
+ assert.ok(h.s.nodes().some(n=>n.type==='InputField'&&n.props.label==='Giá trị đo thực'));
+ assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Xong số đo này'));
+ h.s.unmount();
+});
 test('FIELD saving measurements never shows submit spinner and success drops old error details',async()=>{
  const h=await mounted();h.s.press('Chỉnh số đo');h.s.render();
  h.setFailure(true);h.s.press('Lưu nháp số đo');await h.s.flush();assert.ok(h.notice());

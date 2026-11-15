@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -448,15 +448,18 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <Button variant="secondary" title="Chỉnh số đo" disabled={busy||cancelling} onPress={()=>{if(!busy&&!cancelling){setShowMeasurements(true);setEditingSampleId(null);}}}/>
         </Card>
         <Modal visible={showMeasurements} animationType="slide" onRequestClose={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}>
-          <SafeAreaScreen scroll header={<AppHeader subtitle="Số đo hiện trường" showBack onBack={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}/>}>
+          <SafeAreaScreen scroll keyboardAware header={<AppHeader subtitle="Số đo hiện trường" showBack onBack={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}/>}>
             <Card style={styles.card}>
               <Text style={styles.sectionTitle}>Số đo hiện trường</Text>
               <Text style={styles.muted}>Chọn số đo để nhập hoặc chỉnh sửa.</Text>
           {!measurements.length?<Text>Chưa có loại đo được máy chủ hỗ trợ; chưa thể gửi hồ sơ.</Text>:null}
-          {measurements.map((m,i)=><View key={m.sampleId} pointerEvents={busy||frozen||taskReadOnly?'none':'auto'} style={{opacity:busy||frozen||taskReadOnly?0.6:1}}>
-            <Button variant="text" title={`Sửa ${fieldMeasurementTitle(m.type)}`} onPress={()=>setEditingSampleId(editingSampleId===m.sampleId?null:m.sampleId)}/>
-            <Text style={styles.muted}>{m.value===null?'Chưa đo':`${m.value} ${m.unit}`}{measurementTemplate(verifiedTask?.requiredMeasurementType??0,'required')?.type===m.type?' · Bắt buộc':''}</Text>
-            {editingSampleId===m.sampleId?<>
+          {measurements.map((m,i)=><View key={m.sampleId} pointerEvents={busy||frozen||taskReadOnly?'none':'auto'} style={[styles.measurementItem,{opacity:busy||frozen||taskReadOnly?0.6:1}]}>
+            <Pressable style={styles.measurementToggle} accessibilityRole="button" accessibilityLabel={`Sửa ${fieldMeasurementTitle(m.type)}`} accessibilityState={{expanded:editingSampleId===m.sampleId,disabled:busy||frozen||taskReadOnly}} onPress={()=>setEditingSampleId(editingSampleId===m.sampleId?null:m.sampleId)}>
+              <View style={styles.flex}><Text style={typography.labelLg}>{fieldMeasurementTitle(m.type)}</Text><Text style={styles.muted}>{measurementTemplate(verifiedTask?.requiredMeasurementType??0,'required')?.type===m.type?'Bắt buộc':'Bổ sung'}</Text></View>
+              <Text style={styles.measurementValue}>{m.value===null?'Chưa đo':`${m.value} ${m.unit}`}</Text>
+              <MaterialIcons name={editingSampleId===m.sampleId?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
+            </Pressable>
+            {editingSampleId===m.sampleId?<View style={styles.measurementEditor}>
             <View style={styles.resultHeading}><Text style={[typography.labelLg,{flex:1}]}>{fieldMeasurementTitle(m.type)} · {m.unit}</Text>
               {!taskReadOnly&&measurementTemplate(verifiedTask?.requiredMeasurementType??0,'required')?.type!==m.type?<Pressable style={styles.noticeToggle} accessibilityRole="button" accessibilityLabel={`Bỏ ${fieldMeasurementTitle(m.type)}`} disabled={busy||frozen} onPress={()=>{if(busy||frozen)return;setMeasurements(values=>values.filter(v=>v.sampleId!==m.sampleId));}}><MaterialIcons name="close" size={22} color={colors.secondary}/></Pressable>:null}
             </View>
@@ -469,14 +472,15 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             {!taskReadOnly?<><InputField label="Dụng cụ đo thực tế" value={m.instrument} onChangeText={instrument=>update(i,{instrument})}/><InputField label="Phương pháp đo thực tế" value={m.method} onChangeText={method=>update(i,{method})}/></>:<Text style={styles.muted}>Giá trị máy chủ: {m.value == null ? 'Chưa có' : `${m.value} ${m.unit}`}</Text>}
             {!taskReadOnly&&m.value===null?<InputField label="Lý do chưa đo" value={m.unknownReason??''} onChangeText={unknownReason=>update(i,{unknownReason})}/>:null}
             {m.latitude==null||m.longitude==null?(taskReadOnly?<Text style={styles.muted}>Chưa có GPS quan sát{m.locationReason?` · ${m.locationReason}`:''}</Text>:<InputField label="Lý do chưa có tọa độ quan sát" value={m.locationReason??''} onChangeText={locationReason=>update(i,{locationReason})}/>):<Text>GPS quan sát trong hồ sơ máy chủ: {m.latitude}, {m.longitude}</Text>}
-            </>:null}
+            <Button variant="text" title="Xong số đo này" onPress={()=>{Keyboard.dismiss();setEditingSampleId(null);}}/>
+            </View>:null}
           </View>)}
           {!taskReadOnly?<View>
             <Button variant="text" title={showMeasurementChoices?'Ẩn loại số đo':'Thêm số đo'} disabled={busy||frozen} onPress={()=>{if(!busy&&!frozen)setShowMeasurementChoices(v=>!v);}}/>
             {showMeasurementChoices?<View style={styles.choiceRow}>{[1,2,3,4,5,6].map(type=>{const template=measurementTemplate(type,'choice');if(!template||measurements.some(m=>m.type===template.type))return null;return <Button key={type} variant="secondary" title={fieldMeasurementTitle(template.type)} disabled={busy||frozen} onPress={()=>{if(busy||frozen)return;const next=measurementTemplate(type,randomUUID());if(next){setMeasurements(values=>values.some(m=>m.type===next.type)?values:[...values,next]);setEditingSampleId(next.sampleId);}setShowMeasurementChoices(false);}}/>;})}</View>:null}
           </View>:null}
               <Button variant="primary" title="Lưu nháp số đo" loading={busy&&busyAction==='save'} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>
-              {notice?<Text accessibilityLiveRegion="polite" style={styles.errorText}>{notice}</Text>:null}
+              {notice?<Text accessibilityLiveRegion="polite" style={styles.muted}>{notice}</Text>:null}
             </Card>
           </SafeAreaScreen>
         </Modal>
@@ -489,7 +493,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <Button variant="secondary" title={taskReadOnly?'Xem vị trí':'Chỉnh vị trí'} disabled={busy||cancelling} onPress={()=>{setNotice('');setShowErrorDetail(false);setShowPosition(true);}}/>
         </Card>
         <Modal visible={showPosition} animationType="slide" onRequestClose={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}>
-          <SafeAreaScreen scroll header={<AppHeader subtitle="Vị trí quan sát" showBack onBack={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}/>}>
+          <SafeAreaScreen scroll keyboardAware header={<AppHeader subtitle="Vị trí quan sát" showBack onBack={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}/>}>
             <Card style={styles.card}><View style={styles.positionEditor} pointerEvents={busy||frozen?'none':'auto'}>
 <Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
           {!locationProof?<View style={styles.positionHint}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={styles.positionHintText}>Hồ sơ sẽ ghi nhận thiếu vị trí.</Text></View>:null}
@@ -576,6 +580,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
 }
 
 const styles = StyleSheet.create({
+  measurementItem: {borderWidth:1,borderColor:colors.border,borderRadius:radius.md,overflow:'hidden'},
+  measurementToggle: {flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,minHeight:72},
+  measurementValue: {...typography.labelLg,color:colors.neutral,flexShrink:1,textAlign:'right'},
+  measurementEditor: {padding:spacing.md,borderTopWidth:1,borderColor:colors.border,gap:spacing.xs},
   recoveryCard: {gap:spacing.sm},
   recoveryHeading: {flexDirection:'row',alignItems:'center',gap:spacing.sm},
   recoveryTitle: {...typography.labelLg,color:colors.neutral,lineHeight:21},

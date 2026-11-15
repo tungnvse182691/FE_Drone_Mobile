@@ -5,6 +5,8 @@ const fs=require('node:fs'),vm=require('node:vm');
 const templateScope={require,setTimeout,clearTimeout,Uint8Array,AbortController,URL};
 vm.runInNewContext(fs.readFileSync('tests/t05b.test.cjs','utf8').split("test('T05B FIELD")[0]+";globalThis.template=load('src/api/crewFieldDraft.ts').measurementTemplate;",templateScope);
 
+function expand(s,label){const row=s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel===label);assert.ok(row,label);row.props.onPress();s.render();}
+
 // Executes the shipped screen hooks and handlers; native rendering is checked separately.
 async function mounted(instrument, command = null, initial = {}, status, submission) {
   const context = {actor:'crew', scope:'session', environment:'test', projectId:'project', taskId:'task'};
@@ -35,7 +37,7 @@ async function mounted(instrument, command = null, initial = {}, status, submiss
     },
   });
   s.render(); await s.flush();
-  if(status!=='Submitted'&&!command) {s.press('Chỉnh số đo');s.render();s.press(`Sửa ${{DepressionDepth:'Độ sâu chỗ lõm'}[initial.type]??'Diện tích hư hại'}`);s.render();}
+  if(status!=='Submitted'&&!command) {s.press('Chỉnh số đo');s.render();expand(s,`Sửa ${{DepressionDepth:'Độ sâu chỗ lõm'}[initial.type]??'Diện tích hư hại'}`);s.render();}
   return {s,calls,saved:()=>saved,input:()=>s.nodes().find(n=>n.type==='InputField'&&n.props.label==='Dụng cụ đo thực tế')};
 }
 
@@ -55,7 +57,7 @@ test('FIELD actual onChangeText saves exactly what Crew types without translatio
     assert.equal(h.input().props.value,text);
     h.s.press('Lưu nháp số đo'); await h.s.flush();
     assert.equal(h.calls.at(-1).measurements[0].instrument,text);
-    h.s.press('Chỉnh số đo');h.s.render();h.s.press('Sửa Diện tích hư hại');h.s.render();
+    h.s.press('Chỉnh số đo');h.s.render();expand(h.s,'Sửa Diện tích hư hại');h.s.render();
   }
   h.s.unmount();
 });
@@ -67,7 +69,7 @@ test('FIELD adds optional length and width with unique samples and preserves the
  assert.deepEqual(h.calls.at(-1).measurements.map(m=>m.type),['Area','DepressionLength','DepressionWidth']);
  assert.equal(new Set(h.calls.at(-1).measurements.map(m=>m.sampleId)).size,3);
  assert.equal(h.s.nodes().some(n=>n.props.accessibilityLabel==='Bỏ Diện tích hư hại'),false);
- h.s.press('Chỉnh số đo');h.s.render();h.s.press('Sửa Chiều rộng chỗ lõm');h.s.render();
+ h.s.press('Chỉnh số đo');h.s.render();expand(h.s,'Sửa Chiều rộng chỗ lõm');h.s.render();
  const remove=h.s.nodes().find(n=>n.props.accessibilityLabel==='Bỏ Chiều rộng chỗ lõm');remove.props.onPress();
  h.s.render();h.s.press('Lưu nháp số đo');await h.s.flush();
  assert.deepEqual(h.calls.at(-1).measurements.map(m=>m.type),['Area','DepressionLength']);
