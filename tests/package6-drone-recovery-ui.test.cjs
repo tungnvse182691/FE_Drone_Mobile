@@ -1,7 +1,27 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {drone,id}=require('./package45-drone.test.cjs');
 const {deferred}=require('./helpers/roadfe-screen.cjs');
-const saved={key:id(8),kind:'VIDEO',name:'retained.mp4',size:4,uri:'file:///private/retained.mp4',availability:'LOCAL_UNHASHED'};
+const saved={key:id(8),kind:'VIDEO',name:'retained.mp4',size:4,uri:'file:///private/retained.mp4',availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
+test('Operator finishes interrupted checksum before selecting retained bytes and blocks duplicate actions',async()=>{
+ const pending=deferred();let hashes=0;
+ const file={...saved,availability:'LOCAL_UNHASHED',checksumSha256:null};
+ const s=drone('upload',{}, {params:{taskId:id(2)},modules:{'../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],rehash:async key=>{assert.equal(key,file.key);hashes++;return pending.promise;},close(){}})}}});
+ s.render();await s.flush();const button=s.nodes().find(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4');
+ const restore=button.props.onPress();await s.flush();assert.equal(hashes,1);
+ assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);
+ assert.match(JSON.stringify(s.nodes()),/Đang chọn hoặc sao lưu tệp/);
+ await button.props.onPress();assert.equal(hashes,1);
+ pending.resolve(saved);await restore;await s.flush();
+ assert.match(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);
+ assert.match(JSON.stringify(s.nodes()),/Đã kiểm tra SHA-256/);s.unmount();
+});
+test('Operator never publishes an interrupted checksum into a different session',async()=>{
+ const pending=deferred();const file={...saved,availability:'LOCAL_UNHASHED',checksumSha256:null};
+ const s=drone('upload',{}, {params:{taskId:id(2)},modules:{'../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],rehash:()=>pending.promise,close(){}})}}});
+ s.render();await s.flush();const restore=s.nodes().find(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4').props.onPress();await s.flush();
+ s.h.login('DRONE_OPERATOR',id(9));s.render();await s.flush();pending.resolve(saved);await restore;await s.flush();
+ assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);s.unmount();
+});
 for(const change of ['task','session','actor','environment','logout-relogin'])test('Drone copy stays visibly busy across '+change+' until old preservation settles',async()=>{
  const d=deferred(),params={taskId:id(2)};let copies=0,picks=0;
  const s=drone('upload',{}, {params,pick:async()=>{picks++;return {canceled:false,assets:[{name:'private-old.mp4',uri:'file:///source.mp4',size:4}]};},modules:{

@@ -15,7 +15,7 @@ const KIND = 'DRONE_LOCAL_SOURCE';
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) && !v.startsWith('00000000-0000-0000-0000-');
 const version = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/.test(v);
 
-// Incremental SHA-256. File.readableStream() supplies bounded native chunks;
+// Incremental SHA-256 with bounded native reads;
 // no whole-file ArrayBuffer/base64 is created for large video files.
 class Sha256 {
   private readonly h = new Uint32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
@@ -50,11 +50,22 @@ class Sha256 {
     return Array.from(this.h).map(v=>v.toString(16).padStart(8,'0')).join('');
   }
 }
-async function hashFile(file: File, expectedSize: number): Promise<string> {
+async function hashFile(file: File, expectedSize: number, guard: () => void): Promise<string> {
+  guard();
   if (!file.exists || file.size !== expectedSize) throw Error('drone_file_size_changed');
-  const hash = new Sha256(); const reader = file.readableStream().getReader(); let read = 0;
-  try { while (true) { const part = await reader.read(); if (part.done) break; hash.update(part.value); read += part.value.byteLength; } }
-  finally { reader.releaseLock(); }
+  // Expo's default stream reads 1 KB per native call. Read larger bounded
+  // blocks without materializing a video in memory or starving account guards.
+  const hash = new Sha256(); const handle = file.open(); let read = 0;
+  try {
+    while (read < expectedSize) {
+      guard();
+      const remaining = Math.min(256 * 1024, expectedSize - read);
+      const chunk = await handle.readBytes(remaining); guard();
+      if (!chunk.byteLength || chunk.byteLength > remaining) throw Error('drone_file_size_changed');
+      hash.update(chunk); read += chunk.byteLength;
+    }
+  } finally { handle.close(); }
+  guard();
   if (read !== expectedSize || !file.exists || file.size !== expectedSize) throw Error('drone_file_size_changed');
   return hash.digest();
 }
@@ -71,7 +82,7 @@ export async function readDroneFileRange(file: DroneLocalFile, offset: number, l
     if(!source.exists || source.size!==file.size)throw Error('drone_file_size_changed');
     handle=source.open(); handle.offset=offset;
     const result=new Uint8Array(length);let read=0;
-    while(read<length){guard();const chunk=await handle.readBytes(length-read);guard();if(!chunk.byteLength || chunk.byteLength>length-read)throw Error('drone_file_size_changed');result.set(chunk,read);read+=chunk.byteLength;}
+    while(read<length){guard();const remaining=Math.min(256*1024,length-read);const chunk=await handle.readBytes(remaining);guard();if(!chunk.byteLength || chunk.byteLength>remaining)throw Error('drone_file_size_changed');result.set(chunk,read);read+=chunk.byteLength;}
     if(!source.exists || source.size!==file.size)throw Error('drone_file_size_changed');
     guard();return result;
   } finally {handle?.close();unsubscribe();}
@@ -98,7 +109,7 @@ export async function openDroneLocalFiles(taskId: string) {
     const file = new File(directory, key + (kind === 'VIDEO' ? '.mp4' : '.srt'));
     return { uri: file.uri, partialUri: new File(directory, key + '.partial').uri };
   };
-  return { close,
+  const runtime = { close,
     list: async () => {
       guard();
       const rows = await db.getAllAsync<{id: string; payload: string}>('SELECT id, payload FROM local_draft WHERE kind = ? AND substr(id, 1, ?) = ?',KIND,prefix.length,prefix);
@@ -115,6 +126,17 @@ export async function openDroneLocalFiles(taskId: string) {
           final.exists || partial.exists ? 'INCOMPLETE' as const : 'MISSING' as const;
         return { ...file, availability };
       });
+    },
+    rehash: async (key: string): Promise<DroneLocalFile> => {
+      guard();
+      const saved = (await runtime.list()).find(file => file.key === key); guard();
+      if (!saved || !['LOCAL_READY', 'LOCAL_UNHASHED'].includes(saved.availability)) throw Error('drone_file_unavailable');
+      const { availability: _availability, ...record } = saved;
+      if (record.checksumSha256) return record;
+      const checksumSha256 = await hashFile(new File(record.uri), record.size, guard); guard();
+      const hashed: DroneLocalFile = { ...record, checksumSha256 };
+      await db.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?', JSON.stringify(hashed), new Date().toISOString(), prefix + key, KIND); guard();
+      return hashed;
     },
     preserve: async (kind: Kind, asset: {name: string; uri: string; size?: number}) => {
       guard();
@@ -141,11 +163,12 @@ export async function openDroneLocalFiles(taskId: string) {
       if (!partial.exists || partial.size !== size || !source.exists || source.size !== size) throw Error('drone_file_copy_incomplete');
       await partial.move(new File(record.uri)); guard();
       if (!new File(record.uri).exists || new File(record.uri).size !== size) throw Error('drone_file_copy_incomplete');
-      const checksumSha256 = await hashFile(new File(record.uri), size); guard();
+      const checksumSha256 = await hashFile(new File(record.uri), size, guard); guard();
       const hashed: DroneLocalFile = { ...record, checksumSha256 };
       const nowHashed = new Date().toISOString();
       await db.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ?', JSON.stringify(hashed), nowHashed, prefix + key); guard();
       return hashed;
     },
   };
+  return runtime;
 }

@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=r
 const {DatabaseSync}=require('node:sqlite'),{randomUUID}=require('node:crypto');
 const {pathToFileURL,fileURLToPath}=require('node:url');
 const id=n=>`${String(n).padStart(8,'0')}-1111-4111-8111-111111111111`;
-function fixture(){
+function fixture(options={}){
  const root=fs.mkdtempSync(path.resolve('.cache/drone-files-')),dbPath=path.join(root,'draft.db');let disk,sourceSize,offline=false;
  const reopen=()=>{disk?.close();disk=new DatabaseSync(dbPath);disk.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT); CREATE TABLE IF NOT EXISTS task_cache(id TEXT PRIMARY KEY,kind TEXT,data TEXT,cached_at TEXT)');};reopen();
  const db={getFirstAsync:async(sql,...args)=>disk.prepare(sql).get(...args),runAsync:async(sql,...args)=>disk.prepare(sql).run(...args),getAllAsync:async(sql,...args)=>disk.prepare(sql).all(...args)};
@@ -12,6 +12,7 @@ function fixture(){
  class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}open(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return {get offset(){return offset;},set offset(v){offset=v;},readBytes:async length=>{const chunk=Uint8Array.from(bytes.subarray(offset,offset+Math.min(length,2)));offset+=chunk.length;return chunk;},close(){}};}readableStream(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return new ReadableStream({pull(controller){if(offset>=bytes.length){controller.close();return;}const end=Math.min(offset+2,bytes.length);controller.enqueue(Uint8Array.from(bytes.subarray(offset,end)));offset=end;}});}}
  class Directory extends File {create(){fs.mkdirSync(fileURLToPath(this.uri),{recursive:true});}}
  const task={id:id(2),projectId:id(3),operatorId:actor,version:'AAAAAAAAAAE='};
+ if(options.configureFile)options.configureFile(File);
  const deps={'expo-file-system':{File,Directory,Paths:{document:{uri:docs}}},'expo-crypto':{randomUUID},'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../store/auth':{useAuthStore:{getState:()=>({token:sid,status:'AUTHENTICATED',user:{id:actor,role_code:'DRONE_OPERATOR'}}),subscribe:f=>{listeners.add(f);return()=>listeners.delete(f);}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([actor,sid])},'./client':{apiClient:{defaults:{get baseURL(){return env;}}}},'./droneApi':{getOperatorSurveyTaskDetailReal:async()=>{if(offline)throw {request:{}};return {data:task,etag:`"${task.version}"`};}}};
  const cached={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/operatorOfflineCache.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:cached,exports:cached.exports,require:n=>n==='../hooks/useOperatorReadScope'?{operatorReadScope:()=>JSON.stringify([env,actor,sid])}:deps[n],Date});
@@ -56,11 +57,59 @@ test('Drone stream hashing matches SHA-256 vector across an odd final chunk',asy
  assert.equal(saved.checksumSha256,'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');r.close();
 });
 
+test('Operator hashes large local files in bounded native reads and closes the handle',async()=>{
+ let reads=0,closed=0;
+ const f=fixture({configureFile(File){
+  File.prototype.readableStream=function(){throw Error('default 1KB stream must not be used');};
+  File.prototype.open=function(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return {
+   readBytes:async length=>{assert.ok(length<=256*1024);reads++;const chunk=Uint8Array.from(bytes.subarray(offset,offset+length));offset+=chunk.length;return chunk;},close(){closed++;}
+  };};
+ }});
+ const bytes=Buffer.alloc(700003);for(let i=0;i<bytes.length;i++)bytes[i]=i%251;
+ fs.writeFileSync(f.source,bytes);const r=await f.api.openDroneLocalFiles(id(2));
+ const saved=await r.preserve('VIDEO',{...f.asset,size:bytes.length});
+ assert.equal(saved.checksumSha256,require('node:crypto').createHash('sha256').update(bytes).digest('hex'));
+ assert.equal(reads,3);assert.equal(closed,1);r.close();
+});
+
+test('Operator stops checksum reads on session change and keeps the unhashed file',async()=>{
+ let f,reads=0,closed=0;
+ f=fixture({configureFile(File){
+  File.prototype.readableStream=function(){throw Error('default stream must not be used');};
+  File.prototype.open=function(){return {readBytes:async()=>{reads++;f.change(id(8),'other');return Uint8Array.from([1,2]);},close(){closed++;}};};
+ }});
+ const r=await f.api.openDroneLocalFiles(id(2));
+ await assert.rejects(r.preserve('VIDEO',f.asset),/drone_file_session_changed/);
+ assert.equal(reads,1);assert.equal(closed,1);assert.equal(JSON.parse(f.rows()[0].payload).checksumSha256,null);r.close();
+});
+
 test('Operator native range reader handles short reads and rejects invalid bounds',async()=>{
  const f=fixture(),r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',f.asset);
  assert.deepEqual(Array.from(await f.api.readDroneFileRange(saved,1,3)),[2,3,4]);
  for(const [offset,length] of [[-1,2],[0,0],[3,2],[0,65*1024**2]])await assert.rejects(f.api.readDroneFileRange(saved,offset,length));
  fs.writeFileSync(fileURLToPath(saved.uri),Buffer.from([1]));await assert.rejects(f.api.readDroneFileRange(saved,0,2),/size_changed/);r.close();
+});
+
+test('Operator multipart range reads also bound each native call to 256 KiB',async()=>{
+ let reads=0;
+ const f=fixture({configureFile(File){File.prototype.open=function(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return {
+  get offset(){return offset;},set offset(value){offset=value;},
+  readBytes:async length=>{assert.ok(length<=256*1024);reads++;const part=Uint8Array.from(bytes.subarray(offset,offset+length));offset+=part.length;return part;},close(){}
+ };};}});
+ const bytes=Buffer.alloc(700003);for(let i=0;i<bytes.length;i++)bytes[i]=i%251;fs.writeFileSync(f.source,bytes);
+ const r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',{...f.asset,size:bytes.length});reads=0;
+ assert.deepEqual(Buffer.from(await f.api.readDroneFileRange(saved,13,600000)),bytes.subarray(13,600013));assert.equal(reads,3);r.close();
+});
+
+test('Operator resumes checksum from retained bytes after restart without another copy',async()=>{
+ const f=fixture(),r=await f.api.openDroneLocalFiles(id(2));const saved=await r.preserve('VIDEO',f.asset);r.close();
+ const row=f.rows()[0],record=JSON.parse(row.payload);record.checksumSha256=null;
+ const disk=new DatabaseSync(path.join(path.dirname(fileURLToPath(saved.uri)),'..','draft.db'));
+ disk.prepare('UPDATE local_draft SET payload=? WHERE id=?').run(JSON.stringify(record),row.id);disk.close();
+ f.reopen();f.offline();f.copy(()=>{throw Error('must not copy again');});
+ const restored=await f.api.openDroneLocalFiles(id(2));const hashed=await restored.rehash(saved.key);
+ assert.equal(hashed.checksumSha256,saved.checksumSha256);assert.equal(hashed.uri,saved.uri);assert.equal(f.rows().length,1);
+ await assert.rejects(restored.rehash(id(99)),/unavailable/);restored.close();
 });
 
 test('Operator can preserve a new file offline from an already downloaded assignment after restart',async()=>{

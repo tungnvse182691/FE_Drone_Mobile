@@ -219,6 +219,7 @@ export default function DroneUploadScreen() {
   const restoreFile = async (key: string) => {
     const isCurrent = scope.capture();
     if (!isCurrent() || !params.taskId || picking.current || sending.current || draftLoading) return;
+    picking.current = true; setCopying(true);
     let runtime: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
     try {
       runtime = await openDroneLocalFiles(params.taskId);
@@ -227,9 +228,15 @@ export default function DroneUploadScreen() {
       if (!isCurrent()) return;
       const file = files.find(f => f.key === key);
       if (!file || !['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)) throw Error('file_unavailable');
-      selectFile(file); setSubmitError(null);
-    } catch { if (isCurrent()) setSubmitError('Tệp không còn đầy đủ. Giữ lịch sử và chọn lại tệp nguồn.'); }
-    finally { runtime?.close(); }
+      const ready = file.availability === 'LOCAL_UNHASHED' ? await runtime.rehash(key) : file;
+      if (!isCurrent()) return;
+      selectFile(ready); setSubmitError(null);
+    } catch { if (isCurrent()) setSubmitError('Chưa kiểm tra được tệp đã lưu. Tệp và lịch sử vẫn được giữ; thử lại hoặc chọn lại tệp nguồn.'); }
+    finally {
+      runtime?.close(); picking.current = false;
+      if (mounted.current) setCopying(false);
+      if (isCurrent()) await refreshFiles();
+    }
   };
 
   const [previewScope, setPreviewScope] = useState(scope.key);
