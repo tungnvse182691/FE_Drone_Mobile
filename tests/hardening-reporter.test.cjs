@@ -7,6 +7,7 @@ function guardFixture(){
  const store=Object.assign(f=>f({pendingDraft:null}),{getState:()=>({restoreStartedCommand:()=>done.promise})});
  const props={children:'Stack remains mounted'};
  const s=screen('app/_layout.tsx',{expose:'AuthGuard',exportName:'AuthGuard',props,modules:{
+  '../src/components/AppFontGate':{AppFontGate:'AppFontGate'},
   '../src/store/auth':{useAuthStore:auth},'../src/store/reporter':{useReporterStore:store},
   '../src/api/uploads':{hasAuthenticatedSession:s=>s.status==='AUTHENTICATED'&&!!s.token},
   '../src/store/uploads':{reporterContext:()=>({...context}),assertReporterContext:c=>{if(JSON.stringify(c)!==JSON.stringify(context))throw Error('changed');}},

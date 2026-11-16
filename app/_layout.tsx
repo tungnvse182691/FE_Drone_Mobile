@@ -2,14 +2,9 @@ import 'react-native-gesture-handler';
 import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import {
-  Roboto_400Regular,
-  Roboto_500Medium,
-  Roboto_700Bold,
-} from '@expo-google-fonts/roboto';
+import { AppFontGate } from '../src/components/AppFontGate';
 import { colors } from '../src/design-tokens';
 import { Button } from '../src/components/Button';
 import { OperatorLocalTasks } from '../src/components/OperatorLocalTasks';
@@ -29,31 +24,9 @@ import { hasAuthenticatedSession, type MobileSession } from '../src/api/uploads'
 
 const queryClient = new QueryClient();
 
-let sansationFont: number | null = null;
-try {
-  sansationFont = require('../assets/fonts/Sansation.ttf');
-} catch {
-  sansationFont = null;
-}
-
-const APP_FONTS = {
-  Roboto: Roboto_400Regular,
-  'Roboto-Medium': Roboto_500Medium,
-  'Roboto-Bold': Roboto_700Bold,
-  ...(sansationFont ? { Sansation: sansationFont } : {}),
-};
+const fontScreenLayout = ({ children }: { children: ReactNode }) => <AppFontGate>{children}</AppFontGate>;
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts(APP_FONTS);
-  const [fontTimeout, setFontTimeout] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setFontTimeout(true);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
   useEffect(() => {
     void useAuthStore.getState().restoreRefreshToken();
   }, []);
@@ -62,13 +35,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <StatusBar style="dark" />
       <AuthGuard>
-        <Stack screenOptions={{ headerShown: false }} />
-        {!fontsLoaded && !fontError && !fontTimeout ? (
-          <View style={styles.loading}>
-            <Image source={require('../assets/logo_hoanghai.png')} style={styles.loadingLogo} resizeMode="contain" />
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : null}
+        <Stack screenOptions={{ headerShown: false }} screenLayout={fontScreenLayout} />
       </AuthGuard>
     </QueryClientProvider>
   );

@@ -25,7 +25,10 @@ test('C1 real BottomNav delegates only when callback provided and keeps default 
  s.render();const tab=s.nodes().find(n=>n.type==='Pressable');assert.equal(tab.props.accessibilityState.selected,true);tab.props.onPress();assert.deepEqual(nav,custom?[]:['/(reporter)/uploads']);assert.deepEqual(delegated,custom?['/(reporter)/uploads']:[]);s.unmount();}
 });
 test('C1 unchanged root guard protects direct URLs/expired session, public pages and cross-role',()=>{
- const f=layout(),guard=f.s.h.load('app/_layout.tsx').authGuardDestination;
+ // This unit tests the real pure auth guard; font lifecycle has its own suite.
+ const f=layout(),guard=require('./helpers/roadfe-screen.cjs').harness({modules:{
+  '../src/components/AppFontGate':{AppFontGate:'AppFontGate'},
+ }}).load('app/_layout.tsx').authGuardDestination;
  for(const page of ['uploads','track'])assert.equal(guard(f.s.h.getAuth(),['(reporter)',page]),'/(auth)');
  for(const page of ['home','report','account','capture'])assert.equal(guard(f.s.h.getAuth(),['(reporter)',page]),null);
  f.s.h.login('REPAIR_CREW');assert.equal(guard(f.s.h.getAuth(),['(reporter)','uploads']),'/(crew)/home');f.s.unmount();

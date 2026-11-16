@@ -92,7 +92,7 @@ function harness(options = {}) {
 }
 
 test('restored user without token stays in auth; valid sessions route by role; public draft remains public', () => {
-  const h = harness();
+  const h = harness({ modules: { '../src/components/AppFontGate': { AppFontGate: 'AppFontGate' } } });
   const { authGuardDestination: route } = h.load('app/_layout.tsx');
   const restored = { status: 'VERIFIED_NEEDS_LOGIN', token: null, user: { role_code: 'REPORTER' } };
   assert.equal(route(restored, ['(auth)']), null);

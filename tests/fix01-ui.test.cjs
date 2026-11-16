@@ -20,6 +20,7 @@ for(const method of ['login','otp'])test('RPT-01 real '+method+' screen restores
     const segments=['(auth)'],router={replace:p=>s.nav.push(p)};
     const auth=Object.assign(f=>f(s.h.getAuth()),{getState:()=>s.h.getAuth()});
     const root=screen('app/_layout.tsx',{expose:'AuthGuard',exportName:'AuthGuard',props:{children:'Stack'},modules:{
+      '../src/components/AppFontGate':{AppFontGate:'AppFontGate'},
       '../src/store/auth':{useAuthStore:auth},'../src/store/reporter':s.reporter,'../src/store/uploads':s.uploads,
       '../src/api/uploads':s.h.load('src/api/uploads.ts'),'expo-router':{useSegments:()=>segments,useRouter:()=>router},
       '@tanstack/react-query':{QueryClient:class{}},'expo-font':{},'expo-status-bar':{},'@expo-google-fonts/roboto':{},'react-native-gesture-handler':{},'../src/components/Toast':{Toast:'Toast'},
