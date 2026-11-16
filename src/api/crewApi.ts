@@ -938,7 +938,10 @@ export async function getRepairEligibilityReal(
   const response = await apiClient.get<RepairEligibilityReadView>(
     `/projects/${projectId}/repair-packages/${packageId}/items/${itemId}/eligibility`,
   );
-  const etag = extractEtagFromResponse(response);
+  // Eligibility callers validate the exact strong HTTP validator, including quotes.
+  // A payload version cannot replace a missing response header.
+  const raw = response.headers?.etag ?? response.headers?.ETag;
+  const etag = typeof raw === 'string' ? raw.trim() : '';
   return { data: response.data, etag };
 }
 
