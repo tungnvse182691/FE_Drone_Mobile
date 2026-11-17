@@ -15,12 +15,26 @@ function commandIdentity(i: RepairIdentity,task: api.FieldTaskViewFact): RepairC
   const ctx=task.repairContext!;
   return {...i,packageId:ctx.packageId,itemId:ctx.itemId,bindingId:ctx.bindingId,assignmentId:task.assignmentId!};
 }
+/** A validated API-146 denial is read evidence, never a rejected execution command. */
+class FastTrackStartBlockedError extends Error {
+  readonly missingReasons: readonly string[];
+  constructor(reasons: string[]) {
+    super('fasttrack_start_not_eligible');
+    this.missingReasons=Object.freeze([...reasons]);
+  }
+}
 /** API-146 is evaluated against this exact assessment and binding, never used as If-Match. */
 async function requireFastTrackStart(i: RepairIdentity,r: RepairRuntime,task: api.FieldTaskViewFact,assessmentId: unknown) {
   if (task.mode !== 'CONDITIONAL_FT') return;
   const ctx=task.repairContext!;
   const read=await guarded(i,r,()=>r.api.getRepairEligibilityReal(i.projectId,ctx.packageId,ctx.itemId));
   const v=read.data;
+  if(v&&v.itemId===ctx.itemId&&v.bindingId===ctx.bindingId&&v.assessmentId===assessmentId&&
+    v.eligible===false&&v.activation==='INELIGIBLE'&&Array.isArray(v.missingReasons)&&v.missingReasons.length>0&&
+    v.missingReasons.every(reason=>typeof reason==='string'&&!!reason.trim())&&
+    /^h4-eligibility-v1-[a-f0-9]{64}$/.test(v.version)&&read.etag===`"${v.version}"`) {
+    throw new FastTrackStartBlockedError(v.missingReasons);
+  }
   if(!v||v.itemId!==ctx.itemId||v.bindingId!==ctx.bindingId||v.assessmentId!==assessmentId||
     v.eligible!==true||v.activation!=='ELIGIBLE'||!Array.isArray(v.missingReasons)||v.missingReasons.length!==0||
     v.policyState!=='CONFIGURED'||!api.isCrewResourceId(v.policyRevisionId)||
@@ -284,6 +298,14 @@ export async function readRepairFieldDraft(i: RepairIdentity) {
   const runtime=await openFieldRuntime(i);return loadFieldDraft(i,runtime);
 }
 export function repairErrorMessage(e: unknown): string {
+  if(e instanceof FastTrackStartBlockedError) {
+    const handover=e.missingReasons.some(reason=>['ROAD_HANDOVER_MAPPING_UNKNOWN','EXECUTION_ROADNOTHANDEDOVER'].includes(reason));
+    const coverage=e.missingReasons.includes('COVERAGE_MAPPING_UNKNOWN');
+    if(handover||coverage) {
+      const missing=[handover?'bàn giao tuyến':null,coverage?'phạm vi bảo hành hoặc bảo trì':null].filter(Boolean).join(' và ');
+      return `Chưa thể bắt đầu: máy chủ chưa xác nhận ${missing}. Cần Giám sát xác nhận nguồn và phạm vi áp dụng; ảnh và số đo đã gửi được giữ nguyên.`;
+    }
+  }
   const status=(e as {response?:{status?:number}})?.response?.status;
   if(status===401||status===403)return 'Phiên hoặc quyền đội sửa chữa không còn hợp lệ. Lệnh được giữ để đối soát.';
   if(status===409||status===412||status===428)return 'Chưa xác nhận kết quả do phiên bản hoặc điều kiện lệnh. Giữ nguyên lệnh và khóa gửi mới; đối soát lệnh gốc.';

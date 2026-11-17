@@ -25,6 +25,36 @@ async function assess(h){
   const c=await h.workflow.prepareRepairAssessment(h.identity,h.draft(),h.runtime);
   return h.workflow.dispatchRepair(h.identity,c.key,h.runtime);
 }
+
+test('FT missing handover and coverage explains the server block without preparing or posting a start',async()=>{
+ const h=fixture();try{
+  await assess(h);
+  const read=h.runtime.api.getRepairEligibilityReal;
+  const reasons=['COVERAGE_MAPPING_UNKNOWN','EXECUTION_ROADNOTHANDEDOVER','ROAD_HANDOVER_MAPPING_UNKNOWN'];
+  h.runtime.api.getRepairEligibilityReal=async()=>{const r=await read();Object.assign(r.data,{eligible:false,activation:'INELIGIBLE',missingReasons:reasons});return r;};
+  const before=JSON.stringify(await (await h.runtime.journal()).list());
+  await assert.rejects(h.workflow.prepareRepairStart(h.identity,h.runtime),e=>{
+   assert.deepEqual(Array.from(e.missingReasons??[]),reasons);
+   const message=h.workflow.repairErrorMessage(e);
+   assert.match(message,/bàn giao tuyến/);assert.match(message,/bảo hành hoặc bảo trì/);assert.match(message,/Giám sát/);
+   assert.doesNotMatch(message,/MAPPING_UNKNOWN|ROADNOTHANDEDOVER/);
+   return true;
+  });
+  assert.equal(h.posts(),1);assert.equal(JSON.stringify(await (await h.runtime.journal()).list()),before);
+ }finally{h.raw.close();}
+});
+
+test('FT malformed denial is not presented as a confirmed missing-source diagnosis',async()=>{
+ for(const change of [r=>r.etag='wrong',r=>r.data.assessmentId=ids.first,r=>r.data.bindingId=ids.first,r=>r.data.missingReasons=[null]]){
+  const h=fixture();try{
+   await assess(h);const read=h.runtime.api.getRepairEligibilityReal;
+   h.runtime.api.getRepairEligibilityReal=async()=>{const r=await read();Object.assign(r.data,{eligible:false,activation:'INELIGIBLE',missingReasons:['COVERAGE_MAPPING_UNKNOWN']});change(r);return r;};
+   await assert.rejects(h.workflow.prepareRepairStart(h.identity,h.runtime),e=>{
+    assert.equal(e.missingReasons,undefined);assert.doesNotMatch(h.workflow.repairErrorMessage(e),/Giám sát/);return true;
+   });assert.equal(h.posts(),1);
+  }finally{h.raw.close();}
+ }
+});
 test('FT online assessment uses current FastTrack binding, immutable journal and item version',async()=>{
   const h=fixture();try{
     const c=await h.workflow.prepareRepairAssessment(h.identity,h.draft(),h.runtime);
