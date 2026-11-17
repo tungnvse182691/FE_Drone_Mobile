@@ -347,6 +347,7 @@ export default function CrewTasksScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: colors.surfaceAlt,
   },
   segments: {
     flexDirection: 'row',
@@ -381,6 +382,8 @@ const styles = StyleSheet.create({
   },
   segmentLabelActive: {
     color: colors.neutral,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   countBadge: {
     minWidth: 20,
@@ -420,7 +423,8 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   taskCard: {
-    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    padding: spacing.cardPadding,
     borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
@@ -429,7 +433,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   taskList: {
-    paddingBottom: spacing.lg,
+    gap: spacing.sm,
+    paddingBottom: spacing.xl,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -460,13 +465,14 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   taskTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    lineHeight: 22,
     color: colors.neutral,
     marginTop: spacing.sm,
   },
   taskCode: {
     color: colors.secondary,
+    fontSize: 11,
   },
   taskRouteRow: {
     flexDirection: 'row',
@@ -477,6 +483,8 @@ const styles = StyleSheet.create({
   taskRoute: {
     flex: 1,
     color: colors.secondary,
+    fontSize: 13,
+    lineHeight: 21,
   },
   taskDefect: {
     color: colors.secondary,
@@ -491,15 +499,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    paddingTop: spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.surfaceAlt,
   },
   woChip: {
     maxWidth: '100%',
     paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: radius.full,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.border,
@@ -511,13 +519,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
   },
   duePillUrgent: {
-    backgroundColor: '#FDECEC',
+    // Same quiet deadline treatment as Home; urgency stays in text and icon.
   },
   taskDue: {
     color: colors.secondary,
@@ -525,6 +529,7 @@ const styles = StyleSheet.create({
   },
   taskDueUrgent: {
     color: colors.error,
+    fontFamily: 'Roboto-Medium',
   },
   taskChevron: {
     marginLeft: spacing.xs,
