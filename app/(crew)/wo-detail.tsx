@@ -27,6 +27,7 @@ import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabi
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
 import { CrewFastTrackEligibility } from '../../src/components/crew/CrewFastTrackEligibility';
+import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
 
 /** Câu tiếng Việt cho lỗi API-081/091/093 — không lộ mã kỹ thuật lên màn hình. */
 function fieldTaskActionMessage(error: unknown, phase: 'journal' | 'read' | 'reconcile' | 'send' | 'replay' = 'send'): string {
@@ -210,21 +211,22 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
   const presentation = crewDetailPresentation(fresh.status, action => !fresh.detail ? 'Chưa có dữ liệu' : fieldCommandBlock(fresh.detail, fresh.etag ?? '', actor, action), fieldBlock);
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Chi tiết nhiệm vụ" />}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại danh sách" testID="crew-detail-back" style={styles.backRow} onPress={() => router.replace('/(crew)/tasks')}>
+      <CrewContentTransition ready={ready} replayOnFocus>
+      <CrewPressable accessibilityRole="button" accessibilityLabel="Quay lại danh sách" testID="crew-detail-back" style={styles.backRow} onPress={() => router.replace('/(crew)/tasks')}>
         <MaterialIcons name="arrow-back" size={20} color={colors.secondary} /><Text style={[typography.labelLg, { color: colors.secondary }]}>Quay lại danh sách</Text>
-      </Pressable>
-      <Card style={[styles.card, styles.hero]}>
+      </CrewPressable>
+      <Card style={[styles.card, styles.detailCard, styles.detailHero]}>
         <View style={styles.sectionHeading}><View style={styles.iconBox}><MaterialIcons name="assignment" size={26} color={colors.brandGold} /></View>
-          <View style={styles.flex}><Text style={typography.titleLg}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
+          <View style={styles.flex}><Text style={typography.titleMd}>{fresh.title || 'Nhiệm vụ hiện trường'}</Text></View></View>
         <View style={styles.chips}><CrewTaskStatus status={fresh.status} label={crewStatusLabel(fresh.status)} /></View>
         <View style={styles.chips}><Chip variant="measure-only" label={crewModeLabel(fresh.rawMode)} uppercase={false} /></View>
       </Card>
-      <Card style={styles.taskActionCard}>
+      <Card style={[styles.taskActionCard, styles.detailCard]}>
         <View style={styles.sectionHeading}>
           <Text style={[typography.titleMd,styles.flex]}>Tình trạng hiện tại</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Tải lại / đối soát" accessibilityState={{disabled:busy,busy}} testID="crew-detail-refresh" disabled={busy} style={styles.refreshButton} onPress={()=>void run()}>
+          <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại / đối soát" accessibilityState={{disabled:busy,busy}} testID="crew-detail-refresh" disabled={busy} style={[styles.refreshButton,styles.detailRefresh]} onPress={()=>void run()}>
             {busy?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}
-          </Pressable>
+          </CrewPressable>
         </View>
         <Text style={styles.body}>{presentation.summary}</Text>
         {!ready ? <Text style={styles.hint}>Đang kiểm tra nhật ký thao tác. Nếu chưa hoàn tất, chọn tải lại / đối soát.</Text> : null}
@@ -240,7 +242,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
         {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
       </Card>
-      <Card style={styles.card}>
+      <Card style={[styles.card, styles.detailCard]}>
         <Text style={typography.titleMd}>Thông tin nhiệm vụ</Text>
         <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Hướng dẫn</Text><Text style={styles.body}>{fresh.detail?.instructions || fresh.description || 'Chưa có hướng dẫn bổ sung cho nhiệm vụ này.'}</Text></View></View>
         <View style={styles.factRow}><MaterialIcons name="event" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
@@ -251,20 +253,21 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       </Card>
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
       {fresh.detail?.repairContext?<CrewRepairFacts key={JSON.stringify([scope,task.projectId,task.id,fresh.detail.repairContext.bindingId])} projectId={task.projectId} taskId={task.id}/>:null}
-      <Card style={styles.taskActionCard}>
+      <Card style={[styles.taskActionCard, styles.detailCard]}>
         <Text style={typography.titleMd}>Hồ sơ liên quan</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Khuyết tật thuộc nhiệm vụ" style={({pressed})=>[styles.linkRow,pressed&&styles.linkPressed]} onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})}>
+        <CrewPressable accessibilityRole="button" accessibilityLabel="Khuyết tật thuộc nhiệm vụ" style={({pressed})=>[styles.linkRow,styles.detailLink,pressed&&styles.detailRefresh]} onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})}>
           <MaterialIcons name="report-problem" size={22} color={colors.brandGold}/><Text style={[styles.body,styles.flex]}>Khuyết tật thuộc nhiệm vụ</Text><MaterialIcons name="chevron-right" size={22} color={colors.secondary}/>
-        </Pressable>
+        </CrewPressable>
       </Card>
-      {fresh.detail?.mode === 'NORMAL' ? <Card style={styles.taskActionCard}><NormalRepairBootstrap task={fresh} stage="overview" /></Card> : null}
-      {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={styles.taskActionCard}><FastTrackRepairSummary task={fresh} /></Card> : null}
-      <Card style={styles.taskActionCard}>
-        <Pressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
+      {fresh.detail?.mode === 'NORMAL' ? <Card style={[styles.taskActionCard,styles.detailCard]}><NormalRepairBootstrap task={fresh} stage="overview" /></Card> : null}
+      {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={[styles.taskActionCard,styles.detailCard]}><FastTrackRepairSummary task={fresh} /></Card> : null}
+      <Card style={[styles.taskActionCard,styles.detailCard]}>
+        <CrewPressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
           <MaterialIcons name="info-outline" size={20} color={colors.secondary} /><Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
-        </Pressable>
+        </CrewPressable>
         {showTechnical ? <View style={styles.technicalPanel}><Text style={styles.hint}>Mã nhiệm vụ</Text><Text selectable style={styles.body}>{fresh.id}</Text><Text style={styles.hint}>Dự án</Text><Text selectable style={styles.body}>{fresh.projectId}</Text><Text style={styles.hint}>Phiên bản</Text><Text selectable style={styles.body}>{fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn</Text><Text style={styles.body}>{fresh.status} · {fresh.rawMode}</Text>{record?.rejectionStatus ? <Text style={styles.hint}>Mã phản hồi máy chủ: {record.rejectionStatus}</Text> : null}{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
       </Card>
+      </CrewContentTransition>
     </SafeAreaScreen>
   );
 }
@@ -561,6 +564,10 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
 }
 
 const styles = StyleSheet.create({
+  detailCard: { borderColor: colors.border, marginBottom: spacing.sm },
+  detailHero: { backgroundColor: colors.surface },
+  detailRefresh: { backgroundColor: colors.surfaceAlt },
+  detailLink: { backgroundColor: colors.surface, borderRadius: radius.md },
   repairActiveCard: {backgroundColor:'#EFF6FF',borderColor:'#93C5FD',borderLeftWidth:4},
   closeoutHeading: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:spacing.sm},
   closeoutIcon: {padding:spacing.sm,borderRadius:radius.md},

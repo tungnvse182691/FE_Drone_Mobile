@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { CrewPressable as Pressable } from './CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, spacing, typography } from '../../design-tokens';
 import { Button } from '../Button';
@@ -77,15 +78,15 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   </Card>;
 }
 const styles=StyleSheet.create({
-  card:{gap:spacing.md,marginBottom:spacing.md,borderWidth:1,borderColor:'#E8D9A8',borderRadius:12},
+  card:{gap:spacing.md,marginBottom:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:12},
   heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   flex:{flex:1,minWidth:0},
   hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
   iconBox:{width:36,height:36,borderRadius:10,backgroundColor:'#FFF9EA',alignItems:'center',justifyContent:'center'},
   refresh:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:24},
-  disclosure:{minHeight:48,paddingHorizontal:spacing.md,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:'#FFFCF4',borderRadius:12},
-  pressed:{backgroundColor:'#F6ECCD'},
-  locationSummary:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:'#FFFCF4',borderRadius:12},
+  disclosure:{minHeight:48,paddingHorizontal:spacing.md,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:colors.border,backgroundColor:colors.surfaceAlt,borderRadius:12},
+  pressed:{backgroundColor:'#EDF2F6'},
+  locationSummary:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:12},
   message:{flexDirection:'row',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:8},
   historyHeading:{flexDirection:'row',alignItems:'center',gap:spacing.sm,marginTop:spacing.md,marginBottom:spacing.sm},
   event:{flexDirection:'row',gap:spacing.md,paddingBottom:spacing.md,paddingLeft:spacing.sm},
