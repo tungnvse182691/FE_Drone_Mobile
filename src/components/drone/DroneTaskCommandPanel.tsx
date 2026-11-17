@@ -22,6 +22,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
   const [runtime,setRuntime] = useState<Runtime | null>(null), [saved,setSaved] = useState<Saved>(null);
   const [ready,setReady] = useState(false), [busy,setBusy] = useState(false), [reason,setReason] = useState('');
   const [error,setError] = useState<string | null>(null), [current,setCurrent] = useState<string | null>(null);
+  const [detailsExpanded,setDetailsExpanded] = useState(false);
   const [canPrepare,setCanPrepare] = useState(false);
   const [revision,setRevision] = useState(0);
   const lock = useRef(false);
@@ -95,18 +96,19 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
       </View>
       <Button variant="secondary" title="Xem lệnh cần đối soát" onPress={() => onExpand?.()} />
     </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
-  const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Chỉ chuẩn bị yêu cầu khi máy chủ xác nhận nhiệm vụ mới được giao hoặc giao lại cho bạn.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
+  const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Cập nhật trạng thái để kiểm tra quyền nhận nhiệm vụ.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
   const primaryStyle = { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
-  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,...operatorAppearance.card}}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>{operation==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text></View>
+  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,...operatorAppearance.card,borderColor:colors.border}}>
+    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>{(saved?.command.operation ?? operation)==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text></View>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
     {saved ? <>
-      <Text style={typography.bodyMd}>{saved.command.operation==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text>
       {saved.command.payload.reason ? <Text>{saved.command.payload.reason}</Text> : null}
-      <Text>{saved.phase==='RECEIPT'?'Máy chủ đã trả kết quả cho lệnh này.':saved.phase==='PREPARED'?'Đã lưu lệnh, chưa gửi.':'Lệnh đã gửi nhưng chưa xác nhận được kết quả.'}</Text>
+      <View style={commandStyles.status}>
+        <MaterialIcons name={saved.phase==='RECEIPT'?'check-circle-outline':saved.phase==='PREPARED'?'schedule':'sync-problem'} size={24} color={saved.phase==='RECEIPT'?colors.success:colors.secondary}/>
+        <View style={{flex:1,gap:4}}><Text style={typography.titleMd}>{saved.phase==='RECEIPT'?'Đã có kết quả':saved.phase==='PREPARED'?'Sẵn sàng xác nhận':'Cần kiểm tra kết quả'}</Text><Text style={commandStyles.caption}>{saved.phase==='RECEIPT'?'Máy chủ đã trả kết quả cho lệnh này.':saved.phase==='PREPARED'?'Yêu cầu đã lưu trên máy, chưa gửi.':'Chưa xác nhận được kết quả. Yêu cầu gốc vẫn được giữ.'}</Text></View>
+      </View>
       {saved.phase!=='RECEIPT'?<>
-        <Text style={typography.caption}>Gửi lại giữ nguyên nội dung, phiên bản và mã yêu cầu đã lưu. Đọc trạng thái nhiệm vụ không tự giải quyết lệnh chưa rõ kết quả.</Text>
-        <Button variant="secondary" style={primaryStyle} disabledTextStyle={{color:colors.neutral}} icon={<MaterialIcons name="send" size={18} color={colors.neutral} />} title="Xác nhận gửi lệnh đã lưu" disabled={busy||!ready} onPress={()=>void run('dispatch')} />
+        <Button variant="secondary" style={primaryStyle} disabledTextStyle={{color:colors.neutral}} icon={<MaterialIcons name="send" size={18} color={colors.neutral} />} title="Xác nhận gửi" disabled={busy||!ready} onPress={()=>void run('dispatch')} />
       </>:null}
     </>:<>
       {operation==='decline'?<TextInput accessibilityLabel="Lý do từ chối" value={reason} editable={!busy&&ready} onChangeText={setReason} multiline placeholder="Nhập lý do thực tế" style={{...typography.bodyMd,minHeight:96,borderWidth:1,borderColor:colors.border,borderRadius:12,padding:16,color:colors.neutral,textAlignVertical:'top'}}/>:null}
@@ -119,8 +121,12 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
       </View>
     </>}
     {disabledReason ? <View testID="command-disabled-reason" style={{flexDirection:'row',alignItems:'center',gap:8,padding:12,borderRadius:12,backgroundColor:colors.surfaceAlt}}><MaterialIcons name="info-outline" size={18} color={colors.secondary} /><Text style={{...typography.caption,color:colors.secondary,textAlign:'center',flex:1}}>{disabledReason}</Text></View> : null}
-    <Button variant="secondary" title="Đọc trạng thái nhiệm vụ hiện hành" disabled={busy||!ready} onPress={()=>void run('read')} />
-    {current?<Text style={{borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm}}>Trạng thái hiện hành: {current}</Text>:null}
+    <View style={commandStyles.footer}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Đọc trạng thái nhiệm vụ hiện hành" disabled={busy||!ready} accessibilityState={{disabled:busy||!ready}} onPress={()=>void run('read')} style={commandStyles.link}><MaterialIcons name="refresh" size={20} color={colors.secondary}/><Text style={commandStyles.caption}>Cập nhật trạng thái</Text></Pressable>
+      <Pressable testID="command-details-toggle" accessibilityRole="button" accessibilityLabel="Chi tiết yêu cầu" accessibilityState={{expanded:detailsExpanded}} onPress={()=>setDetailsExpanded(v=>!v)} style={commandStyles.link}><Text style={commandStyles.caption}>Chi tiết</Text><MaterialIcons name={detailsExpanded?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
+    </View>
+    {detailsExpanded?<Text style={commandStyles.caption}>Gửi lại giữ nguyên nội dung, phiên bản và mã yêu cầu đã lưu. Đọc trạng thái nhiệm vụ không tự giải quyết lệnh chưa rõ kết quả.</Text>:null}
+    {current?<Text style={commandStyles.caption}>Trạng thái hiện hành: {current}</Text>:null}
     {error?<View accessibilityRole="alert"><Text>{error}</Text></View>:null}
     {!ready&&error?<Button variant="secondary" title="Thử mở lại lịch sử yêu cầu" onPress={()=>{if(scope.capture()())setRevision(v=>v+1);}} />:null}
   </Card>;
@@ -192,4 +198,11 @@ const recoveryStyles = StyleSheet.create({
   historyToggle: {minHeight:52,flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:8,borderRadius:8,backgroundColor:colors.surfaceAlt},
   historyLabel: {...typography.bodyMd,color:colors.secondary,flex:1},
   pressed: {backgroundColor:operatorAppearance.pressed},
+});
+
+const commandStyles=StyleSheet.create({
+  status:{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt},
+  caption:{...typography.caption,color:colors.secondary,lineHeight:19},
+  footer:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',borderTopWidth:1,borderTopColor:colors.border},
+  link:{minHeight:48,flexDirection:'row',alignItems:'center',gap:6,paddingHorizontal:4},
 });

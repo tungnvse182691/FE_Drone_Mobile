@@ -52,7 +52,7 @@ test('Operator receipt updates the visible status and refreshes task detail only
   dispatch:async()=>{row={...row,phase:'RECEIPT',receipt:{data:{...task,status:'ACCEPTED'}}};},
  })});
  s.render();await s.flush();assert.equal(refreshes,0);
- await s.press('Xác nhận gửi lệnh đã lưu');await s.flush();
+ await s.press('Xác nhận gửi');await s.flush();
  assert.equal(refreshes,1);assert.match(text(s),/Trạng thái hiện hành: ACCEPTED/);s.unmount();
 });
 
@@ -62,7 +62,7 @@ test('Operator unknown command result never announces a resolved task',async()=>
  const s=panel(null,{props:{collapsed:false,onResolved:()=>refreshes++},open:async()=>({
   read:async()=>row,close(){},dispatch:async()=>{throw Error('timeout');},
  })});
- s.render();await s.flush();await s.press('Xác nhận gửi lệnh đã lưu');await s.flush();
+ s.render();await s.flush();await s.press('Xác nhận gửi');await s.flush();
  assert.equal(refreshes,0);assert.match(text(s),/Chưa xác nhận được kết quả/);s.unmount();
 });
 
@@ -83,5 +83,5 @@ test('UI03 multi-ref package counts only displayed pinned geometry and identifie
  const geometry={projectId:task.projectId,route:{routeVersionId:id(4),versionNo:7,isCurrent:false,effectiveFrom:null},segmentSet:{id:id(5),routeVersionId:id(4),segments:[{id:id(6),sequence:3,fromOffsetMeters:10,toOffsetMeters:110,startStationMeters:null,endStationMeters:110,lengthMeters:100,missingMetadata:['startStationMeters']},{id:id(9),sequence:8,lengthMeters:null,missingMetadata:[]}]}};
  const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref,other]}}),getOperatorGeometryPackageReal:async(project,query)=>{queries.push(query);return{data:geometry};}},{params:{taskId:task.id}});
  s.render();await s.flush();assert.match(JSON.stringify(s.nodes().find(n=>n.props?.testID==='displayed-segment-count')),/"1"/);
- assert.doesNotMatch(text(s),/Gói hình học 1\/2/);assert.match(text(s),/Phiên bản tuyến: 7/);assert.match(text(s),/Phân đoạn 3/);assert.match(text(s),/Chưa có dữ liệu/);assert.doesNotMatch(text(s),/OUTSIDE/);assert.equal(queries.length,2);assert.equal(queries[0].routeVersionId,ref.routeVersionId);assert.equal(queries[1].routeVersionId,other.routeVersionId);assert.match(text(s),/Chưa đọc được hình học đã ghim/);s.unmount();
+ assert.doesNotMatch(text(s),/Gói hình học 1\/2/);assert.match(text(s),/Phiên bản tuyến: 7/);assert.match(text(s),/Phân đoạn 3/);assert.doesNotMatch(text(s),/Trạm đầu:/);s.nodes().find(n=>n.props.accessibilityLabel==='Chi tiết phân đoạn 3').props.onPress();await s.flush();assert.match(text(s),/Trạm đầu: Chưa có dữ liệu/);assert.doesNotMatch(text(s),/OUTSIDE/);assert.equal(queries.length,2);assert.equal(queries[0].routeVersionId,ref.routeVersionId);assert.equal(queries[1].routeVersionId,other.routeVersionId);assert.match(text(s),/Chưa đọc được hình học đã ghim/);s.unmount();
 });

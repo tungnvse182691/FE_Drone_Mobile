@@ -10,9 +10,6 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
 import { Chip } from '../../src/components/Chip';
 import { EmptyState } from '../../src/components/EmptyState';
-import {
-  type GeometryPackageViewDto,
-} from '../../src/api/droneApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { operatorAppearance } from '../../src/components/drone/appearance';
 import { operatorMapSegments } from '../../src/api/operatorMapGeometry';
@@ -69,22 +66,12 @@ function optionalMeters(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? `${value} m` : 'Chưa có dữ liệu';
 }
 
-function segmentMetadata(segment: GeometryPackageViewDto['segmentSet']['segments'][number]): string {
-  const parts = [
-    `Từ ${optionalMeters(segment.fromOffsetMeters)}`,
-    `đến ${optionalMeters(segment.toOffsetMeters)}`,
-    `trạm đầu ${optionalMeters(segment.startStationMeters)}`,
-    `trạm cuối ${optionalMeters(segment.endStationMeters)}`,
-    `dài ${optionalMeters(segment.lengthMeters)}`,
-  ];
-  return parts.join(' · ');
-}
-
 export default function DroneWorkPackageScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
   const { workPackage, geometries, loading, geometryError, error, cachedAt, reload: load } = useOperatorWorkPackage(target);
   const [technicalExpanded, setTechnicalExpanded] = useState(false);
+  const [expandedSegments,setExpandedSegments] = useState<string[]>([]);
 
   const renderBody = () => {
     if (loading) {
@@ -208,11 +195,18 @@ export default function DroneWorkPackageScreen() {
             </View>
             <Text style={[typography.caption, styles.noticeText]}>Phiên bản tuyến: {geometry.route.versionNo}</Text>
             {geometry.segmentSet.segments.filter(segment => ref?.segmentIds.includes(segment.id)).map(segment => (
-              <View key={segment.id} style={styles.infoRow}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={[typography.bodyMd, styles.infoValue]}>{segment.sequence == null ? 'Phân đoạn chưa có mã' : `Phân đoạn ${segment.sequence}`}</Text>
-                  <Text style={[typography.caption, styles.infoLabel]}>{segmentMetadata(segment)}</Text>
-                </View>
+              <View key={segment.id} style={styles.segmentCard}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Chi tiết phân đoạn ${segment.sequence ?? ''}`} accessibilityState={{expanded:expandedSegments.includes(segment.id)}} onPress={()=>setExpandedSegments(ids=>ids.includes(segment.id)?ids.filter(id=>id!==segment.id):[...ids,segment.id])} style={styles.segmentToggle}>
+                  <View style={styles.segmentNumber}><MaterialIcons name="route" size={22} color={colors.secondary}/></View>
+                  <View style={{flex:1,gap:4}}><Text style={typography.titleMd}>{segment.sequence == null ? 'Phân đoạn chưa có mã' : `Phân đoạn ${segment.sequence}`}</Text>
+                    <Text style={styles.guidanceNote}>{optionalMeters(segment.fromOffsetMeters)} → {optionalMeters(segment.toOffsetMeters)}</Text></View>
+                  <MaterialIcons name={expandedSegments.includes(segment.id)?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
+                </Pressable>
+                {expandedSegments.includes(segment.id)?<View style={styles.segmentDetails}>
+                  <Text style={styles.guidanceNote}>Trạm đầu: {optionalMeters(segment.startStationMeters)}</Text>
+                  <Text style={styles.guidanceNote}>Trạm cuối: {optionalMeters(segment.endStationMeters)}</Text>
+                  <Text style={styles.guidanceNote}>Chiều dài: {optionalMeters(segment.lengthMeters)}</Text>
+                </View>:null}
               </View>
             ))}
             <View style={styles.infoRow}>
@@ -221,20 +215,12 @@ export default function DroneWorkPackageScreen() {
                 {formatDateTime(geometry.route.effectiveFrom)}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Chiều rộng khảo sát</Text>
-              <Text style={[typography.bodyMd, styles.infoValue]}>
-                {geometry.route.surveyWidthMeters} m
-              </Text>
+            <View style={styles.metrics}>
+              <View style={styles.metric}><Text style={styles.guidanceNote}>Rộng khảo sát</Text><Text style={styles.metricValue}>{optionalMeters(geometry.route.surveyWidthMeters)}</Text></View>
+              <View style={styles.metric}><Text style={styles.guidanceNote}>Dài tuyến</Text><Text style={styles.metricValue}>{optionalMeters(geometry.route.lengthMeters)}</Text></View>
             </View>
             <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Chiều dài tuyến</Text>
-              <Text style={[typography.bodyMd, styles.infoValue]}>
-                {geometry.route.lengthMeters} m
-              </Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={[typography.caption, styles.infoLabel]}>Trạng thái siêu dữ liệu</Text>
+              <Text style={[typography.caption, styles.infoLabel]}>Thông tin tuyến</Text>
               <Text style={[typography.bodyMd, styles.infoValue]}>
                 {metadataStatusLabel(geometry.route.metadataStatus)}
               </Text>
@@ -248,9 +234,9 @@ export default function DroneWorkPackageScreen() {
             <Text style={[typography.bodyMd, styles.infoValue]}>Thông tin kỹ thuật</Text>
             <MaterialIcons name={technicalExpanded ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
           </Pressable>
-          {technicalExpanded ? <View style={{ gap: spacing.sm }}>
+          {technicalExpanded ? <View style={styles.segmentDetails}>
             <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage.scopeVersion ?? '—'}</Text>
-            {workPackage.geometryRefs.map((entry) => <View key={`${entry.routeVersionId}:${entry.segmentSetId}`} style={{ gap: spacing.xs }}>
+            {workPackage.geometryRefs.map((entry) => <View key={`${entry.routeVersionId}:${entry.segmentSetId}`} style={styles.segmentCard}>
               <Text style={typography.labelSm}>{entry.routeVersionId === ref?.routeVersionId && entry.segmentSetId === ref?.segmentSetId ? 'Bộ hình học đang xem' : 'Bộ hình học đã ghim'}</Text>
               <Text selectable style={typography.caption}>Tuyến: {entry.routeVersionId}</Text>
               <Text selectable style={typography.caption}>Bộ phân đoạn: {entry.segmentSetId}</Text>
@@ -261,10 +247,11 @@ export default function DroneWorkPackageScreen() {
         </Card>
 
         <Card style={styles.card}>
-            <View style={styles.cardHeader}><MaterialIcons name="folder-open" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Mục đích tải lên</Text></View>
+            <View style={styles.cardHeader}><MaterialIcons name="folder-open" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Dữ liệu cần gửi</Text></View>
           <View style={styles.uploadGuidance}>
-            <Text style={styles.guidanceText}>Video khảo sát 4K RGB và tệp hành trình SRT/GPS.</Text>
-            <Text style={styles.guidanceNote}>Thiếu dữ liệu hành trình thì chưa đủ bằng chứng đánh giá phủ tuyến.</Text>
+            <View style={styles.guidanceRow}><MaterialIcons name="videocam" size={22} color={colors.secondary}/><Text style={styles.guidanceText}>Video 4K RGB</Text><Text style={styles.guidanceNote}>Bắt buộc</Text></View>
+            <View style={styles.guidanceRow}><MaterialIcons name="subtitles" size={22} color={colors.secondary}/><Text style={styles.guidanceText}>Hành trình SRT/GPS</Text><Text style={styles.guidanceNote}>Nếu có</Text></View>
+            <Text style={styles.guidanceNote}>Cần dữ liệu hành trình để đánh giá phủ tuyến.</Text>
           </View>
         </Card>
       </>
@@ -297,6 +284,14 @@ export default function DroneWorkPackageScreen() {
 }
 
 const styles = StyleSheet.create({
+  metrics:{flexDirection:'row',flexWrap:'wrap',gap:12,marginTop:16},
+  metric:{flex:1,minWidth:120,gap:6,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt},
+  metricValue:{...typography.titleLg,color:colors.neutral},
+  segmentCard:{marginTop:12,borderRadius:12,backgroundColor:colors.surfaceAlt,padding:12},
+  segmentToggle:{flexDirection:'row',alignItems:'center',gap:12,minHeight:48},
+  segmentNumber:{width:40,height:40,borderRadius:10,backgroundColor:colors.surface,alignItems:'center',justifyContent:'center'},
+  segmentDetails:{gap:6,paddingTop:12,marginTop:12,borderTopWidth:1,borderTopColor:colors.border},
+  guidanceRow:{flexDirection:'row',alignItems:'center',gap:10,minHeight:44,flexWrap:'wrap'},
   mapEntry: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12 },
   mapEntryIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
   mapNotice: { flexDirection: 'row', gap: 8, padding: 12, marginTop: 12, backgroundColor: colors.surfaceAlt, borderRadius: 10 },
@@ -305,7 +300,7 @@ const styles = StyleSheet.create({
   segmentChoice: { paddingHorizontal: 12, minHeight: 44, justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border },
   segmentActive: { backgroundColor: colors.surfaceAlt, borderColor: colors.brandGold },
   uploadGuidance: { gap: 8, marginTop: 12 },
-  guidanceText: { ...typography.bodyMd, color: colors.neutral },
+  guidanceText: { ...typography.bodyMd, color: colors.neutral,flex:1,minWidth:120 },
   guidanceNote: { ...typography.caption, color: colors.secondary, lineHeight: 18 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   groupLabel: { ...typography.labelSm, color: colors.secondary, marginTop: 16, marginBottom: 4 },
@@ -338,7 +333,7 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     flex: 1,
   },
-  card: { ...operatorAppearance.card, marginBottom: 12 },
+  card: { ...operatorAppearance.card, borderColor:colors.border, marginBottom: 12 },
   scopeCard: { ...operatorAppearance.card, marginBottom: 12 },
   scopeTitle: {
     color: colors.neutral,

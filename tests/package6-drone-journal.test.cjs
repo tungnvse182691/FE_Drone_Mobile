@@ -95,7 +95,7 @@ test('Recovery moves only verified files explicitly linked to a confirmed datase
 test('Drone command panel saves intent first, sends only after explicit confirmation',async()=>{
  let sends=0,saved=null;const runtime={close(){},read:async()=>saved,prepare:async()=>{saved={command:{key:id(9),operation:'accept',payload:{}},phase:'PREPARED'};return saved.command;},dispatch:async(key,confirmed)=>{assert.equal(key,id(9));assert.equal(confirmed,true);sends++;saved={...saved,phase:'UNKNOWN_OUTCOME'};},readCurrent:async()=>({status:'NEW_ASSIGNED'})};
  const s=panel(runtime);s.render();await s.flush();await s.press('Chuẩn bị tiếp nhận nhiệm vụ');await s.flush();assert.equal(sends,0);
- await s.press('Xác nhận gửi lệnh đã lưu');await s.flush();assert.equal(sends,1);s.unmount();
+ await s.press('Xác nhận gửi');await s.flush();assert.equal(sends,1);s.unmount();
 });
 
 test('Drone PREPARED survives crash/reopen without automatic dispatch; read is not receipt',async()=>{
@@ -155,7 +155,7 @@ test('Drone command panel can reopen failed storage without dispatch or losing s
  '../../api/droneTaskJournal':{openDroneTaskJournal:async()=>{if(++opens===1)throw Error('storage');return {close(){},read:async()=>({command:{key:id(9),operation:'accept',payload:{}},phase:'UNKNOWN_OUTCOME'}),dispatch:async()=>sends++};}},
  '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture})},'../Button':{Button:'Button'},'../Card':{Card:'Card'},'../../design-tokens':{typography:{},spacing:{},colors:{}}
  }});
- s.render();await s.flush();await s.press('Thử mở lại lịch sử yêu cầu');await s.flush();assert.equal(opens,2);assert.equal(sends,0);assert.ok(s.nodes().some(n=>n.type==='Button'&&n.props.title==='Xác nhận gửi lệnh đã lưu'));s.unmount();
+ s.render();await s.flush();await s.press('Thử mở lại lịch sử yêu cầu');await s.flush();assert.equal(opens,2);assert.equal(sends,0);assert.ok(s.nodes().some(n=>n.type==='Button'&&n.props.title==='Xác nhận gửi'));s.unmount();
 });
 
 test('Drone HTTP failures never issue a new key or infer success from a task GET',async()=>{
@@ -201,7 +201,7 @@ test('Drone panel locks double confirmation while original POST is unresolved',a
  const d=deferred();let sends=0;
  const saved={command:{key:id(9),operation:'accept',payload:{}},phase:'UNKNOWN_OUTCOME'};
  const s=panel({close(){},read:async()=>saved,dispatch:async()=>{sends++;await d.promise;}});
- s.render();await s.flush();const first=s.press('Xác nhận gửi lệnh đã lưu');await s.press('Xác nhận gửi lệnh đã lưu');assert.equal(sends,1);
+ s.render();await s.flush();const first=s.press('Xác nhận gửi');await s.press('Xác nhận gửi');assert.equal(sends,1);
  d.resolve();await first;await s.flush();s.unmount();
 });
 

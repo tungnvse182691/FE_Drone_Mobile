@@ -27,16 +27,16 @@ test('UI06 Detail keeps raw identities and versions in expanded technical conten
 
 test('UI06 Upload uses compact file rows without invented preview or location metadata',async()=>{
  const s=drone('upload',{}, {params:{taskId:task.id}});s.render();await s.flush();
- assert.doesNotMatch(text(s),/Chưa có ảnh xem trước/);assert.match(text(s),/Chưa được máy chủ xác minh/);
+ assert.doesNotMatch(text(s),/Chưa có ảnh xem trước/);assert.doesNotMatch(text(s),/Chưa được máy chủ xác minh/);assert.match(text(s),/Không bắt buộc/);
  assert.doesNotMatch(text(s),/Tọa độ ghi hình:|Ghi chú hiện trường/);assert.match(text(s),/Video MP4/);assert.match(text(s),/Dữ liệu GPS · SRT/);
- assert.ok(s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
+ assert.ok(s.nodes().some(n=>n.type==='RecordingDateTimeField'));
  const submit=s.nodes().find(n=>n.type==='Button'&&n.props.title==='Nộp bộ dữ liệu 4K RGB');assert.equal(submit.props.disabled,true);assert.equal(submit.props.style.backgroundColor,'#C9A227');assert.equal(submit.props.variant,'primary');
  const reason=s.nodes().find(n=>n.props.testID==='dataset-submit-requirement');assert.ok(reason,'disabled dataset submission must explain the next requirement');
  assert.match(text(s),/Chọn video MP4 trước khi nộp\./);
  assert.ok(!s.nodes().some(n=>n.type==='MaterialIcons'&&n.props.name==='check-circle'));s.unmount();
 });
 
-for(const [operation,status,reason] of [['accept','SUBMITTED','máy chủ xác nhận'],['decline','NEW_ASSIGNED','Cần nhập lý do thực tế']])test('UI06 command lock explains '+operation+' condition without preparing or dispatching',async()=>{
+for(const [operation,status,reason] of [['accept','SUBMITTED','kiểm tra quyền nhận nhiệm vụ'],['decline','NEW_ASSIGNED','Cần nhập lý do thực tế']])test('UI06 command lock explains '+operation+' condition without preparing or dispatching',async()=>{
  let mutations=0;
  const s=screen('src/components/drone/DroneTaskCommandPanel.tsx',{exportName:'DroneTaskCommandPanel',props:{taskId:task.id,operation},modules:{
  '../../hooks/useOperatorReadScope':{useOperatorReadScope:()=>({key:'scope',capture:()=>()=>true})},
