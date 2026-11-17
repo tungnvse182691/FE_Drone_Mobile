@@ -23,6 +23,8 @@ import {
 } from '../../src/api/crewApi';
 import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
+import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
 export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
 type TaskSegment = 'active' | 'done';
@@ -197,7 +199,7 @@ export default function CrewTasksScreen() {
           {segments.map((s) => {
             const active = s.key === segment;
             return (
-              <Pressable
+              <CrewPressable
                 key={s.key}
                 style={[styles.segment, active && styles.segmentActive]}
                 accessibilityRole="tab"
@@ -212,7 +214,7 @@ export default function CrewTasksScreen() {
                     {s.count}
                   </Text>
                 </View>
-              </Pressable>
+              </CrewPressable>
             );
           })}
         </View>
@@ -220,10 +222,11 @@ export default function CrewTasksScreen() {
         <View style={styles.modeFilters}>
             {TASK_MODE_FILTERS.map((filter) => {
               const active = filter.key === modeFilter;
+              const tone = crewHomeModeTone(filter.key);
               return (
-                <Pressable
+                <CrewPressable
                   key={filter.key}
-                  style={[styles.modeFilter, active && styles.modeFilterActive]}
+                  style={[styles.modeFilter, active && { backgroundColor: tone.background, borderColor: tone.border }]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   onPress={() => setModeFilter(filter.key)}
@@ -231,16 +234,17 @@ export default function CrewTasksScreen() {
                   <Text
                     style={[
                       typography.labelLg,
-                      active ? styles.modeFilterLabelActive : styles.modeFilterLabel,
+                      active ? { color: tone.foreground } : styles.modeFilterLabel,
                     ]}
                   >
                     {filter.label}
                   </Text>
-                </Pressable>
+                </CrewPressable>
               );
             })}
         </View>
 
+        <CrewContentTransition ready={!inbox.query.isPending} revision={TASK_MODE_FILTERS.findIndex(f => f.key === modeFilter) * 2 + (segment === 'done' ? 1 : 0)}>
         {loadError && list.length === 0 ? (
           <EmptyState
             icon="error-outline"
@@ -258,8 +262,9 @@ export default function CrewTasksScreen() {
             {list.map((task) => {
             const railColor = crewTaskStatusStyle(task.status).foreground;
             return (
-              <Pressable
+              <CrewPressable
                 key={task.id}
+                style={{ borderRadius: radius.lg, overflow: 'hidden' }}
                 onPress={() =>
                   router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
                 }
@@ -328,11 +333,12 @@ export default function CrewTasksScreen() {
                     <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} />
                   </View>
                 </Card>
-              </Pressable>
+              </CrewPressable>
             );
             })}
           </View>
         )}
+        </CrewContentTransition>
       </SafeAreaScreen>
 
 
@@ -376,7 +382,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   segmentLabelActive: {
-    color: colors.onPrimary,
+    color: colors.neutral,
   },
   countBadge: {
     minWidth: 20,
@@ -393,7 +399,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   countTextActive: {
-    color: colors.onPrimary,
+    color: colors.neutral,
   },
   modeFilters: {
     flexDirection: 'row',
@@ -412,22 +418,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  modeFilterActive: {
-    borderColor: colors.primary,
-    backgroundColor: '#FEF9E7',
-  },
   modeFilterLabel: {
     color: colors.secondary,
-  },
-  modeFilterLabelActive: {
-    color: colors.brandGold,
   },
   taskCard: {
     marginBottom: spacing.md,
     borderRadius: radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
     elevation: 0,
     shadowOpacity: 0,
   },
@@ -478,7 +477,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   taskCode: {
-    color: colors.brandGold,
+    color: colors.secondary,
   },
   taskRouteRow: {
     flexDirection: 'row',
@@ -512,9 +511,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: radius.full,
-    backgroundColor: '#FEF9E7',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
   },
   duePill: {
     flexGrow: 1,
