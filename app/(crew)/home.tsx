@@ -5,12 +5,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
+import { CrewPressable, CrewContentTransition } from '../../src/components/crew/CrewMotion';
+import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
+import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP, crewStatusLabel, crewDateTime } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { CREW_RECEIVING } from '../../src/constants/routes';
-import { TaskMode } from '../../src/types/enums';
 
 interface CrewMetric {
   label: string;
@@ -72,7 +74,7 @@ export default function CrewHomeScreen() {
         {/* 2 THẺ METRIC: 24px+, icon ô màu pastel, card trắng viền 1px bo 12px */}
         <View style={styles.metricRow}>
           {CREW_METRICS.map((metric, index) => (
-            <Card key={metric.label} style={styles.metricCard}>
+            <Card key={metric.label} style={[styles.metricCard, index === 0 ? styles.metricPending : styles.metricDone]}>
               <View style={styles.metricTopRow}>
                 <Text style={[typography.caption, styles.metricLabel]}>{metric.label}</Text>
                 <View style={[styles.metricIconBox, { backgroundColor: metric.iconBg }]}>
@@ -89,7 +91,7 @@ export default function CrewHomeScreen() {
         {/* SECTION HEADER: Danh sách việc */}
         <View style={styles.sectionHeader}>
           <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ đang theo dõi</Text>
-          <Pressable
+          <CrewPressable
             onPress={() => router.push('/(crew)/tasks')}
             accessibilityRole="button"
             hitSlop={8}
@@ -99,68 +101,74 @@ export default function CrewHomeScreen() {
               <Text style={[typography.labelLg, styles.seeAll]}>Xem tất cả</Text>
               <MaterialIcons name="chevron-right" size={18} color={colors.brandGold} />
             </View>
-          </Pressable>
+          </CrewPressable>
         </View>
 
         {/* Nút inline Chọn nhiệm vụ để chụp ảnh */}
-        <Pressable
+        <CrewPressable
           style={({ pressed }) => [styles.captureBtn, pressed && styles.captureBtnPressed]}
           onPress={() => router.push('/(crew)/tasks')}
           accessibilityRole="button"
           accessibilityLabel="Chọn nhiệm vụ để chụp ảnh"
         >
-          <MaterialIcons name="photo-camera" size={20} color={colors.onPrimary} />
+          <MaterialIcons name="photo-camera" size={20} color={colors.neutral} />
           <Text style={[typography.labelLg, styles.captureBtnText]}>Chọn nhiệm vụ để chụp ảnh</Text>
-        </Pressable>
+        </CrewPressable>
 
         {/* Nút inline Nhận việc (ACK) — C-11 */}
-        <Pressable
-          style={({ pressed }) => [styles.receivingBtn, pressed && styles.captureBtnPressed]}
+        <CrewPressable
+          style={({ pressed }) => [styles.receivingBtn, pressed && styles.receivingBtnPressed]}
           onPress={() => router.push(CREW_RECEIVING)}
           accessibilityRole="button"
           accessibilityLabel="Nhận việc cần xác nhận"
         >
-          <MaterialIcons name="inbox" size={20} color={colors.brandGold} />
+          <MaterialIcons name="inbox" size={20} color="#174EA6" />
           <Text style={[typography.labelLg, styles.receivingBtnText]}>
             Nhận việc cần xác nhận
           </Text>
-          <MaterialIcons name="chevron-right" size={18} color={colors.brandGold} />
-        </Pressable>
+          <MaterialIcons name="chevron-right" size={18} color="#174EA6" />
+        </CrewPressable>
 
 
         {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, mã nhiệm vụ thật, chevron phải */}
         <CrewInboxState inbox={inbox} />
+        {inbox.enabled && inbox.query.isPending && tasks.length === 0 ? <View testID="crew-home-loading"
+          accessible accessibilityRole="progressbar" accessibilityLabel="Đang tải danh sách nhiệm vụ" style={styles.taskList}>
+          {[0, 1].map(key => <View key={key} style={styles.loadingCard} importantForAccessibility="no-hide-descendants">
+            <View style={[styles.loadingLine, { width: '35%' }]} />
+            <View style={[styles.loadingLine, { width: '75%', height: 20 }]} />
+            <View style={[styles.loadingLine, { width: '55%' }]} />
+          </View>)}
+        </View> : null}
+        <CrewContentTransition ready={!inbox.query.isPending && tasks.length > 0} revision={inbox.query.dataUpdatedAt}>
         <View style={styles.taskList}>
           {tasks.map((task) => {
-            const isRepair = task.task_mode === TaskMode.INSPECT_AND_REPAIR;
+            const tone = crewHomeModeTone(task.task_mode);
             return (
               <Pressable
                 key={task.id}
                 disabled={!task.projectId || !task.version}
                 onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: !task.projectId || !task.version }}
+                android_ripple={{ color: '#1A1D2014' }}
                 style={({ pressed }) => [styles.taskCardTouch, pressed && styles.taskCardPressed]}
               >
-                <Card style={styles.taskCard}>
+                <Card style={[styles.taskCard, { borderLeftWidth: 4, borderLeftColor: tone.border }]}>
                   {/* Hàng 1: Chip chế độ + Hạn xử lý */}
                   <View style={styles.taskCardHeader}>
                     <View
                       style={[
                         styles.modeChip,
-                        isRepair ? styles.modeChipRepair : styles.modeChipMeasure,
+                        { backgroundColor: tone.background },
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.modeDot,
-                          isRepair ? styles.modeDotRepair : styles.modeDotMeasure,
-                        ]}
-                      />
+                      <MaterialIcons name={tone.icon} size={16} color={tone.foreground} />
                       <Text
                         style={[
                           typography.labelSm,
                           styles.modeChipText,
-                          isRepair ? styles.modeTextRepair : styles.modeTextMeasure,
+                          { color: tone.foreground },
                         ]}
                       >
                         {TASK_MODE_CHIP[task.task_mode].label}
@@ -203,6 +211,7 @@ export default function CrewHomeScreen() {
                   {!task.projectId || !task.version ? <Text style={typography.caption}>Chưa đủ thông tin dự án hoặc phiên bản để mở nhiệm vụ. Hãy tải lại danh sách.</Text> : null}
                   {/* Hàng 4: Footer thẻ với mã WO nhỏ + khoảng cách + chevron */}
                   <View style={styles.taskCardFooter}>
+                    <View style={styles.taskStatus}><CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)} /></View>
                     <View style={styles.footerLeftMeta}>
                       <View style={styles.woCodeBadge}>
                         <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
@@ -224,6 +233,7 @@ export default function CrewHomeScreen() {
             );
           })}
         </View>
+        </CrewContentTransition>
       </SafeAreaScreen>
     </View>
   );
@@ -238,6 +248,8 @@ const styles = StyleSheet.create({
   /* Hero Section */
   heroSection: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingVertical: spacing.xs,
@@ -245,6 +257,7 @@ const styles = StyleSheet.create({
   },
   heroTextCol: {
     flex: 1,
+    minWidth: 180,
   },
   heroSub: {
     color: colors.secondary,
@@ -254,6 +267,7 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     fontSize: 22,
     lineHeight: 28,
+    fontFamily: 'Roboto-Medium',
   },
   badgeWrapper: {
     flexDirection: 'row',
@@ -264,11 +278,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
+    maxWidth: '100%',
   },
   badgeText: {
-    color: colors.brandGold,
-    letterSpacing: 0.5,
+    color: colors.secondary,
+    fontSize: 12,
+    lineHeight: 18,
+    flexShrink: 1,
   },
 
   /* Metrics Row */
@@ -281,12 +298,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.cardPadding,
     elevation: 0,
     shadowOpacity: 0,
   },
+  metricPending: { backgroundColor: '#FFF4DB', borderColor: '#E8CE92' },
+  metricDone: { backgroundColor: '#E7F4EC', borderColor: '#A8D5BA' },
   metricTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -295,6 +314,7 @@ const styles = StyleSheet.create({
   metricLabel: {
     color: colors.secondary,
     fontFamily: 'Roboto-Medium',
+    flex: 1,
   },
   metricIconBox: {
     width: 32,
@@ -343,6 +363,7 @@ const styles = StyleSheet.create({
 
   /* Capture Button */
   captureBtn: {
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -354,31 +375,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   captureBtnPressed: {
-    backgroundColor: colors.primaryDark,
+    opacity: 0.84,
   },
   captureBtnText: {
-    color: colors.onPrimary,
+    color: colors.neutral,
+    flexShrink: 1,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 
   /* Receiving (ACK) Button — C-11 */
   receivingBtn: {
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.surface,
+    backgroundColor: '#E8F0FD',
     minHeight: 52,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: '#ACC5EB',
     marginBottom: spacing.md,
     paddingHorizontal: spacing.md,
   },
   receivingBtnText: {
-    color: colors.brandGold,
+    color: '#174EA6',
     flex: 1,
     textAlign: 'center',
+    lineHeight: 22,
   },
+  receivingBtnPressed: { backgroundColor: '#D5E4FA' },
 
   /* Task List & Card */
   taskList: {
@@ -394,7 +421,7 @@ const styles = StyleSheet.create({
   taskCard: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.cardPadding,
     elevation: 0,
@@ -416,31 +443,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: radius.full,
   },
-  modeChipRepair: {
-    backgroundColor: '#E9F7EC',
-  },
-  modeChipMeasure: {
-    backgroundColor: '#FEF3E2',
-  },
-  modeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  modeDotRepair: {
-    backgroundColor: colors.success,
-  },
-  modeDotMeasure: {
-    backgroundColor: colors.warning,
-  },
   modeChipText: {
     letterSpacing: 0.2,
-  },
-  modeTextRepair: {
-    color: colors.success,
-  },
-  modeTextMeasure: {
-    color: colors.warning,
+    fontSize: 12,
+    lineHeight: 18,
+    flexShrink: 1,
   },
   dueWrap: {
     flexDirection: 'row',
@@ -494,7 +501,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     borderRadius: radius.sm,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   woCodeText: {
     color: colors.secondary,
@@ -512,4 +519,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     fontSize: 12,
   },
+  taskStatus: { width: '100%' },
+  loadingCard: { minHeight: 140, padding: spacing.md, gap: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface },
+  loadingLine: { height: 16, borderRadius: radius.sm, backgroundColor: colors.border },
 });

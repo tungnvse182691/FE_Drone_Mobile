@@ -10,6 +10,8 @@ test('Crew Home keeps a single account summary and task capture navigation', () 
     '../../src/api/crewApi': { crewTaskIsComplete: () => false },
     '../../src/components/AppHeader': { AppHeader: 'AppHeader' },
     '../../src/components/Card': { Card: 'Card' },
+    '../../src/components/CrewTaskStatus': { CrewTaskStatus: 'CrewTaskStatus' },
+    '../../src/components/crew/CrewMotion': { CrewPressable: 'CrewPressable', CrewContentTransition: 'CrewContentTransition' },
   } });
   s.render();
   const text = s.nodes().filter(n => n.type === 'Text').map(n => n.props.children.flat(Infinity).join('')).join(' ');
