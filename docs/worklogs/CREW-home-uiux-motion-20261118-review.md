@@ -118,3 +118,15 @@ Animated Pressable ban đầu nhận style callback làm native mất nền/layo
 Implementation local commit: 92cecd9 (feat(crew): clarify home colors and accessible press motion). Báo cáo nghiên cứu/evidence nằm trong commit tài liệu tiếp theo.
 
 Chỉ commit local các file đã liệt kê; giữ nguyên untracked artifacts, database, logs, build outputs và Docker/emulator. Các màn Tasks, detail, field-review, receiving và sync còn cần batch baseline riêng; chưa nhận đã hoàn thành UI toàn Crew.
+
+## 7. Follow-up: phản hồi motion khó nhận thấy
+
+Owner phản hồi dùng app không thấy hiệu ứng. Phạm vi trước chỉ ba nút Home và transition khi query có revision mới; cached navigation không replay. Native ripple của task đặt sau Card nền opaque. Báo cáo trước không đồng nghĩa toàn Crew đã có motion.
+
+Correction chỉ ba file source/test: Home, CrewMotion và crew-home-motion.test.cjs. Một wrapper toàn nội dung Home (header/dock giữ nguyên) replay khi screen focus và read revision; opacity 0.25→1, translateY 18→0 trong 280ms. Không remount children hoặc trì hoãn original onPress. Foreground Android ripple cho ba nút và Home task cards; press scale cũ giữ nguyên. Reduce Motion listener và fail-static còn nguyên. Không sửa route, API caller, guards hay nghiệp vụ.
+
+Hai test mới chạy RED trước implementation (7 pass/2 fail), sau sửa targeted 15/15 PASS. Final source: npx tsc --noEmit exit 0; node --test tests/*.test.cjs 1838 PASS, 0 fail/skip, exit 0 (regression-focus-fix.log); git diff --check exit 0. Remote main vẫn b0859f183427f9167d001575eb5b7783fd408fd6, không push.
+
+Android 14 Pixel_6_Pro / emulator-5554 / Expo Go: Home→Tasks→Home, Home→receiving→Back, chỉ điều hướng/read. Video normal speed home-focus-fix.mp4 có transition khi quay lại Home và khi read revision mới; press-fix-frames.png thấy nền nút nhận việc đậm lên trước navigation. focus-fix-frames.png thấy nội dung Home mờ rồi rõ. Clip home-focus-demo.mp4 là đoạn 11–17 giây của recording, không slow motion. Các artifact nằm tại .cache/crew-uiux-motion-20261118/. Không dùng frame rate recording kết luận FPS ứng dụng.
+
+NOT_VERIFIED: physical Android/FPS/release APK, native offline/error/loading lần đầu, OS Reduce Motion toggle/font scaling. Accordion và motion màn Crew khác chưa triển khai. Screenshot baseline/home-final ở checkpoint trước giữ nguyên; correction không rearrange layout. Reference chính cho foreground ripple: React Native 0.88 Pressable docs, https://github.com/react/react-native-website/blob/main/website/versioned_docs/version-0.88/pressable.md.

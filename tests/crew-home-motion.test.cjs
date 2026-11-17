@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {screen}=require('./helpers/roadfe-screen.cjs');
 
 function motion(props={},exportName='CrewPressable') {
- const calls=[],listeners=new Map();let resolve;
+ const calls=[],listeners=new Map();let resolve,focusEffect;
  const preference=new Promise(r=>resolve=r);
  const s=screen('src/components/crew/CrewMotion.tsx',{
   exportName,props,
@@ -13,13 +13,32 @@ function motion(props={},exportName='CrewPressable') {
    useAnimatedStyle:fn=>fn(),withTiming:(v,config)=>{calls.push({v,config});return v;},
    cancelAnimation:()=>calls.push({cancel:true}),ReduceMotion:{System:'system'},
   })},
-  modules:{'react-native':{Pressable:'Pressable',AccessibilityInfo:{
+  modules:{'expo-router':{useFocusEffect:fn=>{focusEffect=fn;}},'react-native':{Pressable:'Pressable',AccessibilityInfo:{
    isReduceMotionEnabled:()=>preference,
    addEventListener:(event,fn)=>{listeners.set(event,fn);return {remove:()=>listeners.delete(event)};},
   }}}
  });
- return {s,calls,listeners,resolve};
+ return {s,calls,listeners,resolve,focus:()=>focusEffect()};
 }
+test('Quick taps show foreground ripple over opaque content and keep the immediate action',()=>{
+ let actions=0;const onPress=()=>actions++;
+ const m=motion({onPress});m.s.render();
+ const b=m.s.nodes().find(n=>n.type==='MotionPressable');
+ assert.equal(b.props.android_ripple?.foreground,true);
+ assert.equal(b.props.onPress,onPress);b.props.onPress();assert.equal(actions,1);
+ m.s.unmount();
+});
+test('A cached screen replays on focus without waiting for a new API revision',async()=>{
+ const m=motion({ready:true,replayOnFocus:true,revision:7,children:'cached-content'},'CrewContentTransition');
+ m.s.render();m.resolve(false);await m.s.flush();
+ const count=m.calls.filter(x=>x.config).length;
+ m.focus();await m.s.flush();
+ assert.equal(m.calls.filter(x=>x.config).length,count+1);
+ m.s.render();assert.equal(m.calls.filter(x=>x.config).length,count+1,'ordinary renders do not replay');
+ m.listeners.get('reduceMotionChanged')(true);await m.s.flush();
+ m.focus();await m.s.flush();assert.equal(m.calls.filter(x=>x.config).length,count+1);
+ assert.ok(JSON.stringify(m.s.nodes()).includes('cached-content'));m.s.unmount();
+});
 test('Crew press feedback respects live Reduce Motion and a late preference read',async()=>{
  const m=motion();m.s.render();
  let button=m.s.nodes().find(n=>n.type==='MotionPressable');
@@ -57,7 +76,7 @@ test('Content motion follows real read revisions, remains static for Reduce Moti
  const m=motion(props,'CrewContentTransition');m.s.render();
  assert.equal(m.calls.filter(x=>x.config).length,0);
  m.resolve(false);await m.s.flush();
- assert.equal(m.calls.filter(x=>x.config).at(-1).config.duration,240);
+ assert.equal(m.calls.filter(x=>x.config).at(-1).config.duration,280);
  const count=m.calls.filter(x=>x.config).length;
  props.revision=2;m.s.render();assert.equal(m.calls.filter(x=>x.config).length,count+1);
  m.listeners.get('reduceMotionChanged')(true);await m.s.flush();

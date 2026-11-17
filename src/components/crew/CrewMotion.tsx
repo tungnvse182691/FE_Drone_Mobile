@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AccessibilityInfo, Pressable, type PressableProps, type PressableStateCallbackType, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { cancelAnimation, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useFocusEffect } from 'expo-router';
 
 /** Crew-only opt-in. Stay static until the OS preference is known; listen live. */
 function useCrewReducedMotion() {
@@ -25,7 +26,7 @@ type CrewPressableProps = Omit<PressableProps, 'style'> & {
 };
 
 /** Feedback only: the original onPress, disabled state and accessible name pass through. */
-export function CrewPressable({ style, disabled, onPressIn, onPressOut, ...props }: CrewPressableProps) {
+export function CrewPressable({ style, disabled, onPressIn, onPressOut, android_ripple, ...props }: CrewPressableProps) {
   const reduced = useCrewReducedMotion();
   const [pressed, setPressed] = useState(false);
   const scale = useSharedValue(1);
@@ -37,6 +38,7 @@ export function CrewPressable({ style, disabled, onPressIn, onPressOut, ...props
     return () => cancelAnimation(scale);
   }, [reduced, disabled, scale]);
   return <MotionPressable {...props} disabled={disabled}
+    android_ripple={android_ripple ?? { color: '#1A1D2029', foreground: true }}
     style={[typeof style === 'function' ? style({ pressed }) : style, animatedStyle]}
     onPressIn={event => {
       if (disabled) return;
@@ -53,18 +55,22 @@ export function CrewPressable({ style, disabled, onPressIn, onPressOut, ...props
 }
 
 /** Never remount children, delay actions, or turn a visual transition into a receipt. */
-export function CrewContentTransition({ ready, revision, children }: { ready: boolean; revision?: number; children: React.ReactNode }) {
+export function CrewContentTransition({ ready, revision, replayOnFocus = false, children }: { ready: boolean; revision?: number; replayOnFocus?: boolean; children: React.ReactNode }) {
   const reduced = useCrewReducedMotion();
+  const [focusRevision, setFocusRevision] = useState(0);
+  useFocusEffect(useCallback(() => {
+    if (replayOnFocus) setFocusRevision(value => value + 1);
+  }, [replayOnFocus]));
   const progress = useSharedValue(1);
-  const style = useAnimatedStyle(() => ({ opacity: 0.45 + 0.55 * progress.value, transform: [{ translateY: 10 * (1 - progress.value) }] }));
+  const style = useAnimatedStyle(() => ({ opacity: 0.25 + 0.75 * progress.value, transform: [{ translateY: 18 * (1 - progress.value) }] }));
   useEffect(() => {
     cancelAnimation(progress);
     if (reduced || !ready) progress.value = 1;
     else {
       progress.value = 0;
-      progress.value = withTiming(1, { duration: 240, reduceMotion: ReduceMotion.System });
+      progress.value = withTiming(1, { duration: 280, reduceMotion: ReduceMotion.System });
     }
     return () => cancelAnimation(progress);
-  }, [ready, revision, reduced, progress]);
+  }, [ready, revision, focusRevision, reduced, progress]);
   return <Animated.View style={style}>{children}</Animated.View>;
 }

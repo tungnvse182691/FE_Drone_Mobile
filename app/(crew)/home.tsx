@@ -59,6 +59,7 @@ export default function CrewHomeScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Đội sửa chữa" />}>
+        <CrewContentTransition ready replayOnFocus revision={inbox.query.dataUpdatedAt}>
         {/* HERO GREETING: Lời chào + Mã NV badge tương phản cao ngoài nắng */}
         <View style={styles.heroSection}>
           <View style={styles.heroTextCol}>
@@ -140,7 +141,6 @@ export default function CrewHomeScreen() {
             <View style={[styles.loadingLine, { width: '55%' }]} />
           </View>)}
         </View> : null}
-        <CrewContentTransition ready={!inbox.query.isPending && tasks.length > 0} revision={inbox.query.dataUpdatedAt}>
         <View style={styles.taskList}>
           {tasks.map((task) => {
             const tone = crewHomeModeTone(task.task_mode);
@@ -151,7 +151,7 @@ export default function CrewHomeScreen() {
                 onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !task.projectId || !task.version }}
-                android_ripple={{ color: '#1A1D2014' }}
+                android_ripple={{ color: '#1A1D2029', foreground: true }}
                 style={({ pressed }) => [styles.taskCardTouch, pressed && styles.taskCardPressed]}
               >
                 <Card style={[styles.taskCard, { borderLeftWidth: 4, borderLeftColor: tone.border }]}>
