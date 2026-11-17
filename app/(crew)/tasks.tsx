@@ -112,7 +112,11 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
     {inbox.error ? <Text style={typography.bodyMd} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
     {inbox.query.data?.pages[0]?.asOf ? <Text style={typography.caption}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text> : null}
-    {inbox.query.hasNextPage && !inbox.error ? <Button variant="secondary" title="Tải thêm" loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} /> : null}
+    {inbox.query.hasNextPage && !inbox.error ? <View style={{ backgroundColor: '#EDF2F6', borderRadius: radius.full, overflow: 'hidden' }}>
+      <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
+        style={{ borderWidth: 0, borderRadius: radius.full }}
+        loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
+    </View> : null}
   </Card>;
 }
 /** Mount children only after an owner-scoped detail read. A new sid unmounts old task UI. */
