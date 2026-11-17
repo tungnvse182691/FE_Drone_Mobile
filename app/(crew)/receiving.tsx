@@ -1,5 +1,6 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { CrewContentTransition, CrewPressable as Pressable } from '../../src/components/crew/CrewMotion';
 import { useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -157,6 +158,7 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
   },[identity,cursor]);
   useFocusEffect(useCallback(()=>{void load(false);},[identity]));
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" showBack fallbackRoute="/(crew)/home" />}>
+    <CrewContentTransition ready={!loading} replayOnFocus>
     <Pressable onPress={()=>setShowHelp(value=>!value)} accessibilityRole="button" accessibilityState={{expanded:showHelp}} style={styles.helpToggle}>
       <MaterialIcons name="help-outline" size={18} color={colors.brandGold}/><Text style={styles.helpLabel}>Vì sao cần chọn dự án?</Text>
     </Pressable>
@@ -174,6 +176,7 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
     {!loading&&!error&&!projects.length?<Text>Không có dự án trong phạm vi được máy chủ trả về.</Text>:null}
     {cursor?<Button variant="secondary" title="Thêm dự án" disabled={loading} onPress={()=>void load(true)} />:null}
     {selected?<ReceivingRequests key={selected} identity={{...identity,projectId:selected}} />:null}
+    </CrewContentTransition>
   </SafeAreaScreen>;
 }
 function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
@@ -380,10 +383,10 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
   },
   rowCard: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   rowHeader: {
     flexDirection: 'row',
@@ -415,7 +418,7 @@ const styles = StyleSheet.create({
   detailCard: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   detailTitle: {
     color: colors.neutral,
