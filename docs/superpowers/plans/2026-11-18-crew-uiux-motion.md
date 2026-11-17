@@ -20,6 +20,8 @@
 
 ## Checkpoints
 
+Checkpoint 2026-11-18: owner stopped further UI implementation and requested commit/push to main. Tasks, Profile, Sync, Receiving, task detail/history and report-defect presentation batches are committed. Remaining checkpoints below are not a claim of completion; see docs/worklogs/2026-11-18-crew-uiux-checkpoint.md for verification limits.
+
 - [ ] Tasks: inspect filters, completed list, scroll and navigation. Modify app/(crew)/tasks.tsx only for tones and feedback, retaining exact filter/navigation handlers. Test tests/dot-c-crew-filter.test.cjs, crew-ui-restore and Crew motion tests.
 - [ ] Profile: inspect stats, rows, scrolling and safe dialogs. Modify app/(crew)/profile.tsx, preserve logout/session behavior. Verify row navigation and return.
 - [ ] Sync: inspect journals and empty/error/read states without replaying pending writes. Modify app/(crew)/sync.tsx and inspected Crew panels only for presentation.
