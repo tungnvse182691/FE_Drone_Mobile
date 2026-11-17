@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { CrewContentTransition, CrewPressable as Pressable } from '../../src/components/crew/CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -181,10 +182,11 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ" />}>
+      <CrewContentTransition ready replayOnFocus>
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
           <MaterialIcons name="sync" size={22} color={colors.primary} />
-          <Text style={[typography.titleLg, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
+          <Text style={[typography.titleMd, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" accessibilityState={{busy:refreshing,disabled:refreshing}} disabled={refreshing} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
           {refreshing?<ActivityIndicator size="small" color={colors.secondary}/>:<MaterialIcons name="refresh" size={20} color={colors.secondary} />}
@@ -296,6 +298,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
       )}
 
       {toast ? <Toast type="info" message={toast} /> : null}
+      </CrewContentTransition>
     </SafeAreaScreen>
   );
 }
@@ -334,7 +337,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
     padding: 4,
     gap: spacing.xs,
     marginBottom: spacing.lg,
@@ -358,7 +361,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   segmentLabelActive: {
-    color: colors.onPrimary,
+    color: colors.neutral,
     flexShrink: 1,
     textAlign: 'center',
   },
@@ -367,7 +370,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
 
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   statusHero: {
     flexDirection: 'row',
@@ -446,7 +449,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
 
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   itemTop: {
     flexDirection: 'row',

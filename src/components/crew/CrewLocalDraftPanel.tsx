@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { CrewPressable as Pressable } from './CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../Card';
@@ -24,7 +25,7 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
   useEffect(()=>{if(refreshSignal>0)void refresh();},[refresh,refreshSignal]);
   if(!sameQueueIdentity(identity))return null;
   const groups=groupCrewLocalDrafts(rows),visible=expanded?groups:groups.slice(0,3);
-  return <Card style={{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:'#E8D9A8'}}>
+  return <Card style={{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:colors.border}}>
     <View style={{flexDirection:'row',alignItems:'center',gap:spacing.sm}}>
       <Text style={[typography.titleMd,{flex:1}]}>Hồ sơ trên thiết bị</Text>
       {loading?<ActivityIndicator size="small" color={colors.secondary}/>:null}
@@ -47,7 +48,7 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
       style={({pressed})=>[styles.expandButton,pressed&&styles.expandButtonPressed]}
     >
       <Text style={styles.expandLabel}>{expanded?'Thu gọn':`Xem thêm ${groups.length-3} nhiệm vụ`}</Text>
-      <MaterialIcons name={expanded?'expand-less':'expand-more'} size={22} color={colors.brandGold}/>
+      <MaterialIcons name={expanded?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
     </Pressable>:null}
   </Card>;
 }
@@ -56,8 +57,8 @@ const styles=StyleSheet.create({
   expandButton:{
     minHeight:48,marginTop:spacing.sm,paddingVertical:12,paddingHorizontal:spacing.md,
     flexDirection:'row',alignItems:'center',justifyContent:'center',gap:spacing.sm,
-    borderWidth:1,borderColor:'#D8C58A',borderRadius:radius.full,backgroundColor:'#FFFBF0',
+    borderWidth:1,borderColor:colors.border,borderRadius:radius.full,backgroundColor:'#EDF2F6',
   },
-  expandButtonPressed:{backgroundColor:'#F3E8C7'},
+  expandButtonPressed:{backgroundColor:'#DFE7EE'},
   expandLabel:{...typography.labelLg,color:colors.secondary,flexShrink:1,textAlign:'center'},
 });

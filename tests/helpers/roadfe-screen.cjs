@@ -76,7 +76,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
     // Screen handler tests keep motion as a transparent native-control boundary.
     // CrewMotion itself is exercised with a Reanimated mock in crew-home-motion.
-    if(name.endsWith('/crew/CrewMotion'))return{CrewPressable:'Pressable',CrewContentTransition:'CrewContentTransition'};
+    if(name.endsWith('/crew/CrewMotion')||name==='./CrewMotion')return{CrewPressable:'Pressable',CrewContentTransition:'CrewContentTransition'};
     if(name.endsWith('/crew/CrewRepairFacts'))return{CrewRepairFacts:'CrewRepairFacts'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};
     if(name.endsWith('/components/InputField'))return{InputField:'InputField'};

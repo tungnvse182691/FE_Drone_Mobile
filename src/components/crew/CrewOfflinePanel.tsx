@@ -68,7 +68,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
 }
 
 const styles = StyleSheet.create({
-  panel: { borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
+  panel: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
   description: { ...typography.caption, color: colors.secondary },
   heading: { flexDirection:'row', alignItems:'center', gap: spacing.xs },
   stateRow: { flexDirection:'row', justifyContent:'space-around', borderTopWidth:1, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
