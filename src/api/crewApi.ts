@@ -149,7 +149,7 @@ export function fastTrackRepairBlock(
   try { validateFastTrackRepairContext(item, projectId, taskId, actorId, etag); return null; }
   catch { return 'Ngữ cảnh sửa chữa nhanh từ máy chủ không hợp lệ; chưa thể hiển thị như nguồn tác nghiệp.'; }
 }
-export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: FieldTaskViewFact, etag?: string): CrewTask {
+export function crewTaskFromWire(item: InspectionTaskResponseDto, detail = item.fieldTaskRead?.data, etag = item.fieldTaskRead?.etag): CrewTask {
   const rawMode = detail?.mode ?? item.mode;
   const target = detail?.defectTarget;
   const coordinates = target && typeof target.longitude === 'number' && Number.isFinite(target.longitude) && Math.abs(target.longitude) <= 180 &&
@@ -159,7 +159,7 @@ export function crewTaskFromWire(item: InspectionTaskResponseDto, detail?: Field
     id: item.id, projectId: item.projectId, version: detail?.version ?? item.version, crewId: item.crewId,
     status: detail?.status ?? item.status, rawMode,
     task_mode: (['MEASURE_ONLY','NORMAL','CONDITIONAL_FT','INSPECT_AND_REPAIR','INSPECT_ONLY'].includes(rawMode) ? rawMode : 'UNKNOWN') as CrewTask['task_mode'],
-    wo_code: '', title: '', defect_type_code: '', coordinates,
+    wo_code: '', title: detail?.instructions?.split('\n')[0]?.trim() ?? '', defect_type_code: '', coordinates,
     route_code: '', section_name: '', chainage: '', locality: '', due_label: detail?.dueAt ?? '',
     due_urgency: 'normal', distance_label: '', defect_location: '', description: detail?.instructions ?? '',
     repair_method: '', safety_note: '', batch_size: item.defectIds.length, detail, etag,
@@ -309,10 +309,35 @@ export async function getFieldTaskStartOriginReal(projectId: string, taskId: str
   if (!isCrewResourceId(projectId) || !isCrewResourceId(taskId)) throw new Error('crew_identity_missing');
   return (await apiClient.get(`/projects/${projectId}/field-inspection-tasks/${taskId}/start-origin`)).data;
 }
-export function crewInboxOptions(scope: string) {
+export function crewInboxOptions(scope: string, detailContext?: { actorId: string; assertCurrent: () => void }) {
   return {
     queryKey: ['crew-inbox', scope], initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }: { pageParam: string | null; signal: AbortSignal }) => listCrewInspectionTasksReal(pageParam, 50, signal),
+    queryFn: async ({ pageParam, signal }: { pageParam: string | null; signal: AbortSignal }) => {
+      detailContext?.assertCurrent();
+      const page = await listCrewInspectionTasksReal(pageParam, 50, signal);
+      detailContext?.assertCurrent();
+      if (!detailContext) return page;
+      // API037 currently projects MEASURE_ONLY for every item. API080 is the
+      // authoritative assigned mode; keep these reads bounded and session scoped.
+      const items = [...page.items];
+      let next = 0;
+      await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
+        while (next < items.length) {
+          detailContext.assertCurrent();
+          signal.throwIfAborted();
+          const index = next++, item = items[index];
+          validateCrewTaskIdentity(item, detailContext.actorId);
+          const read = await getFieldInspectionTaskDetailReal(item.projectId, item.id, signal);
+          detailContext.assertCurrent();
+          signal.throwIfAborted();
+          validateCrewTaskDetail(read.data, read.etag, item.projectId, item.id, detailContext.actorId);
+          if (!read.data.mode || !read.data.status) throw Error('crew_task_response_invalid');
+          items[index] = { ...item, mode: read.data.mode, status: read.data.status, version: read.data.version!, fieldTaskRead: read };
+        }
+      }));
+      detailContext.assertCurrent();
+      return { ...page, items };
+    },
     getNextPageParam: (page: InspectionTaskPageResponseDto, _pages: InspectionTaskPageResponseDto[], _last: string | null, cursors: (string | null)[]) =>
       page.nextCursor && !cursors.includes(page.nextCursor) ? page.nextCursor : undefined,
     retry: false as const, gcTime: 0,
@@ -341,6 +366,8 @@ export interface InspectionTaskResponseDto {
   version: string;
   createdAt?: string | null;
   updatedAt?: string | null;
+  /** Local API080 read projection, never sent as a wire command or authority. */
+  fieldTaskRead?: { data: FieldTaskViewFact; etag: string };
 }
 
 /** Phân trang từ GET /api/v1/me/inspection-tasks (API-037). */

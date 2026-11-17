@@ -6,6 +6,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip, type ChipVariant } from '../../src/components/Chip';
+import { CrewTaskStatus, crewTaskStatusStyle } from '../../src/components/CrewTaskStatus';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
 import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
@@ -66,7 +67,16 @@ export function crewReadError(error: unknown): string {
 export function useCrewInbox() {
   const identity = useCrewIdentity();
   const environment = apiClient.defaults?.baseURL ?? '';
-  const options = crewInboxOptions(identity.scope ?? '');
+  const options = crewInboxOptions(identity.scope ?? '', {
+    actorId: identity.user?.id ?? '',
+    assertCurrent: () => {
+      const current = useAuthStore.getState();
+      if (!identity.enabled || passwordSessionIdentity(current.token) !== identity.scope ||
+          current.user?.id !== identity.user?.id || current.user?.role_code !== RoleCode.REPAIR_CREW ||
+          current.user.must_change_password || !['AUTHENTICATED', 'REFRESHING'].includes(current.status) ||
+          (apiClient.defaults?.baseURL ?? '') !== environment) throw Error('crew_inbox_session_changed');
+    },
+  });
   const query = useInfiniteQuery({ ...options, queryKey: [...options.queryKey, environment], enabled: identity.enabled });
   const { refetch } = query;
   useFocusEffect(useCallback(() => { if (identity.enabled) void refetch(); }, [identity.enabled, refetch]));
@@ -141,13 +151,12 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
   return <React.Fragment key={`${inbox.environment}:${inbox.scope}:${projectId}:${id}`}>{props.operational === false ? props.children(task) : isOperational(task) ? props.children(task) : null}</React.Fragment>;
 }
 
-export type TaskModeFilter = 'ALL' | 'NORMAL' | 'CONDITIONAL_FT' | 'INSPECT_AND_REPAIR' | 'MEASURE_ONLY';
+export type TaskModeFilter = 'ALL' | 'NORMAL' | 'CONDITIONAL_FT' | 'MEASURE_ONLY';
 
 export const TASK_MODE_FILTERS: { key: TaskModeFilter; label: string }[] = [
   { key: 'ALL', label: 'Tất cả' },
   { key: 'NORMAL', label: 'Sửa chữa theo kế hoạch' },
   { key: 'CONDITIONAL_FT', label: 'Sửa chữa nhanh có điều kiện' },
-  { key: 'INSPECT_AND_REPAIR', label: 'Đo kiểm và xem xét sửa chữa' },
   { key: 'MEASURE_ONLY', label: 'Chỉ đo kiểm' },
 ];
 
@@ -243,9 +252,7 @@ export default function CrewTasksScreen() {
         ) : (
           <View style={styles.taskList}>
             {list.map((task) => {
-            const modeChip = TASK_MODE_CHIP[task.task_mode];
-            const railColor =
-              task.task_mode === 'MEASURE_ONLY' ? colors.secondary : colors.success;
+            const railColor = crewTaskStatusStyle(task.status).foreground;
             return (
               <Pressable
                 key={task.id}
@@ -259,17 +266,7 @@ export default function CrewTasksScreen() {
                   <View style={[styles.rail, { backgroundColor: railColor }]} />
                   <View style={styles.taskHeader}>
                     <View style={styles.taskMetaRow}>
-                      {crewTaskIsComplete(task) ? (
-                        <Chip variant="approved" label="Hoàn thành" />
-                      ) : (task.status.toUpperCase() === 'SUBMITTED') ? (
-                        <Chip variant="status-pending" label={crewStatusLabel(task.status)} uppercase={false} />
-                      ) : (task.status.toUpperCase() === 'SUPPLEMENTREQUIRED') ? (
-                        <Chip variant="status-pending" label="Cần bổ sung" uppercase={false} />
-                      ) : (['ASSIGNED', 'NEWASSIGNED'].includes(task.status.toUpperCase())) ? (
-                        <Chip variant="status-pending" label="Chờ nhận việc" uppercase={false} />
-                      ) : (
-                        <Chip variant={modeChip.variant} label={crewStatusLabel(task.status)} uppercase={false} />
-                      )}
+                      <CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)} />
                     </View>
                     {task.distance_label && task.distance_label !== '—' ? (
                       <View style={styles.taskDistPill}>

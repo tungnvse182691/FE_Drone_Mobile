@@ -131,3 +131,33 @@ test('T04 repeated cursor stops; counters do not count rejected as completed',()
  const {api}=harness(),opts=api.crewInboxOptions('scope');assert.equal(opts.getNextPageParam({nextCursor:'same'},[],'same',['same']),undefined);
  assert.equal(api.crewTaskIsComplete({status:'REJECTED'}),false);assert.equal(api.crewTaskIsComplete({status:'COMPLETED'}),true);
 });
+
+test('Crew inbox filters use validated API080 mode instead of API037 placeholder',async()=>{
+ const h=harness();
+ h.respond(async path=>path==='/me/inspection-tasks'
+  ? {data:{items:[wire()],nextCursor:'next',asOf:'now'},headers:{}}
+  : {data:{...wire(),assignedToUserId:actor,defectId:id,mode:'NORMAL',status:'NewAssigned',instructions:'QA sửa trước/sau'},headers:{etag:'"'+wire().version+'"'}});
+ const opts=h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){}});
+ const page=await opts.queryFn({pageParam:null,signal:new AbortController().signal});
+ const task=h.api.crewTaskFromWire(page.items[0]);
+ assert.equal(task.task_mode,'NORMAL');assert.equal(task.status,'NewAssigned');
+ assert.equal(task.title,'QA sửa trước/sau');assert.equal(page.nextCursor,'next');
+ assert.equal(h.calls.length,2);assert.ok(h.calls[1][1].signal);
+});
+
+test('Crew inbox stops before detail reads if session changed after listing',async()=>{
+ const h=harness();let current=true;
+ h.respond(async()=>{current=false;return {data:{items:[wire()],nextCursor:null},headers:{}};});
+ const opts=h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){if(!current)throw Error('session_changed');}});
+ await assert.rejects(opts.queryFn({pageParam:null,signal:new AbortController().signal}),/session_changed/);
+ assert.equal(h.calls.length,1);
+});
+
+test('Crew inbox does not project a foreign assignment from API080',async()=>{
+ const h=harness();
+ h.respond(async path=>path==='/me/inspection-tasks'
+  ? {data:{items:[wire()],nextCursor:null},headers:{}}
+  : {data:{...wire(),assignedToUserId:project,mode:'NORMAL'},headers:{etag:'"'+wire().version+'"'}});
+ const opts=h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){}});
+ await assert.rejects(opts.queryFn({pageParam:null,signal:new AbortController().signal}),/crew_identity_invalid/);
+});
