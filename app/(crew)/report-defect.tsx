@@ -9,14 +9,16 @@ import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { defectTypeLabel } from '../../src/constants/defect-types';
 import { CrewTaskBoundary, type CrewTask } from './tasks';
+import { CrewContentTransition } from '../../src/components/crew/CrewMotion';
 
 export default function CrewReportDefectScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewReportDefectScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Khuyết tật nhiệm vụ" showBack onBack={()=>router.back()} />}>
+    <CrewContentTransition ready replayOnFocus>
     <Card style={styles.banner}><View style={styles.bannerRow}>
-      <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
+      <MaterialIcons name="info-outline" size={22} color="#40566B"/>
       <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin giao việc ban đầu. Ảnh và số đo Crew đã gửi được lưu riêng trong hồ sơ hiện trường.</Text>
     </View></Card>
     <View style={styles.fieldGroup}>
@@ -29,7 +31,7 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>PHÂN LOẠI LỖI</Text>
-      <Card style={styles.infoCard}><View style={styles.bannerRow}><MaterialIcons name="category" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,{flex:1}]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text></View></Card>
+      <Card style={styles.infoCard}><View style={styles.classificationRow}><MaterialIcons name="category" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,{flex:1}]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text></View></Card>
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>HÌNH ẢNH HIỆN TRƯỜNG</Text>
@@ -43,11 +45,13 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
       <Card style={styles.infoCard}><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text></Card>
     </View>
     <View style={styles.ctaWrap}><Button variant="primary" title="Về chi tiết nhiệm vụ" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/></View>
+    </CrewContentTransition>
   </SafeAreaScreen>;
 }
 
 const styles = StyleSheet.create({
-  infoCard: { gap: spacing.sm, borderWidth: 1, borderColor: '#E8D9A8', borderRadius: radius.lg },
+  infoCard: { gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
+  classificationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -97,9 +101,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: '#FEF3E2',
+    backgroundColor: '#EDF2F6',
     borderWidth: 1,
-    borderColor: colors.warning,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.md,
   },
