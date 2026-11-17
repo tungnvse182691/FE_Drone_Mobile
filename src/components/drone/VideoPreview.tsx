@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useEvent } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -22,6 +22,7 @@ export function VideoPreview({ lease }: { lease: OperatorVideoLease }) {
   const currentTime = progress?.currentTime ?? player.currentTime;
   const [firstFrame, setFirstFrame] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
+  const wasReady = useRef(false);
 
   useEffect(() => lease.attachPlayer(() => {
     player.pause();
@@ -31,7 +32,10 @@ export function VideoPreview({ lease }: { lease: OperatorVideoLease }) {
   }), [lease, player]);
 
   useEffect(() => {
-    if (status === 'readyToPlay' || status === 'error') return;
+    if (status === 'readyToPlay') wasReady.current = true;
+    // Seeking can temporarily re-enter loading, including at the end of a file.
+    // That is not an initial decoder failure for an already playable source.
+    if (wasReady.current || status === 'error') return;
     const timer = setTimeout(() => setTimedOut(true), 20000);
     return () => clearTimeout(timer);
   }, [status]);

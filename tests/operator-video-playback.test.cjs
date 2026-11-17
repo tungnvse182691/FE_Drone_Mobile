@@ -103,3 +103,14 @@ test('decoder/corrupt-source errors replace the black player with an alert and d
     assert.ok(ui.calls.includes('pause'));ui.unmount();
   }
 });
+
+test('initial readiness timeout never expires a previously ready video during seek buffering',async(t)=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const ui=previewFixture();
+  await ui.emit('statusChange',{status:'readyToPlay'});
+  await ui.emit('statusChange',{status:'loading'});
+  t.mock.timers.tick(21000);ui.render();
+  assert.ok(ui.nodes().some(n=>n.type==='VideoView'));
+  assert.ok(!ui.nodes().some(n=>n.props.accessibilityRole==='alert'));
+  ui.unmount();
+});
