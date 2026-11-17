@@ -7,6 +7,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { operatorAppearance } from '../../src/components/drone/appearance';
+import { RecordingDateTimeField } from '../../src/components/drone/RecordingDateTimeField';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -58,6 +59,7 @@ export default function DroneUploadScreen() {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const [srtUri, setSrtUri] = useState<string | null>(null);
   const [savedFiles, setSavedFiles] = useState<(DroneLocalFile & {availability: string})[]>([]);
+  const [filesExpanded, setFilesExpanded] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [eligibleDrones, setEligibleDrones] = useState<EligibleDroneDto[]>([]);
   const [eligibleCursor, setEligibleCursor] = useState<string | null>(null);
@@ -250,20 +252,49 @@ export default function DroneUploadScreen() {
     setDraftLoading(true);
     let draft: Awaited<ReturnType<typeof openOperatorUploadDraft>> | undefined;
     let files: Awaited<ReturnType<typeof openDroneLocalFiles>> | undefined;
+    let journal: Awaited<ReturnType<typeof openDroneUploadJournal>> | undefined;
     try {
       draft = await openOperatorUploadDraft(params.taskId); if (!isCurrent()) return;
-      const saved = await draft.read(); if (!isCurrent() || !saved) return;
+      let saved = await draft.read(); if (!isCurrent()) return;
       files = await openDroneLocalFiles(params.taskId); if (!isCurrent()) return;
       const local = await files.list(); if (!isCurrent()) return;
+      // Older app versions saved the upload journal, but not the form at send
+      // time. Recover only an unambiguous exact local source; never guess a date.
+      if (!saved?.videoKey) {
+        journal = await openDroneUploadJournal(params.taskId); if (!isCurrent()) return;
+        const uploads = await journal.read('upload'); if (!isCurrent()) return;
+        const candidates = uploads.filter(item => item.taskId === params.taskId &&
+          ['PREPARED','SESSION_CREATED','PARTS_IN_PROGRESS','COMPLETE_UNKNOWN','VERIFY_PENDING','VERIFIED'].includes(item.status) &&
+          !item.cancelRequest);
+        const recover = (purpose: 'SURVEY_VIDEO' | 'TELEMETRY') => {
+          const matching = candidates.filter(item => item.purpose === purpose);
+          if (matching.length !== 1) return null;
+          const item = matching[0];
+          return local.find(file => file.key === item.localFileId && file.taskId === item.taskId &&
+            file.projectId === item.projectId && file.size === item.sizeBytes &&
+            file.checksumSha256 === item.checksumSha256 && file.availability === 'LOCAL_READY' &&
+            file.kind === (purpose === 'SURVEY_VIDEO' ? 'VIDEO' : 'TELEMETRY'))?.key ?? null;
+        };
+        const videoKey = recover('SURVEY_VIDEO');
+        if (videoKey) saved = {recordedAt:saved?.recordedAt ?? '',timeOffset:saved?.timeOffset ?? '',
+          videoKey,telemetryKey:saved?.telemetryKey ?? recover('TELEMETRY'),savedAt:saved?.savedAt ?? ''};
+      }
+      if (!saved) return;
       for (const [key, kind] of [[saved.videoKey,'VIDEO'],[saved.telemetryKey,'TELEMETRY']] as const) {
         const file = local.find(f => f.key === key && f.kind === kind && ['LOCAL_READY','LOCAL_UNHASHED'].includes(f.availability));
-        if (file) selectFile(file);
+        if (file) {
+          const ready = file.availability === 'LOCAL_UNHASHED' ? await files.rehash(file.key) : file;
+          if (!isCurrent()) return;
+          selectFile(ready);
+        }
       }
       setRecordedAt(saved.recordedAt); setTimeOffset(saved.timeOffset);
       const missing = [saved.videoKey,saved.telemetryKey].some(key => key && !local.some(f => f.key === key && ['LOCAL_READY','LOCAL_UNHASHED'].includes(f.availability)));
-      setDraftMessage(missing ? 'Đã mở nháp. Có tệp chưa đầy đủ; chọn lại tệp nguồn.' : 'Đã mở nháp trên máy. Chưa gửi lên máy chủ.');
+      setDraftMessage(missing ? 'Đã mở nháp. Có tệp chưa đầy đủ; chọn lại tệp nguồn.' :
+        !saved.recordedAt && saved.videoKey ? 'Đã khôi phục tệp. Chọn thời gian ghi hình để tiếp tục gửi.' :
+        'Đã khôi phục thông tin trên thiết bị. Bấm nộp để tiếp tục hoặc kiểm tra kết quả.');
     } catch { if (isCurrent()) setDraftMessage('Chưa mở được nháp. Dữ liệu đã lưu vẫn được giữ.'); }
-    finally { draft?.close(); files?.close(); if (isCurrent()) setDraftLoading(false); }
+    finally { draft?.close(); files?.close(); journal?.close(); if (isCurrent()) setDraftLoading(false); }
   };
   const saveDraft = async () => {
     const isCurrent = scope.capture();
@@ -359,7 +390,7 @@ export default function DroneUploadScreen() {
   };
   const handleStartSubmitDataset = async () => {
     const isCurrent=scope.capture();
-    if(!isCurrent()||sending.current||copying||draftLoading||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
+    if(!isCurrent()||sending.current||savingDraft.current||copying||draftLoading||!params.taskId||!videoFile?.checksumSha256||!selectedDroneId||pendingDataset||!journalReady)return;
     pauseRequested.current=false;setPausePending(false);
     sending.current=true;setSubmitting(true);setSubmitError(null);setReceived(false);setTransferPhase(null);setTransferMessage('Đang chuẩn bị gửi…');
     const guard=()=>{if(!isCurrent()||!mounted.current)throw Error('operator_session_changed');};
@@ -368,6 +399,14 @@ export default function DroneUploadScreen() {
       if(telemetryFile && (!/^-?\d+$/.test(timeOffset)||!Number.isSafeInteger(Number(timeOffset))))throw Error('telemetry_offset_invalid');
       const date=new Date(recordedAt.replace(' ','T')+':00');
       if(!Number.isFinite(date.getTime()) || date.getFullYear()!==Number(recordedAt.slice(0,4)) || date.getMonth()+1!==Number(recordedAt.slice(5,7)) || date.getDate()!==Number(recordedAt.slice(8,10)))throw Error('recorded_at_invalid');
+      // Persist the form before the first upload HTTP request. Logout must not
+      // leave a durable transfer with only volatile file/date selections.
+      const draft = await openOperatorUploadDraft(params.taskId);
+      try {
+        guard();
+        await draft.save({recordedAt,timeOffset,videoKey:videoFile.key,telemetryKey:telemetryFile?.key ?? null});
+        guard();
+      } finally { draft.close(); }
       const transfer = async (file: DroneLocalFile) => {
         const current=await getOperatorSurveyTaskDetailReal(params.taskId!);guard();
         if(current.data.projectId!==file.projectId||file.taskId!==params.taskId||!file.checksumSha256)throw Error('drone_file_task_invalid');
@@ -452,18 +491,22 @@ export default function DroneUploadScreen() {
     : !journalReady ? 'Chưa mở được lịch sử nộp. Hãy mở lại màn này để thử lại; bản nháp vẫn được giữ.'
     : null;
 
-  const fileCard = (kind: 'VIDEO' | 'TELEMETRY', title: string, name: string, size: string, hash: string) => <Card style={styles.card}>
-    <View style={styles.row}><MaterialIcons name={kind==='VIDEO'?'videocam':'subtitles'} size={23} color={colors.secondary}/><Text style={styles.heading}>{title}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} disabled={copying||submitting||draftLoading} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.iconButton}>
-        <MaterialIcons name="folder-open" size={22} color={colors.secondary}/><Text style={typography.caption}>Chọn tệp SD</Text>
-      </Pressable>
-    </View>
-    <View style={styles.fileRow}><MaterialIcons name={kind==='VIDEO'?'movie':'description'} size={30} color={colors.secondary}/><View style={{flex:1,gap:4}}>
-      <Text testID={kind==='VIDEO'?'selected-video':'selected-telemetry'} style={typography.bodyMd}>{name}</Text>
-      <Text style={styles.caption}>{size}{hash!=='—'?` · ${hash}`:''}</Text>
-    </View></View>
-    <Text style={styles.caption}>{verifiedFiles.includes((kind==='VIDEO'?videoFile:telemetryFile)?.key??'')?'Máy chủ đã xác minh tệp':'Chưa được máy chủ xác minh'}</Text>
-  </Card>;
+  const fileCard = (kind: 'VIDEO' | 'TELEMETRY', title: string, name: string, size: string) => {
+    const file = kind==='VIDEO'?videoFile:telemetryFile;
+    return <Card style={styles.card}>
+      <View style={styles.row}>
+        <View style={styles.fileIcon}><MaterialIcons name={kind==='VIDEO'?'videocam':'subtitles'} size={24} color={colors.secondary}/></View>
+        <View style={{flex:1,gap:3}}><Text style={typography.titleMd}>{title}</Text><Text style={styles.caption}>{kind==='VIDEO'?'Bắt buộc · 4K RGB':'Không bắt buộc'}</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} accessibilityState={{disabled:copying||submitting||draftLoading}} disabled={copying||submitting||draftLoading} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.chooseFile}>
+          <MaterialIcons name={file?'swap-horiz':'add'} size={20} color={colors.secondary}/><Text style={styles.chooseLabel}>{file?'Đổi tệp':'Chọn tệp'}</Text>
+        </Pressable>
+      </View>
+      {file?<View style={styles.fileRow}><MaterialIcons name="insert-drive-file" size={22} color={colors.secondary}/><View style={{flex:1,gap:4,minWidth:0}}>
+        <Text testID={kind==='VIDEO'?'selected-video':'selected-telemetry'} numberOfLines={2} ellipsizeMode="middle" style={typography.bodyMd}>{name}</Text>
+        <Text style={styles.caption}>{size} · {verifiedFiles.includes(file.key)?'Máy chủ đã xác minh tệp':'Đã lưu trên thiết bị'}</Text>
+      </View></View>:kind==='VIDEO'?<Text style={styles.caption}>Chọn video từ thiết bị để bắt đầu.</Text>:null}
+    </Card>;
+  };
   return <SafeAreaScreen scroll header={<View style={styles.header}>
     <Pressable accessibilityRole="button" accessibilityLabel="Quay lại" onPress={handleBack} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.secondary}/></Pressable>
     <View style={{flex:1}}><Text style={typography.titleMd}>Dữ liệu khảo sát</Text><Text style={styles.caption}>{params.taskId?`Nhiệm vụ ${params.taskId.slice(0,8)}`:'Chọn nhiệm vụ để tiếp tục'}</Text></View>
@@ -483,20 +526,29 @@ export default function DroneUploadScreen() {
       </Pressable>)}</View>
       {eligibleCursor?<Button title="Tải thêm máy bay" variant="secondary" disabled={eligibleLoading} loading={eligibleLoading} onPress={()=>void loadEligibleDrones(true)}/>:null}
     </Card>
-    {fileCard('VIDEO','Video MP4',videoName,videoSize,videoSha)}
-    {fileCard('TELEMETRY','Dữ liệu GPS · SRT',srtName,srtSize,srtSha)}
+    {fileCard('VIDEO','Video MP4',videoName,videoSize)}
+    {fileCard('TELEMETRY','Dữ liệu GPS · SRT',srtName,srtSize)}
     {copying?<View accessibilityRole="alert" style={styles.notice}><ActivityIndicator color={colors.secondary}/><Text style={styles.noticeText}>Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text></View>:null}
     <Card style={styles.card}>
-      <View style={styles.row}><MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp trên thiết bị</Text><Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable></View>
-      <Text style={styles.caption}>Giới hạn mỗi tệp: video khoảng 8,6 GB · SRT khoảng 10,5 MB</Text>
-      {savedFiles.map(file=><View key={file.key} style={styles.savedFile}><Text style={typography.bodyMd}>{file.name}</Text><Text style={styles.caption}>{file.availability==='LOCAL_READY'?'Đã kiểm tra SHA-256':file.availability==='LOCAL_UNHASHED'?'Chưa kiểm tra SHA-256':file.availability==='INCOMPLETE'?'Bản sao chưa đầy đủ':'Không tìm thấy tệp'}</Text>
-        <Button title={`Dùng tệp đã lưu: ${file.name}`} variant="secondary" disabled={submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)}/></View>)}
-      {!savedFiles.length?<Text style={styles.caption}>Chưa có tệp đã lưu.</Text>:null}
+      <View style={styles.row}>
+        <Pressable testID="saved-files-toggle" accessibilityRole="button" accessibilityLabel="Tệp đã lưu trên thiết bị" accessibilityState={{expanded:filesExpanded}} onPress={()=>setFilesExpanded(v=>!v)} style={[styles.row,{flex:1,minHeight:48}]}>
+          <MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp đã lưu ({savedFiles.length})</Text><MaterialIcons name={filesExpanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable>
+      </View>
+      {filesExpanded?<>
+        <Text style={styles.caption}>Video tối đa 8,6 GB · SRT tối đa 10,5 MB</Text>
+        {savedFiles.map(file=><View key={file.key} style={styles.savedFile}>
+          <View style={{flex:1,minWidth:0,gap:4}}><Text numberOfLines={2} ellipsizeMode="middle" style={typography.bodyMd}>{file.name}</Text><Text style={styles.caption}>{file.availability==='LOCAL_READY'?'Sẵn sàng sử dụng':file.availability==='LOCAL_UNHASHED'?'Cần kiểm tra tệp':file.availability==='INCOMPLETE'?'Bản sao chưa đầy đủ':'Không tìm thấy tệp'}</Text></View>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Dùng tệp đã lưu: ${file.name}`} accessibilityState={{disabled:submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)}} disabled={submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)} style={styles.chooseFile}><Text style={styles.chooseLabel}>Dùng tệp</Text></Pressable>
+        </View>)}
+        {!savedFiles.length?<Text style={styles.caption}>Chưa có tệp đã lưu.</Text>:null}
+      </>:null}
       {fileError?<Text accessibilityRole="alert" style={styles.error}>{fileError}</Text>:null}
     </Card>
     <Card style={styles.card}><Text style={styles.heading}>Thời gian ghi hình</Text>
-      <TextInput accessibilityLabel="Thời gian ghi hình" placeholder="2026-11-14 08:30" value={recordedAt} editable={!submitting&&!pendingDataset&&!draftLoading} onChangeText={v=>{setRecordedAt(v);setDraftMessage(null);}} style={styles.input}/>
-      <Text style={styles.caption}>Giờ địa phương của thiết bị · nhập theo tệp ghi hình.</Text>
+      <RecordingDateTimeField key={`${scope.key}:${params.taskId}`} value={recordedAt} disabled={submitting||!!pendingDataset||draftLoading} onChangeText={v=>{setRecordedAt(v);setDraftMessage(null);}}/>
+      <Text style={styles.caption}>Chọn theo thời điểm quay video · giờ địa phương.</Text>
       {telemetryFile?<><Text style={typography.bodyMd}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch thời gian SRT" placeholder="0 nếu video và SRT cùng mốc" value={timeOffset} editable={!submitting&&!pendingDataset&&!draftLoading} onChangeText={v=>{setTimeOffset(v);setDraftMessage(null);}} keyboardType="numbers-and-punctuation" style={styles.input}/></>:null}
       {!pendingDataset?<Button title="Lưu nháp trên máy" variant="secondary" disabled={submitting||copying||draftLoading||!params.taskId} onPress={()=>void saveDraft()}/>:null}
       {draftMessage?<Text accessibilityLiveRegion="polite" style={styles.caption}>{draftMessage}</Text>:null}
@@ -538,15 +590,18 @@ const styles=StyleSheet.create({
   progressTrack:{height:5,borderRadius:4,backgroundColor:colors.border,overflow:'hidden'},
   progressFill:{height:5,backgroundColor:colors.primary},
   header:{flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:spacing.screenMargin,paddingVertical:8,backgroundColor:colors.surface},
-  card:{...operatorAppearance.card,marginBottom:16,gap:12},
+  card:{...operatorAppearance.card,borderColor:colors.border,marginBottom:16,gap:12},
   row:{flexDirection:'row',alignItems:'center',gap:10},
   heading:{...typography.titleMd,flex:1},
   caption:{...typography.caption,color:colors.secondary,lineHeight:20},
   iconButton:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',padding:6,gap:4},
+  fileIcon:{width:44,height:44,borderRadius:12,backgroundColor:colors.surfaceAlt,alignItems:'center',justifyContent:'center'},
+  chooseFile:{minHeight:48,minWidth:64,paddingHorizontal:10,flexDirection:'row',gap:4,alignItems:'center',justifyContent:'center',borderRadius:8,backgroundColor:colors.surfaceAlt},
+  chooseLabel:{...typography.labelLg,color:colors.secondary},
   fileRow:{flexDirection:'row',gap:12,alignItems:'center',padding:12,backgroundColor:colors.surfaceAlt,borderRadius:10},
   option:{minHeight:52,borderWidth:1,borderColor:colors.border,borderRadius:10,padding:12,flexDirection:'row',alignItems:'center',gap:12},
   selected:{borderColor:operatorAppearance.border,backgroundColor:operatorAppearance.pressed},
-  savedFile:{gap:8,borderTopWidth:1,borderTopColor:colors.border,paddingTop:12},
+  savedFile:{flexDirection:'row',alignItems:'center',gap:12,borderTopWidth:1,borderTopColor:colors.border,paddingTop:12},
   notice:{flexDirection:'row',alignItems:'center',gap:10,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt,marginBottom:16},
   noticeText:{...typography.caption,color:colors.secondary,lineHeight:20,flex:1},
   error:{...typography.bodyMd,color:colors.error,marginVertical:8},

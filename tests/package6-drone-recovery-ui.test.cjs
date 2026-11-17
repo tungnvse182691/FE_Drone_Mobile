@@ -1,7 +1,80 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {drone,id}=require('./package45-drone.test.cjs');
 const {deferred}=require('./helpers/roadfe-screen.cjs');
+async function showFiles(s){const toggle=s.nodes().find(n=>n.props.testID==='saved-files-toggle');if(toggle&&!toggle.props.accessibilityState.expanded){toggle.props.onPress();await s.flush();}}
+async function useSaved(s){await showFiles(s);return s.nodes().find(n=>n.props.accessibilityLabel==='Dùng tệp đã lưu: retained.mp4').props.onPress();}
 const saved={key:id(8),kind:'VIDEO',name:'retained.mp4',size:4,uri:'file:///private/retained.mp4',availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
+
+test('Operator recovers an older interrupted upload whose draft never saved the video selection',async()=>{
+ const file={...saved,taskId:id(2),projectId:id(3)};
+ const intent={kind:'DRONE_UPLOAD_INTENT',taskId:id(2),projectId:id(3),localFileId:file.key,sizeBytes:file.size,checksumSha256:file.checksumSha256,purpose:'SURVEY_VIDEO',status:'VERIFY_PENDING',parts:[{}],body:{fileName:file.name}};
+ const s=drone('upload',{}, {params:{taskId:id(2)},modules:{
+  '../../src/api/operatorUploadDraft':{openOperatorUploadDraft:async()=>({read:async()=>({videoKey:null,telemetryKey:null,recordedAt:'',timeOffset:''}),close(){}})},
+  '../../src/api/droneTaskJournal':{openDroneUploadJournal:async()=>({read:async kind=>kind==='upload'?[intent]:[],close(){}})},
+  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})},
+ }});
+ s.render();await s.flush();
+ assert.match(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);
+ assert.doesNotMatch(JSON.stringify(s.nodes()),/Chọn video MP4 trước khi nộp/);
+ assert.equal(s.nodes().find(n=>n.type==='RecordingDateTimeField').props.value,'');
+ s.unmount();
+});
+
+for(const reason of ['checksum-mismatch','ambiguous','cancel-pending'])test('Operator does not guess a recovery source: '+reason,async()=>{
+ const file={...saved,taskId:id(2),projectId:id(3)};
+ const intent={taskId:id(2),projectId:id(3),localFileId:file.key,sizeBytes:file.size,
+  checksumSha256:reason==='checksum-mismatch'?'b'.repeat(64):file.checksumSha256,
+  purpose:'SURVEY_VIDEO',status:'VERIFY_PENDING',...(reason==='cancel-pending'?{cancelRequest:{phase:'UNKNOWN'}}:{})};
+ const s=drone('upload',{}, {params:{taskId:id(2)},modules:{
+  '../../src/api/operatorUploadDraft':{openOperatorUploadDraft:async()=>({read:async()=>null,close(){}})},
+  '../../src/api/droneTaskJournal':{openDroneUploadJournal:async()=>({read:async kind=>kind==='upload'?(reason==='ambiguous'?[intent,{...intent}]:[intent]):[],close(){}})},
+  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})},
+ }});
+ s.render();await s.flush();assert.equal(s.nodes().filter(n=>n.props.testID==='selected-video').length,0);s.unmount();
+});
+
+test('Operator persists upload inputs before any transfer and restores them after same-account login',async()=>{
+ const file={...saved,taskId:id(2),projectId:id(3)},calls=[];let draft=null;
+ const task={id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',scope:[],version:'version'};
+ const s=drone('upload',{
+  getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:'"version"'}),
+  listEligibleOperatorDronesReal:async()=>({items:[{id:id(7)}],nextCursor:null}),
+ },{params:{taskId:id(2),projectId:id(3)},modules:{
+  '../../src/api/operatorUploadDraft':{openOperatorUploadDraft:async()=>({read:async()=>draft,save:async value=>{calls.push('save');draft=value;},close(){}})},
+  '../../src/api/droneSelectionJournal':{openDroneSelectionJournal:async()=>({read:async()=>({droneId:id(7)}),close(){}})},
+  '../../src/api/droneTaskJournal':{openDroneUploadJournal:async()=>({read:async()=>[],close(){}})},
+  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})},
+  '../../src/api/droneDatasetWorkflow':{orchestrateDroneUpload:async()=>{calls.push('transfer');throw Error('offline');}},
+ }});
+ s.render();await s.flush();await useSaved(s);await s.flush();
+ s.nodes().find(n=>n.type==='RecordingDateTimeField').props.onChangeText('2026-11-14 08:30');await s.flush();
+ s.press('Nộp bộ dữ liệu 4K RGB');await s.flush();
+ assert.deepEqual(calls,['save','transfer']);assert.equal(draft.videoKey,file.key);
+ s.h.logout();s.render();await s.flush();s.h.login('DRONE_OPERATOR',id(1));s.render();await s.flush();
+ assert.match(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);
+ assert.equal(s.nodes().find(n=>n.type==='RecordingDateTimeField').props.value,'2026-11-14 08:30');
+ s.unmount();
+});
+
+for(const stop of ['disk-failure','logout-during-save'])test('Operator never starts transfer after '+stop,async()=>{
+ const file={...saved,taskId:id(2),projectId:id(3)},wait=deferred();let transfers=0,saves=0;
+ const task={id:id(2),projectId:id(3),operatorId:id(1),status:'ACCEPTED',scope:[],version:'version'};
+ const s=drone('upload',{
+  getOperatorSurveyTaskDetailReal:async()=>({data:task,etag:'"version"'}),
+  listEligibleOperatorDronesReal:async()=>({items:[{id:id(7)}],nextCursor:null}),
+ },{params:{taskId:id(2),projectId:id(3)},modules:{
+  '../../src/api/operatorUploadDraft':{openOperatorUploadDraft:async()=>({read:async()=>null,save:async()=>{saves++;if(stop==='disk-failure')throw Error('disk');await wait.promise;},close(){}})},
+  '../../src/api/droneSelectionJournal':{openDroneSelectionJournal:async()=>({read:async()=>({droneId:id(7)}),close(){}})},
+  '../../src/api/droneTaskJournal':{openDroneUploadJournal:async()=>({read:async()=>[],close(){}})},
+  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})},
+  '../../src/api/droneDatasetWorkflow':{orchestrateDroneUpload:async()=>{transfers++;throw Error('must_not_send');}},
+ }});
+ s.render();await s.flush();await useSaved(s);await s.flush();
+ s.nodes().find(n=>n.type==='RecordingDateTimeField').props.onChangeText('2026-11-14 08:30');await s.flush();
+ s.press('Nộp bộ dữ liệu 4K RGB');await s.flush();assert.equal(saves,1);
+ if(stop==='logout-during-save'){s.h.logout();s.render();await s.flush();wait.resolve();await s.flush();}
+ assert.equal(transfers,0);s.unmount();
+});
 
 test('Operator verification polls retain completed byte progress without restarting upload UI',async()=>{
  const file={...saved,taskId:id(2),projectId:id(3)};
@@ -22,8 +95,8 @@ test('Operator verification polls retain completed byte progress without restart
   }
  }});
  try {
-  s.render();await s.flush();await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();
-  s.nodes().find(n=>n.props.accessibilityLabel==='Thời gian ghi hình').props.onChangeText('2026-11-14 08:30');await s.flush();
+  s.render();await s.flush();await useSaved(s);await s.flush();
+  s.nodes().find(n=>n.type==='RecordingDateTimeField').props.onChangeText('2026-11-14 08:30');await s.flush();
   s.press('Nộp bộ dữ liệu 4K RGB');await s.flush();
   const progress=()=>s.nodes().find(n=>n.props.accessibilityRole==='progressbar');
   assert.equal(progress()?.props.accessibilityValue.now,100,'verification retains the completed upload bar');
@@ -38,19 +111,19 @@ test('Operator finishes interrupted checksum before selecting retained bytes and
  const pending=deferred();let hashes=0;
  const file={...saved,availability:'LOCAL_UNHASHED',checksumSha256:null};
  const s=drone('upload',{}, {params:{taskId:id(2)},modules:{'../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],rehash:async key=>{assert.equal(key,file.key);hashes++;return pending.promise;},close(){}})}}});
- s.render();await s.flush();const button=s.nodes().find(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4');
+ s.render();await s.flush();await showFiles(s);const button=s.nodes().find(n=>n.props.accessibilityLabel==='Dùng tệp đã lưu: retained.mp4');
  const restore=button.props.onPress();await s.flush();assert.equal(hashes,1);
  assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);
  assert.match(JSON.stringify(s.nodes()),/Đang chọn hoặc sao lưu tệp/);
  await button.props.onPress();assert.equal(hashes,1);
  pending.resolve(saved);await restore;await s.flush();
  assert.match(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);
- assert.match(JSON.stringify(s.nodes()),/Đã kiểm tra SHA-256/);s.unmount();
+ assert.match(JSON.stringify(s.nodes()),/Đã lưu trên thiết bị/);s.unmount();
 });
 test('Operator never publishes an interrupted checksum into a different session',async()=>{
  const pending=deferred();const file={...saved,availability:'LOCAL_UNHASHED',checksumSha256:null};
  const s=drone('upload',{}, {params:{taskId:id(2)},modules:{'../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],rehash:()=>pending.promise,close(){}})}}});
- s.render();await s.flush();const restore=s.nodes().find(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4').props.onPress();await s.flush();
+ s.render();await s.flush();await showFiles(s);const restore=s.nodes().find(n=>n.props.accessibilityLabel==='Dùng tệp đã lưu: retained.mp4').props.onPress();await s.flush();
  s.h.login('DRONE_OPERATOR',id(9));s.render();await s.flush();pending.resolve(saved);await restore;await s.flush();
  assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);s.unmount();
 });
@@ -58,7 +131,7 @@ for(const change of ['task','session','actor','environment','logout-relogin'])te
  const d=deferred(),params={taskId:id(2)};let copies=0,picks=0;
  const s=drone('upload',{}, {params,pick:async()=>{picks++;return {canceled:false,assets:[{name:'private-old.mp4',uri:'file:///source.mp4',size:4}]};},modules:{
  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[],preserve:()=>{copies++;return copies===1?d.promise:Promise.resolve(saved);},close(){}})}}});
- const picker=()=>s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp SD')));
+ const picker=()=>s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp')));
  s.render();await s.flush();const pending=picker().props.onPress();await s.flush();assert.equal(copies,1);
  const auth=s.h.getAuth();
  if(change==='task')params.taskId=id(9);
@@ -79,24 +152,24 @@ test('Drone upload presents local preservation without a fake online/offline swi
  const s=drone('upload');s.render();await s.flush();
  assert.ok(!s.nodes().some(n=>n.props?.accessibilityRole==='radio'));
  assert.doesNotMatch(JSON.stringify(s.nodes()),/CHẾ ĐỘ ĐỒNG BỘ NGOẠI TUYẾN|Trực tuyến \(Wi-Fi\/4G\)/);
- assert.match(JSON.stringify(s.nodes()),/Tệp trên thiết bị/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã tải lên thành công/);s.unmount();
+ assert.match(JSON.stringify(s.nodes()),/Tệp đã lưu/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã tải lên thành công/);s.unmount();
 });
 test('Drone upload preserves picker bytes before displaying selection and reopens retained files explicitly',async()=>{
  let writes=0;const d=deferred();
  const s=drone('upload',{}, {params:{taskId:id(2)},pick:async()=>({canceled:false,assets:[{name:'new.mp4',uri:'file:///source.mp4',size:4}]}),modules:{
   '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[saved],preserve:async()=>{writes++;return d.promise;},close(){}})}}});
  s.render();await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/retained.mp4/);
- const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp SD'))).props.onPress();
+ const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp'))).props.onPress();
  await s.flush();assert.equal(writes,1);assert.match(JSON.stringify(s.nodes()),/Đang chọn hoặc sao lưu tệp/);assert.doesNotMatch(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/new.mp4/);
  d.resolve({...saved,name:'new.mp4'});await pending;await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/new.mp4/);
- await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/retained.mp4/);s.unmount();
+ await useSaved(s);await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props?.testID==='selected-video')),/retained.mp4/);s.unmount();
 });
 test('Drone upload retains prior selection when preservation fails and hides late preservation after logout',async()=>{
  for(const logout of [false,true]){
  const d=deferred();const s=drone('upload',{}, {params:{taskId:id(2)},pick:async()=>({canceled:false,assets:[{name:'new.mp4',uri:'file:///source.mp4',size:4}]}),modules:{
  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[saved],preserve:()=>d.promise,close(){}})}}});
- s.render();await s.flush();await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();
- const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp SD'))).props.onPress();await s.flush();
+ s.render();await s.flush();await useSaved(s);await s.flush();
+ const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp'))).props.onPress();await s.flush();
  if(logout){s.h.changeAuth({status:'SIGNED_OUT',user:null,token:null});s.render();}
  d.reject(Error('disk full'));await pending;await s.flush();
  const text=JSON.stringify(s.nodes());if(logout)assert.doesNotMatch(text,/retained.mp4|new.mp4/);else assert.match(text,/retained.mp4/);s.unmount();
@@ -126,7 +199,7 @@ test('Drone log rejects a late list after actor leaves and returns to the same s
 test('Operator restores a hashed local file without mislabelling it missing',async()=>{
  const file={...saved,availability:'LOCAL_READY',checksumSha256:'a'.repeat(64)};
  const s=drone('upload',{}, {params:{taskId:id(2)},modules:{'../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[file],close(){}})}}});
- s.render();await s.flush();const button=s.nodes().find(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4');assert.equal(button.props.disabled,false);
+ s.render();await s.flush();await showFiles(s);const button=s.nodes().find(n=>n.props.accessibilityLabel==='Dùng tệp đã lưu: retained.mp4');assert.equal(button.props.disabled,false);
  await button.props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes().filter(n=>n.props.testID==='selected-video')),/retained.mp4/);assert.doesNotMatch(JSON.stringify(s.nodes()),/Không tìm thấy tệp/);s.unmount();
 });
 
@@ -148,8 +221,8 @@ test('Operator one press transfers verified video then submits and reads the dat
    readOperatorDatasetReadback:async(owner,datasetId)=>{calls.push(['read',owner,datasetId]);return {dataset:{surveyTaskId:id(2)}};},
   }
  }});
- s.render();await s.flush();await s.press('Dùng tệp đã lưu: retained.mp4');await s.flush();
- s.nodes().find(n=>n.props.accessibilityLabel==='Thời gian ghi hình').props.onChangeText('2026-11-14 08:30');await s.flush();
+ s.render();await s.flush();await useSaved(s);await s.flush();
+ s.nodes().find(n=>n.type==='RecordingDateTimeField').props.onChangeText('2026-11-14 08:30');await s.flush();
  const send=()=>s.nodes().find(n=>n.props.title==='Nộp bộ dữ liệu 4K RGB'||n.props.title==='Đang gửi dữ liệu…');
  assert.equal(send().props.disabled,false);holdPreflight=true;const submit=send().props.onPress;submit();await s.flush();
  assert.ok(s.nodes().some(n=>n.props.testID==='dataset-transfer-card'),'preflight must not leave a blank screen');
@@ -158,8 +231,8 @@ test('Operator one press transfers verified video then submits and reads the dat
  preflight.resolve();await s.flush();
  assert.equal(send(),undefined);submit();await s.flush();assert.equal(calls.length,1);
  assert.ok(s.nodes().some(n=>n.props.testID==='dataset-transfer-card'));
- assert.ok(!s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
- assert.ok(!s.nodes().some(n=>n.props.title==='Dùng tệp đã lưu: retained.mp4'));
+ assert.ok(!s.nodes().some(n=>n.type==='RecordingDateTimeField'));
+ assert.ok(!s.nodes().some(n=>n.props.accessibilityLabel==='Dùng tệp đã lưu: retained.mp4'));
  assert.equal(s.nodes().filter(n=>n.type==='ActivityIndicator').length,0,'byte progress must not show a second spinner');
  const progress=s.nodes().find(n=>n.props.accessibilityRole==='progressbar');assert.equal(progress.props.accessibilityValue.now,0);
  assert.ok(s.nodes().some(n=>n.props.accessibilityLiveRegion==='polite'));
@@ -169,6 +242,6 @@ test('Operator one press transfers verified video then submits and reads the dat
  assert.deepEqual(Array.from(calls[1][1].payload.videoFileIds),[id(8)]);assert.equal(calls[1][1].payload.deviceId,id(7));
  assert.equal(calls[1][1].ifMatch,'"version"');
  assert.match(JSON.stringify(s.nodes()),/Máy chủ đã nhận bộ dữ liệu/);
- assert.ok(!s.nodes().some(n=>n.props.accessibilityLabel==='Thời gian ghi hình'));
+ assert.ok(!s.nodes().some(n=>n.type==='RecordingDateTimeField'));
  assert.equal(s.nodes().filter(n=>n.type==='ActivityIndicator').length,0);s.unmount();
 });
