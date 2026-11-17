@@ -2,6 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const moduleScope={exports:{}};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/utils/crew-position-proof.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:moduleScope,exports:moduleScope.exports,require:()=>({isCrewResourceId:v=>typeof v==='string'&&v.startsWith('id-')})});
 const {crewPositionSources:sources,chooseCrewPosition:choose}=moduleScope.exports;
+const positionError=(...args)=>moduleScope.exports.crewPositionInputError(...args);
 const task={id:'id-task',projectId:'id-project',routeVersionId:'id-route',segmentSetId:'id-set',slabId:null,layoutRevisionId:null};
 const geometry={taskId:task.id,projectId:task.projectId,routeVersionId:task.routeVersionId,segmentSetId:task.segmentSetId,segments:[{id:'id-segment',fromOffsetMeters:0,toOffsetMeters:100}]};
 test('position sources follow pinned slab rather than offering an unusable route checklist',()=>{
@@ -19,4 +20,14 @@ test('position selection pins real task route without inventing an observed offs
  const proof=choose(task,'ROUTE_CHAINAGE_MARKINGS_CONFIRMED');
  assert.equal(proof.observedRouteVersionId,task.routeVersionId);assert.equal(proof.observedChainageMeters,undefined);
  assert.equal(choose(task,'SLAB_MARKINGS_CONFIRMED').observedSlabId,undefined);assert.equal(choose(task,'UNKNOWN'),null);
+});
+test('position editor explains missing chainage and checks the selected source range without inventing a value',()=>{
+ const proof={kind:'POSITION_CHECKLIST',checklist:'SEGMENT_MARKINGS_CONFIRMED',observedSegmentId:'id-segment'};
+ assert.equal(positionError(proof,'',geometry.segments),'Nhập lý trình trong khoảng 0–100 m.');
+ for(const value of ['0','50','100','12,5'])assert.equal(positionError(proof,value,geometry.segments),null);
+ for(const value of ['101','-1','abc'])assert.equal(positionError(proof,value,geometry.segments),'Nhập lý trình trong khoảng 0–100 m.');
+ assert.equal(positionError({...proof,observedSegmentId:undefined},'50',geometry.segments),'Chọn phân đoạn đã đối chiếu.');
+ assert.equal(positionError(choose(task,'ROUTE_CHAINAGE_MARKINGS_CONFIRMED'),'',[]),'Nhập lý trình quan sát thực tế.');
+ assert.equal(positionError(null,'',[]),null,'unknown remains a valid incomplete draft');
+ assert.equal(proof.observedChainageMeters,undefined);
 });

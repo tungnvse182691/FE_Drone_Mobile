@@ -24,7 +24,7 @@ test('FIELD measurement validation reports errors without changing the entered v
 });
 
 test('FIELD evidence and submission statuses distinguish local, pending and server verified states', () => {
-  const { fieldEvidenceStatus, fieldSubmissionReadinessLabel } = pure('app/(crew)/field-review.tsx', ['fieldEvidenceStatus', 'fieldSubmissionReadinessLabel']);
+  const { fieldEvidenceStatus, fieldSubmissionReadinessLabel } = pure('app/(crew)/field-review.tsx', ['fieldEvidenceStatus', 'fieldAwaitingRepairLink', 'fieldSubmissionReadinessLabel']);
   assert.equal(fieldEvidenceStatus({}).label, 'Đã lưu trên thiết bị');
   assert.equal(fieldEvidenceStatus({}).variant, 'status-pending');
   assert.equal(fieldEvidenceStatus({ completed: true }).label, 'Đã lưu trên thiết bị');
@@ -32,6 +32,8 @@ test('FIELD evidence and submission statuses distinguish local, pending and serv
   assert.equal(fieldEvidenceStatus({ upload: { status: 'FAILED' }, completed: true }).label, 'Máy chủ không xác minh được ảnh');
   assert.equal(fieldSubmissionReadinessLabel('READY'), 'Đủ thông tin theo máy chủ');
   assert.equal(fieldSubmissionReadinessLabel('INCOMPLETE'), 'Cần bổ sung thông tin');
+  assert.equal(fieldSubmissionReadinessLabel('INCOMPLETE',['AFTER_ATTEMPT_BINDING_UNAVAILABLE']), 'Chờ liên kết lượt sửa chữa');
+  assert.equal(fieldSubmissionReadinessLabel('INCOMPLETE',['AFTER_ATTEMPT_BINDING_UNAVAILABLE','AFTER_EVIDENCE_MISSING']), 'Cần bổ sung thông tin');
   assert.equal(fieldSubmissionReadinessLabel('UNKNOWN'), 'Chưa xác nhận độ đầy đủ');
 });
 

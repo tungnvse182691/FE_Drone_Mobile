@@ -23,3 +23,21 @@ export function chooseCrewPosition(task:FieldTaskViewFact,value:string):FieldPos
   return {kind:'POSITION_CHECKLIST',checklist:value,
     ...(value==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?{observedRouteVersionId:task.routeVersionId}:{})};
 }
+
+/** Editor guidance only. BE still evaluates the saved proof against current sources. */
+export function crewPositionInputError(proof:FieldPositionProofInput|null,rawChainage:string,
+  segments:FieldTaskGeometry['segments']):string|null {
+  if(proof?.kind!=='POSITION_CHECKLIST')return null;
+  if(proof.checklist==='SLAB_MARKINGS_CONFIRMED')return proof.observedSlabId?.trim()?null:'Nhập ký hiệu tấm đã đối chiếu.';
+  if(!['SEGMENT_MARKINGS_CONFIRMED','ROUTE_CHAINAGE_MARKINGS_CONFIRMED'].includes(proof.checklist??''))return null;
+  const raw=rawChainage.trim(),value=Number(raw.replace(',','.'));
+  if(proof.checklist==='SEGMENT_MARKINGS_CONFIRMED') {
+    const segment=segments.find(s=>s.id===proof.observedSegmentId);
+    if(!segment)return 'Chọn phân đoạn đã đối chiếu.';
+    const from=segment.fromOffsetMeters,to=segment.toOffsetMeters;
+    if(from===null||to===null)return 'Chưa có phạm vi phân đoạn để đối chiếu.';
+    if(!raw||!Number.isFinite(value)||value<from||value>to)return `Nhập lý trình trong khoảng ${from}–${to} m.`;
+    return null;
+  }
+  return !raw||!Number.isFinite(value)||value<0?'Nhập lý trình quan sát thực tế.':null;
+}

@@ -9,12 +9,13 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
+import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
   type CrewTask, type FieldTaskGeometry, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
-import { chooseCrewPosition, crewPositionSources } from '../../src/utils/crew-position-proof';
+import { chooseCrewPosition, crewPositionSources, crewPositionInputError } from '../../src/utils/crew-position-proof';
 import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, cancelFieldUpload, uploadAndSubmitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
@@ -43,6 +44,11 @@ function FieldErrorPanel({title,message,detail,expanded,onToggle,tone='error'}:{
 export function fieldNoticeModel(notice: string, result?: FieldDraft['result'], detail='') {
   if(result&&(!notice||notice.startsWith('Đã đọc'))) {
     const missing=fieldMissingReasonLabels(result.missingReasons);
+    if (fieldAwaitingRepairLink(result.readiness, result.missingReasons)) return {
+      title:'Đã gửi hồ sơ',tone:'pending' as const,
+      summary:'Ảnh đã lưu · chờ liên kết lượt sửa chữa',
+      detail:'Ảnh đã được lưu. Mở hồ sơ hoàn tất để tiếp tục nộp vào lượt sửa chữa. Không cần tải lại ảnh. Chưa có xác nhận nghiệm thu.',
+    };
     return {title:'Đã gửi hồ sơ',tone:result.readiness==='INCOMPLETE'?'pending' as const:'success' as const,
       summary:result.readiness==='INCOMPLETE'?(missing[0]??'Cần bổ sung thông tin'):'Máy chủ đã nhận hồ sơ',
       detail:[...missing,...(result.missingReasons?.includes('POSITION_CHECKLIST_INSUFFICIENT')?['Máy chủ chưa đối chiếu được tấm, phân đoạn hoặc lý trình với nguồn của nhiệm vụ. Cần kiểm tra đúng dấu mốc và phạm vi tuyến; không dùng số ví dụ cho mọi nhiệm vụ.']:[]),'Hồ sơ đã được đọc lại từ máy chủ; chưa phải xác nhận nghiệm thu.'].join('\n')};
@@ -146,7 +152,11 @@ export function fieldPhotoFeedback(capture: FieldDraft['captures'][number], acti
   return {verified,busy:active&&!blocked&&!verified,label:blocked?'Cần kiểm tra':verified?'Đã xác minh':checking?'Đang kiểm tra':active?'Đang tải':'Chờ tải',percent};
 }
 
-export function fieldSubmissionReadinessLabel(readiness: string | null | undefined) {
+export function fieldAwaitingRepairLink(readiness: string | null | undefined, reasons?: string[] | null) {
+  return readiness === 'INCOMPLETE' && reasons?.length === 1 && reasons[0] === 'AFTER_ATTEMPT_BINDING_UNAVAILABLE';
+}
+export function fieldSubmissionReadinessLabel(readiness: string | null | undefined, reasons?: string[] | null) {
+  if (fieldAwaitingRepairLink(readiness, reasons)) return 'Chờ liên kết lượt sửa chữa';
   return readiness === 'READY' ? 'Đủ thông tin theo máy chủ' : readiness === 'INCOMPLETE' ? 'Cần bổ sung thông tin' : 'Chưa xác nhận độ đầy đủ';
 }
 
@@ -162,6 +172,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [showMeasurementChoices,setShowMeasurementChoices]=useState(false);
   const [showMeasurements,setShowMeasurements]=useState(false);
   const [showPosition,setShowPosition]=useState(false);
+  const [showEvidenceHelp,setShowEvidenceHelp]=useState(false);
+  const [showAssessmentHelp,setShowAssessmentHelp]=useState(false);
   const [editingSampleId,setEditingSampleId]=useState<string|null>(null);
   const [showRecoveryDetail,setShowRecoveryDetail]=useState(false);
   const [rawValues,setRawValues]=useState<Record<string,string>>({});
@@ -255,8 +267,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const repairContext=verifiedTask?.repairContext;
   const finalConfirmed=repairContext?.status==='Confirmed'&&repairContext.finalDecision?.result==='CONFIRMED';
   const repairAccepted=repairContext?.attempt?.review?.decision==='ACCEPT';
+  const linkedSubmission=!!latest?.id&&!!repairContext?.attempt?.attemptId&&repairContext.attempt.effectiveSubmissionId===latest.id;
   const frozen=!!draft?.command;
   const positionSources=crewPositionSources(verifiedTask,positionGeometry);
+  const positionInputError=crewPositionInputError(locationProof,chainage,positionSources.segments);
   const normalMeasurement=(verifiedTask?.mode==='NORMAL'||verifiedTask?.mode==='CONDITIONAL_FT')&&!draft?.repairClaim&&!supplementMode;
   const historicalCancelPending=historicalDraft?.captures.some(c=>c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||(c.cancelState==='BLOCKED'&&!(c.verified&&c.upload?.status==='VERIFIED')));
   const canStartFreshSession=!!historicalDraft&&!fieldDraftPending(historicalDraft)&&!historicalCancelPending;
@@ -382,18 +396,25 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const showNotice=!busy&&!loading&&(notice||draft?.result)&&!(localRecoveryBlocked&&notice===`Không thể dùng nháp của phiên này: ${localRecoveryError} Dữ liệu cũ vẫn được giữ nguyên.`);
   const historicalNotice=fieldNoticeModel(notice,draft?.result,noticeDetail);
   const showRepairDecision=serverLoaded&&!!latest&&(finalConfirmed||repairAccepted)&&(!notice||notice.startsWith('Đã đọc'));
+  const showLinkedSubmission=serverLoaded&&linkedSubmission&&!showRepairDecision&&(!notice||notice.startsWith('Đã đọc'));
+  const linkedReview=repairContext?.attempt?.review?.decision;
   const noticeModel=showRepairDecision?{
     title:finalConfirmed?'Đã nghiệm thu':'Hồ sơ đã được chấp nhận',
     tone:'success' as const,
     summary:finalConfirmed?'Hạng mục đã có xác nhận cuối từ người có thẩm quyền.':'Đang chờ xác nhận cuối của người có thẩm quyền.',
     detail:['Kết quả kiểm tra tại thời điểm nộp hồ sơ:',...fieldMissingReasonLabels(latest?.missingReasons),'Tiến độ sửa chữa hiện tại được đọc riêng từ nhiệm vụ.'].join('\n'),
+  }:showLinkedSubmission?{
+    title:'Đã nộp hồ sơ sửa chữa',tone:linkedReview==='SUPPLEMENT'?'pending' as const:'success' as const,
+    summary:linkedReview==='SUPPLEMENT'?'Quản lý yêu cầu bổ sung':linkedReview?'Xem kết quả đánh giá':'Chờ quản lý đánh giá',
+    detail:'Máy chủ đã liên kết hồ sơ ảnh với lượt sửa chữa. Không cần gửi lại ảnh. Kết quả kiểm tra lúc nộp được giữ trong lịch sử; chưa phải xác nhận nghiệm thu.',
   }:historicalNotice;
   return <SafeAreaScreen scroll header={<><AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />
-    {showNotice||showRepairDecision?<FieldNotice model={noticeModel} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
+    {showNotice||showRepairDecision||showLinkedSubmission?<FieldNotice model={noticeModel} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
   </>}>
     <View style={styles.content}>
-      <Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><Chip label={`Nhiệm vụ: ${fieldTaskStatusLabel(verifiedTask?.status ?? task.status)}`} variant={mode.variant}/>{serverLoaded&&latest?<Chip label={`${finalConfirmed||repairAccepted?'Kết quả lúc nộp':'Hồ sơ'}: ${fieldSubmissionReadinessLabel(latest.readiness)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy||cancelling||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/></Pressable></View>
-        {supplementMode||draft?.repairClaim?<Text style={styles.muted}>{supplementMode?'Bổ sung hồ sơ sửa chữa':'Đo kiểm sau sửa chữa'}</Text>:null}</Card>
+      <Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><CrewTaskStatus status={verifiedTask?.status ?? task.status} label={fieldTaskStatusLabel(verifiedTask?.status ?? task.status)} />{serverLoaded&&latest?<Chip label={linkedSubmission&&fieldAwaitingRepairLink(latest.readiness,latest.missingReasons)?'Hồ sơ: Đã liên kết lượt sửa chữa':`${finalConfirmed||repairAccepted?'Kết quả lúc nộp':'Hồ sơ'}: ${fieldSubmissionReadinessLabel(latest.readiness,latest.missingReasons)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy||cancelling||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/></Pressable></View>
+        {supplementMode||draft?.repairClaim?<Text style={styles.muted}>{supplementMode?'Bổ sung hồ sơ sửa chữa':'Đo kiểm sau sửa chữa'}</Text>:null}
+      </Card>
       {loading?<Text>Đang tải hồ sơ…</Text>:null}
       {error?<FieldErrorPanel title="Không đọc được hồ sơ" message={error} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
       {localRecoveryBlocked?<Card style={[styles.card,styles.recoveryCard]}>
@@ -424,7 +445,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {m.latitude!=null&&m.longitude!=null?<View style={styles.resultRow}><Text style={styles.resultLabel}>Tọa độ đo</Text><Text style={styles.resultText}>{m.latitude}, {m.longitude}</Text></View>:null}
         </View>)}
         {finalConfirmed?<Chip label="Sửa chữa: Đã nghiệm thu" variant="approved" uppercase={false}/>:repairAccepted?<Chip label="Sửa chữa: Chờ xác nhận cuối" variant="status-pending" uppercase={false}/>:null}
-        {!showNotice&&!showRepairDecision&&latest.missingReasons?.length?<View style={styles.missingBox}><Text style={typography.labelLg}>Thông tin còn thiếu</Text>{fieldMissingReasonLabels(latest.missingReasons).map(reason=><Text style={styles.muted} key={reason}>• {reason}</Text>)}</View>:null}
+        {!showNotice&&!showRepairDecision&&!showLinkedSubmission&&latest.missingReasons?.length?<View style={styles.missingBox}><Text style={typography.labelLg}>Thông tin còn thiếu</Text>{fieldMissingReasonLabels(latest.missingReasons).map(reason=><Text style={styles.muted} key={reason}>• {reason}</Text>)}</View>:null}
         <View style={styles.resultHeading}><Text style={typography.labelLg}>Ảnh đã gửi</Text><Text style={styles.muted}>{(latest.evidence??[]).filter(e=>e.fileId).length} ảnh</Text></View>
         <View style={styles.photoGrid}>{(latest.evidence??[]).filter(e=>e.fileId).map((e,index)=>{
           const local=draft?.captures.find(c=>c.verified&&c.upload?.fileId===e.fileId);
@@ -501,27 +522,28 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <SafeAreaProvider>
           <SafeAreaScreen scroll keyboardAware header={<AppHeader subtitle="Vị trí quan sát" showBack onBack={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}/>}>
             <Card style={styles.card}><View style={styles.positionEditor} pointerEvents={busy||frozen?'none':'auto'}>
-<Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><Text style={styles.muted}>Lý trình là khoảng cách tính bằng mét từ đầu tuyến của nhiệm vụ. Nhập theo dấu mốc thực tế, không phải khoảng cách từ điện thoại đến chỗ hư hại. Lưu vị trí mới chỉ lưu nháp; gửi hồ sơ để máy chủ kiểm tra.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
+<Text style={styles.muted}>Chọn dấu mốc đã đối chiếu tại hiện trường.</Text><Text style={styles.muted}>Lý trình tính bằng mét từ đầu tuyến. Chọn phân đoạn và nhập dấu mốc quan sát thực tế.</Text><View accessibilityRole="radiogroup" style={styles.choiceRow}>{positionSources.choices.map(({value,label})=>{const selected=locationProof?.checklist===value || (value==='UNKNOWN'&&!locationProof);return <Pressable key={value} disabled={busy||frozen||taskReadOnly} accessibilityRole="radio" accessibilityState={{selected,disabled:busy||frozen||taskReadOnly}} style={[styles.positionOption,selected&&styles.choiceOptionSelected]} onPress={()=>{if(verifiedTask&&!busy&&!frozen&&!taskReadOnly){setLocationProof(chooseCrewPosition(verifiedTask,value));setChainage('');}}}><MaterialIcons name={selected?"radio-button-checked":"radio-button-unchecked"} size={22} color={selected?colors.primaryDark:colors.secondary}/><Text style={[styles.positionChoiceLabel,selected&&styles.positionChoiceSelected]}>{label}</Text></Pressable>;})}</View>
           {!locationProof?<View style={styles.positionHint}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={styles.positionHintText}>Hồ sơ sẽ ghi nhận thiếu vị trí.</Text></View>:null}
           {locationProof?.checklist==='ROUTE_CHAINAGE_MARKINGS_CONFIRMED'?<>
-            {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>}
+            {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<InputField label="Lý trình quan sát thực tế (m) — bắt buộc" error={positionInputError??undefined} value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>}
           </>:null}
           {locationProof?.checklist==='SEGMENT_MARKINGS_CONFIRMED'?<>
             {taskReadOnly?<Text style={styles.muted}>Lý trình: {chainage||'Chưa có'} m</Text>:<>
               {positionSources.segments.map(segment=><Button key={segment.id} variant="text" title={`${locationProof.observedSegmentId===segment.id?'✓ ':''}Phân đoạn ${segment.sequence} · ${segment.fromOffsetMeters}–${segment.toOffsetMeters} m`} disabled={busy||frozen} onPress={()=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSegmentId:segment.id});}}/>)}
-              <InputField label="Lý trình quan sát thực tế (m)" value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>
+              <InputField label="Lý trình quan sát thực tế (m) — bắt buộc" error={positionInputError??undefined} value={chainage} keyboardType="decimal-pad" onChangeText={value=>{if(!busy&&!frozen)setChainage(value);}}/>
             </>}
           </>:null}
           {locationProof?.checklist==='SLAB_MARKINGS_CONFIRMED'?(taskReadOnly?<Text style={styles.muted}>Ký hiệu tấm: {locationProof.observedSlabId||'Chưa có'}</Text>:<InputField label="Ký hiệu tấm đã đối chiếu thực tế" value={locationProof.observedSlabId??''} onChangeText={value=>{if(!busy&&!frozen)setLocationProof({...locationProof,observedSlabId:value});}}/>):null}
 
-              {!taskReadOnly?<Button variant="primary" title="Lưu vị trí" loading={busy&&busyAction==='save'} disabled={busy||cancelling||frozen} onPress={()=>void run('save')}/>:null}
+              {!taskReadOnly?<Button variant="primary" title="Lưu vị trí" loading={busy&&busyAction==='save'} disabled={busy||cancelling||frozen||!!positionInputError} onPress={()=>void run('save')}/>:null}
               {notice?<FieldNotice model={fieldNoticeModel(notice,undefined,noticeDetail)} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
             </View></Card>
           </SafeAreaScreen>
           </SafeAreaProvider>
         </Modal>
-        <Card style={styles.card}><Text style={styles.sectionTitle}>Ảnh bằng chứng</Text>
-          {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh. Thêm ảnh hiện trường để gửi hồ sơ.'}</Text>:null}
+        <Card style={styles.card}><View style={styles.helpHeading}><MaterialIcons name="photo-library" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Ảnh bằng chứng</Text>{normalMeasurement?<Pressable accessibilityRole="button" accessibilityLabel="Hướng dẫn ảnh bằng chứng" accessibilityState={{expanded:showEvidenceHelp}} style={styles.helpToggle} onPress={()=>setShowEvidenceHelp(v=>!v)}><MaterialIcons name={showEvidenceHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></Pressable>:null}</View>
+          {normalMeasurement&&showEvidenceHelp?<Text style={styles.muted}>Ảnh chụp được lưu trên máy trước. Bấm “Tải ảnh này lên” dưới từng ảnh và chờ “Đã xác minh” để dùng cho đánh giá trước sửa.</Text>:null}
+          {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh hiện trường.'}</Text>:null}
           <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id,transferProgress?.captureId===c.id?transferProgress.percent:undefined);return <View key={c.id} style={styles.photoTile}>
             <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
               <View pointerEvents="none" style={[styles.photoOverlay,feedback.busy&&styles.photoOverlayBusy]} accessible accessibilityLabel={`Ảnh ${index+1}: ${feedback.label}${feedback.percent===null?'':` ${feedback.percent}%`}`} accessibilityState={{busy:feedback.busy}} accessibilityLiveRegion="polite">
@@ -543,18 +565,23 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Card style={styles.card}>
-          <Text style={styles.sectionTitle}>Đánh giá trước sửa</Text>
-          <Text>Sau khi lưu số đo và tải ảnh, mở theo dõi thi công để gửi đánh giá trước sửa.</Text>
-          <Button variant="secondary" title="Mở theo dõi thi công" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>
+          <View style={styles.helpHeading}><MaterialIcons name="fact-check" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Đánh giá trước sửa</Text><Pressable accessibilityRole="button" accessibilityLabel="Hướng dẫn đánh giá trước sửa" accessibilityState={{expanded:showAssessmentHelp}} style={styles.helpToggle} onPress={()=>setShowAssessmentHelp(v=>!v)}><MaterialIcons name={showAssessmentHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></Pressable></View>
+          {showAssessmentHelp?<Text style={styles.muted}>Sau khi lưu số đo và tải ảnh, mở theo dõi thi công để gửi đánh giá trước sửa.</Text>:null}
+          <Button variant="primary" title="Mở theo dõi thi công" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>
         </Card>:null}
-        {!taskReadOnly&&!frozen?<View style={styles.submitActions}><Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy&&busyAction==='submit'} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/></View>:null}
+        {!taskReadOnly&&!frozen&&!normalMeasurement?<View style={styles.submitActions}><Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy&&busyAction==='submit'} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/></View>:null}
         </>:null}
         {fieldDraftPending(draft)?<Card style={styles.card}>
-          <Text>Kết quả thao tác đang được đối soát. Không tạo hồ sơ mới hoặc thay nội dung lệnh đã lưu.</Text>
-          {!draft.command?.responseId?<Text>Chưa có mã hồ sơ được máy chủ xác nhận để đọc lại. Chỉ có thể chủ động đối soát bằng lệnh gốc; tải lại không chứng minh lệnh đã thành công.</Text>:<Text>Đã có mã hồ sơ máy chủ. Có thể đọc lại kết quả mà không gửi lệnh mới.</Text>}
-          <Button variant="secondary" title="Chỉ đọc lại kết quả — không gửi" disabled={busy||!draft.command?.responseId} onPress={()=>void run('reconcile')}/>
-          {draft.command?.phase==='pending'?<Button variant="secondary" title="Đối soát / gửi lại đúng lệnh đã lưu" disabled={busy} onPress={()=>setReplayConfirmed(draft.command?{key:draft.command.key,context:JSON.stringify(context())}:null)}/>:null}
-          {replayConfirmed?<View><Text accessibilityRole="alert">Gửi lại giữ nguyên nội dung, khóa và phiên bản gốc. Nếu máy chủ chưa nhận lệnh, thao tác này có thể thực thi lần đầu.</Text><Button variant="secondary" title="Xác nhận gửi lại lệnh gốc" disabled={busy} onPress={()=>void run('replay')}/><Button variant="text" title="Hủy" onPress={()=>setReplayConfirmed(null)}/></View>:null}
+          <View style={styles.summaryHeader}><Text style={typography.labelLg}>{replayConfirmed?'Xác nhận gửi lại':'Kiểm tra lần gửi'}</Text><MaterialIcons name="sync" size={20} color={colors.secondary}/></View>
+          {replayConfirmed?<>
+            <Text accessibilityRole="alert" style={styles.muted}>Giữ nguyên hồ sơ đã lưu. Nếu máy chủ chưa nhận, thao tác này sẽ gửi hồ sơ.</Text>
+            <Button variant="primary" title="Xác nhận gửi lại" loading={busy&&busyAction==='replay'} disabled={busy} onPress={()=>void run('replay')}/>
+            <Button variant="text" title="Hủy" disabled={busy} onPress={()=>setReplayConfirmed(null)}/>
+          </>:<>
+            <Text style={styles.muted}>{draft.command?.responseId?'Máy chủ đã nhận hồ sơ. Kiểm tra lại để xác nhận kết quả trên thiết bị.':'Chưa xác nhận được lần gửi này. Ảnh và nội dung đã lưu vẫn được giữ.'}</Text>
+            {draft.command?.responseId?<Button variant="secondary" title="Kiểm tra kết quả" loading={busy&&busyAction==='reconcile'} disabled={busy} onPress={()=>void run('reconcile')}/>:null}
+            {draft.command?.phase==='pending'?<Button variant="secondary" title="Kiểm tra lần gửi" disabled={busy} onPress={()=>setReplayConfirmed(draft.command?{key:draft.command.key,context:JSON.stringify(context())}:null)}/>:null}
+          </>}
         </Card>:null}
         {supplementMode&&repairRecovery&&repairRecovery.phase!=='CONFIRMED'?<Card style={styles.card}>
           <Text style={styles.sectionTitle}>Đối soát bổ sung hồ sơ sửa chữa</Text>
@@ -566,8 +593,9 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {repairRecoveryConfirmed?<View><Text accessibilityRole="alert">Sẽ giữ nguyên khóa, nội dung và phiên bản gốc. Nếu máy chủ chưa nhận lệnh, thao tác này có thể thực thi lần đầu.</Text><Button variant="secondary" title="Xác nhận tiếp tục lệnh bổ sung đã lưu" disabled={busy} onPress={()=>void run('recover')}/><Button variant="text" title="Hủy" onPress={()=>setRepairRecoveryConfirmed(null)}/></View>:null}
         </Card>:null}
         {evidenceModel.canCapture&&!draft.repairClaim&&draft.command&&['confirmed','rejected'].includes(draft.command.phase)?<View style={styles.submitActions}><Button variant="secondary" title="Đã xem kết quả — tạo nháp mới" disabled={busy} onPress={()=>void run('new')}/></View>:null}
-        {draft.repairClaim&&draft.command?.phase==='confirmed'?<Button variant="secondary" title={finalConfirmed||repairAccepted||repairContext?.attempt?'Xem tiến độ sửa chữa':'Về chi tiết để nộp hồ sơ chờ quản lý'} disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>:null}
+
       </>:null}
+      {serverLoaded&&latest&&repairContext?<Button variant="secondary" title={linkedSubmission||finalConfirmed||repairAccepted?'Xem hồ sơ hoàn tất':'Tiếp tục hồ sơ hoàn tất'} disabled={busy||cancelling||loading} onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
       <Modal visible={!!deleteTarget} transparent animationType="fade" onRequestClose={()=>setDeleteTarget(null)}>
         <View style={styles.modalBackdrop}><View style={styles.confirmModal} accessibilityViewIsModal>
           <Text style={styles.sectionTitle}>Xóa ảnh cục bộ?</Text>
@@ -624,7 +652,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: spacing.sm,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
     borderRadius: radius.lg,
   },
   priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
@@ -634,6 +662,9 @@ const styles = StyleSheet.create({
   refreshPressed: { backgroundColor: colors.surfaceAlt },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   actionButton: { flex: 1 },
+  helpHeading: {flexDirection:"row",alignItems:"center",gap:spacing.sm},
+  helpTitle: {...typography.titleMd,color:colors.neutral,flex:1},
+  helpToggle: {minWidth:48,minHeight:48,alignItems:"center",justifyContent:"center",borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
   summaryHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -2,17 +2,18 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 async function mounted(options={}){
  const context={actor:'crew',scope:'session',environment:'test',projectId:'project',taskId:'task'};
+ const navigation=[];
  let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0;
  let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN'}],captures:options.emptyCaptures?[]:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
  const s=screen('app/(crew)/field-review.tsx',{
  expose:'CrewFieldReviewScreenContent,fieldNoticeModel,safeFieldErrorDetail',exportName:'CrewFieldReviewScreenContent',
  props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY'}},
- moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>({}),router:{push:()=>cleanup?.()},useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
+ moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>({}),router:{push:p=>{navigation.push(p);cleanup?.();}},useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
  modules:{
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},
- '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
+ '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',mode:options.normal?'NORMAL':'MEASURE_ONLY',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
  '../../src/api/crewFieldDraft':{currentFieldContext:()=>context,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>structuredClone(draft),measurementTemplate:()=>draft.measurements[0],fieldDraftPending:d=>d.command?.phase==='pending',fieldErrorMessage:e=>e.message,
  saveFieldMeasurements:async()=>{if(waitSave)await waitSave.promise;if(failSave)throw Error('Lưu chưa thành công');return structuredClone(draft);},acknowledgeFieldResult:async()=>({...draft,command:null}),
  uploadAndSubmitFieldDraft:async(d,r,onProgress)=>{
@@ -27,7 +28,7 @@ async function mounted(options={}){
  },
  }});
  s.render();await s.flush();
- return {s,detailReads:()=>detailReads,focus:async()=>{cleanup=focus();await s.flush();},setFailure:v=>failSave=v,setWait:d=>waitSave=d,setCommand:c=>draft.command=c,
+ return {s,navigation,detailReads:()=>detailReads,focus:async()=>{cleanup=focus();await s.flush();},setFailure:v=>failSave=v,setWait:d=>waitSave=d,setCommand:c=>draft.command=c,
  submit:()=>s.nodes().find(n=>n.type==='Button'&&n.props.title==='Gửi hồ sơ đo kiểm'),notice:()=>s.nodes().find(n=>typeof n.type==='function'&&n.type.name==='FieldNotice')};
 }
 test('FIELD camera navigation clears busy when returning to the editor',async()=>{
@@ -71,7 +72,7 @@ test('FIELD confirmed send refreshes task and receipt immediately without anothe
  const h=await mounted(),reads=h.detailReads();
  h.s.press('Gửi hồ sơ đo kiểm');await h.s.flush();
  assert.ok(h.detailReads()>reads,'must reload task after confirmed send');
- assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Nhiệm vụ: Đã nộp'));
+ assert.ok(h.s.nodes().some(n=>n.type==='CrewTaskStatus'&&n.props.label==='Đã nộp'));
  assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Chỉnh số đo'),false);
  h.s.unmount();
 });
@@ -79,7 +80,7 @@ test('FIELD confirmed send refreshes task and receipt immediately without anothe
 test('FIELD final decision takes precedence over historical FIELD readiness without rewriting it',async()=>{
  const h=await mounted({previous:true,completed:true,incomplete:true,repairContext:{status:'Confirmed',finalDecision:{result:'CONFIRMED'}}});
  assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Sửa chữa: Đã nghiệm thu'));
- assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Kết quả lúc nộp: Cần bổ sung thông tin'));
+ assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Kết quả lúc nộp: Chờ liên kết lượt sửa chữa'));
  const banner=h.s.nodes()[0].props.header.props.children[1];
  assert.equal(banner.props.model.title,'Đã nghiệm thu');
  assert.match(banner.props.model.detail,/Ảnh sau sửa chưa liên kết/);
@@ -92,6 +93,35 @@ test('FIELD Completed alone never implies final repair acceptance',async()=>{
  h.s.unmount();
 });
 
+test('FIELD a saved claim awaiting formal intake offers the existing closeout route without resubmitting',async()=>{
+ const h=await mounted({previous:true,incomplete:true,repairContext:{status:'InProgress'}});
+ const action=h.s.nodes().find(n=>n.type==='Button'&&n.props.title==='Tiếp tục hồ sơ hoàn tất');
+ assert.ok(action);assert.equal(action.props.disabled,false);
+ h.s.unmount();
+});
+
+
+test('FIELD current linked attempt replaces historical binding warning and opens closeout directly',async()=>{
+ const h=await mounted({previous:true,incomplete:true,repairContext:{status:'Submitted',attempt:{attemptId:'attempt',effectiveSubmissionId:'parent',review:null}}});
+ const banner=h.s.nodes()[0].props.header.props.children[1];
+ assert.equal(banner.props.model.title,'Đã nộp hồ sơ sửa chữa');
+ assert.equal(banner.props.model.summary,'Chờ quản lý đánh giá');
+ assert.equal(banner.props.model.tone,'success');
+ assert.ok(h.s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Hồ sơ: Đã liên kết lượt sửa chữa'));
+ const text=JSON.stringify(h.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.doesNotMatch(text,/Thông tin còn thiếu|Ảnh sau sửa chưa liên kết/);
+ h.s.press('Xem hồ sơ hoàn tất');
+ assert.equal(h.navigation.at(-1).pathname,'/(crew)/complete');
+ assert.equal(h.navigation.at(-1).params.id,'task');
+ h.s.unmount();
+});
+
+test('FIELD unrelated attempt cannot clear current submission binding warning',async()=>{
+ const h=await mounted({previous:true,incomplete:true,repairContext:{status:'Submitted',attempt:{attemptId:'attempt',effectiveSubmissionId:'other',review:null}}});
+ const banner=h.s.nodes()[0].props.header.props.children[1];
+ assert.notEqual(banner?.props.model.title,'Đã nộp hồ sơ sửa chữa');
+ h.s.unmount();
+});
 
 test('FIELD progress stays 100 during verification without claiming VERIFIED',()=>{
  const fs=require('node:fs'),vm=require('node:vm');const scope={require,setTimeout,clearTimeout,Uint8Array,AbortController,URL};
@@ -119,4 +149,20 @@ test('FIELD screen shows transport percent then keeps 100 while waiting for veri
  assert.ok(h.s.nodes().some(n=>n.props?.accessibilityLabel==='Ảnh 1: Đang kiểm tra 100%'));
  assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Gửi hồ sơ đo kiểm'&&!n.props.disabled),false);
  verification.resolve();await h.s.flush();h.s.unmount();
+});
+
+test('FIELD long help is opt-in and each section expands independently',async()=>{
+ const h=await mounted({normal:true,emptyCaptures:true});
+ const copy=()=>JSON.stringify(h.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.doesNotMatch(copy(),/Ảnh chụp được lưu trên máy trước|Sau khi lưu số đo và tải ảnh/);
+ const toggle=label=>h.s.nodes().find(n=>n.props.accessibilityLabel===label);
+ assert.equal(toggle('Hướng dẫn ảnh bằng chứng').props.accessibilityState.expanded,false);
+ toggle('Hướng dẫn ảnh bằng chứng').props.onPress();h.s.render();
+ assert.match(copy(),/Ảnh chụp được lưu trên máy trước/);
+ assert.doesNotMatch(copy(),/Sau khi lưu số đo và tải ảnh/);
+ toggle('Hướng dẫn đánh giá trước sửa').props.onPress();h.s.render();
+ assert.match(copy(),/Sau khi lưu số đo và tải ảnh/);
+ toggle('Hướng dẫn ảnh bằng chứng').props.onPress();h.s.render();
+ assert.doesNotMatch(copy(),/Ảnh chụp được lưu trên máy trước/);
+ h.s.unmount();
 });

@@ -110,7 +110,7 @@ test('FIELD pending command exposes reconciliation without editable draft contro
   const h=await mounted('RULER',command), before=JSON.stringify(h.saved());
   assert.equal(h.input(),undefined);
   assert.equal(h.s.nodes().some(n=>n.type==='Button'&&['Chỉnh số đo','Chỉnh vị trí','Lưu nháp số đo','Chụp / chọn ảnh'].includes(n.props.title)),false);
-  assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Đối soát / gửi lại đúng lệnh đã lưu'));
+  assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Kiểm tra lần gửi'));
   assert.equal(h.calls.length,0); assert.equal(JSON.stringify(h.saved()),before);
   h.s.unmount();
 });
