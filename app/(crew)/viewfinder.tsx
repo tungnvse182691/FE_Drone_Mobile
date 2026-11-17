@@ -247,10 +247,13 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       </View>
 
       {normalAfter?<View style={{padding:spacing.sm}}>
-        <Text style={{color:colors.surface}}>{draft?.repairClaim?'Ảnh sau sửa phải được chụp trực tiếp sau biên nhận kết thúc thi công.':'Cần kết thúc thi công và lập hồ sơ từ chi tiết nhiệm vụ trước khi chụp ảnh sau sửa.'}</Text>
-        <Button variant="secondary" title={postRepairCapture?'Đã xác nhận chụp hiện trạng sau sửa':'Tôi xác nhận đang chụp hiện trạng sau sửa'} disabled={!draft?.repairClaim||busy||!!draft.command} onPress={()=>setPostRepairCapture(v=>!v)}/>
+        <Text style={{...typography.bodyMd,color:colors.surface,marginBottom:spacing.sm}}>{draft?.repairClaim?'Chụp trực tiếp hiện trạng sau khi đã sửa xong.':'Chưa đến bước chụp sau sửa. Cần lưu số đo và tải ảnh trước, gửi đánh giá, sau đó bắt đầu và kết thúc thi công.'}</Text>
+        {draft?.repairClaim?<Pressable accessibilityRole="checkbox" accessibilityLabel="Tôi xác nhận đang chụp hiện trạng sau sửa" accessibilityState={{checked:postRepairCapture,disabled:busy||!!draft.command}} disabled={busy||!!draft.command} onPress={()=>setPostRepairCapture(v=>!v)} style={({pressed})=>[styles.afterConfirmation,postRepairCapture&&styles.afterConfirmationSelected,pressed&&styles.afterConfirmationPressed]}>
+          <MaterialIcons name={postRepairCapture?'check-box':'check-box-outline-blank'} size={26} color="#FFFFFF"/>
+          <Text style={styles.afterConfirmationText}>{postRepairCapture?'Đã xác nhận chụp sau sửa':'Xác nhận chụp sau sửa'}</Text>
+        </Pressable>:<Button variant="secondary" style={{backgroundColor:colors.surface}} title="Xem bước cần làm để chụp sau" disabled={busy||cameraShooting||pickerRef.current} onPress={()=>router.dismissTo({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>}
       </View>:null}
-      {!ready?<Button variant="secondary" title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.dismissTo(fieldHref)}/>:null}
+      {!ready?<Button variant="secondary" style={{backgroundColor:colors.surface}} title="Quay lại hồ sơ để tải lại nháp" onPress={()=>router.dismissTo(fieldHref)}/>:null}
       <View style={styles.viewport}>
         <ViewFinder
           key={`${task.projectId}:${task.id}:${isFocused}`}
@@ -284,6 +287,10 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
 }
 
 const styles = StyleSheet.create({
+  afterConfirmation: {minHeight:52,padding:spacing.md,gap:spacing.sm,flexDirection:'row',alignItems:'center',borderWidth:1,borderColor:'#94A3B8',borderRadius:radius.md,backgroundColor:'#334155'},
+  afterConfirmationSelected: {backgroundColor:'#14532D',borderColor:'#86EFAC'},
+  afterConfirmationPressed: {opacity:0.85},
+  afterConfirmationText: {...typography.labelLg,color:'#FFFFFF',flex:1,flexShrink:1},
   safe: {
     flex: 1,
     backgroundColor: '#0F141C',
