@@ -68,6 +68,9 @@ function screen(file, options = {}) {
     if(name.endsWith('/reporter/PhotoUploadStatus'))return{PhotoUploadStatus:'PhotoUploadStatus'};
     if(name.endsWith('/components/ReporterHeader'))return{ReporterHeader:'ReporterHeader'};
     if(name.endsWith('/components/OperatorLocalTasks'))return{OperatorLocalTasks:'OperatorLocalTasks'};
+    if(name.endsWith('/components/ReporterPasswordReset'))return{ReporterPasswordReset:'ReporterPasswordReset'};
+    if(name.endsWith('/drone/OperatorSubmittedVideos'))return{OperatorSubmittedVideos:'OperatorSubmittedVideos'};
+    if(name.endsWith('/components/CrewTaskStatus'))return{CrewTaskStatus:'CrewTaskStatus',crewTaskStatusStyle:()=>({foreground:'#1D4ED8'})};
     if(name.endsWith('/drone/DroneUploadRecoveryList'))return{DroneUploadRecoveryList:'DroneUploadRecoveryList'};
     if(name.endsWith('/drone/OperatorLocalFiles'))return{OperatorLocalFiles:'OperatorLocalFiles'};
     if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
