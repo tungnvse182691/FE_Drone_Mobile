@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
+import { ReporterPasswordReset } from '../../src/components/ReporterPasswordReset';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { loginReal, requestPasswordRecoveryReal, extractProblemCode } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
@@ -57,6 +58,7 @@ export default function LoginScreen() {
   };
 
   const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryRole, setRecoveryRole] = useState<'employee' | 'reporter'>('employee');
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryMessage, setRecoveryMessage] = useState('');
   const [recoveryLocked, setRecoveryLocked] = useState(false);
@@ -283,6 +285,14 @@ export default function LoginScreen() {
           <ScrollView contentContainerStyle={styles.recoveryContent} keyboardShouldPersistTaps="handled">
           <View style={[styles.loginCard, styles.recoveryCard]}>
             <Text style={typography.titleMd}>Quên mật khẩu</Text>
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Button variant="secondary" title="Người phản ánh" disabled={recoveryBusy.current} onPress={() => setRecoveryRole('reporter')} />
+              <Button variant="secondary" title="Nhân viên" onPress={() => setRecoveryRole('employee')} />
+            </View>
+            {recoveryOpen && recoveryRole === 'reporter' ? <ReporterPasswordReset onComplete={() => {
+              setPassword(''); setRecoveryOpen(false); setError(null);
+              router.replace({ pathname: '/(auth)', params: { passwordChanged: '1' } });
+            }} /> : <>
             <InputField label="Email khôi phục" value={recoveryEmail} onChangeText={text => { if (!recoveryLocked) setRecoveryEmail(text); }} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
             <Text style={typography.bodyMd}>{recoveryMessage}</Text>
             <Button variant="primary" title="Gửi yêu cầu khôi phục" onPress={requestRecovery} disabled={recoveryLocked} />
@@ -290,6 +300,7 @@ export default function LoginScreen() {
               if (recoveryBusy.current) return;
               setRecoveryLocked(false); setRecoveryMessage('');
             }} /> : null}
+            </>}
             <Button variant="secondary" title="Đóng" onPress={() => setRecoveryOpen(false)} />
           </View>
           </ScrollView>
