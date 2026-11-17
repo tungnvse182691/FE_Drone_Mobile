@@ -17,7 +17,7 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Khuyết tật nhiệm vụ" showBack onBack={()=>router.back()} />}>
     <Card style={styles.banner}><View style={styles.bannerRow}>
       <MaterialIcons name="info-outline" size={22} color={colors.warning}/>
-      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin khuyết tật từ nhiệm vụ được giao.</Text>
+      <Text style={[typography.bodyMd,styles.bannerText]}>Thông tin giao việc ban đầu. Ảnh và số đo Crew đã gửi được lưu riêng trong hồ sơ hiện trường.</Text>
     </View></Card>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>NHIỆM VỤ & VỊ TRÍ</Text>
@@ -33,7 +33,10 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>HÌNH ẢNH HIỆN TRƯỜNG</Text>
-      <View style={styles.photoPlaceholder}><MaterialIcons name="photo-library" size={24} color={colors.secondary}/><Text style={[typography.bodyMd,styles.photoText]}>Xem ảnh trong hồ sơ nhiệm vụ</Text><Text style={[typography.caption,styles.photoHint]}>Xem thao tác ảnh của nhiệm vụ tại màn chi tiết khi đủ điều kiện.</Text></View>
+      <Card style={styles.infoCard}>
+        <Text style={typography.bodyMd}>{task.detail?.latestSubmissionId ? 'Nhiệm vụ đã có hồ sơ được máy chủ tiếp nhận. Mở hồ sơ để xem ảnh, số đo và kết quả kiểm tra.' : 'Ảnh và số đo được quản lý trong hồ sơ hiện trường của nhiệm vụ.'}</Text>
+        {task.detail?.latestSubmissionId || task.detail?.firstStartOriginId ? <Button variant="secondary" title={task.detail?.latestSubmissionId ? 'Xem hồ sơ đã nộp' : 'Mở hồ sơ hiện trường'} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/> : null}
+      </Card>
     </View>
     <View style={styles.fieldGroup}>
       <Text style={[typography.labelLg,styles.fieldLabel]}>GHI CHÚ NHIỆM VỤ</Text>
