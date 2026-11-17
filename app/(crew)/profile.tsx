@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth';
@@ -9,22 +9,23 @@ import { Card } from '../../src/components/Card';
 import { useCrewInbox } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
 
 const PERFORMANCE_STATS = [
   {
     value: '',
     label: 'HOÀN THÀNH',
-    color: colors.neutral,
+    color: '#187047',
   },
   {
     value: '',
     label: 'CHƯA HOÀN THÀNH',
-    color: colors.primary,
+    color: '#8A5200',
   },
   {
     value: '',
     label: 'ĐÃ TẢI',
-    color: colors.success,
+    color: colors.neutral,
   },
 ];
 
@@ -96,6 +97,7 @@ export default function CrewProfileScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
+      <CrewContentTransition ready replayOnFocus>
       <View style={styles.profileHeader}>
         <View style={styles.avatar} accessibilityLabel="Biểu tượng tài khoản">
           <MaterialIcons name="person" size={48} color={colors.secondary} />
@@ -107,15 +109,15 @@ export default function CrewProfileScreen() {
         <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>
-          <MaterialIcons name="build" size={14} color={colors.brandGold} />
+          <MaterialIcons name="build" size={14} color="#115E47" />
           <Text style={[typography.labelSm, styles.roleText]}>Kỹ thuật viên sửa chữa</Text>
         </View>
       </View>
 
       <Card style={styles.statsCard}>
-        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, { color: colors.neutral }]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
+        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, { color: colors.neutral }]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View><CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
             {inbox.query.isFetching ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
-          </Pressable></View>
+          </CrewPressable></View>
         {inbox.error ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: colors.secondary }]}>{inbox.error}</Text> :
           inbox.query.isPending && inbox.enabled ? <Text style={typography.bodyMd}>Đang tải thống kê…</Text> :
           !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
@@ -125,7 +127,7 @@ export default function CrewProfileScreen() {
             <React.Fragment key={stat.label}>
               {idx > 0 && <View style={styles.statDivider} />}
               <View style={styles.statCol}>
-                <Text style={[typography.headlineLg, { color: stat.color, fontWeight: '700' }]}>
+                <Text style={[typography.titleLg, styles.statNumber, { color: stat.color }]}>
                   {inbox.error || inbox.query.isPending ? '—' : String(idx === 0 ? completed : idx === 1 ? inbox.tasks.length - completed : inbox.tasks.length)}
                 </Text>
                 <Text style={[typography.labelSm, styles.statLabel]}>{stat.label}</Text>
@@ -140,7 +142,7 @@ export default function CrewProfileScreen() {
 
       <Card style={styles.settingsCard}>
         {SETTINGS_ROWS.map((row, index) => (
-          <Pressable
+          <CrewPressable
             key={row.label}
             accessibilityRole="button"
             style={({ pressed }) => [styles.row, index < SETTINGS_ROWS.length && styles.rowBorder, pressed && styles.rowPressed]}
@@ -152,10 +154,10 @@ export default function CrewProfileScreen() {
               {row.subtitle ? <Text style={[typography.caption, styles.rowSubtitle]}>{row.subtitle}</Text> : null}
             </View>
             <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
-          </Pressable>
+          </CrewPressable>
         ))}
         <View style={styles.row}>
-          <MaterialIcons name="light-mode" size={20} color={colors.brandGold} />
+          <MaterialIcons name="light-mode" size={20} color={colors.secondary} />
           <View style={styles.rowText}>
             <Text style={[typography.bodyMd, styles.rowLabel]}>Giao diện: Tương phản cao ngoài trời</Text>
             <Text style={[typography.caption, styles.rowSubtitle]}>Cố định chế độ sáng</Text>
@@ -163,19 +165,19 @@ export default function CrewProfileScreen() {
         </View>
       </Card>
 
-      <Pressable
+      <CrewPressable
         accessibilityRole="button"
         style={({ pressed }) => [styles.logoutBtn, pressed && styles.logoutPressed]}
         onPress={handleLogout}
       >
         <MaterialIcons name="logout" size={18} color={colors.error} />
         <Text style={[typography.labelLg, styles.logoutText]}>Đăng xuất</Text>
-      </Pressable>
+      </CrewPressable>
 
       <Text style={[typography.caption, styles.footer]}>
         RoadGuard • Bê tông Hoàng Hải
       </Text>
-
+      </CrewContentTransition>
     </SafeAreaScreen>
   );
 }
@@ -192,7 +194,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
@@ -219,18 +221,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: '#DDF5EC',
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: '#83CEB2',
   },
   roleText: {
-    color: colors.brandGold,
+    color: '#115E47',
   },
   statsCard: {
     borderRadius: radius.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   statsRow: {
     flexDirection: 'row',
@@ -256,6 +258,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     textTransform: 'uppercase',
   },
+  statNumber: { fontSize: 28, lineHeight: 36, fontVariant: ['tabular-nums'] },
   sectionLabel: {
     color: colors.secondary,
     marginBottom: spacing.sm,
@@ -264,7 +267,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#E8D9A8',
+    borderColor: colors.border,
   },
   row: {
     flexDirection: 'row',
