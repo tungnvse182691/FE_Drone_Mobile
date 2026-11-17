@@ -6,7 +6,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip, type ChipVariant } from '../../src/components/Chip';
-import { CrewTaskStatus, crewTaskStatusStyle } from '../../src/components/CrewTaskStatus';
+import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
 import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
@@ -260,7 +260,6 @@ export default function CrewTasksScreen() {
         ) : (
           <View style={styles.taskList}>
             {list.map((task) => {
-            const railColor = crewTaskStatusStyle(task.status).foreground;
             return (
               <CrewPressable
                 key={task.id}
@@ -272,7 +271,6 @@ export default function CrewTasksScreen() {
                 accessibilityRole="button"
               >
                 <Card style={styles.taskCard}>
-                  <View style={[styles.rail, { backgroundColor: railColor }]} />
                   <View style={styles.taskHeader}>
                     <View style={styles.taskMetaRow}>
                       <CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)} />
@@ -429,15 +427,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     elevation: 0,
     shadowOpacity: 0,
-  },
-  rail: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    borderTopLeftRadius: radius.xl,
-    borderBottomLeftRadius: radius.xl,
   },
   taskList: {
     paddingBottom: spacing.lg,

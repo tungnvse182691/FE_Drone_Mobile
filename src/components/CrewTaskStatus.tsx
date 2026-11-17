@@ -9,7 +9,7 @@ export function crewTaskStatusStyle(status?: string | null) {
   if (value === 'NEWASSIGNED' || value === 'ASSIGNED') return { background: '#FFF4E5', foreground: '#92400E', icon: 'schedule' as const };
   if (value === 'ACCEPTED') return { background: '#EAF2FF', foreground: '#1D4ED8', icon: 'assignment-turned-in' as const };
   if (value === 'INPROGRESS' || value === 'STARTED') return { background: '#E6F6F5', foreground: '#0F766E', icon: 'build' as const };
-  if (value === 'SUBMITTED') return { background: '#F0EBFF', foreground: '#6D28D9', icon: 'upload-file' as const };
+  if (value === 'SUBMITTED') return { background: '#EDF2F6', foreground: '#40566B', icon: 'upload-file' as const };
   if (value === 'COMPLETED') return { background: '#E8F5E9', foreground: '#166534', icon: 'check-circle' as const };
   if (value === 'SUPPLEMENTREQUIRED') return { background: '#FFF0E8', foreground: '#9A3412', icon: 'edit-note' as const };
   if (value === 'REJECTED') return { background: '#FDECEC', foreground: '#B91C1C', icon: 'cancel' as const };
