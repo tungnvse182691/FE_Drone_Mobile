@@ -53,6 +53,20 @@ function repairOverview(context,history=[],stage='overview'){
  return {s,get mutations(){return mutations;}};
 }
 
+test('C3 ongoing construction keeps finish visible and collapses preparation evidence',async()=>{
+ const f=repairOverview({status:'InProgress'},[{key:'start',phase:'CONFIRMED',operation:'start'}],'progress');
+ f.s.render();await f.s.flush();
+ assert.ok(f.s.nodes().some(n=>n.props.title==='Kết thúc thi công'&&!n.props.disabled));
+ let text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.match(text,/Đang thi công/);
+ assert.doesNotMatch(text,/Số đo đã lưu|Ảnh đã xác minh|Đã bắt đầu thi công\. Chỉ bấm/);
+ const disclosure=f.s.nodes().find(n=>n.props.accessibilityLabel==='Hồ sơ trước sửa');assert.ok(disclosure);
+ assert.equal(disclosure.props.accessibilityState.expanded,false);
+ disclosure.props.onPress();f.s.render();
+ text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.match(text,/Số đo đã lưu/);assert.equal(f.mutations,0);f.s.unmount();
+});
+
 for(const context of [null,{repairPlan:'Keep backend text',itemId:'item',bindingId:'binding',status:'Assigned'}])test('C3 repair overview retains valid links and visible pending recovery with context '+!!context,async()=>{
  const f=repairOverview(context,[{key:'stable',phase:'UNKNOWN_OUTCOME',operation:'start'}]);
  f.s.render();await f.s.flush();
@@ -80,6 +94,16 @@ test('C3 closeout uses current final confirmation rather than stale intake',asyn
  assert.equal(f.mutations,0);f.s.unmount();
 });
 
+
+test('C3 closeout reads submitted server attempt without a journal from another device',async()=>{
+ const f=repairOverview({status:'Submitted',attempt:{attemptId:'attempt',effectiveSubmissionId:'submission',review:null}},[],'closeout');
+ f.s.render();await f.s.flush();
+ const text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+ assert.match(text,/Đã gửi hồ sơ/);assert.match(text,/Đang chờ quản lý đánh giá/);
+ assert.doesNotMatch(text,/Chưa kết thúc thi công|0 ảnh đã xác minh|Chưa có số đo/);
+ for(const title of ['Chụp ảnh sau sửa','Gửi hồ sơ hoàn tất'])assert.equal(f.s.nodes().some(n=>n.props.title===title),false);
+ assert.equal(f.mutations,0);f.s.unmount();
+});
 
 for(const context of [null,{status:'Confirmed',finalDecision:null},{status:'Submitted',attempt:{review:{decision:'ACCEPT'}}}])test('C3 never infers final confirmation from intake or PM review: '+JSON.stringify(context),async()=>{
  const f=repairOverview(context,[{key:'intake',phase:'CONFIRMED',operation:'attempt',receipt:{data:{intakeReadiness:'INCOMPLETE'}}}],'closeout');

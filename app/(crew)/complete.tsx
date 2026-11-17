@@ -3,27 +3,25 @@ import {StyleSheet,Text} from 'react-native';
 import {router} from 'expo-router';
 import {SafeAreaScreen} from '../../src/components/SafeAreaScreen';
 import {AppHeader} from '../../src/components/AppHeader';
+import {CrewTaskStatus} from '../../src/components/CrewTaskStatus';
 import {Card} from '../../src/components/Card';
-import {Button} from '../../src/components/Button';
 import {NormalRepairPanel} from '../../src/components/crew/NormalRepairPanel';
 import {CrewTaskBoundary,crewStatusLabel} from './tasks';
-import {colors,radius,spacing,typography} from '../../src/design-tokens';
+import {colors,spacing,typography} from '../../src/design-tokens';
 export default function CrewRepairCompleteScreen(){
  return <CrewTaskBoundary operational={false}>{task=><SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ hoàn tất thi công" showBack onBack={()=>router.back()}/>}>
  <Card style={styles.summary}>
- <Text style={typography.titleLg}>{task.title||'Nhiệm vụ hiện trường'}</Text>
- <Text style={styles.body}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
- <Text style={styles.body}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ')||'Chưa có thông tin tuyến đường'}</Text>
- <Text style={styles.body}>{crewStatusLabel(task.status)}</Text>
- <Text style={styles.hint}>Thi công xong, gửi hồ sơ và được quản lý xác nhận là các bước riêng biệt.</Text>
+ <Text numberOfLines={2} style={typography.labelLg}>{task.title||'Nhiệm vụ hiện trường'}</Text>
+ <Text style={styles.hint}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
+ {[task.route_code,task.section_name,task.chainage].some(Boolean)?<Text style={styles.hint}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ')}</Text>:null}
+ <CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)}/>
  </Card>
  {(task.detail?.mode==='NORMAL'||task.detail?.mode==='CONDITIONAL_FT')?<NormalRepairPanel task={task} stage="closeout"/>:<Card style={styles.summary}><Text style={styles.body}>Chưa có ngữ cảnh sửa chữa theo kế hoạch phù hợp. Chức năng thi công chưa khả dụng.</Text></Card>}
- <Button title="Về chi tiết nhiệm vụ" variant="secondary" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/>
  </SafeAreaScreen>}</CrewTaskBoundary>;
 }
 
 const styles=StyleSheet.create({
- summary:{borderWidth:1,borderColor:'#E8D9A8',borderRadius:radius.lg,gap:spacing.sm,marginBottom:spacing.md},
+ summary:{gap:spacing.xs,marginBottom:spacing.md},
  body:{...typography.bodyMd,color:colors.neutral},
  hint:{...typography.caption,color:colors.secondary},
 });

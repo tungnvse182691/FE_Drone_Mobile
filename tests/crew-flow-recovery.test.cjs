@@ -165,9 +165,63 @@ function normalScreen(stage,rows=[],extra={}){
 }
 for(const stage of ['progress','closeout'])test('Crew mounted '+stage+' filters actual action groups without a second dispatcher',async()=>{
  const f=normalScreen(stage);f.s.render();await f.s.flush();const titles=f.s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
- for(const title of ['Gửi đánh giá trước sửa','Bắt đầu thi công','Kết thúc thi công'])assert.equal(titles.includes(title),stage==='progress');
- for(const title of ['Chụp ảnh sau sửa / lập hồ sơ sửa chữa','Nộp hồ sơ chờ quản lý đánh giá'])assert.equal(titles.includes(title),stage==='closeout');
+ assert.equal(titles.includes('Gửi đánh giá trước sửa'),stage==='progress');
+ for(const title of ['Bắt đầu thi công','Kết thúc thi công','Chụp ảnh sau sửa'])assert.equal(titles.includes(title),false,'future steps are guidance, not dead buttons');
+ assert.equal(titles.includes('Gửi hồ sơ hoàn tất'),false);
  assert.equal(f.posts(),0);f.s.unmount();
+});
+test('Crew progress keeps the next action before optional plan and expands steps without sending commands',async()=>{
+ const f=normalScreen('progress');f.s.render();await f.s.flush();
+ let nodes=f.s.nodes();
+ const action=nodes.findIndex(n=>n.props.title==='Gửi đánh giá trước sửa');
+ const plan=nodes.findIndex(n=>n.type==='Text'&&n.props.children?.includes('Phương án xử lý'));
+ assert.ok(action>=0&&plan===-1,'optional plan is collapsed behind the next action');
+ f.s.nodes().find(n=>n.props.title==='Xem lịch sử và thông tin kỹ thuật').props.onPress();await f.s.flush();
+ assert.ok(f.s.nodes().findIndex(n=>n.type==='Text'&&n.props.children?.includes('Phương án xử lý'))>action);
+ assert.ok(!JSON.stringify(nodes).includes('Chụp ảnh sau sửa rồi nộp hồ sơ cho quản lý.'));
+ f.s.nodes().find(n=>n.props.accessibilityLabel==='Xem các bước').props.onPress();await f.s.flush();
+ assert.ok(JSON.stringify(f.s.nodes()).includes('Chụp ảnh sau sửa rồi nộp hồ sơ cho quản lý.'));
+ assert.equal(f.posts(),0);
+ f.s.nodes().find(n=>n.props.accessibilityLabel==='Thu gọn các bước').props.onPress();await f.s.flush();
+ assert.ok(!JSON.stringify(f.s.nodes()).includes('Chụp ảnh sau sửa rồi nộp hồ sơ cho quản lý.'));
+ f.s.unmount();
+});
+test('Crew step guidance exposes only the next repair milestone without dispatching on mount',async()=>{
+ const receipt=operation=>({key:operation,operation,phase:'CONFIRMED',receipt:{data:{readiness:'READY'}}});
+ for(const [rows,present,absent] of [
+  [[receipt('assessment')],'Bắt đầu thi công',['Gửi đánh giá trước sửa','Kết thúc thi công']],
+  [[receipt('assessment'),receipt('start')],'Kết thúc thi công',['Gửi đánh giá trước sửa','Bắt đầu thi công']],
+  [[receipt('assessment'),receipt('start'),receipt('finish')],'Mở hồ sơ sau thi công',['Gửi đánh giá trước sửa','Bắt đầu thi công','Kết thúc thi công']],
+ ]){
+  const f=normalScreen('progress',rows);f.s.render();await f.s.flush();
+  const titles=f.s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
+  assert.ok(titles.includes(present));for(const title of absent)assert.ok(!titles.includes(title));
+  assert.equal(f.posts(),0);f.s.unmount();
+ }
+});
+test('Crew assessment waits for every BEFORE photo, not just one verified photo',async()=>{
+ const f=normalScreen('progress',[],{readRepairFieldDraft:async()=>({measurements:[{sampleId:'measure'}],captures:[{purpose:'BEFORE',verified:true,upload:{fileId:'file'}},{purpose:'BEFORE',verified:false}]})});
+ f.s.render();await f.s.flush();
+ assert.ok(!f.s.nodes().some(n=>n.props.title==='Gửi đánh giá trước sửa'));
+ assert.ok(JSON.stringify(f.s.nodes()).includes('Lưu số đo và tải ảnh trước sửa để tiếp tục.'));
+ assert.equal(f.posts(),0);f.s.unmount();
+});
+test('Crew incomplete assessment shows server reasons without technical disclosure or automatic commands',async()=>{
+ const f=normalScreen('progress',[{key:'assessment',operation:'assessment',phase:'CONFIRMED',receipt:{data:{readiness:'INCOMPLETE',missingReasons:['LOCATION_UNKNOWN','REQUIRED_MEASUREMENT_MISSING','NEW_SERVER_REASON']}}}]);
+ f.s.render();await f.s.flush();
+ const text=JSON.stringify(f.s.nodes());
+ assert.ok(text.includes('Chưa bổ sung vị trí quan sát.'));
+ assert.ok(text.includes('Thiếu loại số đo nhiệm vụ yêu cầu.'));
+ assert.ok(text.includes('Còn yêu cầu bổ sung. Xem chi tiết trong lịch sử.'));
+ assert.ok(f.s.nodes().some(n=>n.props.title==='Mở hồ sơ để bổ sung'));
+ assert.ok(!text.includes('Ảnh và số đo đã lưu được giữ nguyên. Sửa phần còn thiếu'));
+ assert.ok(text.includes('Cần bổ sung đánh giá'));
+ assert.ok(!text.includes('Số đo và ảnh đã sẵn sàng để gửi đánh giá.'));
+ assert.ok(!f.s.nodes().some(n=>n.props.title==='Bắt đầu thi công'));
+ assert.equal(f.posts(),0);
+ f.switch();f.s.render();await f.s.flush();
+ assert.ok(!JSON.stringify(f.s.nodes()).includes('Thiếu loại số đo nhiệm vụ yêu cầu.'));
+ f.s.unmount();
 });
 test('Crew mounted definitive recovery requires explicit confirmation and cannot POST or survive actor switch',async()=>{
  const f=normalScreen('progress',[{key:'rejected',operation:'assessment',phase:'REJECTED'}]);f.s.render();await f.s.flush();
@@ -198,10 +252,10 @@ test('Crew FIELD supplement saves local edits before camera and carries mode wit
 });
 for(const phase of ['pending','acknowledged'])test('Crew mounted FIELD '+phase+' exposes only the applicable recovery action',async()=>{
  const f=fieldScreen(phase,phase==='acknowledged'?'server-submission':undefined);f.s.render();await f.s.flush();
- const read=f.s.nodes().find(n=>n.props.title==='Chỉ đọc lại kết quả — không gửi');assert.equal(read.props.disabled,phase==='pending');
- const replay=f.s.nodes().find(n=>n.props.title==='Đối soát / gửi lại đúng lệnh đã lưu');assert.equal(!!replay,phase==='pending');
- if(phase==='acknowledged'){f.s.press('Chỉ đọc lại kết quả — không gửi');await f.s.flush();assert.equal(f.reconciles.length,1);assert.equal(f.reconciles[0][1],false);}
- else{f.s.press('Đối soát / gửi lại đúng lệnh đã lưu');f.s.render();assert.equal(f.reconciles.length,0);f.s.press('Xác nhận gửi lại lệnh gốc');await f.s.flush();assert.equal(f.reconciles[0][1],true);assert.equal(f.reconciles[0][2],'immutable');}
+ const read=f.s.nodes().find(n=>n.props.title==='Kiểm tra kết quả');assert.equal(!!read,phase==='acknowledged');
+ const replay=f.s.nodes().find(n=>n.props.title==='Kiểm tra lần gửi');assert.equal(!!replay,phase==='pending');
+ if(phase==='acknowledged'){f.s.press('Kiểm tra kết quả');await f.s.flush();assert.equal(f.reconciles.length,1);assert.equal(f.reconciles[0][1],false);}
+ else{f.s.press('Kiểm tra lần gửi');f.s.render();assert.equal(f.reconciles.length,0);assert.ok(!f.s.nodes().some(n=>n.props.title==='Kiểm tra lần gửi'),'confirmation replaces initial action');f.s.press('Hủy');f.s.render();assert.equal(f.reconciles.length,0);assert.ok(f.s.nodes().some(n=>n.props.title==='Kiểm tra lần gửi'));f.s.press('Kiểm tra lần gửi');f.s.render();f.s.press('Xác nhận gửi lại');await f.s.flush();assert.equal(f.reconciles[0][1],true);assert.equal(f.reconciles[0][2],'immutable');}
  f.s.unmount();
 });
 for(const phase of ['none','pending','acknowledged'])test('Crew mounted FIELD old-session '+phase+' offers only safe recovery and keeps GET read-only',async()=>{
@@ -277,4 +331,26 @@ test('Crew correction displays only reconciled local receipts and hides late his
   '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>{reads++;return read.promise;},repairErrorMessage:e=>e.message},
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
  }});s.render();await s.flush();assert.equal(reads,1);current=null;s.render();read.resolve([{key:'receipt',operation:'attempt',phase:'CONFIRMED',receipt:{data:{intakeReadiness:'READY'}}}]);await s.flush();assert.ok(!JSON.stringify(s.nodes()).includes('Hồ sơ đủ thông tin tiếp nhận'));s.unmount();
+});
+
+test('Crew closeout puts the current photo action before compact evidence and hides premature submission',async()=>{
+ const f=normalScreen('closeout',[{key:'finish',operation:'finish',phase:'CONFIRMED'}]);
+ f.s.render();await f.s.flush();
+ const nodes=f.s.nodes(),photo=nodes.findIndex(n=>n.props.title==='Chụp ảnh sau sửa');
+ const evidence=nodes.findIndex(n=>n.props.accessibilityLabel==='Chi tiết bản lưu số đo và ảnh');
+ assert.ok(photo>=0&&evidence>photo,'photo action must precede supporting evidence');
+ assert.equal(nodes.filter(n=>n.type==='Button'&&n.props.variant==='primary').length,1);
+ assert.ok(!nodes.some(n=>n.props.title==='Gửi hồ sơ hoàn tất'));
+ assert.ok(!nodes.some(n=>n.props.accessibilityLabel==='Xem các bước'));
+ assert.equal(f.posts(),0);f.s.unmount();
+});
+
+test('Crew closeout evidence starts collapsed and expands without dispatch',async()=>{
+ const f=normalScreen('closeout');f.s.render();await f.s.flush();
+ const summary=()=>f.s.nodes().some(n=>typeof n.type==='function'&&n.type.name==='RepairFieldSummary');
+ const toggle=()=>f.s.nodes().find(n=>n.props.accessibilityLabel==='Chi tiết bản lưu số đo và ảnh');
+ assert.equal(summary(),false);assert.equal(toggle().props.accessibilityState.expanded,false);
+ toggle().props.onPress();await f.s.flush();assert.equal(summary(),true);
+ toggle().props.onPress();await f.s.flush();assert.equal(summary(),false);
+ assert.equal(f.posts(),0);f.s.unmount();
 });

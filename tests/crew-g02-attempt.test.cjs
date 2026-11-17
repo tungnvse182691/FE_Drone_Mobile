@@ -28,7 +28,7 @@ test('G02 API-080 readback presents SUPPLEMENT, ACCEPT, pending and absent attem
 test('G02 keeps API errors distinct from absent attempt and does not expose API-159', () => {
   const source = fs.readFileSync('app/(crew)/repair-correction.tsx', 'utf8');
   assert.match(source, /CrewTaskBoundary operational=\{false\}/);
-  assert.match(source, /title="Gửi bổ sung" disabled/);
+  assert.match(source, /review.canSupplement\?<Button[^>]*title="Gửi bổ sung"/);
   assert.doesNotMatch(source, /(?:supplementRepairAttempt|supplementRepairAttemptReal)\s*\(/);
   assert.match(fs.readFileSync('app/(crew)/tasks.tsx', 'utf8'), /query\.isError \? crewReadError\(query\.error\)/);
   const label = vm.runInNewContext(ts.transpileModule(`function crewReadError(error){const status=error?.response?.status;if(status===401)return 'Phiên đăng nhập không còn hợp lệ.';if(status===403)return 'Bạn không có quyền.';return 'Không tải được dữ liệu.';} crewReadError`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText);

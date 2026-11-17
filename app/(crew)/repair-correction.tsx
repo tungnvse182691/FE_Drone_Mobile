@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -7,7 +8,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import type { CrewRepairAttempt, CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { CrewTaskBoundary,crewStatusLabel,useCrewIdentity } from './tasks';
+import { CrewTaskBoundary,useCrewIdentity } from './tasks';
 
 import { currentRepairIdentity, sameRepairIdentity, type RepairJournalRecord, type RepairIdentity } from '../../src/api/crewRepairDraft';
 import { readRepairHistory, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
@@ -22,35 +23,37 @@ export default function CrewRepairCorrectionScreen() {
 export function CorrectionReadOnly({ task }: { task: CrewTask }) {
   const [technical, setTechnical] = useState(false);
   const review = repairReviewPresentation(task.detail?.repairContext?.attempt);
-  return <SafeAreaScreen scroll header={<AppHeader subtitle="Bổ sung hồ sơ sửa chữa" showBack onBack={()=>router.back()} />}>
+  const accepted=task.detail?.repairContext?.attempt?.review?.decision==='ACCEPT';
+  const tone=accepted?'#166534':review.canSupplement?'#9A3412':colors.secondary;
+  return <SafeAreaScreen scroll header={<AppHeader subtitle="Kết quả hồ sơ sửa chữa" showBack onBack={()=>router.back()} />}>
     <View style={{gap:spacing.md}}>
-    <Card style={{gap:spacing.sm,borderWidth:1,borderColor:"#E8D9A8",borderRadius:radius.lg}}>
-      <Text style={typography.titleMd}>{review.title}</Text>
-      <Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text>
-      <Text>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
-      <Text>Trạng thái nhiệm vụ từ máy chủ: {crewStatusLabel(task.status)}</Text>
-      <Text style={[typography.caption,{color:review.canSupplement?colors.warning:colors.secondary}]}>{review.statusLabel}</Text>
-      <Text>{review.message}</Text>
-      {/* Legacy guard contract: title="Gửi bổ sung" disabled until SUPPLEMENT proof is present. */}
-      <Button variant="primary" title="Gửi bổ sung" disabled={!review.canSupplement} onPress={() => router.push({
+    <Card style={styles.summary}>
+      <View style={[styles.badge,{backgroundColor:accepted?'#E8F5E9':review.canSupplement?'#FFF0E8':colors.surfaceAlt}]}>
+        <MaterialIcons name={accepted?'check-circle':review.canSupplement?'edit-note':'schedule'} size={20} color={tone}/>
+        <Text style={[styles.badgeLabel,{color:tone}]}>{review.statusLabel}</Text>
+      </View>
+      <Text accessibilityRole="header" style={typography.titleMd}>{review.title}</Text>
+      <Text style={styles.body}>{review.message}</Text>
+      <View style={styles.taskInfo}>
+        <Text numberOfLines={2} style={styles.hint}>{task.title||'Nhiệm vụ hiện trường'}</Text>
+        <Text selectable style={styles.hint}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
+      </View>
+      {review.canSupplement?<Button variant="primary" title="Gửi bổ sung" onPress={() => router.push({
         pathname: '/(crew)/field-review', params: { id: task.id, projectId: task.projectId, supplement: '1' },
-      })} />
-      {!review.canSupplement ? <Text style={typography.caption}>Lý do: {review.blockReason}</Text> : null}
-      <Pressable accessibilityRole="button" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={{minHeight:48,justifyContent:'center'}}>
-        <Text style={[typography.labelLg,{color:colors.secondary}]}>Chi tiết kỹ thuật</Text>
-      </Pressable>
-      {technical?<View style={{gap:spacing.xs}}>
-        <Text style={typography.caption}>API-080 chỉ cung cấp trạng thái và mã liên quan; nội dung nhận xét chi tiết của quản lý chưa có trong response.</Text>
-        {review.technical ? <Text selectable style={typography.caption}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
-      </View>:null}
-      <CrewRepairReceiptHistory task={task}/>
-      <CrewRepairRecoveryEntry task={task}/>
-      <Text>{review.canSupplement ? 'Đã đủ điều kiện mở luồng FIELD bổ sung. Bản nộp phải được máy chủ xác minh trước khi liên kết lượt sửa chữa.' : 'Đây là trạng thái đọc từ máy chủ. Chưa đủ điều kiện tạo bản bổ sung hoặc lệnh liên kết.'}</Text>
+      })} />:null}
     </Card>
-    <Button variant="secondary" title="Về chi tiết nhiệm vụ" onPress={() => router.replace({
-      pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId },
-    })} />
-    <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
+    <View style={styles.history}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Lịch sử và thông tin kỹ thuật" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={styles.disclosure}>
+        <MaterialIcons name="history" size={22} color={colors.secondary}/>
+        <Text style={[typography.labelLg,styles.flex]}>Lịch sử và thông tin kỹ thuật</Text>
+        <MaterialIcons name={technical?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
+      </Pressable>
+      {technical?<View style={styles.historyContent}>
+        {review.technical ? <Text selectable style={styles.hint}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
+        <CrewRepairReceiptHistory task={task}/>
+      </View>:null}
+    </View>
+      <CrewRepairRecoveryEntry task={task}/>
     </View>
   </SafeAreaScreen>;
 }
@@ -85,8 +88,8 @@ export function CrewRepairRecoveryEntry({task}:{task:CrewTask}) {
 
 export function repairReviewPresentation(attempt: CrewRepairAttempt | null | undefined) {
   if (!attempt) return {
-    title: 'Chưa có hồ sơ sửa chữa được gửi để đánh giá',
-    message: 'Chưa có lượt sửa chữa hiện hành trên máy chủ. Chưa có yêu cầu bổ sung nào được xác minh; chưa có nội dung yêu cầu.',
+    title: 'Chưa có hồ sơ sửa chữa',
+    message: 'Hồ sơ sửa chữa chưa được gửi. Chỉ bổ sung khi quản lý có yêu cầu sau khi nhận hồ sơ.',
     technical: null,
     canSupplement: false,
     statusLabel: 'Chưa có lượt gửi',
@@ -95,7 +98,7 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
   const technical = { attemptId: attempt.attemptId, effectiveSubmissionId: attempt.effectiveSubmissionId };
   if (!attempt.review) return {
     title: 'Hồ sơ đang chờ quản lý đánh giá',
-    message: 'Bản nộp hiện hành đã được ghi nhận và chưa có quyết định đánh giá.',
+    message: 'Đã nhận hồ sơ. Bạn chưa cần gửi thêm nội dung.',
     technical,
     canSupplement: false,
     statusLabel: 'Đang chờ đánh giá',
@@ -103,7 +106,7 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
   };
   if (attempt.review.decision === 'SUPPLEMENT') return {
     title: 'Quản lý yêu cầu bổ sung hồ sơ sửa chữa',
-    message: 'Máy chủ đã xác nhận yêu cầu bổ sung. Hãy chuẩn bị bản FIELD mới với số đo và bằng chứng thật.',
+    message: 'Mở hồ sơ để bổ sung số đo và ảnh theo yêu cầu.',
     technical,
     canSupplement: true,
     statusLabel: 'Cần bổ sung hồ sơ',
@@ -111,7 +114,7 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
   };
   return {
     title: 'Hồ sơ sửa chữa đã được quản lý chấp nhận',
-    message: 'Máy chủ đã xác nhận hồ sơ hiện hành được chấp nhận.',
+    message: 'Bạn không cần gửi thêm bản bổ sung cho hồ sơ này.',
     technical,
     canSupplement: false,
     statusLabel: 'Đã được chấp nhận',
@@ -139,11 +142,22 @@ export function CrewRepairReceiptHistory({task}:{task:CrewTask}) {
   const phase={PREPARED:'Đã lưu, chưa xác nhận gửi',PENDING:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã lưu biên nhận, chờ đối soát',CONFIRMED:'Đã đối soát biên nhận',REJECTED:'Bị từ chối'};
   return <View style={{gap:spacing.sm}}>
     <Text style={typography.titleMd}>Lịch sử biên nhận trên thiết bị</Text>
-    <Text>Đối chiếu quyền và liên kết nhiệm vụ hiện tại trước khi hiển thị. Đây không phải kết quả đánh giá của quản lý dự án.</Text>
+    <Text style={styles.hint}>Nhật ký thao tác trên máy này, tách biệt với kết quả quản lý ở trên.</Text>
     {busy?<Text>Đang kiểm tra lịch sử…</Text>:null}
-    {rows?.length===0?<Text>Chưa có biên nhận đã lưu trên thiết bị cho nhiệm vụ này.</Text>:null}
+    {rows?.length===0?<Text style={styles.hint}>Chưa có lịch sử trên thiết bị này.</Text>:null}
     {rows?.map(c=><View key={c.key}><Text>{operation[c.operation]}: {phase[c.phase]}</Text>{c.receipt?<Text>Biên nhận máy chủ đã lưu, đúng nguồn liên kết. {c.receipt.data.intakeReadiness==='READY'?'Hồ sơ đủ thông tin tiếp nhận; chưa phải được PM chấp thuận.':''}</Text>:null}</View>)}
     {message?<Text accessibilityRole="alert">{message}</Text>:null}
     <Button variant="secondary" title="Đọc lại lịch sử biên nhận" disabled={busy||!live} onPress={()=>void load()}/>
   </View>;
 }
+
+const styles=StyleSheet.create({
+  summary:{gap:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
+  badge:{flexDirection:'row',alignItems:'center',alignSelf:'flex-start',maxWidth:'100%',gap:spacing.xs,paddingHorizontal:spacing.sm,paddingVertical:spacing.xs,borderRadius:radius.md},
+  badgeLabel:{...typography.labelSm,flexShrink:1},
+  body:{...typography.bodyMd,color:colors.neutral},hint:{...typography.caption,color:colors.secondary},
+  taskInfo:{gap:spacing.xs,paddingTop:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
+  history:{backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
+  disclosure:{minHeight:52,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md},
+  historyContent:{padding:spacing.md,paddingTop:0,gap:spacing.md},flex:{flex:1,minWidth:0},
+});

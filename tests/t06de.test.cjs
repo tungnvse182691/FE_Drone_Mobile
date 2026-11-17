@@ -17,7 +17,7 @@ function render(file,exportName,task){
   if(n==='react')return React;
   if(n==='./tasks')return require('./helpers/crew-ui-labels.cjs');
   if(n==='react-native')return {View:'View',Text:'Text',StyleSheet:{create:x=>x}};
-  if(n==='expo-router')return {router:{push:r=>routes.push(r),replace:r=>routes.push(r)}};
+  if(n==='expo-router')return {router:{push:r=>routes.push(r),replace:r=>routes.push(r),back:()=>routes.push('back')}};
   // Any accidental mutation/storage call fails this read-only screen test.
   if(/api|offline|hooks/.test(n))return new Proxy({},{get:(_,p)=>()=>{writes.push(p);throw Error('unexpected side effect '+String(p));}});
   return new Proxy({},{get:(_,p)=>String(p)});
@@ -35,14 +35,16 @@ test('T06D correction deep link uses the real read boundary without GPS/WO opera
 for(const state of ['AWAITING_PM_REVIEW','Submitted','SupplementRequired','Completed'])test('T06D '+state+' never substitutes for PM SUPPLEMENT proof',()=>{
  const t=task();t.status=state;t.detail.status=state;
  const h=render('app/(crew)/repair-correction.tsx','CorrectionReadOnly',t);
- assert.match(h.text,/Chưa có yêu cầu bổ sung.*được xác minh/);assert.match(h.text,/chưa có nội dung yêu cầu|Chưa có nội dung yêu cầu/);
+ assert.match(h.text,/Chưa có hồ sơ sửa chữa/);assert.match(h.text,/Chỉ bổ sung khi quản lý có yêu cầu/);
+ assert.equal(h.nodes.some(n=>n.props.title==='Gửi bổ sung'),false);
  assert.equal(h.nodes.some(n=>n.props.title==='Gửi bổ sung sửa chữa'),false);
  assert.equal(h.effects.length,0);assert.equal(h.writes.length,0);assert.equal(h.routes.length,0);
 });
 test('T06D correction read-only navigation preserves project/task and never enters repair execution',()=>{
  const t=task(),h=render('app/(crew)/repair-correction.tsx','CorrectionReadOnly',t);
- h.nodes.find(n=>n.props.title==='Về chi tiết nhiệm vụ').props.onPress();
- assert.equal(h.routes[0].pathname,'/(crew)/wo-detail');assert.equal(h.routes[0].params.id,t.id);assert.equal(h.routes[0].params.projectId,t.projectId);
+ const header=h.nodes.find(n=>n.type==='SafeAreaScreen').props.header;
+ assert.equal(header.props.showBack,true);header.props.onBack();
+ assert.equal(h.routes[0],'back');
  assert.equal(h.writes.length,0);
 });
 for(const scenario of ['no task','no project','guest','wrong role','session switch'])test('T06D boundary fails closed for '+scenario,async()=>{
