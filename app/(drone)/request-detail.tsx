@@ -28,6 +28,7 @@ import {
 import { messageFor } from '../../src/api/errorCatalog';
 import { parseProblemDetails } from '../../src/api/problemDetails';
 import { DroneTaskCommandPanel } from '../../src/components/drone/DroneTaskCommandPanel';
+import { OperatorSubmittedVideos } from '../../src/components/drone/OperatorSubmittedVideos';
 
 const ACCESS_POINT_SOURCE_LABEL: Record<string, string> = {
   PLANNED_RENDEZVOUS: 'Theo kế hoạch',
@@ -328,6 +329,7 @@ export default function DroneRequestDetailScreen() {
             style={styles.workPackageButton}
           />
         </View>
+        {!cachedAt ? <OperatorSubmittedVideos taskId={task.id} projectId={task.projectId} /> : null}
         <Card style={styles.technicalCard}>
           <Pressable accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật" accessibilityState={{ expanded: technical }} onPress={() => setTechnical(value => !value)} style={styles.technicalToggle}>
             <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
