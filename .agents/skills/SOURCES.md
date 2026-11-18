@@ -9,6 +9,6 @@ These are agent instructions only. No JavaScript/native dependencies were added.
 
 Both were downloaded as pinned GitHub ZIP archives and copied selectively as documents. No upstream installer or script was executed.
 
-Codex Expo plugin (owner-installed via Plugin UI) is separate; its expo-design-system and expo-animation skills are not copied into this repo.
+Codex Expo Plugin (owner-installed, 13-skill marketplace build) is separate. Its verified UI skill is `building-native-ui`, with `references/animations.md` for motion; do not assume `expo-design-system` or `expo-animation` exist in this installed build. These newer names are listed in https://github.com/expo/skills but not in the 13-skill https://github.com/openai/plugins/tree/main/plugins/expo/skills layout.
 
 RoadGuard owner decisions and AGENTS.md / skills/DESIGN.md / src/design-tokens.ts always govern product colors, routes, permissions, and package changes. Third-party recommendations such as FlashList, native stacks, iOS design idioms, or new packages are not automatic change approvals.
