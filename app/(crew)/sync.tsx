@@ -182,7 +182,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ" />}>
-      <CrewContentTransition ready replayOnFocus>
+      <CrewContentTransition ready>
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
           <MaterialIcons name="sync" size={22} color={colors.primary} />
@@ -353,14 +353,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   segmentActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FFF7DF',
+    borderWidth: 1,
+    borderColor: colors.brandGold,
   },
   segmentLabel: {
+    fontFamily: 'Roboto',
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.secondary,
     flexShrink: 1,
     textAlign: 'center',
   },
   segmentLabelActive: {
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.neutral,
     flexShrink: 1,
     textAlign: 'center',
@@ -408,7 +415,7 @@ const styles = StyleSheet.create({
   queueNoticeText: { ...typography.caption, color: colors.secondary, flex: 1 },
   stateGrid: { flexDirection: 'row', marginTop: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm },
   stateCell: { flex: 1, alignItems: 'center', gap: 2 },
-  stateValue: { ...typography.titleLg, color: colors.neutral },
+  stateValue: { ...typography.titleLg, fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'], color: colors.neutral },
   stateLabel: { ...typography.caption, color: colors.secondary, textAlign: 'center' },
   actionLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, gap: spacing.sm },
   smallAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md },

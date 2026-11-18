@@ -76,3 +76,15 @@ Verification: npx tsc --noEmit exit 0; 88/88 targeted tests (dot-c-crew-filter, 
 NOT_RUN / NOT_VERIFIED: injected network error/offline, native Reduce Motion toggle, enlarged system font, measured FPS, physical APK/iPhone, keyboard forms, mutation/replay/receipt/persistence/session-switch E2E. No backend changes, data resets, manual app restart, or mutation used for visual QA. Preserve all prior untracked artifacts.
 
 Final Tasks source full regression: 156 test files, 1,841 pass, 0 fail; tasks-final-regression.log, node --test --test-concurrency=2, exit 0. This result includes latest ID and load-more presentation edits. Checkpoint Git before commit: main, four tracked files above only; existing untracked retained.
+
+## Sync checkpoint — continuation 2026-11-18
+
+Base 0b660ad, main; IMPLEMENT_AND_SELF_REVIEW. Files: app/(crew)/sync.tsx, src/components/crew/CrewLocalDraftPanel.tsx, src/components/crew/CrewOfflinePanel.tsx and worklog. No business hooks/queue/handlers/guards changed (AST comparison against baf87ee passed for all three).
+
+Presentation: draft IDs use a neutral label; consistent body typography; Open dossier action aligned right; expanded-list control white outlined/radius 12, centered/48dp. Queue numbers 28/34 with tabular digits and more vertical space, clear technical disclosure surface and outlined journal-read control. Existing CrewPressable scale/ripple now also covers technical disclosure/read; OS Reduce Motion preserved. Removed page replayOnFocus; no new accordion-height animation, receipt animation or optimistic success.
+
+Android Pixel_6_Pro / Expo Go: inspected settled baseline, scroll to queue, expand drafts (fourth task becomes visible), scroll to bottom, open technical details (device/capability text and journal read control visible), collapse draft list. Read-only QA; no reconcile/send or pending-data changes. Evidence .cache/crew-tabs-ui-20261118/: sync-before.png → sync-after.png; sync-queue-before.png → sync-queue-after.png; sync-expanded.png, sync-diagnostics-after.png. Compare matching sections; scroll offsets differ. Disclosures retain original handlers.
+
+Checks: 35/35 targeted tests repeated after final label-color/heading-spacing adjustment, sync-targeted-final.log; TypeScript exit 0 after that adjustment; git diff --check pass; scoped MaterialIcons/UD-06/secret-pattern scan no matches. Full regression 156 files, 1,841 pass/0 fail, 208,391ms, sync-regression.log. Full run started before the final two presentational color/gap edits; those were covered by repeated targeted/TypeScript/AST checks. Final combined regression will run again for Profile.
+
+NOT_RUN: journal read button invocation, native reduced-motion setting/font scaling, measured FPS, injected offline/error/loading, legacy-outbox populated tabs (no legacy rows in native fixture), send/receipt/restart/session-switch E2E. Final native send capability is not inferred from read-only appearance. Git at checkpoint: only these source files plus worklog tracked edits; prior untracked preserved. Local commit only, no push.
