@@ -28,8 +28,11 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
   return <Card style={{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:colors.border}}>
     <View style={{flexDirection:'row',alignItems:'center',gap:spacing.sm}}>
       <Text style={[typography.titleMd,{flex:1,color:colors.neutral}]}>Hồ sơ trên thiết bị</Text>
-      {loading?<ActivityIndicator size="small" color={colors.secondary}/>:null}
     </View>
+    {loading?<View style={styles.loadingNotice} accessibilityLiveRegion="polite">
+      <ActivityIndicator size="small" color={colors.brandGold}/>
+      <Text style={[typography.caption,styles.loadingText]}>Đang đọc hồ sơ trên thiết bị…</Text>
+    </View>:null}
     {error?<Text accessibilityLiveRegion="polite" style={{color:colors.error}}>{error}</Text>:null}
     {!loading&&!error&&!rows.length?<Text style={[typography.bodyMd,{color:colors.secondary}]}>Chưa có hồ sơ lưu trên thiết bị.</Text>:null}
     {visible.map(({latest:row,versions,hasCommand})=><View key={JSON.stringify([row.projectId,row.taskId])} style={styles.draftRow}>
@@ -72,6 +75,8 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
 }
 
 const styles=StyleSheet.create({
+  loadingNotice:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:12,borderRadius:radius.md,backgroundColor:'#FBF8EE',borderWidth:1,borderColor:'#E9E1CC'},
+  loadingText:{color:colors.secondary,flex:1,lineHeight:18},
   draftRow:{gap:12,borderTopWidth:1,borderColor:colors.border,paddingTop:spacing.md,paddingBottom:spacing.sm},
   snapshot:{gap:spacing.sm},
   secondaryText:{color:colors.secondary,lineHeight:18},
@@ -85,10 +90,10 @@ const styles=StyleSheet.create({
   expandButton:{
     alignSelf:'center',minHeight:48,marginTop:spacing.sm,paddingVertical:12,paddingHorizontal:spacing.md,
     flexDirection:'row',alignItems:'center',justifyContent:'center',gap:spacing.sm,
-    borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:colors.surface,
+    borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:'#FBF8EE',
   },
-  expandButtonPressed:{backgroundColor:colors.surfaceAlt},
+  expandButtonPressed:{backgroundColor:'#F3ECD6'},
   taskId:{color:colors.neutral,fontSize:14,lineHeight:20,backgroundColor:'#F1F3F5',alignSelf:'flex-start',paddingVertical:6,paddingHorizontal:8,borderRadius:radius.sm},
-  openButton:{alignSelf:'flex-end',minHeight:48,maxWidth:'100%',paddingHorizontal:spacing.md,borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:colors.surface},
+  openButton:{alignSelf:'flex-end',minHeight:48,maxWidth:'100%',paddingHorizontal:spacing.md,borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:'#FBF8EE'},
   expandLabel:{...typography.labelLg,color:colors.secondary,flexShrink:1,textAlign:'center'},
 });

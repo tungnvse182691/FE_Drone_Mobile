@@ -9,7 +9,7 @@ function styles(name){
 function flat(s){return Object.assign({},...[s].flat(Infinity).filter(Boolean));}
 test('Crew tabs grow with font size; filter and refresh controls retain 48dp targets',()=>{
  for(const name of ['tasks','sync']){const s=styles(name);assert.equal(s.segments.height,undefined);assert.ok(s.segment.minHeight>=48);assert.equal(s.segment.height,undefined);assert.equal(s.segmentLabel.flexShrink,1);}
- assert.ok(styles('tasks').modeFilter.minHeight>=48);assert.ok(styles('sync').iconBtn.width>=48);assert.ok(styles('navigation').floatingBack.width>=48);
+ assert.ok(styles('tasks').modeFilter.minHeight>=48);assert.ok(styles('sync').iconBtn.minWidth>=48);assert.ok(styles('sync').iconBtn.minHeight>=48);assert.equal(styles('sync').iconBtn.height,undefined);assert.equal(styles('sync').titleRow.flexWrap,'wrap');assert.ok(styles('navigation').floatingBack.width>=48);
 });
 test('Crew long badge/deadline rows wrap instead of forcing cards wider',()=>{
  for(const [name,rows] of [['tasks',['taskHeader','taskFooter']],['home',['taskCardHeader','taskCardFooter','footerLeftMeta']],['receiving',['rowHeader','infoRow']]])for(const row of rows)assert.equal(styles(name)[row].flexWrap,'wrap',`${name}.${row}`);

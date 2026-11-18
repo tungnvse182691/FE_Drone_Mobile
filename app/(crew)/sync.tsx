@@ -188,8 +188,9 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
           <MaterialIcons name="sync" size={22} color={colors.primary} />
           <Text style={[typography.titleMd, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" accessibilityState={{busy:refreshing,disabled:refreshing}} disabled={refreshing} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]} onPress={refresh}>
-          {refreshing?<ActivityIndicator size="small" color={colors.secondary}/>:<MaterialIcons name="refresh" size={20} color={colors.secondary} />}
+        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" accessibilityState={{busy:refreshing,disabled:refreshing}} disabled={refreshing} style={({ pressed }) => [styles.iconBtn, pressed && styles.refreshPressed]} onPress={refresh}>
+          {refreshing?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={20} color={colors.brandGold} />}
+          <Text style={styles.refreshLabel}>{refreshing?'Đang đọc…':'Tải lại'}</Text>
         </Pressable>
       </View>
 
@@ -306,12 +307,15 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.md,
   },
   titleGroup: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 190,
     flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -322,12 +326,22 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   iconBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.full,
+    minWidth: 124,
+    minHeight: 48,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#89939F',
+    backgroundColor: '#FBF8EE',
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  refreshLabel: { ...typography.labelLg, color: colors.secondary, flexShrink: 1, textAlign: 'center', lineHeight: 20 },
+  refreshPressed: { backgroundColor: '#F3ECD6' },
   pressed: {
     backgroundColor: colors.surfaceAlt,
   },
