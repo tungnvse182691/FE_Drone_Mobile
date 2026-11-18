@@ -63,6 +63,16 @@
 - **Skill thẩm định mã nguồn (Review):** `code-review` (tại `FE_AppMobile/skills/code-review/SKILL.md`) — Quality Gate & cơ chế "Tự vả tự sửa", tự động kiểm chứng `npx tsc --noEmit` 0 lỗi, quét 100% MaterialIcons (cấm Ionicons), quét UD-06 và worklog chỉ khi task implement cho phép; independent review mặc định AUDIT_READ_ONLY.
 - Skill generic `vibe-guard` (nếu có sẵn) đã được bao gồm trong `roadguard`.
 
+## UI/UX agent skills (external, advisory)
+
+- **Skill Codex theo repo:** `.agents/skills/mobile-design/SKILL.md` (bố cục/UX, Android-first) và `.agents/skills/vercel-react-native-skills/SKILL.md` (React Native animation/performance); chỉ đọc reference liên quan task. Nguồn và SHA ghim tại `.agents/skills/SOURCES.md`.
+- **Expo Plugin:** Owner đã cài trong Codex. Dùng `expo-design-system` và `expo-animation` khi phù hợp; plugin không phải dependency app, không sao chép trùng vào repo.
+- **Ưu tiên khi xung đột:** quyết định owner, canonical/governance và BE contract > `AGENTS.md` + `skills/DESIGN.md` + `src/design-tokens.ts` > các skill bên ngoài. Không sử dụng màu tím/Dynamic Color mặc định; không đổi MaterialIcons, Expo Router hay chuyển sang iOS-first.
+- **Giới hạn:** không tự thêm dependency, sao chép demo, đổi API/quyền/offline/command journal hoặc thêm Undo cho mutation đã được máy chủ xử lý. Motion cần hỗ trợ Reduce Motion; APK Android là đích phát hành.
+- **Cách làm UI:** audit giao diện thực tế, đề xuất và duyệt trước khi sửa bố cục lớn; triển khai từng phạm vi nhỏ; chạy typecheck/test, kiểm chứng ảnh hoặc video native; commit local theo checkpoint, không push khi chưa được phép.
+
+---
+
 ## Authority và evidence — RULES-01 (2026-10-28)
 
 Entrypoint: `AGENTS.md`; áp dụng governance tại `docs/specs/00_Governance/01_Authority-and-Source-of-Truth.md`.
