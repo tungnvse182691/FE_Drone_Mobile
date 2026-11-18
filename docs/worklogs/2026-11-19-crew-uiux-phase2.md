@@ -12,8 +12,8 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 | Hồ sơ hoàn tất thi công | 4241fe8 | Gates PASS; native read/disclosure/Back | feda325 |
 | Chỉnh sửa / bổ sung | feda325 | Gates PASS; native empty/history/pressed/Back | 605c029 |
 | Dẫn đường | 605c029 | Gates PASS; native empty/sheet/navigation | 5791edd |
-| Chụp ảnh | 5791edd | Gates PASS; native blocked/Back/reentry | — |
-| Hồ sơ hiện trường | Chưa bắt đầu | Pending | — |
+| Chụp ảnh | 5791edd | Gates PASS; native blocked/Back/reentry | 8f1e6fe |
+| Hồ sơ hiện trường | 8f1e6fe | Gates PASS; native read/scroll/refresh/disclosure/Back | Commit checkpoint7 (xem Git log) |
 
 ## Nguồn và quyết định thiết kế
 
@@ -139,3 +139,40 @@ Giữ nguyên toàn bộ non-JSX statements và action props (AST baseline5791ed
 - Android: đọc blocked state, tap Quay lại về Navigation, mở lại bằng URI đúng task, Android Back trở lại; không restart/reset/reload/capture/save/gallery/GPS permission. viewfinder-before.png / viewfinder-after.png cùng task/blocked state.
 - NATIVE_VERIFIED giới hạn blocked layout/Back/reentry; camera active preview, flash/switch/gallery/mode/pressed, shutter/capture/save/upload/AFTER, offline/error, native large font/Reduce Motion và FPS NOT_VERIFIED. Motion có trong code/Node không được coi là native camera proof. Cần fixture riêng cho phép capture để kiểm chứng thêm; giữ dữ liệu nháp cũ.
 - git diff --check exit0; scoped added-line scan không Ionicons/UD-06/secret/URL mới. Full regression 156 file: node --test --test-concurrency=2,1842/1842 PASS,0fail/skip,241111.0816ms,exit0; viewfinder-regression.log.
+## 7. Hồ sơ hiện trường
+
+Baseline main 8f1e6fe, tracked/staged sạch, ahead/behind6/0. Chỉ app/(crew)/field-review.tsx và worklog. field-review-before.png: thiếu mã nhiệm vụ, title đậm/cạnh tranh với số đo, refresh icon đứng rời, recovery disclosure không rõ vùng chạm, nhãn dụng cụ/phương pháp nhỏ và cột cứng86dp.
+
+Thay đổi: ID nền trung tính từ wo_code hoặc prefix ID thật; title đầy đủ font16/500; divider và nhãn trạng thái; kết quả hồ sơ giữ nguyên semantics, tải lại có label/kem/viền/disabled opacity. Loading có cụm indicator + label trong cùng điều kiện thật. Giá trị số đo label14, nhãn body14 và row wrap linh hoạt; không sửa dữ liệu/đơn vị/unknownReason. Disclosure lỗi/thông báo/recovery/help dùng CrewPressable hiện hữu (100ms lún/180ms hồi/ripple, Reduce Motion), vùng chạm48dp. Không scale form/map/ảnh, không thêm success optimistic hoặc animation lặp. Modal fade/slide hiện hữu chưa có Reduce Motion; giữ nguyên và không nhận đã khắc phục.
+
+Giữ toàn bộ non-JSX business statements, action props, conditions/loading/disabled, validation/GPS, draft/session isolation/recovery/ACK/replay, provenance, upload, route/params/handlers. AST baseline8f1e6fe PASS; manual full diff kiểm JSX conditions và props không đổi. Không bấm tạo nháp/gửi/đối soát/chụp/lưu để lấy screenshot.
+
+- TypeScript exit0, field-review-typecheck.log; targeted 133/133 PASS,0fail/skip,24001.4471ms, field-review-targeted.log (LOGIC_TESTED).
+- Targeted command: node --test tests/crew-field-feedback-state.test.cjs tests/crew-field-ux-01.test.cjs tests/crew-field-instrument-edit.test.cjs tests/crew-flow-recovery.test.cjs tests/crew-g02b-supplement.test.cjs tests/crew-g02b-recovery.test.cjs tests/crew-polish-layout.test.cjs tests/crew-nav01.test.cjs.
+- Android fixture ebcdca88/72f84201, trạng thái Submitted, hồ sơ revision1 cần bổ sung, nháp thuộc phiên cũ; đúng nguồn thật. Đã đọc đầu màn, mở/đóng giải thích, giữ/thả nút (quan sát lún/đổi nền/ripple), tải lại bằng handler cũ, cuộn qua ba số đo/thông tin thiếu/ảnh đã gửi, Back về Navigation và mở lại Field Review đúng ID, trạng thái nháp/receipt giữ nguyên. Không sửa dữ liệu/khởi động lại app hoặc emulator.
+- field-review-before.png / field-review-after.png cùng đầu màn settled; field-review-expanded.png, field-review-pressed.png, field-review-measurements.png là trạng thái bổ sung, không dùng thay baseline. NATIVE_VERIFIED giới hạn các thao tác đọc nêu trên.
+- NOT_VERIFIED: form editable/focus/keyboard/save/restore, chụp/upload/gửi/receipt/recovery; populated photo download/preview; native offline/error/loading chậm, large font, OS Reduce Motion, motion timing/FPS. Hiện có nháp lịch sử nên không tạo nháp mới để test. Không claim Android E2E hoặc HTTP mutation.
+- git diff --check exit0; scoped added-line scan không Ionicons/UD-06/secret/URL mới.
+- Full regression final tree:156 file, node --test --test-concurrency=2,1842/1842 PASS,0fail/skip,255029.7679ms,exit0; field-review-regression.log.
+
+## Rà soát phạm vi cuối phiên
+
+AST presentation helper đối chiếu baseline0a89e94 cho cả7 file source PASS: non-JSX statements và action props không đổi. Manual diff từng checkpoint bổ sung kiểm chứng JSX conditions/guards; AST không thay thế native hay review. Chỉ7 file source riêng trong scope và worklog thay đổi; task-map route wrapper không sửa, private CrewTaskMap là caller riêng đã xác minh. Shared Button/Card/AppHeader/NormalRepairPanel/CrewMotion,7 màn cũ,API/BE/config/dependency không đổi.
+
+Giới hạn cần owner duyệt: Progress/Complete dùng NormalRepairPanel re-export từ WO Detail; chưa redesign sâu panel vì sẽ chạm shared scope ngoài task. Bản đồ có tọa độ, positive SUPPLEMENT/receipt, camera active và mutation trọn luồng cần fixture riêng/permission; không fake dữ liệu. Không đo FPS, không nhận60FPS. Dừng sau checkpoint7, không push/đổi branch hoặc sang màn khác.
+
+## Ảnh đối chiếu
+
+Cùng fixture settled ở đầu màn, trừ các giới hạn đã ghi trong từng checkpoint. Ảnh chỉ giữ local, không commit cache.
+
+| Màn | Trước | Sau |
+|---|---|---|
+| Bản đồ nhiệm vụ | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/task-map-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/task-map-after.png) |
+| Tiến độ | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/progress-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/progress-after.png) |
+| Hoàn tất | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/complete-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/complete-after.png) |
+| Bổ sung | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/correction-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/correction-after.png) |
+| Dẫn đường | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/navigation-before-valid.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/navigation-after.png) |
+| Camera (guard khóa) | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/viewfinder-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/viewfinder-after.png) |
+| Hồ sơ hiện trường | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/field-review-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/field-review-after.png) |
+
+Remote main kiểm read-only qua git ls-remote origin refs/heads/main tại cuối phiên:0a89e945402d00e2f0195fa45d3eae68ec1eacae, không tiến lên so với baseline đã fetch. Không push. Source final7/7 checkpoint đã đối chiếu với baseline; gates software PASS không mở rộng native proof đã ghi.

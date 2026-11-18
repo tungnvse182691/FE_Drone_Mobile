@@ -10,6 +10,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
+import { CrewPressable } from '../../src/components/crew/CrewMotion';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
@@ -36,7 +37,7 @@ function FieldErrorPanel({title,message,detail,expanded,onToggle,tone='error'}:{
   return <Card style={palette.style}>
     <View style={styles.errorHeading}><MaterialIcons name={palette.icon} size={20} color={palette.color}/><Text style={[styles.errorTitle,{color:palette.color}]}>{title}</Text></View>
     <Text accessibilityLiveRegion="polite" style={[styles.errorMessage,tone==='error'?null:styles.noticeMessage]}>{message}</Text>
-    <Pressable accessibilityRole="button" accessibilityState={{expanded}} onPress={onToggle} style={styles.detailToggle}><Text style={styles.detailLabel}>{expanded?'Ẩn chi tiết':'Chi tiết'}</Text><MaterialIcons name={expanded?'expand-less':'expand-more'} size={18} color={colors.secondary}/></Pressable>
+    <CrewPressable accessibilityRole="button" accessibilityState={{expanded}} onPress={onToggle} style={({pressed})=>[styles.detailToggle,pressed&&styles.refreshPressed]}><Text style={styles.detailLabel}>{expanded?'Ẩn chi tiết':'Chi tiết'}</Text><MaterialIcons name={expanded?'expand-less':'expand-more'} size={18} color={colors.secondary}/></CrewPressable>
     {expanded?<Text style={styles.errorDetail}>{detail}</Text>:null}
   </Card>;
 }
@@ -64,7 +65,7 @@ function FieldNotice({model,expanded,onToggle}:{model:ReturnType<typeof fieldNot
     <View style={[styles.noticeBanner,{borderLeftColor:color}]}>
       <MaterialIcons name={model.tone==='success'?'check-circle':model.tone==='pending'?'info-outline':'error-outline'} size={22} color={color}/>
       <View style={styles.flex} accessibilityLiveRegion="polite"><Text style={styles.errorTitle}>{model.title}</Text><Text style={styles.noticeSummary}>{model.summary}</Text></View>
-      {model.detail?<Pressable accessibilityRole="button" accessibilityLabel={expanded?'Ẩn chi tiết thông báo':'Xem chi tiết thông báo'} accessibilityState={{expanded}} onPress={onToggle} style={styles.noticeToggle}><MaterialIcons name={expanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/></Pressable>:null}
+      {model.detail?<CrewPressable accessibilityRole="button" accessibilityLabel={expanded?'Ẩn chi tiết thông báo':'Xem chi tiết thông báo'} accessibilityState={{expanded}} onPress={onToggle} style={({pressed})=>[styles.noticeToggle,pressed&&styles.refreshPressed]}><MaterialIcons name={expanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/></CrewPressable>:null}
     </View>
     {expanded&&model.detail?<ScrollView style={styles.noticeDetails}><Text style={styles.errorDetail}>{model.detail}</Text></ScrollView>:null}
   </View>;
@@ -412,14 +413,24 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     {showNotice||showRepairDecision||showLinkedSubmission?<FieldNotice model={noticeModel} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
   </>}>
     <View style={styles.content}>
-      <Card style={styles.card}><View style={styles.summaryHeader}><View style={styles.flex}><Text style={typography.titleMd}>{task.title||'Nhiệm vụ hiện trường'}</Text><View style={styles.summaryHeader}><CrewTaskStatus status={verifiedTask?.status ?? task.status} label={fieldTaskStatusLabel(verifiedTask?.status ?? task.status)} />{serverLoaded&&latest?<Chip label={linkedSubmission&&fieldAwaitingRepairLink(latest.readiness,latest.missingReasons)?'Hồ sơ: Đã liên kết lượt sửa chữa':`${finalConfirmed||repairAccepted?'Kết quả lúc nộp':'Hồ sơ'}: ${fieldSubmissionReadinessLabel(latest.readiness,latest.missingReasons)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}</View></View><Pressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed]} disabled={busy||cancelling||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/></Pressable></View>
+      <Card style={styles.card}>
+        <View style={styles.identity}><Text style={styles.taskCode}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text></View>
+        <Text style={styles.taskTitle}>{task.title||'Nhiệm vụ hiện trường'}</Text>
+        <View style={styles.taskStatusRow}>
+          <Text style={styles.resultLabel}>Trạng thái nhiệm vụ</Text>
+          <CrewTaskStatus status={verifiedTask?.status ?? task.status} label={fieldTaskStatusLabel(verifiedTask?.status ?? task.status)} />
+        </View>
+        <View style={styles.summaryHeader}>
+          {serverLoaded&&latest?<Chip label={linkedSubmission&&fieldAwaitingRepairLink(latest.readiness,latest.missingReasons)?'Hồ sơ: Đã liên kết lượt sửa chữa':`${finalConfirmed||repairAccepted?'Kết quả lúc nộp':'Hồ sơ'}: ${fieldSubmissionReadinessLabel(latest.readiness,latest.missingReasons)}`} variant={latest.readiness==='READY'?'approved':'status-pending'} uppercase={false}/>:null}
+          <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại hồ sơ hiện trường" style={({pressed})=>[styles.refreshAction,pressed&&styles.refreshPressed,{opacity:busy||cancelling||loading?0.5:1}]} disabled={busy||cancelling||loading} onPress={()=>void load(true)}><MaterialIcons name="refresh" size={18} color={colors.secondary}/><Text style={styles.actionLabel}>Tải lại</Text></CrewPressable>
+        </View>
         {supplementMode||draft?.repairClaim?<Text style={styles.muted}>{supplementMode?'Bổ sung hồ sơ sửa chữa':'Đo kiểm sau sửa chữa'}</Text>:null}
       </Card>
-      {loading?<Text>Đang tải hồ sơ…</Text>:null}
+      {loading?<View style={styles.loadingRow}><ActivityIndicator size="small" color={colors.primaryDark}/><Text style={styles.muted}>Đang tải hồ sơ…</Text></View>:null}
       {error?<FieldErrorPanel title="Không đọc được hồ sơ" message={error} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
       {localRecoveryBlocked?<Card style={[styles.card,styles.recoveryCard]}>
         <View style={styles.recoveryHeading}><MaterialIcons name={recoveryDecision?'note-add':'history'} size={22} color={colors.primaryDark}/><Text style={[styles.recoveryTitle,styles.flex]}>{recoveryDecision?(recoveryDecision==='new'?'Tạo hồ sơ mới?':'Gửi lại lệnh gốc?'):canStartFreshSession?'Có nháp từ lần đăng nhập trước':'Hồ sơ cần kiểm tra kết quả'}</Text>
-          {!recoveryDecision?<Pressable accessibilityRole="button" accessibilityLabel={showRecoveryDetail?'Ẩn giải thích':'Vì sao có thông báo này?'} accessibilityState={{expanded:showRecoveryDetail}} onPress={()=>setShowRecoveryDetail(v=>!v)} style={styles.recoveryToggle}><MaterialIcons name={showRecoveryDetail?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>:null}
+          {!recoveryDecision?<CrewPressable accessibilityRole="button" accessibilityLabel={showRecoveryDetail?'Ẩn giải thích':'Vì sao có thông báo này?'} accessibilityState={{expanded:showRecoveryDetail}} onPress={()=>setShowRecoveryDetail(v=>!v)} style={({pressed})=>[styles.recoveryToggle,pressed&&styles.refreshPressed]}><MaterialIcons name={showRecoveryDetail?'expand-less':'expand-more'} size={22} color={colors.secondary}/></CrewPressable>:null}
         </View>
         {recoveryDecision?<>
           <Text style={styles.recoveryCopy} accessibilityRole="alert">{recoveryDecision==='new'?'Nháp và ảnh cũ vẫn được giữ. Hồ sơ mới bắt đầu trống.':'Lệnh có thể được gửi nếu máy chủ chưa nhận. Nội dung, khóa và phiên bản gốc được giữ nguyên.'}</Text>
@@ -541,7 +552,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </SafeAreaScreen>
           </SafeAreaProvider>
         </Modal>
-        <Card style={styles.card}><View style={styles.helpHeading}><MaterialIcons name="photo-library" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Ảnh bằng chứng</Text>{normalMeasurement?<Pressable accessibilityRole="button" accessibilityLabel="Hướng dẫn ảnh bằng chứng" accessibilityState={{expanded:showEvidenceHelp}} style={styles.helpToggle} onPress={()=>setShowEvidenceHelp(v=>!v)}><MaterialIcons name={showEvidenceHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></Pressable>:null}</View>
+        <Card style={styles.card}><View style={styles.helpHeading}><MaterialIcons name="photo-library" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Ảnh bằng chứng</Text>{normalMeasurement?<CrewPressable accessibilityRole="button" accessibilityLabel="Hướng dẫn ảnh bằng chứng" accessibilityState={{expanded:showEvidenceHelp}} style={({pressed})=>[styles.helpToggle,pressed&&styles.refreshPressed]} onPress={()=>setShowEvidenceHelp(v=>!v)}><MaterialIcons name={showEvidenceHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></CrewPressable>:null}</View>
           {normalMeasurement&&showEvidenceHelp?<Text style={styles.muted}>Ảnh chụp được lưu trên máy trước. Bấm “Tải ảnh này lên” dưới từng ảnh và chờ “Đã xác minh” để dùng cho đánh giá trước sửa.</Text>:null}
           {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh hiện trường.'}</Text>:null}
           <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id,transferProgress?.captureId===c.id?transferProgress.percent:undefined);return <View key={c.id} style={styles.photoTile}>
@@ -565,7 +576,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Card style={styles.card}>
-          <View style={styles.helpHeading}><MaterialIcons name="fact-check" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Đánh giá trước sửa</Text><Pressable accessibilityRole="button" accessibilityLabel="Hướng dẫn đánh giá trước sửa" accessibilityState={{expanded:showAssessmentHelp}} style={styles.helpToggle} onPress={()=>setShowAssessmentHelp(v=>!v)}><MaterialIcons name={showAssessmentHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></Pressable></View>
+          <View style={styles.helpHeading}><MaterialIcons name="fact-check" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Đánh giá trước sửa</Text><CrewPressable accessibilityRole="button" accessibilityLabel="Hướng dẫn đánh giá trước sửa" accessibilityState={{expanded:showAssessmentHelp}} style={({pressed})=>[styles.helpToggle,pressed&&styles.refreshPressed]} onPress={()=>setShowAssessmentHelp(v=>!v)}><MaterialIcons name={showAssessmentHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></CrewPressable></View>
           {showAssessmentHelp?<Text style={styles.muted}>Sau khi lưu số đo và tải ảnh, mở theo dõi thi công để gửi đánh giá trước sửa.</Text>:null}
           <Button variant="primary" title="Mở theo dõi thi công" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>
         </Card>:null}
@@ -623,7 +634,7 @@ const styles = StyleSheet.create({
   recoveryHeading: {flexDirection:'row',alignItems:'center',gap:spacing.sm},
   recoveryTitle: {...typography.labelLg,color:colors.neutral,lineHeight:21},
   recoveryCopy: {...typography.bodyMd,color:colors.secondary},
-  recoveryToggle: {minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center'},
+  recoveryToggle: {minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:radius.md,backgroundColor:'#FBF8EE',borderWidth:1,borderColor:'#E8D9A8'},
   recoveryDetail: {backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
   recoveryActions: {flexDirection:'row',flexWrap:'wrap',justifyContent:'flex-end',gap:spacing.sm,marginTop:spacing.sm},
   submitActions:{paddingTop:spacing.md,paddingBottom:spacing.sm,gap:spacing.sm},
@@ -634,16 +645,16 @@ const styles = StyleSheet.create({
   previewImage: {width:'100%',flex:1},
   measurementResult: {gap:spacing.sm,paddingVertical:spacing.sm,borderBottomWidth:1,borderColor:colors.border},
   resultHeading: {flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:spacing.sm,flexWrap:'wrap'},
-  resultValue: {...typography.titleMd,color:colors.neutral},
-  resultRow: {flexDirection:'row',gap:spacing.sm,alignItems:'flex-start'},
-  resultLabel: {...typography.caption,color:colors.secondary,width:86},
-  resultText: {...typography.bodyMd,color:colors.neutral,flex:1},
+  resultValue: {...typography.labelLg,color:colors.neutral,flexShrink:1},
+  resultRow: {flexDirection:'row',flexWrap:'wrap',gap:spacing.xs,alignItems:'baseline'},
+  resultLabel: {...typography.bodyMd,color:colors.secondary,minWidth:96,flexShrink:1},
+  resultText: {...typography.bodyMd,color:colors.neutral,flexGrow:1,flexShrink:1,flexBasis:180},
   serverPhoto: {alignItems:'center',justifyContent:'center'},
   viewPhotoBadge: {position:'absolute',top:6,right:6,backgroundColor:colors.surface,borderRadius:radius.full,padding:4},
   noticeContainer: {marginHorizontal:spacing.screenMargin,marginVertical:spacing.xs,borderRadius:radius.md,backgroundColor:colors.surface,overflow:'hidden'},
   noticeBanner: {flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingLeft:spacing.sm,paddingVertical:spacing.xs,borderLeftWidth:3},
   noticeSummary: {...typography.caption,color:colors.secondary,marginTop:2},
-  noticeToggle: {width:44,minHeight:44,alignItems:'center',justifyContent:'center'},
+  noticeToggle: {width:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
   noticeDetails: {maxHeight:160,paddingHorizontal:spacing.md,paddingBottom:spacing.sm},
   content: {
     paddingBottom: spacing.xl,
@@ -658,8 +669,14 @@ const styles = StyleSheet.create({
   priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
   missingList: { gap: spacing.xs },
   compactAction: { alignSelf: 'flex-start', minHeight: 36, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
-  refreshAction: { width: 48, height: 48, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center' },
-  refreshPressed: { backgroundColor: colors.surfaceAlt },
+  refreshAction: { minHeight:48, flexDirection:'row', gap:spacing.xs, paddingHorizontal:spacing.sm, paddingVertical:spacing.xs, borderRadius:radius.md, alignItems:'center', justifyContent:'center', backgroundColor:'#FBF8EE', borderWidth:1, borderColor:'#E8D9A8' },
+  identity: {alignSelf:'flex-start',maxWidth:'100%',backgroundColor:colors.surfaceAlt,borderRadius:radius.sm,paddingHorizontal:spacing.sm,paddingVertical:6},
+  taskCode: {...typography.labelLg,color:colors.secondary,flexShrink:1},
+  taskTitle: {...typography.titleMd,color:colors.neutral,fontWeight:'500'},
+  taskStatusRow: {flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:spacing.sm,borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm},
+  actionLabel: {...typography.labelLg,color:colors.secondary},
+  loadingRow: {flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,marginBottom:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:radius.md},
+  refreshPressed: { backgroundColor: '#F3ECD6' },
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   actionButton: { flex: 1 },
   helpHeading: {flexDirection:"row",alignItems:"center",gap:spacing.sm},
@@ -717,8 +734,8 @@ const styles = StyleSheet.create({
   errorHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   errorTitle: { ...typography.labelLg, color: colors.neutral },
   errorMessage: { ...typography.bodyMd, color: colors.neutral },
-  detailToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', minHeight: 40 },
-  detailLabel: { ...typography.labelSm, color: colors.secondary },
+  detailToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start', minHeight: 48, paddingHorizontal:spacing.sm, borderRadius:radius.md, backgroundColor:'#FBF8EE' },
+  detailLabel: { ...typography.labelLg, color: colors.secondary },
   errorDetail: { ...typography.caption, color: colors.secondary },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.42)', justifyContent: 'center', padding: spacing.lg },
   confirmModal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
@@ -733,6 +750,7 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   muted: {
+    ...typography.bodyMd,
     color: colors.secondary,
     marginTop: spacing.xs,
   },
