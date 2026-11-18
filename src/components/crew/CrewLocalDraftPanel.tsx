@@ -32,11 +32,29 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
     </View>
     {error?<Text accessibilityLiveRegion="polite" style={{color:colors.error}}>{error}</Text>:null}
     {!loading&&!error&&!rows.length?<Text style={[typography.bodyMd,{color:colors.secondary}]}>Chưa có hồ sơ lưu trên thiết bị.</Text>:null}
-    {visible.map(({latest:row,versions,hasCommand})=><View key={JSON.stringify([row.projectId,row.taskId])} style={{gap:spacing.xs,borderTopWidth:1,borderColor:colors.border,paddingTop:spacing.sm}}>
+    {visible.map(({latest:row,versions,hasCommand})=><View key={JSON.stringify([row.projectId,row.taskId])} style={styles.draftRow}>
       <Text style={[typography.labelLg,styles.taskId]}>Nhiệm vụ · {row.taskId.slice(0,8)}</Text>
-      <Text style={[typography.bodyMd,{color:colors.secondary}]}>Bản lưu gần nhất: {row.measurements} số đo · {row.photos} ảnh</Text>
-      {row.updatedAt?<Text style={typography.caption}>{new Date(row.updatedAt).toLocaleString('vi-VN')}</Text>:null}
-      <Text style={[typography.bodyMd,{color:colors.secondary}]}>{hasCommand?'Có lịch sử gửi · mở hồ sơ để xem kết quả':row.currentSession?'Nháp chưa gửi':'Nháp từ lần đăng nhập trước'}</Text>
+      <View style={styles.snapshot}>
+        <Text style={[typography.caption,styles.secondaryText]}>Bản lưu gần nhất</Text>
+        <View style={styles.evidenceRow}>
+          <View style={styles.evidenceGroup}>
+            <MaterialIcons name="straighten" size={20} color={colors.secondary}/>
+            <Text style={[typography.bodyMd,styles.evidenceText]}>{row.measurements} số đo</Text>
+          </View>
+          <View style={styles.evidenceGroup}>
+            <MaterialIcons name="photo-library" size={20} color={colors.secondary}/>
+            <Text style={[typography.bodyMd,styles.evidenceText]}>{row.photos} ảnh</Text>
+          </View>
+        </View>
+      </View>
+      {row.updatedAt?<View style={styles.timestamp}>
+        <MaterialIcons name="schedule" size={16} color={colors.secondary}/>
+        <Text style={[typography.caption,styles.timestampText]}>{new Date(row.updatedAt).toLocaleString('vi-VN')}</Text>
+      </View>:null}
+      <View style={styles.draftState}>
+        <MaterialIcons name="info-outline" size={18} color={colors.secondary}/>
+        <Text style={[typography.bodyMd,styles.stateText]}>{hasCommand?'Có lịch sử gửi · mở hồ sơ để xem kết quả':row.currentSession?'Nháp chưa gửi':'Nháp từ lần đăng nhập trước'}</Text>
+      </View>
       {versions>1?<Text style={typography.caption}>{versions} bản lưu được giữ trên máy</Text>:null}
       <Button style={styles.openButton} variant="text" title="Mở hồ sơ" onPress={()=>{if(sameQueueIdentity(identity))router.push({pathname:'/(crew)/field-review',params:{id:row.taskId,projectId:row.projectId}});}}/>
     </View>)}
@@ -54,13 +72,23 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
 }
 
 const styles=StyleSheet.create({
+  draftRow:{gap:12,borderTopWidth:1,borderColor:colors.border,paddingTop:spacing.md,paddingBottom:spacing.sm},
+  snapshot:{gap:spacing.sm},
+  secondaryText:{color:colors.secondary,lineHeight:18},
+  evidenceRow:{flexDirection:'row',flexWrap:'wrap',columnGap:spacing.lg,rowGap:spacing.sm},
+  evidenceGroup:{flexDirection:'row',alignItems:'center',gap:spacing.sm,maxWidth:'100%'},
+  evidenceText:{color:colors.neutral,flexShrink:1},
+  timestamp:{flexDirection:'row',alignItems:'center',gap:spacing.sm},
+  timestampText:{color:colors.secondary,flex:1,lineHeight:18},
+  draftState:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:12,borderRadius:radius.md,backgroundColor:'#F1F3F5'},
+  stateText:{color:colors.secondary,flex:1},
   expandButton:{
     alignSelf:'center',minHeight:48,marginTop:spacing.sm,paddingVertical:12,paddingHorizontal:spacing.md,
     flexDirection:'row',alignItems:'center',justifyContent:'center',gap:spacing.sm,
     borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:colors.surface,
   },
   expandButtonPressed:{backgroundColor:colors.surfaceAlt},
-  taskId:{color:colors.neutral,backgroundColor:'#F1F3F5',alignSelf:'flex-start',paddingVertical:4,paddingHorizontal:8,borderRadius:radius.sm},
-  openButton:{alignSelf:'flex-end',minHeight:48,paddingHorizontal:spacing.md},
+  taskId:{color:colors.neutral,fontSize:14,lineHeight:20,backgroundColor:'#F1F3F5',alignSelf:'flex-start',paddingVertical:6,paddingHorizontal:8,borderRadius:radius.sm},
+  openButton:{alignSelf:'flex-end',minHeight:48,maxWidth:'100%',paddingHorizontal:spacing.md,borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:colors.surface},
   expandLabel:{...typography.labelLg,color:colors.secondary,flexShrink:1,textAlign:'center'},
 });
