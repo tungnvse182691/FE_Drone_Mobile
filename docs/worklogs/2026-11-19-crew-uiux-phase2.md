@@ -13,7 +13,7 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 | Chỉnh sửa / bổ sung | feda325 | Gates PASS; native empty/history/pressed/Back | 605c029 |
 | Dẫn đường | 605c029 | Gates PASS; native empty/sheet/navigation | 5791edd |
 | Chụp ảnh | 5791edd | Gates PASS; native blocked/Back/reentry | 8f1e6fe |
-| Hồ sơ hiện trường | 8f1e6fe | Gates PASS; native read/scroll/refresh/disclosure/Back | Commit checkpoint7 (xem Git log) |
+| Hồ sơ hiện trường | 8f1e6fe | Gates PASS; native read/scroll/refresh/disclosure/Back | e993688 |
 
 ## Nguồn và quyết định thiết kế
 
@@ -176,3 +176,5 @@ Cùng fixture settled ở đầu màn, trừ các giới hạn đã ghi trong t�
 | Hồ sơ hiện trường | [Trước](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/field-review-before.png) | [Sau](D:/Do_AN_Drone/FE_AppMobile/.cache/crew-phase2-ui-20261119/field-review-after.png) |
 
 Remote main kiểm read-only qua git ls-remote origin refs/heads/main tại cuối phiên:0a89e945402d00e2f0195fa45d3eae68ec1eacae, không tiến lên so với baseline đã fetch. Không push. Source final7/7 checkpoint đã đối chiếu với baseline; gates software PASS không mở rộng native proof đã ghi.
+
+Checkpoint7 commit local e993688. Bảy source checkpoint: f85ebc2,4241fe8,feda325,605c029,5791edd,8f1e6fe,e993688. Commit docs cuối chỉ ghi SHA/biên bản, không sửa source sau full regression. Trước docs commit: main ahead7/behind0, tracked source sạch; chỉ worklog đang cập nhật. Untracked cache/log/mydatabase.db/Android build giữ nguyên.
