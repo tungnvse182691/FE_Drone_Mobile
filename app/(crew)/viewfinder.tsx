@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useFocusEffect, useIsFocused } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { CrewTaskBoundary, useCrewIdentity } from './tasks';
 import { fieldCapabilityBlock, type CrewTask } from '../../src/api/crewApi';
 import { currentFieldContext, openFieldRuntime, loadFieldDraft, captureFieldPhoto, fieldDraftPending, fieldErrorMessage, type FieldDraft } from '../../src/api/crewFieldDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { CrewPressable } from '../../src/components/crew/CrewMotion';
 
 type ViewfinderMode = 'before' | 'after' | 'measurement';
 
@@ -90,7 +91,16 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const handleCapture = (photo: CameraCapturedPicture) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true);};
   const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId, ...(params.supplement === '1' ? { supplement: '1' } : {}) } };
   const closeCamera = () => { if (router.canGoBack()) router.back(); else router.dismissTo(fieldHref); };
-  if (block) return <SafeAreaView><Text>{block}</Text><Button variant="secondary" title="Quay lại" onPress={closeCamera} /></SafeAreaView>;
+  if (block) return <SafeAreaView style={styles.blockedSafe}>
+    <ScrollView contentContainerStyle={styles.blockedContent}>
+      <View style={styles.blockedPanel}>
+        <View style={styles.blockedIcon}><MaterialIcons name="no-photography" size={28} color={colors.secondary} /></View>
+        <Text style={styles.blockedTitle}>Chưa thể chụp ảnh</Text>
+        <Text style={styles.blockedMessage}>{block}</Text>
+        <View style={styles.blockedAction}><Button variant="secondary" title="Quay lại" onPress={closeCamera} /></View>
+      </View>
+    </ScrollView>
+  </SafeAreaView>;
 
   const watermark = (
     <View style={styles.watermarkCard} pointerEvents="none">
@@ -179,7 +189,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   };
 
   const galleryButton = (
-    <Pressable
+    <CrewPressable
       accessibilityRole="button"
       accessibilityLabel="Chọn ảnh từ thiết bị"
       disabled={!isFocused||normalAfter||busy||!ready||!!draft?.command||localRecoveryBlocked}
@@ -187,11 +197,11 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       style={({ pressed }) => [styles.sideControl, pressed && styles.sideControlPressed]}
     >
       <MaterialIcons name="photo-library" size={20} color={colors.surface} />
-    </Pressable>
+    </CrewPressable>
   );
 
   const switchButton = (
-    <Pressable
+    <CrewPressable
       accessibilityRole="button"
       accessibilityLabel="Đổi máy ảnh trước/sau"
       disabled={!isFocused||busy||cameraShooting}
@@ -200,7 +210,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
       style={({ pressed }) => [styles.sideControl, (!isFocused||busy||cameraShooting) && styles.sideControlDisabled, pressed && !cameraShooting && styles.sideControlPressed]}
     >
       <MaterialIcons name="flip-camera-android" size={20} color={colors.surface} />
-    </Pressable>
+    </CrewPressable>
   );
 
   const handleConfirm = () => {
@@ -210,15 +220,15 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
       <View style={styles.topBar}>
-        <Pressable onPress={closeCamera} accessibilityRole="button" accessibilityLabel="Đóng máy ảnh" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
+        <CrewPressable onPress={closeCamera} accessibilityRole="button" accessibilityLabel="Đóng máy ảnh" style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}>
           <MaterialIcons name="close" size={20} color={colors.surface} />
-        </Pressable>
+        </CrewPressable>
 
         <View style={styles.modePills}>
           {MODES.filter(item=>item.key!=='after'||task.detail?.purpose==='PostRepair').map((item) => {
             const active = item.key === mode;
             return (
-              <Pressable
+              <CrewPressable
                 key={item.key}
                 disabled={busy||pickerRef.current}
                 onPress={() => {if(savingRef.current||pickerRef.current)return;setMode(item.key);setPostRepairCapture(false);}}
@@ -228,13 +238,13 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
               >
                 {active && <View style={styles.modeDot} />}
                 <Text style={[typography.labelLg, active ? styles.modeTextActive : styles.modeText]}>{item.label}</Text>
-              </Pressable>
+              </CrewPressable>
             );
           })}
         </View>
 
         <View style={styles.rightActions}>
-          <Pressable
+          <CrewPressable
             onPress={() => setFlashOn((value) => !value)}
             accessibilityRole="button"
             accessibilityLabel={flashOn ? 'Tắt đèn flash' : 'Bật đèn flash'}
@@ -242,7 +252,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
             style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
           >
             <MaterialIcons name={flashOn ? 'flash-on' : 'flash-off'} size={19} color={colors.surface} />
-          </Pressable>
+          </CrewPressable>
         </View>
       </View>
 
@@ -287,6 +297,13 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
 }
 
 const styles = StyleSheet.create({
+  blockedSafe: { flex: 1, backgroundColor: colors.surfaceAlt },
+  blockedContent: { flexGrow: 1, padding: spacing.lg, justifyContent: 'center' },
+  blockedPanel: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
+  blockedIcon: { width: 48, height: 48, borderRadius: radius.md, backgroundColor: '#FBF8EE', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
+  blockedTitle: { ...typography.titleMd, color: colors.neutral },
+  blockedMessage: { ...typography.bodyMd, color: colors.secondary },
+  blockedAction: { alignSelf: 'flex-start', minWidth: 144, marginTop: spacing.md },
   afterConfirmation: {minHeight:52,padding:spacing.md,gap:spacing.sm,flexDirection:'row',alignItems:'center',borderWidth:1,borderColor:'#94A3B8',borderRadius:radius.md,backgroundColor:'#334155'},
   afterConfirmationSelected: {backgroundColor:'#14532D',borderColor:'#86EFAC'},
   afterConfirmationPressed: {opacity:0.85},
@@ -297,6 +314,8 @@ const styles = StyleSheet.create({
   },
   topBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: 'rgba(15, 20, 28, 0.9)',
@@ -323,11 +342,13 @@ const styles = StyleSheet.create({
   },
   modePills: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
     alignItems: 'center',
     backgroundColor: '#1E2638',
     borderWidth: 1,
     borderColor: 'rgba(51, 65, 85, 0.6)',
-    borderRadius: radius.full,
+    borderRadius: radius.lg,
     padding: 2,
   },
   modePill: {
@@ -350,11 +371,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.onSurface,
   },
   modeText: {
+    ...typography.bodyMd,
     color: '#CBD5E1',
   },
   modeTextActive: {
+    ...typography.bodyMd,
     color: colors.onSurface,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   viewport: {
     flex: 1,
@@ -371,17 +394,21 @@ const styles = StyleSheet.create({
   },
   watermarkRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   watermarkGps: {
     flexDirection: 'row',
+    flexShrink: 1,
     alignItems: 'center',
     gap: spacing.xs,
   },
   watermarkGpsText: {
+    ...typography.caption,
+    flexShrink: 1,
     color: colors.warning,
-    fontWeight: '700',
   },
   rtkBadge: {
     backgroundColor: 'rgba(16, 185, 129, 0.3)',
@@ -392,12 +419,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginLeft: spacing.sm,
     color: '#6EE7B7',
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    ...typography.caption,
     overflow: 'hidden',
-    textTransform: 'uppercase',
   },
   watermarkMeta: {
     flexDirection: 'row',
@@ -405,10 +428,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   watermarkMetaText: {
+    ...typography.caption,
+    flexShrink: 1,
     color: '#CBD5E1',
   },
   thumbsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
@@ -480,15 +507,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   readyBlock: {
+    flexShrink: 1,
     alignItems: 'flex-end',
   },
   readyCount: {
+    ...typography.bodyMd,
     color: colors.surface,
   },
   readyOk: {
-    color: colors.success,
+    ...typography.caption,
+    color: '#86EFAC',
   },
   readyWaiting: {
+    ...typography.caption,
     color: colors.warning,
   },
   sideControl: {
@@ -513,7 +544,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sheetHint: {
+    ...typography.bodyMd,
     color: '#555F71',
-    textAlign: 'center',
+    textAlign: 'left',
   },
 });

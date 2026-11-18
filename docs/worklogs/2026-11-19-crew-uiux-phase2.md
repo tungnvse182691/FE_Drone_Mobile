@@ -11,8 +11,8 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 | Theo dõi thi công | f85ebc2 | Gates PASS; native read/disclosure/Back | 4241fe8 |
 | Hồ sơ hoàn tất thi công | 4241fe8 | Gates PASS; native read/disclosure/Back | feda325 |
 | Chỉnh sửa / bổ sung | feda325 | Gates PASS; native empty/history/pressed/Back | 605c029 |
-| Dẫn đường | 605c029 | Gates PASS; native empty/sheet/navigation | — |
-| Chụp ảnh | Chưa bắt đầu | Pending | — |
+| Dẫn đường | 605c029 | Gates PASS; native empty/sheet/navigation | 5791edd |
+| Chụp ảnh | 5791edd | Gates PASS; native blocked/Back/reentry | — |
 | Hồ sơ hiện trường | Chưa bắt đầu | Pending | — |
 
 ## Nguồn và quyết định thiết kế
@@ -125,3 +125,17 @@ Giữ toàn bộ map props/markers/coordinate expressions, openGoogleMaps intent
 - Android: thiếu tọa độ thật; Google Maps disabled, tap header thu/mở sheet, Xem nhiệm vụ đến đúng ebcdca88, Android Back trở lại Navigation. navigation-after.png cùng fixture/expanded; navigation-collapsed.png là trạng thái riêng. NATIVE_VERIFIED giới hạn read/layout/sheet/navigation; không claim E2E/FPS.
 - NOT_VERIFIED: map populated/pan/zoom/Google Maps external intent vì thiếu tọa độ, native large font/OS Reduce Motion/error/offline. Không xin quyền GPS hay thay dữ liệu.
 - Full regression 156 file: node --test --test-concurrency=2, 1842/1842 PASS, 0fail/skip,228435.5629ms,exit0; navigation-regression.log. git diff --check exit0, added-line scan không Ionicons/UD-06/secret/URL mới. Kéo thử sheet chưa xác minh được chuyển trạng thái; tap thu/mở đã xác minh, không nhận drag PASS.
+
+## 6. Chụp ảnh
+
+Baseline main 5791edd, ahead/behind5/0, tracked/staged sạch trước edit. Chỉ app/(crew)/viewfinder.tsx và worklog. Android baseline viewfinder-before.png từ task ebcdca88 đã Submitted: guard capture khóa thật; text sát mép/không title/Back full width. Source review thêm: mode row không wrap, metadata GPS font9, camera utility chỉ đổi nền khi nhấn. Không bypass guard để chụp baseline camera active.
+
+UI: trạng thái khóa thành một cụm neutral, icon camera-off, title16/body14 và Back gọn >=48dp, ScrollView cho chữ lớn. Camera active: thanh mode có wrap, font14 nhẹ hơn, metadata caption12 và wrap, provenance footer body14; nút close/flash/mode/gallery/switch dùng CrewPressable hiện hữu (100ms lún/180ms hồi/ripple/Reduce Motion). Không animate preview/watermark/form; không sửa shared ViewFinder/CrewMotion/Button.
+
+Giữ nguyên toàn bộ non-JSX statements và action props (AST baseline5791edd PASS); manual diff giữ mode filter/conditions, disabled/busy/shooting, handlers/routes/params, capture lifecycle/GPS/provenance/notice/local recovery/guard. AFTER confirmation white text/checkbox/handler giữ nguyên.
+
+- npx tsc --noEmit exit0; viewfinder-typecheck.log.
+- node --test tests/crew-after-camera-guidance.test.cjs tests/crew-camera-lifecycle.test.cjs tests/crew-flow-recovery.test.cjs tests/crew-nav01.test.cjs:91/91 PASS,0fail/skip,21254.6679ms; viewfinder-targeted.log (LOGIC_TESTED).
+- Android: đọc blocked state, tap Quay lại về Navigation, mở lại bằng URI đúng task, Android Back trở lại; không restart/reset/reload/capture/save/gallery/GPS permission. viewfinder-before.png / viewfinder-after.png cùng task/blocked state.
+- NATIVE_VERIFIED giới hạn blocked layout/Back/reentry; camera active preview, flash/switch/gallery/mode/pressed, shutter/capture/save/upload/AFTER, offline/error, native large font/Reduce Motion và FPS NOT_VERIFIED. Motion có trong code/Node không được coi là native camera proof. Cần fixture riêng cho phép capture để kiểm chứng thêm; giữ dữ liệu nháp cũ.
+- git diff --check exit0; scoped added-line scan không Ionicons/UD-06/secret/URL mới. Full regression 156 file: node --test --test-concurrency=2,1842/1842 PASS,0fail/skip,241111.0816ms,exit0; viewfinder-regression.log.
