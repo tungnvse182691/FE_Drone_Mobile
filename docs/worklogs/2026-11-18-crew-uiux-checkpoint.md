@@ -88,3 +88,19 @@ Android Pixel_6_Pro / Expo Go: inspected settled baseline, scroll to queue, expa
 Checks: 35/35 targeted tests repeated after final label-color/heading-spacing adjustment, sync-targeted-final.log; TypeScript exit 0 after that adjustment; git diff --check pass; scoped MaterialIcons/UD-06/secret-pattern scan no matches. Full regression 156 files, 1,841 pass/0 fail, 208,391ms, sync-regression.log. Full run started before the final two presentational color/gap edits; those were covered by repeated targeted/TypeScript/AST checks. Final combined regression will run again for Profile.
 
 NOT_RUN: journal read button invocation, native reduced-motion setting/font scaling, measured FPS, injected offline/error/loading, legacy-outbox populated tabs (no legacy rows in native fixture), send/receipt/restart/session-switch E2E. Final native send capability is not inferred from read-only appearance. Git at checkpoint: only these source files plus worklog tracked edits; prior untracked preserved. Local commit only, no push.
+
+## Profile checkpoint — continuation 2026-11-18
+
+Mode IMPLEMENT_AND_SELF_REVIEW, main, base 4675045. Prior continuation commits: 0b660ad (Tasks + owner Home ID amendment), 4675045 (Sync). Files in this checkpoint: app/(crew)/profile.tsx and this worklog only.
+
+Presentation: sentence-case statistics labels, regular Roboto 12/18 with room for wrapping, aligned 28/34 tabular numbers; neutral role badge; sentence-case settings heading 13/18; settings rows minimum 64dp with radius 8. Existing CrewPressable feedback retained. Removed replayOnFocus to avoid repeating the full-page entry effect on return. No new press animation in Profile, no animation-driven business state. Statistical formulas, identity values, disclaimers, actions and route targets unchanged.
+
+Android Pixel_6_Pro Android 14 / existing Expo Go, Fast Refresh: inspected top and scrolled settings; opened personal information Alert and dismissed with OK; opened password screen (empty form, submit disabled) and returned with its Back control; opened help Alert and dismissed with OK; opened Sync through settings and returned using Android Back, retaining Profile scroll position. Initial Android Back on the personal-information Alert did not dismiss it; OK worked. No password entry, logout, send, reconcile or mutation performed.
+
+Evidence .cache/crew-tabs-ui-20261118/: profile-before.png → profile-after.png; profile-settings-after.png shows lower settings. Static screenshots prove presentation, not measured smoothness. No manual reload, restart or video.
+
+Verification on final combined source: npx tsc --noEmit exit 0; 91/91 targeted tests (crew-polish-layout, crew-ui-patch11, crew-nav01, crew-ui-restore, crew-home-motion), profile-targeted.log, 14,820ms. Full regression: node --test --test-concurrency=2 across 156 test files, 1,841 pass / 0 fail / 0 skipped, 199,909ms, profile-final-regression.log, exit 0. This final run covers final Home/Tasks/Sync/Profile source. Supplementary verify-presentation.cjs AST comparison against baf87ee passes non-JSX statements and action props for all six changed source files. git diff --check passes; Profile icon/UD-06/secret-pattern scan no matches. These source checks are not API/native mutation proof.
+
+NOT_RUN / NOT_VERIFIED: Profile statistics refresh invocation, keyboard entry/submission, logout, native Reduce Motion switch, enlarged system font, measured FPS, physical APK/iPhone, injected offline/error, mutation/replay/persistence/receipt E2E. Tasks successful next-page response remains NOT_VERIFIED; observed only loading/disabled with retained rows. Scope complete at presentation checkpoint; no other Crew screens opened for implementation.
+
+Git before local commit: main at 4675045, only Profile and this worklog tracked modifications. Existing .cache, logs, Android build directory and mydatabase.db preserved. No push or branch operation.

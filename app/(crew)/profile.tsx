@@ -14,17 +14,17 @@ import { CrewContentTransition, CrewPressable } from '../../src/components/crew/
 const PERFORMANCE_STATS = [
   {
     value: '',
-    label: 'HOÀN THÀNH',
+    label: 'Hoàn thành',
     color: '#187047',
   },
   {
     value: '',
-    label: 'CHƯA HOÀN THÀNH',
+    label: 'Chưa hoàn thành',
     color: '#8A5200',
   },
   {
     value: '',
-    label: 'ĐÃ TẢI',
+    label: 'Đã tải',
     color: colors.neutral,
   },
 ];
@@ -97,7 +97,7 @@ export default function CrewProfileScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
-      <CrewContentTransition ready replayOnFocus>
+      <CrewContentTransition ready>
       <View style={styles.profileHeader}>
         <View style={styles.avatar} accessibilityLabel="Biểu tượng tài khoản">
           <MaterialIcons name="person" size={48} color={colors.secondary} />
@@ -109,7 +109,7 @@ export default function CrewProfileScreen() {
         <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>
-          <MaterialIcons name="build" size={14} color="#115E47" />
+          <MaterialIcons name="build" size={14} color={colors.secondary} />
           <Text style={[typography.labelSm, styles.roleText]}>Kỹ thuật viên sửa chữa</Text>
         </View>
       </View>
@@ -138,7 +138,7 @@ export default function CrewProfileScreen() {
 
       </Card>
 
-      <Text style={[typography.labelSm, styles.sectionLabel]}>CÀI ĐẶT HỆ THỐNG</Text>
+      <Text style={[typography.labelSm, styles.sectionLabel]}>Cài đặt hệ thống</Text>
 
       <Card style={styles.settingsCard}>
         {SETTINGS_ROWS.map((row, index) => (
@@ -221,12 +221,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: '#DDF5EC',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#83CEB2',
+    borderColor: colors.border,
   },
   roleText: {
-    color: '#115E47',
+    color: colors.secondary,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Roboto',
   },
   statsCard: {
     borderRadius: radius.lg,
@@ -236,7 +239,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-evenly',
   },
   statsHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, gap: spacing.sm },
@@ -251,16 +254,23 @@ const styles = StyleSheet.create({
   statCol: {
     flex: 1,
     alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.sm,
   },
   statLabel: {
     color: colors.secondary,
     marginTop: spacing.xs,
     textAlign: 'center',
-    textTransform: 'uppercase',
+    minHeight: 36,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Roboto',
   },
-  statNumber: { fontSize: 28, lineHeight: 36, fontVariant: ['tabular-nums'] },
+  statNumber: { fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'] },
   sectionLabel: {
     color: colors.secondary,
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: spacing.sm,
   },
   settingsCard: {
@@ -275,7 +285,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    minHeight: 56,
+    minHeight: 64,
+    borderRadius: radius.md,
   },
   rowBorder: {
     borderBottomWidth: 1,
