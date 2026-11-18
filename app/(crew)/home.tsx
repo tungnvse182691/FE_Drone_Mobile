@@ -508,13 +508,16 @@ const styles = StyleSheet.create({
   },
   woCodeBadge: {
     maxWidth: '100%',
-    paddingVertical: 2,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.sm,
+    backgroundColor: '#F1F3F5',
   },
   woCodeText: {
-    color: colors.secondary,
+    color: colors.neutral,
     fontSize: 12,
     lineHeight: 18,
-    fontFamily: 'Roboto-Regular',
+    fontFamily: 'Roboto-Medium',
   },
   distanceText: {
     color: colors.secondary,

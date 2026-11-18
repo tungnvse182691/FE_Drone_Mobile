@@ -6,6 +6,7 @@ function fixture(modes){
  const rows=(modes??[['Completed','MEASURE_ONLY'],['Completed','INSPECT_AND_REPAIR'],['Completed','FUTURE'],['Submitted','MEASURE_ONLY'],['Assigned','INSPECT_AND_REPAIR']]).map(([status,mode],i)=>({id:`00000000-0000-4000-8000-00000000001${i}`,projectId,crewId:actor,mode,status,version:'v1',defectIds:[]}));
  const query={data:{pages:[{items:rows.slice(0,2)},{items:rows.slice(2)}]},isPending:false,isFetching:false,isError:false,hasNextPage:true,refetch(){},fetchNextPage(){}};
  const s=screen('app/(crew)/tasks.tsx',{modules:{
+  '../../src/components/crew/CrewHomeTaskPressable':{CrewHomeTaskPressable:'Pressable'},
   '@tanstack/react-query':{useInfiniteQuery:()=>query},
   'expo-router':{router:{push(){throw Error('unexpected navigation');}},useFocusEffect(){},usePathname:()=>'/tasks'},
   '../../src/api/authApi':{passwordSessionIdentity:t=>t?'["'+actor+'","s1"]':null},

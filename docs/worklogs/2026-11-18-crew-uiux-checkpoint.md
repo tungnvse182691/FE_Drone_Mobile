@@ -48,3 +48,31 @@ Progress, Complete, Correction, Navigation, Viewfinder and Field Review still re
 ## Preservation
 
 Preserved .cache/, existing untracked test logs, Android build output, mydatabase.db and pending data. No reset/clean/stash, Docker mutation or backend changes. Stage explicit files only. Push authorization is the latest owner message; earlier no-push instruction is superseded for these completed commits.
+
+## Current continuation — Home alignment and Tasks (2026-11-18)
+
+Mode: IMPLEMENT_AND_SELF_REVIEW (Codex). Latest owner scope: Home/Tasks load-more and ID presentation, then Tasks → Sync → Profile. LOCAL commits only; no push. The push authorization in the historical checkpoint above does not apply to this continuation. Baseline SHA baf87ee; main retained.
+
+### Previously completed Home, now documented
+
+- 8ba570b: white metric surfaces, restrained accents, greeting 20/26, labels 13/18; gold capture CTA and neutral outlined receiving CTA.
+- cb3a06f: owner-requested larger metrics, minHeight 112, vertical padding 20, numerals 28/34.
+- a6a79bb: task-list ready transition only, no focus/revision replay; gap 12, radius 12, quieter metadata, wrapped full title/location.
+- baf87ee: task press scale 0.97 over 80ms then spring to 1 (stiffness 260, damping 16, mass 0.6), native ripple; original handlers immediate; OS Reduce Motion support and cancellation in existing helper.
+- Existing Home final source verification: 1,841/1,841 tests, 156 files, task-press-regression.log (184,869ms), 121 targeted. Evidence .cache/crew-home-ui-20261118/: before-top.png → after-top.png, before-tasks.png → after-tasks.png, task-rest-after.png / task-pressed-after.png. These are historical Home results, not a substitute for this continuation's checks.
+
+### Tasks + explicit owner Home amendments
+
+Files: app/(crew)/tasks.tsx, app/(crew)/home.tsx, tests/dot-c-crew-filter.test.cjs; this worklog. Existing filter harness gains a transparent mock for the reused Home press wrapper; assertions unchanged.
+
+- Tasks cards reuse existing Home spring press/ripple wrapper, preserve callbacks/disabled/params. Quiet selected segment, readable filter outlines, gap 12, regular 16/22 titles and smaller metadata match Home.
+- Shared CrewInboxState load-more: replace full-width blue pill with centered white outlined 168dp minimum action, 48dp touch target, radius 12, top divider. Same Button loading, disabled, onPress and hasNextPage condition. Shared callers receive this presentation change; no caller workflow changed.
+- Latest owner ID request: both Home/Tasks retain exact displayed identifier, add pale neutral background, 4/8 padding and Roboto Medium 12/18. Date remains separate.
+
+Android: Pixel_6_Pro Android 14, Expo Go already running; Fast Refresh only. Evidence .cache/crew-tabs-ui-20261118/: tasks-before.png → tasks-final-after.png; home-id-before.png → home-id-after-scroll.png. Tasks initial baseline caught a settling header; no header fix is claimed. Home before/after scroll positions differ. Latest owner screenshots also show the original ID/load-more presentation. tasks-pressed.png proves held card visual scale; after release correct fixture detail opened, Back retained filter. Completed/measure-only filters and return to active exercised; scroll and dock Home/Tasks/Sync exercised. Load-more click observed busy/disabled with existing rows retained; successful additional-page response NOT_VERIFIED (request still pending during observation). tasks-loadmore-pressed.png records the immediate press, not a claim of receipt.
+
+Verification: npx tsc --noEmit exit 0; 88/88 targeted tests (dot-c-crew-filter, crew-home-task-press, crew-polish-layout, crew-ui-patch11, crew-nav01, crew-ui-restore), tasks-targeted.log. AST comparison against baf87ee: unchanged non-JSX business statements and action/disabled/loading props in Home/Tasks. git diff --check passed; scoped icon/UD-06/secret-pattern scan found no matches. Full final regression result recorded below before commit.
+
+NOT_RUN / NOT_VERIFIED: injected network error/offline, native Reduce Motion toggle, enlarged system font, measured FPS, physical APK/iPhone, keyboard forms, mutation/replay/receipt/persistence/session-switch E2E. No backend changes, data resets, manual app restart, or mutation used for visual QA. Preserve all prior untracked artifacts.
+
+Final Tasks source full regression: 156 test files, 1,841 pass, 0 fail; tasks-final-regression.log, node --test --test-concurrency=2, exit 0. This result includes latest ID and load-more presentation edits. Checkpoint Git before commit: main, four tracked files above only; existing untracked retained.

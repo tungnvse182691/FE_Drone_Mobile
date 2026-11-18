@@ -25,6 +25,7 @@ import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
 import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
+import { CrewHomeTaskPressable } from '../../src/components/crew/CrewHomeTaskPressable';
 export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
 type TaskSegment = 'active' | 'done';
@@ -114,9 +115,9 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
     {inbox.error ? <Text style={typography.bodyMd} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
     {inbox.query.data?.pages[0]?.asOf ? <Text style={typography.caption}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text> : null}
-    {inbox.query.hasNextPage && !inbox.error ? <View style={{ backgroundColor: '#EDF2F6', borderRadius: radius.full, overflow: 'hidden' }}>
+    {inbox.query.hasNextPage && !inbox.error ? <View style={{ alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
       <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
-        style={{ borderWidth: 0, borderRadius: radius.full }}
+        style={{ minWidth: 168, minHeight: 48, borderWidth: 1, borderColor: '#89939F', borderRadius: radius.lg, backgroundColor: colors.surface }}
         loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
     </View> : null}
   </Card>;
@@ -261,9 +262,10 @@ export default function CrewTasksScreen() {
           <View style={styles.taskList}>
             {list.map((task) => {
             return (
-              <CrewPressable
+              <CrewHomeTaskPressable
                 key={task.id}
                 style={{ borderRadius: radius.lg, overflow: 'hidden' }}
+                android_ripple={{ color: '#1A1D2029', foreground: true }}
                 onPress={() =>
                   router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
                 }
@@ -331,7 +333,7 @@ export default function CrewTasksScreen() {
                     <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} />
                   </View>
                 </Card>
-              </CrewPressable>
+              </CrewHomeTaskPressable>
             );
             })}
           </View>
@@ -373,14 +375,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   segmentActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FFF7DF',
+    borderWidth: 1,
+    borderColor: colors.brandGold,
   },
   segmentLabel: {
+    fontFamily: 'Roboto',
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.secondary,
     flexShrink: 1,
     textAlign: 'center',
   },
   segmentLabelActive: {
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.neutral,
     flexShrink: 1,
     textAlign: 'center',
@@ -394,7 +403,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   countBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    backgroundColor: '#F3E7C0',
   },
   countText: {
     color: colors.secondary,
@@ -416,7 +425,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#89939F',
     backgroundColor: colors.surface,
   },
   modeFilterLabel: {
@@ -433,7 +442,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0,
   },
   taskList: {
-    gap: spacing.sm,
+    gap: 12,
     paddingBottom: spacing.xl,
   },
   taskHeader: {
@@ -469,10 +478,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.neutral,
     marginTop: spacing.sm,
+    fontWeight: '400',
   },
   taskCode: {
-    color: colors.secondary,
-    fontSize: 11,
+    color: colors.neutral,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Roboto-Medium',
   },
   taskRouteRow: {
     flexDirection: 'row',
@@ -499,18 +511,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     marginTop: spacing.sm,
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.surfaceAlt,
   },
   woChip: {
     maxWidth: '100%',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#F1F3F5',
   },
   duePill: {
     flexGrow: 1,
