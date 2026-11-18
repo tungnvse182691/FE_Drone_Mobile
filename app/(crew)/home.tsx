@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { CrewPressable, CrewContentTransition } from '../../src/components/crew/CrewMotion';
+import { CrewHomeTaskPressable } from '../../src/components/crew/CrewHomeTaskPressable';
 import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
 import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -145,7 +146,7 @@ export default function CrewHomeScreen() {
           {tasks.map((task) => {
             const tone = crewHomeModeTone(task.task_mode);
             return (
-              <Pressable
+              <CrewHomeTaskPressable
                 key={task.id}
                 disabled={!task.projectId || !task.version}
                 onPress={() => router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}
@@ -228,7 +229,7 @@ export default function CrewHomeScreen() {
                     </View>
                   </View>
                 </Card>
-              </Pressable>
+              </CrewHomeTaskPressable>
             );
           })}
         </View>

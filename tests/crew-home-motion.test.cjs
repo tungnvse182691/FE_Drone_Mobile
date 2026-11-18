@@ -100,6 +100,7 @@ function home(inbox) {
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
   '../../src/components/CrewTaskStatus':{CrewTaskStatus:'CrewTaskStatus'},
   '../../src/components/crew/CrewMotion':{CrewPressable:'CrewPressable',CrewContentTransition:'CrewContentTransition'},
+  '../../src/components/crew/CrewHomeTaskPressable':{CrewHomeTaskPressable:'Pressable'},
   'expo-router':{router:{push:r=>nav.push(r)}},
  }});return {s,nav};
 }
