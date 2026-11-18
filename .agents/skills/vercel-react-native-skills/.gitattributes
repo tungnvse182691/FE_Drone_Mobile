@@ -1,0 +1,2 @@
+# Preserve intentional Markdown hard breaks from pinned upstream skill
+*.md whitespace=-blank-at-eol
