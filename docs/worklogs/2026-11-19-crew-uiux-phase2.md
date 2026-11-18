@@ -8,8 +8,8 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 | Màn | Baseline HEAD | Trạng thái | Commit local |
 |---|---|---|---|
 | Bản đồ nhiệm vụ | 0a89e94 | Gates PASS, native empty/read/back/pressed | f85ebc2 |
-| Theo dõi thi công | f85ebc2 | Gates PASS; native read/disclosure/Back | Commit chứa checkpoint 2; SHA bổ sung ở checkpoint kế |
-| Hồ sơ hoàn tất thi công | Chưa bắt đầu | Pending | — |
+| Theo dõi thi công | f85ebc2 | Gates PASS; native read/disclosure/Back | 4241fe8 |
+| Hồ sơ hoàn tất thi công | 4241fe8 | Gates PASS; native read/disclosure/Back | Commit chứa checkpoint 3; SHA bổ sung ở checkpoint kế |
 | Chỉnh sửa / bổ sung | Chưa bắt đầu | Pending | — |
 | Dẫn đường | Chưa bắt đầu | Pending | — |
 | Chụp ảnh | Chưa bắt đầu | Pending | — |
@@ -80,3 +80,21 @@ Giữ nguyên task title/ID/route/status expressions, điều kiện NORMAL/COND
 - NOT_VERIFIED: thi công/gửi/receipt, offline/error/loading chậm native, font scale lớn, positive started/finished context, thiết bị thật.
 
 Mọi ảnh/log ở `.cache/crew-phase2-ui-20261119/`, không commit artifacts.
+
+## 3. Hồ sơ hoàn tất thi công
+
+Baseline main `4241fe8`, ahead/behind 2/0; chỉ own WIP của màn này. File source: `app/(crew)/complete.tsx`.
+
+Baseline `complete-before.png`: ID lẫn metadata, title bị giới hạn hai dòng, trạng thái thiếu nhãn và phân cách. Chỉnh summary: ID nền trung tính, title đầy đủ, vị trí có icon khi dữ liệu hiện hữu, divider + nhãn trạng thái; CrewContentTransition ready chỉ bọc summary (280ms, Reduce Motion, không replayOnFocus). Không bọc form/checklist trong transition.
+
+Giữ nguyên expressions task/title/ID/tuyến/status, điều kiện NORMAL/CONDITIONAL_FT, stage="closeout", CrewTaskBoundary operational=false và Back. NormalRepairPanel là shared re-export từ WO Detail nên không sửa checklist/ảnh/CTA bên trong. Màn chỉ hoàn tất phần screen-private; redesign sâu panel chung còn cần owner duyệt scope. Trạng thái “Đã gửi hồ sơ” của nhiệm vụ không được diễn giải thành thi công xong/PM chấp thuận; panel vẫn hiển thị “Chưa kết thúc thi công” và số đo/ảnh bằng 0 đúng nguồn hiện tại.
+
+- `npx tsc --noEmit`: exit 0, `complete-typecheck.log`.
+- `node --test tests/crew-flow-recovery.test.cjs tests/crew-nav01.test.cjs`: 84/84 PASS, 0 fail/skip, 19918.2917ms; `complete-targeted.log` (LOGIC_TESTED).
+- Full regression 156 file: `node --test --test-concurrency=2`: 1842/1842 PASS, 0 fail/skip, 240403.4246ms, exit 0; `complete-regression.log`.
+- AST helper baseline 4241fe8 PASS unchanged non-JSX statements/action props. Manual diff review xác nhận JSX conditions và panel props không đổi; `git diff --check` exit 0; scoped added-line scan không Ionicons/UD-06/secret/URL mới.
+- Native fixture ebcdca88: đọc đầu màn, mở/thu gọn chi tiết bản lưu, cuộn phần ảnh/cảnh báo, Back về Chi tiết và mở lại Hoàn tất thành công. Không reset/restart/mutation.
+- `complete-before.png` / `complete-after.png`: cùng đầu màn, cùng fixture settled; `complete-expanded.png` là ảnh cuộn riêng sau mở disclosure, không dùng so trực tiếp baseline. NATIVE_VERIFIED giới hạn layout/read/scroll/disclosure/Back/reentry.
+- NOT_VERIFIED: mutation hoàn tất/gửi/upload/receipt, hồ sơ có ảnh/số đo, offline/error/loading chậm native, font scale lớn, OS Reduce Motion thực, motion timing/FPS và thiết bị thật. Không claim Android E2E.
+
+Ảnh/log giữ trong `.cache/crew-phase2-ui-20261119/`, không stage.
