@@ -7,8 +7,8 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 
 | Màn | Baseline HEAD | Trạng thái | Commit local |
 |---|---|---|---|
-| Bản đồ nhiệm vụ | 0a89e94 | Gates PASS, native empty/read/back/pressed | Commit chứa checkpoint 1; SHA bổ sung ở checkpoint tiếp theo |
-| Theo dõi thi công | Chưa bắt đầu | Pending | — |
+| Bản đồ nhiệm vụ | 0a89e94 | Gates PASS, native empty/read/back/pressed | f85ebc2 |
+| Theo dõi thi công | f85ebc2 | Gates PASS; native read/disclosure/Back | Commit chứa checkpoint 2; SHA bổ sung ở checkpoint kế |
 | Hồ sơ hoàn tất thi công | Chưa bắt đầu | Pending | — |
 | Chỉnh sửa / bổ sung | Chưa bắt đầu | Pending | — |
 | Dẫn đường | Chưa bắt đầu | Pending | — |
@@ -60,3 +60,23 @@ Giữ nguyên tất cả non-JSX statements, identity/session/sequence guards, r
 ### Phụ thuộc màn tiếp theo
 
 Progress/Complete gọi NormalRepairPanel, thực chất re-export NormalRepairBootstrap từ WO Detail (shared nhiều màn). Chưa sửa panel này; chỉ phần summary/screen-private được phép làm. Thay panel chung cần phân tích + owner duyệt.
+
+## 2. Theo dõi thi công
+
+Baseline main `f85ebc2`, ahead/behind 1/0, không tracked/staged WIP. File duy nhất ngoài worklog: `app/(crew)/progress.tsx`.
+
+Ảnh `progress-before.png` trên fixture hiện hữu `ebcdca88` (QA-CREW-SAFETY-01, Submitted), cùng vị trí đầu màn với `progress-after.png`. Vấn đề: ID lẫn body; status nhỏ và không có nhãn; tuyến đường không có điểm neo thị giác; phần tóm tắt thiếu tầng phân cách với mốc thi công.
+
+UI: đưa ID vào nền trung tính, title đầy đủ, hàng vị trí có icon, divider và cụm “Trạng thái nhiệm vụ” dùng CrewTaskStatus sẵn có. Không card lồng nhau. Summary dùng CrewContentTransition 280ms, Reduce Motion, không replayOnFocus, không bọc panel có input/CTA. Không thêm nút hay thay handler. Shared NormalRepairPanel/WO Detail giữ nguyên; timeline/checklist/CTA sâu chưa redesign vì ngoài allowlist shared.
+
+Giữ nguyên task title/ID/route/status expressions, điều kiện NORMAL/CONDITIONAL_FT, stage="progress", CrewTaskBoundary operational=false, Back. AST helper: lần đầu báo khác vì prop presentation `ready` mới; helper cache được giới hạn bỏ qua ready của riêng CrewContentTransition, mọi action prop/non-JSX statements còn lại PASS. Manual diff xác nhận conditions/panel props unchanged.
+
+- TypeScript `npx tsc --noEmit`: exit 0, `progress-typecheck.log`.
+- `node --test tests/crew-flow-recovery.test.cjs tests/crew-nav01.test.cjs`: 84/84 PASS, 0 fail/skip; `progress-targeted.log` (LOGIC_TESTED).
+- Full regression toàn bộ 156 file tests: `node --test --test-concurrency=2` **1842/1842 PASS**, 0 fail/skip, 246918.8115ms, exit 0; `progress-regression.log`.
+- `git diff --check` exit 0; scan scoped không Ionicons/UD-06/secret hay URL literal mới. Manual review giữ nguyên guard/route/params/disabled/action callbacks.
+- Native read-only: mở Progress từ Chi tiết; mở/thu gọn các bước, cuộn xuống cảnh báo, Back về đúng Chi tiết, mở lại Progress và Back. `progress-expanded.png` chứng minh các mốc có sẵn. Không restart/reset/seed/mutation.
+- NATIVE_VERIFIED giới hạn layout/read/scroll/disclosure/Back/reentry. Entrance có trong code, ảnh settled không chứng minh duration/FPS; cảm giác chuyển động liên tục và Reduce Motion thực tế NOT_VERIFIED. Không claim E2E.
+- NOT_VERIFIED: thi công/gửi/receipt, offline/error/loading chậm native, font scale lớn, positive started/finished context, thiết bị thật.
+
+Mọi ảnh/log ở `.cache/crew-phase2-ui-20261119/`, không commit artifacts.
