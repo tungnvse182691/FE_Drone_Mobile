@@ -59,7 +59,6 @@ export default function CrewHomeScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Đội sửa chữa" />}>
-        <CrewContentTransition ready replayOnFocus revision={inbox.query.dataUpdatedAt}>
         {/* HERO GREETING: Lời chào + Mã NV badge tương phản cao ngoài nắng */}
         <View style={styles.heroSection}>
           <View style={styles.heroTextCol}>
@@ -141,6 +140,7 @@ export default function CrewHomeScreen() {
             <View style={[styles.loadingLine, { width: '55%' }]} />
           </View>)}
         </View> : null}
+        <CrewContentTransition ready={!inbox.query.isPending}>
         <View style={styles.taskList}>
           {tasks.map((task) => {
             const tone = crewHomeModeTone(task.task_mode);
@@ -154,7 +154,7 @@ export default function CrewHomeScreen() {
                 android_ripple={{ color: '#1A1D2029', foreground: true }}
                 style={({ pressed }) => [styles.taskCardTouch, pressed && styles.taskCardPressed]}
               >
-                <Card style={[styles.taskCard, { borderLeftWidth: 4, borderLeftColor: tone.border }]}>
+                <Card style={[styles.taskCard, { borderLeftWidth: 2, borderLeftColor: tone.border }]}>
                   {/* Hàng 1: Chip chế độ + Hạn xử lý */}
                   <View style={styles.taskCardHeader}>
                     <View
@@ -163,7 +163,6 @@ export default function CrewHomeScreen() {
                         { backgroundColor: tone.background },
                       ]}
                     >
-                      <MaterialIcons name={tone.icon} size={16} color={tone.foreground} />
                       <Text
                         style={[
                           typography.labelSm,
@@ -196,14 +195,14 @@ export default function CrewHomeScreen() {
                   </View>
 
                   {/* Hàng 2: Tiêu đề công việc 16px rõ nét ngoài nắng */}
-                  <Text style={[typography.titleMd, styles.taskTitle]} numberOfLines={2}>
+                  <Text style={[typography.titleMd, styles.taskTitle]}>
                     {task.title || 'Nhiệm vụ hiện trường'}
                   </Text>
 
                   {/* Hàng 3: Dòng tuyến • trạm • lý trình kèm icon near-me */}
                   <View style={styles.locationRow}>
-                    <MaterialIcons name="near-me" size={14} color={colors.brandGold} />
-                    <Text style={[typography.bodyMd, styles.locationText]} numberOfLines={1}>
+                    <MaterialIcons name="near-me" size={14} color={colors.secondary} />
+                    <Text style={[typography.bodyMd, styles.locationText]}>
                       {[task.route_code, task.section_name, task.chainage].filter(Boolean).join(' • ') || 'Chưa có tuyến / vị trí'}
                     </Text>
                   </View>
@@ -412,11 +411,13 @@ const styles = StyleSheet.create({
 
   /* Task List & Card */
   taskList: {
-    gap: spacing.sm,
+    gap: 12,
     paddingBottom: spacing.xl,
   },
   taskCardTouch: {
     minHeight: 48,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
   },
   taskCardPressed: {
     opacity: 0.92,
@@ -436,7 +437,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    marginBottom: 12,
   },
   modeChip: {
     flexDirection: 'row',
@@ -445,6 +446,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: radius.full,
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   modeChipText: {
     letterSpacing: 0.2,
@@ -456,9 +459,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    flexShrink: 1,
   },
   dueText: {
     color: colors.secondary,
+    flexShrink: 1,
   },
   dueTextUrgent: {
     color: colors.error,
@@ -469,6 +474,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     marginBottom: 6,
+    fontFamily: 'Roboto-Medium',
+    fontWeight: '400',
   },
   locationRow: {
     flexDirection: 'row',
@@ -487,7 +494,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: spacing.xs,
+    paddingTop: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.surfaceAlt,
   },
@@ -496,19 +503,17 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
     alignItems: 'center',
+    flexShrink: 1,
   },
   woCodeBadge: {
     maxWidth: '100%',
-    backgroundColor: colors.surfaceAlt,
     paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   woCodeText: {
     color: colors.secondary,
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Roboto-Regular',
   },
   distanceText: {
     color: colors.secondary,
