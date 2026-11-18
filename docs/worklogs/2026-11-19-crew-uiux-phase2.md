@@ -9,8 +9,8 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 |---|---|---|---|
 | Bản đồ nhiệm vụ | 0a89e94 | Gates PASS, native empty/read/back/pressed | f85ebc2 |
 | Theo dõi thi công | f85ebc2 | Gates PASS; native read/disclosure/Back | 4241fe8 |
-| Hồ sơ hoàn tất thi công | 4241fe8 | Gates PASS; native read/disclosure/Back | Commit chứa checkpoint 3; SHA bổ sung ở checkpoint kế |
-| Chỉnh sửa / bổ sung | Chưa bắt đầu | Pending | — |
+| Hồ sơ hoàn tất thi công | 4241fe8 | Gates PASS; native read/disclosure/Back | feda325 |
+| Chỉnh sửa / bổ sung | feda325 | Gates PASS; native empty/history/pressed/Back | Commit checkpoint 4 |
 | Dẫn đường | Chưa bắt đầu | Pending | — |
 | Chụp ảnh | Chưa bắt đầu | Pending | — |
 | Hồ sơ hiện trường | Chưa bắt đầu | Pending | — |
@@ -98,3 +98,17 @@ Giữ nguyên expressions task/title/ID/tuyến/status, điều kiện NORMAL/CO
 - NOT_VERIFIED: mutation hoàn tất/gửi/upload/receipt, hồ sơ có ảnh/số đo, offline/error/loading chậm native, font scale lớn, OS Reduce Motion thực, motion timing/FPS và thiết bị thật. Không claim Android E2E.
 
 Ảnh/log giữ trong `.cache/crew-phase2-ui-20261119/`, không stage.
+
+## 4. Chỉnh sửa / bổ sung hồ sơ
+
+Baseline main feda325; chỉ sửa app/(crew)/repair-correction.tsx và worklog. Baseline correction-before.png: trạng thái chữ nhỏ, ID hòa metadata, disclosure lịch sử thiếu phản hồi nhấn. Gom nhiệm vụ liên quan với ID nền trung tính/title đầy đủ; trạng thái body 14; lịch sử nền kem, CrewPressable lún/hồi/ripple hiện hữu (Reduce Motion); kỹ thuật và biên nhận chia dòng có nhãn/divider, giữ đầy đủ dữ liệu.
+
+Giữ nguyên non-JSX statements, review.canSupplement, technical, rows order/conditions, phase/receipt semantics, route supplement/params/onPress và recovery/load helpers. AST baseline feda325 + manual full diff PASS. Không gọi mutation hay fake receipt.
+
+- npx tsc --noEmit: exit 0, correction-typecheck.log.
+- node --test tests/crew-repair-presentation.test.cjs tests/crew-flow-recovery.test.cjs tests/crew-g02b-recovery.test.cjs tests/t06de.test.cjs: 65/65 PASS, 0 fail/skip, 24248.6432ms; correction-targeted.log (LOGIC_TESTED).
+- Full regression 156 file, node --test --test-concurrency=2: 1842/1842 PASS, 0 fail/skip, 235493.154ms, exit 0; correction-regression.log.
+- git diff --check exit 0; scoped added-line scan không Ionicons/UD-06/secret/URL literal mới.
+- Android fixture ebcdca88: xem trạng thái chưa có lượt gửi, giữ/thả disclosure lịch sử, mở/đọc lại lịch sử local (read), thu gọn và Back về Chi tiết. Quan sát lún/đổi nền khi giữ; correction-pressed.png. Không reset/restart/mutation.
+- correction-before.png / correction-after.png cùng đầu màn settled; correction-expanded.png riêng sau mở lịch sử. Tất cả trong .cache/crew-phase2-ui-20261119/.
+- NATIVE_VERIFIED giới hạn read/empty/disclosure/pressed/Back. NOT_VERIFIED: SUPPLEMENT/ACCEPT thật, populated receipt/history, mutation/recovery, native offline/error/loading chậm, font scale lớn, OS Reduce Motion, FPS/motion timing. Không claim Android E2E.

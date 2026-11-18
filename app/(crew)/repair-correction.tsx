@@ -1,11 +1,12 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { CrewPressable } from '../../src/components/crew/CrewMotion';
 import type { CrewRepairAttempt, CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskBoundary,useCrewIdentity } from './tasks';
@@ -32,24 +33,25 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
         <MaterialIcons name={accepted?'check-circle':review.canSupplement?'edit-note':'schedule'} size={20} color={tone}/>
         <Text style={[styles.badgeLabel,{color:tone}]}>{review.statusLabel}</Text>
       </View>
-      <Text accessibilityRole="header" style={typography.titleMd}>{review.title}</Text>
+      <Text accessibilityRole="header" style={styles.title}>{review.title}</Text>
       <Text style={styles.body}>{review.message}</Text>
       <View style={styles.taskInfo}>
-        <Text numberOfLines={2} style={styles.hint}>{task.title||'Nhiệm vụ hiện trường'}</Text>
-        <Text selectable style={styles.hint}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
+        <Text style={styles.hint}>Nhiệm vụ liên quan</Text>
+        <View style={styles.identity}><Text selectable style={styles.code}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text></View>
+        <Text style={styles.body}>{task.title||'Nhiệm vụ hiện trường'}</Text>
       </View>
       {review.canSupplement?<Button variant="primary" title="Gửi bổ sung" onPress={() => router.push({
         pathname: '/(crew)/field-review', params: { id: task.id, projectId: task.projectId, supplement: '1' },
       })} />:null}
     </Card>
     <View style={styles.history}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Lịch sử và thông tin kỹ thuật" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={styles.disclosure}>
+      <CrewPressable accessibilityRole="button" accessibilityLabel="Lịch sử và thông tin kỹ thuật" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={({pressed})=>[styles.disclosure,pressed&&styles.pressed]}>
         <MaterialIcons name="history" size={22} color={colors.secondary}/>
         <Text style={[typography.labelLg,styles.flex]}>Lịch sử và thông tin kỹ thuật</Text>
         <MaterialIcons name={technical?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
-      </Pressable>
+      </CrewPressable>
       {technical?<View style={styles.historyContent}>
-        {review.technical ? <Text selectable style={styles.hint}>Mã lượt: {review.technical.attemptId} · Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text> : null}
+        {review.technical ? <View style={styles.technical}><Text selectable style={styles.hint}>Mã lượt: {review.technical.attemptId}</Text><Text selectable style={styles.hint}>Bản nộp hiệu lực: {review.technical.effectiveSubmissionId}</Text></View> : null}
         <CrewRepairReceiptHistory task={task}/>
       </View>:null}
     </View>
@@ -141,11 +143,11 @@ export function CrewRepairReceiptHistory({task}:{task:CrewTask}) {
   const operation={assessment:'Đánh giá trước sửa',start:'Bắt đầu thi công',finish:'Kết thúc thi công',attempt:'Tiếp nhận hồ sơ',supplement:'Bổ sung hồ sơ'};
   const phase={PREPARED:'Đã lưu, chưa xác nhận gửi',PENDING:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã lưu biên nhận, chờ đối soát',CONFIRMED:'Đã đối soát biên nhận',REJECTED:'Bị từ chối'};
   return <View style={{gap:spacing.sm}}>
-    <Text style={typography.titleMd}>Lịch sử biên nhận trên thiết bị</Text>
+    <Text style={styles.title}>Lịch sử biên nhận trên thiết bị</Text>
     <Text style={styles.hint}>Nhật ký thao tác trên máy này, tách biệt với kết quả quản lý ở trên.</Text>
     {busy?<Text>Đang kiểm tra lịch sử…</Text>:null}
     {rows?.length===0?<Text style={styles.hint}>Chưa có lịch sử trên thiết bị này.</Text>:null}
-    {rows?.map(c=><View key={c.key}><Text>{operation[c.operation]}: {phase[c.phase]}</Text>{c.receipt?<Text>Biên nhận máy chủ đã lưu, đúng nguồn liên kết. {c.receipt.data.intakeReadiness==='READY'?'Hồ sơ đủ thông tin tiếp nhận; chưa phải được PM chấp thuận.':''}</Text>:null}</View>)}
+    {rows?.map(c=><View key={c.key} style={styles.receipt}><Text style={styles.receiptLabel}>{operation[c.operation]}</Text><Text style={styles.body}>{phase[c.phase]}</Text>{c.receipt?<Text style={styles.hint}>Biên nhận máy chủ đã lưu, đúng nguồn liên kết. {c.receipt.data.intakeReadiness==='READY'?'Hồ sơ đủ thông tin tiếp nhận; chưa phải được PM chấp thuận.':''}</Text>:null}</View>)}
     {message?<Text accessibilityRole="alert">{message}</Text>:null}
     <Button variant="secondary" title="Đọc lại lịch sử biên nhận" disabled={busy||!live} onPress={()=>void load()}/>
   </View>;
@@ -154,10 +156,17 @@ export function CrewRepairReceiptHistory({task}:{task:CrewTask}) {
 const styles=StyleSheet.create({
   summary:{gap:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
   badge:{flexDirection:'row',alignItems:'center',alignSelf:'flex-start',maxWidth:'100%',gap:spacing.xs,paddingHorizontal:spacing.sm,paddingVertical:spacing.xs,borderRadius:radius.md},
-  badgeLabel:{...typography.labelSm,flexShrink:1},
+  badgeLabel:{...typography.bodyMd,color:colors.secondary,flexShrink:1},
+  title:{...typography.titleMd,color:colors.neutral},
   body:{...typography.bodyMd,color:colors.neutral},hint:{...typography.caption,color:colors.secondary},
-  taskInfo:{gap:spacing.xs,paddingTop:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
+  taskInfo:{gap:spacing.sm,paddingTop:spacing.md,borderTopWidth:1,borderTopColor:colors.border},
+  identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:6,backgroundColor:colors.surfaceAlt,borderRadius:radius.sm},
+  code:{...typography.labelLg,lineHeight:20,color:colors.secondary,flexShrink:1},
   history:{backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
-  disclosure:{minHeight:52,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md},
-  historyContent:{padding:spacing.md,paddingTop:0,gap:spacing.md},flex:{flex:1,minWidth:0},
+  disclosure:{minHeight:52,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:'#FBF8EE',borderRadius:radius.lg,overflow:'hidden'},
+  pressed:{backgroundColor:'#F3ECD6'},
+  historyContent:{padding:spacing.md,gap:spacing.md},
+  technical:{gap:spacing.sm,paddingBottom:spacing.md,borderBottomWidth:1,borderBottomColor:colors.border},
+  receipt:{gap:spacing.xs,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
+  receiptLabel:{...typography.labelLg,color:colors.neutral},flex:{flex:1,minWidth:0},
 });
