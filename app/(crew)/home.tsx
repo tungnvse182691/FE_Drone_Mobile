@@ -123,11 +123,11 @@ export default function CrewHomeScreen() {
           accessibilityRole="button"
           accessibilityLabel="Nhận việc cần xác nhận"
         >
-          <MaterialIcons name="inbox" size={20} color="#174EA6" />
+          <MaterialIcons name="inbox" size={20} color={colors.secondary} />
           <Text style={[typography.labelLg, styles.receivingBtnText]}>
             Nhận việc cần xác nhận
           </Text>
-          <MaterialIcons name="chevron-right" size={18} color="#174EA6" />
+          <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
         </CrewPressable>
 
 
@@ -265,20 +265,15 @@ const styles = StyleSheet.create({
   },
   heroName: {
     color: colors.neutral,
-    fontSize: 22,
-    lineHeight: 28,
+    fontSize: 20,
+    lineHeight: 26,
     fontFamily: 'Roboto-Medium',
   },
   badgeWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.surface,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 4,
     maxWidth: '100%',
   },
   badgeText: {
@@ -292,7 +287,7 @@ const styles = StyleSheet.create({
   metricRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   metricCard: {
     flex: 1,
@@ -304,8 +299,8 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-  metricPending: { backgroundColor: '#FFF4DB', borderColor: '#E8CE92' },
-  metricDone: { backgroundColor: '#E7F4EC', borderColor: '#A8D5BA' },
+  metricPending: { borderTopColor: '#C9A227', borderTopWidth: 2 },
+  metricDone: { borderTopColor: '#A8D5BA', borderTopWidth: 2 },
   metricTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,19 +308,22 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: colors.secondary,
-    fontFamily: 'Roboto-Medium',
+    fontFamily: 'Roboto-Regular',
+    fontSize: 13,
+    lineHeight: 18,
     flex: 1,
   },
   metricIconBox: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metricValue: {
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 24,
+    lineHeight: 30,
+    fontVariant: ['tabular-nums'],
     marginTop: spacing.xs,
     fontFamily: 'Roboto-Medium',
   },
@@ -347,6 +345,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.neutral,
     flexShrink: 1,
+    fontSize: 16,
+    lineHeight: 22,
+    fontFamily: 'Roboto-Medium',
   },
   seeAllWrap: {
     minHeight: 48,
@@ -371,7 +372,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     minHeight: 52,
     borderRadius: radius.lg,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
   },
   captureBtnPressed: {
@@ -391,21 +392,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    backgroundColor: '#E8F0FD',
+    backgroundColor: colors.surface,
     minHeight: 52,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#ACC5EB',
+    borderColor: '#89939F',
     marginBottom: spacing.md,
     paddingHorizontal: spacing.md,
   },
   receivingBtnText: {
-    color: '#174EA6',
+    color: colors.secondary,
     flex: 1,
-    textAlign: 'center',
+    textAlign: 'left',
     lineHeight: 22,
   },
-  receivingBtnPressed: { backgroundColor: '#D5E4FA' },
+  receivingBtnPressed: { backgroundColor: '#EDF0F3' },
 
   /* Task List & Card */
   taskList: {
