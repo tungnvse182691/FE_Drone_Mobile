@@ -96,30 +96,39 @@ export function useCrewInbox() {
   return { ...identity, environment, query, error, stale, tasks: (!identity.enabled || foreign || (query.isError && !transient)) ? [] : [...items.values()] };
 }
 export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbox> }) {
-  return <Card style={{ marginBottom: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: colors.border }}>
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+  return <Card style={styles.inboxPanel}>
+    <View style={styles.inboxHeader}>
+      <View style={styles.inboxIcon}>
       <MaterialIcons name={inbox.error ? 'error-outline' : 'assignment'} size={20} color={inbox.error ? colors.error : colors.brandGold} />
-      <View style={{ flex: 1 }}>
-        <Text style={typography.titleMd}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
-        <Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong các nhiệm vụ đã tải.</Text>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
+      <View style={styles.inboxHeading}>
+        <Text style={[typography.titleMd, styles.inboxTitle]}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
+        <Text style={[typography.caption, styles.inboxSubtitle]}>Thống kê trong các nhiệm vụ đã tải.</Text>
+      </View>
+      <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
         accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
         disabled={!inbox.enabled || inbox.query.isFetching}
-        style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}
+        style={styles.inboxRefresh}
         onPress={() => { void inbox.query.refetch(); }}>
         {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
-      </Pressable>
+      </CrewPressable>
     </View>
+    <View style={styles.inboxBody}>
     {inbox.stale ? <Text style={typography.bodyMd}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
     {inbox.error ? <Text style={typography.bodyMd} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
-    {inbox.query.data?.pages[0]?.asOf ? <Text style={typography.caption}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text> : null}
-    {inbox.query.hasNextPage && !inbox.error ? <View style={{ alignItems: 'center', paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }}>
+    <View style={styles.inboxFooter}>
+    {inbox.query.data?.pages[0]?.asOf ? <View style={styles.inboxTimestamp}>
+      <MaterialIcons name="schedule" size={16} color={colors.secondary} />
+      <Text style={[typography.caption, styles.inboxTimestampText]}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text>
+    </View> : null}
+    {inbox.query.hasNextPage && !inbox.error ? <View style={styles.inboxMore}>
       <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
-        style={{ minWidth: 168, minHeight: 48, borderWidth: 1, borderColor: '#89939F', borderRadius: radius.lg, backgroundColor: colors.surface }}
+        style={styles.inboxMoreButton}
         loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
     </View> : null}
+    </View>
+    </View>
   </Card>;
 }
 /** Mount children only after an owner-scoped detail read. A new sid unmounts old task UI. */
@@ -347,6 +356,53 @@ export default function CrewTasksScreen() {
 }
 
 const styles = StyleSheet.create({
+  inboxPanel: {
+    padding: 0,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  inboxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    backgroundColor: '#FBF8EE',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9E1CC',
+  },
+  inboxIcon: {
+    width: 32, height: 32,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  inboxHeading: { flex: 1, gap: spacing.xs },
+  inboxTitle: { color: colors.neutral, fontSize: 16, lineHeight: 22 },
+  inboxSubtitle: { color: colors.secondary, lineHeight: 18 },
+  inboxRefresh: {
+    width: 48, height: 48,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#89939F',
+    borderRadius: radius.lg, backgroundColor: colors.surface,
+  },
+  inboxBody: { padding: spacing.md, gap: spacing.sm },
+  inboxFooter: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    alignItems: 'center', gap: 12,
+  },
+  inboxTimestamp: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexBasis: 152, flexGrow: 1, flexShrink: 1,
+  },
+  inboxTimestampText: { flex: 1, color: colors.secondary, lineHeight: 18 },
+  inboxMore: { maxWidth: '100%', marginLeft: 'auto' },
+  inboxMoreButton: {
+    minWidth: 132, minHeight: 48,
+    borderWidth: 1, borderColor: '#89939F',
+    borderRadius: radius.lg, backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: 12,
+  },
   screen: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
