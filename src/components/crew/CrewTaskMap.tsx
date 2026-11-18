@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CrewPressable as Pressable } from './CrewMotion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -41,29 +42,38 @@ export function CrewTaskMap({ projectId, taskId }: { projectId: string; taskId: 
   return <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
     <View style={styles.header}>
       <Pressable accessibilityRole="button" accessibilityLabel="Quay lại nhiệm vụ" onPress={() => router.back()} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.neutral} /></Pressable>
-      <Text style={[typography.titleMd, styles.title]}>Bản đồ nhiệm vụ</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại bản đồ" accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void read()} style={styles.iconButton}><MaterialIcons name="refresh" size={24} color={colors.secondary} /></Pressable>
+      <View style={styles.title}><Text style={styles.heading}>Bản đồ nhiệm vụ</Text><Text style={styles.hint}>Vị trí và hình học tuyến</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại bản đồ" accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void read()} style={({ pressed }) => [styles.refresh, pressed && styles.pressed, busy && styles.disabled]}><MaterialIcons name="refresh" size={22} color={colors.brandGold} /><Text style={styles.actionLabel}>Tải lại</Text></Pressable>
     </View>
-    {busy ? <View style={styles.center}><ActivityIndicator color={colors.brandGold} /><Text style={typography.bodyMd}>Đang tải bản đồ…</Text></View> : error ? <View style={styles.center}><Text accessibilityRole="alert" style={typography.bodyMd}>{error}</Text></View> : <>
+    {busy ? <View style={styles.center}><View style={styles.statePanel}><ActivityIndicator color={colors.brandGold} /><View style={styles.stateCopy}><Text style={styles.heading}>Đang tải bản đồ…</Text><Text style={styles.hint}>Đang đọc vị trí và hình học từ hồ sơ nhiệm vụ.</Text></View></View></View> : error ? <View style={styles.center}><View style={styles.statePanel}><MaterialIcons name="error-outline" size={28} color={colors.secondary} /><View style={styles.stateCopy}><Text style={styles.heading}>Chưa thể hiển thị bản đồ</Text><Text accessibilityRole="alert" style={styles.body}>{error}</Text></View></View></View> : <>
       {facts?.geometry ? <View style={styles.selector}><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.choices}>
-        {[{ id: null, label: 'Tuyến' }, ...facts.geometry.segments.map(s => ({ id: s.id, label: `Đoạn ${s.sequence}` }))].map(choice => <Pressable key={choice.id ?? 'route'} accessibilityRole="button" accessibilityState={{ selected: selectedSegment === choice.id }} onPress={() => setSelectedSegment(choice.id)} style={[styles.choice, selectedSegment === choice.id && styles.active]}><Text style={typography.labelSm}>{choice.label}</Text></Pressable>)}
+        {[{ id: null, label: 'Tuyến' }, ...facts.geometry.segments.map(s => ({ id: s.id, label: `Đoạn ${s.sequence}` }))].map(choice => <Pressable key={choice.id ?? 'route'} accessibilityRole="button" accessibilityState={{ selected: selectedSegment === choice.id }} onPress={() => setSelectedSegment(choice.id)} style={[styles.choice, selectedSegment === choice.id && styles.active]}><Text style={styles.actionLabel}>{choice.label}</Text></Pressable>)}
       </ScrollView></View> : null}
-      <View style={styles.canvas}>{center ? <RoadGuardMapLibre key={selectedSegment ?? 'route'} style={styles.canvas} center={center} routeCoordinates={coordinates} fitTo="route" markers={target ? [{ id: 'defect-target', title: 'Vị trí hư hại', coordinate: [target.longitude, target.latitude], type: 'defect' }] : []} /> : <View style={styles.center}><MaterialIcons name="location-off" size={36} color={colors.secondary} /><Text style={typography.bodyMd}>Chưa có vị trí bản đồ cho phần đang chọn.</Text></View>}</View>
-      <View style={styles.footer}><Text style={typography.bodyMd}>{target ? 'Điểm hư hại từ hồ sơ nhiệm vụ' : 'Chưa có vị trí hư hại'}</Text>{!coordinates.length ? <Text style={styles.hint}>{facts?.geometry ? 'Phần đang chọn chưa có hình học bản đồ.' : 'Tuyến chưa sẵn sàng.'}</Text> : null}</View>
+      <View style={styles.canvas}>{center ? <RoadGuardMapLibre key={selectedSegment ?? 'route'} style={styles.canvas} center={center} routeCoordinates={coordinates} fitTo="route" markers={target ? [{ id: 'defect-target', title: 'Vị trí hư hại', coordinate: [target.longitude, target.latitude], type: 'defect' }] : []} /> : <View style={styles.center}><View style={styles.statePanel}><MaterialIcons name="location-off" size={28} color={colors.brandGold} /><View style={styles.stateCopy}><Text style={styles.heading}>Chưa có vị trí bản đồ</Text><Text style={styles.body}>Chưa có vị trí bản đồ cho phần đang chọn.</Text><Text style={styles.hint}>Có thể tải lại để kiểm tra dữ liệu mới hoặc quay lại nhiệm vụ.</Text></View></View></View>}</View>
+      <View style={styles.footer}><MaterialIcons name="place" size={22} color={colors.secondary} /><View style={styles.title}><Text style={styles.sourceLabel}>Vị trí từ hồ sơ nhiệm vụ</Text><Text style={styles.body}>{target ? 'Điểm hư hại từ hồ sơ nhiệm vụ' : 'Chưa có vị trí hư hại'}</Text>{!coordinates.length ? <Text style={styles.hint}>{facts?.geometry ? 'Phần đang chọn chưa có hình học bản đồ.' : 'Tuyến chưa sẵn sàng.'}</Text> : null}</View></View>
     </>}
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
   iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24 },
-  title: { flex: 1, color: colors.neutral },
+  title: { flex: 1, minWidth: 0, gap: 4 },
+  heading: { ...typography.titleMd, color: colors.neutral },
+  body: { ...typography.bodyMd, color: colors.secondary },
+  refresh: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, paddingVertical: 10, gap: 6, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: '#8994A0', backgroundColor: '#FBF8EE', maxWidth: '35%' },
+  actionLabel: { ...typography.labelLg, color: colors.secondary },
+  pressed: { backgroundColor: '#F3ECD6' },
+  disabled: { opacity: 0.5 },
   canvas: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: colors.surfaceAlt },
+  statePanel: { width: '100%', maxWidth: 420, padding: 24, gap: 16, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  stateCopy: { gap: 8 },
   selector: { borderBottomWidth: 1, borderBottomColor: colors.border },
   choices: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  choice: { minHeight: 48, paddingHorizontal: 16, justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12 },
-  active: { borderColor: colors.brandGold, backgroundColor: colors.surfaceAlt },
-  footer: { padding: 16, gap: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  choice: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'center', borderWidth: 1, borderColor: '#8994A0', borderRadius: 12 },
+  active: { borderColor: colors.brandGold, backgroundColor: '#FBF8EE' },
+  footer: { padding: 16, gap: 12, flexDirection: 'row', alignItems: 'flex-start', borderTopWidth: 1, borderTopColor: colors.border },
+  sourceLabel: { ...typography.labelLg, color: colors.neutral },
   hint: { ...typography.caption, color: colors.secondary },
 });
