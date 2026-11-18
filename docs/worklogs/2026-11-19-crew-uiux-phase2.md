@@ -10,8 +10,8 @@ Scope: bảy route còn lại, presentation/motion only. Android Pixel_6_Pro (em
 | Bản đồ nhiệm vụ | 0a89e94 | Gates PASS, native empty/read/back/pressed | f85ebc2 |
 | Theo dõi thi công | f85ebc2 | Gates PASS; native read/disclosure/Back | 4241fe8 |
 | Hồ sơ hoàn tất thi công | 4241fe8 | Gates PASS; native read/disclosure/Back | feda325 |
-| Chỉnh sửa / bổ sung | feda325 | Gates PASS; native empty/history/pressed/Back | Commit checkpoint 4 |
-| Dẫn đường | Chưa bắt đầu | Pending | — |
+| Chỉnh sửa / bổ sung | feda325 | Gates PASS; native empty/history/pressed/Back | 605c029 |
+| Dẫn đường | 605c029 | Gates PASS; native empty/sheet/navigation | — |
 | Chụp ảnh | Chưa bắt đầu | Pending | — |
 | Hồ sơ hiện trường | Chưa bắt đầu | Pending | — |
 
@@ -112,3 +112,16 @@ Giữ nguyên non-JSX statements, review.canSupplement, technical, rows order/co
 - Android fixture ebcdca88: xem trạng thái chưa có lượt gửi, giữ/thả disclosure lịch sử, mở/đọc lại lịch sử local (read), thu gọn và Back về Chi tiết. Quan sát lún/đổi nền khi giữ; correction-pressed.png. Không reset/restart/mutation.
 - correction-before.png / correction-after.png cùng đầu màn settled; correction-expanded.png riêng sau mở lịch sử. Tất cả trong .cache/crew-phase2-ui-20261119/.
 - NATIVE_VERIFIED giới hạn read/empty/disclosure/pressed/Back. NOT_VERIFIED: SUPPLEMENT/ACCEPT thật, populated receipt/history, mutation/recovery, native offline/error/loading chậm, font scale lớn, OS Reduce Motion, FPS/motion timing. Không claim Android E2E.
+## 5. Dẫn đường
+
+Baseline main 605c029; tracked/staged sạch, ahead/behind 4/0, preserve untracked. File app/(crew)/navigation.tsx. Dùng deep link đúng host exp://127.0.0.1:8081 quan sát từ Expo Go dev menu, ID task/project thật ebcdca88/72f84201; không restart/reset/reload/seed. Lần đầu escape URL sai tạo Unmatched Route do lệnh test; đã sửa URL, không sửa router/guard. navigation-before.png là ảnh URL sai, KHÔNG dùng baseline; baseline hợp lệ navigation-before-valid.png.
+
+Baseline: Back đè status bar, empty title lớn/đậm và thông báo rời, tuyến bị cắt, tọa độ chữ nhỏ và fallback Chưa có GPS gây nhầm nguồn. Chỉnh map container vào safe area (style flex), empty thành cụm neutral/cream icon, title16/body14; tuyến full text, địa chỉ/divider + tọa độ có nhãn, action wrap minWidth144. Chỉ Back dùng CrewPressable cream/pressed, không scale map hay drag handle.
+
+Giữ toàn bộ map props/markers/coordinate expressions, openGoogleMaps intent, disabled, handlers/routes/params, sheet geometry/collapse-offset/onLayout/PanResponder và springs. AST baseline605c029 PASS, manual full diff PASS. Springs kéo sheet hiện hữu chưa có Reduce Motion: giữ nguyên vì task cấm đổi handler; đây là hạn chế sẵn có, không nhận đã xử lý. CrewPressable mới có Reduce Motion.
+
+- TypeScript exit0, navigation-typecheck.log.
+- node --test tests/crew-nav01.test.cjs tests/crew-map-geometry.test.cjs tests/c10bc-ui.test.cjs: 53/53 PASS, 0fail/skip,18200.8178ms, navigation-targeted.log.
+- Android: thiếu tọa độ thật; Google Maps disabled, tap header thu/mở sheet, Xem nhiệm vụ đến đúng ebcdca88, Android Back trở lại Navigation. navigation-after.png cùng fixture/expanded; navigation-collapsed.png là trạng thái riêng. NATIVE_VERIFIED giới hạn read/layout/sheet/navigation; không claim E2E/FPS.
+- NOT_VERIFIED: map populated/pan/zoom/Google Maps external intent vì thiếu tọa độ, native large font/OS Reduce Motion/error/offline. Không xin quyền GPS hay thay dữ liệu.
+- Full regression 156 file: node --test --test-concurrency=2, 1842/1842 PASS, 0fail/skip,228435.5629ms,exit0; navigation-regression.log. git diff --check exit0, added-line scan không Ionicons/UD-06/secret/URL mới. Kéo thử sheet chưa xác minh được chuyển trạng thái; tap thu/mở đã xác minh, không nhận drag PASS.

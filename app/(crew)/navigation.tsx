@@ -12,6 +12,7 @@ import { CrewTaskBoundary } from './tasks';
 import type { CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
+import { CrewPressable } from '../../src/components/crew/CrewMotion';
 
 export default function CrewNavigationScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewNavigationScreenContent task={task} />}</CrewTaskBoundary>;
@@ -116,16 +117,18 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
           ]}
 
         /> : <View style={styles.missingMap}>
-          <MaterialIcons name="location-off" size={48} color={colors.secondary} />
-          <Text style={typography.titleLg}>Chưa có vị trí dẫn đường</Text>
-          <Text style={[typography.bodyMd, { textAlign: 'center', color: colors.secondary }]}>Nhiệm vụ chưa có tọa độ hợp lệ. Bạn vẫn có thể xem thông tin và các thao tác được hỗ trợ.</Text>
+          <View style={styles.emptyContent}>
+            <View style={styles.emptyIcon}><MaterialIcons name="location-off" size={28} color={colors.secondary} /></View>
+            <Text style={styles.emptyTitle}>Chưa có vị trí dẫn đường</Text>
+            <Text style={styles.emptyMessage}>Nhiệm vụ chưa có tọa độ hợp lệ. Bạn vẫn có thể xem thông tin và các thao tác được hỗ trợ.</Text>
+          </View>
         </View>}
 
         {/* Top Header Bar */}
         <View style={styles.topHeader}>
-          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
+          <CrewPressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
             <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
-          </Pressable>
+          </CrewPressable>
 
           <View style={styles.gpsBadge}>
             <MaterialIcons name="place" size={14} color={colors.secondary} />
@@ -182,7 +185,7 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
                 <Text style={[typography.titleLg, styles.distanceValue]}>
                   Vị trí hiện trường
                 </Text>
-                <Text style={[typography.titleMd, styles.roadTag]} numberOfLines={1}>
+                <Text style={[typography.bodyMd, styles.roadTag]}>
                   {[task.chainage, task.route_code, task.locality].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}
                 </Text>
                 <View style={styles.tagRow}>
@@ -203,14 +206,17 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
         {/* Collapsible Content: Address Bar & Actions */}
         <View style={styles.addressBar}>
           <View style={styles.addressLeft}>
-            <MaterialIcons name="place" size={16} color={colors.error} />
+            <MaterialIcons name="place" size={18} color={colors.secondary} />
             <Text style={[typography.bodyMd, styles.addressText]}>
               {[task.locality, task.defect_location].filter(Boolean).join(' • ') || 'Chưa có địa chỉ hiện trường'}
             </Text>
           </View>
-          <Text style={[typography.labelSm, styles.coordText]}>
-            {task.coordinates ? `${task.coordinates.latitude.toFixed(4)}, ${task.coordinates.longitude.toFixed(4)}` : 'Chưa có GPS'}
-          </Text>
+          <View style={styles.coordinateRow}>
+            <Text style={styles.coordinateLabel}>Tọa độ nhiệm vụ</Text>
+            <Text selectable style={styles.coordText}>
+              {task.coordinates ? `${task.coordinates.latitude.toFixed(4)}, ${task.coordinates.longitude.toFixed(4)}` : 'Chưa có tọa độ'}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.actionRow}>
@@ -240,23 +246,24 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
 }
 
 const styles = StyleSheet.create({
-  missingMap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl, paddingBottom: 280, gap: spacing.md },
+  missingMap: { flex: 1, justifyContent: 'center', padding: spacing.lg, paddingBottom: 300 },
+  emptyContent: { padding: spacing.lg, gap: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
+  emptyIcon: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center', borderRadius: radius.md, backgroundColor: '#FBF8EE', marginBottom: spacing.xs },
+  emptyTitle: { ...typography.titleMd, color: colors.neutral },
+  emptyMessage: { ...typography.bodyMd, color: colors.secondary },
   container: {
     flex: 1,
     backgroundColor: colors.surfaceAlt,
     position: 'relative',
   },
   map: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
   },
   topHeader: {
     position: 'absolute',
     top: spacing.sm,
     left: spacing.md,
+    right: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -266,13 +273,14 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: '#FBF8EE',
     borderWidth: 1,
     borderColor: '#E8D9A8',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gpsBadge: {
+    flexShrink: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -290,10 +298,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
   },
   gpsText: {
+    flexShrink: 1,
     color: colors.neutral,
   },
   pressed: {
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#F3ECD6',
   },
   bottomSheet: {
     position: 'absolute',
@@ -360,13 +369,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   distanceValue: {
+    ...typography.titleMd,
     color: colors.neutral,
   },
   distanceHint: {
     color: colors.secondary,
   },
   roadTag: {
-    color: colors.neutral,
+    color: colors.secondary,
     marginTop: 4,
   },
   tagRow: {
@@ -402,16 +412,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addressBar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFF9EB',
-    borderWidth: 1,
-    borderColor: '#E8D9A8',
-    borderRadius: radius.md,
-    padding: spacing.sm,
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingVertical: spacing.md,
   },
   addressLeft: {
     flexDirection: 'row',
@@ -424,16 +428,21 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   coordText: {
+    ...typography.bodyMd,
     color: colors.secondary,
-    marginLeft: spacing.sm,
+    flexShrink: 1,
   },
+  coordinateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, justifyContent: 'space-between' },
+  coordinateLabel: { ...typography.caption, color: colors.secondary },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     paddingTop: spacing.xs,
   },
   actionItem: {
     flex: 1,
+    minWidth: 144,
   },
   arrivalHint: {
     color: colors.secondary,
