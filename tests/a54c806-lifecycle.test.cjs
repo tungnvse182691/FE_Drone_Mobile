@@ -75,7 +75,7 @@ test('no-SRT MISSING receipt preserves exact journal request after timeout; SRT 
 test('submitted video panel paginates, shows MISSING telemetry and drops data on blur',async()=>{
  let calls=0;
  const ui=screen('src/components/drone/OperatorSubmittedVideos.tsx',{exportName:'SubmittedVideos',expose:'SubmittedVideos',props:{scope:'owner',taskId:'task',projectId:'project'},modules:{
-  'react-native':{Text:'Text',View:'View',Platform:{OS:'android'},AppState:{addEventListener:()=>({remove(){}})}},
+  'react-native':{Text:'Text',View:'View',StyleSheet:{create:styles=>styles},Platform:{OS:'android'},AppState:{addEventListener:()=>({remove(){}})}},
   './VideoPreview':{VideoPreview:'VideoPreview'},'../Button':{Button:'Button'},'../Card':{Card:'Card'},
   '../../api/droneDatasetWorkflow':{operatorDatasetScope:()=> 'owner'},
   '../../api/operatorVideoCache':{},
