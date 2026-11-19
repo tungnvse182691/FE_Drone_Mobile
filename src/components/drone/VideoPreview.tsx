@@ -13,7 +13,7 @@ export function VideoPreview({ lease }: { lease: OperatorVideoLease }) {
     instance.loop = false;
     instance.timeUpdateEventInterval = 0.5;
     instance.staysActiveInBackground = false;
-  });
+  }, { seekBackwardIncrement: 5, seekForwardIncrement: 5 });
   const { status, error } = useEvent(player, 'statusChange', { status: player.status });
   const { isPlaying } = useEvent(player, 'playingChange', { isPlaying: player.playing });
   const loaded = useEvent(player, 'sourceLoad');

@@ -137,3 +137,10 @@
 - Evidence root .cache/operator-uiux-20261119/. npx tsc --noEmit exit 0 (upload-final-tsc.log). node --test --test-concurrency=2 tests/drone-ui02c.test.cjs tests/operator-upload-draft.test.cjs tests/operator-recording-time.test.cjs tests/package6-drone-recovery-ui.test.cjs: 55/55 PASS (upload-final-tests.log). Initial test failure depended on removed SRT picker; changed selector to video accessibility label, retained failure/logout assertions and added absence assertion. git diff --check PASS.
 - Last full regression 1900/1900 PASS was checkpoint 9, before Decline/Upload presentation edits; not rerun. Native error/offline, OS Reduce Motion/font scaling, FPS, cancellation/retry and legacy telemetry draft recovery NOT_RUN. No animation performance claim. Untracked artifacts preserved; main retained, no push.
 - All ten Operator routes in this audit now have presentation checkpoints; verification limits remain listed per checkpoint.
+
+## Checkpoint 12: symmetric native video seek controls
+
+- Baseline b2569b2; IMPLEMENT_AND_SELF_REVIEW. VideoPreview uses installed Expo Video player builder options: seekBackwardIncrement=5 and seekForwardIncrement=5. No player lifecycle, authorization, cache lease or API changes.
+- Android same task e2d68aea/session/emulator: both controls visibly show 5; paused forward changed 00:00 to 00:05, rewind returned 00:00. BEFORE video-screen-before.png; AFTER video-seek-after.png under .cache/operator-uiux-20261119/. No reload/restart/mutation.
+- Regression test first failed on missing builder options, then node --test tests/operator-video-playback.test.cjs: 17/17 PASS (video-seek-tests.log). npx tsc --noEmit exit 0 (video-seek-tsc.log). git diff --check PASS. Native iPhone and full suite for this checkpoint NOT_RUN.
+- Main retained; no push; existing untracked preserved. Commit subject fix(operator): use five-second video seek in both directions.

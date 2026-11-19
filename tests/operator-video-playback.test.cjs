@@ -77,7 +77,7 @@ function previewFixture() {
     pause:()=>calls.push('pause'),replace:source=>calls.push(['replace',source])};
   const lease={videoUri:'file:///private/preview/video.mp4',attachPlayer:f=>{detach=f;return()=>{f();detach=undefined;};}};
   const ui=screen('src/components/drone/VideoPreview.tsx',{exportName:'VideoPreview',props:{lease},modules:{
-    'expo-video':{VideoView:'VideoView',useVideoPlayer:(source,setup)=>{assert.equal(source.uri,lease.videoUri);setup(player);return player;}},
+    'expo-video':{VideoView:'VideoView',useVideoPlayer:(source,setup,options)=>{assert.equal(source.uri,lease.videoUri);assert.equal(options?.seekBackwardIncrement,5);assert.equal(options?.seekForwardIncrement,5);setup(player);return player;}},
   },moduleFactories:{expo:({react})=>({useEvent:(instance,name,initial)=>{
     const [value,setValue]=react.useState(initial??null);
     react.useEffect(()=>{callbacks[name]=setValue;return()=>delete callbacks[name];},[name]);
