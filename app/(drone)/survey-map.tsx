@@ -39,7 +39,7 @@ export default function DroneSurveyMapScreen() {
         <MaterialIcons name="refresh" size={24} color={loading ? colors.secondary : colors.neutral} />
       </AnimatedPressable>
     </View>
-    {loading ? <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
+    {loading ? <View style={styles.center}><ActivityIndicator color={colors.primary} /><Text style={styles.notice}>Đang đọc bản đồ khảo sát…</Text></View>
       : error || !workPackage ? <View style={styles.center}><EmptyState icon="map" title="Chưa tải được bản đồ" message={error ?? 'Vui lòng thử lại.'} actionLabel="Tải lại" onAction={() => void reload()} /></View>
         : <>
           {segments.length > 0 ? <View style={styles.selector}>
@@ -47,8 +47,7 @@ export default function DroneSurveyMapScreen() {
               {segments.map((segment, index) => <AnimatedPressable android_ripple={{color:'#C9A22720'}} pressedScale={0.98} key={segment.id} testID={`map-segment-${segment.id}`}
                 accessibilityRole="button" accessibilityLabel={`Đoạn ${segment.sequence ?? index + 1}`} accessibilityState={{ selected: !accessFocused && selected?.id === segment.id }}
                 onPress={() => { setSelectedId(segment.id); setAccessFocused(false); }} style={[styles.segment, !accessFocused && selected?.id === segment.id && styles.activeSegment]}>
-                <MaterialIcons name="route" size={18} color={!accessFocused && selected?.id === segment.id ? colors.brandGold : colors.secondary} />
-                <Text style={[typography.labelLg,{color:colors.neutral}]}>Đoạn {segment.sequence ?? index + 1}</Text>
+                <Text style={[typography.labelLg, styles.segmentLabel, !accessFocused && selected?.id === segment.id && styles.activeLabel]}>Đoạn {segment.sequence ?? index + 1}</Text>
               </AnimatedPressable>)}
             </ScrollView>
           </View> : null}
@@ -60,10 +59,10 @@ export default function DroneSurveyMapScreen() {
           </View>
           <View style={styles.footer}>
             <Pressable testID="focus-map-access" accessibilityRole="button" accessibilityLabel="Xem điểm tiếp cận" disabled={!access}
-              onPress={() => setAccessFocused(true)} android_ripple={{color:'#C9A22720'}} style={[styles.legend, !access && styles.unavailableLegend]}>
-              <MaterialIcons name="place" size={22} color={colors.brandGold} />
+              onPress={() => setAccessFocused(true)} android_ripple={{color:'#C9A22720'}} style={[styles.legend, accessFocused && styles.focusedLegend, !access && styles.unavailableLegend]}>
+              <MaterialIcons name="place" size={22} color="#192D40" />
               <Text style={[typography.bodyMd, styles.title]}>{access ? 'Điểm tiếp cận' : 'Chưa có điểm tiếp cận'}</Text>
-              {access ? <MaterialIcons name="my-location" size={22} color={colors.brandGold} /> : null}
+              {access ? <MaterialIcons name="my-location" size={22} color="#192D40" /> : null}
             </Pressable>
             {geometryError || !accessFocused && coordinates.length === 0 || cachedAt ? <Text accessibilityRole="alert" style={styles.notice}>
               {geometryError ?? (!accessFocused && coordinates.length === 0 ? 'Đoạn này chưa có hình học WGS84.' : operatorCachedNotice(cachedAt!))}
@@ -77,15 +76,18 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
   iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
-  title: { flex: 1, color: colors.neutral },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  title: { flex:1, color:'#192D40', fontFamily:'Roboto-Medium', lineHeight:24 },
+  center: { flex:1, alignItems:'center', justifyContent:'center', padding:20, gap:12 },
   canvas: { flex: 1 },
   selector: { borderBottomWidth: 1, borderBottomColor: colors.border },
   segmentList: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  segment: { minHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 14 },
-  activeSegment: { backgroundColor: '#FFF1CB', borderColor: '#E8D9A9' },
+  segment: { minHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius:12, overflow:'hidden' },
+  segmentLabel: { color:'#192D40', paddingVertical:10, fontVariant:['tabular-nums'] },
+  activeLabel: { color:'#FFFFFF' },
+  activeSegment: { backgroundColor:'#192D40', borderColor:'#192D40' },
   footer: { padding: 16, gap: 8, borderTopWidth: 1, borderTopColor: colors.border },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: '#FFF1CB', borderWidth: 1, borderColor: '#E8D9A9' },
+  legend: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, padding: 12, borderRadius: 12, backgroundColor:'#F3F5F6', borderWidth:1, borderColor:'#DCE2E7' },
+  focusedLegend: { backgroundColor:'#FFF7DE', borderColor:'#C9A227' },
   unavailableLegend: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
   notice: { ...typography.caption, color: colors.secondary, lineHeight: 19 },
 });

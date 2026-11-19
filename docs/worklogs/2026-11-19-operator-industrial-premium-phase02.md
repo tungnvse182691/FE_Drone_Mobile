@@ -71,3 +71,13 @@ C commit: 4a0dae9. Files: app/(drone)/work-package.tsx; tests/package45-drone.te
 - npx tsc --noEmit PASS exit0. Targeted drone-ui02a/b/c, operator-map, package45-drone, wave1-drone: 116/116 PASS, work-package-targeted-final.log. Lần đầu6 lỗi cùng expectation uppercase NHIỆM VỤ; cập nhật đúng copy sentence case, giữ assertion invalid GPS/geometry/error. git diff --check PASS.
 - NOT_VERIFIED: loading/error/offline native, large font/narrow device, Reduce Motion OS/FPS/APK. Tests Node không thay native/HTTP. Không mutation. Full suite cuối phiên.
 - Commit D: commit chứa mục này, SHA ghi checkpoint sau.
+
+## E — Bản đồ khảo sát (20/11)
+
+D commit: 8fab41c. File: app/(drone)/survey-map.tsx.
+- Baseline survey-map-before.png: các chip vàng/icon tuyến lặp, điểm tiếp cận cùng màu khiến khó phân biệt selection. Chuyển selected segment sang navy/white, bỏ icon trang trí segment, giữ nút48dp; focus access nền vàng nhạt chỉ khi chọn, nút mặc định trung tính. Loading thêm label thật, không fake progress.
+- Android: survey-map-after.png và survey-map-access-after.png. Mở từ Gói công việc, chọn Đoạn1 (hierarchy selected đổi đúng), focus Điểm tiếp cận, Back về Gói. Không sửa MapLibre/key/coordinates/markers hay bất kỳ handler nào. Press/ripple/Reduce Motion từ AnimatedPressable hiện có.
+- Map baseline ban đầu trắng; sau khi chờ/Fast Refresh có line vàng trên nền xanh và marker khi focus. KHÔNG coi đây là fix runtime/tiles: kiểm chứng địa lý/basemap đầy đủ NOT_VERIFIED.
+- npx tsc --noEmit exit0; operator-map + wave1-drone + drone-ui02b:64/64 PASS (survey-map-targeted.log), geometry/source/assigned scope tests giữ nguyên. git diff --check PASS.
+- NOT_VERIFIED: network error/offline/empty native, pinch/pan/tile correctness, font lớn, OS Reduce Motion, FPS/APK/iPhone. Full regression cuối phiên. Không mutation.
+- Commit E: commit chứa mục này, SHA ghi checkpoint sau.
