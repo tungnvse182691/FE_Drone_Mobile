@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { CrewPressable as Pressable } from './CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../Card';
 import { Button } from '../Button';
@@ -38,16 +39,16 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
   try{if(!identity)return null;crewReadGuard(identity);}catch{return null;}
   const decision=facts?.context.finalDecision,requests=facts?.context.reviewRequests??[];
   return <Card style={styles.card}>
-    <View style={styles.heading}><MaterialIcons name="verified-user" size={22} color={colors.brandGold}/><Text style={[typography.titleMd,styles.flex]}>An toàn và kết quả sửa chữa</Text>
+    <View style={styles.heading}><MaterialIcons name="verified-user" size={20} color={colors.brandGold}/><Text style={[styles.title,styles.flex]}>An toàn và kết quả sửa chữa</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại an toàn và kết quả" accessibilityState={{busy,disabled:busy}} disabled={busy} onPress={()=>void read()} style={styles.icon}>
         <MaterialIcons name="refresh" size={24} color={colors.secondary}/>
       </Pressable>
     </View>
-    {!loaded?<Button variant="secondary" title="Xem hồ sơ phụ trách" loading={busy} onPress={()=>void read()}/>:null}
+    {!loaded?<Button style={styles.action} variant="secondary" title="Xem hồ sơ phụ trách" loading={busy} onPress={()=>void read()}/>:null}
     {error?<Text accessibilityLiveRegion="polite" style={styles.notice}>{error}</Text>:null}
     {loaded&&!facts?<Text style={styles.notice}>Phân công sửa chữa đã thay đổi. Tải lại nhiệm vụ để xem hồ sơ hiện hành.</Text>:null}
     {facts?<>
-      <Pressable accessibilityRole="button" accessibilityState={{expanded}} onPress={()=>setExpanded(v=>!v)} style={styles.heading}>
+      <Pressable accessibilityRole="button" accessibilityState={{expanded}} onPress={()=>setExpanded(v=>!v)} style={styles.disclosure}>
         <Text style={[typography.bodyMd,styles.flex]}>{facts.measures.length} biện pháp an toàn · {requests.length} yêu cầu xem xét</Text>
         <MaterialIcons name={expanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
       </Pressable>
@@ -58,8 +59,8 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
             <View style={styles.flex}><Text style={typography.labelLg}>Biện pháp {index+1} · {m.installedAt?'Đã lắp đặt':'Chưa lắp đặt'}</Text>
               {m.firstCheckDueAt?<Text style={styles.hint}>Hạn kiểm tra: {crewHistoryTime(m.firstCheckDueAt)}</Text>:null}
               <Text style={styles.hint}>{m.checks.length} lần kiểm tra · {new Set((m.eligibleEvidenceLinks??[]).map(l=>l.fileId)).size} ảnh đủ điều kiện</Text>
-              {!m.installedAt?<Button variant="secondary" title="Xác nhận lắp đặt" onPress={()=>setInstallation({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
-              {m.installedAt?<Button variant="secondary" title="Kiểm tra an toàn" onPress={()=>setCheck({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
+              {!m.installedAt?<Button style={styles.action} variant="secondary" title="Xác nhận lắp đặt" onPress={()=>setInstallation({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
+              {m.installedAt?<Button style={styles.action} variant="secondary" title="Kiểm tra an toàn" onPress={()=>setCheck({projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id})}/>:null}
               {m.warnings.filter(w=>w.intendedActorId===identity.actor&&!m.acknowledgements.some(a=>a.warningId===w.id)).map(w=><View key={w.id} style={styles.warningCard}>
                 <Text style={styles.warning}>Cảnh báo cần tiếp nhận</Text><Text style={styles.hint}>{w.reason}</Text>
                 <Button variant="secondary" title="Tiếp nhận cảnh báo" onPress={()=>setAck({resource:{projectId,packageId:facts.context.packageId,itemId:facts.context.itemId,measureId:m.id},warningId:w.id})}/>
@@ -84,10 +85,13 @@ export function CrewRepairFacts({projectId,taskId}:{projectId:string;taskId:stri
   </Card>;
 }
 const styles=StyleSheet.create({
-  card:{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:'#E8D9A8',borderRadius:12},
-  flex:{flex:1,minWidth:0},heading:{flexDirection:'row',alignItems:'center',gap:spacing.sm},
-  icon:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center'},
-  group:{gap:spacing.md},section:{gap:spacing.sm,padding:spacing.sm,borderRadius:10,backgroundColor:colors.surfaceAlt},
+  card:{gap:spacing.sm,padding:12,marginBottom:12,borderWidth:1,borderColor:colors.border,borderRadius:12},
+  title:{...typography.labelLg,lineHeight:20,color:colors.secondary},
+  flex:{flex:1,minWidth:0},heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
+  icon:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',backgroundColor:'#FBF8EE',borderRadius:8,borderWidth:1,borderColor:'#E8D9A8'},
+  action:{alignSelf:'flex-start',maxWidth:'100%',marginTop:spacing.sm,backgroundColor:'#FBF8EE',borderColor:'#E8D9A8'},
+  disclosure:{minHeight:48,paddingHorizontal:spacing.sm,flexDirection:'row',alignItems:'center',gap:spacing.sm,backgroundColor:'#FBF8EE',borderRadius:8,borderWidth:1,borderColor:'#E8D9A8'},
+  group:{gap:12},section:{gap:spacing.sm,paddingTop:12,borderTopWidth:1,borderTopColor:colors.border},
   row:{flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,paddingVertical:spacing.xs},
   hint:{...typography.caption,color:colors.secondary},notice:{...typography.bodyMd,padding:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
   warning:{...typography.caption,color:colors.secondary,fontWeight:'700'},request:{gap:spacing.xs,paddingVertical:spacing.xs},

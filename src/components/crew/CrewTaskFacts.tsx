@@ -45,12 +45,12 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   const events=facts?.history.events??[];
   const visibleEvents=showAllHistory?events:events.slice(0,3);
   return <Card style={styles.card}>
-    <View style={styles.heading}><View style={styles.iconBox}><MaterialIcons name="map" size={22} color={colors.brandGold} /></View><Text style={[typography.titleMd,styles.flex]}>Vị trí và lịch sử</Text>
+    <View style={styles.heading}><MaterialIcons name="map" size={20} color={colors.brandGold} /><Text style={[styles.title,styles.flex]}>Vị trí và lịch sử</Text>
       {facts?<Pressable accessibilityRole="button" accessibilityLabel="Tải lại vị trí và lịch sử" accessibilityState={{disabled:busy,busy}} disabled={busy} style={styles.refresh} onPress={()=>void read()}>
         <MaterialIcons name="refresh" size={24} color={colors.brandGold}/>
       </Pressable>:busy?<ActivityIndicator size="small" color={colors.brandGold}/>:null}
     </View>
-    {!facts?<Button variant="secondary" title="Xem vị trí / lịch sử" disabled={busy} loading={busy} onPress={()=>void read()} />:null}
+    {!facts?<Button style={styles.action} variant="secondary" title="Xem vị trí / lịch sử" disabled={busy} loading={busy} onPress={()=>void read()} />:null}
     {error?<Text style={styles.message} accessibilityLiveRegion="polite">{error}</Text>:null}
     {facts ? <Pressable accessibilityRole="button" accessibilityLabel={showFacts?'Thu gọn hồ sơ':'Xem hồ sơ đã tải'} accessibilityState={{expanded:showFacts}} style={({pressed})=>[styles.disclosure,pressed&&styles.pressed]} onPress={()=>setShowFacts(v=>!v)}>
       <Text style={[typography.labelLg,styles.flex]}>{showFacts?'Thu gọn hồ sơ':'Xem hồ sơ đã tải'}</Text><MaterialIcons name={showFacts?'expand-less':'expand-more'} size={22} color={colors.brandGold}/>
@@ -58,7 +58,7 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
     {facts&&showFacts?<View style={styles.group}>
       <View style={styles.group}>
         <View style={styles.locationSummary}><MaterialIcons name="route" size={22} color={colors.brandGold}/><View style={styles.flex}><Text style={typography.labelLg}>Bản đồ nhiệm vụ</Text><Text style={styles.hint}>{target?'Điểm hư hại từ hồ sơ nhiệm vụ':'Chưa có vị trí hư hại'}</Text></View></View>
-        <Button variant="secondary" title="Mở bản đồ" onPress={()=>router.push({pathname:CREW_TASK_MAP,params:{id:taskId,projectId}})} />
+        <Button style={styles.action} variant="secondary" title="Mở bản đồ" onPress={()=>router.push({pathname:CREW_TASK_MAP,params:{id:taskId,projectId}})} />
       </View>
       <View style={styles.historyHeading}><MaterialIcons name="history" size={20} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Lịch sử xử lý</Text><Text style={styles.hint}>{events.length} sự kiện</Text></View>
       {events.length===0?<Text style={styles.hint}>Chưa có sự kiện được ghi nhận.</Text>:visibleEvents.map(e=><View key={e.id} style={styles.event}>
@@ -78,18 +78,20 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   </Card>;
 }
 const styles=StyleSheet.create({
-  card:{gap:spacing.md,marginBottom:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:12},
+  card:{gap:spacing.sm,padding:12,marginBottom:12,borderWidth:1,borderColor:colors.border,borderRadius:12},
+  title:{...typography.labelLg,lineHeight:20,color:colors.secondary},
+  action:{alignSelf:'flex-start',maxWidth:'100%',backgroundColor:'#FBF8EE',borderColor:'#E8D9A8'},
   heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   flex:{flex:1,minWidth:0},
   hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
   iconBox:{width:36,height:36,borderRadius:10,backgroundColor:'#FFF9EA',alignItems:'center',justifyContent:'center'},
   refresh:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:24},
-  disclosure:{minHeight:48,paddingHorizontal:spacing.md,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:colors.border,backgroundColor:colors.surfaceAlt,borderRadius:12},
-  pressed:{backgroundColor:'#EDF2F6'},
-  locationSummary:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:12},
+  disclosure:{minHeight:48,paddingHorizontal:spacing.sm,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:'#FBF8EE',borderRadius:8},
+  pressed:{backgroundColor:'#F3ECD6'},
+  locationSummary:{flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingVertical:spacing.sm},
   message:{flexDirection:'row',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:8},
-  historyHeading:{flexDirection:'row',alignItems:'center',gap:spacing.sm,marginTop:spacing.md,marginBottom:spacing.sm},
-  event:{flexDirection:'row',gap:spacing.md,paddingBottom:spacing.md,paddingLeft:spacing.sm},
+  historyHeading:{flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingTop:12,borderTopWidth:1,borderTopColor:colors.border},
+  event:{flexDirection:'row',gap:spacing.sm,paddingVertical:spacing.xs,paddingLeft:spacing.xs},
   eventDot:{width:8,height:8,borderRadius:4,backgroundColor:colors.brandGold,marginTop:6},
   technicalToggle:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderTopWidth:1,borderColor:colors.border,marginTop:spacing.sm},
   technical:{padding:spacing.md,gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
