@@ -11,6 +11,7 @@ import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { CrewPressable, CrewContentTransition } from '../../src/components/crew/CrewMotion';
+import { CrewFastTrackMeasurementGuide } from '../../src/components/crew/CrewFastTrackMeasurementGuide';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
@@ -504,6 +505,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               const normalized=text.trim().replace(',','.');const value=normalized===''?null:Number(normalized);
               update(i,{value,state:value===null?'UNKNOWN':'KNOWN',unknownReason:value===null?m.unknownReason||'Chưa đo tại hiện trường':null});}}/>:null}
             {m.dimension==='LENGTH'?<View style={styles.unitRow}>{['mm','cm','m'].map(unit=><Button style={[styles.unitButton,m.unit===unit&&styles.measurementUnitSelected]} key={unit} variant={m.unit===unit?'secondary':'text'} title={unit} icon={m.unit===unit?<MaterialIcons name="check" size={18} color={colors.primaryDark}/>:undefined} disabled={busy||frozen} onPress={()=>update(i,{unit})}/>)}</View>:null}
+            {showMeasurements&&normalMeasurement&&verifiedTask?.mode==='CONDITIONAL_FT'&&!taskReadOnly?<CrewFastTrackMeasurementGuide projectId={task.projectId} taskId={task.id} measurement={m}/>:null}
             {!taskReadOnly&&measurementValidationMessage(rawValues[m.sampleId]??'')?<Text style={styles.errorText}>{measurementValidationMessage(rawValues[m.sampleId]??'')}</Text>:null}
             {!taskReadOnly?<><InputField label="Dụng cụ đo thực tế" value={m.instrument} onChangeText={instrument=>update(i,{instrument})}/><InputField label="Phương pháp đo thực tế" value={m.method} onChangeText={method=>update(i,{method})}/></>:<Text style={styles.muted}>Giá trị máy chủ: {m.value == null ? 'Chưa có' : `${m.value} ${m.unit}`}</Text>}
             {!taskReadOnly&&m.value===null?<InputField label="Lý do chưa đo" value={m.unknownReason??''} onChangeText={unknownReason=>update(i,{unknownReason})}/>:null}

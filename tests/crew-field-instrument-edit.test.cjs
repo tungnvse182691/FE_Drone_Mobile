@@ -8,7 +8,7 @@ vm.runInNewContext(fs.readFileSync('tests/t05b.test.cjs','utf8').split("test('T0
 function expand(s,label){const row=s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel===label);assert.ok(row,label);row.props.onPress();s.render();}
 
 // Executes the shipped screen hooks and handlers; native rendering is checked separately.
-async function mounted(instrument, command = null, initial = {}, status, submission) {
+async function mounted(instrument, command = null, initial = {}, status, submission, mode = 'MEASURE_ONLY') {
   const context = {actor:'crew', scope:'session', environment:'test', projectId:'project', taskId:'task'};
   const measurement = {sampleId:'sample', type:'Area', dimension:'AREA', unit:'m²', value:1,
     state:'KNOWN', instrument, method:'Quan sát', locationReason:'Chưa có GPS', ...initial};
@@ -24,7 +24,7 @@ async function mounted(instrument, command = null, initial = {}, status, submiss
       '../../src/components/Toast':{Toast:'Toast'}, 'expo-crypto':{randomUUID:()=> `new-sample-${++nextId}`},
       './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},
       '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},
-        getFieldInspectionTaskDetailReal:async()=>({data:{status,requiredMeasurementType:4,latestSubmissionId:submission?.id},etag:'version'}),
+        getFieldInspectionTaskDetailReal:async()=>({data:{mode,status,requiredMeasurementType:4,latestSubmissionId:submission?.id},etag:'version'}),
         getFieldSubmissionDetailReal:async()=>({data:submission})},
       '../../src/api/crewFieldDraft':{
         currentFieldContext:()=>context, openFieldRuntime:async()=>({}),
@@ -41,6 +41,22 @@ async function mounted(instrument, command = null, initial = {}, status, submiss
   if(status!=='Submitted'&&!command) {s.press('Chỉnh số đo');s.render();expand(s,`Sửa ${{DepressionDepth:'Độ sâu chỗ lõm'}[initial.type]??'Diện tích hư hại'}`);s.render();}
   return {s,calls,saved:()=>saved,input:()=>s.nodes().find(n=>n.type==='InputField'&&n.props.label==='Dụng cụ đo thực tế')};
 }
+
+test('FIELD policy guidance appears only inside an open conditional Fast Track measurement editor',async()=>{
+ for(const mode of ['MEASURE_ONLY','NORMAL','CONDITIONAL_FT']) {
+  const h=await mounted('Thước',null,{type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:23},undefined,undefined,mode);
+  const guide=()=>h.s.nodes().filter(n=>n.type==='CrewFastTrackMeasurementGuide');
+  assert.equal(guide().length,mode==='CONDITIONAL_FT'?1:0);
+  if(mode==='CONDITIONAL_FT') {
+   assert.equal(guide()[0].props.taskId,'task');assert.equal(guide()[0].props.projectId,'project');
+   assert.equal(guide()[0].props.measurement.value,23);
+   h.s.input('Giá trị đo thực','2');assert.equal(guide()[0].props.measurement.value,2);
+   expand(h.s,'Sửa Độ sâu chỗ lõm');assert.equal(guide().length,0);
+   h.s.press('Lưu nháp số đo');await h.s.flush();assert.equal(h.calls.at(-1).measurements[0].value,2);
+  }
+  h.s.unmount();
+ }
+});
 
 for (const raw of ['RULER','Thước thép tại hiện trường','Backend custom instrument 42']) {
   test(`FIELD input displays and saves original free text: ${raw}`,async()=>{

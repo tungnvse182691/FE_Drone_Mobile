@@ -74,6 +74,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/drone/DroneUploadRecoveryList'))return{DroneUploadRecoveryList:'DroneUploadRecoveryList'};
     if(name.endsWith('/drone/OperatorLocalFiles'))return{OperatorLocalFiles:'OperatorLocalFiles'};
     if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
+    if(name.endsWith('/crew/CrewFastTrackMeasurementGuide'))return{CrewFastTrackMeasurementGuide:'CrewFastTrackMeasurementGuide'};
     // Screen handler tests keep motion as a transparent native-control boundary.
     // CrewMotion itself is exercised with a Reanimated mock in crew-home-motion.
     if(name.endsWith('/crew/CrewMotion')||name==='./CrewMotion')return{CrewPressable:'Pressable',CrewContentTransition:'CrewContentTransition'};
