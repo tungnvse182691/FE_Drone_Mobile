@@ -16,13 +16,15 @@ function mount(view=policy(),extra={}) {
 }
 test('guide reads the assigned policy and never claims eligibility from a matching number',async()=>{
  const h=mount();h.s.render();assert.match(h.text(),/Đang đọc/);await h.s.flush();
- assert.match(h.text(),/0–10 cm/);assert.match(h.text(),/chưa xác nhận đủ điều kiện/);
+ assert.match(h.text(),/0–10 cm/);assert.doesNotMatch(h.text(),/chưa xác nhận đủ điều kiện/);
+ h.s.nodes().find(n=>n.props.accessibilityLabel==='Chi tiết ngưỡng sửa nhanh').props.onPress();h.s.render();
  assert.match(h.text(),/Giữ số đo thực tế/);assert.equal(h.reads(),1);
  h.props.measurement.value=23;h.s.render();assert.match(h.text(),/ngoài khoảng/);assert.equal(h.reads(),1);
  assert.equal(h.s.nodes().some(n=>n.type==='Button'&&/thi công/i.test(n.props.title)),false);h.s.unmount();
 });
 test('bounds are inclusive, units exact, empty or invalid measurements do not appear in range',async()=>{
  const h=mount();h.s.render();await h.s.flush();
+ h.s.nodes().find(n=>n.props.accessibilityLabel==='Chi tiết ngưỡng sửa nhanh').props.onPress();h.s.render();
  for(const value of [0,10]){h.props.measurement.value=value;h.s.render();assert.match(h.text(),/chưa xác nhận đủ điều kiện/);}
  for(const value of [null,NaN,-Infinity]){h.props.measurement.value=value;h.s.render();assert.doesNotMatch(h.text(),/Trong khoảng số đo/);}
  h.props.measurement.value=2;h.props.measurement.unit='mm';h.s.render();assert.match(h.text(),/Chính sách dùng cm/);assert.doesNotMatch(h.text(),/Trong khoảng số đo/);h.s.unmount();
@@ -46,4 +48,34 @@ test('late result after a session change or unmount cannot publish policy',async
  for(const unmount of [false,true]){const d=deferred(),h=mount(policy(),{read:()=>d.promise});h.s.render();
  if(unmount)h.s.unmount();else h.switchSession();d.resolve({eligibility:policy()});await h.s.flush();
  assert.doesNotMatch(h.text(),/0–10 cm/);if(!unmount)h.s.unmount();}
+});
+
+test('guide starts with only the range, expands details accessibly, and toggling never refetches',async()=>{
+ const h=mount();h.s.render();await h.s.flush();
+ const toggle=()=>h.s.nodes().find(n=>n.props.accessibilityLabel==='Chi tiết ngưỡng sửa nhanh');
+ assert.ok(toggle(),'policy header must toggle details');
+ assert.equal(toggle().props.accessibilityState.expanded,false);
+ assert.doesNotMatch(h.text(),/gồm cả hai mốc/);
+ assert.doesNotMatch(h.text(),/Trong khoảng số đo/);
+ toggle().props.onPress();h.s.render();
+ assert.equal(toggle().props.accessibilityState.expanded,true);
+ assert.match(h.text(),/gồm cả hai mốc/);assert.match(h.text(),/Giữ số đo thực tế/);
+ toggle().props.onPress();h.s.render();
+ h.props.measurement.value=23;h.s.render();assert.doesNotMatch(h.text(),/ngoài khoảng/);
+ toggle().props.onPress();h.s.render();assert.match(h.text(),/ngoài khoảng/);
+ h.props.measurement.unit='mm';h.s.render();assert.match(h.text(),/Chính sách dùng cm/);
+ assert.equal(h.reads(),1);assert.equal(h.props.measurement.value,23);h.s.unmount();
+});
+
+test('reference range follows selected length unit without rounding or changing server unit validation',async()=>{
+ const h=mount();h.s.render();await h.s.flush();
+ for(const [unit,range] of [['mm','0–100 mm'],['cm','0–10 cm'],['m','0–0,1 m']]){
+  h.props.measurement.unit=unit;h.s.render();assert.ok(h.text().includes(range));
+ }
+ assert.equal(h.reads(),1);assert.equal(h.props.measurement.value,2);
+ h.s.nodes().find(n=>n.props.accessibilityLabel==='Chi tiết ngưỡng sửa nhanh').props.onPress();h.s.render();
+ assert.match(h.text(),/Chính sách dùng cm/);assert.match(h.text(),/chính sách gốc: 0–10 cm/);h.s.unmount();
+ const v=policy();v.rules[0].maximum=0.10000000000000002;
+ const precise=mount(v);precise.props.measurement.unit='mm';precise.s.render();await precise.s.flush();
+ assert.match(precise.text(),/0–1,0000000000000002 mm/);precise.s.unmount();
 });
