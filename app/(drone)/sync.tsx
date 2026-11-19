@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   toggleBtnActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FFF1CB',
   },
   toggleBtnText: {
     fontSize: 13,
@@ -390,6 +390,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     gap: spacing.sm,
     ...operatorAppearance.card,
+    borderColor: colors.border,
   },
   summaryInfo: {
     flexDirection: 'column',
@@ -435,12 +436,13 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     ...operatorAppearance.card,
+    borderColor: colors.border,
     flexDirection: 'column',
     alignItems: 'stretch',
     gap: spacing.sm,
     justifyContent: 'space-between',
     padding: spacing.sm,
-    borderLeftWidth: 4,
+    borderLeftWidth: 2,
     borderLeftColor: colors.secondary,
   },
   itemMain: {
@@ -527,15 +529,20 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xl,
   },
   operatorReload: {
-    minHeight: 52,
+    minHeight: 48,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E8D9A9',
     borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    backgroundColor: '#FFF1CB',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
   },
-  operatorReloadPressed: { backgroundColor: colors.primaryDark },
+  operatorReloadPressed: { backgroundColor: '#F3E3B2' },
   operatorReloadDisabled: { opacity: 0.5 },
   operatorReloadText: { ...typography.labelLg, color: colors.neutral },
   reloadNote: { color: colors.secondary, lineHeight: 20 },
@@ -543,6 +550,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     gap: spacing.sm,
     ...operatorAppearance.card,
+    borderColor: colors.border,
   },
   purgeHeader: {
     flexDirection: 'row',

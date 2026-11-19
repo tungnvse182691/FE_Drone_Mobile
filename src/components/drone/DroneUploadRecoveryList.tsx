@@ -45,7 +45,7 @@ export function DroneUploadRecoveryList() {
       {row.partCount>0 && !row.cancelled ? <Text style={styles.caption}>{row.partCount} phần tải đã được lưu</Text>:null}
     </View><MaterialIcons name="chevron-right" size={24} color={colors.secondary}/>
   </Pressable>;
-  return <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
+  return <Card style={{...operatorAppearance.card,borderColor:colors.border,gap:spacing.sm,marginBottom:spacing.md}}>
     <View style={styles.heading}><Text style={styles.headingText}>Hồ sơ tải lên</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại hồ sơ tải lên" accessibilityState={{busy,disabled:busy}} disabled={busy} onPress={()=>void load()} style={styles.refresh}>
         {busy?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
@@ -62,10 +62,10 @@ export function DroneUploadRecoveryList() {
 }
 const styles = StyleSheet.create({
   heading:{flexDirection:'row',alignItems:'center',gap:12}, headingText:{...typography.titleMd,color:colors.neutral,flex:1},
-  refresh:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center'},
+  refresh:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',borderRadius:12,backgroundColor:'#FFF1CB',borderWidth:1,borderColor:'#E8D9A9'},
   row:{minHeight:76,flexDirection:'row',alignItems:'center',gap:12,paddingVertical:12,borderBottomWidth:1,borderBottomColor:colors.border},
-  copy:{flex:1,minWidth:0,gap:4},title:{...typography.bodyMd,color:colors.neutral,fontFamily:'Roboto-Medium'},
+  copy:{flex:1,minWidth:0,gap:4},title:{...typography.bodyMd,color:colors.neutral,fontFamily:'Roboto-Medium',alignSelf:'flex-start',backgroundColor:'#FFF1CB',paddingHorizontal:8,paddingVertical:4,borderRadius:6},
   caption:{...typography.caption,color:colors.secondary,lineHeight:19,flexShrink:1},
-  history:{minHeight:52,flexDirection:'row',alignItems:'center',gap:12,padding:8,borderRadius:8,backgroundColor:colors.surfaceAlt},
+  history:{minHeight:52,flexDirection:'row',alignItems:'center',gap:12,padding:8,borderRadius:12,backgroundColor:'#FFF8E8'},
   historyText:{...typography.bodyMd,color:colors.secondary,flex:1},pressed:{backgroundColor:operatorAppearance.pressed},
 });

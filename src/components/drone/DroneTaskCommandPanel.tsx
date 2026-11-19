@@ -166,10 +166,10 @@ export function DroneTaskRecoveryList() {
       <MaterialIcons name="chevron-right" size={24} color={colors.secondary}/>
     </Pressable>;
   };
-  return <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
+  return <Card style={{...operatorAppearance.card,borderColor:colors.border,gap:spacing.sm,marginBottom:spacing.md}}>
     <View style={{flexDirection:'row',flexWrap:'wrap',alignItems:'center',justifyContent:'space-between',gap:spacing.sm}}>
       <Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>Yêu cầu đã lưu</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại lịch sử yêu cầu" accessibilityState={{busy,disabled:busy}} disabled={busy} onPress={()=>void load()} style={{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center'}}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại lịch sử yêu cầu" accessibilityState={{busy,disabled:busy}} disabled={busy} onPress={()=>void load()} style={{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',borderRadius:12,backgroundColor:'#FFF1CB',borderWidth:1,borderColor:'#E8D9A9'}}>
         {busy?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
       </Pressable>
     </View>
@@ -195,7 +195,7 @@ const recoveryStyles = StyleSheet.create({
   copy: {flex:1,minWidth:0,gap:4},
   title: {...typography.bodyMd,color:colors.neutral,fontFamily:'Roboto-Medium',flexShrink:1},
   subtitle: {...typography.caption,color:colors.secondary,lineHeight:19,flexShrink:1},
-  historyToggle: {minHeight:52,flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:8,borderRadius:8,backgroundColor:colors.surfaceAlt},
+  historyToggle: {minHeight:52,flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:8,borderRadius:12,backgroundColor:'#FFF8E8'},
   historyLabel: {...typography.bodyMd,color:colors.secondary,flex:1},
   pressed: {backgroundColor:operatorAppearance.pressed},
 });

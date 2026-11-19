@@ -92,3 +92,10 @@
 - Android survey-map-before.png / survey-map-after.png, task 25324063. Switched from segment 2 to segment 1 (selected state changed), refreshed read-only; unavailable access remains disabled; Android Back to package. Basemap is absent in baseline and after; not repaired or claimed as verified. Native access-point focus unavailable on this fixture; verified in targeted logic tests only.
 - tsc exit 0; operator-map + operator-navigation-ime: 18/18 PASS (survey-map-tests.log); diff --check PASS. OS Reduce Motion/font settings, offline map, engine lifecycle and FPS NOT_VERIFIED.
 - Commit subject: ui(operator): align survey map controls.
+
+## Checkpoint 7: local sync inventory
+
+- Previous map commit da78c86. Sync summary/read button is compact cream, neutral borders on inventory/recovery groups, cream upload ID badges and history controls. Shared recovery components are also used by upload/log; no status mapping, loading, scope, handler or route change. Existing press highlights retained.
+- Android sync-before.png / sync-after.png under .cache/operator-uiux-20261119. Same local inventory: two verified files with dataset submission unconfirmed, 20 history entries, one task with unknown outcome. Read queue displayed explicit local-only/no-send notice; dismissed notice. No recovery replay or mutation.
+- npx tsc --noEmit exit 0; drone-ui02c + operator-refresh-ui + operator-upload-recovery: 27/27 PASS (sync-tests.log). diff --check PASS. Manual self-review presentation-only.
+- Queue tabs absent on this native fixture; populated queue and error states covered only by logic tests. OS accessibility settings, FPS, recovery mutation NOT_VERIFIED. Full regression pending. Commit subject ui(operator): refine local sync inventory presentation.
