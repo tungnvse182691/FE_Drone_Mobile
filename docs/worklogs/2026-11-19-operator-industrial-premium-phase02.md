@@ -1,0 +1,37 @@
+# Operator Industrial Premium Phase02 — A + B
+
+Mode: IMPLEMENT_AND_SELF_REVIEW (Codex, không phải review độc lập).
+Owner scope: Khảo sát rồi Chi tiết, dừng sau A+B. Branch main; không push.
+Base: 5430eec9ca73cb30d46ad5bccf085cd4ab2de3e4; origin/main đã fetch: 1c852e9.
+
+## A — Khảo sát
+
+### Audit / thay đổi
+
+- Baseline có mã/phạm vi/trạng thái phân tán, controls lặp màu vàng. Gom filter và số lượng đã tải thành một cụm; refresh/history bề mặt trắng, target 48dp.
+- Card chia identity + tiêu đề, footer nền trung tính gom trạng thái/phân đoạn; ID chữ xanh than, tabular figures. Bo 16dp, không shadow, không card lồng.
+- Giữ nguyên classifyTab, count, filter, cursor, thứ tự và handler. Chữ “trong 50 nhiệm vụ đã tải” không phải total backend.
+- Giữ motion nhấn scale .985 + ripple của AnimatedPressable/Reanimated; không thêm entrance lặp. Reduce Motion theo component sẵn có, không chỉnh global.
+- Shared OperatorTaskRow chỉ có caller Requests. Home có row cục bộ; helper visual và Skeleton mà Home import không thay đổi. Không tác động Crew/Reporter.
+
+### Bằng chứng Android
+
+Expo Go, emulator-5554, Pixel 6 Pro Android14, 1440×3120, phiên hiện có; chỉ Fast Refresh, không restart/reload/reset/logout.
+
+- BEFORE: `.cache/industrial-premium-phase02/requests-before-stable.png`.
+- AFTER: `.cache/industrial-premium-phase02/requests-filter-ongoing-after.png`; `requests-supplement-after.png`.
+- Đã mở dropdown, chọn Đang thực hiện (10/50), Cần bổ sung (2/50), refresh, mở Chi tiết Đã nộp và Back, mở Chi tiết Đã nhận.
+- Scroll Chi tiết đã dịch nội dung xuống tới Video và disclosure; không suy từ gesture đơn thuần thành list scroll PASS.
+- NOT_RUN native: list empty/error/initial loading, tải thêm, font phóng lớn, chiều rộng nhỏ, Reduce Motion OS, đo FPS. Không mutation để tạo trạng thái.
+- `requests-before.png` là ảnh giữa transition, không dùng nghiệm thu; `requests-ongoing-after.png` thực tế là Detail, không dùng so sánh Requests. Giữ nguyên artifact.
+
+### Gate đã chạy
+
+- `npx tsc --noEmit`: PASS, exit0.
+- `node --test --test-concurrency=2 tests/operator-ui05.test.cjs tests/operator-ui06-crew.test.cjs tests/drone-ui02a.test.cjs tests/operator-refresh-ui.test.cjs tests/operator-ui-integration.test.cjs tests/operator-home-premium.test.cjs`: PASS 98/98. Log `.cache/industrial-premium-phase02/requests-targeted-final.log`.
+- Full regression: `node --test --test-concurrency=2` với toàn bộ `tests/*.test.cjs`: PASS 1928/1928, 0 fail; 201406.7077ms. Log `.cache/industrial-premium-phase02/requests-regression-final.log`.
+- Lần regression đầu: 11 lỗi cùng assertion màu viền cũ; sửa đúng expectation #DCE2E7 và radius16, giữ assertion trạng thái/callback. Đổi tên test Crew thành Operator đúng component được mount.
+- `git diff --check`: PASS. Diff tự review chỉ JSX/style và kỳ vọng presentation của test. Icon mới MaterialIcons; scan Ionicons app/src không match; không thêm tiền tệ, secret, API hoặc route.
+- UI còn giới hạn: “NHIỆM VỤ HIỆN TẠI” vẫn là nhãn cũ, có thể xuống dòng ở font lớn; chưa có native large-font proof. Card ưu tiên đọc rõ hơn là mật độ tối đa.
+
+Commit checkpoint A: xem Git history commit chứa phần này (không ghi SHA tự tham chiếu).

@@ -64,6 +64,7 @@ export default function DroneRequestsScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" variant="operatorCompact" />}>
+      <View style={styles.controls}>
       <View style={styles.toolbar}>
         <AnimatedPressable android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="button" accessibilityLabel={`Lọc trạng thái: ${selectedLabel}`}
           accessibilityState={{ expanded: filterOpen }}
@@ -98,6 +99,7 @@ export default function DroneRequestsScreen() {
       <Text style={[typography.caption, styles.resultSummary]}>
         {selectedKey === 'all' ? `${tasks.length} nhiệm vụ đã tải` : `${filteredRequests.length} trong ${tasks.length} nhiệm vụ đã tải`}
       </Text>
+      </View>
 
       {/* Content */}
       {error && tasks.length > 0 ? <View style={styles.errorCard}><Text accessibilityRole="alert" style={styles.errorText}>{error}</Text></View> : null}
@@ -137,6 +139,7 @@ export default function DroneRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
+  controls: { gap: 12, marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#DCE2E7' },
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,11 +150,12 @@ const styles = StyleSheet.create({
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
+    minWidth: 0,
+    paddingHorizontal: 12,
     paddingVertical: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#C7D0D8',
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surface,
@@ -159,11 +163,11 @@ const styles = StyleSheet.create({
   filterLabel: {
     ...typography.bodyMd,
     flex: 1,
-    color: colors.neutral,
+    color: '#192D40',
+    lineHeight: 22,
   },
-  iconButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg, overflow: 'hidden' },
+  iconButton: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#DCE2E7', backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
   filterMenu: {
-    marginTop: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
@@ -178,11 +182,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  filterOptionSelected: { backgroundColor: operatorAppearance.pressed },
+  filterOptionSelected: { backgroundColor: '#F7F0DA' },
   optionLabel: { ...typography.bodyMd, color: colors.neutral, flex: 1 },
   optionLabelSelected: { fontWeight: '600' },
-  optionCount: { ...typography.caption, color: colors.secondary },
-  resultSummary: { color: colors.secondary, marginVertical: spacing.md },
+  optionCount: { ...typography.caption, color: '#526170', fontVariant: ['tabular-nums'], minWidth: 24, textAlign: 'right' },
+  resultSummary: { color: '#526170', lineHeight: 18 },
   loadMore: { alignSelf: 'center', maxWidth: '100%', borderRadius: radius.full, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, marginBottom: spacing.md },
   endOfList: { color: colors.secondary, textAlign: 'center', paddingBottom: spacing.md },
   errorCard: { ...operatorAppearance.card, padding: 12, marginBottom: 12 },

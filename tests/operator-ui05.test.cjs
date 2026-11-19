@@ -46,7 +46,7 @@ test('UI05 shared row prioritizes real scope and status, retains exact navigatio
  s.render();assert.match(text(s),/Mặt đường/);assert.match(text(s),/Đã nộp/);assert.match(text(s),/2 phân đoạn/);
  assert.doesNotMatch(text(s),new RegExp(t.projectId+'|'+t.id+'|Nhiệm vụ hiện tại|Chi tiết'));
  const p=s.nodes().find(n=>n.type==='AnimatedPressable');p.props.onPress();assert.equal(pressed,1);
- assert.ok(p.props.style.minHeight>=48);assert.equal(s.nodes().find(n=>n.type==='Card').props.style.borderRadius,12);s.unmount();
+ assert.ok(p.props.style.minHeight>=48);assert.equal(s.nodes().find(n=>n.type==='Card').props.style.borderRadius,16);s.unmount();
 });
 test('UI05 shared row handles unknown enums without invented scope, deadline or priority',()=>{
  const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:{...task,status:'FUTURE',scope:[{targetBand:'FUTURE',segmentIds:[]}]},onPress(){}},modules:{'../Card':{Card:'Card'},'../AnimatedPressable':{AnimatedPressable:'AnimatedPressable'}}});
