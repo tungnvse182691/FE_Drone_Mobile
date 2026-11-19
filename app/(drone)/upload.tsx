@@ -496,8 +496,8 @@ export default function DroneUploadScreen() {
     return <Card style={styles.card}>
       <View style={styles.row}>
         <View style={styles.fileIcon}><MaterialIcons name={kind==='VIDEO'?'videocam':'subtitles'} size={24} color={colors.secondary}/></View>
-        <View style={{flex:1,gap:3}}><Text style={typography.titleMd}>{title}</Text><Text style={styles.caption}>{kind==='VIDEO'?'Bắt buộc · 4K RGB':'Không bắt buộc'}</Text></View>
-        <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} accessibilityState={{disabled:copying||submitting||draftLoading}} disabled={copying||submitting||draftLoading} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} style={styles.chooseFile}>
+        <View style={{flex:1,gap:3}}><Text style={styles.heading}>{title}</Text><Text style={styles.caption}>{kind==='VIDEO'?'Bắt buộc · 4K RGB':'Không bắt buộc'}</Text></View>
+        <Pressable accessibilityRole="button" accessibilityLabel={kind==='VIDEO'?'Chọn video MP4':'Chọn tệp SRT'} accessibilityState={{disabled:copying||submitting||draftLoading}} disabled={copying||submitting||draftLoading} onPress={kind==='VIDEO'?handlePickVideo:handlePickSrt} android_ripple={{color:operatorAppearance.pressed}} style={styles.chooseFile}>
           <MaterialIcons name={file?'swap-horiz':'add'} size={20} color={colors.secondary}/><Text style={styles.chooseLabel}>{file?'Đổi tệp':'Chọn tệp'}</Text>
         </Pressable>
       </View>
@@ -508,14 +508,14 @@ export default function DroneUploadScreen() {
     </Card>;
   };
   return <SafeAreaScreen scroll header={<View style={styles.header}>
-    <Pressable accessibilityRole="button" accessibilityLabel="Quay lại" onPress={handleBack} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.secondary}/></Pressable>
-    <View style={{flex:1}}><Text style={typography.titleMd}>Dữ liệu khảo sát</Text><Text style={styles.caption}>{params.taskId?`Nhiệm vụ ${params.taskId.slice(0,8)}`:'Chọn nhiệm vụ để tiếp tục'}</Text></View>
+    <Pressable accessibilityRole="button" accessibilityLabel="Quay lại" onPress={handleBack} android_ripple={{color:operatorAppearance.pressed}} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.secondary}/></Pressable>
+    <View style={{flex:1}}><Text style={styles.heading}>Dữ liệu khảo sát</Text><Text style={styles.caption}>{params.taskId?`Nhiệm vụ ${params.taskId.slice(0,8)}`:'Chọn nhiệm vụ để tiếp tục'}</Text></View>
   </View>}>
     {!submitting&&!received&&!pendingDataset?<>
     {!params.taskId?<Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={()=>router.push('/(drone)/requests')}/>:null}
     <Card style={styles.card}>
       <View style={styles.row}><MaterialIcons name="flight" size={23} color={colors.secondary}/><Text style={styles.heading}>Máy bay</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại máy bay đủ điều kiện" disabled={eligibleLoading} onPress={()=>void loadEligibleDrones()} style={styles.iconButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại máy bay đủ điều kiện" disabled={eligibleLoading} onPress={()=>void loadEligibleDrones()} android_ripple={{color:operatorAppearance.pressed}} style={styles.iconButton}>
           {eligibleLoading?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
         </Pressable>
       </View>
@@ -524,23 +524,22 @@ export default function DroneUploadScreen() {
       <View accessibilityRole="radiogroup" style={{gap:8}}>{eligibleDrones.map(drone=><Pressable key={drone.id} accessibilityRole="radio" accessibilityLabel={`Máy bay ${drone.serialNo}`} accessibilityState={{checked:selectedDroneId===drone.id}} onPress={()=>void selectDrone(drone)} style={[styles.option,selectedDroneId===drone.id&&styles.selected]}>
         <MaterialIcons name={selectedDroneId===drone.id?'radio-button-checked':'radio-button-unchecked'} size={22} color={colors.secondary}/><Text style={{...typography.bodyMd,flex:1}}>{drone.serialNo}</Text>
       </Pressable>)}</View>
-      {eligibleCursor?<Button title="Tải thêm máy bay" variant="secondary" disabled={eligibleLoading} loading={eligibleLoading} onPress={()=>void loadEligibleDrones(true)}/>:null}
+      {eligibleCursor?<Button style={styles.secondaryAction} title="Tải thêm máy bay" variant="secondary" disabled={eligibleLoading} loading={eligibleLoading} onPress={()=>void loadEligibleDrones(true)}/>:null}
     </Card>
     {fileCard('VIDEO','Video MP4',videoName,videoSize)}
-    {fileCard('TELEMETRY','Dữ liệu GPS · SRT',srtName,srtSize)}
     {copying?<View accessibilityRole="alert" style={styles.notice}><ActivityIndicator color={colors.secondary}/><Text style={styles.noticeText}>Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text></View>:null}
     <Card style={styles.card}>
       <View style={styles.row}>
-        <Pressable testID="saved-files-toggle" accessibilityRole="button" accessibilityLabel="Tệp đã lưu trên thiết bị" accessibilityState={{expanded:filesExpanded}} onPress={()=>setFilesExpanded(v=>!v)} style={[styles.row,{flex:1,minHeight:48}]}>
+        <Pressable testID="saved-files-toggle" accessibilityRole="button" accessibilityLabel="Tệp đã lưu trên thiết bị" accessibilityState={{expanded:filesExpanded}} onPress={()=>setFilesExpanded(v=>!v)} android_ripple={{color:operatorAppearance.pressed}} style={[styles.row,{flex:1,minHeight:48}]}>
           <MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp đã lưu ({savedFiles.length})</Text><MaterialIcons name={filesExpanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} android_ripple={{color:operatorAppearance.pressed}} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable>
       </View>
       {filesExpanded?<>
-        <Text style={styles.caption}>Video tối đa 8,6 GB · SRT tối đa 10,5 MB</Text>
+        <Text style={styles.caption}>Video tối đa 8,6 GB</Text>
         {savedFiles.map(file=><View key={file.key} style={styles.savedFile}>
           <View style={{flex:1,minWidth:0,gap:4}}><Text numberOfLines={2} ellipsizeMode="middle" style={typography.bodyMd}>{file.name}</Text><Text style={styles.caption}>{file.availability==='LOCAL_READY'?'Sẵn sàng sử dụng':file.availability==='LOCAL_UNHASHED'?'Cần kiểm tra tệp':file.availability==='INCOMPLETE'?'Bản sao chưa đầy đủ':'Không tìm thấy tệp'}</Text></View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`Dùng tệp đã lưu: ${file.name}`} accessibilityState={{disabled:submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)}} disabled={submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)} style={styles.chooseFile}><Text style={styles.chooseLabel}>Dùng tệp</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Dùng tệp đã lưu: ${file.name}`} accessibilityState={{disabled:submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)}} disabled={submitting||copying||draftLoading||!['LOCAL_READY','LOCAL_UNHASHED'].includes(file.availability)} onPress={()=>void restoreFile(file.key)} android_ripple={{color:operatorAppearance.pressed}} style={styles.chooseFile}><Text style={styles.chooseLabel}>Dùng tệp</Text></Pressable>
         </View>)}
         {!savedFiles.length?<Text style={styles.caption}>Chưa có tệp đã lưu.</Text>:null}
       </>:null}
@@ -550,7 +549,7 @@ export default function DroneUploadScreen() {
       <RecordingDateTimeField key={`${scope.key}:${params.taskId}`} value={recordedAt} disabled={submitting||!!pendingDataset||draftLoading} onChangeText={v=>{setRecordedAt(v);setDraftMessage(null);}}/>
       <Text style={styles.caption}>Chọn theo thời điểm quay video · giờ địa phương.</Text>
       {telemetryFile?<><Text style={typography.bodyMd}>Độ lệch SRT so với video (ms)</Text><TextInput accessibilityLabel="Độ lệch thời gian SRT" placeholder="0 nếu video và SRT cùng mốc" value={timeOffset} editable={!submitting&&!pendingDataset&&!draftLoading} onChangeText={v=>{setTimeOffset(v);setDraftMessage(null);}} keyboardType="numbers-and-punctuation" style={styles.input}/></>:null}
-      {!pendingDataset?<Button title="Lưu nháp trên máy" variant="secondary" disabled={submitting||copying||draftLoading||!params.taskId} onPress={()=>void saveDraft()}/>:null}
+      {!pendingDataset?<Button style={styles.secondaryAction} title="Lưu nháp trên máy" variant="secondary" disabled={submitting||copying||draftLoading||!params.taskId} onPress={()=>void saveDraft()}/>:null}
       {draftMessage?<Text accessibilityLiveRegion="polite" style={styles.caption}>{draftMessage}</Text>:null}
     </Card>
     </>:null}
@@ -589,14 +588,14 @@ const styles=StyleSheet.create({
   input:{...typography.bodyMd,borderWidth:1,borderColor:colors.border,borderRadius:10,padding:14,color:colors.secondary,minHeight:52},
   progressTrack:{height:5,borderRadius:4,backgroundColor:colors.border,overflow:'hidden'},
   progressFill:{height:5,backgroundColor:colors.primary},
-  header:{flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:spacing.screenMargin,paddingVertical:8,backgroundColor:colors.surface},
+  header:{flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:spacing.screenMargin,paddingVertical:8,backgroundColor:colors.surface,borderBottomWidth:1,borderBottomColor:colors.border},
   card:{...operatorAppearance.card,borderColor:colors.border,marginBottom:16,gap:12},
   row:{flexDirection:'row',alignItems:'center',gap:10},
-  heading:{...typography.titleMd,flex:1},
+  heading:{...typography.bodyLg,fontFamily:'Roboto-Medium',color:colors.secondary,flex:1},
   caption:{...typography.caption,color:colors.secondary,lineHeight:20},
-  iconButton:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',padding:6,gap:4},
+  iconButton:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',padding:6,gap:4,borderWidth:1,borderColor:colors.border,borderRadius:radius.full,backgroundColor:colors.surfaceAlt,overflow:'hidden'},
   fileIcon:{width:44,height:44,borderRadius:12,backgroundColor:colors.surfaceAlt,alignItems:'center',justifyContent:'center'},
-  chooseFile:{minHeight:48,minWidth:64,paddingHorizontal:10,flexDirection:'row',gap:4,alignItems:'center',justifyContent:'center',borderRadius:8,backgroundColor:colors.surfaceAlt},
+  chooseFile:{minHeight:48,minWidth:64,paddingHorizontal:10,flexDirection:'row',gap:4,alignItems:'center',justifyContent:'center',borderRadius:radius.full,borderWidth:1,borderColor:'#E8D9A9',backgroundColor:'#FFF8E8',overflow:'hidden'},
   chooseLabel:{...typography.labelLg,color:colors.secondary},
   fileRow:{flexDirection:'row',gap:12,alignItems:'center',padding:12,backgroundColor:colors.surfaceAlt,borderRadius:10},
   option:{minHeight:52,borderWidth:1,borderColor:colors.border,borderRadius:10,padding:12,flexDirection:'row',alignItems:'center',gap:12},
@@ -606,6 +605,7 @@ const styles=StyleSheet.create({
   noticeText:{...typography.caption,color:colors.secondary,lineHeight:20,flex:1},
   error:{...typography.bodyMd,color:colors.error,marginVertical:8},
   primaryAction:{minHeight:52,borderRadius:12,backgroundColor:colors.primary,borderColor:colors.primary},
+  secondaryAction:{alignSelf:'flex-start',maxWidth:'100%',borderRadius:radius.full,borderColor:'#E8D9A9',backgroundColor:'#FFF8E8'},
   recoveryActions:{gap:12},
   transferCard:{padding:20,gap:20},
   transferCopy:{flex:1,gap:4},

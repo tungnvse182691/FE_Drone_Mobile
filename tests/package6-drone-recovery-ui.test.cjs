@@ -169,7 +169,8 @@ test('Drone upload retains prior selection when preservation fails and hides lat
  const d=deferred();const s=drone('upload',{}, {params:{taskId:id(2)},pick:async()=>({canceled:false,assets:[{name:'new.mp4',uri:'file:///source.mp4',size:4}]}),modules:{
  '../../src/api/droneLocalFiles':{openDroneLocalFiles:async()=>({list:async()=>[saved],preserve:()=>d.promise,close(){}})}}});
  s.render();await s.flush();await useSaved(s);await s.flush();
- const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.children?.some(c=>c?.props?.children?.includes('Chọn tệp'))).props.onPress();await s.flush();
+ assert.equal(s.nodes().some(n=>n.props?.accessibilityLabel==='Chọn tệp SRT'),false);
+ const pending=s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel==='Chọn video MP4').props.onPress();await s.flush();
  if(logout){s.h.changeAuth({status:'SIGNED_OUT',user:null,token:null});s.render();}
  d.reject(Error('disk full'));await pending;await s.flush();
  const text=JSON.stringify(s.nodes());if(logout)assert.doesNotMatch(text,/retained.mp4|new.mp4/);else assert.match(text,/retained.mp4/);s.unmount();
