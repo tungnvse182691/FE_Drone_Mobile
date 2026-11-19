@@ -124,11 +124,12 @@ function DroneLogContent({ scope }: { scope: string }) {
       contentContainerStyle={styles.panelContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
     <CrewContentTransition ready={activeTab === 'lookup'}>
     <View style={styles.lookupSection}>
-    <View style={styles.sectionHeading}><MaterialIcons name="cloud-done" size={20} color={colors.secondary} /><Text style={typography.titleMd}>Kết quả từ máy chủ</Text></View>
+    <View style={styles.sectionHeading}><Text style={styles.lookupHeading}>Kết quả từ máy chủ</Text></View>
     <Button style={styles.lookupButton} title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
     {advanced ? <>
     <Card style={styles.lookupCard}>
       <Text style={styles.lookupTitle}>Đọc lại nhiệm vụ</Text>
+      <Text style={styles.inputLabel}>Mã nhiệm vụ máy chủ</Text>
       <TextInput style={styles.input} accessibilityLabel="Mã nhiệm vụ máy chủ" placeholder="UUID nhiệm vụ" value={taskId} editable={!busy} autoCapitalize="none" onChangeText={value => { setTaskId(value); setTaskText(null); setError(null); }} />
       <Button style={styles.lookupAction} title="Đọc trạng thái nhiệm vụ" variant="secondary" disabled={busy || !uuid(taskId.trim())} onPress={() => void check('task')} />
       {taskText ? <CrewContentTransition ready>
@@ -140,6 +141,7 @@ function DroneLogContent({ scope }: { scope: string }) {
     </Card>
     <Card style={styles.lookupCard}>
       <Text style={styles.lookupTitle}>Kiểm tra tải lên</Text>
+      <Text style={styles.inputLabel}>Mã phiên tải lên máy chủ</Text>
       <TextInput style={styles.input} accessibilityLabel="Mã phiên tải lên máy chủ" placeholder="UUID phiên tải lên" value={uploadId} editable={!busy} autoCapitalize="none" onChangeText={value => { setUploadId(value); setUploadText(null); setError(null); }} />
       <Button style={styles.lookupAction} title="Kiểm tra trạng thái tệp" variant="secondary" disabled={busy || !uuid(uploadId.trim())} onPress={() => void check('upload')} />
       {uploadText ? <CrewContentTransition ready>
@@ -166,26 +168,28 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surfaceAlt },
   tabBar: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.screenMargin, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   tab: { flex: 1, minHeight: 48, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  selectedTab: { backgroundColor: '#FFF1CB', borderColor: '#E8D9A9' },
-  selectedTabLabel: { color: colors.primaryDark, fontFamily: 'Roboto-Medium' },
+  selectedTab: { backgroundColor: '#192D40', borderColor: '#192D40' },
+  selectedTabLabel: { color: colors.surface, fontFamily: 'Roboto-Medium' },
   panel: { flex: 1 },
   hidden: { display: 'none' },
   panelContent: { padding: spacing.screenMargin, paddingBottom: 96 },
   lookupSection: { gap: spacing.sm },
-  lookupTitle: { ...typography.bodyLg, fontFamily: 'Roboto-Medium', color: colors.neutral },
-  lookupCard: { ...operatorAppearance.card, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
-  lookupAction: { alignSelf: 'flex-start', maxWidth: '100%', borderRadius: radius.full, borderColor: '#E8D9A9', backgroundColor: '#FFF8E8' },
+  lookupHeading: { ...typography.titleMd, color: '#192D40', flexShrink: 1 },
+  inputLabel: { ...typography.caption, color: '#526170' },
+  lookupTitle: { ...typography.titleMd, color: '#192D40' },
+  lookupCard: { borderWidth: 0, borderTopWidth: 1, borderColor: '#DCE2E7', borderRadius: 0, backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: spacing.md, gap: spacing.sm, elevation: 0 },
+  lookupAction: { alignSelf: 'flex-start', maxWidth: '100%', borderRadius: 12, borderColor: '#DCE2E7', backgroundColor: colors.surface },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', paddingBottom: spacing.sm, minHeight: 48 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
-  sectionLabel: { color: colors.secondary, flexShrink: 1 },
-  tabLabel: { color: colors.secondary, fontSize: 14, lineHeight: 20 },
-  taskLink: { minHeight: 48, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
-  lookupButton: { alignSelf: 'flex-start', maxWidth: '100%', borderColor: colors.border, backgroundColor: '#FFF8E8' },
-  input: { ...typography.bodyMd, minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, color: colors.neutral },
+  sectionLabel: { ...typography.titleMd, color: '#192D40', flexShrink: 1 },
+  tabLabel: { color: colors.secondary, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  taskLink: { minHeight: 48, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  lookupButton: { alignSelf: 'flex-start', maxWidth: '100%', borderColor: colors.border, backgroundColor: '#F7F0DA', borderRadius: 12 },
+  input: { ...typography.bodyMd, minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12, backgroundColor: colors.surface, color: '#192D40' },
   readback: { backgroundColor: '#F1F3F5', borderRadius: radius.md, padding: spacing.sm, gap: spacing.xs },
   readbackHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   readbackLabel: { ...typography.caption, color: colors.secondary, flexShrink: 1 },
-  readbackValue: { ...typography.bodyMd, fontFamily: 'Roboto-Medium', color: colors.secondary },
+  readbackValue: { ...typography.bodyMd, fontFamily: 'Roboto-Medium', color: '#192D40', fontVariant: ['tabular-nums'] },
   revealIdButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   revealIdText: { color: colors.secondary },
 });

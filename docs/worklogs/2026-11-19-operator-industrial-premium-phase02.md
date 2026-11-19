@@ -1,7 +1,7 @@
-# Operator Industrial Premium Phase02 — A + B
+# Operator Industrial Premium Phase02 — A → I
 
 Mode: IMPLEMENT_AND_SELF_REVIEW (Codex, không phải review độc lập).
-Owner scope: Khảo sát rồi Chi tiết, dừng sau A+B. Branch main; không push.
+Owner scope hiện hành: hoàn tất A→I theo addendum continue-all, ghi đè checkpoint dừng A+B. Branch main; không push.
 Base: 5430eec9ca73cb30d46ad5bccf085cd4ab2de3e4; origin/main đã fetch: 1c852e9.
 
 ## A — Khảo sát
@@ -103,3 +103,13 @@ F commit: b8acea9. File: app/(drone)/sync.tsx.
 - Self-review: STATE_PRESENTATION, queue identity/filter, reload và safe-purge handler, child recovery không đổi. Chỉ JSX copy/style. Giữ Pressable/type/48dp và phản hồi pressed hiện có; không thêm motion liên tục.
 - NOT_VERIFIED: outbox tabs có dữ liệu (outbox0 trong phiên), loading/error/offline native, lịch sử mở rộng, replay/session switch/restart native, font lớn/Reduce Motion OS/FPS/APK. Full regression cuối phiên.
 - Commit G: commit chứa mục này; SHA ghi checkpoint sau.
+
+## H — Nhật ký (20/11)
+
+G commit: d596055. File: app/(drone)/log.tsx.
+- BEFORE log-before.png và log-lookup-before.png: tab vàng và nhiều khối tra cứu giống nhau, thiếu label luôn nhìn thấy. AFTER log-after.png và log-lookup-after.png: selected tab navy, title phân cấp, label riêng cho UUID, các nhóm tra cứu dùng divider thay card lặp; hành động phụ trắng, nút mở nâng cao vàng nhẹ. Giữ đúng hai tab Lệnh đã lưu / Tra cứu.
+- Android Expo Go: mở/thu nhóm tra cứu, xem cả hai tab; nhập abc vào mã nhiệm vụ thấy nút đọc vẫn disabled; đóng bàn phím rồi đổi tab qua lại vẫn giữ abc. Back header rời Nhật ký. Không GET hoặc mutation để tạo dữ liệu kết quả. Các ảnh AFTER chụp trước khi nhập abc; hierarchy kiểm chứng riêng trạng thái nhập.
+- npx tsc --noEmit: PASS exit0 (log-tsc.log). Targeted operator-log-tabs + drone-ui02c + operator-ui-integration + package45-drone:38/38 PASS (log-targeted.log). git diff --check PASS.
+- Self-review: không đổi handler/session/GET/UUID validation, mounting input, recovery và tab state. Giữ AnimatedPressable/CrewContentTransition sẵn có; không thêm entrance lặp hoặc animation liên tục.
+- NOT_VERIFIED: server readback có kết quả/error/loading native, dataset input dưới keyboard, font lớn/narrow device, Reduce Motion OS, FPS/APK/iPhone. Full regression cuối phiên.
+- Commit H: commit chứa mục này, SHA ghi checkpoint tiếp.
