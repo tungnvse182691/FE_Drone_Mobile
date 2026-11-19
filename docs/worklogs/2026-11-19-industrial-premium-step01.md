@@ -22,3 +22,10 @@ Owner đã duyệt Premium Operations70% / Field Operations30%, scope riêng Hom
 - Full regression PASS1928/1928, exit0: $regressionFiles = @(Get-ChildItem tests -Filter *.test.cjs -File | ForEach-Object FullName); node --test --test-concurrency=2 @regressionFiles. Log .cache/industrial-premium-step01/regression-final.log. Lượt trước1927/1928 do predicate test02B còn trông đợi shared row; đã sửa nhận diện component và chạy lại toàn bộ.
 - NOT_RUN native loading/empty/error injection, font lớn/tên dài fixture, đổi OS Reduce Motion trực tiếp, FPS và APK build. Harness states không thay Android evidence. Không tuyên bố60FPS. Self-review, không independent review.
 - Owner yêu cầu căn giữa ba KPI là checkpoint tiếp theo, commit riêng. Dừng tại Operator Home.
+
+## Checkpoint3 — Owner refinement: centered KPI
+
+- Base1803310. Chỉ đổi3 style trong app/(drone)/home.tsx: hàng cố định3 cột flex1/minWidth0, alignItems center; nhãn textAlign center/stretch/minHeight36dp để dành2 dòng và cùng baseline ban đầu. Không numberOfLines/fixed height, nhãn được wrap tự nhiên. Giữ tabular-nums, icon/số/nhãn cách8dp, màu và dữ liệu50/10/26.
+- Android emulator-5554 vẫn Expo Go, Fast Refresh không restart. After .cache/industrial-premium-step01/home-kpi-centered.png đã xem trực tiếp, before refinement home-after-final.png. Native bounds:3 label đều width368px, y998, height126px; số đều y844/height126; centers310/720/1130, icon centers tương ứng. Không clipping ở font hiện hành.
+- Targeted cùng6 file checkpoint2:86/86 PASS; log targeted-kpi.log. npx tsc --noEmit PASS; git diff --check PASS. Full regression1928/1928 áp dụng checkpoint2; không chạy lại toàn bộ cho3 style KPI.
+- NOT_RUN: font scale lớn/narrow device thực, OS Reduce Motion toggle/FPS; không thêm animation hoặc handler trong refinement. Tôn trọng scope Home, không API/navigation/business/global tokens.
