@@ -140,7 +140,7 @@ test('Crew rejection proof/resolution survive SQLite close/reopen and require ne
  await h.workflow.resolveRepairRejection(i,c.key,h.runtime);const replacement=await h.workflow.prepareRepairAssessment(i,{...h.draft(),...i},h.runtime);
  h.fail(null);await h.workflow.dispatchRepair(i,replacement.key,h.runtime);h.reopen();
  assert.equal(h.raw.prepare('SELECT payload FROM local_draft WHERE kind=? ORDER BY rowid').all('T06A_REPAIR_COMMAND')[0].payload,original);
- const third={...i,scope:JSON.stringify([i.actor,'C'])};h.runtime.current=()=>third;
+ const third={...i,scope:JSON.stringify([i.actor,'C'])};h.runtime.current=()=>third;h.runtime.fieldDraft=async()=>({...h.draft(),...third});
  const next=await h.workflow.prepareRepairStart(third,h.runtime);assert.equal(next.operation,'start');h.raw.close();
 });
 test('Crew timeout then late HTTP rejection never creates definitive proof or replacement key',async()=>{
@@ -152,8 +152,8 @@ test('Crew timeout then late HTTP rejection never creates definitive proof or re
 });
 const {screen:mount,deferred}=require('./helpers/roadfe-screen.cjs');
 function normalScreen(stage,rows=[],extra={}){
- const h=harness();let current=h.identity,history=rows,posts=0,resolutions=0;
- const journal={currentRepairIdentity:()=>current,sameRepairIdentity:(a,b)=>!!a&&!!b&&['actor','scope','environment','taskId','projectId'].every(k=>a[k]===b[k])};
+ const h=harness();let current=h.identity,history=rows.map(row=>({...row,...(row.operation==='assessment'&&!row.payload?{payload:h.command().payload}:{})})),posts=0,resolutions=0;
+ const journal={repairAssessmentMatchesDraft:h.assessmentMatchesDraft,currentRepairIdentity:()=>current,sameRepairIdentity:(a,b)=>!!a&&!!b&&['actor','scope','environment','taskId','projectId'].every(k=>a[k]===b[k])};
  const s=mount('app/(crew)/wo-detail.tsx',{exportName:'NormalRepairBootstrap',props:{stage,task:{id:h.identity.taskId,projectId:h.identity.projectId,detail:h.task,etag:'"'+h.task.version+'"'}},modules:{
   'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'../../src/offline/database':{},'./tasks':{useCrewIdentity:()=>({scope:current?.scope,user:current?{id:current.actor}:null})},
   '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:h.task.repairContext,reload:async()=>{}})},
