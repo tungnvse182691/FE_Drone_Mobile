@@ -128,9 +128,9 @@ test('UI02A Home uses neutral task heading and no Base64 version on card', async
   assert.doesNotMatch(JSON.stringify(s.nodes().filter(n => n.type === 'Text')), /Việc cần làm|AAAAAAAAAAE=/); s.unmount();
 });
 
-test('UI02A Work Package promises only current survey video and telemetry; Profile labels local queue', async () => {
+test('UI02A Work Package shows video-only guidance; Profile labels local queue', async () => {
   const t = fixture('SUBMITTED'); const s = drone('work-package', apiFor(t), { params: { taskId: t.id } });
   s.render(); await s.flush(); assert.doesNotMatch(text(s), /DSM|OpenDroneMap|orthomosaic|SfM/);
-  assert.match(text(s), /video|Video/); assert.match(text(s), /SRT/); assert.match(text(s), /Mặt đường/); s.unmount();
+  assert.match(text(s), /Video 4K RGB/); assert.doesNotMatch(text(s), /SRT|GPS|dữ liệu hành trình/); assert.match(text(s), /Mặt đường/); s.unmount();
   const p = drone('profile'); p.render(); await p.flush(); assert.match(text(p), /Hàng đợi trên thiết bị/); assert.doesNotMatch(text(p), /Cài đặt đồng bộ ngoại tuyến/); p.unmount();
 });

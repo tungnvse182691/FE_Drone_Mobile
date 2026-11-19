@@ -175,3 +175,4 @@ I commit: d8dd2ee. Source cuối kiểm chứng: d8dd2ee (sau đó chỉ cập n
 
 - Source base 278c23b + diff follow-up đã rà; sau lượt chạy chỉ cập nhật tài liệu. `npx tsc --noEmit`: exit0. Full regression `$videoFinalFiles=(Get-ChildItem tests -Filter *.test.cjs).FullName; node --test --test-concurrency=2 $videoFinalFiles`: exit0, 1929/1929 PASS, 0 fail/skip/cancel, 211884.2558ms. Log: .cache/industrial-premium-phase02/video-final-regression.log.
 - `git diff --check`: PASS. `git diff --exit-code HEAD -- app/(drone)/home.tsx`: exit0. Không sửa BE, API, upload, journal hoặc orientation handler. Không claim đã xóa telemetry khỏi BE/contract; chỉ bỏ hai đoạn hướng dẫn UI owner chỉ định.
+- Commit trình xem/ghi chú video: bfc3484. Checkpoint Gói công việc là commit chứa dòng này, gồm đúng hai dòng JSX bỏ SRT và test presentation tương ứng; dùng chung gate cuối ở trên.

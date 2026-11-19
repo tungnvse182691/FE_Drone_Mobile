@@ -246,8 +246,6 @@ export default function DroneWorkPackageScreen() {
             <View style={styles.cardHeader}><Text style={[typography.titleMd, styles.sectionTitle]}>Dữ liệu cần gửi</Text></View>
           <View style={styles.uploadGuidance}>
             <View style={styles.guidanceRow}><MaterialIcons name="videocam" size={22} color={colors.secondary}/><Text style={styles.guidanceText}>Video 4K RGB</Text><Text style={styles.guidanceNote}>Bắt buộc</Text></View>
-            <View style={styles.guidanceRow}><MaterialIcons name="subtitles" size={22} color={colors.secondary}/><Text style={styles.guidanceText}>Hành trình SRT/GPS</Text><Text style={styles.guidanceNote}>Nếu có</Text></View>
-            <Text style={styles.guidanceNote}>Cần dữ liệu hành trình để đánh giá phủ tuyến.</Text>
           </View>
         </Card>
       </>
