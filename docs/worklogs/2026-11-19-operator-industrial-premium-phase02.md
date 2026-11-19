@@ -62,3 +62,12 @@ B commit: cf5e3b0. C source: app/(drone)/request-decline.tsx.
 - Self-review: logic trước renderBody và callback/condition không thay; command panel mutation/journal không sửa. Shared default giữ nguyên. Không thêm icon/cost/API/route.
 - NOT_VERIFIED: bàn phím/nhập dài native, confirm/receipt/unknown outcome, offline/error, font lớn, Reduce Motion OS, FPS/APK/iPhone. Không mutation lấy bằng chứng. Full suite sẽ chạy ở final frozen source.
 - Commit C: commit chứa mục này; SHA ghi ở checkpoint kế tiếp.
+
+## D — Gói công việc (20/11)
+
+C commit: 4a0dae9. Files: app/(drone)/work-package.tsx; tests/package45-drone.test.cjs.
+- Audit native: nhiều icon vàng lặp, ID giống thông báo, tọa độ chật. Dùng nhãn/value responsive, ID navy/tabular, map-entry navy có hành động thật, tiêu đề sentence case; phân đoạn dùng hàng có divider thay card lồng. Giữ mọi thông tin BE, kể cả guidance SRT/GPS lịch sử (chưa đối chiếu thay đổi contract trong task UI này).
+- Android Expo Go task2b0dc125: BEFORE work-package-before.png; AFTER work-package-after.png; work-package-segment-after.png mở phân đoạn1 (trạm0–100m); work-package-technical-after.png mở ID kỹ thuật. Scroll và disclosure thực đã chạy. Motion nhấn/ripple sẵn có, không đổi callback/geometry selection/pinned refs.
+- npx tsc --noEmit PASS exit0. Targeted drone-ui02a/b/c, operator-map, package45-drone, wave1-drone: 116/116 PASS, work-package-targeted-final.log. Lần đầu6 lỗi cùng expectation uppercase NHIỆM VỤ; cập nhật đúng copy sentence case, giữ assertion invalid GPS/geometry/error. git diff --check PASS.
+- NOT_VERIFIED: loading/error/offline native, large font/narrow device, Reduce Motion OS/FPS/APK. Tests Node không thay native/HTTP. Không mutation. Full suite cuối phiên.
+- Commit D: commit chứa mục này, SHA ghi checkpoint sau.

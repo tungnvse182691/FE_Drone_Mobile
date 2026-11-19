@@ -61,7 +61,7 @@ test('Drone work package retains task when geometry read fails and hides invalid
  const wp={task,geometryRefs:[{routeVersionId:id(4),segmentSetId:id(5),segmentIds:[id(6)]}],accessPoint:{point:{latitude:200,longitude:106},source:'PLANNED_RENDEZVOUS'}};
  const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:wp}),getOperatorGeometryPackageReal:async()=>{throw Error('offline');}},{params:{taskId:task.id}});
  s.render(); await s.flush();const text=JSON.stringify(s.nodes());
- assert.match(text,/Thông tin nhiệm vụ vẫn được giữ/);assert.match(text,/NHIỆM VỤ/);assert.doesNotMatch(text,/200.000000/);s.unmount();
+ assert.match(text,/Thông tin nhiệm vụ vẫn được giữ/);assert.match(text,/Nhiệm vụ khảo sát/);assert.doesNotMatch(text,/200.000000/);s.unmount();
 });
 test('Drone sync local ACK is not a server receipt and raw payload/error is not rendered',()=>{
  const s=drone('sync',{}, {exportName:'describeItem',expose:'describeItem',props:{id:'local',kind:'submit_dataset',status:'ACKED',attempt:1,last_error:'private-backend-detail',payload_json:'{}',checksum_sha256:null},modules:{'expo-sqlite':{}}});

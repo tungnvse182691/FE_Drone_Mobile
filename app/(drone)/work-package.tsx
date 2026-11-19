@@ -116,51 +116,46 @@ export default function DroneWorkPackageScreen() {
 
         <Card style={styles.scopeCard}>
           <View style={styles.cardHeader}>
-            <MaterialIcons name="assignment" size={16} color={colors.brandGold} />
-            <Text style={[typography.labelSm, styles.scopeOverline]}>NHIỆM VỤ</Text>
+            <Text style={[typography.labelSm, styles.scopeOverline]}>Nhiệm vụ khảo sát</Text>
             <Text style={styles.taskCode}>Mã {operatorTaskDisplayCode(workPackage.task.id)}</Text>
           </View>
           <Text style={[typography.titleMd, styles.scopeTitle]}>Phạm vi đã ghim</Text>
           <View style={styles.infoRow}>
-            <MaterialIcons name="layers" size={16} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoLabel]}>Dải mục tiêu</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>{operatorTaskTargetBand(workPackage.task)}</Text>
           </View>
           <View style={styles.infoRow}>
-            <MaterialIcons name="route" size={16} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoLabel]}>Phân đoạn đã tải</Text>
             <Text testID="displayed-segment-count" style={[typography.bodyMd, styles.infoValue]}>{`${segments.length}`}</Text>
           </View>
         </Card>
 
-        <Card style={styles.card}>
+        <Card style={styles.mapCard}>
           <AnimatedPressable testID="open-survey-map" accessibilityRole="button" accessibilityLabel="Mở bản đồ khảo sát"
             android_ripple={{ color: '#C9A22720' }} pressedScale={0.99}
             onPress={() => router.push({ pathname: DRONE_SURVEY_MAP, params: { taskId: target } })}
             style={styles.mapEntry}>
-            <View style={styles.mapEntryIcon}><MaterialIcons name="map" size={26} color={colors.brandGold} /></View>
+            <View style={styles.mapEntryIcon}><MaterialIcons name="map" size={26} color="#C9A227" /></View>
             <View style={{ flex: 1, gap: 4 }}>
-              <Text style={[typography.titleMd, { color: colors.neutral }]}>Mở bản đồ</Text>
-              <Text style={[typography.caption, { color: colors.secondary }]}>Phân đoạn khảo sát và điểm tiếp cận</Text>
+              <Text style={[typography.titleMd, { color: '#FFFFFF' }]}>Mở bản đồ</Text>
+              <Text style={[typography.caption, { color: '#DCE5EC' }]}>Phân đoạn khảo sát và điểm tiếp cận</Text>
             </View>
-            <MaterialIcons name="chevron-right" size={24} color={colors.secondary} />
+            <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" />
           </AnimatedPressable>
         </Card>
 
         <Card style={styles.card}>
-          <View style={styles.cardHeader}><MaterialIcons name="flight-takeoff" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Hạn bay và điểm tiếp cận</Text></View>
-          <Text style={styles.groupLabel}>THỜI HẠN</Text>
+          <View style={styles.cardHeader}><Text style={[typography.titleMd, styles.sectionTitle]}>Hạn bay và điểm tiếp cận</Text></View>
+          <Text style={styles.groupLabel}>Thời hạn</Text>
           <View style={styles.infoRow}>
-            <MaterialIcons name="event" size={16} color={colors.brandGold} />
             <Text style={[typography.bodyMd, styles.infoLabel]}>Hạn bay</Text>
             <Text style={[typography.bodyMd, styles.infoValue]}>{formatDateTime(workPackage.dueAt ?? null)}</Text>
           </View>
           <View style={styles.divider} />
-          <Text style={styles.groupLabel}>ĐIỂM TIẾP CẬN</Text>
+          <Text style={styles.groupLabel}>Điểm tiếp cận</Text>
           {accessPoint ? (
             <>
               <View style={styles.infoRow}>
-                <MaterialIcons name="my-location" size={16} color={colors.brandGold} />
                 <Text style={[typography.caption, styles.infoLabel]}>Toạ độ WGS84</Text>
                 <Text style={[typography.bodyMd, styles.infoValue]}>
                   {formatCoord(accessPoint.point.longitude, accessPoint.point.latitude)}
@@ -190,8 +185,8 @@ export default function DroneWorkPackageScreen() {
 
         {geometry ? (
           <Card style={styles.card}>
-            <View style={styles.cardHeader}><MaterialIcons name="map" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Gói hình học tuyến</Text></View>
-            <Text style={styles.groupLabel}>PHÂN ĐOẠN ĐÃ GHIM</Text>
+            <View style={styles.cardHeader}><Text style={[typography.titleMd, styles.sectionTitle]}>Gói hình học tuyến</Text></View>
+            <Text style={styles.groupLabel}>Phân đoạn đã ghim</Text>
             <View style={styles.chipRow}>
               <Chip variant="status-pending" label={cachedAt ? "Phiên bản đã lưu" : geometry.route.isCurrent ? "Bản hiện hành" : "Phiên bản đã ghim"} uppercase={false} />
             </View>
@@ -199,7 +194,6 @@ export default function DroneWorkPackageScreen() {
             {geometry.segmentSet.segments.filter(segment => ref?.segmentIds.includes(segment.id)).map(segment => (
               <View key={segment.id} style={styles.segmentCard}>
                 <AnimatedPressable android_ripple={{color:'#C9A22720'}} pressedScale={0.99} accessibilityRole="button" accessibilityLabel={`Chi tiết phân đoạn ${segment.sequence ?? ''}`} accessibilityState={{expanded:expandedSegments.includes(segment.id)}} onPress={()=>setExpandedSegments(ids=>ids.includes(segment.id)?ids.filter(id=>id!==segment.id):[...ids,segment.id])} style={styles.segmentToggle}>
-                  <View style={styles.segmentNumber}><MaterialIcons name="route" size={22} color={colors.secondary}/></View>
                   <View style={{flex:1,gap:4}}><Text style={typography.titleMd}>{segment.sequence == null ? 'Phân đoạn chưa có mã' : `Phân đoạn ${segment.sequence}`}</Text>
                     <Text style={styles.guidanceNote}>{optionalMeters(segment.fromOffsetMeters)} → {optionalMeters(segment.toOffsetMeters)}</Text></View>
                   <MaterialIcons name={expandedSegments.includes(segment.id)?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
@@ -233,7 +227,7 @@ export default function DroneWorkPackageScreen() {
         <Card style={styles.card}>
           <AnimatedPressable android_ripple={{color:'#C9A22720'}} pressedScale={0.995} accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật"
             accessibilityState={{ expanded: technicalExpanded }} onPress={() => setTechnicalExpanded(value => !value)} style={styles.technicalToggle}>
-            <Text style={[typography.bodyMd, styles.infoValue]}>Thông tin kỹ thuật</Text>
+            <Text style={[typography.bodyMd, styles.sectionTitle]}>Thông tin kỹ thuật</Text>
             <MaterialIcons name={technicalExpanded ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
           </AnimatedPressable>
           {technicalExpanded ? <View style={styles.segmentDetails}>
@@ -249,7 +243,7 @@ export default function DroneWorkPackageScreen() {
         </Card>
 
         <Card style={styles.card}>
-            <View style={styles.cardHeader}><MaterialIcons name="folder-open" size={16} color={colors.brandGold} /><Text style={[typography.titleMd, styles.sectionTitle]}>Dữ liệu cần gửi</Text></View>
+            <View style={styles.cardHeader}><Text style={[typography.titleMd, styles.sectionTitle]}>Dữ liệu cần gửi</Text></View>
           <View style={styles.uploadGuidance}>
             <View style={styles.guidanceRow}><MaterialIcons name="videocam" size={22} color={colors.secondary}/><Text style={styles.guidanceText}>Video 4K RGB</Text><Text style={styles.guidanceNote}>Bắt buộc</Text></View>
             <View style={styles.guidanceRow}><MaterialIcons name="subtitles" size={22} color={colors.secondary}/><Text style={styles.guidanceText}>Hành trình SRT/GPS</Text><Text style={styles.guidanceNote}>Nếu có</Text></View>
@@ -288,14 +282,14 @@ export default function DroneWorkPackageScreen() {
 const styles = StyleSheet.create({
   metrics:{flexDirection:'row',flexWrap:'wrap',gap:12,marginTop:16},
   metric:{flex:1,minWidth:120,gap:6,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt},
-  metricValue:{...typography.titleLg,color:colors.neutral},
-  segmentCard:{marginTop:12,borderRadius:12,backgroundColor:colors.surfaceAlt,padding:12},
+  metricValue:{...typography.titleMd,color:'#192D40',fontVariant:['tabular-nums']},
+  segmentCard:{marginTop:12,borderTopWidth:1,borderTopColor:'#DCE2E7',paddingTop:12},
   segmentToggle:{flexDirection:'row',alignItems:'center',gap:12,minHeight:48},
   segmentNumber:{width:40,height:40,borderRadius:10,backgroundColor:colors.surface,alignItems:'center',justifyContent:'center'},
   segmentDetails:{gap:6,paddingTop:12,marginTop:12,borderTopWidth:1,borderTopColor:colors.border},
   guidanceRow:{flexDirection:'row',alignItems:'center',gap:10,minHeight:44,flexWrap:'wrap'},
   mapEntry: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 12, overflow: 'hidden' },
-  mapEntryIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#FFF1CB', alignItems: 'center', justifyContent: 'center' },
+  mapEntryIcon: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#2B4053', alignItems: 'center', justifyContent: 'center' },
   mapNotice: { flexDirection: 'row', gap: 8, padding: 12, marginTop: 12, backgroundColor: colors.surfaceAlt, borderRadius: 10 },
   mapNoticeText: { ...typography.caption, color: colors.secondary, flex: 1, lineHeight: 19 },
   segmentChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
@@ -305,7 +299,7 @@ const styles = StyleSheet.create({
   guidanceText: { ...typography.bodyMd, color: colors.neutral,flex:1,minWidth:120 },
   guidanceNote: { ...typography.caption, color: colors.secondary, lineHeight: 18 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-  taskCode: { ...typography.caption, color: colors.primaryDark, backgroundColor: '#FFF1CB', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  taskCode: { ...typography.bodyMd, fontFamily:'Roboto-Medium', fontVariant:['tabular-nums'], color:'#192D40', backgroundColor:'#EEF2F5', paddingHorizontal:10, paddingVertical:6, borderRadius:8 },
   groupLabel: { ...typography.labelSm, color: colors.secondary, marginTop: 16, marginBottom: 4 },
   divider: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 12 },
   emptyEvidence: { minHeight: 150, borderStyle: 'dashed', borderWidth: 1, borderColor: colors.border, borderRadius: 12, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 12, backgroundColor: colors.surfaceAlt, marginTop: 16 },
@@ -336,15 +330,16 @@ const styles = StyleSheet.create({
     color: colors.neutral,
     flex: 1,
   },
-  card: { ...operatorAppearance.card, borderColor:colors.border, marginBottom: 12 },
-  scopeCard: { ...operatorAppearance.card, borderColor: colors.border, marginBottom: 12 },
+  mapCard: { ...operatorAppearance.card, borderRadius:16, borderColor:'#192D40', backgroundColor:'#192D40', marginBottom:12 },
+  card: { ...operatorAppearance.card, borderRadius:16, borderColor:'#DCE2E7', marginBottom:12 },
+  scopeCard: { ...operatorAppearance.card, borderRadius:16, borderColor:'#DCE2E7', marginBottom:12 },
   scopeTitle: {
     color: colors.neutral,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   scopeOverline: {
-    color: colors.brandGold,
+    color: colors.secondary,
     flex: 1,
   },
   scopeNote: {
@@ -352,7 +347,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   sectionTitle: {
-    flex: 1, color: colors.neutral,
+    flex:1, color:'#192D40', fontSize:16, lineHeight:24, fontFamily:'Roboto-Medium',
   },
   chipRow: {
     flexDirection: 'row',
@@ -361,22 +356,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    paddingVertical: spacing.xs,
+    flexDirection:'row', flexWrap:'wrap', alignItems:'baseline', gap:8, marginTop:8, paddingVertical:6,
   },
   infoLabel: {
     color: colors.secondary,
-    flex: 1,
+    flexGrow:1, flexBasis:112,
   },
   infoValue: {
-    color: colors.neutral,
-    flexShrink: 1,
-    maxWidth: '65%',
-    fontFamily: 'Roboto-Medium',
-    textAlign: 'left',
+    color:'#192D40', flexGrow:1, flexBasis:160, flexShrink:1, fontFamily:'Roboto-Medium', textAlign:'right',
   },
   topBar: {
     flexDirection: 'row',
