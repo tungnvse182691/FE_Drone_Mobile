@@ -13,7 +13,7 @@ test('Requests compact selector preserves every loaded state across pages withou
   const s = drone('requests', { listOperatorSurveyTasksReal: async cursor => cursor ? { items: items.slice(5), nextCursor: null } : { items: items.slice(0, 5), nextCursor: 'next' } });
   s.render(); await s.flush();
   const tap = async label => {
-    const button = s.nodes().find(n => n.type === 'Pressable' && n.props.accessibilityLabel === label);
+    const button = s.nodes().find(n => ['Pressable', 'AnimatedPressable'].includes(n.type) && n.props.accessibilityLabel === label);
     assert.ok(button, label); button.props.onPress(); await s.flush();
   };
   assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 5, 'default shows every task');
