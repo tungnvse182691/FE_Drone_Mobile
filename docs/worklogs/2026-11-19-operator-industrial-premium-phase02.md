@@ -92,3 +92,14 @@ E commit: b5c4ea0. File: app/(drone)/upload.tsx.
 - Self-review: prefix nghiệp vụ trước fileCard nguyên vẹn; onPress/disabled/callback/route/receipt và file URI không đổi. Không sửa shared component.
 - NOT_VERIFIED: upload/VERIFY_PENDING/pause/cancel/replay native, selected file/keyboard/long filename native, network error/offline, font lớn/Reduce Motion OS/FPS/APK. Không mutation lấy bằng chứng. Full regression cuối phiên.
 - Commit F: commit chứa mục này; SHA ghi checkpoint tiếp.
+
+
+## G — Đồng bộ (20/11)
+
+F commit: b8acea9. File: app/(drone)/sync.tsx.
+- Baseline sync-before.png: summary/queue cùng bề mặt, chữ in hoa cạnh các section. Tạo khối tổng quan navy, thông tin phụ tương phản cao, nút đọc lại vàng nhẹ; section sentence case, tabs selected navy, queue row padding16 và nhãn wrap. Không dựng trạng thái gửi/receipt.
+- Android Expo Go: sync-after.png, sync-scroll-after.png. Bấm Đọc lại hàng đợi thấy thông báo chỉ làm mới trên thiết bị; scroll thấy hai hồ sơ VERIFIED chưa nộp và yêu cầu UNKNOWN thật. Không mở/replay/mutation hồ sơ. Recovery child/default giữ nguyên; không sửa dữ liệu đang chờ.
+- npx tsc --noEmit PASS exit0 (sync-tsc-final.log); targeted drone-ui02c + drone-android01-ui + package6-drone-recovery-ui + dot-b-sync-profile:69/69 PASS (sync-targeted-final.log). Lần typecheck đầu phát hiện duplicate style gap, đã xóa và chạy lại thành công. git diff --check PASS.
+- Self-review: STATE_PRESENTATION, queue identity/filter, reload và safe-purge handler, child recovery không đổi. Chỉ JSX copy/style. Giữ Pressable/type/48dp và phản hồi pressed hiện có; không thêm motion liên tục.
+- NOT_VERIFIED: outbox tabs có dữ liệu (outbox0 trong phiên), loading/error/offline native, lịch sử mở rộng, replay/session switch/restart native, font lớn/Reduce Motion OS/FPS/APK. Full regression cuối phiên.
+- Commit G: commit chứa mục này; SHA ghi checkpoint sau.

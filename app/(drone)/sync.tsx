@@ -169,7 +169,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
 
       {/* Switcher */}
       {outboxRows.length > 0 ? <View style={styles.headerRow}>
-        <Text style={[typography.labelSm, styles.headerTitle]}>HÀNG ĐỢI TRÊN THIẾT BỊ</Text>
+        <Text style={[typography.labelSm, styles.headerTitle]}>Hàng đợi trên thiết bị</Text>
         <View style={styles.tabToggle}>
           <Pressable
             style={[styles.toggleBtn, queueTab === 'pending' && styles.toggleBtnActive]}
@@ -206,7 +206,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
             <View
               style={[
                 styles.pulseDot,
-                { backgroundColor: colors.secondary },
+                { backgroundColor: colors.primary },
               ]}
             />
             <Text style={[typography.bodyMd, styles.summaryCount]}>
@@ -239,7 +239,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
       {/* Section Title */}
       {activeItems.length > 0 ? <View style={styles.sectionHeader}>
         <Text style={[typography.labelSm, styles.sectionTitle]}>
-          {queueTab === 'pending' ? 'CÁC MỤC CHỜ XỬ LÝ' : 'BẢN GHI CỤC BỘ'}
+          {queueTab === 'pending' ? 'Các mục chờ xử lý' : 'Bản ghi cục bộ'}
         </Text>
         <Text style={[typography.caption, styles.sectionSub]}>
           {queueTab === 'pending' ? 'Yêu cầu vẫn được giữ trên thiết bị' : 'Chưa xác minh biên nhận máy chủ'}
@@ -305,7 +305,7 @@ function DroneSyncContent({identity}:{identity:QueueIdentity}) {
         <View style={styles.purgeHeader}>
           <MaterialIcons name="inventory-2" size={20} color={colors.secondary} />
           <Text style={[typography.labelSm, styles.purgeTitle]}>
-            BẢO TOÀN DỮ LIỆU TRÊN THIẾT BỊ
+            Bảo toàn dữ liệu trên thiết bị
           </Text>
         </View>
 
@@ -355,7 +355,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   headerTitle: {
-    color: colors.secondary,
+    ...typography.titleMd,
+    color: '#192D40',
   },
   tabToggle: {
     width: '100%',
@@ -363,8 +364,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.sm,
-    padding: 2,
+    borderRadius: 12,
+    padding: 4,
   },
   toggleBtn: {
     minHeight: 48,
@@ -376,21 +377,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   toggleBtnActive: {
-    backgroundColor: '#FFF1CB',
+    backgroundColor: '#192D40',
   },
   toggleBtnText: {
     fontSize: 13,
+    textAlign: 'center',
     color: colors.secondary,
   },
   toggleBtnTextActive: {
-    color: colors.neutral,
-    fontWeight: 'bold',
+    color: colors.surface,
+    fontWeight: '500',
   },
   summaryCard: {
     marginBottom: spacing.md,
-    gap: spacing.sm,
     ...operatorAppearance.card,
-    borderColor: colors.border,
+    backgroundColor: '#192D40',
+    borderColor: '#192D40',
+    padding: 20,
+    gap: 12,
   },
   summaryInfo: {
     flexDirection: 'column',
@@ -409,11 +413,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   summaryCount: {
-    color: colors.neutral,
+    ...typography.titleMd,
+    color: colors.surface,
     flex: 1,
   },
   totalSize: {
-    color: colors.secondary,
+    color: '#C9D3DC',
     fontFamily: 'Roboto',
   },
   sectionHeader: {
@@ -425,7 +430,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   sectionTitle: {
-    color: colors.secondary,
+    ...typography.titleMd,
+    color: '#192D40',
   },
   sectionSub: {
     color: colors.secondary,
@@ -441,7 +447,7 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     gap: spacing.sm,
     justifyContent: 'space-between',
-    padding: spacing.sm,
+    padding: spacing.md,
     borderLeftWidth: 2,
     borderLeftColor: colors.secondary,
   },
@@ -545,7 +551,7 @@ const styles = StyleSheet.create({
   operatorReloadPressed: { backgroundColor: '#F3E3B2' },
   operatorReloadDisabled: { opacity: 0.5 },
   operatorReloadText: { ...typography.labelLg, color: colors.neutral },
-  reloadNote: { color: colors.secondary, lineHeight: 20 },
+  reloadNote: { color: '#C9D3DC', lineHeight: 20 },
   purgeCard: {
     marginBottom: spacing.xl,
     gap: spacing.sm,
@@ -558,7 +564,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   purgeTitle: {
-    color: colors.neutral,
+    ...typography.titleMd,
+    color: '#192D40',
     flex: 1,
   },
   purgeDesc: {
