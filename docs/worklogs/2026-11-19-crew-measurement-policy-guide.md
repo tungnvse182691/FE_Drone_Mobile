@@ -62,3 +62,14 @@ Artifacts tại .cache/crew-measurement-policy-20261119/ (untracked, không comm
 - Checkpoint tích hợp screen/tests/worklog được commit local riêng sau các gate trên; SHA tra git log theo subject feat(crew): show measurement policy guide in conditional task editors.
 
 Không sửa BE, threshold, số đo thực, navigation hoặc workflow. Các artifact untracked cũ được bảo toàn.
+
+## Checkpoint: chỉ hiện hướng dẫn cho số đo có rule (owner yêu cầu tiếp nối)
+
+- Mode IMPLEMENT_AND_SELF_REVIEW; base main 793b61e; fetch origin/main trước edit, không tracked WIP. Remote vẫn 0206b84; không push/đổi branch.
+- Sửa đúng CrewFastTrackMeasurementGuide.tsx: chỉ khi policy CONFIGURED, revision/hash/source và toàn bộ rules hợp lệ nhưng không có code tương ứng mới trả notApplicable và ẩn panel. Không dùng label Bổ sung hay hardcode danh sách loại đo để quyết định ẩn. Policy thiếu/hỏng/revoked và lỗi đọc vẫn có thông báo + retry; không biến unknown thành không áp dụng.
+- Không sửa API, giá trị/đơn vị input, save/assessment/start/finish, navigation hay authority. Tests chứng minh Area có rule vẫn hiện khoảng riêng, cả năm loại không có rule đều ẩn, chuyển lại loại có rule hiện đúng, không đọc lại khi đổi loại.
+- TDD: red.log 17 pass/2 fail trước sửa; targeted 40/40 PASS; full regression 1888/1888 PASS, 0 fail/cancel/skip, 125168.4067ms. npx tsc --noEmit exit 0; git diff --check PASS. Logs tại .cache/crew-policy-optional-20261119/.
+- Android Pixel_6_Pro: mở trực tiếp năm editor Độ chênh tấm, Diện tích hư hại, Kích thước xói lở, Chiều dài/Chiều rộng chỗ lõm trên fixture SUA-NHANH-MOI-05; hierarchy xác nhận phần nhập vẫn có và panel không hiện sau đọc. Quay lại Độ sâu: 2 cm và ngưỡng 0–10 cm còn nguyên. Không lưu nháp hay gửi mutation. Những mục thêm trống để kiểm tra được bỏ qua nút có sẵn; không sửa nháp đã lưu.
+- before.png và after.png: Độ chênh tấm trước/sau, đã xem ảnh. Before dùng mm, sau thêm lại editor mặc định cm sau Fast Refresh; không phải bằng chứng đổi input/unit bất biến. retained-depth.png ghi ngưỡng thật còn hiện. Fast Refresh làm editor quay về hồ sơ theo state hiện tại; không restart/reload thủ công app/emulator.
+- NOT_RUN native: offline/revoked/malformed policy/session switch, task thứ hai có Area rule, full start/finish/upload. Các nhánh lỗi/rule/session được kiểm bằng harness; không nhận là Android E2E toàn workflow. Không thêm motion mới, giữ CrewMotion/Reduce Motion hiện có; FPS chưa đo.
+- Self-review diff: chỉ component trình bày, targeted test và worklog; giữ MaterialIcons, không secret literal, không chi phí/định mức. Git artifacts/untracked cũ được giữ nguyên.

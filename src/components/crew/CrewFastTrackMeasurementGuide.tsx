@@ -33,7 +33,7 @@ export function measurementPolicyDisplayRange(view: RepairEligibilityReadView, m
 }
 
 /** Presentation only: never grants execution authority or modifies measurements. */
-export function measurementPolicyGuide(view: RepairEligibilityReadView, measurement: Measurement) {
+export function measurementPolicyGuide(view: RepairEligibilityReadView, measurement: Measurement): {range: string | null; message: string; notApplicable?: boolean} {
   if (view.policyState !== 'CONFIGURED' || !view.policyRevisionId || !view.policyContentHash ||
       view.missingReasons.some(reason => reason === 'PINNED_POLICY_SOURCE_MISMATCH' || reason === 'POLICY_UNAVAILABLE') ||
       !Array.isArray(view.rules) || !view.rules.length) return unknown;
@@ -46,7 +46,8 @@ export function measurementPolicyGuide(view: RepairEligibilityReadView, measurem
     codes.add(rule.code);
   }
   const rule = view.rules.find(candidate => candidate.code === measurement.type);
-  if (!rule) return {range:null, message:'Chính sách chưa trả ngưỡng cho số đo này.'};
+  // Absence in a validated policy is not a read failure or a measurement error.
+  if (!rule) return {range:null, message:'', notApplicable:true};
   // Preserve all server decimal digits; do not round a threshold into a different boundary.
   const number = (value: number) => String(value).replace('.', ',');
   const range = `${number(rule.minimum)}–${number(rule.maximum)} ${rule.unit}`;
@@ -88,6 +89,7 @@ function MeasurementPolicyRead({identity, projectId, taskId, measurement}: Props
   }, [identity.actor, identity.role, identity.environment, identity.scope, identity.partition, projectId, taskId]);
   const guide = view && sameQueueIdentity(identity) ? measurementPolicyGuide(view, measurement) : null;
   const displayRange = view && guide?.range ? measurementPolicyDisplayRange(view, measurement) : null;
+  if (state === 'ready' && guide?.notApplicable) return null;
   return <View style={styles.panel}>
     <CrewPressable accessibilityRole="button" accessibilityLabel="Chi tiết ngưỡng sửa nhanh" accessibilityState={{expanded}} onPress={()=>setExpanded(value=>!value)} style={styles.heading}>
       <MaterialIcons name="info-outline" size={18} color={colors.primaryDark}/><Text style={styles.title}>Ngưỡng sửa nhanh</Text>{displayRange?<Text style={styles.range}>{displayRange}</Text>:null}<MaterialIcons name={expanded?'expand-less':'expand-more'} size={20} color={colors.primaryDark}/>

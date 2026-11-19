@@ -33,7 +33,27 @@ test('each code uses its own server range and never borrows another rule',async(
  const v=policy();v.rules.push({code:'Area',unit:'m²',minimum:0.1,maximum:1.75});
  const h=mount(v);h.s.render();await h.s.flush();h.props.measurement={type:'Area',unit:'m²',value:1};h.s.render();
  assert.match(h.text(),/0,1–1,75 m²/);assert.doesNotMatch(h.text(),/0–10/);
- h.props.measurement.type='DepressionWidth';h.s.render();assert.match(h.text(),/chưa trả ngưỡng/);assert.doesNotMatch(h.text(),/0,1–1,75/);h.s.unmount();
+ h.props.measurement.type='DepressionWidth';h.s.render();assert.equal(h.s.nodes().length,0);h.s.unmount();
+});
+
+test('valid policy without a rule hides guidance for all five additional measurement types',async()=>{
+ const h=mount();h.s.render();await h.s.flush();
+ for(const type of ['SlabFaultingHeight','Area','ShoulderErosionExtent','DepressionLength','DepressionWidth']){
+  h.props.measurement={type,unit:type==='Area'?'m²':'cm',value:2};h.s.render();
+  assert.equal(h.s.nodes().length,0,type);assert.equal(h.props.measurement.value,2);
+ }
+ assert.equal(h.reads(),1);
+ h.props.measurement={type:'DepressionDepth',unit:'cm',value:2};h.s.render();
+ assert.match(h.text(),/0–10 cm/);h.s.unmount();
+});
+
+test('absent rule must not hide read failures or untrusted policy',async()=>{
+ for(const change of [v=>v.policyState='REVOKED',v=>v.rules=undefined,v=>v.rules=[],v=>v.rules[0].maximum=NaN,v=>v.missingReasons.push('PINNED_POLICY_SOURCE_MISMATCH')]){
+  const v=policy();change(v);const h=mount(v);h.props.measurement.type='Area';h.s.render();await h.s.flush();
+  assert.match(h.text(),/Chưa xác định/);assert.ok(h.s.nodes().find(n=>n.props.accessibilityLabel==='Đọc lại ngưỡng sửa nhanh'));h.s.unmount();
+ }
+ const h=mount(policy(),{read:async()=>{throw Error('offline');}});h.props.measurement.type='Area';h.s.render();await h.s.flush();
+ assert.match(h.text(),/Chưa đọc được/);assert.equal(h.props.measurement.value,2);h.s.unmount();
 });
 for(const change of [v=>v.policyState='REVOKED',v=>v.policyRevisionId=null,v=>v.policyContentHash=null,v=>v.rules=undefined,v=>v.rules[0].maximum=NaN,v=>v.rules[0].minimum=11,v=>v.rules[0].minimum=-1,v=>v.rules.push({...v.rules[0]}),v=>v.rules[0].maximum='10',v=>v.missingReasons.push('PINNED_POLICY_SOURCE_MISMATCH')]){
  test('unusable policy never displays a numerical threshold: '+change,async()=>{const v=policy();change(v);const h=mount(v);h.s.render();await h.s.flush();assert.doesNotMatch(h.text(),/0–10 cm/);assert.match(h.text(),/Chưa xác định/);h.s.unmount();});
