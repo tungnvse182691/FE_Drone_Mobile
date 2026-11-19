@@ -427,6 +427,13 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       }
     }
   };
+  const renderHistory=(rows:RepairJournalRecord[],detailed:boolean)=>rows.map(c=><Card key={c.key} style={styles.card}>
+      <Text style={styles.body}>{{assessment:'Đánh giá',start:'Bắt đầu',finish:'Kết thúc thi công',attempt:'Nộp hồ sơ',supplement:'Bổ sung'}[c.operation]}: {{PREPARED:'Đã lưu lệnh',PENDING:'Đang chờ xác nhận',IN_FLIGHT:'Đang gửi',UNKNOWN_OUTCOME:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã ghi nhận',CONFIRMED:'Đã đối soát',REJECTED:'Bị từ chối'}[c.phase] ?? 'Cần đối soát'}</Text>
+      {c.receipt?<><Text style={styles.hint}>Biên nhận máy chủ đã lưu.</Text>{detailed ? <Text selectable style={styles.hint}>Mã biên nhận: {String(c.receipt.data.id??c.receipt.data.attemptId)}</Text> : null}<Text>{(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='READY'?'Đủ thông tin theo máy chủ':(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='INCOMPLETE'?'Còn thiếu thông tin':'Đã ghi nhận mốc thi công'}</Text>
+        {detailed&&Array.isArray(c.receipt.data.missingReasons)?c.receipt.data.missingReasons.map(r=><Text key={String(r)}>{String(r)}</Text>):null}</>:null}
+      {c.phase==='REJECTED'&&c.rejectionResolved?<Text>Đã giải quyết bằng chứng từ chối; lệnh gốc được giữ trong lịch sử.</Text>:null}
+      {c.phase==='REJECTED'&&!c.rejectionResolved?<Text>Máy chủ đã từ chối thao tác. Lịch sử được giữ nguyên; cần kiểm tra quyền và điều kiện trước khi tiếp tục.</Text>:null}
+    </Card>);
   return <View style={{ gap: spacing.sm }}>
     <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[styles.detailHeading,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại ngữ cảnh sửa chữa" accessibilityState={{disabled:busy||result.status==='loading',busy:busy||result.status==='loading'}} disabled={busy||result.status==='loading'} style={styles.refreshButton} onPress={()=>{void result.reload();void load();}}>
@@ -481,13 +488,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {assessmentChanged&&!started&&!finished?<Text accessibilityRole="alert" style={styles.hint}>Số đo, ảnh hoặc vị trí đã thay đổi trong nháp. Đánh giá cũ chưa bao gồm thay đổi này; cần gửi lại để máy chủ kiểm tra trước khi thi công.</Text>:null}
     {sourceReady&&(!ready||assessmentChanged)&&!started&&!finished?<Button variant="primary" title={assessment?'Gửi lại đánh giá trước sửa':'Gửi đánh giá trước sửa'} disabled={busy||!loaded||!sourceReady||!!assessmentBlock||!!pending||rejected||activeHistory.some(c=>c.operation!=='assessment')||result.status!=='ready'||result.repairContext?.status!=='Assigned'} onPress={()=>void run('assessment')}/>:null}
     </>:null}
-    {history.filter(c=>showRepairTechnical||c.phase!=='CONFIRMED').map(c=><Card key={c.key} style={styles.card}>
-      <Text style={styles.body}>{{assessment:'Đánh giá',start:'Bắt đầu',finish:'Kết thúc thi công',attempt:'Nộp hồ sơ',supplement:'Bổ sung'}[c.operation]}: {{PREPARED:'Đã lưu lệnh',PENDING:'Đang chờ xác nhận',IN_FLIGHT:'Đang gửi',UNKNOWN_OUTCOME:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã ghi nhận',CONFIRMED:'Đã đối soát',REJECTED:'Bị từ chối'}[c.phase] ?? 'Cần đối soát'}</Text>
-      {c.receipt?<><Text style={styles.hint}>Biên nhận máy chủ đã lưu.</Text>{showRepairTechnical ? <Text selectable style={styles.hint}>Mã biên nhận: {String(c.receipt.data.id??c.receipt.data.attemptId)}</Text> : null}<Text>{(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='READY'?'Đủ thông tin theo máy chủ':(c.receipt.data.readiness??c.receipt.data.intakeReadiness)==='INCOMPLETE'?'Còn thiếu thông tin':'Đã ghi nhận mốc thi công'}</Text>
-        {showRepairTechnical&&Array.isArray(c.receipt.data.missingReasons)?c.receipt.data.missingReasons.map(r=><Text key={String(r)}>{String(r)}</Text>):null}</>:null}
-      {c.phase==='REJECTED'&&c.rejectionResolved?<Text>Đã giải quyết bằng chứng từ chối; lệnh gốc được giữ trong lịch sử.</Text>:null}
-      {c.phase==='REJECTED'&&!c.rejectionResolved?<Text>Máy chủ đã từ chối thao tác. Lịch sử được giữ nguyên; cần kiểm tra quyền và điều kiện trước khi tiếp tục.</Text>:null}
-    </Card>)}
+    {renderHistory(history.filter(c=>c.phase!=='CONFIRMED'),false)}
     {stage!=='closeout'&&stage!=='overview'?<>
     {assessment&&!ready?<View style={styles.repairNotice}><MaterialIcons name="info-outline" size={20} color={colors.secondary}/><View style={[styles.flex,{gap:spacing.sm}]}><Text style={typography.labelLg}>Đánh giá cần bổ sung</Text>{assessmentReasons.length?assessmentReasons.map(reason=><Text key={reason} style={styles.body}>{reason}</Text>):<Text style={styles.body}>Chưa có lý do cụ thể. Tải lại để kiểm tra.</Text>}<Button variant="text" title="Mở hồ sơ để bổ sung" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/></View></View>:null}
     {fastTrack?<Card style={styles.card}><CrewFastTrackEligibility key={JSON.stringify([task.projectId,task.id,result.itemVersion,assessment?.key])} projectId={task.projectId} taskId={task.id}/><Text style={styles.hint}>Khi bắt đầu, ứng dụng kiểm tra lại điều kiện với máy chủ. Nếu còn thiếu, thi công chưa được mở.</Text></Card>:null}
@@ -533,12 +534,15 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     </View>:null}
     {stage==='progress'&&finished?<Button variant="secondary" title="Mở hồ sơ sau thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {stage==='closeout'&&!finished&&!serverSubmitted?<Button style={styles.compactAction} variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}
-    {notice&&(notice!=='Đã lưu biên nhận máy chủ và đối chiếu hạng mục.'||showRepairTechnical)?<View style={styles.repairNotice}><MaterialIcons name="info-outline" size={20} color={colors.secondary}/><Text style={[styles.hint,styles.flex]} accessibilityLiveRegion="polite">{notice}</Text></View>:null}
+    {notice&&notice!=='Đã lưu biên nhận máy chủ và đối chiếu hạng mục.'?<View style={styles.repairNotice}><MaterialIcons name="info-outline" size={20} color={colors.secondary}/><Text style={[styles.hint,styles.flex]} accessibilityLiveRegion="polite">{notice}</Text></View>:null}
     </View>
     {result.repairContext ? <>
-      {stage==='overview'||showRepairTechnical?<View style={stage==='overview'?styles.overviewPlan:styles.repairPlan}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{crewRepairPlanLabel(result.repairContext.repairPlan)}</Text></View>:null}
+      {stage==='overview'?<View style={styles.overviewPlan}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{crewRepairPlanLabel(result.repairContext.repairPlan)}</Text></View>:null}
       <Button style={styles.repairTechnicalLink} variant="text" icon={<MaterialIcons name={showRepairTechnical?'expand-less':'history'} size={20} color={colors.secondary}/>} title={showRepairTechnical?'Thu gọn thông tin':stage==='closeout'?'Phương án và lịch sử':'Xem lịch sử và thông tin kỹ thuật'} onPress={()=>setShowRepairTechnical(v=>!v)}/>
       {showRepairTechnical ? <View style={styles.technicalPanel}>
+        {stage!=='overview'?<View style={styles.repairPlan}><Text style={typography.labelLg}>Phương án xử lý</Text><Text style={styles.body}>{crewRepairPlanLabel(result.repairContext.repairPlan)}</Text></View>:null}
+        {renderHistory(history,true)}
+        {notice==='Đã lưu biên nhận máy chủ và đối chiếu hạng mục.'?<Text style={styles.hint} accessibilityLiveRegion="polite">{notice}</Text>:null}
         <View style={styles.technicalHeading}><MaterialIcons name="link" size={20} color="#1D4ED8"/><Text style={typography.labelLg}>Thông tin liên kết</Text></View>
         <View style={styles.technicalStatus}><MaterialIcons name="info-outline" size={18} color="#1D4ED8"/><Text style={styles.technicalStatusText}>{({Assigned:'Đã phân công',InProgress:'Đang thi công',Confirmed:'Đã xác nhận'} as Record<string,string>)[result.repairContext.status]??'Đã đọc trạng thái từ máy chủ'}</Text></View>
         {[

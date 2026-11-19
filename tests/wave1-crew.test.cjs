@@ -15,6 +15,13 @@ test('W1-01 restored history reaches Progress/Complete without authorizing new s
  assert.ok(!JSON.stringify(f.s.nodes()).includes('Biên nhận máy chủ đã lưu.'));
  await f.s.press(stage==='closeout'?'Phương án và lịch sử':'Xem lịch sử và thông tin kỹ thuật');await f.s.flush();
  assert.ok(JSON.stringify(f.s.nodes()).includes('Biên nhận máy chủ đã lưu.'));
+ const expanded=f.s.nodes();
+ const disclosure=expanded.findIndex(n=>n.props.title==='Thu gọn thông tin');
+ const receipt=expanded.findIndex(n=>n.type==='Text'&&JSON.stringify(n.props.children).includes('Biên nhận máy chủ đã lưu.'));
+ assert.ok(receipt>disclosure,'confirmed receipt must expand below the pressed disclosure, not above the closeout card');
+ await f.s.press('Thu gọn thông tin');await f.s.flush();
+ assert.ok(!JSON.stringify(f.s.nodes()).includes('Biên nhận máy chủ đã lưu.'));
+
  if(stage==='progress')assert.equal(f.s.nodes().find(n=>n.props.title==='Bắt đầu thi công').props.disabled,true);
  assert.equal(f.posts(),0);f.s.unmount();
  }
