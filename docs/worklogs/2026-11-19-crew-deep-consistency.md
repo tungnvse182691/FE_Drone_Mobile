@@ -64,3 +64,12 @@ File: `app/(crew)/repair-correction.tsx`. Summary nền kem padding12/gap8; titl
 - Evidence: `B3-before-top.png` (saved, chưa xem trực tiếp); `B3-before-history.png` (đã xem, gồm phần top) → `B3-after-top.png`, `B3-after-history.png` (đã xem, ổn định). Cùng task/state, disclosure mở lại sau Fast Refresh.
 - Self-run TypeScript exit0; targeted5 files96/96 PASS13456.0826ms (`B3-targeted.log`); full1846/1846 PASS165696.0049ms (`B3-full.log`). AST against228a91b và manual diff PASS; git diff --check PASS. Không đổi handlers, disabled/loading, data/conditions hay API.
 - NOT_TESTED: SUPPLEMENT/ACCEPT/waiting states native, offline/error, OS Reduce Motion/font scaling/FPS, mutation/upload/server receipts. Chưa có owner visual approval.
+
+## C — Khuyết tật thuộc nhiệm vụ
+
+Files: `app/(crew)/report-defect.tsx`, `tests/crew-ui-patch11.test.cjs`. Nhãn sentence case đưa vào cùng khung nội dung; ID trắng trước title regular16/22 trên nền kem. Banner một lớp thay card trong card, vị trí dùng divider; nhóm padding12/gap8, nút xem hồ sơ theo nội dung48dp nền kem. Không bỏ dữ liệu. Bỏ replayOnFocus, vẫn giữ entry transition. Test chỉ cập nhật bốn nhãn presentation từ uppercase sang sentence case; không nới gate nghiệp vụ.
+
+- Android cùng fixture A: cuộn đầu/cuối, mở Xem hồ sơ đã nộp → đúng Hồ sơ hiện trường ebcdca88, Back về Khuyết tật; Về chi tiết nhiệm vụ → đúng task Chi tiết. Không mutation; missing classification/coords vẫn đúng nguồn.
+- Evidence `C-before-top.png` / `C-before-lower.png` → `C-after-top.png` / `C-after-lower.png`. Before-lower và after-top đã xem trực tiếp. Cùng task/state; lower offset thay đổi khi tổng chiều cao giảm. Không dùng màn Hồ sơ làm ảnh C.
+- Self-run TypeScript exit0; targeted5 files77/77 PASS9606.3681ms (`C-targeted.log`); full1846/1846 PASS170221.8655ms (`C-full.log`). AST against67445a2 non-JSX/action props PASS; manual JSX điều kiện/nguồn/route params không đổi, diff check PASS.
+- NOT_TESTED: có tọa độ/phân loại và chưa có hồ sơ trên native, offline/error, font scaling, OS Reduce Motion toggle, FPS. Không camera/upload/submit. Chưa owner visual approval.
