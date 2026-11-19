@@ -64,6 +64,7 @@ export default function DroneHomeScreen() {
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Trang chủ" variant="operatorCompact" />}>
+      <View style={styles.overview}>
       <View style={styles.greetingHeader}>
         <Text style={[typography.titleMd, styles.greetingName]}>
           Chào, {user?.full_name?.trim() || 'Phi công'}
@@ -76,14 +77,15 @@ export default function DroneHomeScreen() {
           { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'autorenew' as const, color: colors.brandGold },
           { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'check-circle' as const, color: colors.success },
         ].map(metric => (
-          <View key={metric.key} style={styles.metricColumn}>
+          <View key={metric.key} style={[styles.metricColumn, metric.key !== 'loaded' && styles.metricDivider]}>
             <MaterialIcons name={metric.icon} size={20} color={metric.color} accessibilityLabel={metric.label} />
             <Text testID={`operator-kpi-${metric.key}`} style={{ ...styles.metricNumber, color: metric.color }}>{metric.count}{''}</Text>
-            <Text style={styles.metricLabel} numberOfLines={2}>{metric.label}</Text>
+            <Text style={styles.metricLabel}>{metric.label}</Text>
           </View>
         ))}
       </View>
       {hasMore ? <Text style={styles.pageNote}>Số liệu của trang đầu đã tải.</Text> : null}
+      </View>
       {/* Section Tasks */}
       <View style={styles.sectionHeader}>
         <View style={styles.sectionHeading}>
@@ -132,20 +134,22 @@ export default function DroneHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  greetingHeader: { gap: 4, marginBottom: 16 },
-  greetingName: { color: colors.neutral, lineHeight: 26 },
+  overview: { backgroundColor: '#FFFBF0', borderRadius: 20, padding: 16, marginBottom: 20, gap: 16 },
+  greetingHeader: { gap: 4 },
+  greetingName: { color: colors.neutral, fontSize: 18, fontWeight: '500', lineHeight: 26 },
   greetingMeta: { ...typography.caption, lineHeight: 18, color: colors.secondary },
-  metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 12, marginBottom: 24 },
-  metricColumn: { ...operatorAppearance.card, flex: 1, minWidth: 0, gap: 4, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 8 },
+  metrics: { flexDirection: 'row', alignItems: 'stretch', borderTopWidth: 1, borderTopColor: '#E9DFBE', paddingTop: 12 },
+  metricColumn: { flex: 1, minWidth: 0, gap: 4, alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6 },
+  metricDivider: { borderLeftWidth: 1, borderLeftColor: '#E9DFBE' },
   metricNumber: { fontFamily: 'Roboto-Medium', fontSize: 28, fontWeight: '500', lineHeight: 36, color: colors.neutral, fontVariant: ['tabular-nums'] },
-  metricLabel: { ...typography.caption, lineHeight: 17, minHeight: 34, textAlign: 'center', color: colors.secondary },
-  pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary, marginTop: 8 },
+  metricLabel: { ...typography.caption, lineHeight: 18, textAlign: 'center', color: colors.secondary },
+  pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: 8 },
   sectionTitle: { color: colors.neutral },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   errorCard: { ...operatorAppearance.card, padding: 12, marginBottom: 12 },
   errorText: { ...typography.bodyMd, color: colors.secondary },
-  seeAllPress: { minHeight: 48, minWidth: 48, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  seeAllPress: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#FFF5D9', flexDirection: 'row', alignItems: 'center', gap: 4 },
   seeAll: { ...typography.caption, color: colors.primaryDark },
   taskList: { gap: 12, paddingBottom: 32 },
 });

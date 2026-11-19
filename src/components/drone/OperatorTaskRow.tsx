@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { AnimatedPressable } from '../AnimatedPressable';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Card } from '../Card';
 import { operatorAppearance } from './appearance';
@@ -36,11 +37,15 @@ export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
     : ['SUPPLEMENT_REQUIRED', 'SUPPLEMENTREQUIRED'].includes(status) ? 'error-outline'
     : ['ACCEPTED', 'IN_PROGRESS', 'INPROGRESS'].includes(status) ? 'flight-takeoff' : 'schedule';
 
-  return <Pressable onPress={onPress} style={styles.touch}
+  return <AnimatedPressable onPress={onPress} style={styles.touch} pressedScale={0.985}
     android_ripple={{ color: operatorAppearance.pressed }}
     accessibilityRole="button" accessibilityLabel={`Xem nhiệm vụ ${code}, ${label}`}>
-    <Card style={{ ...styles.card, borderLeftWidth: 4, borderLeftColor: visual.rail }}>
+    <Card style={styles.card}>
       {ongoing ? <Text testID="operator-current-task" style={styles.currentTask}>NHIỆM VỤ HIỆN TẠI</Text> : null}
+      <View style={styles.metadata}>
+        <Text style={styles.code}>Mã {code}</Text>
+        <Text style={styles.metaText}>{segments} phân đoạn</Text>
+      </View>
       <View style={styles.heading}>
         <Text style={styles.title}>Khảo sát {operatorTaskTargetBand(task)}</Text>
         <MaterialIcons name="chevron-right" size={20} color={colors.secondary} />
@@ -50,12 +55,8 @@ export function OperatorTaskRow({ task, onPress }: OperatorTaskRowProps) {
         <MaterialIcons name={icon} size={16} color={visual.ink} />
         <Text style={[styles.statusText, { color: visual.ink }]}>{label}</Text>
       </View>
-      <View style={styles.metadata}>
-        <Text style={styles.metaText}>{segments} phân đoạn</Text>
-        <Text style={styles.metaText}>Mã {code}</Text>
-      </View>
     </Card>
-  </Pressable>;
+  </AnimatedPressable>;
 }
 
 export function OperatorTaskSkeleton() {
@@ -69,12 +70,13 @@ export function OperatorTaskSkeleton() {
 const styles = StyleSheet.create({
   touch: { minHeight: 48, borderRadius: 12, overflow: 'hidden' },
   currentTask: { ...typography.labelSm, color: colors.secondary },
-  card: { ...operatorAppearance.card, padding: 16, gap: 8 },
+  card: { ...operatorAppearance.card, borderColor: colors.border, padding: 16, gap: 10 },
   heading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { ...typography.titleMd, lineHeight: 24, color: colors.neutral, flex: 1, minWidth: 0 },
+  title: { ...typography.titleMd, fontWeight: '500', lineHeight: 24, color: colors.neutral, flex: 1, minWidth: 0 },
   status: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 9999, backgroundColor: colors.surfaceAlt, maxWidth: '100%' },
   statusText: { ...typography.caption, lineHeight: 18, color: colors.secondary, flexShrink: 1 },
-  metadata: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
+  metadata: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  code: { ...typography.caption, fontFamily: 'Roboto-Medium', lineHeight: 18, color: colors.primaryDark, backgroundColor: '#FFF5D9', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   metaText: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   skeletonGroup: { gap: 12 },
   skeletonCard: { borderRadius: 12, padding: 16, gap: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },

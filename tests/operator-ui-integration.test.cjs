@@ -8,13 +8,13 @@ test('integrated row marks only accepted/in-progress tasks and preserves the nav
     const s = screen('src/components/drone/OperatorTaskRow.tsx', {
       exportName: 'OperatorTaskRow',
       props: { task: { id: 'task-1', status, scope: [] }, onPress: () => presses++ },
-      modules: { '../Card': { Card: 'Card' } },
+      modules: { '../Card': { Card: 'Card' }, '../AnimatedPressable': { AnimatedPressable: 'AnimatedPressable' } },
     });
     s.render();
     const markers = s.nodes().filter(n => n.props.testID === 'operator-current-task');
     assert.equal(markers.length, ['Accepted', 'ACCEPTED', 'InProgress', 'IN_PROGRESS'].includes(status) ? 1 : 0, status);
     if (markers.length) assert.deepEqual(markers[0].props.children, ['NHIỆM VỤ HIỆN TẠI']);
-    s.nodes().find(n => n.type === 'Pressable').props.onPress();
+    s.nodes().find(n => n.type === 'AnimatedPressable').props.onPress();
     assert.equal(presses, 1, status);
     s.unmount();
   }

@@ -42,14 +42,14 @@ test('UI05 first loading, empty and failed reads remain distinct',async()=>{
 });
 test('UI05 shared row prioritizes real scope and status, retains exact navigation callback',()=>{
  let pressed=0;const t=fixture('Submitted');
- const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:t,onPress:()=>pressed++},modules:{'../Card':{Card:'Card'}}});
+ const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:t,onPress:()=>pressed++},modules:{'../Card':{Card:'Card'},'../AnimatedPressable':{AnimatedPressable:'AnimatedPressable'}}});
  s.render();assert.match(text(s),/Mặt đường/);assert.match(text(s),/Đã nộp/);assert.match(text(s),/2 phân đoạn/);
  assert.doesNotMatch(text(s),new RegExp(t.projectId+'|'+t.id+'|Nhiệm vụ hiện tại|Chi tiết'));
- const p=s.nodes().find(n=>n.type==='Pressable');p.props.onPress();assert.equal(pressed,1);
+ const p=s.nodes().find(n=>n.type==='AnimatedPressable');p.props.onPress();assert.equal(pressed,1);
  assert.ok(p.props.style.minHeight>=48);assert.equal(s.nodes().find(n=>n.type==='Card').props.style.borderRadius,12);s.unmount();
 });
 test('UI05 shared row handles unknown enums without invented scope, deadline or priority',()=>{
- const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:{...task,status:'FUTURE',scope:[{targetBand:'FUTURE',segmentIds:[]}]},onPress(){}},modules:{'../Card':{Card:'Card'}}});
+ const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:{...task,status:'FUTURE',scope:[{targetBand:'FUTURE',segmentIds:[]}]},onPress(){}},modules:{'../Card':{Card:'Card'},'../AnimatedPressable':{AnimatedPressable:'AnimatedPressable'}}});
  s.render();assert.match(text(s),/Chưa xác định/);assert.match(text(s),/Đang cập nhật/);assert.doesNotMatch(text(s),/ĐH\.05|Ưu tiên|Hạn|Hiện tại/);s.unmount();
 });
 test('UI05 header removes fabricated notifications only in Operator compact variant',()=>{

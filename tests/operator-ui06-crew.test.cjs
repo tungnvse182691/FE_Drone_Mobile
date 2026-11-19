@@ -9,12 +9,12 @@ for(const [status,rail,label] of [
  ['Submitted','#2D3748','Đã nộp'],['COMPLETED','#2F9E44','Hoàn tất'],
  ['SUPPLEMENT_REQUIRED','#F59E0B','Cần bổ sung'],['Rejected','#E5484D','Đã từ chối'],
  ['CANCELLED','#E5484D','Đã huỷ'],['POSTPONED','#F59E0B','Tạm hoãn'],['FUTURE','#2D3748','Đang cập nhật']
-])test('UI06 Crew row maps server status '+status+' to rail, dot and readable label',()=>{
+])test('UI06 Crew row maps server status '+status+' to status dot and readable label',()=>{
  const t={...task,status};let taps=0;
- const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:t,onPress:()=>taps++},modules:{'../Card':{Card:'Card'}}});s.render();
- const card=s.nodes().find(n=>n.type==='Card');assert.equal(card.props.style.borderLeftWidth,4);assert.equal(card.props.style.borderLeftColor,rail);
+ const s=screen('src/components/drone/OperatorTaskRow.tsx',{exportName:'OperatorTaskRow',props:{task:t,onPress:()=>taps++},modules:{'../Card':{Card:'Card'},'../AnimatedPressable':{AnimatedPressable:'AnimatedPressable'}}});s.render();
+ const card=s.nodes().find(n=>n.type==='Card');assert.equal(card.props.style.borderLeftWidth,undefined);assert.equal(card.props.style.borderColor,'#E2E5E9');
  const dot=s.nodes().find(n=>n.props.testID==='operator-status-dot');assert.equal(dot.props.style.width,6);assert.equal(dot.props.style.backgroundColor,rail);
- assert.match(text(s),new RegExp(label));s.nodes().find(n=>n.type==='Pressable').props.onPress();assert.equal(taps,1);assert.equal(t.status,status);s.unmount();
+ assert.match(text(s),new RegExp(label));s.nodes().find(n=>n.type==='AnimatedPressable').props.onPress();assert.equal(taps,1);assert.equal(t.status,status);s.unmount();
 });
 
 test('UI06 Detail keeps raw identities and versions in expanded technical content only',async()=>{
