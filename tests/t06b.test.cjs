@@ -28,7 +28,8 @@ function harness(options={}){
  const workflow=load('src/api/crewRepairWorkflow.ts',{'./crewApi':runtime.api,'./crewRepairDraft':journal,'expo-crypto':{randomUUID}});
  const command=()=>({identity:{...identity,packageId:ids.packageId,itemId:ids.itemId,bindingId:ids.bindingId,assignmentId:ids.assignmentId},key:randomUUID(),operation:'assessment',itemVersion:version,payload:{originId:randomUUID(),fieldFirstStartId:ids.first,measurements:[measurement()],evidence:[evidence()]}});
  const draft=()=>({...identity,measurements:[measurement()],locationProof:null,captures:[{id:ids.capture,uri:'file:///fixture.jpg',purpose:'BEFORE',verified:true,upload:{id:ids.upload,fileId:ids.file},checksum:'a'.repeat(64),mediaType:'image/jpeg',size:12,capturedAt:null}]});
- return {identity,get raw(){return raw;},reopen:()=>{raw.close();raw=new DatabaseSync(options.file);},port,api,runtime,workflow,task,command,draft,calls,posts:()=>posts,switch:()=>current={...identity,scope:JSON.stringify([ids.actor,'B'])},fail:e=>fail=e,saveFail:v=>saveFail=v};
+ runtime.fieldDraft=async()=>draft();
+ return {identity,assessmentMatchesDraft:journal.repairAssessmentMatchesDraft,get raw(){return raw;},reopen:()=>{raw.close();raw=new DatabaseSync(options.file);},port,api,runtime,workflow,task,command,draft,calls,posts:()=>posts,switch:()=>current={...identity,scope:JSON.stringify([ids.actor,'B'])},fail:e=>fail=e,saveFail:v=>saveFail=v};
 }
 test('T06B journal records history and allows start only after confirmed READY assessment',async()=>{
  const h=harness(),j=await h.runtime.journal(),c=h.command();await j.prepare(c);

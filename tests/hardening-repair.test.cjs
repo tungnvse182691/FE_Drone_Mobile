@@ -17,7 +17,7 @@ for(const phase of ['PREPARED','PENDING','ACKNOWLEDGED','CONFIRMED','REJECTED'])
  assert.equal(history.length,1);assert.equal(history[0].identity.scope,c.identity.scope);
  if(phase!=='CONFIRMED')assert.equal((await h.workflow.dispatchRepair(i,c.key,h.runtime)).phase,'CONFIRMED');
  assert.equal(h.raw.prepare('SELECT payload FROM local_draft WHERE kind=?').get('T06A_REPAIR_COMMAND').payload,original);
- if(phase==='CONFIRMED'){const start=await h.workflow.prepareRepairStart(i,h.runtime);assert.equal(start.payload.assessmentId,ids.assessment);assert.equal(start.identity.scope,i.scope);}
+ if(phase==='CONFIRMED'){h.runtime.fieldDraft=async()=>({...h.draft(),...i});const start=await h.workflow.prepareRepairStart(i,h.runtime);assert.equal(start.payload.assessmentId,ids.assessment);assert.equal(start.identity.scope,i.scope);}
 });
 test('HARDEN 401 remains unresolved without terminal business rejection',async()=>{const h=fixture(),j=await h.runtime.journal(),c=await j.prepare(h.command());h.fail({response:{status:401}});await assert.rejects(h.workflow.dispatchRepair(h.identity,c.key,h.runtime));assert.equal((await j.read(c.key)).phase,'PENDING');});
 const path=require('node:path'),{DatabaseSync}=require('node:sqlite');

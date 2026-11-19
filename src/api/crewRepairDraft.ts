@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/auth';
 import { passwordSessionIdentity } from './authApi';
 import { apiClient } from './client';
 import { isCrewResourceId, isRepairItemVersion } from './crewApi';
+import type { FieldDraft } from './crewFieldDraft';
 
 export interface RepairIdentity {
   actor: string; scope: string; environment: string; projectId: string; taskId: string;
@@ -60,6 +61,24 @@ function canonical(value: unknown): string {
     }).join(',') + '}';
   }
   throw new Error('repair_payload_invalid');
+}
+/** Compare submitted content, excluding transport origin/key/device metadata. */
+export function sameRepairAssessmentSource(a: Record<string,unknown>,b: Record<string,unknown>): boolean {
+  const source=(p:Record<string,unknown>)=>JSON.parse(JSON.stringify({
+    fieldFirstStartId:p.fieldFirstStartId??null,measurements:p.measurements??[],evidence:p.evidence??[],
+    locationProof:p.locationProof??null,stopConditions:p.stopConditions??null,
+  }));
+  return canonical(source(a))===canonical(source(b));
+}
+/** Local edits never grant authority: they invalidate the previous assessment for a new start. */
+export function repairAssessmentMatchesDraft(payload: Record<string,unknown>,draft: FieldDraft): boolean {
+  const captures=draft.captures.filter(c=>c.purpose!=='AFTER');
+  if(captures.some(c=>!c.verified||!c.upload?.fileId||c.cancelState==='REQUESTED'||c.cancelState==='UNKNOWN'||c.cancelState==='BLOCKED'))return false;
+  return sameRepairAssessmentSource(payload,{
+    fieldFirstStartId:payload.fieldFirstStartId,measurements:draft.measurements,locationProof:draft.locationProof,
+    evidence:captures.map(c=>({captureOriginId:c.id,fileId:c.upload!.fileId,purpose:c.purpose,
+      checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),
+  });
 }
 function snapshot(intent: RepairIntent): RepairJournalRecord {
   validateIdentity(intent.identity);
@@ -199,9 +218,8 @@ export async function openRepairJournal(identity: RepairIdentity,
               previous.receipt?.itemVersion !== record.itemVersion || stored.some(r => r.operation === record.operation || r.phase === 'REJECTED'))
             throw new Error('repair_history_requires_reconciliation');
         } else if (record.operation === 'start') {
-          const assessment = stored.find(r => sameBinding(record.identity,r.identity) && r.operation === 'assessment' &&
-            r.phase === 'CONFIRMED' && r.receipt?.data.id === record.payload.assessmentId);
-          if (!assessment || assessment.receipt?.data.readiness !== 'READY' ||
+          const assessment = stored.filter(r=>r.operation==='assessment').at(-1);
+          if (!assessment || assessment.phase!=='CONFIRMED' || assessment.receipt?.data.id!==record.payload.assessmentId || assessment.receipt?.data.readiness !== 'READY' ||
             assessment.receipt.data.stage !== 'PRE_EXECUTION' ||
             !sameBinding(assessment.identity,record.identity) ||
             assessment.payload.fieldFirstStartId !== record.payload.fieldFirstStartId ||
@@ -219,7 +237,9 @@ export async function openRepairJournal(identity: RepairIdentity,
           const previous=stored[stored.length-1];
           if (record.operation!=='assessment' || stored.some(r=>r.operation!=='assessment'||r.phase!=='CONFIRMED') ||
               !sameBinding(previous.identity,record.identity) ||
-              previous.receipt?.data.readiness!=='INCOMPLETE' || previous.receipt.itemVersion!==record.itemVersion ||
+              !['INCOMPLETE','READY'].includes(String(previous.receipt?.data.readiness)) || previous.receipt?.data.stage!=='PRE_EXECUTION' ||
+              previous.payload.fieldFirstStartId!==record.payload.fieldFirstStartId || previous.receipt?.itemVersion!==record.itemVersion ||
+              (previous.receipt.data.readiness==='READY'&&sameRepairAssessmentSource(previous.payload,record.payload)) ||
               canonical(previous.payload)===canonical(record.payload)) throw new Error('repair_history_requires_reconciliation');
         }
         const now = new Date().toISOString();

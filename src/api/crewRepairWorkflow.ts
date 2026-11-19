@@ -1,5 +1,5 @@
 import * as api from './crewApi';
-import { sameRepairIdentity,
+import { sameRepairIdentity, repairAssessmentMatchesDraft,
   type RepairIdentity, type RepairCommandIdentity, type RepairJournalRecord } from './crewRepairDraft';
 import { openFieldRuntime, loadFieldDraft, readHistoricalFieldDraft, validateRepairClaimReadback, type FieldDraft } from './crewFieldDraft';
 import { repairRuntime, guard, guarded, timestamp, fresh, validateRepairReceipt, readRepairHistory, type RepairRuntime } from './crewRepairHistory';
@@ -105,10 +105,16 @@ export async function prepareRepairStart(i: RepairIdentity,r=repairRuntime(i)) {
   if(task.repairContext!.itemVersion!==assessment.receipt.itemVersion)throw Error('repair_stale_assessment');
   const first=await firstStart(i,r,task);
   if(first!==assessment.payload.fieldFirstStartId)throw Error('repair_first_start_invalid');
+  await requireCurrentAssessmentSource(i,r,assessment);
   await requireFastTrackStart(i,r,task,assessment.receipt.data.id);
+  await requireCurrentAssessmentSource(i,r,assessment);
   const payload={originId:r.uuid(),fieldFirstStartId:first,assessmentId:assessment.receipt.data.id,claimedAt:r.now(),deviceId:null};
   validateRepairInput('start',payload);
   return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'start',key:r.uuid(),itemVersion:task.repairContext!.itemVersion,payload}));
+}
+async function requireCurrentAssessmentSource(i: RepairIdentity,r: RepairRuntime,assessment: RepairJournalRecord) {
+  const draft=await guarded(i,r,()=>r.fieldDraft?r.fieldDraft():readRepairFieldDraft(i));
+  if(!sameRepairIdentity(i,draft)||!repairAssessmentMatchesDraft(assessment.payload,draft))throw Error('repair_assessment_source_changed');
 }
 /** Finish is an explicit physical event following a confirmed execution-start receipt. */
 export async function prepareRepairFinish(i: RepairIdentity,r=repairRuntime(i)) {
@@ -202,6 +208,7 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
       if(!previous?.receipt || previous.phase!=='CONFIRMED' || previous.receipt.data.readiness!=='READY' ||
           previous.receipt.data.id!==c.payload.assessmentId || previous.receipt.itemVersion!==c.itemVersion)throw Error('repair_assessment_required');
       validateRepairReceipt(previous,previous.receipt.data,`"${previous.receipt.itemVersion}"`);
+      if(c.phase==='PREPARED')await requireCurrentAssessmentSource(i,r,previous);
     }
     if(c.operation==='finish'||c.operation==='attempt') {
       const history=(await guarded(i,r,()=>j.history())).filter(row=>!row.rejectionResolved);
@@ -229,7 +236,12 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
       const block=c.operation==='supplement'?null:r.api.repairExecutionBlock(task,response.etag,i.actor,c.operation as 'assessment'|'start'|'finish'|'attempt');
       if(block)throw Error(block);
       if(task.repairContext!.itemVersion!==c.itemVersion)throw Error('repair_stale_assessment');
-      if(c.operation==='start')await requireFastTrackStart(i,r,task,c.payload.assessmentId);
+      if(c.operation==='start') {
+        await requireFastTrackStart(i,r,task,c.payload.assessmentId);
+        const assessment=(await guarded(i,r,()=>j.history())).filter(row=>!row.rejectionResolved&&row.operation==='assessment').at(-1);
+        if(!assessment)throw Error('repair_assessment_required');
+        await requireCurrentAssessmentSource(i,r,assessment);
+      }
       c=await guarded(i,r,()=>j.transition(key,'PENDING'));
     }
     if(c.phase==='PENDING') {
@@ -318,6 +330,7 @@ export function repairErrorMessage(e: unknown): string {
     repair_first_start_invalid:'Mốc bắt đầu đầu tiên không khớp nhiệm vụ hoặc phân công hiện tại. Đã khóa lệnh.',
     repair_binding_changed:'Liên kết hoặc phân công đã thay đổi. Giữ lịch sử để đối soát.',
     repair_stale_assessment:'Phiên bản hạng mục đã thay đổi sau đánh giá trước sửa. Chưa được bắt đầu thi công.',
+    repair_assessment_source_changed:'Số đo, ảnh hoặc vị trí đã thay đổi sau đánh giá. Gửi lại đánh giá trước sửa để máy chủ kiểm tra dữ liệu mới rồi mới bắt đầu thi công.',
     repair_previous_session_unresolved:'Có lệnh phiên cũ chưa rõ kết quả. Cần xác nhận trước khi gửi lại nguyên lệnh; có thể thực thi lần đầu.',
     repair_history_requires_reconciliation:'Lịch sử sửa chữa cần đối soát trước khi tạo lệnh mới.',
     repair_session_changed:'Phiên đội sửa chữa đã thay đổi. Đã dừng thao tác và giữ lệnh cũ.',
