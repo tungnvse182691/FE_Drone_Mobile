@@ -73,11 +73,11 @@ export default function DroneHomeScreen() {
       </View>
       <View style={styles.metrics}>
         {[
-          { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download' as const, color: colors.secondary },
-          { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'autorenew' as const, color: colors.brandGold },
-          { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'check-circle' as const, color: colors.success },
+          { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download' as const, color: colors.secondary, background: '#ECEFF2' },
+          { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'autorenew' as const, color: colors.brandGold, background: '#FFF1CB' },
+          { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'check-circle' as const, color: colors.success, background: '#EDF5EE' },
         ].map(metric => (
-          <View key={metric.key} style={[styles.metricColumn, metric.key !== 'loaded' && styles.metricDivider]}>
+          <View key={metric.key} style={[styles.metricColumn, { backgroundColor: metric.background }]}>
             <MaterialIcons name={metric.icon} size={20} color={metric.color} accessibilityLabel={metric.label} />
             <Text testID={`operator-kpi-${metric.key}`} style={{ ...styles.metricNumber, color: metric.color }}>{metric.count}{''}</Text>
             <Text style={styles.metricLabel}>{metric.label}</Text>
@@ -134,15 +134,14 @@ export default function DroneHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  overview: { backgroundColor: '#FFFBF0', borderRadius: 20, padding: 16, marginBottom: 20, gap: 16 },
+  overview: { marginBottom: 20, gap: 16 },
   greetingHeader: { gap: 4 },
   greetingName: { color: colors.neutral, fontSize: 18, fontWeight: '500', lineHeight: 26 },
   greetingMeta: { ...typography.caption, lineHeight: 18, color: colors.secondary },
-  metrics: { flexDirection: 'row', alignItems: 'stretch', borderTopWidth: 1, borderTopColor: '#E9DFBE', paddingTop: 12 },
-  metricColumn: { flex: 1, minWidth: 0, gap: 4, alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6 },
-  metricDivider: { borderLeftWidth: 1, borderLeftColor: '#E9DFBE' },
+  metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  metricColumn: { flex: 1, minWidth: 0, minHeight: 132, borderRadius: 12, gap: 8, alignItems: 'flex-start', padding: 12 },
   metricNumber: { fontFamily: 'Roboto-Medium', fontSize: 28, fontWeight: '500', lineHeight: 36, color: colors.neutral, fontVariant: ['tabular-nums'] },
-  metricLabel: { ...typography.caption, lineHeight: 18, textAlign: 'center', color: colors.secondary },
+  metricLabel: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary },
   sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: 8 },
   sectionTitle: { color: colors.neutral },

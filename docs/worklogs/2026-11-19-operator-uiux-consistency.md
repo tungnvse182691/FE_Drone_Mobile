@@ -51,3 +51,12 @@
 | sync | Pending; refresh must remain read only |
 | log | Pending |
 | profile | Pending |
+
+## Checkpoint 2: owner-selected tonal KPI tiles
+
+- Baseline 5a76790. Owner selected the separate three-tile mock on 19 November; supersedes the rejected divider design in checkpoint 1.
+- Home only: remove enclosing cream panel and all KPI rules; use separate neutral / cream / green tiles with 8dp gaps, 12dp corners, left-aligned contents and minimum height 132dp. Real counts, page note and handlers unchanged. No new animation on read-only metrics.
+- BEFORE `.cache/operator-uiux-20261119/home-tiles-before.png`; AFTER `.cache/operator-uiux-20261119/home-tiles-after.png`, actual Android Expo Go, same session and values 50/11/23.
+- Android: ADB swipe up moved to last Home task; swipe down returned to greeting; See all opened Nhiệm vụ khảo sát and showed loading. No restart/reload.
+- Fresh `npx tsc --noEmit`: exit 0; `node --test --test-concurrency=2 tests/operator-ui05.test.cjs tests/operator-ui-integration.test.cjs`: 18/18 PASS (home-tiles-tests.log); `git diff --check`: PASS.
+- OS font scaling and OS Reduce Motion NOT_VERIFIED; full regression deferred to final Operator checkpoint. Commit subject `ui(operator): apply approved tonal home metrics`.
