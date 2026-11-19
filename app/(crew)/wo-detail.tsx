@@ -423,19 +423,19 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     }
   };
   return <View style={{ gap: spacing.sm }}>
-    <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[stage==='overview'?styles.detailHeading:typography.titleMd,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
+    <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[stage==='overview'||stage==='progress'?styles.detailHeading:typography.titleMd,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại ngữ cảnh sửa chữa" accessibilityState={{disabled:busy||result.status==='loading',busy:busy||result.status==='loading'}} disabled={busy||result.status==='loading'} style={styles.refreshButton} onPress={()=>{void result.reload();void load();}}>
         {busy||result.status==='loading'?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}</Pressable>
     </View>
     {stage!=='overview'&&stage!=='closeout'?<Card style={[styles.repairStepCard,started&&!finished&&styles.repairActiveCard]}>
       <View style={styles.sectionHeading}>
-        <View style={styles.flex}><Text style={styles.eyebrow}>BƯỚC HIỆN TẠI</Text><Text style={typography.titleMd}>{!loaded?'Đang đọc tiến trình…':finished?'Hồ sơ sau thi công':started?'Đang thi công':ready?(task.detail?.mode==='CONDITIONAL_FT'?'Kiểm tra điều kiện sửa nhanh':'Sẵn sàng thi công'):incomplete?'Cần bổ sung đánh giá':sourceReady?'Đánh giá trước sửa':'Chuẩn bị số đo và ảnh'}</Text></View>
-        <MaterialIcons name={finished?'task-alt':started?'construction':'assignment'} size={28} color={started&&!finished?'#1D4ED8':colors.secondary}/>
+        <View style={styles.flex}><Text style={styles.hint}>Bước hiện tại</Text><Text style={styles.progressTitle}>{!loaded?'Đang đọc tiến trình…':finished?'Hồ sơ sau thi công':started?'Đang thi công':ready?(task.detail?.mode==='CONDITIONAL_FT'?'Kiểm tra điều kiện sửa nhanh':'Sẵn sàng thi công'):incomplete?'Cần bổ sung đánh giá':sourceReady?'Đánh giá trước sửa':'Chuẩn bị số đo và ảnh'}</Text></View>
+        <MaterialIcons name={finished?'task-alt':started?'construction':'assignment'} size={22} color={started&&!finished?'#1D4ED8':colors.secondary}/>
       </View>
       <Text style={styles.hint}>{!loaded?'Chờ đối chiếu dữ liệu đã lưu.':finished?closeoutMessage:started?'Chỉ kết thúc khi công việc tại hiện trường đã hoàn tất.':ready?(task.detail?.mode==='CONDITIONAL_FT'?'Đã có đánh giá. Kiểm tra điều kiện bên dưới; chỉ bắt đầu khi máy chủ xác nhận đủ điều kiện.':'Đánh giá đã đủ thông tin. Có thể bắt đầu khi sẵn sàng tại hiện trường.'):incomplete?'Bổ sung mục còn thiếu rồi gửi đánh giá lại.':sourceReady?'Số đo và ảnh đã sẵn sàng để gửi đánh giá.':'Lưu số đo và tải ảnh trước sửa để tiếp tục.'}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={showRepairSteps?'Thu gọn các bước':'Xem các bước'} accessibilityState={{expanded:showRepairSteps}} onPress={()=>setShowRepairSteps(v=>!v)} style={styles.repairDisclosure}>
+      <CrewPressable accessibilityRole="button" accessibilityLabel={showRepairSteps?'Thu gọn các bước':'Xem các bước'} accessibilityState={{expanded:showRepairSteps}} onPress={()=>setShowRepairSteps(v=>!v)} style={[styles.repairDisclosure,styles.progressDisclosure]}>
         <Text style={typography.labelLg}>{showRepairSteps?'Thu gọn các bước':'Xem các bước'}</Text><MaterialIcons name={showRepairSteps?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
-      </Pressable>
+      </CrewPressable>
       {showRepairSteps?[
         {title:'Số đo và ảnh trước sửa',done:sourceReady||!!assessment||!!started||!!finished,detail:'Lưu số đo, tải ảnh trước sửa và chờ xác minh.'},
         {title:'Đánh giá trước sửa',done:ready||!!started||!!finished,detail:assessment&&!ready?'Cần bổ sung theo kết quả đánh giá.':'Máy chủ kiểm tra điều kiện trước khi thi công.'},
@@ -448,8 +448,8 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
         <View style={styles.flex}><Text style={typography.labelLg}>{step.title}{step.done?' · Đã xong':''}</Text><Text style={styles.hint}>{step.detail}</Text></View>
       </View>):null}
     </Card>:null}
-    <View style={stage==='progress'?styles.repairWorkCard:undefined}>
-    {stage==='progress'&&started?<Pressable accessibilityRole="button" accessibilityLabel="Hồ sơ trước sửa" accessibilityState={{expanded:showBeforeEvidence}} style={styles.repairDisclosure} onPress={()=>setShowBeforeEvidence(v=>!v)}><MaterialIcons name="fact-check" size={22} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Hồ sơ trước sửa</Text><MaterialIcons name={showBeforeEvidence?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>:stage==='progress'?<Text style={styles.eyebrow}>HỒ SƠ TRƯỚC SỬA</Text>:null}
+    <View style={stage==='progress'?styles.progressWork:undefined}>
+    {stage==='progress'&&started?<Pressable accessibilityRole="button" accessibilityLabel="Hồ sơ trước sửa" accessibilityState={{expanded:showBeforeEvidence}} style={styles.repairDisclosure} onPress={()=>setShowBeforeEvidence(v=>!v)}><MaterialIcons name="fact-check" size={22} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Hồ sơ trước sửa</Text><MaterialIcons name={showBeforeEvidence?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>:stage==='progress'?<Text style={styles.detailHeading}>Hồ sơ trước sửa</Text>:null}
     {stage==='overview' && result.repairContext ? <>
       <View style={styles.overviewLinks}>
         {([
@@ -466,9 +466,9 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     {result.status === 'ready' && !result.repairContext ? <Text>Chưa có hạng mục sửa chữa được liên kết hợp lệ với nhiệm vụ này. Các thao tác sửa chữa chưa khả dụng.</Text> : null}
     {stage!=='closeout'&&stage!=='overview'?<>
     {(!started||stage!=='progress'||showBeforeEvidence)?<>
-    <View style={styles.repairStats}>
-      <View style={styles.repairStat}><View style={styles.statHeading}><MaterialIcons name="straighten" size={20} color={colors.secondary}/><Text style={typography.titleLg}>{draft?.measurements.length??0}</Text></View><Text style={styles.hint}>Số đo đã lưu</Text></View>
-      <View style={styles.repairStat}><View style={styles.statHeading}><MaterialIcons name="photo-library" size={20} color={colors.secondary}/><Text style={typography.titleLg}>{draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}</Text></View><Text style={styles.hint}>Ảnh đã xác minh</Text></View>
+    <View style={[styles.repairStats,styles.progressStats]}>
+      <View style={styles.progressStat}><View style={styles.statHeading}><MaterialIcons name="straighten" size={20} color={colors.secondary}/><Text style={styles.progressTitle}>{draft?.measurements.length??0}</Text></View><Text style={styles.hint}>Số đo đã lưu</Text></View>
+      <View style={styles.progressStat}><View style={styles.statHeading}><MaterialIcons name="photo-library" size={20} color={colors.secondary}/><Text style={styles.progressTitle}>{draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}</Text></View><Text style={styles.hint}>Ảnh đã xác minh</Text></View>
     </View>
     <Button variant={!sourceReady&&!started&&!finished?'primary':'text'} title="Số đo / ảnh hiện trường" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
     </>:null}
@@ -584,7 +584,12 @@ const styles = StyleSheet.create({
   repairWorkCard: {backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:spacing.md,gap:spacing.sm,marginBottom:spacing.sm},
   repairNotice: {flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
   repairTechnicalLink: {borderWidth:1,borderColor:colors.border,backgroundColor:colors.surface},
-  repairStepCard: {gap:spacing.sm, borderWidth:1, borderColor:colors.border, padding:spacing.md, marginBottom:spacing.sm},
+  repairStepCard: {gap:spacing.sm, borderWidth:1, borderColor:'#E8D9A8', backgroundColor:'#FBF8EE', padding:12, marginBottom:4},
+  progressTitle: {...typography.labelLg,lineHeight:20,color:colors.neutral},
+  progressDisclosure: {paddingHorizontal:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:colors.surface,borderRadius:radius.md},
+  progressWork: {padding:12,gap:spacing.sm,backgroundColor:colors.surface,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border},
+  progressStats: {gap:12,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
+  progressStat: {flexGrow:1,flexBasis:120,minWidth:0,gap:spacing.xs},
   repairDisclosure: {minHeight:48, flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:spacing.sm},
   repairStepRow: {flexDirection:'row', gap:spacing.sm, alignItems:'flex-start', paddingVertical:spacing.xs},
   repairStepNumber: {width:24,height:24,borderRadius:radius.full,backgroundColor:colors.surfaceAlt,alignItems:'center',justifyContent:'center'},
