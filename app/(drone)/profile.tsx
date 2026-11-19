@@ -29,25 +29,26 @@ export default function DroneProfileScreen() {
       {/* Avatar & Personal Header */}
       <View style={styles.profileHeader}>
         <View style={styles.avatarCircle}>
-          <MaterialIcons name="person" size={28} color={colors.primaryDark} />
+          <MaterialIcons name="person" size={48} color={colors.secondary} />
 
         </View>
 
         <View style={styles.profileIdentity}>
-          <Text style={[typography.titleMd, styles.userName]}>
+          <Text style={[typography.titleLg, styles.userName]}>
             {normalizeName(user?.full_name ?? '') || 'Phi công hiện trường'}
           </Text>
 
           {employeeCode ? <Text style={[typography.caption, styles.userSub]}>Mã NV: {employeeCode}</Text> : null}
 
           <View style={styles.roleChip}>
-            <MaterialIcons name="flight-takeoff" size={14} color={colors.primaryDark} />
+            <MaterialIcons name="flight-takeoff" size={14} color={colors.secondary} />
             <Text style={styles.roleChipText}>Phi công hiện trường</Text>
           </View>
         </View>
       </View>
 
       {/* Settings Menu List */}
+      <Text style={[typography.labelSm, styles.sectionLabel]}>Cài đặt hệ thống</Text>
       <Card style={styles.menuCard}>
         <Pressable
           style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: operatorAppearance.pressed }]}
@@ -178,22 +179,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileHeader: {
-    flexDirection: 'row',
-    gap: spacing.sm,
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   avatarCircle: {
-    width: 48,
-    height: 48,
+    width: 80,
+    height: 80,
     borderRadius: radius.full,
-    backgroundColor: '#FEF3E2',
+    backgroundColor: colors.surfaceAlt,
     borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     flexShrink: 0,
+    marginBottom: spacing.sm,
   },
   verifiedCheck: {
     position: 'absolute',
@@ -210,30 +211,31 @@ const styles = StyleSheet.create({
   },
   userName: {
     color: colors.neutral,
-    marginTop: 2,
+    textAlign: 'center',
   },
   userSub: {
     color: colors.secondary,
-    marginTop: 2,
+    marginTop: spacing.xs,
+    textAlign: 'center',
   },
-  profileIdentity: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
+  profileIdentity: { alignSelf: 'stretch', minWidth: 0, alignItems: 'center' },
   roleChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF3E2',
+    gap: spacing.xs,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   roleChipText: {
-    color: colors.primaryDark,
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
+    color: colors.secondary,
+    fontSize: 12,
+    lineHeight: 18,
+    fontFamily: 'Roboto',
   },
   statsCard: {
     flexDirection: 'row',
@@ -293,18 +295,20 @@ const styles = StyleSheet.create({
   },
   menuCard: {
     ...operatorAppearance.card,
-    padding: 0,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     marginBottom: spacing.md,
     overflow: 'hidden',
   },
   menuItem: {
-    minHeight: 56,
+    minHeight: 64,
     gap: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
   },
   menuItemLeft: {
     flex: 1,
@@ -324,6 +328,12 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
   },
+  sectionLabel: {
+    color: colors.secondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: spacing.sm,
+  },
   logoutContainer: {
     gap: spacing.sm,
     marginBottom: spacing.xl,
@@ -334,20 +344,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#FDECEC',
+    backgroundColor: '#FFFAFA',
     borderWidth: 1,
-    borderColor: '#F8D7DA',
-    paddingVertical: 12,
-    borderRadius: radius.md,
+    borderColor: colors.error,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
   },
   logoutText: {
     color: colors.error,
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   versionFootnote: {
     textAlign: 'center',
     color: colors.secondary,
-    marginTop: 4,
+    marginTop: spacing.sm,
   },
   modalBackdrop: {
     flex: 1,
@@ -356,7 +366,7 @@ const styles = StyleSheet.create({
   },
   infoModalCard: {
     borderWidth: 1,
-    borderColor: operatorAppearance.border,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -373,7 +383,7 @@ const styles = StyleSheet.create({
   },
   infoModalTitle: {
     color: colors.neutral,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   infoModalCloseBtn: {
     minWidth: 48,
@@ -400,9 +410,9 @@ const styles = StyleSheet.create({
   },
   infoModalFooterBtn: {
     minHeight: 48,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#FFF1CB',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E8D9A9',
     borderRadius: radius.md,
     paddingVertical: 12,
     alignItems: 'center',
@@ -411,6 +421,6 @@ const styles = StyleSheet.create({
   },
   infoModalFooterText: {
     color: colors.neutral,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 });
