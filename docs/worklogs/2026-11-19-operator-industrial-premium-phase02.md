@@ -152,3 +152,26 @@ I commit: d8dd2ee. Source cuối kiểm chứng: d8dd2ee (sau đó chỉ cập n
 - Motion: giữ press/ripple/spring từ component sẵn có; bổ sung AnimatedPressable ở disclosure Detail/Upload, không animation liên tục hoặc giả kết quả API. OS Reduce Motion và FPS chưa đo; không claim 60FPS.
 - Evidence: LOGIC_TESTED cho Node; native read-only interactions được ghi riêng từng màn. NOT_VERIFIED/NOT_RUN: native mutation/receipt/offline/error branches, font lớn/thiết bị hẹp, OS Reduce Motion, APK/iPhone/FPS. Không coi full regression là full Android workflow E2E.
 - Git: main; tracked sạch trước commit tổng kết tài liệu. Untracked .cache/log/build/db giữ nguyên; không push/pull/branch switch/reset/clean/stash/restart emulator/session.
+
+## Follow-up — Trình xem video và bỏ ghi chú SRT (20/11)
+
+- Reviewer: Codex, IMPLEMENT_AND_SELF_REVIEW; base 278c23b. Owner yêu cầu chỉnh UI trình xem và bỏ ghi chú SRT/GPS, giữ video.
+- Files: src/components/drone/OperatorSubmittedVideos.tsx, VideoPreview.tsx; tests/a54c806-lifecycle.test.cjs, operator-video-playback.test.cjs.
+- Header gọn, Back trung tính, tiêu đề navy; metadata dưới khung 16:9; fullscreen trong khung có bề mặt 36dp nhưng vùng chạm 48dp. Bỏ caption ready trùng control native; loading/error vẫn hiện. Bỏ ghi chú telemetry dưới lần nộp. Không đổi API/handler/source/lease disposal, seek hoặc orientation.
+- Android Expo Go, emulator-5554: mở lần nộp và video thật hiện có, control native hiển thị +/-5 giây; bấm tua tới thấy 00:05. Back về Chi tiết quan sát được; không đủ bằng chứng xác nhận play/fullscreen trong chuỗi thao tác sau đó nên NOT_VERIFIED cho hai ca này, không suy PASS.
+- BEFORE: .cache/industrial-premium-phase02/video-viewer-before.png. AFTER đã xem trực tiếp: video-viewer-polished-after.png; video-note-removed-after.png. Các ảnh video-viewer-after.png và video-viewer-immersive-polished-after.png thực tế là Chi tiết, không dùng làm evidence trình xem.
+- TypeScript npx tsc --noEmit exit0 (video-final-tsc.log). Targeted 5 file video/lifecycle/package45: 50/50 PASS (video-viewer-targeted.log). Regression kết quả cuối ghi checkpoint tiếp theo.
+- Self-review: diff presentation, không đổi nghiệp vụ hoặc Home/Crew/Reporter/config/dependency; scan Ionicons app/src no match, added-line scan route/handler/secret/UD-06 no match, git diff --check PASS. Không mutation/restart emulator/session. NOT_RUN: APK/iPhone, font lớn, Reduce Motion, xoay vật lý/FPS và upload end-to-end.
+
+## Follow-up — Gói công việc chỉ hướng dẫn gửi video (20/11)
+
+- Owner screenshot codex-clipboard-fe11cf29-b040-45fb-a509-b493a2a0f669.png chỉ định bỏ hàng Hành trình SRT/GPS và ghi chú phủ tuyến. Xóa đúng 2 dòng JSX trong app/(drone)/work-package.tsx; giữ Video 4K RGB / Bắt buộc, không đổi upload contract hoặc xử lý nháp telemetry cũ.
+- Android AFTER: .cache/industrial-premium-phase02/work-package-video-only-after.png, đã xem trực tiếp. BEFORE dùng ảnh owner và work-package-technical-after.png của checkpoint D; không chụp BEFORE mới riêng cho thao tác xóa này.
+- tests/drone-ui02a.test.cjs: đổi expectation UI yêu cầu SRT sang có video và không SRT/GPS/hướng dẫn hành trình. Giữ assertions phạm vi Mặt đường và Hồ sơ. Targeted 27/27 PASS (video-only-guidance-targeted.log).
+- Regression đầu: 1928/1929 PASS, 1 FAIL chính là expectation SRT cũ nêu trên (video-viewer-regression.log). Đã sửa test presentation theo quyết định owner; không sửa runtime logic. Regression cuối ghi checkpoint tiếp theo.
+- Commit local riêng từng follow-up; main, không push, giữ nguyên untracked/cache/db/build/log.
+
+### Gate follow-up cuối
+
+- Source base 278c23b + diff follow-up đã rà; sau lượt chạy chỉ cập nhật tài liệu. `npx tsc --noEmit`: exit0. Full regression `$videoFinalFiles=(Get-ChildItem tests -Filter *.test.cjs).FullName; node --test --test-concurrency=2 $videoFinalFiles`: exit0, 1929/1929 PASS, 0 fail/skip/cancel, 211884.2558ms. Log: .cache/industrial-premium-phase02/video-final-regression.log.
+- `git diff --check`: PASS. `git diff --exit-code HEAD -- app/(drone)/home.tsx`: exit0. Không sửa BE, API, upload, journal hoặc orientation handler. Không claim đã xóa telemetry khỏi BE/contract; chỉ bỏ hai đoạn hướng dẫn UI owner chỉ định.

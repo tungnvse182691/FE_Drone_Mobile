@@ -115,7 +115,6 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     {page?.items.map((row, index) => <Button key={row.id} style={[styles.submission, selected?.id === row.id && styles.selectedSubmission]} icon={<MaterialIcons name={selected?.id === row.id ? "check-circle-outline" : "chevron-right"} size={22} color={colors.secondary}/>} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />)}
     {page?.nextCursor ? <Button variant="secondary" title="Xem thêm lần nộp" disabled={busy} onPress={() => void load(true)} /> : null}
     {selected ? <View style={styles.fileList}>
-      <Text style={[typography.caption, styles.fileNote]}>{selected.telemetryStatus === 'MISSING' ? 'Không kèm SRT/GPS. Video vẫn đã được nộp.' : 'Dữ liệu GPS được máy chủ kiểm tra riêng.'}</Text>
       {selected.videos.length === 0 ? <Text>Chưa có tệp video trong bộ dữ liệu.</Text> : selected.videos.map((file, index) => <Button key={file.fileId} style={styles.videoAction} icon={<MaterialIcons name="play-circle-outline" size={24} color={colors.neutral}/>} variant="secondary" title={`Mở video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB`} onPress={() => void play(file.fileId)} disabled={busy} />)}
     </View> : null}
     {busy && abort.current ? <View style={{ gap: spacing.sm }}><Text>Đang tải bản xem tạm: {progress}%</Text><Button title="Hủy tải bản xem" variant="secondary" onPress={() => abort.current?.abort()} /></View> : null}
@@ -126,12 +125,11 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
           <Pressable accessibilityRole="button" accessibilityLabel="Đóng video, quay lại chi tiết nhiệm vụ"
             onPress={() => void stopPreview()} android_ripple={{ color: operatorAppearance.border }}
             style={({ pressed }) => [styles.viewerBack, immersive && styles.viewerDarkButton, pressed && { opacity: 0.7 }]}>
-            <MaterialIcons name="arrow-back" size={24} color={immersive ? '#FFFFFF' : colors.neutral} />
+            <MaterialIcons name="arrow-back" size={24} color={immersive ? '#FFFFFF' : '#192D40'} />
           </Pressable>
           <View style={styles.viewerHeading}>
             {!immersive ? <>
-            <Text accessibilityRole="header" style={[typography.titleMd, styles.title]}>Xem video</Text>
-            <Text style={[typography.caption, { color: colors.secondary }]}>{previewLabel}</Text>
+            <Text accessibilityRole="header" style={[typography.titleMd, styles.viewerTitle]}>Xem video</Text>
             </> : null}
           </View>
         </View>
@@ -141,9 +139,12 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
           <Pressable accessibilityRole="button" accessibilityLabel={immersive ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
             onPress={() => { setOrientationError(''); setImmersive(value => !value); }} android_ripple={{ color: operatorAppearance.border }}
             style={({ pressed }) => [styles.viewerExpand, pressed && { opacity: 0.7 }]}>
-            <MaterialIcons name={immersive ? 'fullscreen-exit' : 'fullscreen'} size={26} color="#FFFFFF" />
+            <View pointerEvents="none" style={styles.viewerExpandSurface}>
+              <MaterialIcons name={immersive ? 'fullscreen-exit' : 'fullscreen'} size={24} color="#FFFFFF" />
+            </View>
           </Pressable>
         </View>
+        {!immersive ? <Text style={[typography.bodyMd, styles.viewerMetadata]}>{previewLabel}</Text> : null}
       </SafeAreaView>
       </SafeAreaProvider>
     </Modal> : null}
@@ -151,20 +152,22 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
 }
 
 const styles = StyleSheet.create({
-  viewer: { flex: 1, backgroundColor: colors.surface },
-  viewerHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  viewer: { flex: 1, backgroundColor: colors.surfaceAlt },
+  viewerHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   viewerDarkHeader: { backgroundColor: '#000000', borderBottomWidth: 0, paddingVertical: spacing.xs },
   viewerDarkButton: { backgroundColor: 'transparent', borderWidth: 0 },
-  viewerBack: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, overflow: 'hidden' },
+  viewerBack: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   viewerHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
+  viewerTitle: { color: '#192D40', lineHeight: 24 },
+  viewerMetadata: { color: '#526170', paddingHorizontal: 16, paddingVertical: 12, fontVariant: ['tabular-nums'] },
   videoFrame: { position: 'relative', minHeight: 0 },
-  viewerExpand: { position: 'absolute', top: spacing.sm, right: spacing.sm, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: 'rgba(0,0,0,0.72)', overflow: 'hidden' },
+  viewerExpand: { position: 'absolute', top: 4, right: 4, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full, overflow: 'hidden' },
+  viewerExpandSurface: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.48)' },
   sectionHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   sectionTitle: { color: '#192D40', flexGrow: 1, lineHeight: 24 },
   submission: { alignItems: 'flex-start', borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg },
   selectedSubmission: { borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed },
   fileList: { gap: spacing.sm, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
-  fileNote: { color: colors.secondary, lineHeight: 18 },
   videoAction: { alignItems: 'flex-start', borderColor: '#DCE2E7', backgroundColor: '#F3F5F6', borderRadius: 12 },
   section: { gap: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DCE2E7', borderRadius: 16 },
   title: { color: colors.neutral },

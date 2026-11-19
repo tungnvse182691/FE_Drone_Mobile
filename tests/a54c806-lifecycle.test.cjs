@@ -72,7 +72,7 @@ test('no-SRT MISSING receipt preserves exact journal request after timeout; SRT 
   assert.deepEqual(replayed,original);assert.equal(result.status,'DATASET_CONFIRMED');
  }
 });
-test('submitted video panel paginates, shows MISSING telemetry and drops data on blur',async()=>{
+test('submitted video panel paginates, omits telemetry note and drops data on blur',async()=>{
  let calls=0;
  const ui=screen('src/components/drone/OperatorSubmittedVideos.tsx',{exportName:'SubmittedVideos',expose:'SubmittedVideos',props:{scope:'owner',taskId:'task',projectId:'project'},modules:{
   'react-native':{Text:'Text',View:'View',StyleSheet:{create:styles=>styles},Platform:{OS:'android'},AppState:{addEventListener:()=>({remove(){}})}},
@@ -83,6 +83,7 @@ test('submitted video panel paginates, shows MISSING telemetry and drops data on
  }});
  ui.render();assert.equal(calls,0);ui.press('Xem video đã gửi');await ui.flush();ui.press('Xem thêm lần nộp');await ui.flush();
  assert.equal(calls,2);ui.press('Lần nộp 1');await ui.flush();
- assert.ok(ui.nodes().some(n=>n.props?.children?.includes('Không kèm SRT/GPS. Video vẫn đã được nộp.')));
+ assert.ok(!ui.nodes().some(n=>n.props?.children?.includes('Không kèm SRT/GPS. Video vẫn đã được nộp.')));
+ assert.ok(ui.nodes().some(n=>n.props?.children?.includes('Chưa có tệp video trong bộ dữ liệu.')));
  ui.blur();ui.render();assert.ok(!ui.nodes().some(n=>n.props?.title==='Lần nộp 1'));ui.unmount();
 });

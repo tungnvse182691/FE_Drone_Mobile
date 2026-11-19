@@ -153,3 +153,15 @@ test('default dedicated viewer uses a contained 16:9 player instead of filling t
  assert.equal(view.props.style.aspectRatio,16/9);assert.equal(view.props.style.flex,undefined);assert.equal(view.props.contentFit,'contain');
  assert.equal(view.props.fullscreenOptions.enable,false);ui.unmount();
 });
+
+test('dedicated viewer keeps loading and error feedback without duplicating ready native controls',async()=>{
+ const ui=previewFixture({expanded:true});
+ try {
+  assert.ok(ui.nodes().some(n=>n.props.accessibilityLiveRegion==='polite'));
+  await ui.emit('statusChange',{status:'readyToPlay'});
+  assert.ok(ui.nodes().some(n=>n.type==='VideoView'));
+  assert.ok(!ui.nodes().some(n=>n.props.accessibilityLiveRegion==='polite'));
+  await ui.emit('statusChange',{status:'error',error:{message:'decode failed'}});
+  assert.ok(ui.nodes().some(n=>n.props.accessibilityRole==='alert'));
+ } finally { ui.unmount(); }
+});

@@ -52,7 +52,7 @@ export function VideoPreview({ lease, expanded = false, immersive = false }: { l
       <VideoView player={player} style={immersive ? { flex: 1, minHeight: 160, backgroundColor: '#000000' } : expanded ? { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000000' } : { height: 240 }} contentFit="contain" nativeControls
         fullscreenOptions={{ enable: !expanded }} allowsPictureInPicture={false}
         onFirstFrameRender={() => setFirstFrame(true)} />
-      {!immersive ? <Text accessibilityLiveRegion="polite" style={[typography.caption, expanded && { paddingHorizontal: spacing.md, paddingBottom: spacing.md }]}>
+      {!immersive && (!expanded || status !== 'readyToPlay') ? <Text accessibilityLiveRegion="polite" style={[typography.caption, expanded && { paddingHorizontal: spacing.md, paddingBottom: spacing.md }]}>
         {status === 'readyToPlay'
           ? `${isPlaying ? 'Đang phát' : 'Đã sẵn sàng · Nhấn phát trên video'} · ${time(currentTime)} / ${time(duration)}${firstFrame ? ' · Đã hiển thị hình' : ''}`
           : 'Đã tải tệp · Đang kiểm tra khả năng phát trên thiết bị…'}
