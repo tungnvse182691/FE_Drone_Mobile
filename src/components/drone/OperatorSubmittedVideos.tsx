@@ -1,9 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { VideoPreview } from './VideoPreview';
+import { requestVideoOrientation } from './videoOrientation';
 import { useAuthStore } from '../../store/auth';
 import { operatorDatasetScope } from '../../api/droneDatasetWorkflow';
 import { listOperatorVideos, operatorVideoError, readOperatorVideos, type OperatorDatasetPage, type OperatorVideoSource } from '../../api/operatorVideoReadback';
@@ -24,6 +25,21 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
   const [preview, setPreview] = useState<OperatorVideoLease | null>(null), [progress, setProgress] = useState(0), [busy, setBusy] = useState(false);
   const [previewLabel, setPreviewLabel] = useState('');
   const [immersive, setImmersive] = useState(false);
+  const [orientationError, setOrientationError] = useState('');
+  useEffect(() => {
+    if (!preview) return;
+    let current = true;
+    void requestVideoOrientation(immersive).catch(() => {
+      if (current) {
+        setOrientationError('Thiết bị chưa chuyển được hướng màn hình. Bạn vẫn có thể xem video và thử phóng to lại.');
+        setImmersive(false);
+      }
+    });
+    return () => {
+      current = false;
+      void requestVideoOrientation(false).catch(() => undefined);
+    };
+  }, [preview, immersive]);
   const alive = useRef(false), serial = useRef(0), lock = useRef(false), lease = useRef<OperatorVideoLease | null>(null);
   const abort = useRef<AbortController | null>(null);
   const cleanup = useRef<Promise<void>>(Promise.resolve());
@@ -74,6 +90,7 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     const index = selected.videos.findIndex(file => file.fileId === fileId);
     const file = selected.videos[index];
     setPreviewLabel(file ? `Video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB` : 'Video đã gửi');
+    setOrientationError('');
     lease.current = next; setPreview(next);
   });
   // A local preview is not an offline authorization grant. Periodically recheck the server;
@@ -101,7 +118,7 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
       {selected.videos.length === 0 ? <Text>Chưa có tệp video trong bộ dữ liệu.</Text> : selected.videos.map((file, index) => <Button key={file.fileId} style={styles.videoAction} icon={<MaterialIcons name="play-circle-outline" size={24} color={colors.neutral}/>} variant="secondary" title={`Mở video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB`} onPress={() => void play(file.fileId)} disabled={busy} />)}
     </View> : null}
     {busy && abort.current ? <View style={{ gap: spacing.sm }}><Text>Đang tải bản xem tạm: {progress}%</Text><Button title="Hủy tải bản xem" variant="secondary" onPress={() => abort.current?.abort()} /></View> : null}
-    {preview ? <Modal visible presentationStyle="fullScreen" animationType="none" onRequestClose={() => void stopPreview()}>
+    {preview ? <Modal visible presentationStyle="fullScreen" supportedOrientations={['portrait', 'landscape-left', 'landscape-right']} animationType="none" onRequestClose={() => void stopPreview()}>
       <SafeAreaProvider>
       <SafeAreaView style={[styles.viewer, immersive && { backgroundColor: '#000000' }]}>
         <View style={[styles.viewerHeader, immersive && styles.viewerDarkHeader]}>
@@ -117,15 +134,15 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
             </> : null}
           </View>
         </View>
-        <View style={[styles.viewerActions, immersive && styles.viewerDarkHeader]}>
+        {orientationError ? <Text accessibilityRole="alert" style={[typography.bodyMd, { padding: spacing.md }]}>{orientationError}</Text> : null}
+        <View testID="operator-video-frame" style={[styles.videoFrame, immersive && { flex: 1 }]}>
+          <VideoPreview key={preview.videoUri} lease={preview} expanded immersive={immersive} />
           <Pressable accessibilityRole="button" accessibilityLabel={immersive ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
-            onPress={() => setImmersive(value => !value)} android_ripple={{ color: operatorAppearance.border }}
-            style={({ pressed }) => [styles.viewerExpand, immersive && styles.viewerDarkButton, pressed && { opacity: 0.7 }]}>
-            <MaterialIcons name={immersive ? 'fullscreen-exit' : 'fullscreen'} size={24} color={immersive ? '#FFFFFF' : colors.neutral} />
-            <Text style={[typography.labelLg, styles.expandLabel, immersive && { color: '#FFFFFF' }]}>{immersive ? 'Thu nhỏ' : 'Phóng to'}</Text>
+            onPress={() => { setOrientationError(''); setImmersive(value => !value); }} android_ripple={{ color: operatorAppearance.border }}
+            style={({ pressed }) => [styles.viewerExpand, pressed && { opacity: 0.7 }]}>
+            <MaterialIcons name={immersive ? 'fullscreen-exit' : 'fullscreen'} size={26} color="#FFFFFF" />
           </Pressable>
         </View>
-        <VideoPreview key={preview.videoUri} lease={preview} expanded immersive={immersive} />
       </SafeAreaView>
       </SafeAreaProvider>
     </Modal> : null}
@@ -139,9 +156,8 @@ const styles = StyleSheet.create({
   viewerDarkButton: { backgroundColor: 'transparent', borderWidth: 0 },
   viewerBack: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, overflow: 'hidden' },
   viewerHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
-  viewerActions: { alignItems: 'flex-end', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
-  viewerExpand: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: 48, maxWidth: '100%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, overflow: 'hidden' },
-  expandLabel: { flexShrink: 1, color: colors.neutral },
+  videoFrame: { position: 'relative', minHeight: 0 },
+  viewerExpand: { position: 'absolute', top: spacing.sm, right: spacing.sm, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: 'rgba(0,0,0,0.72)', overflow: 'hidden' },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   submission: { alignItems: 'flex-start', borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg },
   selectedSubmission: { borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed },

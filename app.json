@@ -8,7 +8,11 @@
     "scheme": "roadguard",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
+      }
     },
     "android": {
       "package": "com.hoanghai.roadguard",
@@ -23,6 +27,7 @@
       ["expo-splash-screen", { "image": "./assets/splash-icon.png", "backgroundColor": "#FFFFFF", "imageWidth": 200, "resizeMode": "contain" }],
       "expo-router",
       "expo-status-bar",
+      ["expo-screen-orientation", { "initialOrientation": "PORTRAIT_UP" }],
       "expo-sqlite",
       "expo-camera",
       "expo-location",
