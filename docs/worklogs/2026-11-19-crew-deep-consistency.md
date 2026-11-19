@@ -55,3 +55,12 @@ Files: `app/(crew)/complete.tsx`, `app/(crew)/wo-detail.tsx`. Hero kem padding12
 - Evidence: `B2-before-top.png` → `B2-after-top.png`; `B2-before-expanded.png` → `B2-after-evidence-stable.png`, đã xem trực tiếp. Ảnh expanded trước ở đầu scroll; final ở vị trí thấp hơn để thấy đầy đủ bản lưu. `B2-after-expanded.png` bị reset disclosure bởi Fast Refresh nên không dùng làm proof expanded.
 - Self-run TypeScript exit0; targeted5 files96/96 PASS13333.9819ms (`B2-targeted.log`); full1846/1846 PASS165088.0011ms (`B2-full.log`). AST2 files against b8f8ac3, manual diff và diff check PASS. Shared NormalRepairPanel callers: detail overview, progress, complete; style closeout tách progressWork của B1. Không services/hooks/DTO thay đổi.
 - NOT_TESTED: finished/serverSubmitted closeout fixture, native offline/error, font scaling, OS Reduce Motion toggle, measured FPS, mutation/receipt/upload. Không nhận owner visual approval.
+
+## B3 — Kết quả và yêu cầu bổ sung
+
+File: `app/(crew)/repair-correction.tsx`. Summary nền kem padding12/gap8; title regular16/22, body14/21; ID nền trắng, nhóm nhiệm vụ có divider. Disclosure lịch sử48dp giữ CrewPressable/Reduce Motion; heading lịch sử14/20 và nút đọc lại theo nội dung nền kem. Giữ toàn bộ repairReviewPresentation, accepted/tone, recovery và journal hooks.
+
+- Android cùng fixture A/B1/B2: Chưa có lượt gửi / Chưa có hồ sơ sửa chữa; mở/thu lịch sử, đọc lại lịch sử biên nhận (vẫn rỗng), Back về đúng Chi tiết. Không mutation. Caller search ReceiptHistory/Recovery chỉ có trong file này.
+- Evidence: `B3-before-top.png` (saved, chưa xem trực tiếp); `B3-before-history.png` (đã xem, gồm phần top) → `B3-after-top.png`, `B3-after-history.png` (đã xem, ổn định). Cùng task/state, disclosure mở lại sau Fast Refresh.
+- Self-run TypeScript exit0; targeted5 files96/96 PASS13456.0826ms (`B3-targeted.log`); full1846/1846 PASS165696.0049ms (`B3-full.log`). AST against228a91b và manual diff PASS; git diff --check PASS. Không đổi handlers, disabled/loading, data/conditions hay API.
+- NOT_TESTED: SUPPLEMENT/ACCEPT/waiting states native, offline/error, OS Reduce Motion/font scaling/FPS, mutation/upload/server receipts. Chưa có owner visual approval.

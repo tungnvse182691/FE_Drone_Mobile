@@ -47,7 +47,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
     <View style={styles.history}>
       <CrewPressable accessibilityRole="button" accessibilityLabel="Lịch sử và thông tin kỹ thuật" accessibilityState={{expanded:technical}} onPress={()=>setTechnical(value=>!value)} style={({pressed})=>[styles.disclosure,pressed&&styles.pressed]}>
         <MaterialIcons name="history" size={22} color={colors.secondary}/>
-        <Text style={[typography.labelLg,styles.flex]}>Lịch sử và thông tin kỹ thuật</Text>
+        <Text style={[styles.sectionTitle,styles.flex]}>Lịch sử và thông tin kỹ thuật</Text>
         <MaterialIcons name={technical?'expand-less':'expand-more'} size={22} color={colors.secondary}/>
       </CrewPressable>
       {technical?<View style={styles.historyContent}>
@@ -143,30 +143,32 @@ export function CrewRepairReceiptHistory({task}:{task:CrewTask}) {
   const operation={assessment:'Đánh giá trước sửa',start:'Bắt đầu thi công',finish:'Kết thúc thi công',attempt:'Tiếp nhận hồ sơ',supplement:'Bổ sung hồ sơ'};
   const phase={PREPARED:'Đã lưu, chưa xác nhận gửi',PENDING:'Chưa rõ kết quả',ACKNOWLEDGED:'Đã lưu biên nhận, chờ đối soát',CONFIRMED:'Đã đối soát biên nhận',REJECTED:'Bị từ chối'};
   return <View style={{gap:spacing.sm}}>
-    <Text style={styles.title}>Lịch sử biên nhận trên thiết bị</Text>
+    <Text style={styles.sectionTitle}>Lịch sử biên nhận trên thiết bị</Text>
     <Text style={styles.hint}>Nhật ký thao tác trên máy này, tách biệt với kết quả quản lý ở trên.</Text>
     {busy?<Text>Đang kiểm tra lịch sử…</Text>:null}
     {rows?.length===0?<Text style={styles.hint}>Chưa có lịch sử trên thiết bị này.</Text>:null}
     {rows?.map(c=><View key={c.key} style={styles.receipt}><Text style={styles.receiptLabel}>{operation[c.operation]}</Text><Text style={styles.body}>{phase[c.phase]}</Text>{c.receipt?<Text style={styles.hint}>Biên nhận máy chủ đã lưu, đúng nguồn liên kết. {c.receipt.data.intakeReadiness==='READY'?'Hồ sơ đủ thông tin tiếp nhận; chưa phải được PM chấp thuận.':''}</Text>:null}</View>)}
     {message?<Text accessibilityRole="alert">{message}</Text>:null}
-    <Button variant="secondary" title="Đọc lại lịch sử biên nhận" disabled={busy||!live} onPress={()=>void load()}/>
+    <Button style={styles.compactAction} variant="secondary" title="Đọc lại lịch sử biên nhận" disabled={busy||!live} onPress={()=>void load()}/>
   </View>;
 }
 
 const styles=StyleSheet.create({
-  summary:{gap:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
+  summary:{padding:12,gap:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,backgroundColor:'#FBF8EE'},
   badge:{flexDirection:'row',alignItems:'center',alignSelf:'flex-start',maxWidth:'100%',gap:spacing.xs,paddingHorizontal:spacing.sm,paddingVertical:spacing.xs,borderRadius:radius.md},
   badgeLabel:{...typography.bodyMd,color:colors.secondary,flexShrink:1},
-  title:{...typography.titleMd,color:colors.neutral},
-  body:{...typography.bodyMd,color:colors.neutral},hint:{...typography.caption,color:colors.secondary},
-  taskInfo:{gap:spacing.sm,paddingTop:spacing.md,borderTopWidth:1,borderTopColor:colors.border},
-  identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:6,backgroundColor:colors.surfaceAlt,borderRadius:radius.sm},
+  title:{...typography.bodyLg,lineHeight:22,color:colors.neutral},
+  sectionTitle:{...typography.labelLg,lineHeight:20,color:colors.neutral},
+  body:{...typography.bodyMd,lineHeight:21,color:colors.neutral},hint:{...typography.caption,color:colors.secondary},
+  taskInfo:{gap:spacing.sm,paddingTop:12,borderTopWidth:1,borderTopColor:colors.border},
+  identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:4,backgroundColor:colors.surface,borderRadius:radius.sm},
   code:{...typography.labelLg,lineHeight:20,color:colors.secondary,flexShrink:1},
   history:{backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
-  disclosure:{minHeight:52,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:'#FBF8EE',borderRadius:radius.lg,overflow:'hidden'},
+  disclosure:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:12,backgroundColor:'#FBF8EE',borderRadius:radius.lg,overflow:'hidden'},
   pressed:{backgroundColor:'#F3ECD6'},
-  historyContent:{padding:spacing.md,gap:spacing.md},
-  technical:{gap:spacing.sm,paddingBottom:spacing.md,borderBottomWidth:1,borderBottomColor:colors.border},
+  historyContent:{padding:12,gap:12},
+  compactAction:{alignSelf:'flex-start',maxWidth:'100%',backgroundColor:'#FBF8EE'},
+  technical:{gap:spacing.sm,paddingBottom:12,borderBottomWidth:1,borderBottomColor:colors.border},
   receipt:{gap:spacing.xs,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
   receiptLabel:{...typography.labelLg,color:colors.neutral},flex:{flex:1,minWidth:0},
 });
