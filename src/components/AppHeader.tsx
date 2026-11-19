@@ -18,7 +18,8 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, v
   const role = useAuthStore((state) => state.role);
 
   const crew = role === RoleCode.REPAIR_CREW;
-  const compact = crew || (variant === 'operatorCompact' && role === RoleCode.DRONE_OPERATOR);
+  const operatorCompact = variant === 'operatorCompact' && role === RoleCode.DRONE_OPERATOR;
+  const compact = crew || operatorCompact;
 
   const handleBack = () => {
     if (onBack) {
@@ -49,12 +50,12 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, v
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, operatorCompact && styles.operatorContainer]}>
       <View style={[styles.brandGroup, compact && styles.compactBrandGroup]}>
         {showBack ? (
           <Pressable
             onPress={handleBack}
-            style={({ pressed }) => [styles.backButton, crew && styles.compactAvatar, pressed && styles.backButtonPressed]}
+            style={({ pressed }) => [styles.backButton, crew && styles.compactAvatar, operatorCompact && styles.operatorBackButton, pressed && styles.backButtonPressed]}
             accessibilityRole="button"
             accessibilityLabel="Quay lại"
             hitSlop={8}
@@ -62,14 +63,14 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, v
             <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </Pressable>
         ) : null}
-        <Image source={require('../../assets/logo_hoanghai_icon.png')} style={[styles.logo, compact && styles.compactLogo]} resizeMode="contain" />
+        <Image source={require('../../assets/logo_hoanghai_icon.png')} style={[styles.logo, compact && styles.compactLogo, operatorCompact && styles.operatorLogo]} resizeMode="contain" />
         <View style={compact ? styles.compactBrandText : undefined}>
-          <Text style={[typography.titleMd, styles.brand]}>{crew ? 'BÊ TÔNG HOÀNG HẢI' : 'HOÀNG HẢI'}</Text>
-          <Text style={[typography.caption, styles.subtitle]}>{subtitle}</Text>
+          <Text style={[typography.titleMd, styles.brand, operatorCompact && styles.operatorBrand]}>{crew ? 'BÊ TÔNG HOÀNG HẢI' : 'HOÀNG HẢI'}</Text>
+          <Text style={[typography.caption, styles.subtitle, operatorCompact && styles.operatorSubtitle]}>{subtitle}</Text>
         </View>
       </View>
 
-      <View style={styles.actionGroup}>
+      <View style={[styles.actionGroup, operatorCompact && styles.operatorActions]}>
         {!compact ? <Pressable
           style={({ pressed }) => [styles.iconButton, pressed && styles.actionPressed]}
           onPress={handleNotificationPress}
@@ -93,6 +94,12 @@ export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, v
 }
 
 const styles = StyleSheet.create({
+  operatorContainer: { columnGap: 8 },
+  operatorLogo: { width: 40, height: 40, flexShrink: 0 },
+  operatorBrand: { fontSize: 18, lineHeight: 24 },
+  operatorSubtitle: { fontSize: 13, lineHeight: 18 },
+  operatorBackButton: { width: 48, height: 48, flexShrink: 0 },
+  operatorActions: { flexShrink: 0 },
   compactBrandGroup: { flex: 1, minWidth: 0 },
   compactBrandText: { flex: 1, minWidth: 0 },
   compactLogo: { width: 32, height: 32 },
