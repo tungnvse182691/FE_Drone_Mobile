@@ -119,3 +119,11 @@
 - NOT_RUN: OS font scaling/Reduce Motion, measured FPS, native offline/error, final native tab-input retention roundtrip and Back fallback without history. Input retention/hidden panels tested in Node, not claimed native. Recovery mutations and upload actions not executed. Native checks stopped at owner request to move on promptly.
 - Route matrix update: work-package checkpoint 5; survey-map checkpoint 6; sync checkpoint 7; profile checkpoint 8; Log checkpoint 9 implemented with limits above. Request-decline and upload native audit remain pending.
 - Local checkpoint commit subject: ui(operator): simplify log tabs and group lookup results. Main retained; no push; untracked artifacts preserved.
+
+## Checkpoint 10: decline task presentation
+
+- Baseline 51887fe. Native observed task 7ad31d42, newly assigned. Quiet neutral task border, cream ID badge, reduced heading weight, remove repeated row rules, content-width framed return control. Styles only in app/(drone)/request-decline.tsx; handlers, conditions, command panel/journal and API untouched. Existing press feedback retained; no new motion claimed.
+- Android BEFORE decline-before.png / AFTER decline-after.png under .cache/operator-uiux-20261119/, same emulator/session/task; both inspected. Empty reason correctly keeps save disabled and shows reason; return control pressed to task detail. No save/send/mutation or restart.
+- npx tsc --noEmit exit 0 (decline-tsc.log). node --test --test-concurrency=2 tests/drone-ui02b.test.cjs tests/package45-drone.test.cjs tests/package6-drone-recovery-ui.test.cjs: 58/58 PASS (decline-tests.log). git diff --check PASS. Self-review: style-only diff.
+- NOT_RUN: actual decline/save/confirmation, keyboard entry, native error/offline, OS font/Reduce Motion, FPS. Last full regression 1900/1900 was checkpoint 9, before this style-only patch. Owner requested prompt progress through remaining screens.
+- Local commit subject ui(operator): soften decline task summary. Main retained, no push, existing untracked preserved.

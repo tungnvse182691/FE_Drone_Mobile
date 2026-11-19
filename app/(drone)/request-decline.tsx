@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     backgroundColor: '#FEF9E7',
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: '#E8D9A9',
     marginBottom: spacing.md,
   },
   noticeText: {
@@ -279,6 +279,7 @@ const styles = StyleSheet.create({
   },
   card: {
     ...operatorAppearance.card,
+    borderColor: colors.border,
     marginBottom: spacing.md,
   },
   cardHeader: {
@@ -289,8 +290,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   cardCode: {
-    flex: 1,
-    color: colors.neutral,
+    ...typography.bodyMd,
+    fontFamily: 'Roboto-Medium',
+    flexShrink: 1,
+    color: colors.secondary,
+    backgroundColor: '#FFF8E8',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    overflow: 'hidden',
   },
   cardTitle: {
     color: colors.neutral,
@@ -307,7 +315,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
+    borderTopWidth: 0,
     borderTopColor: colors.border,
   },
   infoLabel: {
@@ -349,6 +357,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   secondaryButton: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    backgroundColor: colors.surface,
     marginTop: spacing.xs,
   },
   topBar: {
@@ -362,7 +376,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   topBarTitle: {
-    color: colors.neutral,
+    ...typography.bodyLg,
+    fontFamily: 'Roboto-Medium',
+    flexShrink: 1,
+    color: colors.secondary,
   },
   backButton: {
     width: 48,
