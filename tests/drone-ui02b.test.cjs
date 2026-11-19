@@ -43,13 +43,13 @@ test('02B Detail keeps technical IDs collapsed, toggles them and preserves Work 
   assert.ok(!s.nodes().some(n => n.props.accessibilityLabel === 'Từ chối nhiệm vụ')); s.unmount();
 });
 
-test('02B Log separates task, local commands and server reads with advanced lookup initially hidden', async () => {
+test('02B Log separates local commands and server reads with advanced lookup initially hidden', async () => {
   const s = drone('log', { listOperatorSurveyTasksReal: async () => ({ items: [fixture], nextCursor: null }) }, {
     expose: ['DroneLogContent'], exportName: 'DroneLogContent', props: { scope: 'test' },
     modules: { '../../src/components/drone/DroneTaskCommandPanel': { DroneTaskRecoveryList: 'DroneTaskRecoveryList' } },
   });
   s.render(); await s.flush();
-  for (const heading of ['Nhiệm vụ được giao', 'Lệnh trên thiết bị', 'Kết quả từ máy chủ']) assert.ok(text(s).includes(heading));
+  for (const heading of ['Lệnh trên thiết bị', 'Kết quả từ máy chủ']) assert.ok(text(s).includes(heading));
   assert.equal(s.nodes().filter(n => n.type === 'TextInput').length, 0);
   s.press('Tra cứu nâng cao bằng mã máy chủ'); await s.flush();
   assert.equal(s.nodes().filter(n => n.type === 'TextInput').length, 2);

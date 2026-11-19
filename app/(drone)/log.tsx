@@ -1,19 +1,20 @@
-import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { CrewContentTransition } from '../../src/components/crew/CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { DroneDatasetReadbackPanel } from '../../src/components/drone/DroneDatasetReadbackPanel';
 import { DroneTaskRecoveryList } from '../../src/components/drone/DroneTaskCommandPanel';
 import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import { useAuthStore } from '../../src/store/auth';
 import { apiClient } from '../../src/api/client';
 import { operatorTaskDisplayCode, operatorTaskStatusLabel } from '../../src/api/operator-task-view';
-import { OperatorTaskRow } from '../../src/components/drone/OperatorTaskRow';
 import { operatorAppearance } from '../../src/components/drone/appearance';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { getOperatorUploadSessionReal, getOperatorSurveyTaskDetailReal } from '../../src/api/droneApi';
@@ -58,13 +59,12 @@ export async function readOperatorLogResource(scope: string, kind: 'task' | 'upl
 export default function DroneLogScreen() {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
   const scope = operatorLogScope();
-  if (!scope) return <SafeAreaScreen header={<AppHeader subtitle="Nhật ký" variant="operatorCompact" />}><Text>Cần phiên Operator hợp lệ.</Text></SafeAreaScreen>;
+  if (!scope) return <SafeAreaScreen header={<AppHeader subtitle="Nhật ký" variant="operatorCompact" showBack fallbackRoute="/(drone)/requests" />}><Text>Cần phiên Operator hợp lệ.</Text></SafeAreaScreen>;
   return <DroneLogContent key={scope} scope={scope} />;
 }
 function DroneLogContent({ scope }: { scope: string }) {
   const readScope = useOperatorReadScope('log');
-  const pages = useOperatorTaskPages();
-  const { tasks, error: listError } = pages;
+  const [activeTab, setActiveTab] = useState<'commands' | 'lookup'>('commands');
   const [advanced, setAdvanced] = useState(false);
   const [taskId, setTaskId] = useState(''), [uploadId, setUploadId] = useState('');
   const [taskText, setTaskText] = useState<string | null>(null), [uploadText, setUploadText] = useState<string | null>(null);
@@ -95,64 +95,97 @@ function DroneLogContent({ scope }: { scope: string }) {
       if (active() && isCurrent()) setBusy(false);
     }
   };
-  return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhật ký" variant="operatorCompact" />}>
-    <View style={styles.tabs}>
-      <Pressable style={styles.taskLink} onPress={() => router.push('/(drone)/requests')} accessibilityRole="button"><Text style={typography.labelSm}>Nhiệm vụ</Text></Pressable>
-      <Text style={[typography.labelSm, styles.active]}>Nhật ký lệnh</Text>
+  return <SafeAreaView style={styles.screen} edges={['top', 'left', 'right']}>
+    <AppHeader subtitle="Nhật ký" variant="operatorCompact" showBack fallbackRoute="/(drone)/requests" />
+    <View style={styles.tabBar} accessibilityRole="tablist">
+      {([
+        ['commands', 'Lệnh đã lưu'], ['lookup', 'Tra cứu'],
+      ] as const).map(([id, label]) => <AnimatedPressable key={id} testID={`log-tab-${id}`}
+        accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected: activeTab === id }}
+        onPress={() => setActiveTab(id)} pressedScale={0.985}
+        android_ripple={{ color: operatorAppearance.pressed }}
+        style={[styles.tab, activeTab === id && styles.selectedTab]}>
+        <Text style={[styles.tabLabel, activeTab === id && styles.selectedTabLabel]}>{label}</Text>
+      </AnimatedPressable>)}
     </View>
-    <View style={styles.sectionHeading}><MaterialIcons name="pending-actions" size={20} color={colors.primary} /><Text style={typography.titleMd}>Lệnh trên thiết bị</Text></View>
+    <ScrollView testID="log-panel-commands" style={[styles.panel, activeTab !== 'commands' && styles.hidden]}
+      accessibilityElementsHidden={activeTab !== 'commands'} importantForAccessibility={activeTab === 'commands' ? 'auto' : 'no-hide-descendants'}
+      contentContainerStyle={styles.panelContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+    <CrewContentTransition ready={activeTab === 'commands'}>
+    <View style={styles.tabs}>
+      <Text style={[typography.bodyMd, styles.sectionLabel]}>Lệnh trên thiết bị</Text>
+      <AnimatedPressable style={styles.taskLink} android_ripple={{ color: operatorAppearance.pressed }} onPress={() => router.push('/(drone)/requests')} accessibilityRole="button"><Text style={[typography.labelSm, styles.tabLabel]}>Tất cả nhiệm vụ</Text></AnimatedPressable>
+    </View>
     <DroneTaskRecoveryList />
-    <Card style={styles.card}>
-      <View style={styles.sectionHeading}>
-        <Text style={[typography.titleMd, { flex: 1 }]}>Nhiệm vụ được giao</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại danh sách" accessibilityState={{ busy: pages.loading, disabled: pages.loading }} disabled={pages.loading} onPress={() => void pages.refresh()} style={styles.refreshButton}>
-          {pages.loading ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
-        </Pressable>
-      </View>
-      {tasks.map(task => <OperatorTaskRow key={task.id} task={task} onPress={() => { if (active()) router.push(`/(drone)/request-detail?taskId=${encodeURIComponent(task.id)}`); }} />)}
-      {!tasks.length ? <Text>Chưa có nhiệm vụ trong danh sách đã tải.</Text> : null}
-      {listError ? <Text accessibilityRole="alert">{listError}</Text> : null}
-      {pages.nextCursor ? <Button title={listError ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={pages.loading} loading={pages.loading} onPress={() => void pages.loadMore()} /> : null}
-    </Card>
-    <Card style={styles.card}>
+    </CrewContentTransition>
+    </ScrollView>
+    <ScrollView testID="log-panel-lookup" style={[styles.panel, activeTab !== 'lookup' && styles.hidden]}
+      accessibilityElementsHidden={activeTab !== 'lookup'} importantForAccessibility={activeTab === 'lookup' ? 'auto' : 'no-hide-descendants'}
+      contentContainerStyle={styles.panelContent} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+    <CrewContentTransition ready={activeTab === 'lookup'}>
+    <View style={styles.lookupSection}>
     <View style={styles.sectionHeading}><MaterialIcons name="cloud-done" size={20} color={colors.secondary} /><Text style={typography.titleMd}>Kết quả từ máy chủ</Text></View>
-    <Button title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
+    <Button style={styles.lookupButton} title={advanced ? 'Ẩn tra cứu nâng cao' : 'Tra cứu nâng cao bằng mã máy chủ'} variant="secondary" onPress={() => setAdvanced(v => !v)} />
     {advanced ? <>
-    <Card style={styles.card}>
-      <Text style={typography.titleMd}>Đọc lại nhiệm vụ</Text>
+    <Card style={styles.lookupCard}>
+      <Text style={styles.lookupTitle}>Đọc lại nhiệm vụ</Text>
       <TextInput style={styles.input} accessibilityLabel="Mã nhiệm vụ máy chủ" placeholder="UUID nhiệm vụ" value={taskId} editable={!busy} autoCapitalize="none" onChangeText={value => { setTaskId(value); setTaskText(null); setError(null); }} />
-      <Button title="Đọc trạng thái nhiệm vụ" variant="secondary" disabled={busy || !uuid(taskId.trim())} onPress={() => void check('task')} />
-      {taskText ? <Text style={typography.bodyMd}>{taskText}</Text> : null}
+      <Button style={styles.lookupAction} title="Đọc trạng thái nhiệm vụ" variant="secondary" disabled={busy || !uuid(taskId.trim())} onPress={() => void check('task')} />
+      {taskText ? <CrewContentTransition ready>
+        <View style={styles.readback} accessibilityLiveRegion="polite">
+          <View style={styles.readbackHeading}><MaterialIcons name="fact-check" size={18} color={colors.secondary} /><Text style={styles.readbackLabel}>Trạng thái từ máy chủ</Text></View>
+          <Text style={styles.readbackValue}>{taskText}</Text>
+        </View>
+      </CrewContentTransition> : null}
     </Card>
-    <Card style={styles.card}>
-      <Text style={typography.titleMd}>Kiểm tra tải lên</Text>
+    <Card style={styles.lookupCard}>
+      <Text style={styles.lookupTitle}>Kiểm tra tải lên</Text>
       <TextInput style={styles.input} accessibilityLabel="Mã phiên tải lên máy chủ" placeholder="UUID phiên tải lên" value={uploadId} editable={!busy} autoCapitalize="none" onChangeText={value => { setUploadId(value); setUploadText(null); setError(null); }} />
-      <Button title="Kiểm tra trạng thái tệp" variant="secondary" disabled={busy || !uuid(uploadId.trim())} onPress={() => void check('upload')} />
-      {uploadText ? <>
-        <Text style={typography.bodyMd}>{showFullUploadId ? `Mã phiên đầy đủ: ${uploadId.trim()}` : uploadText}</Text>
+      <Button style={styles.lookupAction} title="Kiểm tra trạng thái tệp" variant="secondary" disabled={busy || !uuid(uploadId.trim())} onPress={() => void check('upload')} />
+      {uploadText ? <CrewContentTransition ready>
+      <View style={styles.readback} accessibilityLiveRegion="polite">
+        <View style={styles.readbackHeading}><MaterialIcons name="insert-drive-file" size={18} color={colors.secondary} /><Text style={styles.readbackLabel}>Trạng thái từ máy chủ</Text></View>
+        <Text style={styles.readbackValue}>{showFullUploadId ? `Mã phiên đầy đủ: ${uploadId.trim()}` : uploadText}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel={showFullUploadId ? 'Ẩn mã phiên đầy đủ' : 'Hiện mã phiên đầy đủ'} onPress={() => setShowFullUploadId(value => !value)} style={styles.revealIdButton}>
           <MaterialIcons name={showFullUploadId ? 'visibility-off' : 'visibility'} size={16} color={colors.secondary} />
           <Text style={[typography.caption, styles.revealIdText]}>{showFullUploadId ? 'Ẩn mã phiên' : 'Hiện mã phiên đầy đủ để đối soát'}</Text>
         </Pressable>
-      </> : null}
+      </View>
+      </CrewContentTransition> : null}
     </Card>
-    <DroneDatasetReadbackPanel />
+    <DroneDatasetReadbackPanel compact />
     </> : null}
     {busy ? <Text>Đang đọc dữ liệu máy chủ…</Text> : null}
     {error ? <Text accessibilityRole="alert">{error}</Text> : null}
-    </Card>
-  </SafeAreaScreen>;
+    </View>
+    </CrewContentTransition>
+    </ScrollView>
+  </SafeAreaView>;
 }
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surfaceAlt },
+  tabBar: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.screenMargin, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+  tab: { flex: 1, minHeight: 48, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  selectedTab: { backgroundColor: '#FFF1CB', borderColor: '#E8D9A9' },
+  selectedTabLabel: { color: colors.primaryDark, fontFamily: 'Roboto-Medium' },
+  panel: { flex: 1 },
+  hidden: { display: 'none' },
+  panelContent: { padding: spacing.screenMargin, paddingBottom: 96 },
+  lookupSection: { gap: spacing.sm },
+  lookupTitle: { ...typography.bodyLg, fontFamily: 'Roboto-Medium', color: colors.neutral },
+  lookupCard: { ...operatorAppearance.card, borderColor: colors.border, padding: spacing.md, gap: spacing.sm },
+  lookupAction: { alignSelf: 'flex-start', maxWidth: '100%', borderRadius: radius.full, borderColor: '#E8D9A9', backgroundColor: '#FFF8E8' },
   tabs: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', paddingBottom: spacing.sm, minHeight: 48 },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginBottom: spacing.sm },
-  taskRow: { minHeight: 56, paddingVertical: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, gap: 4 },
-  note: { color: colors.secondary, marginBottom: spacing.sm },
-  active: { color: colors.primaryDark },
-  taskLink: { minHeight: 48, justifyContent: 'center', paddingRight: spacing.md },
-  card: { ...operatorAppearance.card, marginBottom: spacing.md, gap: spacing.sm },
-  refreshButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-  input: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, color: colors.neutral },
+  sectionLabel: { color: colors.secondary, flexShrink: 1 },
+  tabLabel: { color: colors.secondary, fontSize: 14, lineHeight: 20 },
+  taskLink: { minHeight: 48, justifyContent: 'center', paddingHorizontal: spacing.md, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  lookupButton: { alignSelf: 'flex-start', maxWidth: '100%', borderColor: colors.border, backgroundColor: '#FFF8E8' },
+  input: { ...typography.bodyMd, minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm, color: colors.neutral },
+  readback: { backgroundColor: '#F1F3F5', borderRadius: radius.md, padding: spacing.sm, gap: spacing.xs },
+  readbackHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  readbackLabel: { ...typography.caption, color: colors.secondary, flexShrink: 1 },
+  readbackValue: { ...typography.bodyMd, fontFamily: 'Roboto-Medium', color: colors.secondary },
   revealIdButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   revealIdText: { color: colors.secondary },
 });

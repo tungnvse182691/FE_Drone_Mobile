@@ -115,11 +115,13 @@ test('W1-02 Home marks first page and links to remaining tasks',async()=>{
  f.s.render();await f.s.flush();assert.match(text(f.s),/trang đầu/);assert.ok(f.s.nodes().some(n=>n.type==='AnimatedPressable'&&n.props.accessibilityLabel==='Xem tất cả nhiệm vụ khảo sát'));f.s.unmount();
 });
 
-test('W1-02 Log loads next page and refresh resets the loaded list',async()=>{
- const calls=[],f=drone('app/(drone)/log.tsx',{listOperatorSurveyTasksReal:async cursor=>{calls.push(cursor);return {items:[task(cursor?2:1)],nextCursor:cursor?null:'p2'};}},{exportName:'DroneLogContent',expose:'DroneLogContent',props:{scope:'actor-A'},modules:{
+test('W1-02 Log keeps recovery reachable without duplicating the survey list read',async()=>{
+ const calls=[],f=drone('app/(drone)/log.tsx',{listOperatorSurveyTasksReal:async cursor=>{calls.push(cursor);return {items:[task(1)],nextCursor:'p2'};}},{exportName:'DroneLogContent',expose:'DroneLogContent',props:{scope:'actor-A'},modules:{
  '../../src/components/drone/DroneDatasetReadbackPanel':{DroneDatasetReadbackPanel:'DroneDatasetReadbackPanel'},
  '../../src/components/drone/DroneTaskCommandPanel':{DroneTaskRecoveryList:'DroneTaskRecoveryList'},
  }});
- f.s.render();await f.s.flush();f.s.press('Tải thêm nhiệm vụ');await f.s.flush();assert.equal(f.s.nodes().filter(n=>n.type==='OperatorTaskRow').length,2);assert.ok(!f.s.nodes().some(n=>n.props.title==='Tải thêm nhiệm vụ'));
- f.s.nodes().find(n=>n.props.accessibilityLabel==='Đọc lại danh sách').props.onPress();await f.s.flush();assert.deepEqual(calls,[null,'p2',null]);assert.ok(f.s.nodes().some(n=>n.props.title==='Tải thêm nhiệm vụ'));f.s.unmount();
+ f.s.render();await f.s.flush();assert.deepEqual(calls,[]);
+ assert.ok(f.s.nodes().some(n=>n.type==='DroneTaskRecoveryList'));
+ assert.ok(!f.s.nodes().some(n=>n.props.title==='Tải thêm nhiệm vụ'));
+ assert.ok(!f.s.nodes().some(n=>n.props.testID==='log-tab-tasks'));f.s.unmount();
 });

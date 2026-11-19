@@ -187,12 +187,12 @@ test('Drone sync reports read errors without success and can reopen storage afte
  failRead=false;await button().props.onPress();await s.flush();assert.match(JSON.stringify(s.nodes()),/Đã làm mới danh sách/);s.unmount();
 });
 
-test('Drone log rejects a late list after actor leaves and returns to the same session',async()=>{
- let sessionIdentity; const d=deferred(),props={scope:''},s=drone('log',{listOperatorSurveyTasksReal:()=>d.promise},{exportName:'DroneLogContent',expose:'DroneLogContent',props,modules:{'../../src/api/authApi':{passwordSessionIdentity:t=>sessionIdentity(t)}}});
+test('Drone log does not fetch duplicate task data across an actor bounce',async()=>{
+ let sessionIdentity,reads=0; const props={scope:''},s=drone('log',{listOperatorSurveyTasksReal:async()=>{reads++;return {items:[],nextCursor:null};}},{exportName:'DroneLogContent',expose:'DroneLogContent',props,modules:{'../../src/api/authApi':{passwordSessionIdentity:t=>sessionIdentity(t)}}});
  // Use the actual exported scope from the running auth fixture.
  sessionIdentity=s.h.load('src/api/authApi.ts').passwordSessionIdentity;const current=s.h.getAuth();props.scope=JSON.stringify([null,sessionIdentity(current.token)]);
  s.render();s.h.login('DRONE_OPERATOR',id(9));s.h.changeAuth(current);
- d.resolve({items:[{id:id(2),status:'ACCEPTED'}]});await s.flush();
+ await s.flush();assert.equal(reads,0);
  assert.ok(!s.nodes().some(n=>n.type==='Pressable'&&JSON.stringify(n).includes('00000002')));s.unmount();
 });
 
