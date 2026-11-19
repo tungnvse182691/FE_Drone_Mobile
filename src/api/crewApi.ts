@@ -604,6 +604,8 @@ export interface RepairEligibilityReadView {
   policyRevisionId: string | null;
   policyContentHash: string | null;
   policyState: string;
+  /** API-146 policy rules; older/unavailable responses may omit this guidance. */
+  rules?: { code: string; unit: string; minimum: number; maximum: number }[];
   missingReasons: string[];
   version: string;
   assessmentId?: string | null;
