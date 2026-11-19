@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { VideoPreview } from './VideoPreview';
@@ -102,6 +102,7 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     </View> : null}
     {busy && abort.current ? <View style={{ gap: spacing.sm }}><Text>Đang tải bản xem tạm: {progress}%</Text><Button title="Hủy tải bản xem" variant="secondary" onPress={() => abort.current?.abort()} /></View> : null}
     {preview ? <Modal visible presentationStyle="fullScreen" animationType="none" onRequestClose={() => void stopPreview()}>
+      <SafeAreaProvider>
       <SafeAreaView style={[styles.viewer, immersive && { backgroundColor: '#000000' }]}>
         <View style={[styles.viewerHeader, immersive && styles.viewerDarkHeader]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Đóng video, quay lại chi tiết nhiệm vụ"
@@ -115,14 +116,18 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
             <Text style={[typography.caption, { color: colors.secondary }]}>{previewLabel}</Text>
             </> : null}
           </View>
+        </View>
+        <View style={[styles.viewerActions, immersive && styles.viewerDarkHeader]}>
           <Pressable accessibilityRole="button" accessibilityLabel={immersive ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
             onPress={() => setImmersive(value => !value)} android_ripple={{ color: operatorAppearance.border }}
-            style={({ pressed }) => [styles.viewerBack, immersive && styles.viewerDarkButton, pressed && { opacity: 0.7 }]}>
+            style={({ pressed }) => [styles.viewerExpand, immersive && styles.viewerDarkButton, pressed && { opacity: 0.7 }]}>
             <MaterialIcons name={immersive ? 'fullscreen-exit' : 'fullscreen'} size={24} color={immersive ? '#FFFFFF' : colors.neutral} />
+            <Text style={[typography.labelLg, styles.expandLabel, immersive && { color: '#FFFFFF' }]}>{immersive ? 'Thu nhỏ' : 'Phóng to'}</Text>
           </Pressable>
         </View>
         <VideoPreview key={preview.videoUri} lease={preview} expanded immersive={immersive} />
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal> : null}
   </Card>;
 }
@@ -133,7 +138,10 @@ const styles = StyleSheet.create({
   viewerDarkHeader: { backgroundColor: '#000000', borderBottomWidth: 0, paddingVertical: spacing.xs },
   viewerDarkButton: { backgroundColor: 'transparent', borderWidth: 0 },
   viewerBack: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, overflow: 'hidden' },
-  viewerHeading: { flex: 1, gap: spacing.xs },
+  viewerHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
+  viewerActions: { alignItems: 'flex-end', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
+  viewerExpand: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: 48, maxWidth: '100%', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, overflow: 'hidden' },
+  expandLabel: { flexShrink: 1, color: colors.neutral },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   submission: { alignItems: 'flex-start', borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg },
   selectedSubmission: { borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed },
