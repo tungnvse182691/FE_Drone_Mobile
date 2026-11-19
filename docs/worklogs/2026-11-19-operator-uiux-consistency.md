@@ -85,3 +85,10 @@
 - Android: work-package-before.png / work-package-after.png; opened first segment (work-package-segment-after.png: 0–100m), scrolled back and opened dedicated map. Same emulator/session; no mutations or restart. Native caught function-style AnimatedPressable losing row layout; replaced that presentation style with static mapEntry before final evidence.
 - tsc exit 0. operator-map + drone-ui02c + package45-drone: 40/40 PASS (work-package-tests.log). diff --check PASS; manual diff UI only. OS font scaling/Reduce Motion/FPS and unavailable access-point native case NOT_VERIFIED.
 - All image/log paths under .cache/operator-uiux-20261119. Full regression pending. Commit subject: ui(operator): refine pinned work package presentation.
+
+## Checkpoint 6: survey-map controls
+
+- Previous work-package commit 272bcad. Map chrome only: framed 48dp header actions, cream selected segment with readable 14sp label, neutral framed unavailable access notice. Existing AnimatedPressable press/reduce-motion path on header/segments. Map engine/provider, geometry selection, IDs, params, center and handlers unchanged.
+- Android survey-map-before.png / survey-map-after.png, task 25324063. Switched from segment 2 to segment 1 (selected state changed), refreshed read-only; unavailable access remains disabled; Android Back to package. Basemap is absent in baseline and after; not repaired or claimed as verified. Native access-point focus unavailable on this fixture; verified in targeted logic tests only.
+- tsc exit 0; operator-map + operator-navigation-ime: 18/18 PASS (survey-map-tests.log); diff --check PASS. OS Reduce Motion/font settings, offline map, engine lifecycle and FPS NOT_VERIFIED.
+- Commit subject: ui(operator): align survey map controls.

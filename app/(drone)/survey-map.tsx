@@ -9,6 +9,7 @@ import { operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import { RoadGuardMapLibre } from '../../src/components/map/RoadGuardMapLibre';
 import { EmptyState } from '../../src/components/EmptyState';
 import { colors, typography } from '../../src/design-tokens';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 
 /** Focused MapLibre view. API-225 pins remain the authority for API-104 reads. */
 export default function DroneSurveyMapScreen() {
@@ -30,25 +31,25 @@ export default function DroneSurveyMapScreen() {
 
   return <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.screen}>
     <View style={styles.header}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại gói công việc" onPress={() => router.back()} style={styles.iconButton}>
+      <AnimatedPressable android_ripple={{color:'#C9A22720'}} accessibilityRole="button" accessibilityLabel="Quay lại gói công việc" onPress={() => router.back()} style={styles.iconButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.neutral} />
-      </Pressable>
+      </AnimatedPressable>
       <Text style={[typography.titleMd, styles.title]}>Bản đồ khảo sát</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Tải lại bản đồ" disabled={loading} onPress={() => void reload()} style={styles.iconButton}>
+      <AnimatedPressable android_ripple={{color:'#C9A22720'}} accessibilityRole="button" accessibilityLabel="Tải lại bản đồ" disabled={loading} onPress={() => void reload()} style={styles.iconButton}>
         <MaterialIcons name="refresh" size={24} color={loading ? colors.secondary : colors.neutral} />
-      </Pressable>
+      </AnimatedPressable>
     </View>
     {loading ? <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
       : error || !workPackage ? <View style={styles.center}><EmptyState icon="map" title="Chưa tải được bản đồ" message={error ?? 'Vui lòng thử lại.'} actionLabel="Tải lại" onAction={() => void reload()} /></View>
         : <>
           {segments.length > 0 ? <View style={styles.selector}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segmentList}>
-              {segments.map((segment, index) => <Pressable key={segment.id} testID={`map-segment-${segment.id}`}
+              {segments.map((segment, index) => <AnimatedPressable android_ripple={{color:'#C9A22720'}} pressedScale={0.98} key={segment.id} testID={`map-segment-${segment.id}`}
                 accessibilityRole="button" accessibilityLabel={`Đoạn ${segment.sequence ?? index + 1}`} accessibilityState={{ selected: !accessFocused && selected?.id === segment.id }}
                 onPress={() => { setSelectedId(segment.id); setAccessFocused(false); }} style={[styles.segment, !accessFocused && selected?.id === segment.id && styles.activeSegment]}>
                 <MaterialIcons name="route" size={18} color={!accessFocused && selected?.id === segment.id ? colors.brandGold : colors.secondary} />
-                <Text style={typography.labelSm}>Đoạn {segment.sequence ?? index + 1}</Text>
-              </Pressable>)}
+                <Text style={[typography.labelLg,{color:colors.neutral}]}>Đoạn {segment.sequence ?? index + 1}</Text>
+              </AnimatedPressable>)}
             </ScrollView>
           </View> : null}
           <View testID="survey-map-canvas" style={styles.canvas}>
@@ -59,7 +60,7 @@ export default function DroneSurveyMapScreen() {
           </View>
           <View style={styles.footer}>
             <Pressable testID="focus-map-access" accessibilityRole="button" accessibilityLabel="Xem điểm tiếp cận" disabled={!access}
-              onPress={() => setAccessFocused(true)} style={styles.legend}>
+              onPress={() => setAccessFocused(true)} android_ripple={{color:'#C9A22720'}} style={[styles.legend, !access && styles.unavailableLegend]}>
               <MaterialIcons name="place" size={22} color={colors.brandGold} />
               <Text style={[typography.bodyMd, styles.title]}>{access ? 'Điểm tiếp cận' : 'Chưa có điểm tiếp cận'}</Text>
               {access ? <MaterialIcons name="my-location" size={22} color={colors.brandGold} /> : null}
@@ -74,16 +75,17 @@ export default function DroneSurveyMapScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
-  iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  iconButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   title: { flex: 1, color: colors.neutral },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   canvas: { flex: 1 },
   selector: { borderBottomWidth: 1, borderBottomColor: colors.border },
   segmentList: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   segment: { minHeight: 48, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: colors.border, borderRadius: 14 },
-  activeSegment: { backgroundColor: colors.surfaceAlt, borderColor: colors.brandGold },
+  activeSegment: { backgroundColor: '#FFF1CB', borderColor: '#E8D9A9' },
   footer: { padding: 16, gap: 8, borderTopWidth: 1, borderTopColor: colors.border },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48 },
+  legend: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48, padding: 12, borderRadius: 12, backgroundColor: '#FFF1CB', borderWidth: 1, borderColor: '#E8D9A9' },
+  unavailableLegend: { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
   notice: { ...typography.caption, color: colors.secondary, lineHeight: 19 },
 });
