@@ -1,7 +1,8 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import { Button } from '../../src/components/Button';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -64,25 +65,25 @@ export default function DroneRequestsScreen() {
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" variant="operatorCompact" />}>
       <View style={styles.toolbar}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Lọc trạng thái: ${selectedLabel}`}
+        <AnimatedPressable android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="button" accessibilityLabel={`Lọc trạng thái: ${selectedLabel}`}
           accessibilityState={{ expanded: filterOpen }}
           onPress={() => setFilterOpen(open => !open)} style={styles.filterToggle}>
           <MaterialIcons name="filter-list" size={20} color={colors.secondary} />
           <Text style={styles.filterLabel}>{selectedLabel}</Text>
           <MaterialIcons name={filterOpen ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Làm mới nhiệm vụ"
+        </AnimatedPressable>
+        <AnimatedPressable android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="button" accessibilityLabel="Làm mới nhiệm vụ"
           disabled={loading} accessibilityState={{ disabled: loading, busy: loading }}
           style={styles.iconButton} onPress={() => void fetchTasks()}>
           {loading ? <ActivityIndicator size="small" color={colors.brandGold} accessibilityLabel="Đang tải nhiệm vụ" /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
-        </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Nhật ký lệnh"
+        </AnimatedPressable>
+        <AnimatedPressable android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="button" accessibilityLabel="Nhật ký lệnh"
           style={styles.iconButton} onPress={() => router.push('/(drone)/log')}>
           <MaterialIcons name="history" size={24} color={colors.secondary} />
-        </Pressable>
+        </AnimatedPressable>
       </View>
       {filterOpen ? <View style={styles.filterMenu} accessibilityRole="radiogroup">
-        {options.map(option => <Pressable key={option.key} accessibilityRole="radio"
+        {options.map(option => <AnimatedPressable key={option.key} pressedScale={0.995} android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="radio"
           accessibilityLabel={`${option.label} (${option.count})`}
           accessibilityState={{ checked: selectedKey === option.key }}
           style={[styles.filterOption, selectedKey === option.key && styles.filterOptionSelected]}
@@ -92,7 +93,7 @@ export default function DroneRequestsScreen() {
           <Text style={styles.optionCount}>{option.count}</Text>
           <MaterialIcons name={selectedKey === option.key ? 'radio-button-checked' : 'radio-button-unchecked'}
             size={20} color={selectedKey === option.key ? colors.primary : colors.secondary} />
-        </Pressable>)}
+        </AnimatedPressable>)}
       </View> : null}
       <Text style={[typography.caption, styles.resultSummary]}>
         {selectedKey === 'all' ? `${tasks.length} nhiệm vụ đã tải` : `${filteredRequests.length} trong ${tasks.length} nhiệm vụ đã tải`}
@@ -130,7 +131,7 @@ export default function DroneRequestsScreen() {
             onPress={() => router.push({ pathname: '/(drone)/request-detail', params: { taskId: item.id, code: operatorTaskDisplayCode(item.id) } })} />)}
         </View>
       )}
-      {pages.nextCursor ? <Button title={error ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={loading} loading={loading} onPress={() => void pages.loadMore()} /> : !loading && !error ? <Text style={typography.caption}>Đã tải hết danh sách nhiệm vụ.</Text> : null}
+      {pages.nextCursor ? <Button style={styles.loadMore} icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />} title={error ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={loading} loading={loading} onPress={() => void pages.loadMore()} /> : !loading && !error ? <Text style={[typography.caption, styles.endOfList]}>Đã tải hết danh sách nhiệm vụ.</Text> : null}
     </SafeAreaScreen>
   );
 }
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   filterToggle: {
     flex: 1,
@@ -150,8 +151,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderWidth: 1,
-    borderColor: operatorAppearance.border,
-    borderRadius: radius.md,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
     backgroundColor: colors.surface,
   },
   filterLabel: {
@@ -159,12 +161,12 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.neutral,
   },
-  iconButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg, overflow: 'hidden' },
   filterMenu: {
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
     borderWidth: 1,
-    borderColor: operatorAppearance.border,
-    borderRadius: radius.md,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
@@ -180,7 +182,9 @@ const styles = StyleSheet.create({
   optionLabel: { ...typography.bodyMd, color: colors.neutral, flex: 1 },
   optionLabelSelected: { fontWeight: '600' },
   optionCount: { ...typography.caption, color: colors.secondary },
-  resultSummary: { color: colors.secondary, marginVertical: spacing.sm },
+  resultSummary: { color: colors.secondary, marginVertical: spacing.md },
+  loadMore: { alignSelf: 'center', maxWidth: '100%', borderRadius: radius.full, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, marginBottom: spacing.md },
+  endOfList: { color: colors.secondary, textAlign: 'center', paddingBottom: spacing.md },
   errorCard: { ...operatorAppearance.card, padding: 12, marginBottom: 12 },
   errorText: { ...typography.bodyMd, color: colors.secondary },
   listContainer: { gap: 12, paddingBottom: 24 },

@@ -42,7 +42,7 @@
 | Route | Status |
 | --- | --- |
 | home | Presentation implemented; checkpoint native limits above |
-| requests | Shared task row updated; route-specific checkpoint pending |
+| requests | Toolbar/filter/pagination presentation implemented; native limits below |
 | request-detail | Pending |
 | request-decline | Pending |
 | work-package | Pending |
@@ -60,3 +60,12 @@
 - Android: ADB swipe up moved to last Home task; swipe down returned to greeting; See all opened Nhiệm vụ khảo sát and showed loading. No restart/reload.
 - Fresh `npx tsc --noEmit`: exit 0; `node --test --test-concurrency=2 tests/operator-ui05.test.cjs tests/operator-ui-integration.test.cjs`: 18/18 PASS (home-tiles-tests.log); `git diff --check`: PASS.
 - OS font scaling and OS Reduce Motion NOT_VERIFIED; full regression deferred to final Operator checkpoint. Commit subject `ui(operator): apply approved tonal home metrics`.
+
+## Checkpoint 3: survey task list
+
+- Previous checkpoints: 5a76790 (initial Home/shared row), 01d7782 (approved Home tiles). Baseline for this checkpoint: 01d7782.
+- `app/(drone)/requests.tsx` only: neutral filter/menu outlines, cream framed refresh/history actions, 8dp toolbar gaps, existing AnimatedPressable press feedback/ripple with existing Reduce Motion path, centered rounded load-more action. No filter/count/pagination/route/API/handler changes.
+- BEFORE requests-before.png (closed) and requests-filter-before.png; AFTER requests-after.png (closed) and requests-filter-after.png. All under `.cache/operator-uiux-20261119/`, same Android emulator/session. Shared row already changed in checkpoint 1 before these list baselines.
+- Android: expanded filter; selected ongoing => 11 of 50; refreshed with same result; reopened and returned to all states. Native busy frame was too brief to assert; targeted test verifies busy/disabled with retained tasks. No restart or mutation.
+- `npx tsc --noEmit`: exit 0. `node --test --test-concurrency=2 tests/operator-ui05.test.cjs tests/operator-ui-integration.test.cjs tests/operator-refresh-ui.test.cjs`: 31/31 PASS (requests-targeted.log). `git diff --check`: PASS. Manual diff: unchanged callbacks, business conditions and text/data.
+- Native load-more reachability/press, empty/error, OS font scaling/Reduce Motion, FPS: NOT_VERIFIED. Full regression pending final checkpoint. Commit subject: `ui(operator): refine survey list controls and pagination`.
