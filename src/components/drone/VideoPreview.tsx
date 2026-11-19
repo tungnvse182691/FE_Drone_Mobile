@@ -8,7 +8,7 @@ import { spacing, typography } from '../../design-tokens';
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 
 /** One immutable, authorized local file per mount. Native controls handle play/seek/fullscreen. */
-export function VideoPreview({ lease }: { lease: OperatorVideoLease }) {
+export function VideoPreview({ lease, expanded = false, immersive = false }: { lease: OperatorVideoLease; expanded?: boolean; immersive?: boolean }) {
   const player = useVideoPlayer({ uri: lease.videoUri }, instance => {
     instance.loop = false;
     instance.timeUpdateEventInterval = 0.5;
@@ -44,19 +44,19 @@ export function VideoPreview({ lease }: { lease: OperatorVideoLease }) {
   }, [player, status, timedOut]);
 
   const failed = status === 'error' || Boolean(error) || timedOut;
-  return <View style={{ gap: spacing.sm }}>
-    {failed ? <Text accessibilityRole="alert" style={typography.bodyMd}>
+  return <View style={{ gap: spacing.sm, ...(immersive ? { flex: 1 } : {}) }}>
+    {failed ? <Text accessibilityRole="alert" style={[typography.bodyMd, expanded && { padding: spacing.md,  backgroundColor: '#FFFFFF', color: '#1A1D20' }]}>
       {timedOut ? 'Video đã tải nhưng thiết bị chưa đọc được dữ liệu để phát.' : 'Video đã tải nhưng trình phát của thiết bị không giải mã được tệp. Định dạng có thể không được hỗ trợ hoặc tệp không hợp lệ.'}
       {' Đóng video rồi mở lại để thử; nếu vẫn lỗi, cần bản xem H.264 tương thích với thiết bị.'}
     </Text> : <>
-      <VideoView player={player} style={{ height: 240 }} contentFit="contain" nativeControls
-        fullscreenOptions={{ enable: true }} allowsPictureInPicture={false}
+      <VideoView player={player} style={immersive ? { flex: 1, minHeight: 160, backgroundColor: '#000000' } : expanded ? { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#000000' } : { height: 240 }} contentFit="contain" nativeControls
+        fullscreenOptions={{ enable: !expanded }} allowsPictureInPicture={false}
         onFirstFrameRender={() => setFirstFrame(true)} />
-      <Text accessibilityLiveRegion="polite" style={typography.caption}>
+      {!immersive ? <Text accessibilityLiveRegion="polite" style={[typography.caption, expanded && { paddingHorizontal: spacing.md, paddingBottom: spacing.md }]}>
         {status === 'readyToPlay'
           ? `${isPlaying ? 'Đang phát' : 'Đã sẵn sàng · Nhấn phát trên video'} · ${time(currentTime)} / ${time(duration)}${firstFrame ? ' · Đã hiển thị hình' : ''}`
           : 'Đã tải tệp · Đang kiểm tra khả năng phát trên thiết bị…'}
-      </Text>
+      </Text> : null}
     </>}
   </View>;
 }

@@ -53,7 +53,7 @@ function screen(file, options = {}) {
   const factoryModules = {};
   let localMedia;
   const code=ts.transpileModule(fs.readFileSync(path.resolve(__dirname,'../..',file),'utf8')+(options.expose?'\nexport { '+options.expose+' };':''),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText;
-  vm.runInNewContext(code,{module,exports:module.exports,React:react,Date,setTimeout,clearTimeout,Uint8Array,require:name=>{
+  vm.runInNewContext(code,{module,exports:module.exports,React:react,Date,setTimeout,clearTimeout,setInterval,clearInterval,AbortController,Uint8Array,require:name=>{
     if(options.moduleFactories?.[name])return factoryModules[name]??=(options.moduleFactories[name]({react,modules}));
     if(options.modules?.[name])return options.modules[name];
     if(modules[name])return modules[name];

@@ -1,5 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { VideoPreview } from './VideoPreview';
 import { useAuthStore } from '../../store/auth';
@@ -20,6 +22,8 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
   const [page, setPage] = useState<OperatorDatasetPage | null>(null), [error, setError] = useState('');
   const [selected, setSelected] = useState<{ id: string; videos: OperatorVideoSource[]; telemetryStatus: string } | null>(null);
   const [preview, setPreview] = useState<OperatorVideoLease | null>(null), [progress, setProgress] = useState(0), [busy, setBusy] = useState(false);
+  const [previewLabel, setPreviewLabel] = useState('');
+  const [immersive, setImmersive] = useState(false);
   const alive = useRef(false), serial = useRef(0), lock = useRef(false), lease = useRef<OperatorVideoLease | null>(null);
   const abort = useRef<AbortController | null>(null);
   const cleanup = useRef<Promise<void>>(Promise.resolve());
@@ -29,6 +33,7 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     abort.current?.abort(); abort.current = null;
     const prior = lease.current; lease.current = null;
     setPreview(null);
+    setImmersive(false);
     cleanup.current = cleanup.current.then(() => prior?.dispose()).then(() => undefined).catch(() => undefined);
     return cleanup.current;
   };
@@ -66,6 +71,9 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     const controller = new AbortController(); abort.current = controller;
     const next = await downloadOperatorVideo(scope, taskId, projectId, selected.id, fileId, controller.signal, percent => { if (current()) setProgress(percent); });
     if (!current()) { await next.dispose(); return; }
+    const index = selected.videos.findIndex(file => file.fileId === fileId);
+    const file = selected.videos[index];
+    setPreviewLabel(file ? `Video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB` : 'Video đã gửi');
     lease.current = next; setPreview(next);
   });
   // A local preview is not an offline authorization grant. Periodically recheck the server;
@@ -82,25 +90,56 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     return () => { stopped = true; clearInterval(timer); };
   }, [scope, taskId, projectId, preview, selected]));
   return <Card style={styles.section}>
-    <Text style={[typography.titleMd, styles.title]}>Video đã gửi</Text>
-    <Button style={styles.readAction} variant="secondary" title={page ? 'Làm mới video đã gửi' : 'Xem video đã gửi'} onPress={() => void load()} disabled={busy} loading={busy} />
+    <View style={styles.sectionHeading}><MaterialIcons name="video-library" size={22} color={colors.secondary}/><Text style={[typography.titleMd, styles.title]}>Video đã gửi</Text></View>
+    <Button style={styles.readAction} icon={<MaterialIcons name="refresh" size={20} color={colors.secondary}/>} variant="secondary" title={page ? 'Làm mới video đã gửi' : 'Xem video đã gửi'} onPress={() => void load()} disabled={busy} loading={busy} />
     {error ? <Text accessibilityRole="alert" style={typography.bodyMd}>{error}</Text> : null}
     {page?.items.length === 0 ? <Text style={typography.bodyMd}>Nhiệm vụ chưa có bộ dữ liệu đã nộp.</Text> : null}
-    {page?.items.map((row, index) => <Button key={row.id} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />)}
+    {page?.items.map((row, index) => <Button key={row.id} style={[styles.submission, selected?.id === row.id && styles.selectedSubmission]} icon={<MaterialIcons name={selected?.id === row.id ? "check-circle-outline" : "chevron-right"} size={22} color={colors.secondary}/>} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />)}
     {page?.nextCursor ? <Button variant="secondary" title="Xem thêm lần nộp" disabled={busy} onPress={() => void load(true)} /> : null}
-    {selected ? <View style={{ gap: spacing.sm }}>
-      <Text style={typography.caption}>{selected.telemetryStatus === 'MISSING' ? 'Không kèm SRT/GPS. Video vẫn đã được nộp.' : 'Dữ liệu GPS được máy chủ kiểm tra riêng.'}</Text>
-      {selected.videos.length === 0 ? <Text>Chưa có tệp video trong bộ dữ liệu.</Text> : selected.videos.map((file, index) => <Button key={file.fileId} variant="secondary" title={`Mở video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB`} onPress={() => void play(file.fileId)} disabled={busy} />)}
+    {selected ? <View style={styles.fileList}>
+      <Text style={[typography.caption, styles.fileNote]}>{selected.telemetryStatus === 'MISSING' ? 'Không kèm SRT/GPS. Video vẫn đã được nộp.' : 'Dữ liệu GPS được máy chủ kiểm tra riêng.'}</Text>
+      {selected.videos.length === 0 ? <Text>Chưa có tệp video trong bộ dữ liệu.</Text> : selected.videos.map((file, index) => <Button key={file.fileId} style={styles.videoAction} icon={<MaterialIcons name="play-circle-outline" size={24} color={colors.neutral}/>} variant="secondary" title={`Mở video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB`} onPress={() => void play(file.fileId)} disabled={busy} />)}
     </View> : null}
     {busy && abort.current ? <View style={{ gap: spacing.sm }}><Text>Đang tải bản xem tạm: {progress}%</Text><Button title="Hủy tải bản xem" variant="secondary" onPress={() => abort.current?.abort()} /></View> : null}
-    {preview ? <>
-      <VideoPreview key={preview.videoUri} lease={preview} />
-      <Button title="Đóng video" variant="secondary" onPress={stopPreview} />
-    </> : null}
+    {preview ? <Modal visible presentationStyle="fullScreen" animationType="none" onRequestClose={() => void stopPreview()}>
+      <SafeAreaView style={[styles.viewer, immersive && { backgroundColor: '#000000' }]}>
+        <View style={[styles.viewerHeader, immersive && styles.viewerDarkHeader]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Đóng video, quay lại chi tiết nhiệm vụ"
+            onPress={() => void stopPreview()} android_ripple={{ color: operatorAppearance.border }}
+            style={({ pressed }) => [styles.viewerBack, immersive && styles.viewerDarkButton, pressed && { opacity: 0.7 }]}>
+            <MaterialIcons name="arrow-back" size={24} color={immersive ? '#FFFFFF' : colors.neutral} />
+          </Pressable>
+          <View style={styles.viewerHeading}>
+            {!immersive ? <>
+            <Text accessibilityRole="header" style={[typography.titleMd, styles.title]}>Xem video</Text>
+            <Text style={[typography.caption, { color: colors.secondary }]}>{previewLabel}</Text>
+            </> : null}
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={immersive ? 'Thoát toàn màn hình' : 'Xem toàn màn hình'}
+            onPress={() => setImmersive(value => !value)} android_ripple={{ color: operatorAppearance.border }}
+            style={({ pressed }) => [styles.viewerBack, immersive && styles.viewerDarkButton, pressed && { opacity: 0.7 }]}>
+            <MaterialIcons name={immersive ? 'fullscreen-exit' : 'fullscreen'} size={24} color={immersive ? '#FFFFFF' : colors.neutral} />
+          </Pressable>
+        </View>
+        <VideoPreview key={preview.videoUri} lease={preview} expanded immersive={immersive} />
+      </SafeAreaView>
+    </Modal> : null}
   </Card>;
 }
 
 const styles = StyleSheet.create({
+  viewer: { flex: 1, backgroundColor: colors.surface },
+  viewerHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  viewerDarkHeader: { backgroundColor: '#000000', borderBottomWidth: 0, paddingVertical: spacing.xs },
+  viewerDarkButton: { backgroundColor: 'transparent', borderWidth: 0 },
+  viewerBack: { width: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, borderWidth: 1, borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, overflow: 'hidden' },
+  viewerHeading: { flex: 1, gap: spacing.xs },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  submission: { alignItems: 'flex-start', borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg },
+  selectedSubmission: { borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed },
+  fileList: { gap: spacing.sm, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
+  fileNote: { color: colors.secondary, lineHeight: 18 },
+  videoAction: { alignItems: 'flex-start', borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg },
   section: { gap: spacing.sm, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
   title: { color: colors.neutral },
   readAction: { alignSelf: 'flex-start', maxWidth: '100%', borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg },

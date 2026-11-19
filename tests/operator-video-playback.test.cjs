@@ -71,12 +71,12 @@ test('cancel during download prevents a lease and allows manual retry',async()=>
 module.exports={cacheFixture};
 
 const {screen}=require('./helpers/roadfe-screen.cjs');
-function previewFixture() {
+function previewFixture(props={}) {
   const callbacks={},calls=[];let detach;
   const player={status:'loading',playing:false,duration:0,currentTime:0,
     pause:()=>calls.push('pause'),replace:source=>calls.push(['replace',source])};
   const lease={videoUri:'file:///private/preview/video.mp4',attachPlayer:f=>{detach=f;return()=>{f();detach=undefined;};}};
-  const ui=screen('src/components/drone/VideoPreview.tsx',{exportName:'VideoPreview',props:{lease},modules:{
+  const ui=screen('src/components/drone/VideoPreview.tsx',{exportName:'VideoPreview',props:{lease,...props},modules:{
     'expo-video':{VideoView:'VideoView',useVideoPlayer:(source,setup,options)=>{assert.equal(source.uri,lease.videoUri);assert.equal(options?.seekBackwardIncrement,5);assert.equal(options?.seekForwardIncrement,5);setup(player);return player;}},
   },moduleFactories:{expo:({react})=>({useEvent:(instance,name,initial)=>{
     const [value,setValue]=react.useState(initial??null);
@@ -104,6 +104,13 @@ test('decoder/corrupt-source errors replace the black player with an alert and d
   }
 });
 
+test('dedicated viewer expands the same native player without launching another Android Activity',()=>{
+ const ui=previewFixture({expanded:true,immersive:true});
+ const view=ui.nodes().find(n=>n.type==='VideoView');
+ assert.equal(view.props.fullscreenOptions.enable,false);assert.equal(view.props.nativeControls,true);assert.equal(view.props.style.flex,1);
+ assert.ok(!ui.nodes().some(n=>n.props.accessibilityLiveRegion==='polite'));ui.unmount();
+});
+
 test('initial readiness timeout never expires a previously ready video during seek buffering',async(t)=>{
   t.mock.timers.enable({apis:['setTimeout']});
   const ui=previewFixture();
@@ -113,4 +120,10 @@ test('initial readiness timeout never expires a previously ready video during se
   assert.ok(ui.nodes().some(n=>n.type==='VideoView'));
   assert.ok(!ui.nodes().some(n=>n.props.accessibilityRole==='alert'));
   ui.unmount();
+});
+
+test('default dedicated viewer uses a contained 16:9 player instead of filling the screen',()=>{
+ const ui=previewFixture({expanded:true});const view=ui.nodes().find(n=>n.type==='VideoView');
+ assert.equal(view.props.style.aspectRatio,16/9);assert.equal(view.props.style.flex,undefined);assert.equal(view.props.contentFit,'contain');
+ assert.equal(view.props.fullscreenOptions.enable,false);ui.unmount();
 });

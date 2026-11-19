@@ -27,8 +27,8 @@ test('UI06 Detail keeps raw identities and versions in expanded technical conten
 
 test('UI06 Upload uses compact file rows without invented preview or location metadata',async()=>{
  const s=drone('upload',{}, {params:{taskId:task.id}});s.render();await s.flush();
- assert.doesNotMatch(text(s),/Chưa có ảnh xem trước/);assert.doesNotMatch(text(s),/Chưa được máy chủ xác minh/);assert.match(text(s),/Không bắt buộc/);
- assert.doesNotMatch(text(s),/Tọa độ ghi hình:|Ghi chú hiện trường/);assert.match(text(s),/Video MP4/);assert.match(text(s),/Dữ liệu GPS · SRT/);
+ assert.doesNotMatch(text(s),/Chưa có ảnh xem trước/);assert.doesNotMatch(text(s),/Chưa được máy chủ xác minh/);
+ assert.doesNotMatch(text(s),/Tọa độ ghi hình:|Ghi chú hiện trường/);assert.match(text(s),/Video MP4/);assert.doesNotMatch(text(s),/Dữ liệu GPS · SRT|Không bắt buộc/);
  assert.ok(s.nodes().some(n=>n.type==='RecordingDateTimeField'));
  const submit=s.nodes().find(n=>n.type==='Button'&&n.props.title==='Nộp bộ dữ liệu 4K RGB');assert.equal(submit.props.disabled,true);assert.equal(submit.props.style.backgroundColor,'#C9A227');assert.equal(submit.props.variant,'primary');
  const reason=s.nodes().find(n=>n.props.testID==='dataset-submit-requirement');assert.ok(reason,'disabled dataset submission must explain the next requirement');
