@@ -81,3 +81,14 @@ D commit: 8fab41c. File: app/(drone)/survey-map.tsx.
 - npx tsc --noEmit exit0; operator-map + wave1-drone + drone-ui02b:64/64 PASS (survey-map-targeted.log), geometry/source/assigned scope tests giữ nguyên. git diff --check PASS.
 - NOT_VERIFIED: network error/offline/empty native, pinch/pan/tile correctness, font lớn, OS Reduce Motion, FPS/APK/iPhone. Full regression cuối phiên. Không mutation.
 - Commit E: commit chứa mục này, SHA ghi checkpoint sau.
+
+## F — Tải dữ liệu khảo sát (20/11)
+
+E commit: b5c4ea0. File: app/(drone)/upload.tsx.
+- Baseline upload-before-stable.png: icon tiêu đề lặp, các hành động phụ cùng vàng với CTA. Dùng title/navy và caption slate, bỏ icon Máy bay/Tệp đã lưu; nút chọn/đổi tệp và lưu nháp trung tính radius12. Hàng wrap và tiến trình tabular; không đổi công thức progress, receipt hoặc điều kiện.
+- AnimatedPressable cho disclosure Tệp đã lưu, timing150ms/Reduce Motion kế thừa; không trì hoãn handler. Button/choice còn lại giữ phản hồi hiện có.
+- Android Expo Go task Đã nhận2fb2b846: AFTER upload-after.png; mở Tệp đã lưu thấy empty thật0, scroll tới CTA khóa kèm lý do chọn MP4 (upload-storage-after.png), Back về Chi tiết. Không chọn file/máy bay, lưu nháp hoặc submit. upload-before.png thực tế Chi tiết, không dùng làm baseline Upload.
+- npx tsc --noEmit exit0 (upload-tsc.log). node --test package45-drone, package6-drone-files/selection/dataset-replay, operator-upload-draft/storage-transfer/recording-time, drone-android01-ui:61/61 PASS (upload-targeted.log). git diff --check PASS.
+- Self-review: prefix nghiệp vụ trước fileCard nguyên vẹn; onPress/disabled/callback/route/receipt và file URI không đổi. Không sửa shared component.
+- NOT_VERIFIED: upload/VERIFY_PENDING/pause/cancel/replay native, selected file/keyboard/long filename native, network error/offline, font lớn/Reduce Motion OS/FPS/APK. Không mutation lấy bằng chứng. Full regression cuối phiên.
+- Commit F: commit chứa mục này; SHA ghi checkpoint tiếp.

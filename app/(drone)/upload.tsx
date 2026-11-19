@@ -9,6 +9,7 @@ import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { operatorAppearance } from '../../src/components/drone/appearance';
 import { RecordingDateTimeField } from '../../src/components/drone/RecordingDateTimeField';
 import { Card } from '../../src/components/Card';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { Button } from '../../src/components/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { cancelOperatorUploadSession, orchestrateDroneUpload, operatorDatasetScope, readOperatorDatasetReadback, submitDroneDataset, replayDroneDataset, type DroneDatasetPlan } from '../../src/api/droneDatasetWorkflow';
@@ -514,7 +515,7 @@ export default function DroneUploadScreen() {
     {!submitting&&!received&&!pendingDataset?<>
     {!params.taskId?<Button title="Chọn nhiệm vụ từ máy chủ" variant="secondary" onPress={()=>router.push('/(drone)/requests')}/>:null}
     <Card style={styles.card}>
-      <View style={styles.row}><MaterialIcons name="flight" size={23} color={colors.secondary}/><Text style={styles.heading}>Máy bay</Text>
+      <View style={styles.row}><Text style={styles.heading}>Máy bay</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Tải lại máy bay đủ điều kiện" disabled={eligibleLoading} onPress={()=>void loadEligibleDrones()} android_ripple={{color:operatorAppearance.pressed}} style={styles.iconButton}>
           {eligibleLoading?<ActivityIndicator color={colors.secondary}/>:<MaterialIcons name="refresh" size={22} color={colors.secondary}/>}
         </Pressable>
@@ -530,9 +531,9 @@ export default function DroneUploadScreen() {
     {copying?<View accessibilityRole="alert" style={styles.notice}><ActivityIndicator color={colors.secondary}/><Text style={styles.noticeText}>Đang chọn hoặc sao lưu tệp. Chờ hoàn tất trước khi chọn tệp tiếp theo.</Text></View>:null}
     <Card style={styles.card}>
       <View style={styles.row}>
-        <Pressable testID="saved-files-toggle" accessibilityRole="button" accessibilityLabel="Tệp đã lưu trên thiết bị" accessibilityState={{expanded:filesExpanded}} onPress={()=>setFilesExpanded(v=>!v)} android_ripple={{color:operatorAppearance.pressed}} style={[styles.row,{flex:1,minHeight:48}]}>
-          <MaterialIcons name="sd-storage" size={23} color={colors.secondary}/><Text style={styles.heading}>Tệp đã lưu ({savedFiles.length})</Text><MaterialIcons name={filesExpanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
-        </Pressable>
+        <AnimatedPressable testID="saved-files-toggle" accessibilityRole="button" accessibilityLabel="Tệp đã lưu trên thiết bị" accessibilityState={{expanded:filesExpanded}} onPress={()=>setFilesExpanded(v=>!v)} android_ripple={{color:operatorAppearance.pressed}} style={[styles.row,{flex:1,minHeight:48}]}>
+          <Text style={styles.heading}>Tệp đã lưu ({savedFiles.length})</Text><MaterialIcons name={filesExpanded?'expand-less':'expand-more'} size={24} color={colors.secondary}/>
+        </AnimatedPressable>
         <Pressable accessibilityRole="button" accessibilityLabel="Đọc lại tệp đã lưu" onPress={()=>void refreshFiles()} android_ripple={{color:operatorAppearance.pressed}} style={styles.iconButton}><MaterialIcons name="refresh" size={22} color={colors.secondary}/></Pressable>
       </View>
       {filesExpanded?<>
@@ -590,28 +591,28 @@ const styles=StyleSheet.create({
   progressFill:{height:5,backgroundColor:colors.primary},
   header:{flexDirection:'row',alignItems:'center',gap:12,paddingHorizontal:spacing.screenMargin,paddingVertical:8,backgroundColor:colors.surface,borderBottomWidth:1,borderBottomColor:colors.border},
   card:{...operatorAppearance.card,borderColor:colors.border,marginBottom:16,gap:12},
-  row:{flexDirection:'row',alignItems:'center',gap:10},
-  heading:{...typography.bodyLg,fontFamily:'Roboto-Medium',color:colors.secondary,flex:1},
-  caption:{...typography.caption,color:colors.secondary,lineHeight:20},
+  row:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:10},
+  heading:{...typography.titleMd,fontFamily:'Roboto-Medium',color:'#192D40',flex:1,minWidth:0},
+  caption:{...typography.caption,color:'#526170',lineHeight:20},
   iconButton:{minHeight:48,minWidth:48,alignItems:'center',justifyContent:'center',padding:6,gap:4,borderWidth:1,borderColor:colors.border,borderRadius:radius.full,backgroundColor:colors.surfaceAlt,overflow:'hidden'},
-  fileIcon:{width:44,height:44,borderRadius:12,backgroundColor:colors.surfaceAlt,alignItems:'center',justifyContent:'center'},
-  chooseFile:{minHeight:48,minWidth:64,paddingHorizontal:10,flexDirection:'row',gap:4,alignItems:'center',justifyContent:'center',borderRadius:radius.full,borderWidth:1,borderColor:'#E8D9A9',backgroundColor:'#FFF8E8',overflow:'hidden'},
+  fileIcon:{width:40,height:40,borderRadius:12,backgroundColor:'#F3F5F6',alignItems:'center',justifyContent:'center'},
+  chooseFile:{minHeight:48,minWidth:64,maxWidth:'100%',paddingHorizontal:12,paddingVertical:8,flexDirection:'row',gap:4,alignItems:'center',justifyContent:'center',borderRadius:12,borderWidth:1,borderColor:'#CBD4DD',backgroundColor:'#F3F5F6',overflow:'hidden'},
   chooseLabel:{...typography.labelLg,color:colors.secondary},
   fileRow:{flexDirection:'row',gap:12,alignItems:'center',padding:12,backgroundColor:colors.surfaceAlt,borderRadius:10},
-  option:{minHeight:52,borderWidth:1,borderColor:colors.border,borderRadius:10,padding:12,flexDirection:'row',alignItems:'center',gap:12},
-  selected:{borderColor:operatorAppearance.border,backgroundColor:operatorAppearance.pressed},
+  option:{minHeight:52,borderWidth:1,borderColor:'#CBD4DD',borderRadius:12,padding:12,flexDirection:'row',alignItems:'center',gap:12},
+  selected:{borderColor:'#192D40',backgroundColor:'#EDF1F4'},
   savedFile:{flexDirection:'row',alignItems:'center',gap:12,borderTopWidth:1,borderTopColor:colors.border,paddingTop:12},
   notice:{flexDirection:'row',alignItems:'center',gap:10,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt,marginBottom:16},
   noticeText:{...typography.caption,color:colors.secondary,lineHeight:20,flex:1},
   error:{...typography.bodyMd,color:colors.error,marginVertical:8},
   primaryAction:{minHeight:52,borderRadius:12,backgroundColor:colors.primary,borderColor:colors.primary},
-  secondaryAction:{alignSelf:'flex-start',maxWidth:'100%',borderRadius:radius.full,borderColor:'#E8D9A9',backgroundColor:'#FFF8E8'},
+  secondaryAction:{alignSelf:'flex-start',maxWidth:'100%',borderRadius:12,borderColor:'#CBD4DD',backgroundColor:'#F3F5F6'},
   recoveryActions:{gap:12},
   transferCard:{padding:20,gap:20},
   transferCopy:{flex:1,gap:4},
   transferIcon:{width:52,height:52,borderRadius:16,backgroundColor:operatorAppearance.pressed,alignItems:'center',justifyContent:'center'},
-  transferStatus:{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt},
-  percentage:{...typography.bodyMd,color:colors.secondary,fontWeight:'700'},
+  transferStatus:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:12,padding:14,borderRadius:12,backgroundColor:'#F3F5F6'},
+  percentage:{...typography.titleMd,color:'#192D40',fontFamily:'Roboto-Medium',fontVariant:['tabular-nums']},
   transferComplete:{borderColor:colors.success},
   completeIcon:{backgroundColor:colors.surfaceAlt},
 });
