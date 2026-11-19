@@ -1,7 +1,7 @@
 # Crew deep consistency — 19/11/2026
 
 Mode: IMPLEMENT_AND_SELF_REVIEW (Codex), không phải independent review hay owner approval.
-Base: main `0206b84d059b31f9d9a8cffc82d9255e38b9f2c9`. Không fetch/pull/push, đổi branch, restart app/emulator hoặc thay dữ liệu.
+Base: main `0206b84d059b31f9d9a8cffc82d9255e38b9f2c9`. Không fetch/pull/push, đổi branch hoặc thay dữ liệu. Ngoại lệ owner cho phép mở lại riêng app đúng một lần sau blocker D; đã dùng, không restart emulator/xóa cache/dữ liệu/session.
 
 ## Phạm vi và thứ tự
 
@@ -34,9 +34,9 @@ Files: `app/(crew)/wo-detail.tsx`, `src/components/crew/CrewTaskFacts.tsx`, `src
 - AST presentation comparison against0206b84:3 files PASS (non-JSX statements/action/disabled/loading/identity/accessibilityState); manual diff reviewed. `git diff --check` PASS. No services/hooks/DTOs modified.
 - NOT_TESTED: native offline/error, font scaling, OS Reduce Motion toggle, measured FPS, mutation/receipt/upload/restart; không chứng minh bằng test Node. Route traversal checkpoint tiếp tục B/C. Chưa có owner visual approval.
 
-## B1/B2/B3/C/D/E
+## Các checkpoint tiếp theo
 
-Chưa hoàn tất; không dùng các commit Phase2 làm bằng chứng duyệt cho task này.
+Kết quả từng checkpoint ở dưới; không dùng các commit Phase2 làm bằng chứng owner đã duyệt task này.
 
 ## B1 — Theo dõi thi công
 
@@ -86,3 +86,41 @@ File: `app/(crew)/field-review.tsx`. Hero kem padding12, ID trắng viền vàng
 - NOT_TESTED: FastTrack after (baseline `D-fasttrack-before-top.png`/lower có); edit measurement/location/camera/submit/upload không thao tác để bảo toàn draft; native offline/error, font scaling, OS Reduce Motion toggle, FPS.
 - Native blocker sau khi rời measure-only sang Sync: mở hồ sơ9b840ab7 không đến được đúng task; app hiện Chi tiết970f90aa. Nút về danh sách/tab/Back Android chưa chuyển màn qua nhiều lần quan sát; press phản hồi và Metro/CDP còn kết nối, console error/warn truy vấn không có mục mới. Chưa xác định nguyên nhân, KHÔNG quy kết do BE hay sửa navigation ngoài scope. Không restart/reload; đã hỏi owner quyền mở lại riêng app để tiếp tục FastTrack/E. Không nhận route toàn app PASS từ ca này.
 - Chưa owner visual approval. Scope E chưa sửa; chờ vào đúng modal lấy baseline native.
+
+### D — kiểm chứng bổ sung sau quyền mở lại app
+
+Mục này cập nhật giới hạn FastTrack/E ở checkpoint D bên trên. Owner cho phép mở lại riêng app một lần; đã dùng đúng một lần, giữ emulator/data/cache/session. Không sửa navigation để xử lý blocker chưa rõ nguyên nhân.
+
+- Từ Sync mở đúng FastTrack `9b840ab7`, xem title dài wrap, bản lưu hiện tại “Chưa đo”, không ảnh; không ép số đo lịch sử Sync vào draft phiên hiện tại. Mở/thu giải thích ảnh, Back từ header về Tasks. Evidence `D-fasttrack-before-top.png` → `D-fasttrack-after-top.png`; `D-fasttrack-after-help.png` là disclosure mở, đã xem trực tiếp. Native FastTrack sau sửa đã kiểm được, thay NOT_TESTED ở mục D.
+- Sau đó vào nhiệm vụ safety từ Tasks. Chọn tab đang active tại field-review không chuyển ngay; header Back hoạt động. Không kết luận blocker navigation đã được sửa hoặc toàn bộ navigation PASS.
+
+## E — Modal Kiểm tra an toàn
+
+Files: `src/components/crew/CrewSafetyCheck.tsx`, `tests/crew-safety-check-ui.test.cjs`; worklog này. Caller thực tế duy nhất `CrewRepairFacts`.
+
+- Baseline native cùng task `ebcdca88-ce04-40e9-80b5-be23e1286a13`, project `72f84201-c001-4000-8000-000000000001`: 1 biện pháp đã lắp, 4 kiểm tra, 1 ảnh đủ điều kiện, 0 yêu cầu xem xét. Modal initial trước sửa: title lớn/đậm, khoảng cách dày, ảnh vuông và vùng gửi thiếu phân nhóm.
+- Header regular16/22; section14/20, padding12/gap8, lựa chọn min48dp. Ảnh4:3, dải chọn màu kem; vùng gửi kem/viền vàng nhạt. Thêm heading phân biệt initial/pending/blocked/error/done và loading có lời giải thích. Done có nút “Đóng kiểm tra”, không có nút gửi, ghi rõ kết quả gửi không phải hoàn tất sửa chữa.
+- Motion: lựa chọn/ảnh/checkbox dùng CrewPressable sẵn có (ripple/scale, Reduce Motion); nội dung dùng CrewContentTransition khi ready. Bỏ native slide của Modal để không bỏ qua Reduce Motion. Không thêm dependency, không trì hoãn handler hay animation thành công giả.
+- Đọc BE ở SHA `fe08de06a4d19a840df51e349a1a0dec9e43c963`: `RepairSafetyController.cs`, `RepairWorkflowDtos.cs`, workflow07 và catalog API153. Giữ DTO/guard/If-Match/idempotency, không sửa BE, không gọi POST kiểm tra để dựng done.
+- Native: chọn An toàn, chọn/bỏ ảnh (1/20→0/20), chạm xem ảnh qua handler hiện có; Image trả về khung đen, không nhận là nội dung ảnh đã xác minh hay HTTP_VERIFIED. Mở bàn phím qua ô ghi nhận trống, Back đóng bàn phím nhưng giữ modal. Nút Đóng về đúng Chi tiết; mở lại thì radio/ảnh trở về chưa chọn, nội dung trống đúng state ban đầu. Cuộn thấy đầy đủ nút gửi; Android Back đóng modal về Chi tiết. Số kiểm tra vẫn4. Không gửi/đối soát/chụp/upload.
+- Evidence đã xem: `E-before-top.png` / `E-before-lower.png` → `E-after-initial-final.png` / `E-after-lower-final.png`. Cùng task/initial, sau mở lại không có lựa chọn/preview. Top cùng đầu scroll; lower scroll khác offset vì chiều cao thay đổi, không so pixel. `E-after-preview.png` chỉ là ảnh tương tác với radio đã chọn và preview đen, không dùng làm final initial.
+- Self-run `npx tsc --noEmit`: exit0. Targeted command `node --test --test-concurrency=2 tests/crew-safety-check-ui.test.cjs tests/crew-safety-check.test.cjs tests/crew-safety-discovery.test.cjs tests/crew-safety-installation.test.cjs tests/crew-safety-acknowledgement.test.cjs tests/final-safety-contract.test.cjs tests/crew-c10bc.test.cjs tests/crew-home-motion.test.cjs`:42/42 PASS3121.7329ms (`E-targeted.log`). Full `node --test --test-concurrency=2 tests/*.test.cjs`:1853/1853 PASS175992.6519ms (`E-full.log`).
+- New isolated shipped-handler harness:7 tests, trước sửa5 PASS/2 FAIL; sau sửa7 PASS. Có loading, radio/photo selection, uninstalled/read error/no photo, other actor pending, deferred reconciliation chưa resolve thì chưa done; done chỉ close, không resend/reprepare. Đây là LOGIC_TESTED, không phải native receipt/readback.
+- Presentation comparison against4d969dd: toàn bộ state/effects/preview/send/journal/receipt và mọi action prop cũ identical (normalize CRLF); chỉ thêm action done-close dùng onClose/disabled busy cũ. Manual diff, `git diff --check`, scoped scan Ionicons/UD06/LiDAR/asphalt PASS (không match). Không source ngoài scope, navigation/API/queue đổi.
+- NOT_TESTED native: done/pending/blocked/error/loading transient, offline, OS Reduce Motion toggle, font scaling, measured FPS, API mutation/receipt/upload. Không dùng runtime mock hoặc gửi thật để tái hiện. Bằng chứng done của owner là phản hồi baseline, không phải ảnh final của trạng thái done. Chưa owner visual approval.
+
+## Bàn giao theo checkpoint
+
+Mọi source dưới đây kèm worklog này trong commit riêng; đường dẫn ảnh tương đối từ evidence folder `.cache/crew-deep-consistency-20261119/` ở repo. Source/hành vi, số test, evidence phụ và giới hạn chi tiết ở từng mục phía trên.
+
+| Scope | Source/test đã đổi | Commit local | Baseline → final | UI và retained behavior / tests |
+|---|---|---|---|---|
+| A | wo-detail; CrewTaskFacts; CrewRepairFacts | 051cac8 | A-detail-before-top.png → A-detail-after-top.png | Nhóm ID/title/status/actions; handlers/guards/params giữ nguyên,82 targeted +1846 full |
+| B1 | progress; wo-detail | b8f8ac3 | B1-before-top.png → B1-after-top.png | Bước/ảnh/số đo gọn;4 bước và Back kiểm native,96 targeted +1846 full |
+| B2 | complete; wo-detail | 228a91b | B2-before-top.png → B2-after-top.png | Bỏ tím, nhóm trạng thái riêng; không đổi gating,96 targeted +1846 full |
+| B3 | repair-correction | 67445a2 | B3-before-history.png → B3-after-history.png | Nhóm kết quả/biên nhận; receipt/recovery không đổi,96 targeted +1846 full |
+| C | report-defect; crew-ui-patch11.test.cjs | 8bbb634 | C-before-top.png → C-after-top.png | Nhóm khuyết tật read-only; giữ routes/params/data,77 targeted +1846 full |
+| D | field-review | 4d969dd | D-planned-before-top.png → D-planned-after-top.png; D-fasttrack-before-top.png → D-fasttrack-after-top.png; D-measure-before-top.png → D-measure-after-top.png |3 modes, ID/nhóm ảnh/recovery; không đổi ownership/draft/upload,82 targeted +1846 full |
+| E | CrewSafetyCheck; crew-safety-check-ui.test.cjs | commit chứa mục E: style(crew): clarify safety check states and touch feedback | E-before-top.png → E-after-initial-final.png; E-before-lower.png → E-after-lower-final.png | Phân biệt trạng thái và đóng; retained handler comparison PASS,42 targeted +1853 full |
+
+Git: main, không push/fetch/pull/đổi branch. Untracked artifacts cũ giữ nguyên; ảnh/log .cache không stage. Scope A→E dừng tại đây chờ owner duyệt, không chuyển màn/role khác. Không nhận test PASS là owner đã duyệt thiết kế.

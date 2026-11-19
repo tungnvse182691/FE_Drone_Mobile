@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Button } from '../Button';
+import { CrewContentTransition, CrewPressable } from './CrewMotion';
 import { InputField } from '../InputField';
-import { colors, spacing, typography } from '../../design-tokens';
+import { colors, typography } from '../../design-tokens';
 import { crewReadGuard, readSafetyMeasure, type RepairSafetyResource, type SafetyCommand } from '../../api/crewSafetyWorkflow';
 import { prepareSafetyIntent, dispatchSafetyIntent, reconcileSafetyIntent } from '../../api/crewSafetyDraft';
 import { openOfflineJournal, type OfflineJournalRecord } from '../../api/crewOfflineJournal';
@@ -76,39 +77,63 @@ export function CrewSafetyCheck({identity,resource,taskId,onClose,onSaved}:{iden
   };
   const saved=pending?.proof.command as Extract<SafetyCommand,{kind:'check'}>|undefined;
   const editable=!busy&&!blocked&&!pending&&!done;
-  return <Modal visible animationType="slide" onRequestClose={()=>{if(!busy)onClose();}}>
+  return <Modal visible animationType="none" onRequestClose={()=>{if(!busy)onClose();}}>
     <SafeAreaView style={styles.screen}><KeyboardAvoidingView style={styles.screen} behavior={Platform.OS==='ios'?'padding':undefined}>
-      <View style={styles.header}><Text style={[typography.titleLg,styles.flex]}>Kiểm tra an toàn</Text><Button variant="text" title="Đóng" disabled={busy} onPress={onClose}/></View>
+      <View style={styles.header}><Text style={[styles.title,styles.flex]}>Kiểm tra an toàn</Text><Button style={styles.close} variant="secondary" title="Đóng" disabled={busy} onPress={onClose}/></View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.body}>
+        <CrewContentTransition ready={!busy}><View style={styles.sections}>
+        {busy&&!pending&&!done?<View style={styles.loading} accessibilityLiveRegion="polite"><ActivityIndicator size="small" color={colors.brandGold}/><Text style={[styles.hint,styles.flex]}>Đang tải trạng thái kiểm tra…</Text></View>:null}
         {!pending&&!done?<>
-          <View style={styles.card}><Text style={typography.titleMd}>Kết quả hiện trường</Text>
-            {results.map(option=><Pressable key={option.value} accessibilityRole="radio" accessibilityState={{checked:result===option.value,disabled:!editable}} disabled={!editable} onPress={()=>setResult(option.value)} style={[styles.option,result===option.value&&styles.selected]}>
+          <View style={styles.card}><Text style={styles.sectionTitle}>Kết quả hiện trường</Text>
+            {results.map(option=><CrewPressable key={option.value} accessibilityRole="radio" accessibilityState={{checked:result===option.value,disabled:!editable}} disabled={!editable} onPress={()=>setResult(option.value)} style={[styles.option,result===option.value&&styles.selected]}>
               <MaterialIcons name={option.icon} size={24} color={option.color}/><Text style={[typography.labelLg,styles.flex]}>{option.label}</Text><MaterialIcons name={result===option.value?'radio-button-checked':'radio-button-unchecked'} size={24} color={colors.secondary}/>
-            </Pressable>)}
+            </CrewPressable>)}
             <InputField label="Ghi nhận hiện trường" multiline value={findings} onChangeText={value=>{if(editable)setFindings(value);}} placeholder="Tình trạng biện pháp tại thời điểm kiểm tra"/>
           </View>
-          <View style={styles.card}><Text style={typography.titleMd}>Ảnh kiểm tra · {selected.length}/20</Text>
+          <View style={styles.card}><Text style={styles.sectionTitle}>Ảnh kiểm tra · {selected.length}/20</Text>
             {!links.length?<Text style={styles.hint}>Chưa có ảnh hiện trường đủ điều kiện. Bổ sung ảnh trong hồ sơ hiện trường khi nhiệm vụ cho phép, rồi mở lại màn này.</Text>:<>
               <Text style={styles.hint}>Mở ảnh để xem trước, đánh dấu ảnh dùng cho lần kiểm tra.</Text>
               <View style={styles.grid}>{links.map((link,index)=><View key={link.fileId} style={styles.photo}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Xem ảnh ${index+1}`} disabled={!editable||previewBusy!==null} onPress={()=>void preview(link.fileId)} style={styles.preview}>
+                <CrewPressable accessibilityRole="button" accessibilityLabel={`Xem ảnh ${index+1}`} disabled={!editable||previewBusy!==null} onPress={()=>void preview(link.fileId)} style={styles.preview}>
                   {previews[link.fileId]?<Image source={{uri:previews[link.fileId]}} style={styles.image}/>:<MaterialIcons name="image" size={36} color={colors.secondary}/>}
                   <Text style={styles.photoLabel}>{previewBusy===link.fileId?'Đang tải…':`Ảnh ${index+1}`}</Text>
-                </Pressable>
-                <Pressable accessibilityRole="checkbox" accessibilityLabel={`Chọn ảnh ${index+1}`} accessibilityState={{checked:selected.includes(link.evidenceLinkId),disabled:!editable}} disabled={!editable} onPress={()=>setSelected(old=>old.includes(link.evidenceLinkId)?old.filter(id=>id!==link.evidenceLinkId):old.length<20?[...old,link.evidenceLinkId]:old)} style={styles.choose}>
+                </CrewPressable>
+                <CrewPressable accessibilityRole="checkbox" accessibilityLabel={`Chọn ảnh ${index+1}`} accessibilityState={{checked:selected.includes(link.evidenceLinkId),disabled:!editable}} disabled={!editable} onPress={()=>setSelected(old=>old.includes(link.evidenceLinkId)?old.filter(id=>id!==link.evidenceLinkId):old.length<20?[...old,link.evidenceLinkId]:old)} style={styles.choose}>
                   <MaterialIcons name={selected.includes(link.evidenceLinkId)?'check-box':'check-box-outline-blank'} color={colors.brandGold} size={24}/><Text style={typography.labelLg}>Chọn ảnh</Text>
-                </Pressable>
+                </CrewPressable>
               </View>)}</View>
             </>}
           </View>
         </>:null}
-        <View style={styles.card}>
-          {saved?<><Text style={typography.titleMd}>{results.find(r=>r.value===saved.result)?.label}</Text><Text style={styles.hint}>{saved.findings}</Text><Text style={styles.hint}>{saved.evidenceIds?.length??0} ảnh trong lần gửi</Text></>:null}
+        <View style={[styles.card,styles.feedback]}>
+          <Text style={styles.sectionTitle}>{done?'Kết quả gửi kiểm tra':blocked?'Chưa thể gửi kiểm tra':pending?'Chờ đối soát lần gửi':message?'Kiểm tra lại nội dung':'Gửi ghi nhận kiểm tra'}</Text>
+          {saved?<><Text style={styles.sectionTitle}>{results.find(r=>r.value===saved.result)?.label}</Text><Text style={styles.hint}>{saved.findings}</Text><Text style={styles.hint}>{saved.evidenceIds?.length??0} ảnh trong lần gửi</Text></>:null}
           {message?<Text accessibilityLiveRegion="polite" style={styles.notice}>{message}</Text>:null}
+          {done?<><Text style={styles.hint}>Đây là kết quả gửi kiểm tra, không phải xác nhận hoàn tất sửa chữa.</Text><Button style={styles.close} variant="secondary" title="Đóng kiểm tra" disabled={busy} onPress={onClose}/></>:null}
           {!done?<Button variant="primary" title={pending?'Đối soát lần gửi':'Gửi kiểm tra'} loading={busy} disabled={blocked||(!pending&&!links.length)} onPress={()=>void send()}/>:null}
         </View>
+        </View></CrewContentTransition>
       </ScrollView>
     </KeyboardAvoidingView></SafeAreaView>
   </Modal>;
 }
-const styles=StyleSheet.create({screen:{flex:1,backgroundColor:colors.surfaceAlt},flex:{flex:1,minWidth:0},header:{flexDirection:'row',alignItems:'center',padding:spacing.md,gap:spacing.sm,backgroundColor:colors.surface},body:{padding:spacing.md,gap:spacing.md},card:{padding:spacing.md,borderWidth:1,borderColor:'#E8D9A8',borderRadius:12,backgroundColor:colors.surface,gap:spacing.md},hint:{...typography.bodyMd,color:colors.secondary},notice:{...typography.bodyMd,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:8},option:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,borderRadius:10,borderWidth:1,borderColor:colors.border},selected:{backgroundColor:'#FFF9E8',borderColor:'#C9A227'},grid:{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm},photo:{width:'47%',borderWidth:1,borderColor:'#E8D9A8',borderRadius:10,overflow:'hidden'},preview:{aspectRatio:1,alignItems:'center',justifyContent:'center',backgroundColor:colors.surfaceAlt},image:{position:'absolute',top:0,left:0,right:0,bottom:0},photoLabel:{position:'absolute',bottom:8,left:8,backgroundColor:colors.surface,padding:4,borderRadius:4,...typography.caption},choose:{flexDirection:'row',alignItems:'center',justifyContent:'center',minHeight:48,gap:spacing.xs}});
+const styles=StyleSheet.create({
+  screen:{flex:1,backgroundColor:colors.surfaceAlt},flex:{flex:1,minWidth:0},
+  header:{flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:8,gap:8,backgroundColor:colors.surface,borderBottomWidth:1,borderBottomColor:colors.border},
+  title:{...typography.bodyLg,color:colors.neutral,lineHeight:22},
+  body:{padding:16},sections:{gap:12},
+  close:{alignSelf:'flex-start',minHeight:48,backgroundColor:'#FBF8EE',borderColor:'#E8D9A8',paddingHorizontal:12},
+  card:{padding:12,borderWidth:1,borderColor:colors.border,borderRadius:12,backgroundColor:colors.surface,gap:8},
+  sectionTitle:{...typography.labelLg,color:colors.secondary,lineHeight:20},
+  hint:{...typography.bodyMd,color:colors.secondary},
+  feedback:{backgroundColor:'#FBF8EE',borderColor:'#E8D9A8'},
+  loading:{flexDirection:'row',alignItems:'center',gap:8,padding:12,backgroundColor:'#FBF8EE',borderRadius:10},
+  notice:{...typography.bodyMd,color:colors.secondary,paddingVertical:8,borderTopWidth:1,borderTopColor:'#E8D9A8'},
+  option:{flexDirection:'row',alignItems:'center',minHeight:48,gap:8,paddingHorizontal:12,paddingVertical:10,borderRadius:10,borderWidth:1,borderColor:colors.border,overflow:'hidden'},
+  selected:{backgroundColor:'#FBF8EE',borderColor:'#C9A227'},
+  grid:{flexDirection:'row',flexWrap:'wrap',gap:8},photo:{width:'47%',borderWidth:1,borderColor:'#E8D9A8',borderRadius:10,overflow:'hidden'},
+  preview:{aspectRatio:4/3,minHeight:48,alignItems:'center',justifyContent:'center',backgroundColor:colors.surfaceAlt},
+  image:{position:'absolute',top:0,left:0,right:0,bottom:0},
+  photoLabel:{position:'absolute',bottom:8,left:8,backgroundColor:colors.surface,padding:4,borderRadius:4,...typography.caption},
+  choose:{flexDirection:'row',alignItems:'center',justifyContent:'center',minHeight:48,gap:4,backgroundColor:'#FBF8EE'},
+});
