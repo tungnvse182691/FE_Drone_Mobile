@@ -52,3 +52,13 @@ Owner mở rộng checkpoint ngày 19/11: hoàn tất A→I tuần tự, không 
 - git diff --check PASS. Self-review: prefix logic Detail, dispatcher/journal và RecoveryList, prefix lifecycle/modal video không đổi; chỉ JSX/style/optional presentation.
 - NOT_VERIFIED: Google Maps app ngoài, mở player thực, nhận/từ chối/upload, empty/error/offline, OS Reduce Motion, font lớn/thiết bị hẹp và FPS. Không suy Node tests thành Android E2E toàn workflow.
 - Commit B: commit chứa mục này; SHA sẽ được ghi ở checkpoint kế tiếp.
+
+## C — Từ chối nhiệm vụ (20/11)
+
+B commit: cf5e3b0. C source: app/(drone)/request-decline.tsx.
+- Baseline decline-before.png: hàng dữ liệu xa nhau, giá trị chưa phân cấp, vàng ở thông báo/mã cạnh CTA. Đổi sang label/value navy với nhịp hàng rõ, wrap khi thiếu rộng; mã tabular trung tính, tiêu đề16/24. Khối lệnh opt-in premium của B; nút quay lại radius12 và khoảng cách12 với khối nhập.
+- Android task2b0dc125: mở Từ chối từ Chi tiết, xem lý do khóa và Back về Chi tiết. Không nhập/lưu/gửi từ chối. AFTER decline-after.png chụp trước chỉnh marginBottom12 cuối (chỉ khoảng cách nút/panel); không claim ảnh này chứng minh margin cuối.
+- npx tsc --noEmit exit0. Targeted/regression liên quan: drone-ui02a, drone-android01-ui, final-drone, package45-drone, operator-ui03: 99/99 PASS (decline-targeted.log). git diff --check PASS. Phần chỉ style cuối không đổi TS shape/behavior.
+- Self-review: logic trước renderBody và callback/condition không thay; command panel mutation/journal không sửa. Shared default giữ nguyên. Không thêm icon/cost/API/route.
+- NOT_VERIFIED: bàn phím/nhập dài native, confirm/receipt/unknown outcome, offline/error, font lớn, Reduce Motion OS, FPS/APK/iPhone. Không mutation lấy bằng chứng. Full suite sẽ chạy ở final frozen source.
+- Commit C: commit chứa mục này; SHA ghi ở checkpoint kế tiếp.

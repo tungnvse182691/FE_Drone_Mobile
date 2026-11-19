@@ -227,7 +227,7 @@ export default function DroneRequestDeclineScreen() {
         }
       >
         {renderBody()}
-        {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} operation="decline" onResolved={status => {
+        {scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} presentation="premium" operation="decline" onResolved={status => {
           if (scope.capture()()) setResolved({ scope: scope.key, status });
         }} /> : null}
       </SafeAreaScreen>
@@ -254,9 +254,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: '#FEF9E7',
+    backgroundColor: '#F3F5F6',
     borderWidth: 1,
-    borderColor: '#E8D9A9',
+    borderColor: '#DCE2E7',
     marginBottom: spacing.md,
   },
   noticeText: {
@@ -279,11 +279,13 @@ const styles = StyleSheet.create({
   },
   card: {
     ...operatorAppearance.card,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
+    borderRadius: 16,
     marginBottom: spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
@@ -293,16 +295,21 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     fontFamily: 'Roboto-Medium',
     flexShrink: 1,
-    color: colors.secondary,
-    backgroundColor: '#FFF8E8',
+    color: '#192D40',
+    fontVariant: ['tabular-nums'],
+    backgroundColor: '#F3F5F6',
     borderRadius: radius.md,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     overflow: 'hidden',
   },
   cardTitle: {
-    color: colors.neutral,
-    marginBottom: spacing.xs,
+    color: '#192D40',
+    fontFamily: 'Roboto-Medium',
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 8,
+    marginBottom: 12,
   },
   sectionTitle: {
     color: colors.secondary,
@@ -310,21 +317,29 @@ const styles = StyleSheet.create({
   },
   infoRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: 8,
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
-    borderTopWidth: 0,
-    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    borderTopColor: '#EDF0F2',
   },
   infoLabel: {
-    color: colors.secondary,
-    flexShrink: 0,
+    color: '#526170',
+    flexGrow: 1,
+    flexBasis: 112,
+    fontSize: 13,
+    lineHeight: 21,
   },
   infoValue: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontFamily: 'Roboto-Medium',
+    flexGrow: 1,
+    flexBasis: 160,
     flexShrink: 1,
+    lineHeight: 21,
     textAlign: 'right',
   },
   input: {
@@ -357,11 +372,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   secondaryButton: {
+    marginBottom: 12,
     alignSelf: 'flex-start',
     maxWidth: '100%',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.full,
+    borderRadius: 12,
     backgroundColor: colors.surface,
     marginTop: spacing.xs,
   },
