@@ -78,3 +78,10 @@
 - Android BEFORE detail-before.png / AFTER detail-after.png under `.cache/operator-uiux-20261119/`, task 25324063, same session. Read video list => real 'Lần nộp 1 · 8/11/2026'; navigated to work-package, Android Back returned; scrolled to technical controls and opened technical disclosure. No submit/accept/decline/upload/replay or restart.
 - `npx tsc --noEmit`: exit 0. First broad targeted run 55/56 (list wrapper test failure fixed separately in 84bef25). Follow-up `node --test --test-concurrency=2 tests/drone-ui02a.test.cjs tests/operator-video-playback.test.cjs tests/operator-detail-focus.test.cjs`: 57/57 PASS; earlier other detail/package/UI tests green. `git diff --check`: PASS. Manual diff: presentation only.
 - Playback on actual video, mutation UI receipts, OS accessibility settings/FPS, offline/error native: NOT_VERIFIED. Video list read does not prove video playback or fresh HTTP receipt validation. Commit subject `ui(operator): clarify task detail and video section`.
+
+## Checkpoint 5: work-package
+
+- Previous detail commit: 62717eb. Work-package only: neutral scope border, cream code badge, fewer row dividers, map entry minimum 56dp instead of 76dp, cream map icon. Existing AnimatedPressable/Reduce Motion for map and disclosures; same handlers/params/content.
+- Android: work-package-before.png / work-package-after.png; opened first segment (work-package-segment-after.png: 0–100m), scrolled back and opened dedicated map. Same emulator/session; no mutations or restart. Native caught function-style AnimatedPressable losing row layout; replaced that presentation style with static mapEntry before final evidence.
+- tsc exit 0. operator-map + drone-ui02c + package45-drone: 40/40 PASS (work-package-tests.log). diff --check PASS; manual diff UI only. OS font scaling/Reduce Motion/FPS and unavailable access-point native case NOT_VERIFIED.
+- All image/log paths under .cache/operator-uiux-20261119. Full regression pending. Commit subject: ui(operator): refine pinned work package presentation.
