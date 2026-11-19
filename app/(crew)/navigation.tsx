@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { CREW_WO_DETAIL } from '../../src/constants/routes';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { Button } from '../../src/components/Button';
@@ -126,7 +127,10 @@ function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
 
         {/* Top Header Bar */}
         <View style={styles.topHeader}>
-          <CrewPressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Quay lại" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
+          <CrewPressable onPress={() => {
+            if (router.canGoBack()) router.back();
+            else router.replace({ pathname: CREW_WO_DETAIL, params: { id: task.id, projectId: task.projectId } });
+          }} accessibilityRole="button" accessibilityLabel="Quay lại" style={({ pressed }) => [styles.floatingBack, pressed && styles.pressed]}>
             <MaterialIcons name="arrow-back" size={20} color={colors.neutral} />
           </CrewPressable>
 

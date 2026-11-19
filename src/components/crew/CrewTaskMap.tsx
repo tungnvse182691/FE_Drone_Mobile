@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { CrewPressable as Pressable } from './CrewMotion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { CREW_WO_DETAIL } from '../../constants/routes';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography } from '../../design-tokens';
 import { readAssignedFieldFacts, currentQueueIdentity, crewReadGuard } from '../../api/crewSafetyWorkflow';
@@ -41,7 +42,10 @@ export function CrewTaskMap({ projectId, taskId }: { projectId: string; taskId: 
   const center = coordinates[0] ?? (target ? [target.longitude, target.latitude] as [number, number] : null);
   return <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.screen}>
     <View style={styles.header}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại nhiệm vụ" onPress={() => router.back()} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.neutral} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Quay lại nhiệm vụ" onPress={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace({ pathname: CREW_WO_DETAIL, params: { id: taskId, projectId } });
+      }} style={styles.iconButton}><MaterialIcons name="arrow-back" size={24} color={colors.neutral} /></Pressable>
       <View style={styles.title}><Text style={styles.heading}>Bản đồ nhiệm vụ</Text><Text style={styles.hint}>Vị trí và hình học tuyến</Text></View>
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại bản đồ" accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={() => void read()} style={({ pressed }) => [styles.refresh, pressed && styles.pressed, busy && styles.disabled]}><MaterialIcons name="refresh" size={22} color={colors.brandGold} /><Text style={styles.actionLabel}>Tải lại</Text></Pressable>
     </View>
