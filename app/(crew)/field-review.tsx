@@ -413,7 +413,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     {showNotice||showRepairDecision||showLinkedSubmission?<FieldNotice model={noticeModel} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
   </>}>
     <View style={styles.content}>
-      <Card style={styles.card}>
+      <Card style={[styles.card,styles.taskSummary]}>
         <View style={styles.identity}><Text style={styles.taskCode}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text></View>
         <Text style={styles.taskTitle}>{task.title||'Nhiệm vụ hiện trường'}</Text>
         <View style={styles.taskStatusRow}>
@@ -461,12 +461,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         <View style={styles.photoGrid}>{(latest.evidence??[]).filter(e=>e.fileId).map((e,index)=>{
           const local=draft?.captures.find(c=>c.verified&&c.upload?.fileId===e.fileId);
           const label=e.purpose==='AFTER'?'Sau sửa chữa':e.purpose==='BEFORE'?'Hiện trạng':'Đo kiểm';
-          return <Pressable key={e.captureOriginId} accessibilityRole="button" accessibilityLabel={`Xem ảnh ${index+1}: ${label}`} disabled={busy} onPress={()=>void run('download',e.fileId!)} style={styles.photoTile}>
-            <View style={[styles.photoFrame,styles.serverPhoto]}>{local?<Image source={{uri:local.uri}} style={styles.photoImage} resizeMode="cover"/>:<MaterialIcons name="image" size={36} color={colors.secondary}/>}
-              <View pointerEvents="none" style={styles.photoCaption}><Text style={styles.photoStatus}>Ảnh {index+1} · {label}</Text></View>
+          return <CrewPressable key={e.captureOriginId} accessibilityRole="button" accessibilityLabel={`Xem ảnh ${index+1}: ${label}`} disabled={busy} onPress={()=>void run('download',e.fileId!)} style={styles.photoTile}>
+            <View style={[styles.photoFrame,styles.serverPhoto]}>{local?<Image source={{uri:local.uri}} style={styles.photoImage} resizeMode="cover"/>:<View style={styles.photoPlaceholder}><MaterialIcons name="image" size={24} color={colors.secondary}/><Text style={styles.placeholderLabel}>Chạm để tải ảnh</Text></View>}
+              <View pointerEvents="none" style={[styles.photoCaption,!local&&styles.placeholderCaption]}><Text style={[styles.photoStatus,!local&&styles.placeholderLabel]}>Ảnh {index+1} · {label}</Text></View>
               <View pointerEvents="none" style={styles.viewPhotoBadge}><MaterialIcons name="zoom-in" size={20} color={colors.neutral}/></View>
             </View>
-          </Pressable>;
+          </CrewPressable>;
         })}</View>
       </Card>:serverLoaded&&!loading?<Card style={styles.card}><Text style={styles.sectionTitle}>Hồ sơ đã gửi</Text><Text style={styles.muted}>Chưa có hồ sơ đã gửi.</Text></Card>:null}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={()=>setPreview(null)}>
@@ -480,7 +480,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         <Card style={styles.card}>
           <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Số đo hiện trường</Text><MaterialIcons name="straighten" size={24} color={colors.primaryDark}/></View>
           {measurements.map(m=><View key={m.sampleId} style={styles.resultHeading}><Text style={[typography.bodyMd,styles.flex]}>{fieldMeasurementTitle(m.type)}</Text><Text style={styles.resultValue}>{m.value===null?'Chưa đo':`${m.value} ${m.unit}`}</Text></View>)}
-          <Button variant="secondary" title="Chỉnh số đo" disabled={busy||cancelling} onPress={()=>{if(!busy&&!cancelling){setShowMeasurements(true);setEditingSampleId(null);}}}/>
+          <Button variant="secondary" style={styles.compactAction} title="Chỉnh số đo" disabled={busy||cancelling} onPress={()=>{if(!busy&&!cancelling){setShowMeasurements(true);setEditingSampleId(null);}}}/>
         </Card>
         <Modal visible={showMeasurements} presentationStyle="fullScreen" animationType="slide" onRequestClose={()=>{if(!busy){if(frozen)setShowMeasurements(false);else void run('save');}}}>
           <SafeAreaProvider>
@@ -527,7 +527,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             <Text style={typography.labelLg}>{positionSources.choices.find(c=>c.value===draft.locationProof?.checklist)?.label??'Chưa xác định'}</Text>
             <Text style={styles.positionHintText}>{draft.locationProof?.observedChainageMeters!=null?`Lý trình ${draft.locationProof.observedChainageMeters} m`:draft.locationProof?.observedSlabId?`Ký hiệu tấm: ${draft.locationProof.observedSlabId}`:draft.locationProof?'Chưa có dấu mốc quan sát':'Cần bổ sung vị trí hiện trường'}</Text>
           </View></View>
-          <Button variant="secondary" title={taskReadOnly?'Xem vị trí':'Chỉnh vị trí'} disabled={busy||cancelling} onPress={()=>{setNotice('');setShowErrorDetail(false);setShowPosition(true);}}/>
+          <Button variant="secondary" style={styles.compactAction} title={taskReadOnly?'Xem vị trí':'Chỉnh vị trí'} disabled={busy||cancelling} onPress={()=>{setNotice('');setShowErrorDetail(false);setShowPosition(true);}}/>
         </Card>
         <Modal visible={showPosition} presentationStyle="fullScreen" animationType="slide" onRequestClose={()=>{if(!busy){if(frozen||taskReadOnly)setShowPosition(false);else void run('save');}}}>
           <SafeAreaProvider>
@@ -572,7 +572,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </View>;})}</View>
           {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
           {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
-          {evidenceModel.canCapture&&!frozen?<Button variant="secondary" title="Chụp / chọn ảnh" disabled={busy||cancelling} onPress={()=>void run('camera')}/>:null}
+          {evidenceModel.canCapture&&!frozen?<Button variant="secondary" style={styles.compactAction} title="Chụp / chọn ảnh" disabled={busy||cancelling} onPress={()=>void run('camera')}/>:null}
         </Card>
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Card style={styles.card}>
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
   recoveryTitle: {...typography.labelLg,color:colors.neutral,lineHeight:21},
   recoveryCopy: {...typography.bodyMd,color:colors.secondary},
   recoveryToggle: {minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:radius.md,backgroundColor:'#FBF8EE',borderWidth:1,borderColor:'#E8D9A8'},
-  recoveryDetail: {backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
+  recoveryDetail: {borderTopWidth:1,borderTopColor:'#E8D9A8',paddingTop:spacing.sm},
   recoveryActions: {flexDirection:'row',flexWrap:'wrap',justifyContent:'flex-end',gap:spacing.sm,marginTop:spacing.sm},
   submitActions:{paddingTop:spacing.md,paddingBottom:spacing.sm,gap:spacing.sm},
   unitRow: {flexDirection:'row',gap:spacing.sm,marginBottom:spacing.sm},
@@ -649,7 +649,10 @@ const styles = StyleSheet.create({
   resultRow: {flexDirection:'row',flexWrap:'wrap',gap:spacing.xs,alignItems:'baseline'},
   resultLabel: {...typography.bodyMd,color:colors.secondary,minWidth:96,flexShrink:1},
   resultText: {...typography.bodyMd,color:colors.neutral,flexGrow:1,flexShrink:1,flexBasis:180},
-  serverPhoto: {alignItems:'center',justifyContent:'center'},
+  serverPhoto: {alignItems:'center',justifyContent:'center',aspectRatio:4/3,backgroundColor:'#FBF8EE'},
+  photoPlaceholder: {alignItems:'center',gap:spacing.xs,paddingHorizontal:spacing.xs,paddingBottom:32},
+  placeholderLabel: {...typography.caption,color:colors.secondary,textAlign:'center'},
+  placeholderCaption: {backgroundColor:'#F3ECD6'},
   viewPhotoBadge: {position:'absolute',top:6,right:6,backgroundColor:colors.surface,borderRadius:radius.full,padding:4},
   noticeContainer: {marginHorizontal:spacing.screenMargin,marginVertical:spacing.xs,borderRadius:radius.md,backgroundColor:colors.surface,overflow:'hidden'},
   noticeBanner: {flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingLeft:spacing.sm,paddingVertical:spacing.xs,borderLeftWidth:3},
@@ -660,7 +663,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
   },
   card: {
-    marginBottom: spacing.md,
+    marginBottom: 12,
+    padding: 12,
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
@@ -668,11 +672,12 @@ const styles = StyleSheet.create({
   },
   priorCard: { marginBottom: spacing.md, gap: spacing.xs, backgroundColor: colors.surfaceAlt },
   missingList: { gap: spacing.xs },
-  compactAction: { alignSelf: 'flex-start', minHeight: 36, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  taskSummary: {backgroundColor:'#FBF8EE',borderColor:'#E8D9A8'},
+  compactAction: { alignSelf:'flex-start',maxWidth:'100%',minHeight:48,paddingVertical:spacing.xs,paddingHorizontal:12,backgroundColor:'#FBF8EE',borderColor:'#E8D9A8' },
   refreshAction: { minHeight:48, flexDirection:'row', gap:spacing.xs, paddingHorizontal:spacing.sm, paddingVertical:spacing.xs, borderRadius:radius.md, alignItems:'center', justifyContent:'center', backgroundColor:'#FBF8EE', borderWidth:1, borderColor:'#E8D9A8' },
-  identity: {alignSelf:'flex-start',maxWidth:'100%',backgroundColor:colors.surfaceAlt,borderRadius:radius.sm,paddingHorizontal:spacing.sm,paddingVertical:6},
+  identity: {alignSelf:'flex-start',maxWidth:'100%',backgroundColor:colors.surface,borderWidth:1,borderColor:'#E8D9A8',borderRadius:radius.sm,paddingHorizontal:spacing.sm,paddingVertical:6},
   taskCode: {...typography.labelLg,color:colors.secondary,flexShrink:1},
-  taskTitle: {...typography.titleMd,color:colors.neutral,fontWeight:'500'},
+  taskTitle: {...typography.bodyMd,fontSize:16,lineHeight:22,color:colors.neutral,fontWeight:'400'},
   taskStatusRow: {flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:spacing.sm,borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm},
   actionLabel: {...typography.labelLg,color:colors.secondary},
   loadingRow: {flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,marginBottom:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:radius.md},
@@ -680,8 +685,8 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', gap: spacing.sm },
   actionButton: { flex: 1 },
   helpHeading: {flexDirection:"row",alignItems:"center",gap:spacing.sm},
-  helpTitle: {...typography.titleMd,color:colors.neutral,flex:1},
-  helpToggle: {minWidth:48,minHeight:48,alignItems:"center",justifyContent:"center",borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
+  helpTitle: {...typography.labelLg,lineHeight:20,color:colors.neutral,flex:1},
+  helpToggle: {minWidth:48,minHeight:48,alignItems:"center",justifyContent:"center",borderRadius:radius.md,backgroundColor:'#FBF8EE',borderWidth:1,borderColor:'#E8D9A8'},
   summaryHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -698,9 +703,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   sectionTitle: {
-    ...typography.titleMd,
+    ...typography.labelLg,
+    lineHeight:20,
     color: colors.neutral,
-    marginBottom: spacing.sm,
   },
   readinessRow: {
     flexDirection: 'row',
@@ -726,7 +731,7 @@ const styles = StyleSheet.create({
   verifiedBadge: {position:'absolute',top:6,left:6,backgroundColor:colors.surface,borderRadius:radius.full,padding:2},
   progressTrack: {position:'absolute',bottom:0,left:0,right:0,height:3,backgroundColor:'rgba(255,255,255,0.3)'},
   progressFill: {height:3,backgroundColor:colors.primary},
-  removePhoto: {position:'absolute',right:0,top:0,width:44,height:44,borderRadius:radius.full,backgroundColor:colors.surface,alignItems:'center',justifyContent:'center'},
+  removePhoto: {position:'absolute',right:0,top:0,width:48,height:48,borderRadius:radius.full,backgroundColor:colors.surface,alignItems:'center',justifyContent:'center'},
   errorPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.error, gap: spacing.xs },
   successPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.success, gap: spacing.xs },
   pendingPanel: { marginBottom: spacing.md, borderLeftWidth: 3, borderLeftColor: colors.warning, gap: spacing.xs },
@@ -752,7 +757,6 @@ const styles = StyleSheet.create({
   muted: {
     ...typography.bodyMd,
     color: colors.secondary,
-    marginTop: spacing.xs,
   },
   centerText: {
     textAlign: 'center',
@@ -772,7 +776,7 @@ const styles = StyleSheet.create({
   positionOption: {minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.sm,borderWidth:1,borderColor:colors.border,borderRadius:radius.md},
   positionChoiceLabel: {...typography.bodyMd,color:colors.secondary,flex:1},
   positionChoiceSelected: {fontWeight:'700',color:colors.neutral},
-  positionSummary: {flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.sm,borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
+  positionSummary: {flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
   positionHint: {flexDirection:'row',alignItems:'flex-start',gap:spacing.xs,padding:spacing.sm,borderRadius:radius.md,backgroundColor:colors.surfaceAlt},
   positionHintText: {...typography.caption,color:colors.secondary,flexShrink:1},
   choiceOption: {

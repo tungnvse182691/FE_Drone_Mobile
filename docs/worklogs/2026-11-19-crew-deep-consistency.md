@@ -73,3 +73,16 @@ Files: `app/(crew)/report-defect.tsx`, `tests/crew-ui-patch11.test.cjs`. Nhãn s
 - Evidence `C-before-top.png` / `C-before-lower.png` → `C-after-top.png` / `C-after-lower.png`. Before-lower và after-top đã xem trực tiếp. Cùng task/state; lower offset thay đổi khi tổng chiều cao giảm. Không dùng màn Hồ sơ làm ảnh C.
 - Self-run TypeScript exit0; targeted5 files77/77 PASS9606.3681ms (`C-targeted.log`); full1846/1846 PASS170221.8655ms (`C-full.log`). AST against67445a2 non-JSX/action props PASS; manual JSX điều kiện/nguồn/route params không đổi, diff check PASS.
 - NOT_TESTED: có tọa độ/phân loại và chưa có hồ sơ trên native, offline/error, font scaling, OS Reduce Motion toggle, FPS. Không camera/upload/submit. Chưa owner visual approval.
+
+## D — Hồ sơ hiện trường
+
+File: `app/(crew)/field-review.tsx`. Hero kem padding12, ID trắng viền vàng, title regular16/22; heading14/20. Nhóm số đo/ảnh/vị trí sát hơn, vị trí và giải thích recovery dùng divider. Nút đọc/chỉnh theo nội dung, min48dp. Ảnh máy chủ dùng CrewPressable có ripple/scale/Reduce Motion; placeholder4:3 ghi rõ “Chạm để tải ảnh”, ảnh local giữ nguyên nhánh render. Không đổi state, handlers, điều kiện, API hay lưu nháp.
+
+- Native baseline đã đọc ba modes: FastTrack `9b840ab7`, planned `c0b9c48f`, measure-only `970f90aa`; cùng project72f84201-c001-4000-8000-000000000001. Không ép nháp qua phiên.
+- Planned: after-top title dài wrap; vẫn5cm/5ảnh, cuộn đủ5 placeholder. Bấm ảnh đầu mở ảnh thật, đóng preview, Back đúng Chi tiết rồi về Tasks. Chỉ chứng minh ảnh đầu tải/xem được, không nhận cả5 ảnh đã tải hay HTTP trace verified.
+- Measure-only: after vẫn2cm, dụng cụ/phương pháp “tay”,2ảnh; mở/thu giải thích nháp phiên cũ, đọc đủ nội dung; không bấm tạo nháp/đối soát. Cuộn thấy đủ hai placeholder.
+- Before→after trong evidence folder: `D-planned-before-top.png`→`D-planned-after-top.png`, `D-planned-before-evidence.png`→`D-planned-after-evidence.png`; `D-measure-before-top.png`→`D-measure-after-top.png`, `D-measure-before-evidence.png`→`D-measure-after-evidence.png`. Ảnh final top/evidence đã xem trực tiếp. Recovery mở: `D-measure-after-recovery.png`; ảnh tải thật: `D-planned-after-preview.png`. Scroll lower không trùng pixel do chiều cao thay đổi.
+- Self-run TypeScript exit0; targeted6 files82/82 PASS16481.9444ms (`D-targeted.log`); full1846/1846 PASS170064.4139ms (`D-full.log`). AST against8bbb634 giữ non-JSX/action props PASS; manual diff, diff check PASS. Không fixture hardcode.
+- NOT_TESTED: FastTrack after (baseline `D-fasttrack-before-top.png`/lower có); edit measurement/location/camera/submit/upload không thao tác để bảo toàn draft; native offline/error, font scaling, OS Reduce Motion toggle, FPS.
+- Native blocker sau khi rời measure-only sang Sync: mở hồ sơ9b840ab7 không đến được đúng task; app hiện Chi tiết970f90aa. Nút về danh sách/tab/Back Android chưa chuyển màn qua nhiều lần quan sát; press phản hồi và Metro/CDP còn kết nối, console error/warn truy vấn không có mục mới. Chưa xác định nguyên nhân, KHÔNG quy kết do BE hay sửa navigation ngoài scope. Không restart/reload; đã hỏi owner quyền mở lại riêng app để tiếp tục FastTrack/E. Không nhận route toàn app PASS từ ca này.
+- Chưa owner visual approval. Scope E chưa sửa; chờ vào đúng modal lấy baseline native.
