@@ -35,3 +35,20 @@ Expo Go, emulator-5554, Pixel 6 Pro Android14, 1440×3120, phiên hiện có; ch
 - UI còn giới hạn: “NHIỆM VỤ HIỆN TẠI” vẫn là nhãn cũ, có thể xuống dòng ở font lớn; chưa có native large-font proof. Card ưu tiên đọc rõ hơn là mật độ tối đa.
 
 Commit checkpoint A: xem Git history commit chứa phần này (không ghi SHA tự tham chiếu).
+
+## Owner addendum — continue all
+
+Owner mở rộng checkpoint ngày 19/11: hoàn tất A→I tuần tự, không dừng A+B. Chỉ UI/motion; không push hoặc mutation lấy bằng chứng. A 513aee2 giữ nguyên.
+
+## B — Chi tiết nhiệm vụ
+
+- Gom phạm vi + hạn bay vào overview; mã/status cùng hàng wrap. Bỏ icon trang trí assignment/layers/route/event/coordinate. Điểm tiếp cận thành nhóm riêng, hành động phụ trung tính; CTA gửi dữ liệu giữ nguyên.
+- Disclosure/Google Maps dùng AnimatedPressable sẵn có (ripple + nhấn nhẹ, Reduce Motion kế thừa). Video heading/action wrap; không đổi player/modal/lifecycle. CommandPanel chỉ opt-in presentation premium, caller khác giữ mặc định.
+- Files: app/(drone)/request-detail.tsx; src/components/drone/DroneTaskCommandPanel.tsx; src/components/drone/OperatorSubmittedVideos.tsx.
+- Android Expo Go emulator-5554: xem Đã nhận 1f6b0d1c; scroll tới disclosure, mở Thông tin kỹ thuật thấy ID/version thật; Detail→Gói công việc→Back và Detail→Upload→Back hoạt động. Không gửi dữ liệu. BEFORE detail-before.png (Đã nộp 25324063); AFTER detail-accepted-after.png (Đã nhận 1f6b0d1c), detail-technical-after.png. Hai ảnh khác task/status nên không dùng so sánh dữ liệu. detail-accepted-before.png có Refreshing overlay; không dùng làm baseline sạch. detail-disclosure-after.png thực tế WorkPackage, không coi là disclosure.
+- npx tsc --noEmit: PASS exit0 (chạy lại sau sửa prop order).
+- Targeted 8 file drone-ui02a/b, operator-ui03/ui06/integration, video-viewer/playback/orientation: 122/122 PASS, detail-targeted.log.
+- Full regression detail-regression.log: 1927/1928, một regex đòi key/taskId liền nhau. Giữ nguyên thứ tự prop cũ rồi chạy lại tests/final-drone.test.cjs: 23/23 PASS (detail-regression-recheck.log). Không thay assertion business.
+- git diff --check PASS. Self-review: prefix logic Detail, dispatcher/journal và RecoveryList, prefix lifecycle/modal video không đổi; chỉ JSX/style/optional presentation.
+- NOT_VERIFIED: Google Maps app ngoài, mở player thực, nhận/từ chối/upload, empty/error/offline, OS Reduce Motion, font lớn/thiết bị hẹp và FPS. Không suy Node tests thành Android E2E toàn workflow.
+- Commit B: commit chứa mục này; SHA sẽ được ghi ở checkpoint kế tiếp.

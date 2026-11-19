@@ -10,13 +10,16 @@ import { Card } from '../Card';
 import { operatorAppearance } from './appearance';
 import { typography, spacing, colors } from '../../design-tokens';
 
+const premiumPanelStyle = { borderRadius: 16, borderColor: '#DCE2E7', marginTop: 0, gap: 12 };
+
 type Runtime = Awaited<ReturnType<typeof openDroneTaskJournal>>;
 type Saved = Awaited<ReturnType<Runtime['read']>>;
 /** One dispatcher for detail/decline/recovery. Opening the panel never posts. */
-export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand, onResolved, children}: {
+export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onExpand, onResolved, children, presentation}: {
   taskId: string; operation: 'accept' | 'decline'; collapsed?: boolean; onExpand?: () => void;
   onResolved?: (status: string) => void;
   children?: React.ReactNode;
+  presentation?: 'premium';
 }) {
   const scope = useOperatorReadScope(taskId);
   const [runtime,setRuntime] = useState<Runtime | null>(null), [saved,setSaved] = useState<Saved>(null);
@@ -89,7 +92,7 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
   // A failed assignment read is not a pending command. Only a real unresolved
   // row or an unreadable journal needs the collapsed recovery notice.
   if (collapsed) return (saved && saved.phase !== 'RECEIPT') || (error && !ready) ?
-    <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md}}>
+    <Card style={{...operatorAppearance.card,gap:spacing.sm,marginBottom:spacing.md,...(presentation === 'premium' ? premiumPanelStyle : {})}}>
       <View accessibilityRole="alert" testID="command-recovery-notice">
         <Text style={typography.titleMd}>{saved?.phase === 'PREPARED' ? 'Đã lưu lệnh, chưa gửi' : saved && saved.phase !== 'RECEIPT' ? 'Chưa rõ kết quả lệnh đã gửi' : 'Cần kiểm tra lịch sử yêu cầu'}</Text>
         <Text style={typography.bodyMd}>{error ?? 'Lệnh gốc vẫn được giữ. Mở để kiểm tra; ứng dụng không tự gửi lại.'}</Text>
@@ -98,8 +101,8 @@ export function DroneTaskCommandPanel({taskId, operation, collapsed = false, onE
     </Card> : !ready ? <Text style={typography.caption}>Đang khôi phục lịch sử yêu cầu…</Text> : null;
   const disabledReason = busy ? 'Đang xử lý yêu cầu đã chọn. Vui lòng chờ.' : !ready ? 'Chưa đọc được lịch sử yêu cầu; thao tác gửi đang khóa.' : !saved && !canPrepare ? 'Cập nhật trạng thái để kiểm tra quyền nhận nhiệm vụ.' : !saved && operation === 'decline' && !reason.trim() ? 'Cần nhập lý do thực tế trước khi lưu yêu cầu từ chối.' : null;
   const primaryStyle = { minHeight: 52, borderRadius: 12, backgroundColor: colors.primary, borderColor: colors.primary };
-  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,...operatorAppearance.card,borderColor:colors.border}}>
-    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={colors.brandGold} /><Text style={{...typography.titleMd,color:colors.neutral,flex:1}}>{(saved?.command.operation ?? operation)==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text></View>
+  return <Card style={{gap:spacing.md,marginTop:spacing.md,marginBottom:12,...operatorAppearance.card,borderColor:colors.border,...(presentation === 'premium' ? premiumPanelStyle : {})}}>
+    <View style={{flexDirection:'row',alignItems:'center',gap:8}}><MaterialIcons name="assignment-turned-in" size={16} color={presentation === 'premium' ? '#192D40' : colors.brandGold} /><Text style={{...typography.titleMd,color:presentation === 'premium' ? '#192D40' : colors.neutral,flex:1}}>{(saved?.command.operation ?? operation)==='accept'?'Tiếp nhận nhiệm vụ':'Từ chối nhiệm vụ'}</Text></View>
     {!ready&&!error ? <Text>Đang khôi phục lịch sử yêu cầu…</Text> : null}
     {saved ? <>
       {saved.command.payload.reason ? <Text>{saved.command.payload.reason}</Text> : null}

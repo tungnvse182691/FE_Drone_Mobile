@@ -107,8 +107,9 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     return () => { stopped = true; clearInterval(timer); };
   }, [scope, taskId, projectId, preview, selected]));
   return <Card style={styles.section}>
-    <View style={styles.sectionHeading}><MaterialIcons name="video-library" size={22} color={colors.secondary}/><Text style={[typography.titleMd, styles.title]}>Video đã gửi</Text></View>
+    <View style={styles.sectionHeading}><MaterialIcons name="video-library" size={22} color={colors.secondary}/><Text style={[typography.titleMd, styles.sectionTitle]}>Video đã gửi</Text>
     <Button style={styles.readAction} icon={<MaterialIcons name="refresh" size={20} color={colors.secondary}/>} variant="secondary" title={page ? 'Làm mới video đã gửi' : 'Xem video đã gửi'} onPress={() => void load()} disabled={busy} loading={busy} />
+    </View>
     {error ? <Text accessibilityRole="alert" style={typography.bodyMd}>{error}</Text> : null}
     {page?.items.length === 0 ? <Text style={typography.bodyMd}>Nhiệm vụ chưa có bộ dữ liệu đã nộp.</Text> : null}
     {page?.items.map((row, index) => <Button key={row.id} style={[styles.submission, selected?.id === row.id && styles.selectedSubmission]} icon={<MaterialIcons name={selected?.id === row.id ? "check-circle-outline" : "chevron-right"} size={22} color={colors.secondary}/>} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />)}
@@ -158,13 +159,14 @@ const styles = StyleSheet.create({
   viewerHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
   videoFrame: { position: 'relative', minHeight: 0 },
   viewerExpand: { position: 'absolute', top: spacing.sm, right: spacing.sm, width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, backgroundColor: 'rgba(0,0,0,0.72)', overflow: 'hidden' },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  sectionHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  sectionTitle: { color: '#192D40', flexGrow: 1, lineHeight: 24 },
   submission: { alignItems: 'flex-start', borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg },
   selectedSubmission: { borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed },
   fileList: { gap: spacing.sm, paddingHorizontal: spacing.sm, paddingBottom: spacing.sm },
   fileNote: { color: colors.secondary, lineHeight: 18 },
-  videoAction: { alignItems: 'flex-start', borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg },
-  section: { gap: spacing.sm, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
+  videoAction: { alignItems: 'flex-start', borderColor: '#DCE2E7', backgroundColor: '#F3F5F6', borderRadius: 12 },
+  section: { gap: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#DCE2E7', borderRadius: 16 },
   title: { color: colors.neutral },
-  readAction: { alignSelf: 'flex-start', maxWidth: '100%', borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg },
+  readAction: { alignSelf: 'flex-start', minHeight: 48, maxWidth: '100%', borderColor: '#DCE2E7', backgroundColor: '#F3F5F6', borderRadius: 12 },
 });
