@@ -113,3 +113,13 @@ G commit: d596055. File: app/(drone)/log.tsx.
 - Self-review: không đổi handler/session/GET/UUID validation, mounting input, recovery và tab state. Giữ AnimatedPressable/CrewContentTransition sẵn có; không thêm entrance lặp hoặc animation liên tục.
 - NOT_VERIFIED: server readback có kết quả/error/loading native, dataset input dưới keyboard, font lớn/narrow device, Reduce Motion OS, FPS/APK/iPhone. Full regression cuối phiên.
 - Commit H: commit chứa mục này, SHA ghi checkpoint tiếp.
+
+## I — Hồ sơ (20/11)
+
+H commit: 245673c. File: app/(drone)/profile.tsx.
+- BEFORE profile-before.png: vùng nhận diện rời rạc, avatar lớn và nút đăng xuất viền đỏ thu hút hơn phần cài đặt. AFTER profile-after.png: giữ cấu trúc nhận diện giữa màn tương ứng Crew, gom vào một bề mặt; avatar navy/gold64, tên20/28, role trung tính bỏ icon trang trí; menu chia hàng có divider inset và nhịp16. Đăng xuất giữ chữ/icon đỏ, giảm viền về trung tính. Không thêm thống kê.
+- Android Expo Go: mở thông tin cá nhân, xem profile-info-after.png, đóng bằng X; mở Hàng đợi trên thiết bị tới Đồng bộ rồi quay lại Hồ sơ qua dock. Nội dung hiện có nằm trong viewport, không che dock. Không bấm đổi mật khẩu/đăng xuất hoặc mutation.
+- npx tsc --noEmit PASS exit0 (profile-tsc.log). Targeted drone-ui02c + dot-b-sync-profile + drone-android01-ui + operator-ui-integration:37/37 PASS (profile-targeted.log). git diff --check PASS.
+- Self-review IMPLEMENT_AND_SELF_REVIEW: chỉ JSX/style; giữ handler, conditional employeeCode, auth/session, navigation params và dữ liệu người dùng thật. Giữ ripple/pressed của menu, slide của modal; không thêm animation mới hoặc hiệu ứng lặp.
+- NOT_VERIFIED: font lớn/narrow device, tên dài hơn dữ liệu hiện có, OS Reduce Motion, FPS/APK/iPhone; đổi mật khẩu/đăng xuất không chạy theo khóa an toàn. Full regression đang chạy trên source đã đóng băng.
+- Commit I: commit chứa mục này, SHA ghi tổng kết sau.
