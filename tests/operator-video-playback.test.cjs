@@ -14,11 +14,12 @@ function cacheFixture(options={}) {
       return {videos:[{...file,checksumSha256:reads===2&&options.changed?'changed':file.checksumSha256}]};
     }},
     'expo-file-system/legacy':{
+      getFreeDiskStorageAsync:async()=>options.freeBytes??16*1024**3,
       cacheDirectory:'file:///ios-or-android-cache/',deleteAsync:async uri=>events.push(['delete',uri]),makeDirectoryAsync:async()=>{},
       writeAsStringAsync:async()=>{},getInfoAsync:async()=>({exists:true,isDirectory:false,size:options.actualSize??file.sizeBytes}),
       createDownloadResumable:(url,uri,config,progress)=>({cancelAsync:async()=>events.push(['cancel']),downloadAsync:async()=>{
-        events.push(['download',url,config]);await options.duringDownload?.(()=>{valid=false;listeners.forEach(f=>f());});
-        progress({totalBytesWritten:file.sizeBytes,totalBytesExpectedToWrite:file.sizeBytes});
+        events.push(['download',url,config]);await options.duringDownload?.(()=>{valid=false;listeners.forEach(f=>f());},progress);
+        progress({totalBytesWritten:options.written??file.sizeBytes,totalBytesExpectedToWrite:options.expected??file.sizeBytes});
         if(options.interrupted)throw Error('network interrupted');
         return {status:options.status??200,headers:{'Content-Type':options.mime??'video/mp4'}};
       }}),
@@ -54,7 +55,32 @@ test('download uses LAN-configured endpoint and Bearer header without leaking to
   assert.ok(!lease.videoUri.includes('secret-test-bearer'));await lease.dispose();
 });
 
-for(const options of [{size:256*1024*1024+1},{actualSize:4},{mime:'text/html'},{status:401},{status:403},{status:404},{denyAfter:true},{changed:true},{interrupted:true},{duringDownload:async invalidate=>invalidate()}]) {
+test('authorized videos larger than 256 MB can be downloaded without reading bytes into JS memory',async()=>{
+  for(const size of [256*1024**2+1,8*1024**3]){
+    const h=cacheFixture({size});const lease=await h.open();
+    assert.ok(h.events.some(e=>e[0]==='download'));await lease.dispose();
+  }
+});
+test('insufficient device storage rejects before starting the download',async()=>{
+  const h=cacheFixture({size:300*1024**2,freeBytes:100*1024**2});
+  await assert.rejects(h.open(),/operator_video_storage_insufficient/);
+  assert.ok(!h.events.some(e=>e[0]==='download'));assert.equal(h.listeners.size,0);
+});
+test('active large download can exceed three minutes; stalled download is still cancelled',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const h=cacheFixture({size:300*1024**2,duringDownload:async(_,progress)=>{
+    for(let i=1;i<=4;i++){
+      t.mock.timers.tick(120000);
+      progress({totalBytesWritten:i*1024**2,totalBytesExpectedToWrite:300*1024**2});
+      assert.ok(!h.events.some(e=>e[0]==='cancel'));
+    }
+  }});
+  const lease=await h.open();await lease.dispose();
+  const stalled=cacheFixture({duringDownload:async()=>t.mock.timers.tick(180001)});
+  await assert.rejects(stalled.open(),/operator_video_cancelled/);
+  assert.ok(stalled.events.some(e=>e[0]==='cancel'));
+});
+for(const options of [{expected:6},{written:6},{actualSize:4},{mime:'text/html'},{status:401},{status:403},{status:404},{denyAfter:true},{changed:true},{interrupted:true},{duringDownload:async invalidate=>invalidate()}]) {
   test('rejects invalid/unauthorized/interrupted preview '+JSON.stringify(options),async()=>{
     const h=cacheFixture(options);await assert.rejects(h.open());assert.equal(h.listeners.size,0);
     assert.ok(h.events.filter(e=>e[0]==='delete').every(e=>e[1].startsWith('file:///ios-or-android-cache/roadguard-operator-video-preview-v1/')));

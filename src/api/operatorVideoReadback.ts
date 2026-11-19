@@ -57,6 +57,6 @@ export function operatorVideoError(error: unknown): string {
   if (status === 401) return 'Phiên hết hạn. Vui lòng đăng nhập lại.';
   if (status === 403) return 'Bạn không còn quyền xem dữ liệu của nhiệm vụ này.';
   if (status === 404) return 'Không tìm thấy nhiệm vụ, bộ dữ liệu hoặc video.';
-  if ((error as Error)?.message === 'operator_video_too_large') return 'Video vượt giới hạn xem tạm 256 MB trên điện thoại.';
+  if ((error as Error)?.message === 'operator_video_storage_insufficient') return 'Bộ nhớ trống chưa đủ để tải video xem tạm. Hãy giải phóng bộ nhớ rồi thử lại.';
   return 'Chưa mở được video đã gửi. Kiểm tra kết nối và quyền nhiệm vụ rồi thử lại.';
 }

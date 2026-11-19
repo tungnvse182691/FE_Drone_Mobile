@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/auth';
 import { apiClient } from './client';
 import { operatorVideoGuard, readOperatorVideos } from './operatorVideoReadback';
 
-export const OPERATOR_VIDEO_CACHE_LIMIT = 256 * 1024 * 1024;
+const STORAGE_RESERVE_BYTES = 64 * 1024 * 1024;
 let occupied = false;
 export type OperatorVideoLease = {
   videoUri: string;
@@ -44,24 +44,30 @@ export async function downloadOperatorVideo(scope: string, taskId: string, proje
   const check = () => { guard?.check(); if (stopped || signal.aborted) throw Error('operator_video_cancelled'); };
   const authUnsubscribe = useAuthStore.subscribe(() => { try { guard?.check(); } catch { cancel(); } });
   signal.addEventListener('abort', cancel);
-  const timeout = setTimeout(cancel, 180000);
+  // A large file may take longer than three minutes; expire stalled transfers only.
+  let timeout = setTimeout(cancel, 180000), lastBytesWritten = 0;
   try {
     guard = operatorVideoGuard(scope); check();
     const detail = await readOperatorVideos(scope, taskId, projectId, datasetId); check();
     const file = detail.videos.find(source => source.fileId === fileId);
     if (!file) throw Error('operator_video_source_mismatch');
-    if (file.sizeBytes > OPERATOR_VIDEO_CACHE_LIMIT) throw Error('operator_video_too_large');
     const base = apiClient.defaults.baseURL, token = useAuthStore.getState().token;
     if (!base || !/^https?:\/\/[^@?#\s]+$/.test(base) || !token || !FileSystem.cacheDirectory) throw Error('operator_video_transport_invalid');
     const root = `${FileSystem.cacheDirectory}roadguard-operator-video-preview-v1/`;
     // Remove leftovers from a terminated app. This namespace contains previews only.
     await FileSystem.deleteAsync(root, { idempotent: true }); check();
+    const freeBytes = await FileSystem.getFreeDiskStorageAsync(); check();
+    if (!Number.isFinite(freeBytes) || freeBytes < file.sizeBytes + STORAGE_RESERVE_BYTES) throw Error('operator_video_storage_insufficient');
     directory = `${root}${randomUUID()}/`;
     await FileSystem.makeDirectoryAsync(directory, { intermediates: true }); check();
     const videoUri = `${directory}video.mp4`;
     transfer = FileSystem.createDownloadResumable(`${base.replace(/\/$/, '')}/files/${encodeURIComponent(fileId)}/content`, videoUri,
       { headers: { Authorization: `Bearer ${token}` }, cache: false }, progress => {
-        if (progress.totalBytesWritten > file.sizeBytes || progress.totalBytesExpectedToWrite > OPERATOR_VIDEO_CACHE_LIMIT) { cancel(); return; }
+        if (progress.totalBytesWritten > file.sizeBytes || progress.totalBytesExpectedToWrite > file.sizeBytes) { cancel(); return; }
+        if (progress.totalBytesWritten > lastBytesWritten) {
+          lastBytesWritten = progress.totalBytesWritten;
+          clearTimeout(timeout); timeout = setTimeout(cancel, 180000);
+        }
         try { check(); onProgress(Math.min(99, Math.floor(progress.totalBytesWritten * 100 / file.sizeBytes))); } catch { cancel(); }
       });
     const response = await transfer.downloadAsync(); check();

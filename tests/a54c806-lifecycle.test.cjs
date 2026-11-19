@@ -33,7 +33,7 @@ test('Reporter session switch and unmount suppress late confirmation',async()=>{
   assert.equal(ui.completed(),0);
  }
 });
-function cacheFixture({status=200,size=5,denyAfter=false}={}){
+function cacheFixture({status=200,size=5,denyAfter=false,freeBytes=16*1024**3}={}){
  const deleted=[],downloads=[],written=[];let reads=0;
  const file={fileId:'00000005-1111-4111-8111-111111111111',sizeBytes:size,checksumSha256:'fixture'};
  const mod={exports:{}};
@@ -42,7 +42,7 @@ function cacheFixture({status=200,size=5,denyAfter=false}={}){
   '../store/auth':{useAuthStore:{getState:()=>({token:'fixture-bearer'}),subscribe:()=>()=>{}}},
   './client':{apiClient:{defaults:{baseURL:'https://fixture.test/api/v1'}}},
   './operatorVideoReadback':{operatorVideoGuard:()=>({check(){},close(){}}),readOperatorVideos:async()=>{if(denyAfter&&++reads===2)throw {response:{status:403}};return {videos:[file]};}},
-  'expo-file-system/legacy':{cacheDirectory:'file:///cache/',deleteAsync:async p=>deleted.push(p),makeDirectoryAsync:async()=>{},writeAsStringAsync:async(p,b)=>written.push([p,b]),getInfoAsync:async()=>({exists:true,isDirectory:false,size}),createDownloadResumable:(url,path,options,progress)=>{downloads.push({url,path,options});return {downloadAsync:async()=>{progress({totalBytesWritten:size,totalBytesExpectedToWrite:size});return {status,headers:{'Content-Type':'video/mp4'}};},cancelAsync:async()=>{}}}},
+  'expo-file-system/legacy':{getFreeDiskStorageAsync:async()=>freeBytes,cacheDirectory:'file:///cache/',deleteAsync:async p=>deleted.push(p),makeDirectoryAsync:async()=>{},writeAsStringAsync:async(p,b)=>written.push([p,b]),getInfoAsync:async()=>({exists:true,isDirectory:false,size}),createDownloadResumable:(url,path,options,progress)=>{downloads.push({url,path,options});return {downloadAsync:async()=>{progress({totalBytesWritten:size,totalBytesExpectedToWrite:size});return {status,headers:{'Content-Type':'video/mp4'}};},cancelAsync:async()=>{}}}},
  };
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/operatorVideoCache.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,setTimeout,clearTimeout,require:n=>{if(!deps[n])throw Error(n);return deps[n];}});
  return {...mod.exports,file,deleted,downloads,written};
@@ -53,8 +53,8 @@ test('video uses Bearer header only, bounded dedicated cache and safe disposal',
  assert.ok(h.written.every(([,html])=>!html.includes('fixture-bearer')));await lease.dispose();await lease.dispose();
  assert.ok(h.deleted.every(p=>p.startsWith('file:///cache/roadguard-operator-video-preview-v1/')));
 });
-test('oversize, aborted, denied and missing video never yields a player and cleans preview only',async()=>{
- for(const options of [{size:256*1024*1024+1},{status:401},{status:403},{status:404},{denyAfter:true},{abort:true}]){
+test('insufficient storage, aborted, denied and missing video never yields a player and cleans preview only',async()=>{
+ for(const options of [{size:300*1024**2,freeBytes:100*1024**2},{status:401},{status:403},{status:404},{denyAfter:true},{abort:true}]){
   const h=cacheFixture(options),controller=new AbortController();if(options.abort)controller.abort();
   await assert.rejects(h.downloadOperatorVideo('scope','task','project','dataset',h.file.fileId,controller.signal,()=>{}));
   assert.equal(h.written.length,0);assert.ok(h.deleted.every(p=>p.startsWith('file:///cache/roadguard-operator-video-preview-v1/')));
