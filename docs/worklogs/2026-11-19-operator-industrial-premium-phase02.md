@@ -123,3 +123,32 @@ H commit: 245673c. File: app/(drone)/profile.tsx.
 - Self-review IMPLEMENT_AND_SELF_REVIEW: chỉ JSX/style; giữ handler, conditional employeeCode, auth/session, navigation params và dữ liệu người dùng thật. Giữ ripple/pressed của menu, slide của modal; không thêm animation mới hoặc hiệu ứng lặp.
 - NOT_VERIFIED: font lớn/narrow device, tên dài hơn dữ liệu hiện có, OS Reduce Motion, FPS/APK/iPhone; đổi mật khẩu/đăng xuất không chạy theo khóa an toàn. Full regression đang chạy trên source đã đóng băng.
 - Commit I: commit chứa mục này, SHA ghi tổng kết sau.
+
+## Tổng kết 9/9 — 20/11/2026
+
+I commit: d8dd2ee. Source cuối kiểm chứng: d8dd2ee (sau đó chỉ cập nhật tài liệu này).
+Ảnh dưới đây là artifact Android thực trong .cache, được giữ untracked theo yêu cầu owner; không có video.
+
+| Màn | Commit local | BEFORE | AFTER | Targeted | Native / giới hạn chính |
+|---|---|---|---|---|---|
+| A Khảo sát | 513aee2 | [Trước](../../.cache/industrial-premium-phase02/requests-before-stable.png) | [Sau](../../.cache/industrial-premium-phase02/requests-filter-ongoing-after.png) | 98/98 | Filter/refresh/detail/back; empty/error/tải thêm chưa kiểm |
+| B Chi tiết | cf5e3b0 | [Trước](../../.cache/industrial-premium-phase02/detail-before.png) | [Sau](../../.cache/industrial-premium-phase02/detail-accepted-after.png) | 122/122 | Scroll/disclosure/package/upload/back; ảnh khác task/status; mutation/video chưa kiểm |
+| C Từ chối | 4a0dae9 | [Trước](../../.cache/industrial-premium-phase02/decline-before.png) | [Sau](../../.cache/industrial-premium-phase02/decline-after.png) | 99/99 | Mở/back; ảnh trước tweak margin cuối; không gửi từ chối |
+| D Gói công việc | 8fab41c | [Trước](../../.cache/industrial-premium-phase02/work-package-before.png) | [Sau](../../.cache/industrial-premium-phase02/work-package-after.png) | 116/116 | Scroll/disclosure/map/back; [ảnh cuối](../../.cache/industrial-premium-phase02/work-package-technical-after.png) có tweak icon vàng; error chưa kiểm |
+| E Bản đồ | b5c4ea0 | [Trước](../../.cache/industrial-premium-phase02/survey-map-before.png) | [Sau](../../.cache/industrial-premium-phase02/survey-map-access-after.png) | 64/64 | Chọn đoạn/focus/back; basemap/geography/pinch chưa kiểm đầy đủ |
+| F Tải dữ liệu | b8acea9 | [Trước](../../.cache/industrial-premium-phase02/upload-before-stable.png) | [Sau](../../.cache/industrial-premium-phase02/upload-after.png) | 61/61 | Empty storage/disclosure/disabled CTA/back; không chọn file/upload/submit |
+| G Đồng bộ | d596055 | [Trước](../../.cache/industrial-premium-phase02/sync-before.png) | [Sau](../../.cache/industrial-premium-phase02/sync-after.png) | 69/69 | Đọc lại local/scroll; không replay hồ sơ pending/UNKNOWN |
+| H Nhật ký | 245673c | [Trước](../../.cache/industrial-premium-phase02/log-lookup-before.png) | [Sau](../../.cache/industrial-premium-phase02/log-lookup-after.png) | 38/38 | Tabs/disclosure/invalid input/keyboard/back; không server lookup lấy kết quả |
+| I Hồ sơ | d8dd2ee | [Trước](../../.cache/industrial-premium-phase02/profile-before.png) | [Sau](../../.cache/industrial-premium-phase02/profile-after.png) | 37/37 | Modal đóng/mở, queue navigation; không đổi mật khẩu/logout |
+
+### Gate cuối trên source đóng băng
+
+- TypeScript: `npx tsc --noEmit`, exit0 (profile-tsc.log), không sửa source sau lệnh này.
+- Full regression: `$phaseTestFiles=(Get-ChildItem tests -Filter *.test.cjs).FullName; node --test --test-concurrency=2 $phaseTestFiles` — exit0, 1928/1928 PASS, 0 fail/skip/cancel, 188116.7218ms. Log: `.cache/industrial-premium-phase02/final-regression.log`.
+- `git diff --check 5430eec HEAD`: PASS. `git diff --exit-code 5430eec HEAD -- 'app/(drone)/home.tsx'`: exit0, Home nguyên vẹn.
+- Scan toàn app/src Ionicons: no match (git grep exit1). Scan added lines app/src cho non-Material icon family, UD-06 và private-key/token patterns: 0 match. Đây là scoped pattern scan, không phải security audit toàn repo.
+- Rà added handler/route candidates: 3 dòng chỉ đổi Pressable→AnimatedPressable hoặc style selection; callback/điều kiện cũ giữ nguyên. Self-review không phát hiện thay đổi business trong diff. Các test cập nhật chỉ expectation presentation; không bỏ assertion nghiệp vụ.
+- Phạm vi file: 9 screen app/(drone); OperatorTaskRow, OperatorSubmittedVideos, optional premium presentation của DroneTaskCommandPanel; 3 test presentation và worklog này. Không đổi Home, BE, global tokens, package/config, Crew/Reporter source.
+- Motion: giữ press/ripple/spring từ component sẵn có; bổ sung AnimatedPressable ở disclosure Detail/Upload, không animation liên tục hoặc giả kết quả API. OS Reduce Motion và FPS chưa đo; không claim 60FPS.
+- Evidence: LOGIC_TESTED cho Node; native read-only interactions được ghi riêng từng màn. NOT_VERIFIED/NOT_RUN: native mutation/receipt/offline/error branches, font lớn/thiết bị hẹp, OS Reduce Motion, APK/iPhone/FPS. Không coi full regression là full Android workflow E2E.
+- Git: main; tracked sạch trước commit tổng kết tài liệu. Untracked .cache/log/build/db giữ nguyên; không push/pull/branch switch/reset/clean/stash/restart emulator/session.
