@@ -6,13 +6,13 @@ import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
-import { OperatorTaskRow, OperatorTaskSkeleton } from '../../src/components/drone/OperatorTaskRow';
+import { operatorTaskVisual, OperatorTaskSkeleton } from '../../src/components/drone/OperatorTaskRow';
 import { EmptyState } from '../../src/components/EmptyState';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { colors, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { listOperatorSurveyTasksReal, type SurveyTaskV2ResponseDto } from '../../src/api/droneApi';
-import { operatorTaskDisplayCode } from '../../src/api/operator-task-view';
+import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 import { operatorAppearance } from '../../src/components/drone/appearance';
 
 export default function DroneHomeScreen() {
@@ -73,12 +73,12 @@ export default function DroneHomeScreen() {
       </View>
       <View style={styles.metrics}>
         {[
-          { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download' as const, color: colors.secondary, background: '#ECEFF2' },
-          { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'autorenew' as const, color: colors.brandGold, background: '#FFF1CB' },
-          { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'check-circle' as const, color: colors.success, background: '#EDF5EE' },
+          { key: 'loaded', count: tasks.length, label: 'Đã tải', icon: 'download' as const, color: '#FFFFFF' },
+          { key: 'ongoing', count: ongoingCount, label: 'Đang thực hiện', icon: 'autorenew' as const, color: colors.primary },
+          { key: 'submitted', count: submittedCount, label: 'Đã nộp', icon: 'check-circle' as const, color: '#FFFFFF' },
         ].map(metric => (
-          <View key={metric.key} style={[styles.metricColumn, { backgroundColor: metric.background }]}>
-            <MaterialIcons name={metric.icon} size={20} color={metric.color} accessibilityLabel={metric.label} />
+          <View key={metric.key} style={styles.metricColumn}>
+            <MaterialIcons name={metric.icon} size={20} color={metric.color} accessible={false} />
             <Text testID={`operator-kpi-${metric.key}`} style={{ ...styles.metricNumber, color: metric.color }}>{metric.count}{''}</Text>
             <Text style={styles.metricLabel}>{metric.label}</Text>
           </View>
@@ -96,6 +96,8 @@ export default function DroneHomeScreen() {
           onPress={() => router.push('/(drone)/requests')}
           accessibilityRole="button"
           accessibilityLabel="Xem tất cả nhiệm vụ khảo sát"
+          android_ripple={{ color: '#EADDAF' }}
+          pressedScale={0.98}
           style={styles.seeAllPress}
         >
           <Text style={[typography.caption, styles.seeAll]}>Xem tất cả</Text>
@@ -133,22 +135,70 @@ export default function DroneHomeScreen() {
   );
 }
 
+// Home-only presentation; shared task rows and every navigation callback stay unchanged.
+export function OperatorTaskRow({ task, onPress }: { task: SurveyTaskV2ResponseDto; onPress: () => void }) {
+  const code = operatorTaskDisplayCode(task.id);
+  const label = operatorTaskStatusLabel(task.status);
+  const visual = operatorTaskVisual(task.status);
+  const segments = task.scope?.reduce((count, scope) => count + (scope.segmentIds?.length ?? 0), 0) ?? 0;
+  const ongoing = ['ACCEPTED', 'IN_PROGRESS', 'INPROGRESS'].includes(task.status?.toUpperCase());
+  return <AnimatedPressable onPress={onPress} style={styles.taskCard} pressedScale={0.985}
+    android_ripple={{ color: '#EADDAF' }} accessibilityRole="button"
+    accessibilityLabel={`Xem nhiệm vụ ${code}, ${label}`}>
+    <View style={styles.taskBody}>
+      <View style={styles.taskMetadata}>
+        <Text style={styles.taskCode}>Mã {code}</Text>
+        {ongoing ? <Text testID="operator-current-task" style={styles.currentTask}>NHIỆM VỤ HIỆN TẠI</Text> : null}
+      </View>
+      <View style={styles.taskHeading}>
+        <Text style={styles.taskTitle}>Khảo sát {operatorTaskTargetBand(task)}</Text>
+        <MaterialIcons name="chevron-right" size={22} color={premium.navy} accessible={false} />
+      </View>
+    </View>
+    <View style={styles.taskFooter}>
+      <View style={[styles.statusChip, { backgroundColor: visual.background }]}>
+        <View accessible={false} style={[styles.statusDot, { backgroundColor: visual.rail }]} />
+        <Text style={[styles.statusText, { color: visual.ink }]}>{label}</Text>
+      </View>
+      <View style={styles.segmentGroup}>
+        <MaterialIcons name="route" size={16} color={premium.muted} accessible={false} />
+        <Text style={styles.segmentText}>{segments} phân đoạn</Text>
+      </View>
+    </View>
+  </AnimatedPressable>;
+}
+
+// Proposed palette is local to Operator Home; global design tokens are untouched.
+const premium = { navy: '#192D40', muted: '#526170', line: '#DCE2E7', soft: '#F3F5F6', onNavy: '#C9D3DC' };
 const styles = StyleSheet.create({
-  overview: { marginBottom: 20, gap: 16 },
+  overview: { marginBottom: 24, gap: 20, padding: 20, borderRadius: 20, backgroundColor: premium.navy },
   greetingHeader: { gap: 4 },
-  greetingName: { color: colors.neutral, fontSize: 18, fontWeight: '500', lineHeight: 26 },
-  greetingMeta: { ...typography.caption, lineHeight: 18, color: colors.secondary },
-  metrics: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
-  metricColumn: { flex: 1, minWidth: 0, minHeight: 132, borderRadius: 12, gap: 8, alignItems: 'flex-start', padding: 12 },
+  greetingName: { color: '#FFFFFF', fontSize: 20, fontWeight: '500', lineHeight: 28 },
+  greetingMeta: { ...typography.caption, lineHeight: 18, color: premium.onNavy },
+  metrics: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'stretch', gap: 12 },
+  metricColumn: { flex: 1, minWidth: 76, gap: 8, alignItems: 'flex-start' },
   metricNumber: { fontFamily: 'Roboto-Medium', fontSize: 28, fontWeight: '500', lineHeight: 36, color: colors.neutral, fontVariant: ['tabular-nums'] },
-  metricLabel: { ...typography.caption, lineHeight: 18, color: colors.secondary },
-  pageNote: { ...typography.caption, lineHeight: 18, color: colors.secondary },
-  sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginBottom: 8 },
-  sectionTitle: { color: colors.neutral },
+  metricLabel: { ...typography.caption, lineHeight: 18, color: premium.onNavy },
+  pageNote: { ...typography.caption, lineHeight: 18, color: premium.onNavy },
+  sectionHeader: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionTitle: { color: premium.navy, fontWeight: '500' },
   sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   errorCard: { ...operatorAppearance.card, padding: 12, marginBottom: 12 },
   errorText: { ...typography.bodyMd, color: colors.secondary },
-  seeAllPress: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#FFF5D9', flexDirection: 'row', alignItems: 'center', gap: 4 },
+  seeAllPress: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, borderRadius: 12, backgroundColor: '#F7F0DA', flexDirection: 'row', alignItems: 'center', gap: 4, overflow: 'hidden' },
   seeAll: { ...typography.caption, color: colors.primaryDark },
   taskList: { gap: 12, paddingBottom: 32 },
+  taskCard: { minHeight: 48, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: premium.line, overflow: 'hidden' },
+  taskBody: { padding: 16, gap: 12 },
+  taskMetadata: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  taskCode: { ...typography.caption, fontFamily: 'Roboto-Medium', color: premium.navy, backgroundColor: premium.soft, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, lineHeight: 18 },
+  currentTask: { ...typography.labelSm, color: colors.primaryDark, flexShrink: 1, lineHeight: 18 },
+  taskHeading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  taskTitle: { ...typography.titleMd, fontWeight: '500', color: premium.navy, lineHeight: 24, flex: 1, minWidth: 0 },
+  taskFooter: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: premium.soft, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, maxWidth: '100%' },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { ...typography.caption, lineHeight: 18, flexShrink: 1 },
+  segmentGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  segmentText: { ...typography.caption, color: premium.muted, lineHeight: 18 },
 });

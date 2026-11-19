@@ -4,7 +4,7 @@ const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const {drone,id,task}=require('./package45-drone.test.cjs');
 const text=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).join('')).join('\n');
 const fixture=(status,n=2)=>({...task,id:id(n),status,scope:[{targetBand:'SURFACE',segmentIds:[id(6),id(7)]}]});
-const rows=s=>s.nodes().filter(n=>n.type==='OperatorTaskRow');
+const rows=s=>s.nodes().filter(n=>(n.type==='OperatorTaskRow'||n.type?.name==='OperatorTaskRow'));
 const tap=async(s,label)=>{s.nodes().find(n=>n.props.accessibilityLabel===label).props.onPress();await s.flush();};
 
 test('UI05 Home compact summary counts loaded statuses, removes email and duplicate shortcuts',async()=>{

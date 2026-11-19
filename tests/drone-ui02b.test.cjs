@@ -14,7 +14,7 @@ test('UI05 Home supersedes 02B duplicate shortcuts with compact summary and surv
   const button = s.nodes().find(n => n.props.accessibilityLabel === 'Xem tất cả nhiệm vụ khảo sát');
   assert.ok(button.props.style.minHeight >= 48 && button.props.style.minWidth >= 48);
   button.props.onPress(); assert.equal(routes.at(-1), '/(drone)/requests');
-  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 1); s.unmount();
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow' || n.type?.name === 'OperatorTaskRow').length, 1); s.unmount();
 });
 
 test('02B Detail keeps technical IDs collapsed, toggles them and preserves Work Package and recovery', async () => {

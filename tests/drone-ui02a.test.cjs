@@ -123,8 +123,8 @@ test('UI02A bounded band labels never mutate wire values and unknown has neutral
 
 test('UI02A Home uses neutral task heading and no Base64 version on card', async () => {
   const t = fixture('SUBMITTED'); const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [t], nextCursor: null }) });
-  s.render(); await s.flush(); assert.match(text(s), /Nhiệm vụ khảo sát/); assert.equal(s.nodes().find(n => n.type === 'OperatorTaskRow').props.task.scope[0].targetBand, 'SURFACE');
-  assert.equal(s.nodes().find(n => n.type === 'OperatorTaskRow').props.task.status, 'SUBMITTED', 'Submitted remains distinct from Completed');
+  s.render(); await s.flush(); assert.match(text(s), /Nhiệm vụ khảo sát/); assert.equal(s.nodes().find(n => (n.type === 'OperatorTaskRow' || n.type?.name === 'OperatorTaskRow')).props.task.scope[0].targetBand, 'SURFACE');
+  assert.equal(s.nodes().find(n => (n.type === 'OperatorTaskRow' || n.type?.name === 'OperatorTaskRow')).props.task.status, 'SUBMITTED', 'Submitted remains distinct from Completed');
   assert.doesNotMatch(JSON.stringify(s.nodes().filter(n => n.type === 'Text')), /Việc cần làm|AAAAAAAAAAE=/); s.unmount();
 });
 
