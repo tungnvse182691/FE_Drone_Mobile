@@ -43,7 +43,7 @@
 | --- | --- |
 | home | Presentation implemented; checkpoint native limits above |
 | requests | Toolbar/filter/pagination presentation implemented; native limits below |
-| request-detail | Pending |
+| request-detail | Presentation implemented; read-only native checks, mutation/playback limits below |
 | request-decline | Pending |
 | work-package | Pending |
 | survey-map | Pending; no basemap/provider change authorized |
@@ -70,3 +70,11 @@
 - `npx tsc --noEmit`: exit 0. `node --test --test-concurrency=2 tests/operator-ui05.test.cjs tests/operator-ui-integration.test.cjs tests/operator-refresh-ui.test.cjs`: 31/31 PASS (requests-targeted.log). `git diff --check`: PASS. Manual diff: unchanged callbacks, business conditions and text/data.
 - Native load-more reachability/press, empty/error, OS font scaling/Reduce Motion, FPS: NOT_VERIFIED. Full regression pending final checkpoint. Commit subject: `ui(operator): refine survey list controls and pagination`.
 - Checkpoint commit b2db2b8. Broader follow-up found UI02A tap helper hardcoded Pressable; adapt to accept existing AnimatedPressable too, without changing behavioral assertions. Re-executed UI02A/video/detail-focus: 57/57 PASS. Correction committed separately by subject `test(operator): recognize animated survey controls`.
+
+## Checkpoint 4: task detail and submitted-video presentation
+
+- Baseline after list test follow-up: 84bef25. Changed `app/(drone)/request-detail.tsx`, `src/components/drone/OperatorSubmittedVideos.tsx`.
+- Replace repeated gold card borders with neutral boundaries; code becomes cream badge, title 18/26, softer deadline label. Work-package action cream; video read button content-sized with cream surface. Technical disclosure uses existing AnimatedPressable/Reduce Motion behavior. Preserve status conditions, all calls, route params, player/download/source/lease lifecycle and handlers.
+- Android BEFORE detail-before.png / AFTER detail-after.png under `.cache/operator-uiux-20261119/`, task 25324063, same session. Read video list => real 'Lần nộp 1 · 8/11/2026'; navigated to work-package, Android Back returned; scrolled to technical controls and opened technical disclosure. No submit/accept/decline/upload/replay or restart.
+- `npx tsc --noEmit`: exit 0. First broad targeted run 55/56 (list wrapper test failure fixed separately in 84bef25). Follow-up `node --test --test-concurrency=2 tests/drone-ui02a.test.cjs tests/operator-video-playback.test.cjs tests/operator-detail-focus.test.cjs`: 57/57 PASS; earlier other detail/package/UI tests green. `git diff --check`: PASS. Manual diff: presentation only.
+- Playback on actual video, mutation UI receipts, OS accessibility settings/FPS, offline/error native: NOT_VERIFIED. Video list read does not prove video playback or fresh HTTP receipt validation. Commit subject `ui(operator): clarify task detail and video section`.

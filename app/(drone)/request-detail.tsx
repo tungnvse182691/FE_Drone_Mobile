@@ -7,6 +7,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
 import { DRONE_REQUEST_DECLINE, DRONE_WORK_PACKAGE, DRONE_UPLOAD, DRONE_REQUESTS } from '../../src/constants/routes';
@@ -210,11 +211,11 @@ export default function DroneRequestDetailScreen() {
     return (
       <>
         {cachedAt || workCachedAt ? <Card style={styles.scopeCard}><Text style={typography.bodyMd}>{operatorCachedNotice(cachedAt ?? workCachedAt)}</Text></Card> : null}
-        <Card style={{ ...styles.heroCard, ...(attention ? { borderLeftWidth: 4, borderLeftColor: colors.primary } : {}) }}>
+        <Card style={styles.heroCard}>
           <View style={styles.headerTitleRow}>
             <MaterialIcons name="assignment" size={16} color={colors.brandGold} />
             <Text style={styles.overline}>NHIỆM VỤ KHẢO SÁT</Text>
-            <Text style={[typography.caption, styles.codeLabel]}>{displayCode}</Text>
+            <Text style={[typography.caption, styles.codeLabel]}>Mã {displayCode}</Text>
           </View>
           <Text style={[typography.titleLg, styles.heroTitle]}>Khảo sát {operatorTaskTargetBand(task)}</Text>
           <View style={[styles.statusChip, { backgroundColor: pastel }]}>
@@ -331,11 +332,11 @@ export default function DroneRequestDetailScreen() {
         </View>
         {!cachedAt ? <OperatorSubmittedVideos taskId={task.id} projectId={task.projectId} /> : null}
         <Card style={styles.technicalCard}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật" accessibilityState={{ expanded: technical }} onPress={() => setTechnical(value => !value)} style={styles.technicalToggle}>
+          <AnimatedPressable android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="button" accessibilityLabel="Thông tin kỹ thuật" accessibilityState={{ expanded: technical }} onPress={() => setTechnical(value => !value)} style={styles.technicalToggle}>
             <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
             <Text style={[typography.labelSm, { flex: 1 }]}>Thông tin kỹ thuật</Text>
             <MaterialIcons name={technical ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
-          </Pressable>
+          </AnimatedPressable>
           {technical ? <View style={styles.techDetailBox}>
             <Text selectable style={typography.caption}>Mã máy chủ: {task.id}</Text>
             <Text selectable style={typography.caption}>Phiên bản nhiệm vụ: {task.version}</Text>
@@ -408,21 +409,21 @@ const styles = StyleSheet.create({
   circleIconButton: { width: 48, height: 48, borderRadius: radius.full, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   topBarCenter: { flex: 1, minWidth: 0, alignItems: 'center' },
   topBarTitle: { color: colors.neutral },
-  heroCard: { ...operatorAppearance.card, marginBottom: 12 },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  heroCard: { ...operatorAppearance.card, borderColor: colors.border, marginBottom: 12 },
+  headerTitleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
   overline: { ...typography.labelSm, color: colors.brandGold, flex: 1, lineHeight: 18 },
   statusChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 6 },
-  groupLabel: { ...typography.labelSm, color: colors.secondary, marginTop: 12, marginBottom: 8 },
+  groupLabel: { ...typography.caption, color: colors.secondary, marginTop: 8, marginBottom: 8 },
   infoLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   infoText: { ...typography.bodyMd, color: colors.secondary, flex: 1 },
   medium: { fontFamily: 'Roboto-Medium', color: colors.neutral },
   divider: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4 },
-  heroTitle: { color: colors.neutral, marginVertical: 12 },
-  codeLabel: { color: colors.secondary },
+  heroTitle: { ...typography.titleMd, fontSize: 18, lineHeight: 26, color: colors.neutral, marginVertical: 12 },
+  codeLabel: { color: colors.primaryDark, backgroundColor: '#FFF5D9', borderRadius: radius.sm, paddingHorizontal: 8, paddingVertical: 5, overflow: 'hidden' },
   sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
   supplementText: { color: colors.secondary, marginVertical: spacing.sm },
-  scopeCard: { ...operatorAppearance.card, marginBottom: 12 },
-  accessPointCard: { ...operatorAppearance.card, marginBottom: 12 },
+  scopeCard: { ...operatorAppearance.card, borderColor: colors.border, marginBottom: 12 },
+  accessPointCard: { ...operatorAppearance.card, borderColor: colors.border, marginBottom: 12 },
   accessPointHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs },
   accessPointHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   accessPointHeaderTitle: { flex: 1, color: colors.neutral },
@@ -433,11 +434,11 @@ const styles = StyleSheet.create({
   boldCoord: { fontWeight: '500', color: colors.neutral, fontFamily: 'Roboto' },
   navMapButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.sm, backgroundColor: colors.surface, marginTop: spacing.xs },
   navMapButtonText: { color: colors.neutral, flexShrink: 1, lineHeight: 21, textAlign: 'center' },
-  technicalCard: { ...operatorAppearance.card, marginBottom: 12 },
+  technicalCard: { ...operatorAppearance.card, borderColor: colors.border, marginBottom: 12, paddingVertical: spacing.sm },
   techDetailBox: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs, gap: spacing.sm },
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: { gap: spacing.sm, marginBottom: spacing.md },
-  workPackageButton: { width: '100%', backgroundColor: colors.surfaceAlt, borderColor: colors.neutral },
+  workPackageButton: { width: '100%', backgroundColor: operatorAppearance.pressed, borderColor: operatorAppearance.border, borderRadius: radius.lg },
   rejectButton: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.sm, backgroundColor: colors.surface },
   rejectButtonText: { color: colors.neutral, textAlign: 'center', lineHeight: 21, flexShrink: 1 },
   syncFootnote: { textAlign: 'center', color: colors.secondary, marginTop: spacing.xs },

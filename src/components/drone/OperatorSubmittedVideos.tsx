@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { AppState, Platform, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { VideoPreview } from './VideoPreview';
 import { useAuthStore } from '../../store/auth';
@@ -8,7 +8,8 @@ import { listOperatorVideos, operatorVideoError, readOperatorVideos, type Operat
 import { downloadOperatorVideo, type OperatorVideoLease } from '../../api/operatorVideoCache';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { spacing, typography } from '../../design-tokens';
+import { colors, radius, spacing, typography } from '../../design-tokens';
+import { operatorAppearance } from './appearance';
 
 export function OperatorSubmittedVideos({ taskId, projectId }: { taskId: string; projectId: string }) {
   useAuthStore(s => s.token); useAuthStore(s => s.user); useAuthStore(s => s.status);
@@ -80,9 +81,9 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     }, 30000);
     return () => { stopped = true; clearInterval(timer); };
   }, [scope, taskId, projectId, preview, selected]));
-  return <Card style={{ gap: spacing.sm, marginBottom: spacing.md }}>
-    <Text style={typography.titleMd}>Video đã gửi</Text>
-    <Button variant="secondary" title={page ? 'Làm mới video đã gửi' : 'Xem video đã gửi'} onPress={() => void load()} disabled={busy} loading={busy} />
+  return <Card style={styles.section}>
+    <Text style={[typography.titleMd, styles.title]}>Video đã gửi</Text>
+    <Button style={styles.readAction} variant="secondary" title={page ? 'Làm mới video đã gửi' : 'Xem video đã gửi'} onPress={() => void load()} disabled={busy} loading={busy} />
     {error ? <Text accessibilityRole="alert" style={typography.bodyMd}>{error}</Text> : null}
     {page?.items.length === 0 ? <Text style={typography.bodyMd}>Nhiệm vụ chưa có bộ dữ liệu đã nộp.</Text> : null}
     {page?.items.map((row, index) => <Button key={row.id} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />)}
@@ -98,3 +99,9 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     </> : null}
   </Card>;
 }
+
+const styles = StyleSheet.create({
+  section: { gap: spacing.sm, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
+  title: { color: colors.neutral },
+  readAction: { alignSelf: 'flex-start', maxWidth: '100%', borderColor: operatorAppearance.border, backgroundColor: operatorAppearance.pressed, borderRadius: radius.lg },
+});
