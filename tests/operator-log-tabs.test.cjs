@@ -37,4 +37,3 @@ test('Log tabs isolate visible sections without new reads or losing lookup input
   assert.equal(selected().length, 1);
   s.unmount();
 });
-
