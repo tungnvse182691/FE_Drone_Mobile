@@ -423,7 +423,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     }
   };
   return <View style={{ gap: spacing.sm }}>
-    <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[stage==='overview'||stage==='progress'?styles.detailHeading:typography.titleMd,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
+    <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[styles.detailHeading,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại ngữ cảnh sửa chữa" accessibilityState={{disabled:busy||result.status==='loading',busy:busy||result.status==='loading'}} disabled={busy||result.status==='loading'} style={styles.refreshButton} onPress={()=>{void result.reload();void load();}}>
         {busy||result.status==='loading'?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}</Pressable>
     </View>
@@ -501,7 +501,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     </>:null}
     {stage!=='progress'&&stage!=='overview'?<>
     <Card style={styles.repairWorkCard}>
-    <View style={styles.closeoutHeading}><View style={[styles.closeoutIcon,{backgroundColor:finalConfirmed||pmAccepted?"#E8F5E9":serverSubmitted||intake?"#F0EBFF":"#EAF2FF"}]}><MaterialIcons name={finalConfirmed||pmAccepted?"check-circle":serverSubmitted||intake?"upload-file":"construction"} size={24} color={finalConfirmed||pmAccepted?"#166534":serverSubmitted||intake?"#6D28D9":"#1D4ED8"}/></View><Text style={[typography.titleMd,styles.flex]}>{finalConfirmed?'Đã nghiệm thu':pmAccepted?'Hồ sơ đã được chấp nhận':serverSubmitted||intake?'Đã gửi hồ sơ':draft?.command?.phase==='confirmed'?'Gửi hồ sơ hoàn tất':draft?.repairClaim?'Hoàn thiện ảnh sau sửa':'Thêm ảnh sau sửa'}</Text></View>
+    <View style={styles.closeoutHeading}><View style={[styles.closeoutIcon,{backgroundColor:finalConfirmed||pmAccepted?"#E8F5E9":serverSubmitted||intake?"#FBF8EE":"#F8F9FA"}]}><MaterialIcons name={finalConfirmed||pmAccepted?"check-circle":serverSubmitted||intake?"upload-file":"construction"} size={24} color={finalConfirmed||pmAccepted?"#166534":serverSubmitted||intake?colors.brandGold:colors.secondary}/></View><Text style={[styles.progressTitle,styles.flex]}>{finalConfirmed?'Đã nghiệm thu':pmAccepted?'Hồ sơ đã được chấp nhận':serverSubmitted||intake?'Đã gửi hồ sơ':draft?.command?.phase==='confirmed'?'Gửi hồ sơ hoàn tất':draft?.repairClaim?'Hoàn thiện ảnh sau sửa':'Thêm ảnh sau sửa'}</Text></View>
     <Text style={styles.hint}>{closeoutMessage}</Text>
     {!finalConfirmed&&!pmAccepted&&!serverSubmitted?<>
     {!finished?<Text style={styles.hint}>Ảnh sau sửa sẽ mở khi kết thúc thi công.</Text>:!intake&&!draft?.command&&!draft?.repairClaim?<Button variant="primary" title="Chụp ảnh sau sửa" disabled={busy||!loaded||!finished||!!pending||rejected||!!intake||!!draft?.command} onPress={()=>void run('claim')}/>:null}
@@ -519,14 +519,14 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
           {label:'Số đo',value:draft?.measurements.length??0},
           {label:'Ảnh trước',value:draft?.captures.filter(c=>c.purpose==='BEFORE'&&c.verified&&c.upload?.fileId).length??0},
           {label:'Ảnh sau',value:draft?.captures.filter(c=>c.purpose==='AFTER'&&c.verified&&c.upload?.fileId).length??0},
-        ].map(stat=><View key={stat.label} style={styles.closeoutStat}><Text style={typography.titleLg}>{stat.value}</Text><Text style={styles.hint}>{stat.label}</Text></View>)}</View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết bản lưu số đo và ảnh" accessibilityState={{expanded:showCloseoutEvidence}} style={styles.repairDisclosure} onPress={()=>setShowCloseoutEvidence(v=>!v)}><Text style={typography.labelSm}>Chi tiết bản lưu</Text><MaterialIcons name={showCloseoutEvidence?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>
+        ].map(stat=><View key={stat.label} style={styles.closeoutStat}><Text style={styles.progressTitle}>{stat.value}</Text><Text style={styles.hint}>{stat.label}</Text></View>)}</View>
+        <CrewPressable accessibilityRole="button" accessibilityLabel="Chi tiết bản lưu số đo và ảnh" accessibilityState={{expanded:showCloseoutEvidence}} style={[styles.repairDisclosure,styles.progressDisclosure]} onPress={()=>setShowCloseoutEvidence(v=>!v)}><Text style={styles.progressTitle}>Chi tiết bản lưu</Text><MaterialIcons name={showCloseoutEvidence?'expand-less':'expand-more'} size={22} color={colors.secondary}/></CrewPressable>
         {showCloseoutEvidence?<RepairFieldSummary draft={draft}/>:null}
       </>:null}
-      <Button variant="text" title="Xem số đo và ảnh" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
+      <Button style={styles.compactAction} variant="text" title="Xem số đo và ảnh" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
     </View>:null}
     {stage==='progress'&&finished?<Button variant="secondary" title="Mở hồ sơ sau thi công" onPress={()=>router.push({pathname:'/(crew)/complete',params:{id:task.id,projectId:task.projectId}})}/>:null}
-    {stage==='closeout'&&!finished&&!serverSubmitted?<Button variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}
+    {stage==='closeout'&&!finished&&!serverSubmitted?<Button style={styles.compactAction} variant="secondary" title="Xem các mốc thi công" onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {notice&&(notice!=='Đã lưu biên nhận máy chủ và đối chiếu hạng mục.'||showRepairTechnical)?<View style={styles.repairNotice}><MaterialIcons name="info-outline" size={20} color={colors.secondary}/><Text style={[styles.hint,styles.flex]} accessibilityLiveRegion="polite">{notice}</Text></View>:null}
     </View>
     {result.repairContext ? <>
@@ -553,7 +553,7 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
   const before=draft?.captures.filter(c=>c.purpose==='BEFORE'&&c.verified&&c.upload?.fileId).length??0;
   const after=draft?.captures.filter(c=>c.purpose==='AFTER'&&c.verified&&c.upload?.fileId).length??0;
   return <View style={{gap:spacing.sm}}>
-      <Text style={typography.titleMd}>Số đo và ảnh</Text>
+      <Text style={styles.progressTitle}>Số đo và ảnh</Text>
       <Text style={styles.hint}>Bản lưu trên thiết bị; chưa thay cho hồ sơ được máy chủ tiếp nhận.</Text>
       {draft?.measurements.length?draft.measurements.map(m=><View key={m.sampleId}>
         <Text style={styles.body}>{({Area:'Diện tích hư hại',SlabFaultingHeight:'Độ chênh tấm',ShoulderErosionExtent:'Kích thước xói lở',DepressionLength:'Chiều dài chỗ lõm',DepressionWidth:'Chiều rộng chỗ lõm',DepressionDepth:'Độ sâu chỗ lõm'} as Record<string,string>)[m.type]??'Số đo hiện trường'}: {m.state==='KNOWN'&&typeof m.value==='number'&&Number.isFinite(m.value)&&m.unit?`${m.value} ${m.unit}`:m.unknownReason||'Chưa có giá trị và đơn vị được xác nhận'}</Text>
@@ -578,11 +578,12 @@ const styles = StyleSheet.create({
   overviewPlan: { gap: spacing.xs, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   repairActiveCard: {backgroundColor:'#EFF6FF',borderColor:'#93C5FD',borderLeftWidth:4},
   closeoutHeading: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:spacing.sm},
-  closeoutIcon: {padding:spacing.sm,borderRadius:radius.md},
-  closeoutStat: {flex:1,minWidth:70,alignItems:"center",gap:spacing.xs,paddingVertical:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:radius.md},
+  closeoutIcon: {padding:spacing.xs,borderRadius:radius.md},
+  closeoutStat: {flexGrow:1,flexBasis:80,minWidth:0,gap:spacing.xs,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
   evidenceCounts: {gap:spacing.xs,borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm},
-  repairWorkCard: {backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:spacing.md,gap:spacing.sm,marginBottom:spacing.sm},
+  repairWorkCard: {backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:12,gap:spacing.sm,marginBottom:4},
   repairNotice: {flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
+  compactAction: {alignSelf:"flex-start",maxWidth:"100%",backgroundColor:"#FBF8EE"},
   repairTechnicalLink: {borderWidth:1,borderColor:colors.border,backgroundColor:colors.surface},
   repairStepCard: {gap:spacing.sm, borderWidth:1, borderColor:'#E8D9A8', backgroundColor:'#FBF8EE', padding:12, marginBottom:4},
   progressTitle: {...typography.labelLg,lineHeight:20,color:colors.neutral},

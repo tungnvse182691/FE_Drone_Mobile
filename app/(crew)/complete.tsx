@@ -25,10 +25,10 @@ export default function CrewRepairCompleteScreen(){
 }
 
 const styles=StyleSheet.create({
- summary:{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg},
- identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:6,backgroundColor:colors.surfaceAlt,borderRadius:radius.sm},
+ summary:{gap:spacing.sm,padding:12,marginBottom:12,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,backgroundColor:'#FBF8EE'},
+ identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:4,backgroundColor:colors.surface,borderRadius:radius.sm},
  code:{...typography.labelLg,lineHeight:20,color:colors.secondary,flexShrink:1},
- title:{...typography.titleMd,color:colors.neutral},
+ title:{...typography.bodyLg,lineHeight:22,color:colors.neutral},
  location:{flexDirection:'row',alignItems:'flex-start',gap:spacing.xs},
  flex:{flex:1,minWidth:0},
  statusRow:{borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm,flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:spacing.sm},
