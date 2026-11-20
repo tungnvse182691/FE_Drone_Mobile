@@ -52,3 +52,9 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - B committed `2117589`. File `app/(crew)/wo-detail.tsx`: merged identity/status/action overview, neutral surfaces, 16/24 title, compact ID, label/value facts without decorative date/location icons. Same expressions, conditions, callbacks and route params.
 - ANDROID_VIEWED task 60a04265, read-only submitted MEASURE_ONLY. Before `detail-before.png`; final `detail-after-stable.png`; expanded technical `detail-technical-after.png`. Scroll and technical disclosure inspected; Back to list tapped. Original `detail-after.png` is pre-refresh, not final acceptance; retained as artifact.
 - `npx tsc --noEmit` exit 0; detail/status/repair/reassessment presentation tests 16/16; `git diff --check` pass. Native other modes/loading/error, large font and Reduce Motion NOT_VERIFIED. No mutation, restart or settings changes.
+
+## A2 — Owner addendum: KPI option B
+
+- C committed `b330999`. Only `app/(crew)/home.tsx`: two equal flexible navy-light KPI surfaces, left 3dp gold/mint accents, matching numbers, full pale labels. Original real counts/error placeholders unchanged. Wrap with 120dp minimum; no fixed text height, new icon or motion.
+- Android before `home-kpi-b-before.png`, after `home-kpi-b-after.png`, visually inspected; actual values 46/4 unchanged. Existing inbox fetching indicator is independent of KPI polish.
+- `npx tsc --noEmit` exit 0; Home/layout/press/motion/status 14/14 pass; `git diff --check` pass. Large OS font/narrow viewport/native Reduce Motion NOT_VERIFIED (settings unchanged). Source diff has only style and style selection.

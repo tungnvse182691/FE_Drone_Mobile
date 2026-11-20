@@ -73,8 +73,8 @@ export default function CrewHomeScreen() {
 
         <View style={styles.metricRow}>
           {CREW_METRICS.map((metric, index) => (
-            <View key={metric.label} style={styles.metricCard}>
-              <Text style={[typography.headlineLg, styles.metricValue]}>
+            <View key={metric.label} style={[styles.metricCard, index === 0 ? styles.metricPending : styles.metricDone]}>
+              <Text style={[typography.headlineLg, styles.metricValue, index === 0 ? styles.metricPendingValue : styles.metricDoneValue]}>
                 {inbox.error || inbox.query.isPending ? '—' : String(index === 0 ? tasks.length : inbox.tasks.filter(crewTaskIsComplete).length)}
               </Text>
               <Text style={[typography.caption, styles.metricLabel]}>{metric.label}</Text>
@@ -286,18 +286,22 @@ const styles = StyleSheet.create({
   /* Metrics Row */
   metricRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   metricCard: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 120,
     gap: 4,
     padding: 12,
+    borderLeftWidth: 3,
     backgroundColor: '#243D52',
     borderRadius: 12,
   },
-  metricPending: { borderTopColor: '#C9A227', borderTopWidth: 2 },
-  metricDone: { borderTopColor: '#A8D5BA', borderTopWidth: 2 },
+  metricPending: { borderLeftColor: '#C9A227' },
+  metricDone: { borderLeftColor: '#A8D5BA' },
+  metricPendingValue: { color: '#C9A227' },
+  metricDoneValue: { color: '#A8D5BA' },
   metricTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
