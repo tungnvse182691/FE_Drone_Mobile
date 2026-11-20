@@ -177,6 +177,7 @@ export default function DroneRequestDetailScreen() {
   };
 
   const [technical, setTechnical] = useState(false);
+  const [fullTechnicalId, setFullTechnicalId] = useState(false);
   const [commandsExpanded, setCommandsExpanded] = useState(false);
 
   const renderBody = () => {
@@ -329,10 +330,27 @@ export default function DroneRequestDetailScreen() {
             <MaterialIcons name={technical ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
           </AnimatedPressable>
           {technical ? <View style={styles.techDetailBox}>
-            <Text selectable style={typography.caption}>Mã máy chủ: {task.id}</Text>
-            <Text selectable style={typography.caption}>Phiên bản nhiệm vụ: {task.version}</Text>
-            <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
-            <Text style={typography.caption}>Phạm vi được ghim theo nhiệm vụ; xem các phân đoạn ở Gói công việc.</Text>
+            <View style={styles.techRow}>
+              <Text style={styles.techLabel}>Mã máy chủ</Text>
+              <Text selectable={fullTechnicalId} style={styles.techValue}>{fullTechnicalId || task.id.length <= 20 ? task.id : `${task.id.slice(0, 8)}…${task.id.slice(-8)}`}</Text>
+            </View>
+            <AnimatedPressable accessibilityRole="button" accessibilityLabel={fullTechnicalId ? 'Thu gọn mã máy chủ' : 'Xem mã máy chủ đầy đủ'}
+              accessibilityState={{ expanded: fullTechnicalId }} onPress={() => setFullTechnicalId(value => !value)}
+              android_ripple={{ color: operatorAppearance.pressed }} pressedScale={0.995} style={styles.techIdToggle}>
+              <Text style={styles.techLink}>{fullTechnicalId ? 'Thu gọn mã' : 'Xem mã đầy đủ'}</Text>
+            </AnimatedPressable>
+            {fullTechnicalId ? <Text style={styles.techNote}>Nhấn giữ mã đầy đủ để chọn và sao chép.</Text> : null}
+            <View style={styles.techVersions}>
+              <View style={styles.techRow}>
+                <Text style={styles.techLabel}>Phiên bản nhiệm vụ</Text>
+                <Text selectable style={styles.techValue}>{task.version}</Text>
+              </View>
+              <View style={styles.techRow}>
+                <Text style={styles.techLabel}>Phiên bản phạm vi</Text>
+                <Text selectable style={styles.techValue}>{workPackage?.scopeVersion ?? 'Chưa có dữ liệu'}</Text>
+              </View>
+            </View>
+            <Text style={styles.techNote}>Phạm vi được ghim theo nhiệm vụ; xem các phân đoạn ở Gói công việc.</Text>
           </View> : null}
           {!canOpenDecline && scope.key && target ? <DroneTaskCommandPanel key={scope.key} taskId={target} presentation="premium" operation="accept"
             onResolved={() => void loadTask()} collapsed={!commandsExpanded} onExpand={() => setCommandsExpanded(true)} /> : null}
@@ -433,7 +451,14 @@ const styles = StyleSheet.create({
   navMapButton: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: '#DCE2E7', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#F3F5F6', marginTop: 4, overflow: 'hidden' },
   navMapButtonText: { ...typography.bodyMd, color: '#192D40', flexShrink: 1, lineHeight: 21, textAlign: 'center' },
   technicalCard: { ...operatorAppearance.card, borderRadius: 16, borderColor: '#DCE2E7', marginBottom: 12, paddingVertical: 4 },
-  techDetailBox: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, marginTop: spacing.xs, gap: spacing.sm },
+  techDetailBox: { borderTopWidth: 1, borderTopColor: '#DCE2E7', paddingTop: 16, paddingBottom: 16, marginTop: 4, gap: 12 },
+  techRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 12, rowGap: 4 },
+  techLabel: { ...typography.caption, color: '#526170', lineHeight: 20, flexBasis: 124, flexGrow: 1 },
+  techValue: { ...typography.bodyMd, color: '#192D40', lineHeight: 22, flexBasis: 156, flexGrow: 1, flexShrink: 1, fontVariant: ['tabular-nums'] },
+  techVersions: { backgroundColor: '#F3F5F6', borderRadius: 10, padding: 12, gap: 12 },
+  techIdToggle: { minHeight: 48, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 12, borderRadius: 8, overflow: 'hidden' },
+  techLink: { ...typography.bodyMd, fontFamily: 'Roboto-Medium', color: '#192D40', lineHeight: 22 },
+  techNote: { ...typography.caption, color: '#526170', lineHeight: 20 },
   technicalToggle: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   actionContainer: { gap: spacing.sm, marginBottom: spacing.md },
   workPackageButton: { width: '100%', minHeight: 48, backgroundColor: colors.surface, borderColor: '#DCE2E7', borderRadius: 12 },

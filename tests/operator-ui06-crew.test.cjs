@@ -22,7 +22,9 @@ test('UI06 Detail keeps raw identities and versions in expanded technical conten
  s.render();await s.flush();assert.doesNotMatch(text(s),/raw-scope-version/);assert.ok(!text(s).includes(task.id));
  assert.match(text(s),/Máy chủ chưa cung cấp điểm tiếp cận cho nhiệm vụ này\./);
  s.nodes().find(n=>n.props.accessibilityLabel==='Thông tin kỹ thuật').props.onPress();await s.flush();
- assert.ok(text(s).includes(task.id));assert.match(text(s),/raw-scope-version/);s.unmount();
+ assert.ok(text(s).includes(`${task.id.slice(0,8)}…${task.id.slice(-8)}`));assert.match(text(s),/raw-scope-version/);
+ s.nodes().find(n=>n.props.accessibilityLabel==='Xem mã máy chủ đầy đủ').props.onPress();await s.flush();
+ assert.ok(text(s).includes(task.id));assert.ok(s.nodes().some(n=>n.type==='Text'&&n.props.selectable===true&&n.props.children[0]===task.id));s.unmount();
 });
 
 test('UI06 Upload uses compact file rows without invented preview or location metadata',async()=>{
