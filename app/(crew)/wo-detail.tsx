@@ -222,8 +222,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
           <CrewTaskStatus status={fresh.status} label={crewStatusLabel(fresh.status)} />
           <Chip variant="measure-only" label={crewModeLabel(fresh.rawMode)} uppercase={false} />
         </View>
-      </Card>
-      <Card style={[styles.taskActionCard, styles.detailCard]}>
+        <View style={styles.detailDivider} />
         <View style={styles.sectionHeading}>
           <Text style={[styles.detailHeading,styles.flex]}>Tình trạng hiện tại</Text>
           <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại / đối soát" accessibilityState={{disabled:busy,busy}} testID="crew-detail-refresh" disabled={busy} style={[styles.refreshButton,styles.detailRefresh]} onPress={()=>void run()}>
@@ -247,9 +246,9 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <Card style={[styles.card, styles.detailCard]}>
         <Text style={styles.detailHeading}>Thông tin nhiệm vụ</Text>
         <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Hướng dẫn</Text><Text style={styles.body}>{fresh.detail?.instructions || fresh.description || 'Chưa có hướng dẫn bổ sung cho nhiệm vụ này.'}</Text></View></View>
-        <View style={styles.factRow}><MaterialIcons name="event" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
+        <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
         {fresh.wo_code ? <Text style={styles.body}>Lệnh công tác: {fresh.wo_code}</Text> : null}
-        <View style={styles.factRow}><MaterialIcons name="place" size={20} color={colors.secondary} /><View style={styles.flex}><Text style={styles.hint}>Vị trí hiện trường</Text><Text style={styles.body}>{[fresh.route_code, fresh.section_name, fresh.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text>
+        <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Vị trí hiện trường</Text><Text style={styles.body}>{[fresh.route_code, fresh.section_name, fresh.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text>
           <Text style={styles.hint}>{fresh.coordinates ? `${fresh.coordinates.latitude}, ${fresh.coordinates.longitude}` : 'Chưa có tọa độ dẫn đường'}</Text></View></View>
         {fresh.coordinates ? <Button variant="secondary" title="Dẫn đường" onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } })} /> : null}
       </Card>
@@ -576,13 +575,14 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
 }
 
 const styles = StyleSheet.create({
-  detailCard: { borderColor: colors.border, marginBottom: 12, gap: 12, padding: 12 },
-  detailHero: { backgroundColor: '#FBF8EE', gap: spacing.sm },
-  detailTitle: { ...typography.bodyLg, lineHeight: 22, color: colors.neutral },
-  detailHeading: { ...typography.labelLg, lineHeight: 20, color: colors.secondary },
-  detailId: { ...typography.labelLg, lineHeight: 20, color: colors.secondary, alignSelf: 'flex-start', backgroundColor: colors.surface, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radius.sm },
-  detailRefresh: { backgroundColor: '#FBF8EE', borderWidth: 1, borderColor: '#E8D9A8' },
-  detailLink: { backgroundColor: '#FBF8EE', borderRadius: radius.md, minHeight: 48, padding: spacing.sm },
+  detailCard: { borderColor: '#DCE2E7', marginBottom: 12, gap: 12, padding: 16 },
+  detailHero: { backgroundColor: '#F3F5F6', gap: 12 },
+  detailDivider: { height: 1, backgroundColor: '#DCE2E7', marginTop: 4 },
+  detailTitle: { ...typography.labelLg, fontSize: 16, lineHeight: 24, color: '#192D40' },
+  detailHeading: { ...typography.labelLg, fontSize: 14, lineHeight: 21, color: '#192D40' },
+  detailId: { ...typography.labelSm, lineHeight: 18, color: '#192D40', alignSelf: 'flex-start', backgroundColor: '#E4E9ED', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  detailRefresh: { backgroundColor: '#F7F0DA', borderWidth: 1, borderColor: '#DCE2E7' },
+  detailLink: { backgroundColor: '#F3F5F6', borderRadius: radius.md, minHeight: 48, padding: 12 },
   overviewLinks: { gap: spacing.sm },
   overviewLink: { minHeight: 48, padding: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: '#FBF8EE', borderRadius: radius.md, borderWidth: 1, borderColor: '#E8D9A8', overflow: 'hidden' },
   overviewPlan: { gap: spacing.xs, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },

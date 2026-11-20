@@ -46,3 +46,9 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - Baseline `tasks-before.png`; stable `tasks-after.png` visually inspected. Android active→done shows four completed tasks, submitted remains in active; done→active tested. Existing press/ripple and content transition unchanged. Filters/count predicates/paging/hooks/handlers/route params unchanged in source diff.
 - `npx tsc --noEmit`: exit 0; Home/layout/motion/press/status + dot-c filters: 17/17 (`tasks-targeted.log`); `git diff --check`: pass. Global full regression baseline remains 1949/1950 (unrelated expired Operator fixture).
 - Native loading/error/offline, large text, narrow width and OS Reduce Motion NOT_VERIFIED; no settings changed, mutation or session restart.
+
+## C — Chi tiết nhiệm vụ
+
+- B committed `2117589`. File `app/(crew)/wo-detail.tsx`: merged identity/status/action overview, neutral surfaces, 16/24 title, compact ID, label/value facts without decorative date/location icons. Same expressions, conditions, callbacks and route params.
+- ANDROID_VIEWED task 60a04265, read-only submitted MEASURE_ONLY. Before `detail-before.png`; final `detail-after-stable.png`; expanded technical `detail-technical-after.png`. Scroll and technical disclosure inspected; Back to list tapped. Original `detail-after.png` is pre-refresh, not final acceptance; retained as artifact.
+- `npx tsc --noEmit` exit 0; detail/status/repair/reassessment presentation tests 16/16; `git diff --check` pass. Native other modes/loading/error, large font and Reduce Motion NOT_VERIFIED. No mutation, restart or settings changes.
