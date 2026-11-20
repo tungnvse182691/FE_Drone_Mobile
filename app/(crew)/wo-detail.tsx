@@ -519,7 +519,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
     </Card>
     </>:null}
     {stage==='closeout'?<View style={styles.repairWorkCard}>
-      <View style={styles.closeoutHeading}><MaterialIcons name="photo-library" size={22} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Số đo và ảnh</Text><Text style={styles.hint}>{serverSubmitted?'Đã gửi':'Bản lưu trên máy'}</Text></View>
+      <View style={styles.closeoutHeading}><Text style={[typography.labelLg,styles.flex]}>Số đo và ảnh</Text><Text style={styles.hint}>{serverSubmitted?'Đã gửi':'Bản lưu trên máy'}</Text></View>
       {!serverSubmitted?<>
         <View style={styles.repairStats}>{[
           {label:'Số đo',value:draft?.measurements.length??0},
@@ -589,9 +589,9 @@ const styles = StyleSheet.create({
   repairActiveCard: {backgroundColor:'#EDF2F5',borderColor:'#DCE2E7',borderLeftColor:'#C9A227',borderLeftWidth:3},
   closeoutHeading: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:spacing.sm},
   closeoutIcon: {padding:spacing.xs,borderRadius:radius.md},
-  closeoutStat: {flexGrow:1,flexBasis:80,minWidth:0,gap:spacing.xs,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
+  closeoutStat: {flexGrow:1,flexBasis:80,minWidth:0,gap:spacing.xs,padding:spacing.sm,borderRadius:6,backgroundColor:'#F3F5F6'},
   evidenceCounts: {gap:spacing.xs,borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm},
-  repairWorkCard: {backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:12,gap:spacing.sm,marginBottom:4},
+  repairWorkCard: {backgroundColor:colors.surface,borderWidth:1,borderColor:'#DCE2E7',borderRadius:radius.lg,padding:16,gap:12,marginBottom:4},
   repairNotice: {flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
   compactAction: {alignSelf:"flex-start",maxWidth:"100%",backgroundColor:"#FBF8EE"},
   repairTechnicalLink: {borderWidth:1,borderColor:colors.border,backgroundColor:colors.surface},

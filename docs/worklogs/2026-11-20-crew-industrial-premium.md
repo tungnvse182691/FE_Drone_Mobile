@@ -75,3 +75,10 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - TypeScript exit 0; repair/reassessment presentation + polish layout 9/9 pass (`progress-targeted.log`); diff check pass. Other progress states, font/narrow/Reduce Motion and mutation paths NOT_VERIFIED. Full regression baseline unchanged (1949/1950, unrelated Operator expired fixture).
 
 - E follow-up: header Back returned Detail for the same 9b840ab7 task. Source diff reviewed: styles + decorative construction/location icon removal only. Full regression baseline remains inherited 1949/1950; no native FPS claim.
+
+## F — Hồ sơ hoàn tất thi công
+
+- Files complete.tsx + closeout presentation in wo-detail.tsx. Neutral task summary, compact navy ID/title; removed location/photo decoration. Three original counts remain separate neutral cells; closeout spacing and borders align with Progress. Existing spring/ripple and Reduce Motion helpers retained.
+- Android task 9b840ab7: opened from Detail; before `complete-before.png`, after `complete-after.png` visually inspected. Opened and closed “Chi tiết bản lưu”; original zero counts and “Chưa kết thúc thi công” guard retained. No capture/finish/submit. Other server states and narrow/font/Reduce Motion NOT_VERIFIED.
+- `npx tsc --noEmit` explicit TSC_PASS exit 0. Repair/reassessment presentation + polish layout 9/9 pass. `git diff --check` pass; diff only styles/decorative icons. Full regression baseline 1949/1950; no new full run at this checkpoint.
+- E source checkpoint eebddcd; b259499 adds verification notes only, not duplicate source changes. Owner confirmed no other writer; no reset/rewrite performed.
