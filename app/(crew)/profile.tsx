@@ -100,7 +100,7 @@ export default function CrewProfileScreen() {
       <CrewContentTransition ready>
       <View style={styles.profileHeader}>
         <View style={styles.avatar} accessibilityLabel="Biểu tượng tài khoản">
-          <MaterialIcons name="person" size={48} color={colors.secondary} />
+          <MaterialIcons name="person" size={36} color={colors.secondary} />
         </View>
         <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
         <Text style={[typography.bodyMd, styles.meta]}>
@@ -109,13 +109,12 @@ export default function CrewProfileScreen() {
         <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
 
         <View style={styles.roleChip}>
-          <MaterialIcons name="build" size={14} color={colors.secondary} />
           <Text style={[typography.labelSm, styles.roleText]}>Kỹ thuật viên sửa chữa</Text>
         </View>
       </View>
 
       <Card style={styles.statsCard}>
-        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, { color: colors.neutral }]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View><CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
+        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, styles.statsTitle]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View><CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
             {inbox.query.isFetching ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
           </CrewPressable></View>
         {inbox.error ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: colors.secondary }]}>{inbox.error}</Text> :
@@ -125,7 +124,6 @@ export default function CrewProfileScreen() {
         <View style={styles.statsRow}>
           {PERFORMANCE_STATS.map((stat, idx) => (
             <React.Fragment key={stat.label}>
-              {idx > 0 && <View style={styles.statDivider} />}
               <View style={styles.statCol}>
                 <Text style={[typography.titleLg, styles.statNumber, { color: stat.color }]}>
                   {inbox.error || inbox.query.isPending ? '—' : String(idx === 0 ? completed : idx === 1 ? inbox.tasks.length - completed : inbox.tasks.length)}
@@ -189,18 +187,20 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   avatar: {
-    width: 80,
-    height: 80,
+    width: 64,
+    height: 64,
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 2,
-    borderColor: colors.border,
+    backgroundColor: '#F3F5F6',
+    borderWidth: 1,
+    borderColor: '#DCE2E7',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   name: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontSize: 18,
+    lineHeight: 26,
     textAlign: 'center',
   },
   meta: {
@@ -221,9 +221,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: colors.surface,
+    backgroundColor: '#F3F5F6',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
   },
   roleText: {
     color: colors.secondary,
@@ -235,27 +235,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
   },
   statsRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-evenly',
+    alignItems: 'stretch',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   statsHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, gap: spacing.sm },
   statsHeadingText: { flex: 1, gap: 2 },
+  statsTitle: { color: '#192D40', fontSize: 16, lineHeight: 24 },
   refreshButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full },
-  statDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-  },
   statCol: {
     flex: 1,
+    minWidth: 88,
     alignItems: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.sm,
+    padding: spacing.sm,
+    backgroundColor: '#F3F5F6',
+    borderRadius: radius.md,
   },
   statLabel: {
     color: colors.secondary,
@@ -266,7 +264,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontFamily: 'Roboto',
   },
-  statNumber: { fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'] },
+  statNumber: { fontSize: 28, lineHeight: 36, fontVariant: ['tabular-nums'] },
   sectionLabel: {
     color: colors.secondary,
     fontSize: 13,
@@ -277,7 +275,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
   },
   row: {
     flexDirection: 'row',
