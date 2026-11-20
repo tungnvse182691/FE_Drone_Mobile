@@ -67,11 +67,16 @@ function optionalMeters(value: number | null | undefined): string {
   return typeof value === 'number' && Number.isFinite(value) ? `${value} m` : 'Chưa có dữ liệu';
 }
 
+function compactTechnicalId(value: string): string {
+  return value.length > 20 ? `${value.slice(0, 8)}…${value.slice(-8)}` : value;
+}
+
 export default function DroneWorkPackageScreen() {
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
   const { workPackage, geometries, loading, geometryError, error, cachedAt, reload: load } = useOperatorWorkPackage(target);
   const [technicalExpanded, setTechnicalExpanded] = useState(false);
+  const [fullTechnicalIds, setFullTechnicalIds] = useState(false);
   const [expandedSegments,setExpandedSegments] = useState<string[]>([]);
 
   const renderBody = () => {
@@ -230,15 +235,39 @@ export default function DroneWorkPackageScreen() {
             <Text style={[typography.bodyMd, styles.sectionTitle]}>Thông tin kỹ thuật</Text>
             <MaterialIcons name={technicalExpanded ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
           </AnimatedPressable>
-          {technicalExpanded ? <View style={styles.segmentDetails}>
-            <Text selectable style={typography.caption}>Phiên bản phạm vi: {workPackage.scopeVersion ?? '—'}</Text>
-            {workPackage.geometryRefs.map((entry) => <View key={`${entry.routeVersionId}:${entry.segmentSetId}`} style={styles.segmentCard}>
-              <Text style={typography.labelSm}>{entry.routeVersionId === ref?.routeVersionId && entry.segmentSetId === ref?.segmentSetId ? 'Bộ hình học đang xem' : 'Bộ hình học đã ghim'}</Text>
-              <Text selectable style={typography.caption}>Tuyến: {entry.routeVersionId}</Text>
-              <Text selectable style={typography.caption}>Bộ phân đoạn: {entry.segmentSetId}</Text>
-              <Text selectable style={typography.caption}>Phân đoạn: {entry.segmentIds.join(', ')}</Text>
+          {technicalExpanded ? <View style={styles.technicalDetails}>
+            <View style={styles.technicalVersions}>
+              <View style={styles.technicalRow}>
+                <Text style={styles.technicalLabel}>Phiên bản phạm vi</Text>
+                <Text selectable style={styles.technicalValue}>{workPackage.scopeVersion ?? '—'}</Text>
+              </View>
+              {geometry ? <View style={styles.technicalRow}>
+                <Text style={styles.technicalLabel}>Phiên bản hình học</Text>
+                <Text selectable style={styles.technicalValue}>{geometry.route.versionNo}</Text>
+              </View> : null}
+            </View>
+            <AnimatedPressable accessibilityRole="button" accessibilityLabel="Xem mã đầy đủ"
+              accessibilityState={{ expanded: fullTechnicalIds }}
+              onPress={() => setFullTechnicalIds(value => !value)}
+              android_ripple={{ color: '#192D4010' }} pressedScale={0.995} style={styles.technicalIdToggle}>
+              <Text style={styles.technicalLink}>{fullTechnicalIds ? 'Thu gọn mã' : 'Xem mã đầy đủ'}</Text>
+            </AnimatedPressable>
+            {fullTechnicalIds ? <Text style={styles.technicalHint}>Nhấn giữ mã đầy đủ để chọn và sao chép.</Text> : null}
+            {workPackage.geometryRefs.map((entry) => <View key={`${entry.routeVersionId}:${entry.segmentSetId}`} style={styles.technicalGroup}>
+              <Text style={styles.technicalGroupTitle}>{entry.routeVersionId === ref?.routeVersionId && entry.segmentSetId === ref?.segmentSetId ? 'Bộ hình học đang xem' : 'Bộ hình học đã ghim'}</Text>
+              <View style={styles.technicalRow}>
+                <Text style={styles.technicalLabel}>Tuyến</Text>
+                <Text selectable={fullTechnicalIds} style={styles.technicalValue}>{fullTechnicalIds ? entry.routeVersionId : compactTechnicalId(entry.routeVersionId)}</Text>
+              </View>
+              <View style={styles.technicalRow}>
+                <Text style={styles.technicalLabel}>Bộ phân đoạn</Text>
+                <Text selectable={fullTechnicalIds} style={styles.technicalValue}>{fullTechnicalIds ? entry.segmentSetId : compactTechnicalId(entry.segmentSetId)}</Text>
+              </View>
+              {entry.segmentIds.map((segmentId, index) => <View key={`${segmentId}:${index}`} style={styles.technicalRow}>
+                <Text style={styles.technicalLabel}>{`Phân đoạn ${index + 1}`}</Text>
+                <Text selectable={fullTechnicalIds} style={styles.technicalValue}>{fullTechnicalIds ? segmentId : compactTechnicalId(segmentId)}</Text>
+              </View>)}
             </View>)}
-            {geometry ? <Text selectable style={typography.caption}>Phiên bản hình học: {geometry.route.versionNo}</Text> : null}
           </View> : null}
         </Card>
 
@@ -278,6 +307,16 @@ export default function DroneWorkPackageScreen() {
 }
 
 const styles = StyleSheet.create({
+  technicalDetails: { borderTopWidth: 1, borderTopColor: '#DCE2E7', marginTop: 8, paddingTop: 16 },
+  technicalVersions: { backgroundColor: '#F3F5F6', borderRadius: 10, padding: 12, gap: 12 },
+  technicalRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 12, rowGap: 4 },
+  technicalLabel: { ...typography.caption, color: '#526170', lineHeight: 20, flexBasis: 124, flexGrow: 1 },
+  technicalValue: { ...typography.bodyMd, color: '#192D40', lineHeight: 22, flexBasis: 156, flexGrow: 1, flexShrink: 1, fontVariant: ['tabular-nums'] },
+  technicalGroup: { borderTopWidth: 1, borderTopColor: '#DCE2E7', paddingTop: 16, marginTop: 12, gap: 12 },
+  technicalGroupTitle: { ...typography.bodyMd, fontFamily: 'Roboto-Medium', color: '#192D40', lineHeight: 22, marginBottom: 4 },
+  technicalIdToggle: { minHeight: 48, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 12, marginTop: 8, borderRadius: 8, overflow: 'hidden' },
+  technicalLink: { ...typography.bodyMd, fontFamily: 'Roboto-Medium', color: '#192D40', lineHeight: 22 },
+  technicalHint: { ...typography.caption, color: '#526170', lineHeight: 20 },
   metrics:{flexDirection:'row',flexWrap:'wrap',gap:12,marginTop:16},
   metric:{flex:1,minWidth:120,gap:6,padding:14,borderRadius:12,backgroundColor:colors.surfaceAlt},
   metricValue:{...typography.titleMd,color:'#192D40',fontVariant:['tabular-nums']},

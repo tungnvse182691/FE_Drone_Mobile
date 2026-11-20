@@ -32,6 +32,7 @@ test('02C Work Package shows only pinned segments, truthful revision and collaps
  assert.ok(!s.nodes().some(n=>n.type==='Chip'&&n.props.label==='Bản hiện hành'));
  assert.match(text(s),/chưa cung cấp điểm tiếp cận cho nhiệm vụ này/);assert.doesNotMatch(text(s),/DSM|OpenDroneMap|SfM/);
  const toggle=()=>s.nodes().find(n=>n.props.accessibilityLabel==='Thông tin kỹ thuật');
- assert.ok(toggle());assert.equal(toggle().props.accessibilityState.expanded,false);toggle().props.onPress();await s.flush();assert.match(text(s),new RegExp(id(4)));
+ assert.ok(toggle());assert.equal(toggle().props.accessibilityState.expanded,false);toggle().props.onPress();await s.flush();assert.match(text(s),/00000004…11111111/);
+ s.nodes().find(n=>n.props.accessibilityLabel==='Xem mã đầy đủ').props.onPress();await s.flush();assert.match(text(s),new RegExp(id(4)));
  const back=walk(s.nodes().find(n=>n.type==='SafeAreaScreen').props.header).find(n=>n.props.accessibilityLabel==='Quay lại');assert.ok(back.props.style({pressed:false})[0].width>=48);s.unmount();
 });
