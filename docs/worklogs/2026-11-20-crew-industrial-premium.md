@@ -126,3 +126,36 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - J viewfinder.tsx CODE_ONLY / BLOCKED for fresh native baseline: Field Review camera action saves field measurements before navigating; repair AFTER action prepares/persists a repair claim before navigating. Home camera starts task selection. Under the owner's no-draft-write/no-mutation constraint these entry actions were not invoked. No camera guard bypass, direct-link substitute, capture, picker or new blank draft.
 - L navigation.tsx CODE_ONLY / BLOCKED for fresh native baseline: normal Detail entry requires fresh.coordinates. Previously inspected native tasks did not expose that entry. No fabricated coordinates or deep link used to substitute normal access. Existing navigation spring is not Reduce Motion aware; unchanged and not claimed compliant by this task.
 - Read-only source review preserves camera purpose/permission/session/draft lifecycle, taskId/projectId, Google Maps coordinates and Back fallback. node --test tests/crew-camera-lifecycle.test.cjs tests/crew-after-camera-guidance.test.cjs tests/dot-b-camera.test.cjs tests/crew-map-back.test.cjs tests/crew-map-geometry.test.cjs: 22/22 PASS, LOGIC_TESTED only; not native acceptance of J/L.
+
+## Consolidated checkpoint index — owner review
+
+Mode: Codex IMPLEMENT_AND_SELF_REVIEW, not independent review. All image names below are in `.cache/crew-industrial-premium-20261120/`; retained untracked. Native status means the observed state only, not all workflow branches. 12 routes have presentation commits; J/L remain source-reviewed and blocked for a fresh safe native baseline. Full 14-route native acceptance is not claimed.
+
+| Route | Source checkpoint | Android before → after | Executed targeted tests | Native limit |
+|---|---|---|---|---|
+| A Home | 03303ea + c8f7709 | home-before.png → home-kpi-b-after.png | 14/14 | Real 46/4; font/narrow/Reduce Motion not verified |
+| B Tasks | 2117589 | tasks-before.png → tasks-after.png | 17/17 | Active/done filters viewed; error/offline not forced |
+| C Detail | b330999 | detail-before.png → detail-after-stable.png | 16/16 | Submitted MEASURE_ONLY; other modes not fully native tested |
+| D Receiving | 7de974f | receiving-before.png → receiving-detail-after.png | 72/72 | Populated list viewed; request detail/ACK not verified |
+| E Progress | eebddcd | progress-before.png → progress-after.png | 9/9 | Old-session state; disclosure and same-task Back observed; no mutation |
+| F Complete | 3f0daa7 | complete-before.png → complete-after.png | 9/9 | Unstarted/zero counts; no finish/submit |
+| G Correction | f7306ff | correction-before.png → correction-after.png | 9/9 | Empty review/history; populated decisions not verified |
+| H Defect | 3755fb7 | defect-before-current.png → defect-after.png | 15/15 | Long title; evidence-link arrival not verified |
+| I Field | 67cd4c8 | field-before-current.png → field-after.png | 64/64 | NORMAL submitted; no draft adoption/edit/save |
+| J Camera | unchanged | No fresh native baseline | J/L source tests 22/22 | BLOCKED: entry saves draft/claim; no bypass |
+| K Map | 76bd616 | taskmap-before.png → taskmap-after.png; taskmap-populated-after.png | 16/16 | Map/segment controls viewed; exact same-task Back not verified |
+| L Navigation | unchanged | No fresh native baseline | J/L source tests 22/22 | BLOCKED: no coordinate-enabled normal entry found |
+| M Sync | 6ab2996 | sync-before.png → sync-after-stable.png | 27/27 | Real 8/0/8, technical disclosure; no replay/submit |
+| N Profile | 3a10277 | profile-before-stable.png → profile-after-final.png | 20/20 | Scroll/info alert observed; intermittent safe area remains unexplained |
+
+- TypeScript was executed for each presentation checkpoint with exit 0; tests above are separate runs and overlap, so do not add their counts into a unique-test total. Existing CrewMotion retained; no newly implemented animation, measured FPS, or full native Reduce Motion verification claimed.
+- Net source diff from 4c8bd65 reviewed across Crew routes and three Crew-only components: presentation JSX/decorative icons/style changes only. No API/state/handler/guard/formula/route-parameter changes found. Operator/Reporter/BE/global tokens/config/dependencies untouched.
+- Follow-up observations outside this presentation scope: intermittent delayed navigation/touch; pre-edit Profile safe-area overlap; previously observed Field→Detail journal read/reconcile error. Causes unresolved; not represented as fixed by UI commits. Large-font/narrow-screen/native Reduce Motion and mutation branches remain NOT_VERIFIED.
+
+### Final self-review execution — 20/11/2026
+
+- Full command: `node --test --test-concurrency=2 tests/*.test.cjs`, final source checkpoint 3a10277 (Profile patch already present when run started). Exit 1, 1950 tests, 1949 pass, 1 fail, 503696ms. Log `.cache/crew-industrial-premium-20261120/full-regression-final-review.log`.
+- Sole failure repeats baseline: tests/package6-drone-journal.test.cjs:375, “Operator persists URL admission before POST and renews an expired admission with a new key”, expected generation 1, actual 2. Scenario helper returns part URL expiry 2026-11-20T00:00:00Z at lines 317/320, already expired at execution. No changed Operator/test/upload files in net diff. This is an inherited failing gate, not a green full regression or an Android upload verification.
+- Fresh final scope check: only 11 Crew route files, CrewTaskMap/CrewLocalDraftPanel/CrewOfflinePanel and this worklog differ from base 4c8bd65. task-map.tsx route itself unchanged; its visual component changed. J/L untouched. Global icon/UD-06 text scan in app/src returned no matches (rg exit 1 denotes no match). git diff --check passed; warning about LF→CRLF is a Git line-ending warning, not a test failure.
+- Additional normal-route native check: tapped Công việc from Profile, observed actual Tasks arrival (60a04265/970f90aa rows). Header brand top y188 on Profile became y43 on Tasks while Android status bar occupies y0–145. Screenshot tasks-safearea-followup.png visually confirms overlap. This reproduces an unresolved inset issue across routes; no shared layout/header/navigation patch or restart was attempted. Full visual acceptance remains open until root cause is investigated separately.
+- No push, fetch/pull, branch change, data/cache deletion or mutation performed in this review. Local commits preserved; owner confirmed sole writer. Documentation checkpoint follows the per-screen commits and does not claim 14/14 native PASS.
