@@ -26,12 +26,19 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
         <Text style={styles.fieldLabel}>Nhiệm vụ & vị trí</Text>
         <View style={styles.identity}><Text style={styles.code}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text></View>
         <Text style={styles.taskTitle}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
-        <View style={styles.gpsField}><MaterialIcons name="place" size={22} color={colors.secondary}/><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
+        <View style={styles.gpsField}><Text style={[typography.bodyMd,styles.gpsText,{flex:1}]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text></View>
         <Text style={typography.caption}>{task.coordinates ? `Tọa độ nhiệm vụ từ máy chủ: ${task.coordinates.latitude.toFixed(6)}, ${task.coordinates.longitude.toFixed(6)}` : 'Chưa có tọa độ nhiệm vụ. Không phải GPS quan sát mới.'}</Text>
       </Card>
     </View>
     <View style={styles.fieldGroup}>
-      <Card style={styles.infoCard}><Text style={styles.fieldLabel}>Phân loại lỗi</Text><View style={styles.classificationRow}><MaterialIcons name="category" size={20} color={colors.secondary}/><Text style={[typography.bodyMd,{flex:1}]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text></View></Card>
+      <Card style={styles.infoCard}>
+        <Text style={styles.fieldLabel}>Phân loại lỗi</Text>
+        <Text style={typography.bodyMd}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Chưa có phân loại lỗi từ nhiệm vụ'}</Text>
+        <View style={styles.notes}>
+          <Text style={styles.fieldLabel}>Ghi chú nhiệm vụ</Text>
+          <Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text>
+        </View>
+      </Card>
     </View>
     <View style={styles.fieldGroup}>
       <Card style={styles.infoCard}>
@@ -40,20 +47,18 @@ function CrewReportDefectScreenContent({ task }: { task: CrewTask }) {
         {task.detail?.latestSubmissionId || task.detail?.firstStartOriginId ? <Button style={styles.compactAction} variant="secondary" title={task.detail?.latestSubmissionId ? 'Xem hồ sơ đã nộp' : 'Mở hồ sơ hiện trường'} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/> : null}
       </Card>
     </View>
-    <View style={styles.fieldGroup}>
-      <Card style={styles.infoCard}><Text style={styles.fieldLabel}>Ghi chú nhiệm vụ</Text><Text style={typography.bodyMd}>{task.detail?.instructions || task.description || 'Chưa có ghi chú từ nhiệm vụ'}</Text></Card>
-    </View>
-    <View style={styles.ctaWrap}><Button variant="primary" title="Về chi tiết nhiệm vụ" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/></View>
+    <View style={styles.ctaWrap}><Button variant="secondary" title="Về chi tiết nhiệm vụ" onPress={()=>router.replace({pathname:'/(crew)/wo-detail',params:{id:task.id,projectId:task.projectId}})}/></View>
     </CrewContentTransition>
   </SafeAreaScreen>;
 }
 
 const styles = StyleSheet.create({
-  infoCard: { padding:12, gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg },
-  taskCard: { backgroundColor:'#FBF8EE' },
-  identity: { alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:8,paddingVertical:4,backgroundColor:colors.surface,borderRadius:radius.sm },
-  code: { ...typography.labelLg,lineHeight:20,color:colors.secondary,flexShrink:1 },
-  taskTitle: { ...typography.bodyLg,lineHeight:22,color:colors.neutral },
+  infoCard: { padding:spacing.md, gap: spacing.sm, borderWidth: 1, borderColor:'#DCE2E7', borderRadius: radius.lg },
+  taskCard: { backgroundColor:'#F3F5F6' },
+  identity: { alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:8,paddingVertical:4,backgroundColor:'#E4E9ED',borderRadius:radius.sm },
+  code: { ...typography.labelSm,lineHeight:18,color:'#192D40',flexShrink:1 },
+  taskTitle: { ...typography.labelLg,fontSize:16,lineHeight:24,color:'#192D40' },
+  notes: { gap:spacing.sm,borderTopWidth:1,borderTopColor:'#DCE2E7',paddingTop:spacing.md,marginTop:spacing.xs },
   compactAction: { alignSelf:'flex-start',maxWidth:'100%',backgroundColor:'#FBF8EE' },
   classificationRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   topBar: {

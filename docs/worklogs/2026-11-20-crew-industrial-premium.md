@@ -88,3 +88,9 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - F committed 3f0daa7. repair-correction.tsx styles only: neutral summary/disclosure, navy 16/24 title, compact task ID, consistent 16dp spacing. Review decisions, receipt history, technical disclosure, recovery and supplement routes/guards unchanged. Original full IDs remain selectable under the existing disclosure.
 - Android NORMAL task ebcdca88 via Detail: correction-before.png / correction-after.png inspected; empty review and empty local history shown truthfully. Disclosure opened/closed, no mutation. Accepted/pending/supplement populated native states, long technical IDs, font/narrow/Reduce Motion NOT_VERIFIED; existing mounted accepted/supplement tests pass.
 - Explicit TypeScript TSC_EXIT=0; repair/reassessment presentation + polish layout 9/9; git diff --check pass. Existing ripple/spring retained; no FPS measurement. Full regression inherited 1949/1950, expired Operator fixture unrelated.
+
+## H — Khuyết tật thuộc nhiệm vụ
+
+- G committed f7306ff. report-defect.tsx: grouped classification and original instructions in one facts section, removed decorative place/category icons, compact navy identity/title and neutral summary. Back-to-detail changed visual variant only; original replace callback/params unchanged. Submitted evidence button and predicates unchanged.
+- Android ebcdca88: defect-before-current.png / defect-after.png inspected; long title wraps, existing missing coordinate/classification states remain. Opened original submitted-evidence link for same task. No mutation. Other data states, narrow/large text/Reduce Motion NOT_VERIFIED.
+- Explicit TypeScript TSC_EXIT=0; defect evidence navigation + polish layout/l10n 15/15 pass; diff check pass. Global regression baseline unchanged; existing content/press helpers retained.
