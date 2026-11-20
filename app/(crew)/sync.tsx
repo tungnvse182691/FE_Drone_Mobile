@@ -185,7 +185,6 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
       <CrewContentTransition ready>
       <View style={styles.titleRow}>
         <View style={styles.titleGroup}>
-          <MaterialIcons name="sync" size={22} color={colors.primary} />
           <Text style={[typography.titleMd, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" accessibilityState={{busy:refreshing,disabled:refreshing}} disabled={refreshing} style={({ pressed }) => [styles.iconBtn, pressed && styles.refreshPressed]} onPress={refresh}>
@@ -322,7 +321,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   pageTitle: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontSize: 16,
+    lineHeight: 24,
     flexShrink: 1,
   },
   iconBtn: {
@@ -335,7 +336,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderWidth: 1,
     borderColor: '#89939F',
-    backgroundColor: '#FBF8EE',
+    backgroundColor: '#F7F0DA',
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',

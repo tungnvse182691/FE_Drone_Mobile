@@ -25,9 +25,9 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
   useEffect(()=>{if(refreshSignal>0)void refresh();},[refresh,refreshSignal]);
   if(!sameQueueIdentity(identity))return null;
   const groups=groupCrewLocalDrafts(rows),visible=expanded?groups:groups.slice(0,3);
-  return <Card style={{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:colors.border}}>
+  return <Card style={{gap:spacing.sm,marginBottom:spacing.md,borderWidth:1,borderColor:'#DCE2E7'}}>
     <View style={{flexDirection:'row',alignItems:'center',gap:spacing.sm}}>
-      <Text style={[typography.titleMd,{flex:1,color:colors.neutral}]}>Hồ sơ trên thiết bị</Text>
+      <Text style={[typography.titleMd,{flex:1,color:'#192D40',fontSize:16,lineHeight:24}]}>Hồ sơ trên thiết bị</Text>
     </View>
     {loading?<View style={styles.loadingNotice} accessibilityLiveRegion="polite">
       <ActivityIndicator size="small" color={colors.brandGold}/>
@@ -41,17 +41,14 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
         <Text style={[typography.caption,styles.secondaryText]}>Bản lưu gần nhất</Text>
         <View style={styles.evidenceRow}>
           <View style={styles.evidenceGroup}>
-            <MaterialIcons name="straighten" size={20} color={colors.secondary}/>
             <Text style={[typography.bodyMd,styles.evidenceText]}>{row.measurements} số đo</Text>
           </View>
           <View style={styles.evidenceGroup}>
-            <MaterialIcons name="photo-library" size={20} color={colors.secondary}/>
             <Text style={[typography.bodyMd,styles.evidenceText]}>{row.photos} ảnh</Text>
           </View>
         </View>
       </View>
       {row.updatedAt?<View style={styles.timestamp}>
-        <MaterialIcons name="schedule" size={16} color={colors.secondary}/>
         <Text style={[typography.caption,styles.timestampText]}>{new Date(row.updatedAt).toLocaleString('vi-VN')}</Text>
       </View>:null}
       <View style={styles.draftState}>
@@ -77,15 +74,15 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
 const styles=StyleSheet.create({
   loadingNotice:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:12,borderRadius:radius.md,backgroundColor:'#FBF8EE',borderWidth:1,borderColor:'#E9E1CC'},
   loadingText:{color:colors.secondary,flex:1,lineHeight:18},
-  draftRow:{gap:12,borderTopWidth:1,borderColor:colors.border,paddingTop:spacing.md,paddingBottom:spacing.sm},
+  draftRow:{gap:8,borderTopWidth:1,borderColor:'#DCE2E7',paddingTop:spacing.md,paddingBottom:spacing.sm},
   snapshot:{gap:spacing.sm},
   secondaryText:{color:colors.secondary,lineHeight:18},
   evidenceRow:{flexDirection:'row',flexWrap:'wrap',columnGap:spacing.lg,rowGap:spacing.sm},
-  evidenceGroup:{flexDirection:'row',alignItems:'center',gap:spacing.sm,maxWidth:'100%'},
+  evidenceGroup:{flexDirection:'row',alignItems:'center',gap:spacing.sm,maxWidth:'100%',backgroundColor:'#F3F5F6',borderRadius:8,paddingHorizontal:10,paddingVertical:6},
   evidenceText:{color:colors.neutral,flexShrink:1},
   timestamp:{flexDirection:'row',alignItems:'center',gap:spacing.sm},
   timestampText:{color:colors.secondary,flex:1,lineHeight:18},
-  draftState:{flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:12,borderRadius:radius.md,backgroundColor:'#F1F3F5'},
+  draftState:{flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,padding:10,borderRadius:radius.md,backgroundColor:'#F3F5F6'},
   stateText:{color:colors.secondary,flex:1},
   expandButton:{
     alignSelf:'center',minHeight:48,marginTop:spacing.sm,paddingVertical:12,paddingHorizontal:spacing.md,
@@ -93,7 +90,7 @@ const styles=StyleSheet.create({
     borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:'#FBF8EE',
   },
   expandButtonPressed:{backgroundColor:'#F3ECD6'},
-  taskId:{color:colors.neutral,fontSize:14,lineHeight:20,backgroundColor:'#F1F3F5',alignSelf:'flex-start',paddingVertical:6,paddingHorizontal:8,borderRadius:radius.sm},
+  taskId:{color:'#192D40',fontSize:12,lineHeight:18,fontVariant:['tabular-nums'],alignSelf:'flex-start',paddingVertical:4},
   openButton:{alignSelf:'flex-end',minHeight:48,maxWidth:'100%',paddingHorizontal:spacing.md,borderWidth:1,borderColor:'#89939F',borderRadius:radius.lg,backgroundColor:'#FBF8EE'},
   expandLabel:{...typography.labelLg,color:colors.secondary,flexShrink:1,textAlign:'center'},
 });

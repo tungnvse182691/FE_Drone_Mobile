@@ -56,7 +56,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
   const pending=records.filter(r=>['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
   const confirmed=records.filter(r=>r.phase==='RECONCILED').length;
   return <Card style={styles.panel}>
-    <View style={styles.heading}><MaterialIcons name="sync" size={20} color={colors.brandGold}/><Text style={typography.titleMd}>Hàng đợi trên thiết bị</Text></View>
+    <View style={styles.heading}><Text style={[typography.titleMd,{color:'#192D40',fontSize:16,lineHeight:24}]}>Hàng đợi trên thiết bị</Text></View>
     <View style={styles.stateRow}><View><Text style={styles.value}>{records.length}</Text><Text style={styles.label}>Đã lưu</Text></View><View><Text style={styles.value}>{pending}</Text><Text style={styles.label}>Chờ đối soát</Text></View><View><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View></View>
     <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
     {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
@@ -69,11 +69,11 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
 }
 
 const styles = StyleSheet.create({
-  panel: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
+  panel: { borderWidth: 1, borderColor: '#DCE2E7', borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
   description: { ...typography.caption, color: colors.secondary },
   heading: { flexDirection:'row', alignItems:'center', gap: spacing.sm },
   stateRow: { flexDirection:'row', justifyContent:'space-around', borderTopWidth:1, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.md },
-  value: { ...typography.titleMd, fontSize:28, lineHeight:34, fontVariant:['tabular-nums'], color: colors.neutral, textAlign:'center' },
+  value: { ...typography.titleMd, fontSize:28, lineHeight:36, fontVariant:['tabular-nums'], color: '#192D40', textAlign:'center' },
   label: { ...typography.caption, color: colors.secondary, textAlign:'center' },
   record: { gap: spacing.xs, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
   recordTitle: { flexDirection:'row', flexWrap:'wrap', justifyContent:'space-between', gap: spacing.sm },
