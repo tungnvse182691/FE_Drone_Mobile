@@ -92,5 +92,11 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 ## H — Khuyết tật thuộc nhiệm vụ
 
 - G committed f7306ff. report-defect.tsx: grouped classification and original instructions in one facts section, removed decorative place/category icons, compact navy identity/title and neutral summary. Back-to-detail changed visual variant only; original replace callback/params unchanged. Submitted evidence button and predicates unchanged.
-- Android ebcdca88: defect-before-current.png / defect-after.png inspected; long title wraps, existing missing coordinate/classification states remain. Opened original submitted-evidence link for same task. No mutation. Other data states, narrow/large text/Reduce Motion NOT_VERIFIED.
+- Android ebcdca88: defect-before-current.png / defect-after.png inspected; long title wraps, existing missing coordinate/classification states remain. Tapped submitted-evidence link, but arrival was not observed at that step: link arrival NOT_VERIFIED. Later Field Review was reached from Detail, not evidence of the Defect link. No mutation. Other data states, narrow/large text/Reduce Motion NOT_VERIFIED.
 - Explicit TypeScript TSC_EXIT=0; defect evidence navigation + polish layout/l10n 15/15 pass; diff check pass. Global regression baseline unchanged; existing content/press helpers retained.
+
+## I — Hồ sơ hiện trường
+
+- H committed 3755fb7. field-review.tsx styles only: neutral overview, compact navy ID, navy 16/24 title, 16dp section padding, tabular measurement results and neutral lazy-photo frames. Existing policy guide/units, draft recovery, inputs, gallery, receipts, permissions and callbacks untouched.
+- Android NORMAL submitted ebcdca88 reached from Detail: field-before-current.png / field-after.png / field-lower-after.png. Inspected long task title, old-session warning, missing measurements and lazy image label; scrolled lower and Back returned same task Detail. No draft creation/adoption/save/capture/send. Other modes/editors, large font/narrow/Reduce Motion NOT_VERIFIED.
+- Explicit TypeScript TSC_EXIT=0; field UX/feedback/dimensions/instrument/policy/layout 64/64 pass. git diff --check pass; reviewed complete diff (StyleSheet only). Corrected H worklog evidence overclaim: Defect-link arrival was not observed, Field opened from Detail instead.
