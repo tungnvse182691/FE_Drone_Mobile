@@ -1,6 +1,5 @@
 import React from 'react';
 import {StyleSheet,Text,View} from 'react-native';
-import {MaterialIcons} from '@expo/vector-icons';
 import {router} from 'expo-router';
 import {SafeAreaScreen} from '../../src/components/SafeAreaScreen';
 import {AppHeader} from '../../src/components/AppHeader';
@@ -16,7 +15,7 @@ export default function CrewRepairProgressScreen(){
  <Card style={styles.summary}>
  <View style={styles.identity}><Text style={styles.code}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text></View>
  <Text style={styles.title}>{task.title||'Nhiệm vụ hiện trường'}</Text>
- <View style={styles.location}><MaterialIcons name="location-on" size={18} color={colors.secondary}/><Text style={[styles.body,styles.flex]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ')||'Chưa có thông tin tuyến đường'}</Text></View>
+ <View style={styles.location}><Text style={[styles.body,styles.flex]}>{[task.route_code,task.section_name,task.chainage].filter(Boolean).join(' • ')||'Chưa có thông tin tuyến đường'}</Text></View>
  <View style={styles.statusRow}><Text style={styles.caption}>Trạng thái nhiệm vụ</Text><CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)}/></View>
  </Card>
  </CrewContentTransition>
@@ -25,10 +24,10 @@ export default function CrewRepairProgressScreen(){
 }
 
 const styles=StyleSheet.create({
- summary:{borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,gap:spacing.sm,padding:12,marginBottom:12,backgroundColor:'#FBF8EE'},
- identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:4,backgroundColor:colors.surface,borderRadius:radius.sm},
- code:{...typography.labelLg,lineHeight:20,color:colors.secondary,flexShrink:1},
- title:{...typography.bodyLg,lineHeight:22,color:colors.neutral},
+ summary:{borderWidth:1,borderColor:'#DCE2E7',borderRadius:radius.lg,gap:spacing.sm,padding:16,marginBottom:12,backgroundColor:'#F3F5F6'},
+ identity:{alignSelf:'flex-start',maxWidth:'100%',paddingHorizontal:spacing.sm,paddingVertical:4,backgroundColor:'#E4E9ED',borderRadius:6},
+ code:{...typography.labelSm,lineHeight:18,color:'#192D40',flexShrink:1},
+ title:{...typography.labelLg,fontSize:16,lineHeight:24,color:'#192D40'},
  location:{flexDirection:'row',alignItems:'flex-start',gap:spacing.xs},
  flex:{flex:1,minWidth:0},
  statusRow:{borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.sm,flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:spacing.sm},

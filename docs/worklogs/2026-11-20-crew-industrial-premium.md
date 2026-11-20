@@ -66,3 +66,10 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - `npx tsc --noEmit` exit 0; `node --test tests/h01a.test.cjs tests/crew-nav01.test.cjs tests/crew-polish-layout.test.cjs tests/crew-polish-l10n.test.cjs` 72/72 pass. Final detail font size adjusted 16→14 presentation only. Diff check pass. Large font/narrow/Reduce Motion NOT_VERIFIED.
 
 - Follow-up: discovery resolved naturally. `receiving-detail-after.png` actually shows populated list (despite filename), visually inspected with closed/acknowledged/unacknowledged statuses. Closed row tap had not opened detail at capture, so detail interaction remains NOT_VERIFIED.
+
+## E — Theo dõi thi công
+
+- D committed `7de974f`. Owner-authorized one project reopening used after frozen taps; Expo Go ANR Wait chosen, app recovered. No storage/cache reset or logout.
+- Files progress.tsx and repair panel presentation in wo-detail.tsx: neutral identity summary, navy title/compact ID, quieter current-step panel/disclosure, consistent step spacing and tabular counters. Existing CrewPressable motion retained. No handlers, conditions or state expressions changed; shared panel callers remain Crew Detail/Progress/Complete only.
+- Android task 9b840ab7 opened normally via Tasks conditional filter → Detail → Theo dõi thi công. Before `progress-before.png`, after `progress-after.png`, expanded `progress-steps-after.png`; opened/closed four-step disclosure. No start/assessment/finish/replay mutation. Existing prior-session warning remains.
+- TypeScript exit 0; repair/reassessment presentation + polish layout 9/9 pass (`progress-targeted.log`); diff check pass. Other progress states, font/narrow/Reduce Motion and mutation paths NOT_VERIFIED. Full regression baseline unchanged (1949/1950, unrelated Operator expired fixture).

@@ -434,7 +434,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       {c.phase==='REJECTED'&&!c.rejectionResolved?<Text>Máy chủ đã từ chối thao tác. Lịch sử được giữ nguyên; cần kiểm tra quyền và điều kiện trước khi tiếp tục.</Text>:null}
     </Card>);
   return <View style={{ gap: spacing.sm }}>
-    <View style={styles.sectionHeading}><MaterialIcons name="construction" size={22} color={colors.brandGold}/><Text style={[styles.detailHeading,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
+    <View style={styles.sectionHeading}><Text style={[styles.detailHeading,styles.flex]}>{stage==='closeout'?'Hồ sơ sau thi công':stage==='progress'?'Các mốc thi công':fastTrack?'Sửa chữa nhanh':'Sửa chữa theo kế hoạch'}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại ngữ cảnh sửa chữa" accessibilityState={{disabled:busy||result.status==='loading',busy:busy||result.status==='loading'}} disabled={busy||result.status==='loading'} style={styles.refreshButton} onPress={()=>{void result.reload();void load();}}>
         {busy||result.status==='loading'?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}</Pressable>
     </View>
@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
   overviewLinks: { gap: spacing.sm },
   overviewLink: { minHeight: 48, padding: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: '#FBF8EE', borderRadius: radius.md, borderWidth: 1, borderColor: '#E8D9A8', overflow: 'hidden' },
   overviewPlan: { gap: spacing.xs, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
-  repairActiveCard: {backgroundColor:'#EFF6FF',borderColor:'#93C5FD',borderLeftWidth:4},
+  repairActiveCard: {backgroundColor:'#EDF2F5',borderColor:'#DCE2E7',borderLeftColor:'#C9A227',borderLeftWidth:3},
   closeoutHeading: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:spacing.sm},
   closeoutIcon: {padding:spacing.xs,borderRadius:radius.md},
   closeoutStat: {flexGrow:1,flexBasis:80,minWidth:0,gap:spacing.xs,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
@@ -595,15 +595,15 @@ const styles = StyleSheet.create({
   repairNotice: {flexDirection:'row',alignItems:'flex-start',gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:radius.md,padding:spacing.sm},
   compactAction: {alignSelf:"flex-start",maxWidth:"100%",backgroundColor:"#FBF8EE"},
   repairTechnicalLink: {borderWidth:1,borderColor:colors.border,backgroundColor:colors.surface},
-  repairStepCard: {gap:spacing.sm, borderWidth:1, borderColor:'#E8D9A8', backgroundColor:'#FBF8EE', padding:12, marginBottom:4},
-  progressTitle: {...typography.labelLg,lineHeight:20,color:colors.neutral},
-  progressDisclosure: {paddingHorizontal:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:colors.surface,borderRadius:radius.md},
-  progressWork: {padding:12,gap:spacing.sm,backgroundColor:colors.surface,borderRadius:radius.lg,borderWidth:1,borderColor:colors.border},
+  repairStepCard: {gap:12, borderWidth:1, borderColor:'#DCE2E7', backgroundColor:'#F3F5F6', padding:16, marginBottom:4},
+  progressTitle: {...typography.labelLg,lineHeight:21,color:'#192D40',fontVariant:['tabular-nums']},
+  progressDisclosure: {paddingHorizontal:12,borderWidth:1,borderColor:'#DCE2E7',backgroundColor:colors.surface,borderRadius:radius.md},
+  progressWork: {padding:16,gap:12,backgroundColor:colors.surface,borderRadius:radius.lg,borderWidth:1,borderColor:'#DCE2E7'},
   progressStats: {gap:12,paddingVertical:spacing.sm,borderTopWidth:1,borderTopColor:colors.border},
   progressStat: {flexGrow:1,flexBasis:120,minWidth:0,gap:spacing.xs},
   repairDisclosure: {minHeight:48, flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:spacing.sm},
-  repairStepRow: {flexDirection:'row', gap:spacing.sm, alignItems:'flex-start', paddingVertical:spacing.xs},
-  repairStepNumber: {width:24,height:24,borderRadius:radius.full,backgroundColor:colors.surfaceAlt,alignItems:'center',justifyContent:'center'},
+  repairStepRow: {flexDirection:'row', gap:12, alignItems:'flex-start', paddingVertical:8},
+  repairStepNumber: {width:24,height:24,borderRadius:6,backgroundColor:'#E4E9ED',alignItems:'center',justifyContent:'center'},
   repairStepDone: {backgroundColor:colors.success},
   repairStats: {flexDirection:'row',flexWrap:'wrap',gap:spacing.sm,paddingVertical:spacing.xs},
   repairStat: {flexGrow:1,flexBasis:120,minWidth:0,padding:spacing.sm,gap:spacing.xs,backgroundColor:colors.surfaceAlt,borderRadius:radius.md},
