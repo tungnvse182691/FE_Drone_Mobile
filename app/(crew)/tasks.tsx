@@ -98,9 +98,6 @@ export function useCrewInbox() {
 export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbox> }) {
   return <Card style={styles.inboxPanel}>
     <View style={styles.inboxHeader}>
-      <View style={styles.inboxIcon}>
-      <MaterialIcons name={inbox.error ? 'error-outline' : 'assignment'} size={20} color={inbox.error ? colors.error : colors.brandGold} />
-      </View>
       <View style={styles.inboxHeading}>
         <Text style={[typography.titleMd, styles.inboxTitle]}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
         <Text style={[typography.caption, styles.inboxSubtitle]}>Thống kê trong các nhiệm vụ đã tải.</Text>
@@ -119,7 +116,6 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
     <View style={styles.inboxFooter}>
     {inbox.query.data?.pages[0]?.asOf ? <View style={styles.inboxTimestamp}>
-      <MaterialIcons name="schedule" size={16} color={colors.secondary} />
       <Text style={[typography.caption, styles.inboxTimestampText]}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text>
     </View> : null}
     {inbox.query.hasNextPage && !inbox.error ? <View style={styles.inboxMore}>
@@ -283,12 +279,14 @@ export default function CrewTasksScreen() {
               >
                 <Card style={styles.taskCard}>
                   <View style={styles.taskHeader}>
+                    <View style={styles.woChip}>
+                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
+                    </View>
                     <View style={styles.taskMetaRow}>
                       <CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)} />
                     </View>
                     {task.distance_label && task.distance_label !== '—' ? (
                       <View style={styles.taskDistPill}>
-                        <MaterialIcons name="near-me" size={14} color={colors.brandGold} />
                         <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
                       </View>
                     ) : null}
@@ -300,7 +298,6 @@ export default function CrewTasksScreen() {
 
                   {task.route_code || task.section_name || task.chainage ? (
                     <View style={styles.taskRouteRow}>
-                      <MaterialIcons name="alt-route" size={14} color={colors.secondary} />
                       <Text style={[typography.caption, styles.taskRoute]}>
                         {[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage]
                           .filter(Boolean)
@@ -317,9 +314,6 @@ export default function CrewTasksScreen() {
                   </Text>
 
                   <View style={styles.taskFooter}>
-                    <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
-                    </View>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
                         <MaterialIcons
@@ -369,24 +363,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
-    backgroundColor: '#FBF8EE',
+    backgroundColor: '#F3F5F6',
     borderBottomWidth: 1,
-    borderBottomColor: '#E9E1CC',
+    borderBottomColor: '#DCE2E7',
   },
   inboxIcon: {
     width: 32, height: 32,
     alignItems: 'center', justifyContent: 'center',
   },
-  inboxHeading: { flex: 1, gap: spacing.xs },
-  inboxTitle: { color: colors.neutral, fontSize: 16, lineHeight: 22 },
+  inboxHeading: { flex: 1, minWidth: 0, gap: 2 },
+  inboxTitle: { color: '#192D40', fontSize: 16, lineHeight: 24 },
   inboxSubtitle: { color: colors.secondary, lineHeight: 18 },
   inboxRefresh: {
     width: 48, height: 48,
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#89939F',
-    borderRadius: radius.lg, backgroundColor: colors.surface,
+    borderRadius: radius.lg, backgroundColor: '#F7F0DA',
   },
-  inboxBody: { padding: spacing.md, gap: spacing.sm },
+  inboxBody: { paddingHorizontal: 12, paddingVertical: 8, gap: spacing.sm },
   inboxFooter: {
     flexDirection: 'row', flexWrap: 'wrap',
     alignItems: 'center', gap: 12,
@@ -398,9 +392,9 @@ const styles = StyleSheet.create({
   inboxTimestampText: { flex: 1, color: colors.secondary, lineHeight: 18 },
   inboxMore: { maxWidth: '100%', marginLeft: 'auto' },
   inboxMoreButton: {
-    minWidth: 132, minHeight: 48,
+    minWidth: 112, minHeight: 48,
     borderWidth: 1, borderColor: '#89939F',
-    borderRadius: radius.lg, backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.lg, backgroundColor: '#F7F0DA',
     paddingHorizontal: 12,
   },
   screen: {
@@ -431,9 +425,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   segmentActive: {
-    backgroundColor: '#FFF7DF',
+    backgroundColor: '#192D40',
     borderWidth: 1,
-    borderColor: colors.brandGold,
+    borderColor: '#192D40',
   },
   segmentLabel: {
     fontFamily: 'Roboto',
@@ -446,7 +440,7 @@ const styles = StyleSheet.create({
   segmentLabelActive: {
     fontSize: 13,
     lineHeight: 18,
-    color: colors.neutral,
+    color: '#FFFFFF',
     flexShrink: 1,
     textAlign: 'center',
   },
@@ -465,7 +459,8 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   countTextActive: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontVariant: ['tabular-nums'],
   },
   modeFilters: {
     flexDirection: 'row',
@@ -478,11 +473,11 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     paddingVertical: spacing.sm,
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.full,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#89939F',
-    backgroundColor: colors.surface,
+    backgroundColor: '#F3F5F6',
   },
   modeFilterLabel: {
     color: colors.secondary,
@@ -531,13 +526,13 @@ const styles = StyleSheet.create({
   },
   taskTitle: {
     fontSize: 16,
-    lineHeight: 22,
-    color: colors.neutral,
+    lineHeight: 24,
+    color: '#192D40',
     marginTop: spacing.sm,
     fontWeight: '400',
   },
   taskCode: {
-    color: colors.neutral,
+    color: '#192D40',
     fontSize: 12,
     lineHeight: 18,
     fontFamily: 'Roboto-Medium',

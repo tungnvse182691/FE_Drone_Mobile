@@ -39,3 +39,10 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - Android Home→Receiving via original action verified, no ACK. Stable final screenshot `home-after.png` inspected after Fast Refresh; Receiving header Back returns Home. Capture quick action opens task selection (no capture/mutation).
 - Full regression: 1949/1950 pass. Sole failure `package6-drone-journal.test.cjs:375`, expired URL admission fixture, generation 2 vs expected 1. Matches owner-provided baseline; unrelated Operator runtime/test left unchanged. Log `full-regression.log`.
 - Native loading/empty/error, narrow/font scaling, OS Reduce Motion: NOT_VERIFIED. Existing motion tests cover preference changes and immediate handlers, not native FPS.
+
+## B — Công việc / inbox shared with Home
+
+- A committed `03303ea`. B file `app/(crew)/tasks.tsx`: ID and original after-repair suffix beside status, 16/24 task title; navy selected completion tab, quiet rectangular mode filters; redundant assignment/location/time decoration removed. Shared inbox heading uses neutral surface, cream refresh/load-more and less footer padding; all content retained.
+- Baseline `tasks-before.png`; stable `tasks-after.png` visually inspected. Android active→done shows four completed tasks, submitted remains in active; done→active tested. Existing press/ripple and content transition unchanged. Filters/count predicates/paging/hooks/handlers/route params unchanged in source diff.
+- `npx tsc --noEmit`: exit 0; Home/layout/motion/press/status + dot-c filters: 17/17 (`tasks-targeted.log`); `git diff --check`: pass. Global full regression baseline remains 1949/1950 (unrelated expired Operator fixture).
+- Native loading/error/offline, large text, narrow width and OS Reduce Motion NOT_VERIFIED; no settings changed, mutation or session restart.
