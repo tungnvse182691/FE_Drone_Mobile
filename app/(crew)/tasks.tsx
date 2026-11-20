@@ -95,9 +95,10 @@ export function useCrewInbox() {
   const stale = !!(transient && !foreign && items.size && identity.enabled);
   return { ...identity, environment, query, error, stale, tasks: (!identity.enabled || foreign || (query.isError && !transient)) ? [] : [...items.values()] };
 }
-export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbox> }) {
-  return <Card style={styles.inboxPanel}>
-    <View style={styles.inboxHeader}>
+export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: ReturnType<typeof useCrewInbox>; presentation?: 'default' | 'tasks' }) {
+  const tasksPresentation = presentation === 'tasks';
+  return <Card style={[styles.inboxPanel, tasksPresentation && styles.tasksInboxPanel]}>
+    <View style={[styles.inboxHeader, tasksPresentation && styles.tasksInboxHeader]}>
       <View style={styles.inboxHeading}>
         <Text style={[typography.titleMd, styles.inboxTitle]}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
         <Text style={[typography.caption, styles.inboxSubtitle]}>Thống kê trong các nhiệm vụ đã tải.</Text>
@@ -105,12 +106,12 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
       <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
         accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
         disabled={!inbox.enabled || inbox.query.isFetching}
-        style={styles.inboxRefresh}
+        style={[styles.inboxRefresh, tasksPresentation && styles.tasksInboxRefresh]}
         onPress={() => { void inbox.query.refetch(); }}>
         {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
       </CrewPressable>
     </View>
-    <View style={styles.inboxBody}>
+    <View style={[styles.inboxBody, tasksPresentation && styles.tasksInboxBody]}>
     {inbox.stale ? <Text style={typography.bodyMd}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
     {inbox.error ? <Text style={typography.bodyMd} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
@@ -120,7 +121,7 @@ export function CrewInboxState({ inbox }: { inbox: ReturnType<typeof useCrewInbo
     </View> : null}
     {inbox.query.hasNextPage && !inbox.error ? <View style={styles.inboxMore}>
       <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
-        style={styles.inboxMoreButton}
+        style={[styles.inboxMoreButton, tasksPresentation && styles.tasksInboxMoreButton]}
         loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
     </View> : null}
     </View>
@@ -200,7 +201,7 @@ export default function CrewTasksScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Công việc" />}>
-        <CrewInboxState inbox={inbox} />
+        <CrewInboxState inbox={inbox} presentation="tasks" />
         <View style={styles.segments}>
           {segments.map((s) => {
             const active = s.key === segment;
@@ -269,7 +270,7 @@ export default function CrewTasksScreen() {
             return (
               <CrewHomeTaskPressable
                 key={task.id}
-                style={{ borderRadius: radius.lg, overflow: 'hidden' }}
+                style={{ borderRadius: 16, overflow: 'hidden' }}
                 android_ripple={{ color: '#1A1D2029', foreground: true }}
                 onPress={() =>
                   router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
@@ -278,6 +279,7 @@ export default function CrewTasksScreen() {
                 accessibilityRole="button"
               >
                 <Card style={styles.taskCard}>
+                  <View style={styles.taskContent}>
                   <View style={styles.taskHeader}>
                     <View style={styles.woChip}>
                       <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
@@ -313,6 +315,7 @@ export default function CrewTasksScreen() {
                     ) : null}
                   </Text>
 
+                  </View>
                   <View style={styles.taskFooter}>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
@@ -367,6 +370,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#DCE2E7',
   },
+  // Opt-in surface for Tasks; Home and task boundaries retain the default inbox.
+  tasksInboxPanel: {
+    borderWidth: 0, borderRadius: 0, backgroundColor: 'transparent',
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  tasksInboxHeader: {
+    paddingHorizontal: 0, paddingTop: 0, paddingBottom: 12,
+    backgroundColor: 'transparent', borderBottomWidth: 0,
+  },
+  tasksInboxRefresh: { borderColor: '#DDC98A' },
+  tasksInboxBody: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 16 },
+  tasksInboxMoreButton: { borderColor: '#DDC98A' },
   inboxIcon: {
     width: 32, height: 32,
     alignItems: 'center', justifyContent: 'center',
@@ -408,10 +423,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     padding: 4,
     marginBottom: spacing.md,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#E8EDF0',
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 0,
   },
   segment: {
     flex: 1,
@@ -476,7 +490,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#89939F',
+    borderColor: '#CFD7DD',
     backgroundColor: '#F3F5F6',
   },
   modeFilterLabel: {
@@ -484,14 +498,15 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     backgroundColor: colors.surface,
-    padding: spacing.cardPadding,
-    borderRadius: radius.lg,
+    padding: 0,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
     elevation: 0,
     shadowOpacity: 0,
   },
+  taskContent: { padding: spacing.cardPadding },
   taskList: {
     gap: 12,
     paddingBottom: spacing.xl,
@@ -561,17 +576,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.cardPadding,
+    paddingVertical: 12,
+    backgroundColor: '#F1F4F6',
     borderTopWidth: 1,
-    borderTopColor: colors.surfaceAlt,
+    borderTopColor: '#E6EBEF',
   },
   woChip: {
     maxWidth: '100%',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: radius.sm,
-    backgroundColor: '#F1F3F5',
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
   },
   duePill: {
     flexGrow: 1,
