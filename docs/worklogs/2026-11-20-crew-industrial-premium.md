@@ -82,3 +82,9 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - Android task 9b840ab7: opened from Detail; before `complete-before.png`, after `complete-after.png` visually inspected. Opened and closed “Chi tiết bản lưu”; original zero counts and “Chưa kết thúc thi công” guard retained. No capture/finish/submit. Other server states and narrow/font/Reduce Motion NOT_VERIFIED.
 - `npx tsc --noEmit` explicit TSC_PASS exit 0. Repair/reassessment presentation + polish layout 9/9 pass. `git diff --check` pass; diff only styles/decorative icons. Full regression baseline 1949/1950; no new full run at this checkpoint.
 - E source checkpoint eebddcd; b259499 adds verification notes only, not duplicate source changes. Owner confirmed no other writer; no reset/rewrite performed.
+
+## G — Kết quả hồ sơ sửa chữa
+
+- F committed 3f0daa7. repair-correction.tsx styles only: neutral summary/disclosure, navy 16/24 title, compact task ID, consistent 16dp spacing. Review decisions, receipt history, technical disclosure, recovery and supplement routes/guards unchanged. Original full IDs remain selectable under the existing disclosure.
+- Android NORMAL task ebcdca88 via Detail: correction-before.png / correction-after.png inspected; empty review and empty local history shown truthfully. Disclosure opened/closed, no mutation. Accepted/pending/supplement populated native states, long technical IDs, font/narrow/Reduce Motion NOT_VERIFIED; existing mounted accepted/supplement tests pass.
+- Explicit TypeScript TSC_EXIT=0; repair/reassessment presentation + polish layout 9/9; git diff --check pass. Existing ripple/spring retained; no FPS measurement. Full regression inherited 1949/1950, expired Operator fixture unrelated.
