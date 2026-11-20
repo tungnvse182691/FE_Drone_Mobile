@@ -58,3 +58,11 @@ Plan: A→N separately scoped commits (E/F may share dependent presentation). At
 - C committed `b330999`. Only `app/(crew)/home.tsx`: two equal flexible navy-light KPI surfaces, left 3dp gold/mint accents, matching numbers, full pale labels. Original real counts/error placeholders unchanged. Wrap with 120dp minimum; no fixed text height, new icon or motion.
 - Android before `home-kpi-b-before.png`, after `home-kpi-b-after.png`, visually inspected; actual values 46/4 unchanged. Existing inbox fetching indicator is independent of KPI polish.
 - `npx tsc --noEmit` exit 0; Home/layout/press/motion/status 14/14 pass; `git diff --check` pass. Large OS font/narrow viewport/native Reduce Motion NOT_VERIFIED (settings unchanged). Source diff has only style and style selection.
+
+## D — Tiếp nhận
+
+- A2 committed `c8f7709`. Only receiving.tsx presentation: compact navy ID, neutral request surfaces, fewer repeated decorative icons; detail label/value wrap and selectable original UUID retained. Refresh remains 48dp. ACK predicates/callbacks untouched.
+- Android before `receiving-before.png`; after `receiving-after-loading.png` inspected. Current discovery remains loading; populated rows/detail and ACK-disabled closed state after refresh NOT_VERIFIED. No ACK or mutation performed. Metro error log returned empty. This is partial native acceptance, not populated-state PASS.
+- `npx tsc --noEmit` exit 0; `node --test tests/h01a.test.cjs tests/crew-nav01.test.cjs tests/crew-polish-layout.test.cjs tests/crew-polish-l10n.test.cjs` 72/72 pass. Final detail font size adjusted 16→14 presentation only. Diff check pass. Large font/narrow/Reduce Motion NOT_VERIFIED.
+
+- Follow-up: discovery resolved naturally. `receiving-detail-after.png` actually shows populated list (despite filename), visually inspected with closed/acknowledged/unacknowledged statuses. Closed row tap had not opened detail at capture, so detail interaction remains NOT_VERIFIED.

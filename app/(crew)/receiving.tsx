@@ -262,21 +262,17 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
               <Card style={styles.rowCard}>
                 <View style={styles.rowHeader}>
                   <View style={styles.rowTitleWrap}>
-                    <MaterialIcons name="inbox" size={16} color={colors.brandGold} />
                     <Text style={[typography.labelLg, styles.rowTitle]}>{kindLabel(request.kind)}</Text>
                   </View>
                   <Chip variant={state.variant} label={state.label} uppercase={false} />
                 </View>
                 <View style={styles.metaRow}>
-                  <MaterialIcons name="tag" size={13} color={colors.secondary} />
-                  <Text style={[typography.caption, styles.metaText]}>ID yêu cầu: {request.id.slice(0, 8)}</Text>
+                  <Text style={[typography.caption, styles.requestId]}>ID yêu cầu: {request.id.slice(0, 8)}</Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <MaterialIcons name="schedule" size={13} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>{receivingTimingLabel(request)}</Text>
                 </View>
                 <View style={styles.metaRow}>
-                  <MaterialIcons name="person" size={13} color={colors.secondary} />
                   <Text style={[typography.caption, styles.metaText]}>
                     {sourceKindLabel(request.sourceKind) ? `Nguồn: ${sourceKindLabel(request.sourceKind)}` : null}
                   </Text>
@@ -367,6 +363,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
 }
 
 const styles = StyleSheet.create({
+  requestId: { ...typography.labelSm, color: '#192D40', backgroundColor: '#E4E9ED', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, lineHeight: 18, flexShrink: 1 },
   screen: {
     flex: 1,
   },
@@ -386,7 +383,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
   },
   rowHeader: {
     flexDirection: 'row',
@@ -402,7 +399,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   rowTitle: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontSize: 16,
+    lineHeight: 24,
     flexShrink: 1,
   },
   metaRow: {
@@ -418,10 +417,12 @@ const styles = StyleSheet.create({
   detailCard: {
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
   },
   detailTitle: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontSize: 16,
+    lineHeight: 24,
     flexShrink: 1,
   },
   infoRow: {
@@ -438,11 +439,16 @@ const styles = StyleSheet.create({
   infoLabel: {
     color: colors.secondary,
     flexShrink: 0,
+    minWidth: 112,
   },
   infoValue: {
-    color: colors.neutral,
+    color: '#192D40',
+    fontSize: 14,
+    lineHeight: 21,
     flexShrink: 1,
-    textAlign: 'right',
+    textAlign: 'left',
+    flexBasis: 190,
+    flexGrow: 1,
   },
   notice: {
     flexDirection: 'row',
@@ -451,9 +457,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: '#FEF9E7',
+    backgroundColor: '#F7F0DA',
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: '#DCE2E7',
   },
   noticeText: {
     color: colors.secondary,
@@ -483,7 +489,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
     borderRadius: radius.md,
     marginBottom: spacing.sm,
   },
@@ -493,9 +499,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#F3F5F6',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
     borderRadius: radius.md,
     marginBottom: spacing.sm,
   },
@@ -515,8 +521,10 @@ const styles = StyleSheet.create({
   },
   compactButton: {
     minHeight: 48,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#F7F0DA',
   },
   topBar: {
     flexDirection: 'row',
@@ -532,9 +540,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: '#F3F5F6',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#DCE2E7',
   },
   pressed: {
     opacity: 0.7,
