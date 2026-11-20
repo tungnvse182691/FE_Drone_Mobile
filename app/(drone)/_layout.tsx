@@ -1,8 +1,9 @@
 import React from 'react';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, useNavigation, usePathname } from 'expo-router';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomNav } from '../../src/components/BottomNav';
+import { operatorTabAction } from '../../src/navigation/operatorTabNavigation';
 
 const DRONE_TABS = [
   { icon: 'home', iconFamily: 'material' as const, label: 'Trang chủ', route: '/(drone)/home' },
@@ -31,6 +32,15 @@ const DRONE_TABS = [
 ];
 
 export default function DroneLayout() {
+  const navigation = useNavigation();
+  const navigateOperatorTab = React.useCallback((route: string) => {
+    // In a layout this navigation belongs to the parent. Read its current child
+    // stack at tap time; never reset the auth/role navigator or queue a stale snapshot.
+    const state = navigation.getState()?.routes.find(item => item.name === '(drone)')?.state;
+    if (!state || state.stale !== false) return;
+    const action = operatorTabAction(state, route);
+    if (action) navigation.dispatchSync(action);
+  }, [navigation]);
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = React.useState(() => Keyboard.isVisible());
   const [viewport, setViewport] = React.useState({ width: 0, height: 0 });
@@ -64,7 +74,7 @@ export default function DroneLayout() {
       {!keyboardVisible && !focusedMap ? <View testID="operator-navigation-dock" pointerEvents="box-none"
         style={[styles.navigationDock, { height: viewport.height || '100%' }]}>
         <SafeAreaView edges={['bottom']} onLayout={event => setNavigationHeight(event.nativeEvent.layout.height)}>
-          <BottomNav tabs={DRONE_TABS} activeRoute={activeRoute} appearance="crew" />
+          <BottomNav tabs={DRONE_TABS} activeRoute={activeRoute} appearance="crew" onNavigate={navigateOperatorTab} />
         </SafeAreaView>
       </View> : null}
     </View>

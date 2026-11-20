@@ -5,8 +5,8 @@ const { screen } = require('./helpers/roadfe-screen.cjs');
 test('Operator cold-start system-bar resize keeps navigation labels inside the viewport', async () => {
   const s = screen('app/(drone)/_layout.tsx', {
     modules: {
-      'expo-router': {Stack: 'Stack', usePathname: () => '/request-detail'},
-      '../../src/components/BottomNav': {BottomNav: 'BottomNav'},
+      'expo-router': {Stack: 'Stack', usePathname: () => '/request-detail', useNavigation: () => ({})},
+      '../../src/navigation/operatorTabNavigation': {operatorTabAction: () => null}, '../../src/components/BottomNav': {BottomNav: 'BottomNav'},
       'react-native-safe-area-context': {SafeAreaView: 'SafeAreaView', useSafeAreaInsets: () => ({top: 41, bottom: 24, left: 0, right: 0})},
     },
   });
@@ -25,7 +25,7 @@ test('Operator cold-start system-bar resize keeps navigation labels inside the v
 
 test('Operator focused map hides navigation without unmounting Stack',()=>{
  for(const route of ['/survey-map','/(drone)/survey-map']) {
-  const s=screen('app/(drone)/_layout.tsx',{modules:{'expo-router':{Stack:'Stack',usePathname:()=>route},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});
+  const s=screen('app/(drone)/_layout.tsx',{modules:{'expo-router':{Stack:'Stack',usePathname:()=>route,useNavigation:()=>({})},'../../src/navigation/operatorTabNavigation': {operatorTabAction: () => null}, '../../src/components/BottomNav':{BottomNav:'BottomNav'}}});
   s.render();assert.equal(s.nodes().filter(n=>n.type==='Stack').length,1);
   assert.ok(!s.nodes().some(n=>n.type==='BottomNav'));
   s.unmount();
@@ -39,7 +39,7 @@ test('Operator navigation stays below resized viewport and preserves Stack durin
       isVisible: () => false,
       addListener: (name, fn) => { listeners.set(name, fn); return {remove() { removed++; }}; },
     }})},
-    modules: {'expo-router': {Stack: 'Stack', usePathname: () => '/upload'}, '../../src/components/BottomNav': {BottomNav: 'BottomNav'}},
+    modules: {'expo-router': {Stack: 'Stack', usePathname: () => '/upload', useNavigation: () => ({})}, '../../src/navigation/operatorTabNavigation': {operatorTabAction: () => null}, '../../src/components/BottomNav': {BottomNav: 'BottomNav'}},
   });
   s.render();
   const root = s.nodes().find(n => n.type === 'View' && n.props.onLayout);

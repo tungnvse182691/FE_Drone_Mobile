@@ -12,7 +12,7 @@ const routes={home:'Trang chủ',report:'Gửi phản ánh','report-detail':'Ph�
 for(const [route,label] of Object.entries(routes))for(const prefix of ['/','/(reporter)/'])test('NAV-01 exact '+prefix+route+' selects '+label,()=>assert.deepEqual(layout(prefix+route),[label]));
 for(const route of ['report-detail-extra','reporter','track-extra','profile-extra','uploads-extra'])test('NAV-01 unknown lookalike '+route+' never matches a tab',()=>assert.deepEqual(layout('/'+route),[]));
 for(const group of ['crew','drone'])test('NAV-01 shared BottomNav preserves every declared '+group+' route exactly',()=>{
- const s=screen('app/('+group+')/_layout.tsx',{modules:{'expo-router':{Stack:'Stack',usePathname:()=>'/home'},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});s.render();
+ const s=screen('app/('+group+')/_layout.tsx',{modules:{'expo-router':{Stack:'Stack',usePathname:()=>'/home',useNavigation:()=>({})},'../../src/navigation/operatorTabNavigation':{operatorTabAction:()=>null},'../../src/components/BottomNav':{BottomNav:'BottomNav'}}});s.render();
  const {tabs}=s.nodes().find(n=>n.type==='BottomNav').props;
  for(const tab of tabs)for(const activeRoute of tab.activeRoutes??tab.activePrefixes??[tab.route]){
   const nav=screen('src/components/BottomNav.tsx',{exportName:'BottomNav',props:{tabs,activeRoute}});nav.render();
