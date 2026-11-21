@@ -72,7 +72,11 @@ test('C1-B crew layout owns exactly one bottom inset around BottomNav',()=>{
 });
 
 test('C1-B shared SafeAreaScreen does not claim the bottom inset (no double padding)',()=>{
-  const s=screen('src/components/SafeAreaScreen.tsx',{exportName:'SafeAreaScreen',props:{children:null}});
+  const s=screen('src/components/SafeAreaScreen.tsx',{
+    exportName:'SafeAreaScreen',props:{children:null},
+    moduleFactories:{react:({react})=>({...react,createContext:value=>({defaultValue:value,Provider:'InsetScope'}),useContext:()=>false})},
+    modules:{'react-native-safe-area-context':{SafeAreaView:'SafeAreaView',useSafeAreaInsets:()=>({top:0,left:0,right:0,bottom:0})}},
+  });
   s.render();
   const safe=s.nodes().find(n=>n.type==='SafeAreaView');
   assert.ok(!(safe.props.edges??[]).includes('bottom'),'SafeAreaScreen must not add a second bottom inset');

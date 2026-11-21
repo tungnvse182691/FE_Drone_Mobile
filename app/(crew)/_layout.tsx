@@ -3,6 +3,7 @@ import { Stack, usePathname } from 'expo-router';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from '../../src/components/BottomNav';
+import { ProviderInsetScreens } from '../../src/components/SafeAreaScreen';
 
 const CREW_TABS = [
   { icon: 'home', iconFamily: 'material' as const, label: 'Trang chủ', route: '/(crew)/home' },
@@ -37,16 +38,18 @@ export default function CrewLayout() {
     : `/(crew)${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
 
   return (
-    <CrewScreenShell hideDock={activeRoute === '/(crew)/viewfinder' || activeRoute === '/(crew)/task-map'}>
-      <View style={styles.stackArea}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="field-review" dangerouslySingular={(_name, params) => params?.projectId && params?.id ? `${params.projectId}:${params.id}:${params.supplement === '1' ? 'supplement' : 'normal'}` : undefined} />
-        </Stack>
-      </View>
-      <SafeAreaView edges={['bottom']}>
-        <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} appearance="crew" />
-      </SafeAreaView>
-    </CrewScreenShell>
+    <ProviderInsetScreens>
+      <CrewScreenShell hideDock={activeRoute === '/(crew)/viewfinder' || activeRoute === '/(crew)/task-map'}>
+        <View style={styles.stackArea}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="field-review" dangerouslySingular={(_name, params) => params?.projectId && params?.id ? `${params.projectId}:${params.id}:${params.supplement === '1' ? 'supplement' : 'normal'}` : undefined} />
+          </Stack>
+        </View>
+        <SafeAreaView edges={['bottom']}>
+          <BottomNav tabs={CREW_TABS} activeRoute={activeRoute} appearance="crew" />
+        </SafeAreaView>
+      </CrewScreenShell>
+    </ProviderInsetScreens>
   );
 }
 
