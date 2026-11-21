@@ -286,9 +286,15 @@ test('Drone upload and dataset journals are isolated and reject credential or UR
  const d=await r.prepare({kind:'dataset',projectId:id(3),version:'AAAAAAAAAAE=',ifMatch:'"AAAAAAAAAAE="',body:{videoFileId:id(9),telemetryFileId:id(10)}});assert.equal(d.kind,'DRONE_DATASET_INTENT');
  r.close();f.env('https://other.test');const other=await f.api.openDroneUploadJournal(id(2));assert.equal((await other.read()).length,0);other.close();
 });
+// Keep URL/session expiry scenarios deterministic as the real calendar advances.
+// Scope the clock to this VM; other tests and production keep their real Date.
+class UploadFixtureDate extends Date {
+ constructor(...args){super(...(args.length ? args : ['2026-11-05T00:00:00Z']));}
+ static now(){return Date.parse('2026-11-05T00:00:00Z');}
+}
 function loadUploadWorkflow(journalFactory, api={}, auth){
  const deps={'../store/auth':{useAuthStore:auth??{getState:()=>({token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}}),subscribe:()=>()=>{}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([id(1),'sid'])},'./client':{apiClient:{defaults:{baseURL:'https://fixture.test'}}},'./droneTaskJournal':{openDroneUploadJournal:journalFactory},'./droneApi':{createOperatorUploadSessionReal:()=>{},getOperatorUploadSessionReal:()=>{},getOperatorUploadPartUrlsReal:()=>{},putUploadPartBytesDirect:()=>{},completeOperatorUploadReal:()=>{},getOperatorFileMetadataReal:()=>{},getOperatorDatasetReal:()=>{},getOperatorDatasetCoverageReal:()=>{},getOperatorSurveyTaskDetailReal:()=>{},...api}};
- const mod={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneDatasetWorkflow.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date,Set,Map,JSON});return mod.exports;
+ const mod={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneDatasetWorkflow.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date:UploadFixtureDate,Set,Map,JSON});return mod.exports;
 }
 test('Drone upload orchestration persists before transport and distinguishes complete from verified',async()=>{
  const updates=[],intent={key:id(20),status:'PREPARED',uploadId:null,fileId:null,version:null,ifMatch:null};let prepared=false;
