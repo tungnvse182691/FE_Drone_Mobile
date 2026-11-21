@@ -1,0 +1,6 @@
+interface:
+  display_name: "RoadGuard Taste Review"
+  short_description: "Explicit-only, read-only visual audit for RoadGuard mobile."
+  default_prompt: "Use $redesign-existing-projects to audit one existing RoadGuard screen visually. Do not edit code or install dependencies. Report findings and options for owner approval."
+policy:
+  allow_implicit_invocation: false
