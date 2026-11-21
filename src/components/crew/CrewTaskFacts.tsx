@@ -45,7 +45,7 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   const events=facts?.history.events??[];
   const visibleEvents=showAllHistory?events:events.slice(0,3);
   return <Card style={styles.card}>
-    <View style={styles.heading}><MaterialIcons name="map" size={20} color={colors.brandGold} /><Text style={[styles.title,styles.flex]}>Vị trí và lịch sử</Text>
+    <View style={styles.heading}><View style={styles.accent}/><Text style={[styles.title,styles.flex]}>Vị trí và lịch sử</Text>
       {facts?<Pressable accessibilityRole="button" accessibilityLabel="Tải lại vị trí và lịch sử" accessibilityState={{disabled:busy,busy}} disabled={busy} style={styles.refresh} onPress={()=>void read()}>
         <MaterialIcons name="refresh" size={24} color={colors.brandGold}/>
       </Pressable>:busy?<ActivityIndicator size="small" color={colors.brandGold}/>:null}
@@ -56,17 +56,17 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
       <Text style={[typography.labelLg,styles.flex]}>{showFacts?'Thu gọn hồ sơ':'Xem hồ sơ đã tải'}</Text><MaterialIcons name={showFacts?'expand-less':'expand-more'} size={22} color={colors.brandGold}/>
     </Pressable> : null}
     {facts&&showFacts?<View style={styles.group}>
-      <View style={styles.group}>
-        <View style={styles.locationSummary}><MaterialIcons name="route" size={22} color={colors.brandGold}/><View style={styles.flex}><Text style={typography.labelLg}>Bản đồ nhiệm vụ</Text><Text style={styles.hint}>{target?'Điểm hư hại từ hồ sơ nhiệm vụ':'Chưa có vị trí hư hại'}</Text></View></View>
-        <Button style={styles.action} variant="secondary" title="Mở bản đồ" onPress={()=>router.push({pathname:CREW_TASK_MAP,params:{id:taskId,projectId}})} />
+      <View style={styles.locationPanel}>
+        <View style={styles.locationSummary}><View style={styles.flex}><Text style={styles.locationTitle}>Bản đồ nhiệm vụ</Text><Text style={styles.hint}>{target?'Điểm hư hại từ hồ sơ nhiệm vụ':'Chưa có vị trí hư hại'}</Text></View></View>
+        <Button style={styles.mapAction} variant="secondary" title="Mở bản đồ" onPress={()=>router.push({pathname:CREW_TASK_MAP,params:{id:taskId,projectId}})} />
       </View>
-      <View style={styles.historyHeading}><MaterialIcons name="history" size={20} color={colors.secondary}/><Text style={[typography.labelLg,styles.flex]}>Lịch sử xử lý</Text><Text style={styles.hint}>{events.length} sự kiện</Text></View>
+      <View style={styles.historyHeading}><Text style={[styles.locationTitle,styles.flex]}>Lịch sử xử lý</Text><Text style={styles.hint}>{events.length} sự kiện</Text></View>
       {events.length===0?<Text style={styles.hint}>Chưa có sự kiện được ghi nhận.</Text>:visibleEvents.map(e=><View key={e.id} style={styles.event}>
-        <View style={styles.eventDot}/><View style={styles.flex}><Text style={typography.bodyMd}>{crewEventLabel(e.kind)}</Text><Text style={styles.hint}>{crewHistoryTime(e.occurredAt)}</Text>{e.reason&&['REJECTED','SUPPLEMENT','REVIEWED'].includes(e.kind)?<Text style={styles.hint}>{e.reason}</Text>:null}</View>
+        <View style={styles.eventTrack}><View style={styles.eventRail}/><View style={styles.eventDot}/></View><View style={styles.eventContent}><Text style={styles.eventTitle}>{crewEventLabel(e.kind)}</Text><Text style={styles.hint}>{crewHistoryTime(e.occurredAt)}</Text>{e.reason&&['REJECTED','SUPPLEMENT','REVIEWED'].includes(e.kind)?<Text style={styles.hint}>{e.reason}</Text>:null}</View>
       </View>)}
       {events.length>3?<Pressable accessibilityRole="button" accessibilityState={{expanded:showAllHistory}} style={styles.disclosure} onPress={()=>setShowAllHistory(v=>!v)}><Text style={[typography.labelLg,styles.flex]}>{showAllHistory?'Thu gọn sự kiện':`Xem thêm ${events.length-3} sự kiện`}</Text><MaterialIcons name={showAllHistory?'expand-less':'expand-more'} size={22} color={colors.brandGold}/></Pressable>:null}
       {facts.geometry?<>
-        <Pressable accessibilityRole="button" accessibilityState={{expanded:showGeometry}} style={styles.technicalToggle} onPress={()=>setShowGeometry(v=>!v)}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={[styles.hint,styles.flex]}>Thông tin kỹ thuật vị trí</Text><MaterialIcons name={showGeometry?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>
+        <Pressable accessibilityRole="button" accessibilityState={{expanded:showGeometry}} style={styles.technicalToggle} onPress={()=>setShowGeometry(v=>!v)}><Text style={[styles.hint,styles.flex]}>Thông tin kỹ thuật vị trí</Text><MaterialIcons name={showGeometry?'expand-less':'expand-more'} size={22} color={colors.secondary}/></Pressable>
         {showGeometry && <View style={styles.technical}>
           <Text style={styles.hint}>Phiên bản tuyến</Text><Text selectable style={styles.technicalValue}>{facts.geometry.routeVersionId}</Text>
           <Text style={styles.hint}>Hệ tọa độ nguồn</Text><Text selectable style={styles.technicalValue}>{facts.geometry.route.spatialSrid} · {facts.geometry.route.profileStatus}</Text>
@@ -78,21 +78,28 @@ export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string
   </Card>;
 }
 const styles=StyleSheet.create({
-  card:{gap:spacing.sm,padding:12,marginBottom:12,borderWidth:1,borderColor:colors.border,borderRadius:12},
-  title:{...typography.labelLg,lineHeight:20,color:colors.secondary},
-  action:{alignSelf:'flex-start',maxWidth:'100%',backgroundColor:'#FBF8EE',borderColor:'#E8D9A8'},
+  card:{gap:16,padding:16,marginBottom:16,borderWidth:1,borderColor:'#DCE2E7',borderRadius:16},
+  title:{...typography.titleMd,lineHeight:24,color:'#192D40'},
+  accent:{width:3,height:18,borderRadius:2,backgroundColor:colors.primary},
+  action:{alignSelf:'flex-start',maxWidth:'100%',backgroundColor:'#F3F5F6',borderColor:'#DCE2E7'},
+  mapAction:{alignSelf:'center',marginLeft:'auto',maxWidth:'100%',backgroundColor:'#FFFFFF',borderColor:'#C9B56D'},
   heading:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   flex:{flex:1,minWidth:0},
-  hint:{...typography.caption,color:colors.secondary},group:{gap:spacing.sm},
-  iconBox:{width:36,height:36,borderRadius:10,backgroundColor:'#FFF9EA',alignItems:'center',justifyContent:'center'},
+  hint:{...typography.caption,lineHeight:19,color:'#526170'},group:{gap:16},
+  locationPanel:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:12,padding:12,borderRadius:12,backgroundColor:'#F8F5EA',borderWidth:1,borderColor:'#E4D9B4'},
+  locationTitle:{...typography.labelLg,lineHeight:22,color:'#192D40'},
   refresh:{minWidth:48,minHeight:48,alignItems:'center',justifyContent:'center',borderRadius:24},
-  disclosure:{minHeight:48,paddingHorizontal:spacing.sm,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderWidth:1,borderColor:'#E8D9A8',backgroundColor:'#FBF8EE',borderRadius:8},
-  pressed:{backgroundColor:'#F3ECD6'},
-  locationSummary:{flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingVertical:spacing.sm},
+  disclosure:{minHeight:48,paddingVertical:8,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderRadius:8},
+  pressed:{backgroundColor:'#EDF1F4'},
+  locationSummary:{flexGrow:1,flexShrink:1,flexBasis:150,minWidth:0,flexDirection:'row',alignItems:'center',gap:spacing.sm},
   message:{flexDirection:'row',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surfaceAlt,borderRadius:8},
-  historyHeading:{flexDirection:'row',alignItems:'center',gap:spacing.sm,paddingTop:12,borderTopWidth:1,borderTopColor:colors.border},
-  event:{flexDirection:'row',gap:spacing.sm,paddingVertical:spacing.xs,paddingLeft:spacing.xs},
-  eventDot:{width:8,height:8,borderRadius:4,backgroundColor:colors.brandGold,marginTop:6},
+  historyHeading:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:spacing.sm,paddingTop:8},
+  event:{flexDirection:'row',gap:12},
+  eventTrack:{width:10,alignItems:'center',alignSelf:'stretch'},
+  eventRail:{position:'absolute',top:8,bottom:-16,width:1,backgroundColor:'#DCE2E7'},
+  eventDot:{width:8,height:8,borderRadius:4,backgroundColor:'#8393A1',marginTop:7},
+  eventContent:{flex:1,minWidth:0,gap:4,paddingBottom:8},
+  eventTitle:{...typography.labelLg,lineHeight:22,color:'#192D40'},
   technicalToggle:{minHeight:48,flexDirection:'row',alignItems:'center',gap:spacing.sm,borderTopWidth:1,borderColor:colors.border,marginTop:spacing.sm},
   technical:{padding:spacing.md,gap:spacing.sm,backgroundColor:colors.surfaceAlt,borderRadius:8},
   technicalValue:{...typography.bodyMd,color:colors.secondary,flexShrink:1,marginBottom:spacing.sm},

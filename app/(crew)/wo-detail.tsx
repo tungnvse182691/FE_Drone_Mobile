@@ -222,31 +222,32 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
           <CrewTaskStatus status={fresh.status} label={crewStatusLabel(fresh.status)} />
           <Chip variant="measure-only" label={crewModeLabel(fresh.rawMode)} uppercase={false} />
         </View>
-        <View style={styles.detailDivider} />
+      </Card>
+      <Card style={[styles.card, styles.detailCard, styles.detailState]}>
         <View style={styles.sectionHeading}>
-          <Text style={[styles.detailHeading,styles.flex]}>Tình trạng hiện tại</Text>
+          <Text style={[styles.detailTasteHeading,styles.detailStateHeading,styles.flex]}>Tình trạng hiện tại</Text>
           <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại / đối soát" accessibilityState={{disabled:busy,busy}} testID="crew-detail-refresh" disabled={busy} style={[styles.refreshButton,styles.detailRefresh]} onPress={()=>void run()}>
-            {busy?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}
+            {busy?<ActivityIndicator size="small" color="#E8CA69"/>:<MaterialIcons name="refresh" size={24} color="#E8CA69"/>}
           </CrewPressable>
         </View>
-        <Text style={styles.body}>{presentation.summary}</Text>
-        {!ready ? <Text style={styles.hint}>Đang kiểm tra nhật ký thao tác. Nếu chưa hoàn tất, chọn tải lại / đối soát.</Text> : null}
-        {pending ? <Text accessibilityRole="alert" style={styles.body}>Còn thao tác chưa đối soát xong. Giữ nguyên lệnh và kiểm tra kết quả trước khi thao tác tiếp.</Text> : null}
-        {presentation.commands.includes('accept') ? <Button variant="primary" title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} /> : null}
+        <Text style={styles.detailStateBody}>{presentation.summary}</Text>
+        {!ready ? <Text style={styles.detailStateHint}>Đang kiểm tra nhật ký thao tác. Nếu chưa hoàn tất, chọn tải lại / đối soát.</Text> : null}
+        {pending ? <Text accessibilityRole="alert" style={styles.detailStateBody}>Còn thao tác chưa đối soát xong. Giữ nguyên lệnh và kiểm tra kết quả trước khi thao tác tiếp.</Text> : null}
+        {presentation.commands.includes('accept') ? <Button variant="secondary" style={styles.detailPrimary} title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} /> : null}
         {presentation.commands.includes('reject') ? <>
-          {!blocked('reject') && <InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline />}
-          <Button variant="secondary" title="Từ chối nhiệm vụ" disabled={blocked('reject') || !reason.trim() || reason.trim().length > 2000} onPress={() => void run('reject')} />
+          {!blocked('reject') && <View style={styles.detailSecondarySurface}><InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline /></View>}
+          <Button variant="secondary" style={styles.detailSecondary} title="Từ chối nhiệm vụ" disabled={blocked('reject') || !reason.trim() || reason.trim().length > 2000} onPress={() => void run('reject')} />
         </> : null}
-        {presentation.commands.includes('start') ? <Button variant="primary" title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} /> : null}
-        {presentation.fieldLabel ? <Button variant="primary" title={presentation.fieldLabel} disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} /> : null}
-        {!presentation.commands.length && !presentation.fieldLabel && fieldBlock ? <Text style={styles.hint}>Thao tác hiện trường chưa khả dụng với trạng thái hoặc điều kiện hiện tại.</Text> : null}
-        {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
-        {record?.phase === 'pending' ? <Button variant="secondary" title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
+        {presentation.commands.includes('start') ? <Button variant="secondary" style={styles.detailPrimary} title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} /> : null}
+        {presentation.fieldLabel ? <Button variant="secondary" style={styles.detailPrimary} title={presentation.fieldLabel} disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} /> : null}
+        {!presentation.commands.length && !presentation.fieldLabel && fieldBlock ? <Text style={styles.detailStateHint}>Thao tác hiện trường chưa khả dụng với trạng thái hoặc điều kiện hiện tại.</Text> : null}
+        {notice ? <Text accessibilityLiveRegion="polite" style={styles.detailStateBody}>{notice}</Text> : null}
+        {record?.phase === 'pending' ? <Button variant="secondary" style={styles.detailSecondary} title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
       </Card>
       <Card style={[styles.card, styles.detailCard]}>
-        <Text style={styles.detailHeading}>Thông tin nhiệm vụ</Text>
+        <View style={styles.detailSectionTitle}><View style={styles.detailAccent}/><Text style={[styles.detailTasteHeading,styles.flex]}>Thông tin nhiệm vụ</Text></View>
         <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Hướng dẫn</Text><Text style={styles.body}>{fresh.detail?.instructions || fresh.description || 'Chưa có hướng dẫn bổ sung cho nhiệm vụ này.'}</Text></View></View>
-        <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.body}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View></View>
+        <View style={styles.detailDeadline}><Text style={styles.hint}>Thời hạn hoàn thành (giờ Việt Nam)</Text><Text style={styles.detailDeadlineValue}>{fresh.due_label ? crewDateTime(fresh.due_label) : 'Chưa có thời hạn'}</Text></View>
         {fresh.wo_code ? <Text style={styles.body}>Lệnh công tác: {fresh.wo_code}</Text> : null}
         <View style={styles.factRow}><View style={styles.flex}><Text style={styles.hint}>Vị trí hiện trường</Text><Text style={styles.body}>{[fresh.route_code, fresh.section_name, fresh.chainage].filter(Boolean).join(' • ') || 'Chưa có thông tin tuyến đường'}</Text>
           <Text style={styles.hint}>{fresh.coordinates ? `${fresh.coordinates.latitude}, ${fresh.coordinates.longitude}` : 'Chưa có tọa độ dẫn đường'}</Text></View></View>
@@ -255,16 +256,16 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
       {fresh.detail?.repairContext?<CrewRepairFacts key={JSON.stringify([scope,task.projectId,task.id,fresh.detail.repairContext.bindingId])} projectId={task.projectId} taskId={task.id}/>:null}
       <Card style={[styles.taskActionCard, styles.detailCard]}>
-        <Text style={styles.detailHeading}>Hồ sơ liên quan</Text>
-        <CrewPressable accessibilityRole="button" accessibilityLabel="Khuyết tật thuộc nhiệm vụ" style={({pressed})=>[styles.linkRow,styles.detailLink,pressed&&styles.detailRefresh]} onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})}>
-          <MaterialIcons name="report-problem" size={22} color={colors.brandGold}/><Text style={[styles.body,styles.flex]}>Khuyết tật thuộc nhiệm vụ</Text><MaterialIcons name="chevron-right" size={22} color={colors.secondary}/>
+        <Text style={styles.detailTasteHeading}>Hồ sơ liên quan</Text>
+        <CrewPressable accessibilityRole="button" accessibilityLabel="Khuyết tật thuộc nhiệm vụ" style={({pressed})=>[styles.linkRow,styles.detailLink,pressed&&styles.detailLinkPressed]} onPress={()=>router.push({pathname:'/(crew)/report-defect',params:{id:task.id,projectId:task.projectId}})}>
+          <Text style={[styles.body,styles.flex]}>Khuyết tật thuộc nhiệm vụ</Text><MaterialIcons name="chevron-right" size={22} color={colors.secondary}/>
         </CrewPressable>
       </Card>
       {fresh.detail?.mode === 'NORMAL' ? <Card style={[styles.taskActionCard,styles.detailCard]}><NormalRepairBootstrap task={fresh} stage="overview" /></Card> : null}
       {fresh.detail?.mode === 'CONDITIONAL_FT' ? <Card style={[styles.taskActionCard,styles.detailCard]}><FastTrackRepairSummary task={fresh} /></Card> : null}
       <Card style={[styles.taskActionCard,styles.detailCard]}>
         <CrewPressable accessibilityRole="button" accessibilityState={{ expanded: showTechnical }} onPress={() => setShowTechnical(v => !v)} style={styles.sectionHeading}>
-          <MaterialIcons name="info-outline" size={20} color={colors.secondary} /><Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
+          <Text style={[typography.labelLg, styles.flex]}>Chi tiết kỹ thuật</Text><MaterialIcons name={showTechnical ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
         </CrewPressable>
         {showTechnical ? <View style={styles.technicalPanel}><Text style={styles.hint}>Mã nhiệm vụ</Text><Text selectable style={styles.body}>{fresh.id}</Text><Text style={styles.hint}>Dự án</Text><Text selectable style={styles.body}>{fresh.projectId}</Text><Text style={styles.hint}>Phiên bản</Text><Text selectable style={styles.body}>{fresh.version}</Text><Text style={styles.hint}>Trạng thái nguồn</Text><Text style={styles.body}>{fresh.status} · {fresh.rawMode}</Text>{record?.rejectionStatus ? <Text style={styles.hint}>Mã phản hồi máy chủ: {record.rejectionStatus}</Text> : null}{record?.origin ? <Text selectable style={styles.hint}>Mã bắt đầu: {record.origin.id}</Text> : null}</View> : null}
       </Card>
@@ -575,13 +576,25 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
 }
 
 const styles = StyleSheet.create({
-  detailCard: { borderColor: '#DCE2E7', marginBottom: 12, gap: 12, padding: 16 },
-  detailHero: { backgroundColor: '#F3F5F6', gap: 12 },
-  detailDivider: { height: 1, backgroundColor: '#DCE2E7', marginTop: 4 },
-  detailTitle: { ...typography.labelLg, fontSize: 16, lineHeight: 24, color: '#192D40' },
+  detailCard: { borderColor: '#DCE2E7', borderRadius: 16, marginBottom: 16, gap: 16, padding: 16 },
+  detailHero: { backgroundColor: colors.surface, gap: 12 },
+  detailTitle: { ...typography.titleLg, lineHeight: 28, color: '#192D40' },
   detailHeading: { ...typography.labelLg, fontSize: 14, lineHeight: 21, color: '#192D40' },
-  detailId: { ...typography.labelSm, lineHeight: 18, color: '#192D40', alignSelf: 'flex-start', backgroundColor: '#E4E9ED', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  detailRefresh: { backgroundColor: '#F7F0DA', borderWidth: 1, borderColor: '#DCE2E7' },
+  detailTasteHeading: { ...typography.titleMd, lineHeight: 24, color: '#192D40' },
+  detailId: { ...typography.labelLg, lineHeight: 21, color: '#526170' },
+  detailState: { backgroundColor: '#192D40', borderColor: '#192D40' },
+  detailStateHeading: { color: '#FFFFFF' },
+  detailStateBody: { ...typography.bodyMd, lineHeight: 23, color: '#E0E7EC' },
+  detailStateHint: { ...typography.caption, lineHeight: 19, color: '#CDD7DF' },
+  detailPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
+  detailSecondary: { backgroundColor: '#F3F5F6', borderColor: '#DCE2E7' },
+  detailSecondarySurface: { backgroundColor: colors.surface, padding: 12, borderRadius: radius.md },
+  detailRefresh: { backgroundColor: '#243D51', borderWidth: 1, borderColor: '#486072' },
+  detailSectionTitle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  detailAccent: { width: 3, height: 18, borderRadius: 2, backgroundColor: colors.primary },
+  detailDeadline: { gap: 6, borderTopWidth: 1, borderTopColor: '#DCE2E7', paddingTop: 16 },
+  detailDeadlineValue: { ...typography.titleMd, lineHeight: 24, fontVariant: ['tabular-nums'], color: '#192D40' },
+  detailLinkPressed: { backgroundColor: '#E4E9ED' },
   detailLink: { backgroundColor: '#F3F5F6', borderRadius: radius.md, minHeight: 48, padding: 12 },
   overviewLinks: { gap: spacing.sm },
   overviewLink: { minHeight: 48, padding: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: '#FBF8EE', borderRadius: radius.md, borderWidth: 1, borderColor: '#E8D9A8', overflow: 'hidden' },
