@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
 const {QueryClient,InfiniteQueryObserver}=require('@tanstack/react-query');
 const actor='11111111-1111-4111-8111-111111111111',project='22222222-2222-4222-8222-222222222222',id='33333333-3333-4333-8333-333333333333';
-const wire=()=>({id,projectId:project,crewId:actor,mode:'MEASURE_ONLY',status:'ASSIGNED',version:'AAAAAAAAB9E=',defectIds:[]});
+const wire=()=>({id,projectId:project,crewId:actor,mode:'MEASURE_ONLY',status:'ASSIGNED',version:'AAAAAAAAB9E=',defectIds:[],assignmentId:id,assignmentStatus:'ACTIVE'});
 function harness(){
  const calls=[];let respond=async()=>({data:{items:[],nextCursor:null,asOf:'2026-10-28T00:00:00Z'},headers:{}});
  const module={exports:{}};
@@ -53,7 +53,7 @@ function screenHarness(file,options={}){
    if(n==='react')return react;
    if(n==='react-native')return {StyleSheet:{create:o=>o},Platform:{select:o=>o.default},View:'View',Text:'Text',Pressable:'Pressable'};
    if(n==='expo-router')return {router:{replace(){}},useLocalSearchParams:()=>params,usePathname:()=>`/(crew)/${file}`,useFocusEffect:()=>{}};
-   if(n==='@tanstack/react-query')return {useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:false,refetch(){}};}};
+   if(n==='@tanstack/react-query')return {useQueryClient:()=>({resetQueries(){}}),useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:false,refetch(){}};}};
    if(n.endsWith('/store/auth'))return {useAuthStore:s=>s(state)};
    if(n.endsWith('/offline/upload-queue'))return {currentQueueIdentity:()=>({actor,role:'REPAIR_CREW',partition:'test-crew',scope:'test-session',environment:'http://fixture/api/v1'})};
    if(n.endsWith('/api/authApi'))return {passwordSessionIdentity:t=>t?JSON.stringify([state.user.id,'sid-'+state.user.id]):null};
@@ -132,17 +132,10 @@ test('T04 repeated cursor stops; counters do not count rejected as completed',()
  assert.equal(api.crewTaskIsComplete({status:'REJECTED'}),false);assert.equal(api.crewTaskIsComplete({status:'COMPLETED'}),true);
 });
 
-test('Crew inbox filters use validated API080 mode instead of API037 placeholder',async()=>{
- const h=harness();
- h.respond(async path=>path==='/me/inspection-tasks'
-  ? {data:{items:[wire()],nextCursor:'next',asOf:'now'},headers:{}}
-  : {data:{...wire(),assignedToUserId:actor,defectId:id,mode:'NORMAL',status:'NewAssigned',instructions:'QA sửa trước/sau'},headers:{etag:'"'+wire().version+'"'}});
- const opts=h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){}});
- const page=await opts.queryFn({pageParam:null,signal:new AbortController().signal});
- const task=h.api.crewTaskFromWire(page.items[0]);
- assert.equal(task.task_mode,'NORMAL');assert.equal(task.status,'NewAssigned');
- assert.equal(task.title,'QA sửa trước/sau');assert.equal(page.nextCursor,'next');
- assert.equal(h.calls.length,2);assert.ok(h.calls[1][1].signal);
+test('Crew inbox uses current API037 summary without detail fan-out',async()=>{
+ const h=harness();h.respond(async()=>({data:{items:[{...wire(),mode:'NORMAL',status:'NEWASSIGNED',taskCode:'FIELD-01'}],nextCursor:'next',asOf:'now'},headers:{}}));
+ const page=await h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){}}).queryFn({pageParam:null,signal:new AbortController().signal});
+ const task=h.api.crewTaskFromWire(page.items[0]);assert.equal(task.task_mode,'NORMAL');assert.equal(task.status,'NEWASSIGNED');assert.equal(task.wo_code,'FIELD-01');assert.equal(task.detail,undefined);assert.equal(page.nextCursor,'next');assert.equal(h.calls.length,1);
 });
 
 test('Crew inbox stops before detail reads if session changed after listing',async()=>{
@@ -153,10 +146,10 @@ test('Crew inbox stops before detail reads if session changed after listing',asy
  assert.equal(h.calls.length,1);
 });
 
-test('Crew inbox does not project a foreign assignment from API080',async()=>{
+test('Crew inbox does not project a foreign assignment from API037',async()=>{
  const h=harness();
  h.respond(async path=>path==='/me/inspection-tasks'
-  ? {data:{items:[wire()],nextCursor:null},headers:{}}
+  ? {data:{items:[{...wire(),crewId:project}],nextCursor:null},headers:{}}
   : {data:{...wire(),assignedToUserId:project,mode:'NORMAL'},headers:{etag:'"'+wire().version+'"'}});
  const opts=h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){}});
  await assert.rejects(opts.queryFn({pageParam:null,signal:new AbortController().signal}),/crew_identity_invalid/);

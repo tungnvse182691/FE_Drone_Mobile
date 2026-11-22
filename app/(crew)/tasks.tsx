@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -10,7 +10,7 @@ import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
 import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, usePathname } from 'expo-router';
 import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/auth';
@@ -19,7 +19,7 @@ import { passwordSessionIdentity } from '../../src/api/authApi';
 import {
   crewInboxOptions, crewTaskFromWire, crewTaskIsComplete, crewTaskActionBlock,
   getFieldInspectionTaskDetailReal, isCrewResourceId, validateCrewTaskDetail,
-  type CrewTask, type OperationalCrewTask,
+  crewAssignmentCanOpen, type CrewListQuery, type CrewTask, type OperationalCrewTask,
 } from '../../src/api/crewApi';
 import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -28,7 +28,7 @@ import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
 import { CrewHomeTaskPressable } from '../../src/components/crew/CrewHomeTaskPressable';
 export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
-type TaskSegment = 'active' | 'done';
+type TaskSegment = 'active' | 'done' | 'other';
 
 /** Presentation only: unknown wire states never grant a capability. */
 export function crewStatusLabel(status: string): string {
@@ -61,13 +61,15 @@ export function useCrewIdentity() {
 }
 export function crewReadError(error: unknown): string {
   const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 400) return 'Bộ lọc hoặc trang tiếp theo không còn hợp lệ. Tải lại danh sách từ đầu.';
   if (status === 401) return 'Phiên đăng nhập không còn hợp lệ. Vui lòng đăng nhập lại.';
   if (status === 403) return 'Bạn không có quyền hoặc không còn được giao nhiệm vụ này.';
   if (status === 409 || status === 412) return 'Dữ liệu nhiệm vụ vừa thay đổi. Vui lòng tải lại để xem phiên bản mới.';
   if (status === 404) return 'Không tìm thấy nhiệm vụ trong phạm vi của bạn.';
   return 'Không tải được dữ liệu nhiệm vụ. Vui lòng thử lại.';
 }
-export function useCrewInbox() {
+export function useCrewInbox(filters: CrewListQuery = {}) {
+  const client = useQueryClient();
   const identity = useCrewIdentity();
   const environment = apiClient.defaults?.baseURL ?? '';
   const options = crewInboxOptions(identity.scope ?? '', {
@@ -79,7 +81,7 @@ export function useCrewInbox() {
           current.user.must_change_password || !['AUTHENTICATED', 'REFRESHING'].includes(current.status) ||
           (apiClient.defaults?.baseURL ?? '') !== environment) throw Error('crew_inbox_session_changed');
     },
-  });
+  }, filters);
   const query = useInfiniteQuery({ ...options, queryKey: [...options.queryKey, environment], enabled: identity.enabled });
   const { refetch } = query;
   useFocusEffect(useCallback(() => { if (identity.enabled) void refetch(); }, [identity.enabled, refetch]));
@@ -89,11 +91,16 @@ export function useCrewInbox() {
   const transient = query.isError && (status == null || status === 408 || status === 429 || status >= 500);
   if (identity.enabled && (!query.isError || transient)) for (const page of query.data?.pages ?? []) for (const item of page.items) {
     if (!item.crewId || item.crewId.toLowerCase() !== identity.user!.id.toLowerCase()) { foreign = true; continue; }
-    if (isCrewResourceId(item.id) && !items.has(item.id)) items.set(item.id, crewTaskFromWire(item));
+    if (!isCrewResourceId(item.assignmentId)) { foreign = true; continue; }
+    const key = item.assignmentId.toLowerCase();
+    if (isCrewResourceId(item.id) && !items.has(key)) items.set(key, crewTaskFromWire(item));
   }
   const error = !identity.enabled ? 'Vui lòng đăng nhập bằng tài khoản đội sửa chữa.' : foreign ? 'Dữ liệu phân công không khớp tài khoản hiện tại.' : query.isError ? crewReadError(query.error) : null;
   const stale = !!(transient && !foreign && items.size && identity.enabled);
-  return { ...identity, environment, query, error, stale, tasks: (!identity.enabled || foreign || (query.isError && !transient)) ? [] : [...items.values()] };
+  const refresh = () => status === 400
+    ? client.resetQueries({ queryKey: [...options.queryKey, environment], exact: true })
+    : query.refetch();
+  return { ...identity, environment, query, refresh, error, stale, tasks: (!identity.enabled || foreign || (query.isError && !transient)) ? [] : [...items.values()] };
 }
 export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: ReturnType<typeof useCrewInbox>; presentation?: 'default' | 'tasks' }) {
   const tasksPresentation = presentation === 'tasks';
@@ -107,7 +114,7 @@ export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: Ret
         accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
         disabled={!inbox.enabled || inbox.query.isFetching}
         style={[styles.inboxRefresh, tasksPresentation && styles.tasksInboxRefresh]}
-        onPress={() => { void inbox.query.refetch(); }}>
+        onPress={() => { void inbox.refresh(); }}>
         {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
       </CrewPressable>
     </View>
@@ -185,24 +192,27 @@ export const TASK_MODE_CHIP: Record<CrewTask['task_mode'], { variant: ChipVarian
 export default function CrewTasksScreen() {
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
-  const inbox = useCrewInbox();
-  const activeTasks = inbox.tasks.filter(t => !crewTaskIsComplete(t));
-  const doneTasks = inbox.tasks.filter(crewTaskIsComplete);
+  const [acceptance, setAcceptance] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'REJECTED'>('ALL');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
+  const inbox = useCrewInbox({
+    statusGroup: segment === 'active' ? 'INCOMPLETE' : segment === 'done' ? 'COMPLETED' : 'OTHER',
+    mode: modeFilter === 'ALL' ? undefined : modeFilter,
+    acceptance: acceptance === 'ALL' ? undefined : acceptance, search: debouncedSearch,
+  });
   const loadError = inbox.error;
-
-  const segments: { key: TaskSegment; label: string; count: number }[] = [
-    { key: 'active', label: 'Chưa hoàn thành', count: activeTasks.length },
-    { key: 'done', label: 'Hoàn thành', count: doneTasks.length },
+  const segments: { key: TaskSegment; label: string }[] = [
+    { key: 'active', label: 'Chưa hoàn thành' }, { key: 'done', label: 'Hoàn thành' }, { key: 'other', label: 'Khác' },
   ];
-
-  const list = (segment === 'active' ? activeTasks : doneTasks)
-    .filter((task) => modeFilter === 'ALL' || task.task_mode === modeFilter);
+  // API037 has already applied the AND filters across the full server collection.
+  const list = search.trim() === debouncedSearch ? inbox.tasks : [];
 
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Công việc" />}>
         <CrewInboxState inbox={inbox} presentation="tasks" />
-        <View style={styles.segments}>
+        {acceptance !== 'REJECTED' ? <View style={styles.segments}>
           {segments.map((s) => {
             const active = s.key === segment;
             return (
@@ -216,17 +226,23 @@ export default function CrewTasksScreen() {
                 <Text style={[typography.labelLg, active ? styles.segmentLabelActive : styles.segmentLabel]}>
                   {s.label}
                 </Text>
-                <View style={[styles.countBadge, active && styles.countBadgeActive]}>
-                  <Text style={[typography.labelSm, active ? styles.countTextActive : styles.countText]}>
-                    {s.count}
-                  </Text>
-                </View>
               </CrewPressable>
             );
           })}
-        </View>
+        </View> : null}
 
+        <TextInput value={search} onChangeText={setSearch} maxLength={100} autoCapitalize="none"
+          accessibilityLabel="Tìm theo mã nhiệm vụ" placeholder="Tìm mã nhiệm vụ" placeholderTextColor={colors.secondary}
+          style={{ ...typography.bodyMd, minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.sm, color: colors.neutral }} />
         <View style={styles.modeFilters}>
+          {(['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'] as const).map(value => <CrewPressable key={value}
+            style={[styles.modeFilter, acceptance === value && styles.segmentActive]} accessibilityRole="button"
+            accessibilityState={{ selected: acceptance === value }} onPress={() => setAcceptance(value)}>
+            <Text style={[typography.labelLg, acceptance === value ? styles.segmentLabelActive : styles.segmentLabel]}>{({ ALL: 'Tất cả tiếp nhận', PENDING: 'Chờ tiếp nhận', ACCEPTED: 'Đã nhận', REJECTED: 'Đã từ chối' })[value]}</Text>
+          </CrewPressable>)}
+        </View>
+        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Đã tải {list.length} phân công trong bộ lọc này</Text>
+        {acceptance !== 'REJECTED' ? <View style={styles.modeFilters}>
             {TASK_MODE_FILTERS.map((filter) => {
               const active = filter.key === modeFilter;
               const tone = crewHomeModeTone(filter.key);
@@ -249,7 +265,7 @@ export default function CrewTasksScreen() {
                 </CrewPressable>
               );
             })}
-        </View>
+        </View> : null}
 
         <CrewContentTransition ready={!inbox.query.isPending} revision={TASK_MODE_FILTERS.findIndex(f => f.key === modeFilter) * 2 + (segment === 'done' ? 1 : 0)}>
         {loadError && list.length === 0 ? (
@@ -269,13 +285,13 @@ export default function CrewTasksScreen() {
             {list.map((task) => {
             return (
               <CrewHomeTaskPressable
-                key={task.id}
+                key={task.assignmentId}
                 style={{ borderRadius: 16, overflow: 'hidden' }}
                 android_ripple={{ color: '#1A1D2029', foreground: true }}
                 onPress={() =>
-                  router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
+                  crewAssignmentCanOpen(task) && router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
                 }
-                disabled={!isCrewResourceId(task.projectId) || !task.version}
+                disabled={!crewAssignmentCanOpen(task)}
                 accessibilityRole="button"
               >
                 <Card style={styles.taskCard}>
@@ -285,7 +301,7 @@ export default function CrewTasksScreen() {
                       <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
                     </View>
                     <View style={styles.taskMetaRow}>
-                      <CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)} />
+                      <CrewTaskStatus status={task.isHistory ? 'REJECTED' : task.status} label={task.isHistory ? 'Phân công đã từ chối' : crewStatusLabel(task.status)} />
                     </View>
                     {task.distance_label && task.distance_label !== '—' ? (
                       <View style={styles.taskDistPill}>
@@ -296,7 +312,8 @@ export default function CrewTasksScreen() {
 
                   <Text style={[typography.titleMd, styles.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
 
-                  {!isCrewResourceId(task.projectId) || !task.version ? <Text>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
+                  {task.isHistory ? <Text style={typography.bodyMd}>Lịch sử từ chối · {crewDateTime(task.rejectedAt)}. Không mở hồ sơ hiện hành.</Text> : !crewAssignmentCanOpen(task) ? <Text>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
+                  {!task.isHistory ? <Text style={typography.caption}>{task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text> : null}
 
                   {task.route_code || task.section_name || task.chainage ? (
                     <View style={styles.taskRouteRow}>
@@ -336,7 +353,7 @@ export default function CrewTasksScreen() {
                     ) : (
                       <View style={{ flex: 1 }} />
                     )}
-                    <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} />
+                    {crewAssignmentCanOpen(task) ? <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} /> : null}
                   </View>
                 </Card>
               </CrewHomeTaskPressable>

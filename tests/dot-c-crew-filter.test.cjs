@@ -3,11 +3,14 @@ const {screen,harness}=require('./helpers/roadfe-screen.cjs');
 const actor='00000000-0000-4000-8000-000000000001',projectId='00000000-0000-4000-8000-000000000002';
 function fixture(modes){
  const api=harness().load('src/api/crewApi.ts');
- const rows=(modes??[['Completed','MEASURE_ONLY'],['Completed','INSPECT_AND_REPAIR'],['Completed','FUTURE'],['Submitted','MEASURE_ONLY'],['Assigned','INSPECT_AND_REPAIR']]).map(([status,mode],i)=>({id:`00000000-0000-4000-8000-00000000001${i}`,projectId,crewId:actor,mode,status,version:'v1',defectIds:[]}));
+ const rows=(modes??[['Completed','MEASURE_ONLY'],['Completed','INSPECT_AND_REPAIR'],['Completed','FUTURE'],['Submitted','MEASURE_ONLY'],['Assigned','INSPECT_AND_REPAIR']]).map(([status,mode],i)=>({id:'00000000-0000-4000-8000-00000000001'+i,assignmentId:'00000000-0000-4000-8000-00000000001'+i,assignmentStatus:'ACTIVE',projectId,crewId:actor,mode,status,version:'v1',defectIds:[]}));
  const query={data:{pages:[{items:rows.slice(0,2)},{items:rows.slice(2)}]},isPending:false,isFetching:false,isError:false,hasNextPage:true,refetch(){},fetchNextPage(){}};
  const s=screen('app/(crew)/tasks.tsx',{modules:{
   '../../src/components/crew/CrewHomeTaskPressable':{CrewHomeTaskPressable:'Pressable'},
-  '@tanstack/react-query':{useInfiniteQuery:()=>query},
+  '@tanstack/react-query':{useQueryClient:()=>({resetQueries(){}}),useInfiniteQuery:options=>{
+    const f=options.queryKey[2],selected=query.data.pages.flatMap(p=>p.items).filter(r=>(!f.mode||r.mode===f.mode)&&(!f.statusGroup|| (f.statusGroup==='COMPLETED'?r.status.toUpperCase()==='COMPLETED':f.statusGroup==='INCOMPLETE'?r.status.toUpperCase()!=='COMPLETED':false)));
+    return {...query,data:{pages:[{items:selected}]}};
+  }},
   'expo-router':{router:{push(){throw Error('unexpected navigation');}},useFocusEffect(){},usePathname:()=>'/tasks'},
   '../../src/api/authApi':{passwordSessionIdentity:t=>t?'["'+actor+'","s1"]':null},
   '../../src/api/client':{apiClient:{defaults:{baseURL:'fixture-env'}}},
@@ -42,4 +45,11 @@ test('C4 filtered empty state, cached transient error and foreign-owner protecti
  assert.ok(f.s.nodes().some(n=>n.props.title==='Không có công việc trong bộ lọc này'));
  f.query.isError=true;f.query.error={response:{status:503}};f.tap('Tất cả');assert.equal(f.ids().length,2);
  f.query.data.pages[0].items[0].crewId='foreign';f.s.render();assert.equal(f.ids().length,0);assert.match(JSON.stringify(f.s.nodes()),/không khớp/);assert.equal(f.s.h.calls.length,0);f.s.unmount();
+});
+
+test('FE1 selected acceptance keeps readable foreground on navy',()=>{
+ const f=fixture();
+ const label=f.s.nodes().find(n=>n.type==='Text'&&n.props.children.includes('Tất cả tiếp nhận'));
+ const style=Object.assign({},...label.props.style.flat(Infinity).filter(Boolean));
+ assert.equal(style.color,'#FFFFFF');f.s.unmount();
 });

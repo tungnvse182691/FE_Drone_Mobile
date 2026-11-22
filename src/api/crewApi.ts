@@ -53,6 +53,8 @@ export type CrewTask = Omit<CrewFieldTaskCard, 'coordinates' | 'task_mode' | 'de
   task_mode: TaskMode | 'NORMAL' | 'CONDITIONAL_FT' | 'UNKNOWN'; defect_type_code: string;
   coordinates: { latitude: number; longitude: number } | null;
   detail?: FieldTaskViewFact; etag?: string;
+  assignmentId?: string | null; assignmentStatus?: string | null; acceptanceOutcome?: string | null;
+  acceptedAt?: string | null; rejectedAt?: string | null; isHistory?: boolean;
 };
 export type OperationalCrewTask = CrewTask & CrewFieldTaskCard;
 export function isCrewResourceId(value: unknown): value is string {
@@ -150,23 +152,26 @@ export function fastTrackRepairBlock(
   catch { return 'Ngữ cảnh sửa chữa nhanh từ máy chủ không hợp lệ; chưa thể hiển thị như nguồn tác nghiệp.'; }
 }
 export function crewTaskFromWire(item: InspectionTaskResponseDto, detail = item.fieldTaskRead?.data, etag = item.fieldTaskRead?.etag): CrewTask {
-  const rawMode = detail?.mode ?? item.mode;
+  const rawMode = detail?.mode ?? item.mode ?? '';
   const target = detail?.defectTarget;
   const coordinates = target && typeof target.longitude === 'number' && Number.isFinite(target.longitude) && Math.abs(target.longitude) <= 180 &&
     typeof target.latitude === 'number' && Number.isFinite(target.latitude) && Math.abs(target.latitude) <= 90
     ? { longitude: target.longitude, latitude: target.latitude } : null;
   return {
     id: item.id, projectId: item.projectId, version: detail?.version ?? item.version, crewId: item.crewId,
-    status: detail?.status ?? item.status, rawMode,
+    status: detail?.status ?? item.status ?? '', rawMode,
+    assignmentId: detail?.assignmentId ?? item.assignmentId, assignmentStatus: item.assignmentStatus,
+    acceptanceOutcome: item.acceptanceOutcome, acceptedAt: item.acceptedAt, rejectedAt: item.rejectedAt, isHistory: item.isHistory,
     task_mode: (['MEASURE_ONLY','NORMAL','CONDITIONAL_FT','INSPECT_AND_REPAIR','INSPECT_ONLY'].includes(rawMode) ? rawMode : 'UNKNOWN') as CrewTask['task_mode'],
-    wo_code: '', title: detail?.instructions?.split('\n')[0]?.trim() ?? '', defect_type_code: '', coordinates,
-    route_code: '', section_name: '', chainage: '', locality: '', due_label: detail?.dueAt ?? '',
+    wo_code: item.taskCode ?? '', title: detail?.instructions?.split('\n')[0]?.trim() ?? '', defect_type_code: '', coordinates,
+    route_code: '', section_name: '', chainage: '', locality: '', due_label: detail?.dueAt ?? item.dueAt ?? '',
     due_urgency: 'normal', distance_label: '', defect_location: '', description: detail?.instructions ?? '',
     repair_method: '', safety_note: '', batch_size: item.defectIds.length, detail, etag,
   };
 }
 export function crewTaskIsComplete(task: { status: string }): boolean { return task.status.toUpperCase() === 'COMPLETED'; }
 export function crewTaskActionBlock(task: CrewTask | null): string | null {
+  if (task?.isHistory || task?.assignmentStatus === 'REJECTED') return 'Phân công đã từ chối chỉ dùng để xem lịch sử.';
   if (!task || !task.projectId || !task.id || !task.version || !task.etag) return 'Chưa có định danh hoặc phiên bản nhiệm vụ hợp lệ.';
   if (task.rawMode === 'NORMAL' || task.rawMode === 'CONDITIONAL_FT' || task.detail?.repairContext) return 'Thi công sửa chữa chưa được mở; chỉ xem ngữ cảnh từ máy chủ.';
   if (!task.coordinates || !Number.isFinite(task.coordinates.latitude) || !Number.isFinite(task.coordinates.longitude) ||
@@ -309,34 +314,59 @@ export async function getFieldTaskStartOriginReal(projectId: string, taskId: str
   if (!isCrewResourceId(projectId) || !isCrewResourceId(taskId)) throw new Error('crew_identity_missing');
   return (await apiClient.get(`/projects/${projectId}/field-inspection-tasks/${taskId}/start-origin`)).data;
 }
-export function crewInboxOptions(scope: string, detailContext?: { actorId: string; assertCurrent: () => void }) {
+export interface CrewListQuery {
+  mode?: 'NORMAL' | 'CONDITIONAL_FT' | 'MEASURE_ONLY';
+  statusGroup?: 'INCOMPLETE' | 'COMPLETED' | 'OTHER';
+  status?: 'NEWASSIGNED' | 'ACCEPTED' | 'REJECTED' | 'INPROGRESS' | 'SUPPLEMENTREQUIRED' | 'SUBMITTED' | 'COMPLETED' | 'CANCELLED' | 'UNKNOWN';
+  acceptance?: 'PENDING' | 'ACCEPTED' | 'REJECTED'; search?: string; limit?: number;
+}
+/** Canonical query context. Rejected history cannot be filtered by current task facts. */
+export function crewListQuery(query: CrewListQuery = {}): CrewListQuery {
+  const q = { ...query, search: query.search?.trim() || undefined, limit: query.limit ?? 50 };
+  if (q.acceptance === 'REJECTED') { delete q.mode; delete q.status; delete q.statusGroup; }
+  if (!Number.isInteger(q.limit) || q.limit < 1 || q.limit > 100 || (q.search && (q.search.length > 100 || /[\x00-\x1f\x7f]/.test(q.search))) ||
+      (q.mode && !['NORMAL','CONDITIONAL_FT','MEASURE_ONLY'].includes(q.mode)) ||
+      (q.statusGroup && !['INCOMPLETE','COMPLETED','OTHER'].includes(q.statusGroup)) ||
+      (q.status && !['NEWASSIGNED','ACCEPTED','REJECTED','INPROGRESS','SUPPLEMENTREQUIRED','SUBMITTED','COMPLETED','CANCELLED','UNKNOWN'].includes(q.status)) ||
+      (q.acceptance && !['PENDING','ACCEPTED','REJECTED'].includes(q.acceptance))) throw Error('crew_list_query_invalid');
+  return q;
+}
+export function validateCrewAssignment(item: InspectionTaskResponseDto, actorId: string): void {
+  if (!isCrewResourceId(item.assignmentId)) throw Error('crew_assignment_invalid');
+  if (item.isHistory) {
+    if (item.assignmentStatus !== 'REJECTED' || item.acceptanceOutcome !== 'REJECTED' || item.version !== '' ||
+        item.mode != null || item.status != null || item.policyVersionId != null || item.dueAt != null || item.defectIds.length) throw Error('crew_history_invalid');
+    validateCrewTaskIdentity({ ...item, version: 'history-read-only' }, actorId);
+  } else {
+    validateCrewTaskIdentity(item, actorId);
+    if (item.assignmentStatus !== 'ACTIVE') throw Error('crew_assignment_inactive');
+  }
+}
+export function crewAssignmentCanOpen(task: CrewTask): boolean {
+  return !task.isHistory && task.assignmentStatus === 'ACTIVE' && isCrewResourceId(task.assignmentId) &&
+    isCrewResourceId(task.id) && isCrewResourceId(task.projectId) && !!task.version;
+}
+export function collectCrewAssignments(pages: Pick<InspectionTaskPageResponseDto, 'items'>[], actorId: string): CrewTask[] {
+  const items = new Map<string, CrewTask>();
+  for (const page of pages) for (const item of page.items) {
+    validateCrewAssignment(item, actorId);
+    const key = item.assignmentId!.toLowerCase();
+    if (!items.has(key)) items.set(key, crewTaskFromWire(item));
+  }
+  return [...items.values()];
+}
+export function crewInboxOptions(scope: string, detailContext?: { actorId: string; assertCurrent: () => void }, query: CrewListQuery = {}) {
+  const filters = crewListQuery(query);
   return {
-    queryKey: ['crew-inbox', scope], initialPageParam: null as string | null,
+    queryKey: ['crew-inbox', scope, filters], initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }: { pageParam: string | null; signal: AbortSignal }) => {
       detailContext?.assertCurrent();
-      const page = await listCrewInspectionTasksReal(pageParam, 50, signal);
+      signal.throwIfAborted();
+      const page = await listCrewInspectionTasksReal(pageParam, filters.limit, signal, filters);
       detailContext?.assertCurrent();
-      if (!detailContext) return page;
-      // API037 currently projects MEASURE_ONLY for every item. API080 is the
-      // authoritative assigned mode; keep these reads bounded and session scoped.
-      const items = [...page.items];
-      let next = 0;
-      await Promise.all(Array.from({ length: Math.min(4, items.length) }, async () => {
-        while (next < items.length) {
-          detailContext.assertCurrent();
-          signal.throwIfAborted();
-          const index = next++, item = items[index];
-          validateCrewTaskIdentity(item, detailContext.actorId);
-          const read = await getFieldInspectionTaskDetailReal(item.projectId, item.id, signal);
-          detailContext.assertCurrent();
-          signal.throwIfAborted();
-          validateCrewTaskDetail(read.data, read.etag, item.projectId, item.id, detailContext.actorId);
-          if (!read.data.mode || !read.data.status) throw Error('crew_task_response_invalid');
-          items[index] = { ...item, mode: read.data.mode, status: read.data.status, version: read.data.version!, fieldTaskRead: read };
-        }
-      }));
-      detailContext.assertCurrent();
-      return { ...page, items };
+      signal.throwIfAborted();
+      if (detailContext) for (const item of page.items) validateCrewAssignment(item, detailContext.actorId);
+      return page;
     },
     getNextPageParam: (page: InspectionTaskPageResponseDto, _pages: InspectionTaskPageResponseDto[], _last: string | null, cursors: (string | null)[]) =>
       page.nextCursor && !cursors.includes(page.nextCursor) ? page.nextCursor : undefined,
@@ -359,13 +389,16 @@ export interface InspectionTaskResponseDto {
   id: string;
   projectId: string;
   defectIds: string[];
-  mode: string;
+  mode: string | null;
   crewId: string;
   policyVersionId: string | null;
-  status: string;
+  status: string | null;
   version: string;
   createdAt?: string | null;
   updatedAt?: string | null;
+  taskCode?: string | null; dueAt?: string | null; assignmentId?: string | null;
+  assignmentStatus?: string | null; acceptanceOutcome?: string | null;
+  acceptedAt?: string | null; rejectedAt?: string | null; isHistory?: boolean;
   /** Local API080 read projection, never sent as a wire command or authority. */
   fieldTaskRead?: { data: FieldTaskViewFact; etag: string };
 }
@@ -803,8 +836,9 @@ export async function listCrewInspectionTasksReal(
   cursor?: string | null,
   limit: number = 50,
   signal?: AbortSignal,
+  query: CrewListQuery = {},
 ): Promise<InspectionTaskPageResponseDto> {
-  const params: Record<string, unknown> = { limit };
+  const params: Record<string, unknown> = { ...crewListQuery({ ...query, limit: query.limit ?? limit }) };
   if (cursor) {
     params.cursor = cursor;
   }

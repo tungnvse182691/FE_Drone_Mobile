@@ -3,7 +3,7 @@ const {screen}=require('./helpers/roadfe-screen.cjs');
 const flat=s=>Object.assign({},...[s].flat(Infinity).filter(Boolean));
 function setup(presentation,overrides={},inboxOverrides={}){
  const calls=[];
- const inbox={enabled:true,tasks:[{}],query:{isPending:false,isFetching:false,hasNextPage:true,data:{pages:[{asOf:'2026-11-20T07:02:00Z'}]},refetch:()=>calls.push('refresh'),fetchNextPage:()=>calls.push('more'),...overrides},...inboxOverrides};
+ const inbox={enabled:true,tasks:[{}],refresh:()=>calls.push('refresh'),query:{isPending:false,isFetching:false,hasNextPage:true,data:{pages:[{asOf:'2026-11-20T07:02:00Z'}]},refetch:()=>calls.push('refresh'),fetchNextPage:()=>calls.push('more'),...overrides},...inboxOverrides};
  const s=screen('app/(crew)/tasks.tsx',{exportName:'CrewInboxState',props:{inbox,...(presentation?{presentation}:{})},modules:{'../../src/components/crew/CrewHomeTaskPressable':{CrewHomeTaskPressable:'Pressable'},'@tanstack/react-query':{},...Object.fromEntries(['AppHeader','Card','Chip','EmptyState','FAB','Button'].map(n=>['../../src/components/'+n,{[n]:n}])),'../../src/components/crew/CrewMotion':{CrewPressable:'CrewPressable'}}});
  s.render();return {s,calls};
 }

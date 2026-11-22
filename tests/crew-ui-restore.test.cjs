@@ -71,7 +71,7 @@ test('Crew inbox renders loading, empty and HTTP failures with safe retry and cu
  const render=vm.runInNewContext(code+';CrewInboxState',{crewDateTime:pure('crewDateTime'),React:{createElement:(type,props,...children)=>({type,props,children})},Card:'Card',View:'View',Text:'Text',Button:'Button',Pressable:'Pressable',CrewPressable:'Pressable',styles:{},ActivityIndicator:'ActivityIndicator',MaterialIcons:'MaterialIcons',colors:{},spacing:{},radius:{full:9999},typography:{}});
  const walk=x=>!x?[]:Array.isArray(x)?x.flatMap(walk):typeof x==='object'?[x,...walk(x.children)]:[];
  for(const scenario of [{pending:true,expected:/Đang tải nhiệm vụ/},{expected:/Chưa có nhiệm vụ được giao/},{error:pure('crewReadError')({response:{status:403}}),expected:/không có quyền/},{error:pure('crewReadError')({response:{status:409}}),expected:/vừa thay đổi/}]){
-  let reads=0,more=0;const tree=render({inbox:{enabled:true,tasks:[],error:scenario.error,query:{isPending:!!scenario.pending,isFetching:false,hasNextPage:!scenario.error&&!scenario.pending,refetch:()=>reads++,fetchNextPage:()=>more++}}});
+  let reads=0,more=0;const tree=render({inbox:{enabled:true,tasks:[],refresh:()=>reads++,error:scenario.error,query:{isPending:!!scenario.pending,isFetching:false,hasNextPage:!scenario.error&&!scenario.pending,refetch:()=>reads++,fetchNextPage:()=>more++}}});
   assert.match(JSON.stringify(tree),scenario.expected);const nodes=walk(tree);nodes.find(n=>n.props?.accessibilityLabel==='Tải lại nhiệm vụ').props.onPress();assert.equal(reads,1);
   const next=nodes.find(n=>n.props?.title==='Tải thêm');if(scenario.error)assert.equal(next,undefined);else if(next){next.props.onPress();assert.equal(more,1);}
  }
