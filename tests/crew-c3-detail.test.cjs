@@ -113,3 +113,14 @@ for(const context of [null,{status:'Confirmed',finalDecision:null},{status:'Subm
  if(context?.attempt)assert.match(text,/PM đã chấp nhận hồ sơ/);
  assert.equal(f.mutations,0);f.s.unmount();
 });
+
+test('FE3 corrected submission and reopened context supersede old final intake without mutation',async()=>{
+ for(const context of [
+  {status:'Submitted',attempt:{attemptId:'attempt',effectiveSubmissionId:'new-submission',review:null}},
+  {status:'Assigned',attempt:null,finalDecision:null},
+ ]){
+  const f=repairOverview(context,[{key:'old',phase:'CONFIRMED',operation:'attempt',receipt:{data:{intakeReadiness:'READY'}}}],'closeout');
+  f.s.render();await f.s.flush();const text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
+  assert.doesNotMatch(text,/Đã nghiệm thu|PM đã chấp nhận hồ sơ/);assert.equal(f.mutations,0);f.s.unmount();
+ }
+});

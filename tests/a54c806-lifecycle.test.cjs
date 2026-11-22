@@ -87,3 +87,19 @@ test('submitted video panel paginates, omits telemetry note and drops data on bl
  assert.ok(ui.nodes().some(n=>n.props?.children?.includes('Chưa có tệp video trong bộ dữ liệu.')));
  ui.blur();ui.render();assert.ok(!ui.nodes().some(n=>n.props?.title==='Lần nộp 1'));ui.unmount();
 });
+
+test('FE3 panel opens exact assessment without playback and clears results on blur',async()=>{
+ const calls=[];
+ const ui=screen('src/components/drone/OperatorSubmittedVideos.tsx',{exportName:'SubmittedVideos',expose:'SubmittedVideos',props:{scope:'owner',taskId:'task',projectId:'project'},modules:{
+  'react-native':{Text:'Text',View:'View',StyleSheet:{create:s=>s},Platform:{OS:'android'},AppState:{addEventListener:()=>({remove(){}})}},
+  './VideoPreview':{VideoPreview:'VideoPreview'},'../Button':{Button:'Button'},'../Card':{Card:'Card'},
+  '../../api/droneDatasetWorkflow':{operatorDatasetScope:()=> 'owner'},'../../api/operatorVideoCache':{},
+  '../../api/operatorVideoReadback':{operatorVideoError:()=> 'SAFE ERROR',operatorProcessingText:()=> 'Đang chờ: 2 · Thất bại: 1',
+   listOperatorVideos:async()=>({items:[{id:'dataset',versionNo:2,assessmentId:'assessment',processingCounts:{QUEUED:2,FAILED:1}}],nextCursor:null}),
+   readOperatorAssessment:async(...a)=>{calls.push(a);return {id:'assessment',datasetId:'dataset',methodVersion:'method-real',items:[{segmentId:'segment',targetBand:'SURFACE',positionStatus:'PASS',qualityStatus:'FAIL',coverageStatus:'UNKNOWN',reason:'Need resurvey'}]};}},
+ }});
+ ui.render();ui.press('Xem video đã gửi');await ui.flush();ui.press('Xem đánh giá lần nộp 2');await ui.flush();
+ assert.deepEqual(calls,[['owner','task','project','dataset','assessment']]);const text=JSON.stringify(ui.nodes());
+ for(const value of ['Need resurvey','method-real','Thất bại: 1','UNKNOWN'])assert.ok(text.includes(value));
+ assert.ok(!text.includes('COMPLETED'));ui.blur();ui.render();assert.ok(!JSON.stringify(ui.nodes()).includes('Need resurvey'));ui.unmount();
+});

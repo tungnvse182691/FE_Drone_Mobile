@@ -324,6 +324,12 @@ export async function getOperatorDatasetCoverageReal(datasetId: string): Promise
  * API-038: GET /api/v1/me/survey-tasks
  * Lấy danh sách nhiệm vụ khảo sát gán cho DroneOperator đang đăng nhập.
  */
+export interface SurveyAssessmentView {
+  id: string; datasetId: string; methodVersion: string; reviewedBy: string; reviewedAt: string; version: string;
+  items: Array<{ routeVersionId: string; segmentSetId: string; segmentId: string; targetBand: string;
+    positionStatus: string; qualityStatus: string; coverageStatus: string; reason: string;
+    evidence: Array<{ fileId: string; fromMilliseconds?: number | null; toMilliseconds?: number | null }> }>;
+}
 export interface OperatorListQuery {
   statusGroup?: 'WAITING' | 'IN_PROGRESS' | 'SUBMITTED' | 'SUPPLEMENT_REQUIRED' | 'COMPLETED' | 'OTHER';
   status?: 'NEW_ASSIGNED' | 'REASSIGNED' | 'ACCEPTED' | 'IN_PROGRESS' | 'SUBMITTED' | 'SUPPLEMENT_REQUIRED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'POSTPONED' | 'UNKNOWN';

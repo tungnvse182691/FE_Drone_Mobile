@@ -33,3 +33,23 @@ for(const status of [401,403,404])test(`read preserves HTTP ${status} and messag
  await assert.rejects(h.api.listOperatorVideos('owner',id(1),id(2)),e=>e.response.status===status);
  assert.ok(h.api.operatorVideoError({response:{status}}).length>0);
 });
+
+test('assessment reads exact dataset/id, validates source and ETag, blocks session bounce',async()=>{
+ const assessment={id:id(9),datasetId:id(4),methodVersion:'v1',reviewedBy:id(8),reviewedAt:'2026-11-22T00:00:00Z',version:'a1',items:[{routeVersionId:id(10),segmentSetId:id(11),segmentId:id(12),targetBand:'SURFACE',positionStatus:'PASS',qualityStatus:'FAIL',coverageStatus:'UNKNOWN',reason:'Evidence',evidence:[{fileId:id(5)}]}]};
+ for(const scenario of ['valid','dataset','id','etag','bounce','source']){
+  const h=fixture();h.respond(async path=>{
+   if(!path.includes('/assessments/')){if(scenario==='source')h.dataset.projectId=id(99);return {data:h.dataset};}
+   if(scenario==='bounce')h.bounce();
+   return {data:{...assessment,...(scenario==='dataset'?{datasetId:id(99)}:scenario==='id'?{id:id(99)}:{})},headers:{etag:scenario==='etag'?'"wrong"':'"a1"'}};
+  });
+  if(scenario==='valid'){const a=await h.api.readOperatorAssessment('owner',id(1),id(2),id(4),id(9));assert.equal(a.items[0].qualityStatus,'FAIL');assert.equal(h.calls.at(-1),`/datasets/${id(4)}/assessments/${id(9)}`);}
+  else await assert.rejects(h.api.readOperatorAssessment('owner',id(1),id(2),id(4),id(9)));
+  assert.equal(h.listeners.size,0);
+ }
+});
+test('processing null, empty, simultaneous and unknown statuses remain distinct',()=>{
+ const h=fixture();assert.match(h.api.operatorProcessingText(null),/Chưa/);assert.match(h.api.operatorProcessingText({}),/Chưa có job/);
+ const text=h.api.operatorProcessingText({QUEUED:2,SUCCEEDED:1,FAILED:1,NEW_STATE:3});
+ for(const part of ['Đang chờ: 2','Thành công: 1','Thất bại: 1','NEW_STATE: 3'])assert.ok(text.includes(part));
+ assert.throws(()=>h.api.operatorProcessingText({FAILED:-1}));
+});

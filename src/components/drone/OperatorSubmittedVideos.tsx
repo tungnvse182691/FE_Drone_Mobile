@@ -7,7 +7,8 @@ import { VideoPreview } from './VideoPreview';
 import { requestVideoOrientation } from './videoOrientation';
 import { useAuthStore } from '../../store/auth';
 import { operatorDatasetScope } from '../../api/droneDatasetWorkflow';
-import { listOperatorVideos, operatorVideoError, readOperatorVideos, type OperatorDatasetPage, type OperatorVideoSource } from '../../api/operatorVideoReadback';
+import { listOperatorVideos, operatorVideoError, readOperatorVideos, readOperatorAssessment, operatorProcessingText, type OperatorDatasetPage, type OperatorVideoSource } from '../../api/operatorVideoReadback';
+import type { SurveyAssessmentView } from '../../api/droneApi';
 import { downloadOperatorVideo, type OperatorVideoLease } from '../../api/operatorVideoCache';
 import { Button } from '../Button';
 import { Card } from '../Card';
@@ -22,6 +23,7 @@ export function OperatorSubmittedVideos({ taskId, projectId }: { taskId: string;
 function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: string; projectId: string }) {
   const [page, setPage] = useState<OperatorDatasetPage | null>(null), [error, setError] = useState('');
   const [selected, setSelected] = useState<{ id: string; videos: OperatorVideoSource[]; telemetryStatus: string } | null>(null);
+  const [assessment, setAssessment] = useState<SurveyAssessmentView | null>(null);
   const [preview, setPreview] = useState<OperatorVideoLease | null>(null), [progress, setProgress] = useState(0), [busy, setBusy] = useState(false);
   const [previewLabel, setPreviewLabel] = useState('');
   const [immersive, setImmersive] = useState(false);
@@ -55,7 +57,7 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
   };
   useFocusEffect(useCallback(() => {
     alive.current = !sessionInvalid.current;
-    const invalidate = () => { serial.current++; stopPreview(); setPage(null); setSelected(null); setBusy(false); };
+    const invalidate = () => { serial.current++; stopPreview(); setPage(null); setSelected(null); setAssessment(null); setBusy(false); };
     const unsubscribe = useAuthStore.subscribe(() => { if (operatorDatasetScope() !== scope) { sessionInvalid.current = true; alive.current = false; invalidate(); } });
     const app = AppState.addEventListener('change', state => { if (state !== 'active') { alive.current = false; invalidate(); } else { alive.current = !sessionInvalid.current; } });
     return () => { alive.current = false; invalidate(); unsubscribe(); app.remove(); };
@@ -66,18 +68,23 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     const generation = ++serial.current;
     const current = () => active() && serial.current === generation;
     try { await operation(current); }
-    catch (e) { if (current()) { stopPreview(); setPage(null); setSelected(null); setError(operatorVideoError(e)); } }
+    catch (e) { if (current()) { stopPreview(); setPage(null); setSelected(null); setAssessment(null); setError(operatorVideoError(e)); } }
     finally { lock.current = false; if (current()) setBusy(false); }
   };
   const load = (more = false) => run(async current => {
-    stopPreview(); setSelected(null);
+    stopPreview(); setSelected(null); setAssessment(null);
     const next = await listOperatorVideos(scope, taskId, projectId, more ? page?.nextCursor : undefined);
     if (current()) setPage(old => ({ items: more && old ? [...old.items, ...next.items.filter(row => !old.items.some(prior => prior.id === row.id))] : next.items, nextCursor: next.nextCursor }));
   });
   const select = (id: string) => run(async current => {
-    stopPreview(); setSelected(null);
+    stopPreview(); setSelected(null); setAssessment(null);
     const detail = await readOperatorVideos(scope, taskId, projectId, id);
     if (current()) setSelected({ id, videos: detail.videos, telemetryStatus: detail.dataset.telemetryStatus });
+  });
+  const inspectAssessment = (datasetId: string, assessmentId: string) => run(async current => {
+    setAssessment(null);
+    const result = await readOperatorAssessment(scope, taskId, projectId, datasetId, assessmentId);
+    if (current()) setAssessment(result);
   });
   const play = (fileId: string) => run(async current => {
     if (!selected || Platform.OS === 'web') { setError('Chức năng phát video hiện dành cho ứng dụng Android/iPhone.'); return; }
@@ -101,7 +108,7 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     const timer = setInterval(() => {
       if (reading) return; reading = true;
       void readOperatorVideos(scope, taskId, projectId, selected.id).catch(e => {
-        if (!stopped && active()) { stopPreview(); setSelected(null); setPage(null); setError(operatorVideoError(e)); }
+        if (!stopped && active()) { stopPreview(); setSelected(null); setPage(null); setAssessment(null); setError(operatorVideoError(e)); }
       }).finally(() => { reading = false; });
     }, 30000);
     return () => { stopped = true; clearInterval(timer); };
@@ -112,7 +119,20 @@ function SubmittedVideos({ scope, taskId, projectId }: { scope: string; taskId: 
     </View>
     {error ? <Text accessibilityRole="alert" style={typography.bodyMd}>{error}</Text> : null}
     {page?.items.length === 0 ? <Text style={typography.bodyMd}>Nhiệm vụ chưa có bộ dữ liệu đã nộp.</Text> : null}
-    {page?.items.map((row, index) => <Button key={row.id} style={[styles.submission, selected?.id === row.id && styles.selectedSubmission]} icon={<MaterialIcons name={selected?.id === row.id ? "check-circle-outline" : "chevron-right"} size={22} color={colors.secondary}/>} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />)}
+    {page?.items.map((row, index) => <View key={row.id} style={styles.fileList}>
+      <Button style={[styles.submission, selected?.id === row.id && styles.selectedSubmission]} icon={<MaterialIcons name={selected?.id === row.id ? "check-circle-outline" : "chevron-right"} size={22} color={colors.secondary}/>} variant="secondary" title={`Lần nộp ${row.versionNo ?? index + 1}${row.submittedAt ? ` · ${new Date(row.submittedAt).toLocaleDateString('vi-VN')}` : ''}`} onPress={() => void select(row.id)} disabled={busy} />
+      <Text style={typography.bodyMd}>Xử lý: {row.processingCounts === undefined ? 'Chưa được cung cấp trạng thái xử lý.' : operatorProcessingText(row.processingCounts)}</Text>
+      {row.assessmentId ? <Button variant="secondary" title={`Xem đánh giá lần nộp ${row.versionNo ?? index + 1}`} disabled={busy} onPress={() => void inspectAssessment(row.id, row.assessmentId!)} /> : null}
+    </View>)}
+    {assessment ? <View style={styles.fileList}>
+      <Text style={typography.labelLg}>Đánh giá bộ dữ liệu · {assessment.methodVersion}</Text>
+      <Text selectable style={typography.caption}>{assessment.id}</Text>
+      {assessment.items.length === 0 ? <Text>Chưa có hạng mục đánh giá.</Text> : assessment.items.map((item, index) => <View key={index} style={styles.fileList}>
+        <Text selectable style={typography.bodyMd}>Phân đoạn: {item.segmentId} · {item.targetBand}</Text>
+        <Text style={typography.bodyMd}>Vị trí: {item.positionStatus} · Chất lượng: {item.qualityStatus} · Phủ: {item.coverageStatus}</Text>
+        <Text style={typography.bodyMd}>{item.reason}</Text>
+      </View>)}
+    </View> : null}
     {page?.nextCursor ? <Button variant="secondary" title="Xem thêm lần nộp" disabled={busy} onPress={() => void load(true)} /> : null}
     {selected ? <View style={styles.fileList}>
       {selected.videos.length === 0 ? <Text>Chưa có tệp video trong bộ dữ liệu.</Text> : selected.videos.map((file, index) => <Button key={file.fileId} style={styles.videoAction} icon={<MaterialIcons name="play-circle-outline" size={24} color={colors.neutral}/>} variant="secondary" title={`Mở video ${index + 1} · ${(file.sizeBytes / 1024 ** 2).toFixed(1)} MB`} onPress={() => void play(file.fileId)} disabled={busy} />)}

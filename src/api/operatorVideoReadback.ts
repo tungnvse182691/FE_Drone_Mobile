@@ -1,9 +1,9 @@
 import { apiClient } from './client';
 import { useAuthStore } from '../store/auth';
 import { isDroneResourceId, operatorDatasetScope } from './droneDatasetWorkflow';
-import { getOperatorSurveyTaskDetailReal, type DatasetDetailViewDto } from './droneApi';
+import { getOperatorSurveyTaskDetailReal, type DatasetDetailViewDto, type SurveyAssessmentView } from './droneApi';
 
-export type OperatorDatasetRow = { id: string; surveyTaskId: string; versionNo: number; submittedAt: string | null; integrityStatus: string; version: string };
+export type OperatorDatasetRow = { id: string; surveyTaskId: string; versionNo: number; submittedAt: string | null; integrityStatus: string; version: string; assessmentId?: string | null; processingCounts?: Record<string, number> | null };
 export type OperatorDatasetPage = { items: OperatorDatasetRow[]; nextCursor: string | null };
 export type OperatorVideoSource = DatasetDetailViewDto['sourceFiles'][number];
 
@@ -34,7 +34,37 @@ export async function listOperatorVideos(scope: string, taskId: string, projectI
     if (!page || !Array.isArray(page.items) || page.items.length > 25 || page.items.some(row => !row || !isDroneResourceId(row.id) || row.surveyTaskId !== taskId || !row.version) ||
         !(page.nextCursor === null || typeof page.nextCursor === 'string' && page.nextCursor.length > 0 && page.nextCursor.length <= 4096)) throw Error('operator_video_page_invalid');
     await readTask(taskId, projectId, guard.check);
+    for (const row of page.items) {
+      if (row.assessmentId != null && !isDroneResourceId(row.assessmentId)) throw Error('operator_assessment_id_invalid');
+      operatorProcessingText(row.processingCounts);
+    }
     return page;
+  } finally { guard.close(); }
+}
+/** Processing is independent of upload integrity, assessment and task completion. */
+export function operatorProcessingText(counts: Record<string, number> | null | undefined): string {
+  if (counts == null) return 'Chưa được cung cấp trạng thái xử lý.';
+  if (typeof counts !== 'object' || Array.isArray(counts) || Object.values(counts).some(n => !Number.isSafeInteger(n) || n < 0)) throw Error('operator_processing_invalid');
+  const labels: Record<string, string> = { QUEUED: 'Đang chờ', RUNNING: 'Đang xử lý', SUCCEEDED: 'Thành công', FAILED: 'Thất bại', CANCELLED: 'Đã hủy', UNKNOWN: 'Chưa xác định' };
+  return Object.entries(counts).map(([status, count]) => `${labels[status] ?? `Trạng thái khác ${status}`}: ${count}`).join(' · ') || 'Chưa có job xử lý.';
+}
+export async function readOperatorAssessment(scope: string, taskId: string, projectId: string, datasetId: string, assessmentId: string): Promise<SurveyAssessmentView> {
+  const guard = operatorVideoGuard(scope);
+  try {
+    if (!isDroneResourceId(assessmentId)) throw Error('operator_assessment_id_invalid');
+    await readOperatorVideos(scope, taskId, projectId, datasetId); guard.check();
+    const response = await apiClient.get<SurveyAssessmentView>(`/datasets/${encodeURIComponent(datasetId)}/assessments/${encodeURIComponent(assessmentId)}`);
+    guard.check();
+    const a = response.data;
+    const time = (value: number | null | undefined) => value == null || Number.isSafeInteger(value) && value >= 0;
+    if (!a || a.id !== assessmentId || a.datasetId !== datasetId || !a.version || response.headers?.etag !== `"${a.version}"` ||
+        !a.methodVersion || !isDroneResourceId(a.reviewedBy) || !Number.isFinite(Date.parse(a.reviewedAt)) || !Array.isArray(a.items) ||
+        a.items.some(i => !i || ![i.routeVersionId,i.segmentSetId,i.segmentId].every(isDroneResourceId) ||
+          ![i.targetBand,i.positionStatus,i.qualityStatus,i.coverageStatus].every(v => typeof v === 'string' && !!v) || typeof i.reason !== 'string' ||
+          !Array.isArray(i.evidence) || i.evidence.some(e => !e || !isDroneResourceId(e.fileId) || !time(e.fromMilliseconds) || !time(e.toMilliseconds) ||
+            e.fromMilliseconds != null && e.toMilliseconds != null && e.fromMilliseconds > e.toMilliseconds))) throw Error('operator_assessment_source_invalid');
+    await readTask(taskId, projectId, guard.check);
+    return a;
   } finally { guard.close(); }
 }
 export async function readOperatorVideos(scope: string, taskId: string, projectId: string, datasetId: string) {
