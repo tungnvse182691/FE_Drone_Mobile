@@ -1,7 +1,7 @@
 import { useOperatorTaskPages } from '../../src/hooks/useOperatorTaskPages';
 import { Button } from '../../src/components/Button';
-import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -25,22 +25,16 @@ const FILTER_ICON: Record<TabKey | 'all', { name: React.ComponentProps<typeof Ma
   other: { name: 'help-outline', color: colors.secondary },
 };
 
-function classifyTab(status: string): TabKey {
-  const s = status?.toUpperCase();
-  if (s === 'NEW_ASSIGNED' || s === 'NEWASSIGNED' || s === 'REASSIGNED') return 'pending';
-  if (s === 'ACCEPTED' || s === 'IN_PROGRESS' || s === 'INPROGRESS') return 'ongoing';
-  if (s === 'SUBMITTED') return 'submitted';
-  if (s === 'SUPPLEMENT_REQUIRED' || s === 'SUPPLEMENTREQUIRED') return 'supplement';
-  if (s === 'COMPLETED') return 'completed';
-  return 'other';
-}
+const STATUS_GROUP = { all: undefined, pending: 'WAITING', ongoing: 'IN_PROGRESS', submitted: 'SUBMITTED', supplement: 'SUPPLEMENT_REQUIRED', completed: 'COMPLETED', other: 'OTHER' } as const;
 
 export default function DroneRequestsScreen() {
   const [activeTab, setActiveTab] = useState<TabKey | 'all'>('all');
   const [filterOpen, setFilterOpen] = useState(false);
-  const pages = useOperatorTaskPages();
+  const [search, setSearch] = useState(''), [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
+  const pages = useOperatorTaskPages({ statusGroup: STATUS_GROUP[activeTab], search: debouncedSearch });
   const { loading, error } = pages;
-  const tasks = pages.tasks.map(dto => ({ ...dto, tab: classifyTab(dto.status) }));
+  const tasks = search.trim() === debouncedSearch ? pages.tasks : [];
   const fetchTasks = pages.refresh;
   if (!pages.ready) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
 
@@ -53,14 +47,10 @@ export default function DroneRequestsScreen() {
     { key: 'other', label: 'Trạng thái khác' },
   ];
 
-  const availableFilters = filters.map(filter => ({ ...filter, count: tasks.filter(t => t.tab === filter.key).length }))
-    .filter(filter => filter.count > 0);
-  // A refresh or account switch can remove the selected state. Keep remaining tasks visible.
-  const selectedFilter = availableFilters.find(filter => filter.key === activeTab);
-  const selectedKey = selectedFilter?.key ?? 'all';
-  const selectedLabel = selectedFilter?.label ?? 'Tất cả trạng thái';
-  const filteredRequests = selectedKey === 'all' ? tasks : tasks.filter(item => item.tab === selectedKey);
-  const options = [{ key: 'all' as const, label: 'Tất cả trạng thái', count: tasks.length }, ...availableFilters];
+  const selectedKey = activeTab;
+  const selectedLabel = filters.find(filter => filter.key === activeTab)?.label ?? 'Tất cả trạng thái';
+  const filteredRequests = tasks;
+  const options = [{ key: 'all' as const, label: 'Tất cả trạng thái' }, ...filters];
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ khảo sát" variant="operatorCompact" />}>
@@ -85,19 +75,21 @@ export default function DroneRequestsScreen() {
       </View>
       {filterOpen ? <View style={styles.filterMenu} accessibilityRole="radiogroup">
         {options.map(option => <AnimatedPressable key={option.key} pressedScale={0.995} android_ripple={{ color: operatorAppearance.pressed }} accessibilityRole="radio"
-          accessibilityLabel={`${option.label} (${option.count})`}
+          accessibilityLabel={option.label}
           accessibilityState={{ checked: selectedKey === option.key }}
           style={[styles.filterOption, selectedKey === option.key && styles.filterOptionSelected]}
           onPress={() => { setActiveTab(option.key); setFilterOpen(false); }}>
           <MaterialIcons name={FILTER_ICON[option.key].name} size={20} color={FILTER_ICON[option.key].color} />
           <Text style={[styles.optionLabel, selectedKey === option.key && styles.optionLabelSelected]}>{option.label}</Text>
-          <Text style={styles.optionCount}>{option.count}</Text>
           <MaterialIcons name={selectedKey === option.key ? 'radio-button-checked' : 'radio-button-unchecked'}
             size={20} color={selectedKey === option.key ? colors.primary : colors.secondary} />
         </AnimatedPressable>)}
       </View> : null}
+      <TextInput value={search} onChangeText={setSearch} maxLength={100} autoCapitalize="none"
+        accessibilityLabel="Tìm tên dự án hoặc ID nhiệm vụ" placeholder="Tên dự án hoặc ID nhiệm vụ" placeholderTextColor={colors.secondary}
+        style={[typography.bodyMd, { minHeight: 48, color: colors.neutral, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, paddingHorizontal: 12 }]} />
       <Text style={[typography.caption, styles.resultSummary]}>
-        {selectedKey === 'all' ? `${tasks.length} nhiệm vụ đã tải` : `${filteredRequests.length} trong ${tasks.length} nhiệm vụ đã tải`}
+        {`${tasks.length} nhiệm vụ đã tải trong bộ lọc này`}
       </Text>
       </View>
 
@@ -122,7 +114,7 @@ export default function DroneRequestsScreen() {
               ? 'Hiện tại không có nhiệm vụ mới đang chờ tiếp nhận.'
               : selectedKey === 'ongoing'
                 ? 'Không có nhiệm vụ nào đang trong quá trình thực hiện.'
-                : 'Không có nhiệm vụ thuộc trạng thái này trong các trang đã tải.'
+                : 'Không có nhiệm vụ khớp bộ lọc và tìm kiếm hiện tại.'
           }
           actionLabel="Tải lại"
           onAction={() => void fetchTasks()}
@@ -133,7 +125,7 @@ export default function DroneRequestsScreen() {
             onPress={() => router.push({ pathname: '/(drone)/request-detail', params: { taskId: item.id, code: operatorTaskDisplayCode(item.id) } })} />)}
         </View>
       )}
-      {pages.nextCursor ? <Button style={styles.loadMore} icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />} title={error ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={loading} loading={loading} onPress={() => void pages.loadMore()} /> : !loading && !error ? <Text style={[typography.caption, styles.endOfList]}>Đã tải hết danh sách nhiệm vụ.</Text> : null}
+      {search.trim() === debouncedSearch && pages.nextCursor ? <Button style={styles.loadMore} icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />} title={error ? 'Thử lại tải thêm' : 'Tải thêm nhiệm vụ'} variant="secondary" disabled={loading} loading={loading} onPress={() => void pages.loadMore()} /> : !loading && !error ? <Text style={[typography.caption, styles.endOfList]}>Đã tải hết danh sách nhiệm vụ.</Text> : null}
     </SafeAreaScreen>
   );
 }

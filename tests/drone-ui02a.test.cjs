@@ -7,10 +7,11 @@ const fixture = status => ({ ...task, status, version: 'AAAAAAAAAAE=', scope: [{
 const apiFor = t => ({ getOperatorSurveyTaskDetailReal: async () => ({ data: t, etag: `"${t.version}"` }), getOperatorWorkPackageReal: async () => ({ data: { task: t, geometryRefs: [] } }) });
 const routeSpy = routes => ({ 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: route => routes.push(route) } }) });
 
-test('Requests compact selector preserves every loaded state across pages without empty filter clutter', async () => {
+test('Requests selector queries server and retains all filter choices including empty results', async () => {
   const states = ['NEW_ASSIGNED', 'Reassigned', 'ACCEPTED', 'InProgress', 'SUBMITTED', 'Submitted', 'SUPPLEMENT_REQUIRED', 'SupplementRequired', 'COMPLETED', 'UnknownFuture'];
   const items = states.map((status, i) => ({ ...fixture(status), id: id(20 + i) }));
-  const s = drone('requests', { listOperatorSurveyTasksReal: async cursor => cursor ? { items: items.slice(5), nextCursor: null } : { items: items.slice(0, 5), nextCursor: 'next' } });
+  const groups={WAITING:[0,1],IN_PROGRESS:[2,3],SUBMITTED:[4,5],SUPPLEMENT_REQUIRED:[6,7],COMPLETED:[8],OTHER:[9]};
+  const s = drone('requests', { listOperatorSurveyTasksReal: async (cursor,_limit,q={}) => q.statusGroup ? {items:groups[q.statusGroup].map(i=>items[i]),nextCursor:null} : cursor ? { items: items.slice(5), nextCursor: null } : { items: items.slice(0, 5), nextCursor: 'next' } });
   s.render(); await s.flush();
   const tap = async label => {
     const button = s.nodes().find(n => ['Pressable', 'AnimatedPressable'].includes(n.type) && n.props.accessibilityLabel === label);
@@ -19,12 +20,11 @@ test('Requests compact selector preserves every loaded state across pages withou
   assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 5, 'default shows every task');
   assert.ok(!s.nodes().some(n => n.props.accessibilityRole === 'radio'), 'options start collapsed');
   await tap('Lọc trạng thái: Tất cả trạng thái');
-  assert.ok(!s.nodes().some(n => n.props.accessibilityLabel === 'Cần bổ sung (0)'));
-  await tap('Đã nộp (1)');
-  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 1);
+  assert.ok(s.nodes().some(n => n.props.accessibilityLabel === 'Cần bổ sung'));
+  await tap('Đã nộp');
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 2);
   assert.ok(!s.nodes().some(n => n.props.accessibilityRole === 'radio'), 'selection closes options');
-  s.press('Tải thêm nhiệm vụ'); await s.flush();
-  for (const [label, indexes] of [['Chờ nhận (2)', [0,1]], ['Đang thực hiện (2)',[2,3]], ['Đã nộp (2)',[4,5]], ['Cần bổ sung (2)',[6,7]], ['Hoàn tất (1)',[8]], ['Trạng thái khác (1)',[9]], ['Tất cả trạng thái (10)',states.map((_,i)=>i)]]) {
+  for (const [label, indexes] of [['Chờ nhận', [0,1]], ['Đang thực hiện',[2,3]], ['Đã nộp',[4,5]], ['Cần bổ sung',[6,7]], ['Hoàn tất',[8]], ['Trạng thái khác',[9]], ['Tất cả trạng thái',[0,1,2,3,4]]]) {
     const toggle = s.nodes().find(n => n.props.accessibilityLabel?.startsWith('Lọc trạng thái:'));
     toggle.props.onPress(); await s.flush();
     await tap(label);
@@ -48,16 +48,15 @@ test('Requests card uses one server status and no overlapping current-task badge
   s.unmount();
 });
 
-test('Requests refresh cannot strand selection when selected state disappears', async () => {
+test('Requests refresh retains selected server filter when result becomes empty', async () => {
   let current = [fixture('SUBMITTED')];
-  const s = drone('requests', { listOperatorSurveyTasksReal: async () => ({ items: current, nextCursor: null }) });
+  const s = drone('requests', { listOperatorSurveyTasksReal: async (_c,_l,q={}) => ({ items: q.statusGroup ? current.filter(t=>t.status===q.statusGroup) : current, nextCursor: null }) });
   s.render(); await s.flush();
   const tap = async label => { s.nodes().find(n => n.props.accessibilityLabel === label).props.onPress(); await s.flush(); };
-  await tap('Lọc trạng thái: Tất cả trạng thái'); await tap('Đã nộp (1)');
+  await tap('Lọc trạng thái: Tất cả trạng thái'); await tap('Đã nộp');
   current = [fixture('SUPPLEMENT_REQUIRED')]; await tap('Làm mới nhiệm vụ');
-  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 1);
-  assert.ok(s.nodes().some(n => n.props.accessibilityLabel === 'Lọc trạng thái: Tất cả trạng thái'));
-  assert.equal(s.nodes().find(n => n.type === 'OperatorTaskRow').props.task.status, 'SUPPLEMENT_REQUIRED'); s.unmount();
+  assert.equal(s.nodes().filter(n => n.type === 'OperatorTaskRow').length, 0);
+  assert.ok(s.nodes().some(n => n.props.accessibilityLabel === 'Lọc trạng thái: Đã nộp'));s.unmount();
 });
 
 for (const status of ['SUBMITTED', 'SUPPLEMENT_REQUIRED', 'COMPLETED', 'ACCEPTED', 'UNKNOWN']) test(`UI02A Detail ${status} has read-only path without decline invitation`, async () => {

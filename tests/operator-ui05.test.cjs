@@ -20,11 +20,11 @@ test('UI05 Home compact summary counts loaded statuses, removes email and duplic
 });
 test('UI05 Requests keeps loaded rows while refreshing and reports an honest filtered count',async()=>{
  const d=deferred();let calls=0;const routes=[];
- const s=drone('requests',{listOperatorSurveyTasksReal:()=>++calls===1?Promise.resolve({items:[fixture('Submitted'),fixture('Accepted',3)],nextCursor:'more'}):d.promise},
+ const s=drone('requests',{listOperatorSurveyTasksReal:(_c,_l,q={})=>++calls<=2?Promise.resolve({items:q.statusGroup?[fixture('SUBMITTED')]:[fixture('Submitted'),fixture('Accepted',3)],nextCursor:'more'}):d.promise},
  {moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],router:{push:r=>routes.push(r)}})}});
  s.render();await s.flush();assert.match(text(s),/2 nhiệm vụ đã tải/);assert.doesNotMatch(text(s),/Trong 2/);
- await tap(s,'Lọc trạng thái: Tất cả trạng thái');await tap(s,'Đã nộp (1)');
- assert.match(text(s),/1 trong 2 nhiệm vụ đã tải/);assert.equal(rows(s).length,1);
+ await tap(s,'Lọc trạng thái: Tất cả trạng thái');await tap(s,'Đã nộp');
+ assert.match(text(s),/1 nhiệm vụ đã tải trong bộ lọc này/);assert.equal(rows(s).length,1);
  rows(s)[0].props.onPress();assert.equal(routes[0].params.taskId,id(2));
  await tap(s,'Làm mới nhiệm vụ');assert.equal(rows(s).length,1);
  assert.ok(s.nodes().some(n=>n.type==='ActivityIndicator'&&n.props.accessibilityLabel==='Đang tải nhiệm vụ'));

@@ -57,6 +57,9 @@ export interface SurveyTaskV2ResponseDto {
   status: string;
   version: string;
   supplementTaskId?: string | null;
+  projectName?: string | null;
+  dueAt?: string | null;
+  parentTaskId?: string | null;
 }
 
 export interface SurveyTaskPageV2ResponseDto {
@@ -321,13 +324,26 @@ export async function getOperatorDatasetCoverageReal(datasetId: string): Promise
  * API-038: GET /api/v1/me/survey-tasks
  * Lấy danh sách nhiệm vụ khảo sát gán cho DroneOperator đang đăng nhập.
  */
+export interface OperatorListQuery {
+  statusGroup?: 'WAITING' | 'IN_PROGRESS' | 'SUBMITTED' | 'SUPPLEMENT_REQUIRED' | 'COMPLETED' | 'OTHER';
+  status?: 'NEW_ASSIGNED' | 'REASSIGNED' | 'ACCEPTED' | 'IN_PROGRESS' | 'SUBMITTED' | 'SUPPLEMENT_REQUIRED' | 'COMPLETED' | 'REJECTED' | 'CANCELLED' | 'POSTPONED' | 'UNKNOWN';
+  search?: string;
+  limit?: number;
+}
 export async function listOperatorSurveyTasksReal(
   cursor?: string | null,
   limit = 50,
+  query: OperatorListQuery = {},
 ): Promise<SurveyTaskPageV2ResponseDto> {
-  const params: Record<string, string | number> = { limit: Math.min(100, Math.max(1, limit)) };
+  const size = query.limit ?? limit, search = query.search?.trim();
+  if (!Number.isInteger(size) || size < 1 || size > 100 || (search && (search.length > 100 || /[\x00-\x1f\x7f]/.test(search))) ||
+      (query.statusGroup && !['WAITING','IN_PROGRESS','SUBMITTED','SUPPLEMENT_REQUIRED','COMPLETED','OTHER'].includes(query.statusGroup)) ||
+      (query.status && !['NEW_ASSIGNED','REASSIGNED','ACCEPTED','IN_PROGRESS','SUBMITTED','SUPPLEMENT_REQUIRED','COMPLETED','REJECTED','CANCELLED','POSTPONED','UNKNOWN'].includes(query.status))) throw Error('operator_list_query_invalid');
+  const params: Record<string, string | number> = { limit: size };
+  if (query.statusGroup) params.statusGroup = query.statusGroup;
+  if (query.status) params.status = query.status;
+  if (search) params.search = search;
   if (cursor) params.cursor = cursor;
-
   const res = await apiClient.get<SurveyTaskPageV2ResponseDto>('/me/survey-tasks', { params });
   return res.data;
 }
