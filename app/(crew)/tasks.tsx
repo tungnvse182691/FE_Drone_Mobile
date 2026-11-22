@@ -193,6 +193,8 @@ export default function CrewTasksScreen() {
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
   const [acceptance, setAcceptance] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'REJECTED'>('ALL');
+  const [expandedFilter, setExpandedFilter] = useState<'acceptance' | 'mode' | null>(null);
+  const [showData, setShowData] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
@@ -211,19 +213,18 @@ export default function CrewTasksScreen() {
   return (
     <View style={styles.screen}>
       <SafeAreaScreen scroll header={<AppHeader subtitle="Công việc" />}>
-        <CrewInboxState inbox={inbox} presentation="tasks" />
         {acceptance !== 'REJECTED' ? <View style={styles.segments}>
           {segments.map((s) => {
             const active = s.key === segment;
             return (
               <CrewPressable
                 key={s.key}
-                style={[styles.segment, active && styles.segmentActive]}
+                style={[styles.segment, active && styles.tabActive]}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active }}
                 onPress={() => setSegment(s.key)}
               >
-                <Text style={[typography.labelLg, active ? styles.segmentLabelActive : styles.segmentLabel]}>
+                <Text style={[typography.labelLg, styles.tabLabel, active && styles.tabLabelActive]}>
                   {s.label}
                 </Text>
               </CrewPressable>
@@ -231,18 +232,41 @@ export default function CrewTasksScreen() {
           })}
         </View> : null}
 
+        <View style={styles.searchField}>
+        <MaterialIcons name="search" size={22} color={colors.secondary} />
         <TextInput value={search} onChangeText={setSearch} maxLength={100} autoCapitalize="none"
           accessibilityLabel="Tìm theo mã nhiệm vụ" placeholder="Tìm mã nhiệm vụ" placeholderTextColor={colors.secondary}
-          style={{ ...typography.bodyMd, minHeight: 48, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: spacing.md, marginBottom: spacing.sm, color: colors.neutral }} />
-        <View style={styles.modeFilters}>
+          style={[typography.bodyMd, styles.searchInput]} />
+        </View>
+        <CrewPressable accessibilityRole="button" accessibilityLabel="Bộ lọc tiếp nhận"
+          accessibilityState={{ expanded: expandedFilter === 'acceptance' }}
+          onPress={() => setExpandedFilter(value => value === 'acceptance' ? null : 'acceptance')}
+          style={styles.filterSelector}>
+          <View style={styles.selectorText}>
+            <Text style={[typography.caption, styles.filterLabel]}>Tiếp nhận</Text>
+            <Text style={[typography.titleMd, styles.filterValue]}>{({ ALL: 'Tất cả tiếp nhận', PENDING: 'Chờ tiếp nhận', ACCEPTED: 'Đã nhận', REJECTED: 'Đã từ chối' })[acceptance]}</Text>
+          </View>
+          <MaterialIcons name={expandedFilter === 'acceptance' ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} />
+        </CrewPressable>
+        {expandedFilter === 'acceptance' ? <View style={styles.modeFilters}>
           {(['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'] as const).map(value => <CrewPressable key={value}
             style={[styles.modeFilter, acceptance === value && styles.segmentActive]} accessibilityRole="button"
-            accessibilityState={{ selected: acceptance === value }} onPress={() => setAcceptance(value)}>
+            accessibilityState={{ selected: acceptance === value }} onPress={() => { setAcceptance(value); setExpandedFilter(null); }}>
             <Text style={[typography.labelLg, acceptance === value ? styles.segmentLabelActive : styles.segmentLabel]}>{({ ALL: 'Tất cả tiếp nhận', PENDING: 'Chờ tiếp nhận', ACCEPTED: 'Đã nhận', REJECTED: 'Đã từ chối' })[value]}</Text>
           </CrewPressable>)}
-        </View>
-        <Text style={[typography.caption, { marginBottom: spacing.sm }]}>Đã tải {list.length} phân công trong bộ lọc này</Text>
-        {acceptance !== 'REJECTED' ? <View style={styles.modeFilters}>
+        </View> : null}
+        {acceptance !== 'REJECTED' ? <>
+        <CrewPressable accessibilityRole="button" accessibilityLabel="Bộ lọc loại công việc"
+          accessibilityState={{ expanded: expandedFilter === 'mode' }}
+          onPress={() => setExpandedFilter(value => value === 'mode' ? null : 'mode')}
+          style={styles.filterSelector}>
+          <View style={styles.selectorText}>
+            <Text style={[typography.caption, styles.filterLabel]}>Loại công việc</Text>
+            <Text style={[typography.titleMd, styles.filterValue]}>{TASK_MODE_FILTERS.find(filter => filter.key === modeFilter)?.label}</Text>
+          </View>
+          <MaterialIcons name={expandedFilter === 'mode' ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} />
+        </CrewPressable>
+        {expandedFilter === 'mode' ? <View style={styles.modeFilters}>
             {TASK_MODE_FILTERS.map((filter) => {
               const active = filter.key === modeFilter;
               const tone = crewHomeModeTone(filter.key);
@@ -252,7 +276,7 @@ export default function CrewTasksScreen() {
                   style={[styles.modeFilter, active && { backgroundColor: tone.background, borderColor: tone.border }]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  onPress={() => setModeFilter(filter.key)}
+                  onPress={() => { setModeFilter(filter.key); setExpandedFilter(null); }}
                 >
                   <Text
                     style={[
@@ -266,6 +290,32 @@ export default function CrewTasksScreen() {
               );
             })}
         </View> : null}
+        </> : null}
+
+        <View style={styles.listHeading}>
+          <Text style={[typography.titleLg, styles.listTitle]}>Nhiệm vụ</Text>
+          <View style={styles.listActions}>
+            <CrewPressable accessibilityRole="button" accessibilityLabel="Dữ liệu danh sách nhiệm vụ"
+              accessibilityState={{ expanded: showData }} onPress={() => setShowData(value => !value)} style={styles.dataToggle}>
+              <Text style={[typography.bodyMd, styles.dataToggleText]}>Dữ liệu</Text>
+              <MaterialIcons name={showData ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
+            </CrewPressable>
+            <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
+              accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
+              disabled={!inbox.enabled || inbox.query.isFetching} style={styles.listRefresh}
+              onPress={() => { void inbox.refresh(); }}>
+              {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
+            </CrewPressable>
+          </View>
+        </View>
+        {showData ? <View style={styles.dataDetails}>
+          <Text style={[typography.bodyMd, styles.dataText]}>Đã tải {list.length} phân công trong bộ lọc này</Text>
+          <Text style={[typography.caption, styles.dataText]}>Thống kê trong các nhiệm vụ đã tải.</Text>
+          {inbox.query.data?.pages[0]?.asOf ? <Text style={[typography.caption, styles.dataText]}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text> : null}
+        </View> : null}
+        {inbox.query.isPending && inbox.enabled ? <Text style={[typography.bodyMd, styles.listNotice]} accessibilityLiveRegion="polite">Đang tải nhiệm vụ…</Text> : null}
+        {inbox.stale ? <Text style={[typography.bodyMd, styles.listNotice]}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
+        {inbox.error && list.length > 0 ? <Text style={[typography.bodyMd, styles.listNotice]} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
 
         <CrewContentTransition ready={!inbox.query.isPending} revision={TASK_MODE_FILTERS.findIndex(f => f.key === modeFilter) * 2 + (segment === 'done' ? 1 : 0)}>
         {loadError && list.length === 0 ? (
@@ -286,7 +336,7 @@ export default function CrewTasksScreen() {
             return (
               <CrewHomeTaskPressable
                 key={task.assignmentId}
-                style={{ borderRadius: 16, overflow: 'hidden' }}
+                style={styles.taskPressable}
                 android_ripple={{ color: '#1A1D2029', foreground: true }}
                 onPress={() =>
                   crewAssignmentCanOpen(task) && router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
@@ -296,10 +346,11 @@ export default function CrewTasksScreen() {
               >
                 <Card style={styles.taskCard}>
                   <View style={styles.taskContent}>
+                  <View style={styles.taskTitleRow}>
+                    <Text style={[typography.titleMd, styles.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
+                    {crewAssignmentCanOpen(task) ? <MaterialIcons name="chevron-right" size={22} color={colors.secondary} /> : null}
+                  </View>
                   <View style={styles.taskHeader}>
-                    <View style={styles.woChip}>
-                      <Text style={[typography.labelSm, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
-                    </View>
                     <View style={styles.taskMetaRow}>
                       <CrewTaskStatus status={task.isHistory ? 'REJECTED' : task.status} label={task.isHistory ? 'Phân công đã từ chối' : crewStatusLabel(task.status)} />
                     </View>
@@ -309,8 +360,9 @@ export default function CrewTasksScreen() {
                       </View>
                     ) : null}
                   </View>
-
-                  <Text style={[typography.titleMd, styles.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
+                  <View style={styles.woChip}>
+                    <Text selectable style={[typography.caption, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
+                  </View>
 
                   {task.isHistory ? <Text style={typography.bodyMd}>Lịch sử từ chối · {crewDateTime(task.rejectedAt)}. Không mở hồ sơ hiện hành.</Text> : !crewAssignmentCanOpen(task) ? <Text>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
                   {!task.isHistory ? <Text style={typography.caption}>{task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text> : null}
@@ -336,24 +388,18 @@ export default function CrewTasksScreen() {
                   <View style={styles.taskFooter}>
                     {task.due_label && task.due_label !== '—' ? (
                       <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
-                        <MaterialIcons
-                          name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'}
-                          size={13}
-                          color={task.due_urgency === 'urgent' ? colors.error : colors.secondary}
-                        />
                         <Text
                           style={[
                             typography.caption,
                             task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
                           ]}
                         >
-                          {crewDateTime(task.due_label)}
+                          Hạn hoàn thành: {crewDateTime(task.due_label)}
                         </Text>
                       </View>
                     ) : (
                       <View style={{ flex: 1 }} />
                     )}
-                    {crewAssignmentCanOpen(task) ? <MaterialIcons name="chevron-right" size={16} color={colors.secondary} style={styles.taskChevron} /> : null}
                   </View>
                 </Card>
               </CrewHomeTaskPressable>
@@ -362,6 +408,10 @@ export default function CrewTasksScreen() {
           </View>
         )}
         </CrewContentTransition>
+        {inbox.query.hasNextPage && !inbox.error ? <View style={styles.listMore}>
+          <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
+            loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
+        </View> : null}
       </SafeAreaScreen>
 
 
@@ -433,16 +483,43 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surfaceAlt,
   },
+  searchField: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1, borderColor: '#89939F', borderRadius: radius.md,
+    backgroundColor: colors.surface, paddingHorizontal: 12, marginBottom: spacing.md,
+  },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 48, color: colors.neutral, paddingVertical: 12 },
+  filterSelector: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    minHeight: 64, paddingVertical: 10, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: '#89939F', borderRadius: radius.md,
+    backgroundColor: colors.surface, marginBottom: spacing.sm, overflow: 'hidden',
+  },
+  selectorText: { flex: 1, minWidth: 0, gap: 2 },
+  filterLabel: { color: colors.secondary },
+  filterValue: { color: '#192D40', flexShrink: 1 },
+  listHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
+  listTitle: { color: '#192D40', flexGrow: 1, flexShrink: 1 },
+  listActions: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto' },
+  dataToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48, paddingHorizontal: 8, borderRadius: radius.md, overflow: 'hidden' },
+  dataToggleText: { color: colors.secondary },
+  listRefresh: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: colors.border, overflow: 'hidden' },
+  dataDetails: { gap: 4, padding: 12, backgroundColor: '#EDF1F4', borderRadius: radius.md, marginBottom: 8 },
+  dataText: { color: colors.secondary },
+  listNotice: { color: colors.secondary, marginVertical: 8 },
+  listMore: { paddingVertical: 16 },
+  tabActive: { borderBottomWidth: 3, borderBottomColor: colors.primary },
+  tabLabel: { fontSize: 13, lineHeight: 20, flexShrink: 1, textAlign: 'center', color: colors.secondary },
+  tabLabelActive: { color: '#192D40', fontFamily: 'Roboto-Medium' },
   segments: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 56,
     gap: spacing.xs,
-    padding: 4,
+    padding: 0,
     marginBottom: spacing.md,
-    backgroundColor: '#E8EDF0',
-    borderRadius: radius.lg,
-    borderWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   segment: {
     flex: 1,
@@ -453,7 +530,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: radius.md,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
   },
   segmentActive: {
     backgroundColor: '#192D40',
@@ -462,15 +540,15 @@ const styles = StyleSheet.create({
   },
   segmentLabel: {
     fontFamily: 'Roboto',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 21,
     color: colors.secondary,
     flexShrink: 1,
     textAlign: 'center',
   },
   segmentLabelActive: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 21,
     color: '#FFFFFF',
     flexShrink: 1,
     textAlign: 'center',
@@ -514,19 +592,20 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   taskCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     padding: 0,
-    borderRadius: 16,
+    borderRadius: 0,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderTopWidth: 1,
     borderColor: colors.border,
     elevation: 0,
     shadowOpacity: 0,
   },
-  taskContent: { padding: spacing.cardPadding },
+  taskPressable: { overflow: 'hidden' },
+  taskContent: { paddingTop: 16, gap: 6 },
+  taskTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   taskList: {
-    gap: 12,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   taskHeader: {
     flexDirection: 'row',
@@ -557,17 +636,17 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   taskTitle: {
-    fontSize: 16,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 18,
     lineHeight: 24,
     color: '#192D40',
-    marginTop: spacing.sm,
-    fontWeight: '400',
   },
   taskCode: {
-    color: '#192D40',
+    color: colors.secondary,
     fontSize: 12,
     lineHeight: 18,
-    fontFamily: 'Roboto-Medium',
+    fontFamily: 'Roboto',
   },
   taskRouteRow: {
     flexDirection: 'row',
@@ -593,11 +672,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.cardPadding,
-    paddingVertical: 12,
-    backgroundColor: '#F1F4F6',
-    borderTopWidth: 1,
-    borderTopColor: '#E6EBEF',
+    paddingTop: 6,
+    paddingBottom: 16,
   },
   woChip: {
     maxWidth: '100%',
