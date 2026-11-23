@@ -1,19 +1,20 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),vm=require('node:vm');
 const {screen}=require('./helpers/roadfe-screen.cjs');
-function styles(name){
+function styles(name,binding='styles'){
  const file=`app/(crew)/${name}.tsx`,ast=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
- let init;for(const n of ast.statements)if(ts.isVariableStatement(n))for(const d of n.declarationList.declarations)if(d.name.getText()==='styles')init=d.initializer.getText();
+ let init;for(const n of ast.statements)if(ts.isVariableStatement(n))for(const d of n.declarationList.declarations)if(d.name.getText()===binding)init=d.initializer.getText();
  const t={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/design-tokens.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:t.exports,require:()=>({})});
- return vm.runInNewContext(`(${init})`,{StyleSheet:{create:x=>x},Platform:{select:x=>x.android??x.default},...t.exports});
+ return vm.runInNewContext(`(${init})`,{StyleSheet:{create:x=>x},Platform:{select:x=>x.android??x.default},v2Palette:{navy:'#192D40',muted:'#5A6470',quiet:'#6E7A85'},...t.exports});
 }
 function flat(s){return Object.assign({},...[s].flat(Infinity).filter(Boolean));}
 test('Crew tabs grow with font size; filter and refresh controls retain 48dp targets',()=>{
- for(const name of ['tasks','sync']){const s=styles(name);assert.equal(s.segments.height,undefined);assert.ok(s.segment.minHeight>=48);assert.equal(s.segment.height,undefined);assert.equal(s.segmentLabel.flexShrink,1);}
- assert.ok(styles('tasks').modeFilter.minHeight>=48);assert.ok(styles('sync').iconBtn.minWidth>=48);assert.ok(styles('sync').iconBtn.minHeight>=48);assert.equal(styles('sync').iconBtn.height,undefined);assert.equal(styles('sync').titleRow.flexWrap,'wrap');assert.ok(styles('navigation').floatingBack.width>=48);
+ const task=styles('tasks','v2');assert.equal(task.tabs.height,undefined);assert.ok(task.tab.minHeight>=48);assert.equal(task.tab.height,undefined);assert.equal(task.tab.flexShrink,1);assert.ok(task.chip.minHeight>=48);assert.ok(task.iconButton.width>=48);assert.ok(task.iconButton.height>=48);assert.ok(task.searchInput.minHeight>=48);
+ const s=styles('sync');assert.equal(s.segments.height,undefined);assert.ok(s.segment.minHeight>=48);assert.equal(s.segment.height,undefined);assert.equal(s.segmentLabel.flexShrink,1);
+ assert.ok(s.iconBtn.minWidth>=48);assert.ok(s.iconBtn.minHeight>=48);assert.equal(s.iconBtn.height,undefined);assert.equal(s.titleRow.flexWrap,'wrap');assert.ok(styles('navigation').floatingBack.width>=48);
 });
 test('Crew long badge/deadline rows wrap instead of forcing cards wider',()=>{
- for(const [name,rows] of [['tasks',['taskHeader','taskFooter']],['home',['taskCardHeader','taskCardFooter','footerLeftMeta']],['receiving',['rowHeader','infoRow']]])for(const row of rows)assert.equal(styles(name)[row].flexWrap,'wrap',`${name}.${row}`);
- assert.equal(styles('tasks').taskDue.flexShrink,1);assert.equal(styles('home').sectionTitle.flexShrink,1);
+ for(const [name,rows] of [['home',['taskCardHeader','taskCardFooter','footerLeftMeta']],['receiving',['rowHeader','infoRow']]])for(const row of rows)assert.equal(styles(name)[row].flexWrap,'wrap',`${name}.${row}`);
+ const task=styles('tasks','v2');assert.equal(task.statusRow.flexWrap,'wrap');assert.equal(task.statusText.flexShrink,1);assert.equal(task.acceptance.flexShrink,1);assert.equal(task.taskTitle.flex,1);assert.equal(styles('home').sectionTitle.flexShrink,1);
 });
 const task={id:'task',projectId:'project',status:'Submitted',task_mode:'MEASURE_ONLY',title:'Rất dài '.repeat(50),description:'Backend FIELD text',detail:{instructions:'Backend text'},coordinates:null};
 const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'./tasks':{CrewTaskBoundary:'Boundary',crewStatusLabel:()=> 'Đã gửi hồ sơ',useCrewIdentity:()=>({})},'expo-router':{router:{back(){},replace(){}},useFocusEffect:()=>{}}};

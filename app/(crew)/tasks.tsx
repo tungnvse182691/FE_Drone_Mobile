@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Clipboard, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Chip, type ChipVariant } from '../../src/components/Chip';
-import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FAB } from '../../src/components/FAB';
 import { DEFECT_TYPE_CODES, defectTypeLabel, type DefectTypeCode } from '../../src/constants/defect-types';
@@ -23,9 +22,8 @@ import {
 } from '../../src/api/crewApi';
 import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
-import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
-import { CrewHomeTaskPressable } from '../../src/components/crew/CrewHomeTaskPressable';
+import { CrewPressable } from '../../src/components/crew/CrewMotion';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
 type TaskSegment = 'active' | 'done' | 'other';
@@ -189,235 +187,234 @@ export const TASK_MODE_CHIP: Record<CrewTask['task_mode'], { variant: ChipVarian
   INSPECT_ONLY: { variant: 'status-pending', label: 'Chỉ kiểm tra' },
 };
 
+/** Calendar grouping is presentation only: original deadlines and task order are retained. */
+export function crewTasksDueGroups(tasks: CrewTask[], now = Date.now()) {
+  const day = (value: number) => Math.floor((value + 7 * 60 * 60 * 1000) / 86400000);
+  const today = day(now);
+  const weekday = new Date(today * 86400000).getUTCDay();
+  const weekEnd = today + (weekday === 0 ? 0 : 7 - weekday);
+  const labels = ['Quá hạn', 'Hôm nay', 'Ngày mai', 'Tuần này', 'Sau tuần này', 'Chưa có hạn'];
+  const groups = labels.map(label => ({ label, tasks: [] as CrewTask[] }));
+  for (const task of tasks) {
+    const due = Date.parse(task.due_label);
+    const date = day(due);
+    const index = !Number.isFinite(due) ? 5 : due < now ? 0 : date === today ? 1 : date === today + 1 ? 2 : date <= weekEnd ? 3 : 4;
+    groups[index].tasks.push(task);
+  }
+  return groups.filter(group => group.tasks.length > 0);
+}
+
+export function crewTaskCodePreview(code: string): string {
+  if (/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(code)) return code.slice(0, 8) + '…';
+  const match = code.match(/^(.*-)([^-]+)$/);
+  const prefix = match?.[1] ?? '';
+  const value = match?.[2] ?? code;
+  return prefix + value.slice(0, 8) + (value.length > 8 ? '…' : '');
+}
+
+const ACCEPTANCE_FILTERS = [
+  { key: 'ALL', label: 'Tất cả tiếp nhận' }, { key: 'PENDING', label: 'Chờ tiếp nhận' },
+  { key: 'ACCEPTED', label: 'Đã nhận' }, { key: 'REJECTED', label: 'Đã từ chối' },
+] as const;
+
 export default function CrewTasksScreen() {
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
   const [acceptance, setAcceptance] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'REJECTED'>('ALL');
-  const [expandedFilter, setExpandedFilter] = useState<'acceptance' | 'mode' | null>(null);
-  const [showData, setShowData] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const insets = useSafeAreaInsets();
+  const client = useQueryClient();
+  useEffect(() => {
+    let active = true, changed = false;
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', value => {
+      changed = true;
+      if (active) setReduceMotion(value);
+    });
+    void AccessibilityInfo.isReduceMotionEnabled().then(value => {
+      if (active && !changed) setReduceMotion(value);
+    }).catch(() => { /* Unknown preference stays static. */ });
+    return () => { active = false; subscription.remove(); };
+  }, []);
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
   const inbox = useCrewInbox({
     statusGroup: segment === 'active' ? 'INCOMPLETE' : segment === 'done' ? 'COMPLETED' : 'OTHER',
     mode: modeFilter === 'ALL' ? undefined : modeFilter,
     acceptance: acceptance === 'ALL' ? undefined : acceptance, search: debouncedSearch,
   });
-  const loadError = inbox.error;
+  // Reuse an already loaded, actor/environment-scoped inbox for summary only.
+  // No extra request, no global totals inferred from a server-filtered page.
+  const cached = inbox.enabled ? client.getQueryData?.<NonNullable<typeof inbox.query.data>>([
+    ...crewInboxOptions(inbox.scope ?? '').queryKey, inbox.environment,
+  ]) : undefined;
+  const summaryItems = new Map<string, CrewTask>();
+  for (const page of cached?.pages ?? []) for (const item of page.items) {
+    if (item.crewId?.toLowerCase() === inbox.user?.id.toLowerCase() && isCrewResourceId(item.assignmentId) && isCrewResourceId(item.id)) {
+      summaryItems.set(item.assignmentId!.toLowerCase(), crewTaskFromWire(item));
+    }
+  }
+  const loaded = summaryItems.size ? [...summaryItems.values()] : inbox.tasks;
+  const completed = loaded.filter(crewTaskIsComplete).length;
+  const asOf = (summaryItems.size ? cached : inbox.query.data)?.pages[0]?.asOf;
+  const loadedTime = asOf && Number.isFinite(Date.parse(asOf))
+    ? new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(asOf)) : '—';
   const segments: { key: TaskSegment; label: string }[] = [
     { key: 'active', label: 'Chưa hoàn thành' }, { key: 'done', label: 'Hoàn thành' }, { key: 'other', label: 'Khác' },
   ];
   // API037 has already applied the AND filters across the full server collection.
   const list = search.trim() === debouncedSearch ? inbox.tasks : [];
+  const groups = crewTasksDueGroups(list);
+  const tabCount = (key: TaskSegment) => summaryItems.size ? (key === 'done' ? completed : key === 'active' ? loaded.filter(task => !crewTaskIsComplete(task) && !['CANCELLED', 'REJECTED', 'UNKNOWN'].includes(task.status.toUpperCase())).length : loaded.filter(task => ['CANCELLED', 'REJECTED', 'UNKNOWN'].includes(task.status.toUpperCase())).length) : key === segment && !inbox.query.isPending ? list.length : '—';
+  const ripple = { color: '#1A1D2020' };
 
-  return (
-    <View style={styles.screen}>
-      <SafeAreaScreen scroll header={<AppHeader subtitle="Công việc" />}>
-        {acceptance !== 'REJECTED' ? <View style={styles.segments}>
-          {segments.map((s) => {
-            const active = s.key === segment;
-            return (
-              <CrewPressable
-                key={s.key}
-                style={[styles.segment, active && styles.tabActive]}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                onPress={() => setSegment(s.key)}
-              >
-                <Text style={[typography.labelLg, styles.tabLabel, active && styles.tabLabelActive]}>
-                  {s.label}
-                </Text>
-              </CrewPressable>
-            );
-          })}
-        </View> : null}
-
-        <View style={styles.searchField}>
-        <MaterialIcons name="search" size={22} color={colors.secondary} />
-        <TextInput value={search} onChangeText={setSearch} maxLength={100} autoCapitalize="none"
-          accessibilityLabel="Tìm theo mã nhiệm vụ" placeholder="Tìm mã nhiệm vụ" placeholderTextColor={colors.secondary}
-          style={[typography.bodyMd, styles.searchInput]} />
+  return <View style={styles.screen}>
+    <SafeAreaScreen scroll header={<>
+      <AppHeader subtitle="Công việc" />
+      <View style={v2.summary} accessibilityLabel="Thống kê trong các nhiệm vụ đã tải">
+        {[
+          { value: loaded.length - completed, label: 'đang mở' },
+          { value: loaded.length, label: `đã tải lúc ${loadedTime}` },
+          { value: completed, label: 'đã xong' },
+        ].map((item, index) => <View key={item.label} style={[v2.summaryColumn, index > 0 && v2.summaryDivider]}>
+          <Text style={[typography.titleLg, v2.summaryNumber]}>{inbox.query.isPending && !loaded.length ? '—' : item.value}</Text>
+          <Text style={[typography.caption, v2.summaryLabel]}>{item.label}</Text>
+        </View>)}
+      </View>
+      <View style={v2.controls}>
+        <View style={v2.tabs} accessibilityRole="tablist">
+          {segments.map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label}
+            accessibilityState={{ selected: segment === item.key }} android_ripple={ripple}
+            style={[v2.tab, segment === item.key && v2.tabActive]} onPress={() => setSegment(item.key)}>
+            <Text style={[typography.labelLg, v2.tabText, segment === item.key && v2.tabTextActive]}>{item.label} <Text style={v2.tabCount}>{tabCount(item.key)}</Text></Text>
+          </Pressable>)}
         </View>
-        <CrewPressable accessibilityRole="button" accessibilityLabel="Bộ lọc tiếp nhận"
-          accessibilityState={{ expanded: expandedFilter === 'acceptance' }}
-          onPress={() => setExpandedFilter(value => value === 'acceptance' ? null : 'acceptance')}
-          style={styles.filterSelector}>
-          <View style={styles.selectorText}>
-            <Text style={[typography.caption, styles.filterLabel]}>Tiếp nhận</Text>
-            <Text style={[typography.titleMd, styles.filterValue]}>{({ ALL: 'Tất cả tiếp nhận', PENDING: 'Chờ tiếp nhận', ACCEPTED: 'Đã nhận', REJECTED: 'Đã từ chối' })[acceptance]}</Text>
+        <View style={v2.searchRow}>
+          <View style={v2.searchField}>
+            <MaterialIcons name="search" size={20} color={v2Palette.muted} />
+            <TextInput value={search} onChangeText={setSearch} maxLength={100} autoCapitalize="none"
+              accessibilityLabel="Tìm theo mã nhiệm vụ" placeholder="Tìm mã nhiệm vụ" placeholderTextColor={v2Palette.muted}
+              style={[typography.bodyMd, v2.searchInput]} />
           </View>
-          <MaterialIcons name={expandedFilter === 'acceptance' ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} />
-        </CrewPressable>
-        {expandedFilter === 'acceptance' ? <View style={styles.modeFilters}>
-          {(['ALL', 'PENDING', 'ACCEPTED', 'REJECTED'] as const).map(value => <CrewPressable key={value}
-            style={[styles.modeFilter, acceptance === value && styles.segmentActive]} accessibilityRole="button"
-            accessibilityState={{ selected: acceptance === value }} onPress={() => { setAcceptance(value); setExpandedFilter(null); }}>
-            <Text style={[typography.labelLg, acceptance === value ? styles.segmentLabelActive : styles.segmentLabel]}>{({ ALL: 'Tất cả tiếp nhận', PENDING: 'Chờ tiếp nhận', ACCEPTED: 'Đã nhận', REJECTED: 'Đã từ chối' })[value]}</Text>
-          </CrewPressable>)}
-        </View> : null}
-        {acceptance !== 'REJECTED' ? <>
-        <CrewPressable accessibilityRole="button" accessibilityLabel="Bộ lọc loại công việc"
-          accessibilityState={{ expanded: expandedFilter === 'mode' }}
-          onPress={() => setExpandedFilter(value => value === 'mode' ? null : 'mode')}
-          style={styles.filterSelector}>
-          <View style={styles.selectorText}>
-            <Text style={[typography.caption, styles.filterLabel]}>Loại công việc</Text>
-            <Text style={[typography.titleMd, styles.filterValue]}>{TASK_MODE_FILTERS.find(filter => filter.key === modeFilter)?.label}</Text>
-          </View>
-          <MaterialIcons name={expandedFilter === 'mode' ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} />
-        </CrewPressable>
-        {expandedFilter === 'mode' ? <View style={styles.modeFilters}>
-            {TASK_MODE_FILTERS.map((filter) => {
-              const active = filter.key === modeFilter;
-              const tone = crewHomeModeTone(filter.key);
-              return (
-                <CrewPressable
-                  key={filter.key}
-                  style={[styles.modeFilter, active && { backgroundColor: tone.background, borderColor: tone.border }]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => { setModeFilter(filter.key); setExpandedFilter(null); }}
-                >
-                  <Text
-                    style={[
-                      typography.labelLg,
-                      active ? { color: tone.foreground } : styles.modeFilterLabel,
-                    ]}
-                  >
-                    {filter.label}
-                  </Text>
-                </CrewPressable>
-              );
-            })}
-        </View> : null}
-        </> : null}
-
-        <View style={styles.listHeading}>
-          <Text style={[typography.titleLg, styles.listTitle]}>Nhiệm vụ</Text>
-          <View style={styles.listActions}>
-            <CrewPressable accessibilityRole="button" accessibilityLabel="Dữ liệu danh sách nhiệm vụ"
-              accessibilityState={{ expanded: showData }} onPress={() => setShowData(value => !value)} style={styles.dataToggle}>
-              <Text style={[typography.bodyMd, styles.dataToggleText]}>Dữ liệu</Text>
-              <MaterialIcons name={showData ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
-            </CrewPressable>
-            <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
-              accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
-              disabled={!inbox.enabled || inbox.query.isFetching} style={styles.listRefresh}
-              onPress={() => { void inbox.refresh(); }}>
-              {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
-            </CrewPressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Bộ lọc" accessibilityState={{ expanded: filterOpen }}
+            android_ripple={ripple} style={v2.iconButton} onPress={() => { Keyboard.dismiss(); setFilterOpen(true); }}>
+            <MaterialIcons name="filter-alt" size={23} color={v2Palette.navy} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ" disabled={!inbox.enabled || inbox.query.isFetching}
+            accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
+            android_ripple={ripple} style={v2.iconButton} onPress={() => { void inbox.refresh(); }}>
+            {inbox.query.isFetching ? <ActivityIndicator color={v2Palette.navy} /> : <MaterialIcons name="refresh" size={24} color={v2Palette.navy} />}
+          </Pressable>
+        </View>
+      </View>
+    </>}>
+      {acceptance === 'REJECTED' ? <Text style={[typography.bodyMd, v2.notice]}>Lịch sử phân công đã từ chối</Text> : null}
+      {inbox.stale ? <Text style={[typography.bodyMd, v2.notice]}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
+      {inbox.error && list.length > 0 ? <Text style={[typography.bodyMd, v2.notice]} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
+      {inbox.query.isPending && inbox.enabled ? <View accessibilityLabel="Đang tải nhiệm vụ" accessibilityState={{ busy: true }}>
+        {[0, 1, 2].map(index => <View key={index} style={v2.skeletonRow} importantForAccessibility="no-hide-descendants">
+          {[38, 88, 65, 76, 45].map((width, line) => <View key={line} style={[v2.skeletonLine, { width: `${width}%` }]} />)}
+        </View>)}
+      </View> : inbox.error && !list.length ? <EmptyState icon="error-outline" title="Lỗi tải danh sách nhiệm vụ" message={inbox.error} />
+        : !list.length ? <EmptyState icon="check-circle" title="Không có công việc trong bộ lọc này" message="Chuyển sang bộ lọc khác để xem danh sách công việc." />
+        : groups.map(group => <View key={group.label}>
+          <View style={v2.groupHeading}><Text style={[typography.titleLg, v2.groupTitle]}>{group.label}</Text><Text style={[typography.bodyMd, v2.muted]}>{group.tasks.length} việc</Text></View>
+          {group.tasks.map(task => <View key={task.assignmentId} style={v2.taskRow}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Mở nhiệm vụ ${task.title || crewTaskCodePreview(task.wo_code || task.id)}`}
+              disabled={!crewAssignmentCanOpen(task)} android_ripple={ripple} style={v2.taskBody}
+              onPress={() => crewAssignmentCanOpen(task) && router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}>
+              <View style={v2.statusRow}>
+                <View style={v2.statusBadge}><MaterialIcons name="description" size={14} color={colors.neutral} /><Text style={[typography.caption, v2.statusText]}>{task.isHistory ? 'Phân công đã từ chối' : crewStatusLabel(task.status)}</Text></View>
+                <Text style={[typography.caption, v2.acceptance]}>{task.isHistory ? `Đã từ chối · ${crewDateTime(task.rejectedAt)}` : task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text>
+              </View>
+              <View style={v2.titleRow}><Text style={[typography.titleMd, v2.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>{crewAssignmentCanOpen(task) ? <MaterialIcons name="chevron-right" size={22} color={v2Palette.navy} /> : null}</View>
+              {task.isHistory ? <Text style={[typography.bodyMd, v2.muted]}>Lịch sử từ chối · {crewDateTime(task.rejectedAt)}. Không mở hồ sơ hiện hành.</Text> : !crewAssignmentCanOpen(task) ? <Text style={[typography.bodyMd, v2.muted]}>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
+              {task.route_code || task.section_name || task.chainage ? <Text style={[typography.bodyMd, v2.muted]}>{[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage].filter(Boolean).join(' • ')}</Text> : null}
+              <Text style={[typography.bodyMd, v2.muted]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Nhiệm vụ kiểm tra hiện trường'}{task.batch_size > 1 ? ` • Đợt gom ${task.batch_size} vị trí` : ''}</Text>
+              {task.distance_label && task.distance_label !== '—' ? <Text style={[typography.caption, v2.muted]}>{task.distance_label}</Text> : null}
+              {task.due_label && task.due_label !== '—' ? <Text style={[typography.bodyMd, v2.muted]}>Hạn hoàn thành: {crewDateTime(task.due_label)}</Text> : null}
+            </Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Sao chép mã nhiệm vụ ${crewTaskCodePreview(task.wo_code || task.id)}`}
+              android_ripple={ripple} style={v2.copyCode} onPress={() => { Clipboard.setString(task.wo_code || task.id); AccessibilityInfo.announceForAccessibility('Đã sao chép mã nhiệm vụ'); }}>
+              <Text style={[typography.bodyMd, v2.muted]}>{crewTaskCodePreview(task.wo_code || task.id)}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
+            </Pressable>
+          </View>)}
+        </View>)}
+      {inbox.query.hasNextPage && !inbox.error ? <View style={styles.listMore}><Button variant="secondary" title="Tải thêm" loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} /></View> : null}
+    </SafeAreaScreen>
+    {filterOpen ? <Modal visible transparent animationType={reduceMotion ? 'none' : 'slide'} onRequestClose={() => setFilterOpen(false)}>
+      <View style={v2.modalRoot}>
+        <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Đóng bộ lọc" onPress={() => setFilterOpen(false)} />
+        <View style={[v2.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]} accessibilityViewIsModal>
+          <View style={v2.handle} />
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={v2.sheetContent}>
+            <Text style={[typography.titleLg, v2.groupTitle]}>Bộ lọc</Text>
+            <Text style={[typography.bodyMd, v2.muted]}>Chọn xong danh sách tự cập nhật ngay.</Text>
+            <Text style={[typography.titleMd, v2.filterHeading]}>Tiếp nhận</Text>
+            <View style={v2.chips}>{ACCEPTANCE_FILTERS.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: acceptance === item.key }} android_ripple={ripple} onPress={() => setAcceptance(item.key)} style={[v2.chip, acceptance === item.key && v2.chipSelected]}><Text style={[typography.bodyMd, v2.chipText, acceptance === item.key && v2.chipTextSelected]}>{item.label}</Text></Pressable>)}</View>
+            <Text style={[typography.titleMd, v2.filterHeading]}>Loại công việc</Text>
+            <View style={v2.chips}>{TASK_MODE_FILTERS.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: modeFilter === item.key }} android_ripple={ripple} onPress={() => setModeFilter(item.key)} style={[v2.chip, modeFilter === item.key && v2.chipSelected]}><Text style={[typography.bodyMd, v2.chipText, modeFilter === item.key && v2.chipTextSelected]}>{item.label}</Text></Pressable>)}</View>
+          </ScrollView>
+          <View style={v2.sheetActions}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Xóa lọc" android_ripple={ripple} style={[v2.sheetButton, v2.resetButton]} onPress={() => { setAcceptance('ALL'); setModeFilter('ALL'); }}><Text style={[typography.labelLg, v2.chipText]}>Xóa lọc</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Xem kết quả" android_ripple={ripple} style={[v2.sheetButton, v2.applyButton]} onPress={() => setFilterOpen(false)}><Text style={[typography.labelLg, v2.chipText]}>Xem kết quả</Text></Pressable>
           </View>
         </View>
-        {showData ? <View style={styles.dataDetails}>
-          <Text style={[typography.bodyMd, styles.dataText]}>Đã tải {list.length} phân công trong bộ lọc này</Text>
-          <Text style={[typography.caption, styles.dataText]}>Thống kê trong các nhiệm vụ đã tải.</Text>
-          {inbox.query.data?.pages[0]?.asOf ? <Text style={[typography.caption, styles.dataText]}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text> : null}
-        </View> : null}
-        {inbox.query.isPending && inbox.enabled ? <Text style={[typography.bodyMd, styles.listNotice]} accessibilityLiveRegion="polite">Đang tải nhiệm vụ…</Text> : null}
-        {inbox.stale ? <Text style={[typography.bodyMd, styles.listNotice]}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
-        {inbox.error && list.length > 0 ? <Text style={[typography.bodyMd, styles.listNotice]} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
-
-        <CrewContentTransition ready={!inbox.query.isPending} revision={TASK_MODE_FILTERS.findIndex(f => f.key === modeFilter) * 2 + (segment === 'done' ? 1 : 0)}>
-        {loadError && list.length === 0 ? (
-          <EmptyState
-            icon="error-outline"
-            title="Lỗi tải danh sách nhiệm vụ"
-            message={loadError}
-          />
-        ) : inbox.query.isPending ? null : list.length === 0 ? (
-          <EmptyState
-            icon="check-circle"
-            title="Không có công việc trong bộ lọc này"
-            message="Chuyển sang bộ lọc khác để xem danh sách công việc."
-          />
-        ) : (
-          <View style={styles.taskList}>
-            {list.map((task) => {
-            return (
-              <CrewHomeTaskPressable
-                key={task.assignmentId}
-                style={styles.taskPressable}
-                android_ripple={{ color: '#1A1D2029', foreground: true }}
-                onPress={() =>
-                  crewAssignmentCanOpen(task) && router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })
-                }
-                disabled={!crewAssignmentCanOpen(task)}
-                accessibilityRole="button"
-              >
-                <Card style={styles.taskCard}>
-                  <View style={styles.taskContent}>
-                  <View style={styles.taskTitleRow}>
-                    <Text style={[typography.titleMd, styles.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
-                    {crewAssignmentCanOpen(task) ? <MaterialIcons name="chevron-right" size={22} color={colors.secondary} /> : null}
-                  </View>
-                  <View style={styles.taskHeader}>
-                    <View style={styles.taskMetaRow}>
-                      <CrewTaskStatus status={task.isHistory ? 'REJECTED' : task.status} label={task.isHistory ? 'Phân công đã từ chối' : crewStatusLabel(task.status)} />
-                    </View>
-                    {task.distance_label && task.distance_label !== '—' ? (
-                      <View style={styles.taskDistPill}>
-                        <Text style={[typography.caption, styles.taskDist]}>{task.distance_label}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={styles.woChip}>
-                    <Text selectable style={[typography.caption, styles.taskCode]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
-                  </View>
-
-                  {task.isHistory ? <Text style={typography.bodyMd}>Lịch sử từ chối · {crewDateTime(task.rejectedAt)}. Không mở hồ sơ hiện hành.</Text> : !crewAssignmentCanOpen(task) ? <Text>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
-                  {!task.isHistory ? <Text style={typography.caption}>{task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text> : null}
-
-                  {task.route_code || task.section_name || task.chainage ? (
-                    <View style={styles.taskRouteRow}>
-                      <Text style={[typography.caption, styles.taskRoute]}>
-                        {[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage]
-                          .filter(Boolean)
-                          .join(' • ')}
-                      </Text>
-                    </View>
-                  ) : null}
-
-                  <Text style={[typography.caption, styles.taskDefect]}>
-                    {task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Nhiệm vụ kiểm tra hiện trường'}
-                    {task.batch_size > 1 ? (
-                      <Text style={styles.taskBatch}> • Đợt gom {task.batch_size} vị trí</Text>
-                    ) : null}
-                  </Text>
-
-                  </View>
-                  <View style={styles.taskFooter}>
-                    {task.due_label && task.due_label !== '—' ? (
-                      <View style={[styles.duePill, task.due_urgency === 'urgent' && styles.duePillUrgent]}>
-                        <Text
-                          style={[
-                            typography.caption,
-                            task.due_urgency === 'urgent' ? styles.taskDueUrgent : styles.taskDue,
-                          ]}
-                        >
-                          Hạn hoàn thành: {crewDateTime(task.due_label)}
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={{ flex: 1 }} />
-                    )}
-                  </View>
-                </Card>
-              </CrewHomeTaskPressable>
-            );
-            })}
-          </View>
-        )}
-        </CrewContentTransition>
-        {inbox.query.hasNextPage && !inbox.error ? <View style={styles.listMore}>
-          <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
-            loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
-        </View> : null}
-      </SafeAreaScreen>
-
-
-    </View>
-  );
+      </View>
+    </Modal> : null}
+  </View>;
 }
+
+// Approved v2 palette; local token debt only, no shared token changes.
+const v2Palette = { navy: '#192D40', muted: '#5A6470', quiet: '#6E7A85' };
+const v2 = StyleSheet.create({
+  summary: { flexDirection: 'row', paddingVertical: 16, backgroundColor: colors.surface },
+  summaryColumn: { flex: 1, alignItems: 'center', paddingHorizontal: 4, gap: 4 },
+  summaryDivider: { borderLeftWidth: 1, borderLeftColor: colors.border },
+  summaryNumber: { color: v2Palette.navy, fontVariant: ['tabular-nums'] },
+  summaryLabel: { color: v2Palette.quiet, textAlign: 'center', lineHeight: 18 },
+  controls: { backgroundColor: colors.surface, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  tabs: { flexDirection: 'row', gap: 8 },
+  tab: { flexGrow: 1, flexShrink: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: colors.primary },
+  tabText: { color: v2Palette.muted, textAlign: 'center', lineHeight: 20, fontSize: 13 },
+  tabTextActive: { color: v2Palette.navy },
+  tabCount: { fontVariant: ['tabular-nums'], fontSize: 12 },
+  searchRow: { flexDirection: 'row', gap: 8, paddingTop: 12 },
+  searchField: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#89939F', borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
+  searchInput: { flex: 1, minWidth: 0, minHeight: 48, color: colors.neutral, paddingVertical: 10 },
+  iconButton: { width: 48, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#89939F', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  groupHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 16, paddingBottom: 16 },
+  groupTitle: { color: v2Palette.navy, flexShrink: 1 },
+  muted: { color: v2Palette.muted },
+  notice: { color: v2Palette.muted, marginVertical: 8 },
+  taskRow: { borderTopWidth: 1, borderTopColor: colors.border },
+  taskBody: { paddingTop: 16, gap: 8 },
+  statusRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, backgroundColor: '#EDF1F4', maxWidth: '100%' },
+  statusText: { color: colors.neutral, flexShrink: 1, fontFamily: 'Roboto-Medium', lineHeight: 18 },
+  acceptance: { color: v2Palette.muted, flexShrink: 1, lineHeight: 18 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  taskTitle: { flex: 1, fontSize: 18, lineHeight: 26, color: v2Palette.navy },
+  copyCode: { minHeight: 48, justifyContent: 'center', paddingBottom: 8 },
+  skeletonRow: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.border, gap: 14 },
+  skeletonLine: { height: 16, borderRadius: 4, backgroundColor: '#D8DEE3' },
+  modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#1A1D2080' },
+  sheet: { maxHeight: '90%', backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12 },
+  handle: { width: 42, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 16 },
+  sheetContent: { paddingHorizontal: 20, gap: 6, paddingBottom: 16 },
+  filterHeading: { color: v2Palette.muted, marginTop: 18, marginBottom: 4 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1, borderColor: '#D8DEE3', borderRadius: 26, minHeight: 48, maxWidth: '100%', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.surface, overflow: 'hidden' },
+  chipSelected: { backgroundColor: v2Palette.navy, borderColor: v2Palette.navy },
+  chipText: { color: v2Palette.navy, flexShrink: 1, lineHeight: 22, textAlign: 'center' },
+  chipTextSelected: { color: colors.surface },
+  sheetActions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20 },
+  sheetButton: { flex: 1, minHeight: 48, borderRadius: 26, alignItems: 'center', justifyContent: 'center', padding: 12, overflow: 'hidden' },
+  resetButton: { borderWidth: 1, borderColor: '#D8DEE3' },
+  applyButton: { backgroundColor: colors.primary },
+});
 
 const styles = StyleSheet.create({
   inboxPanel: {
@@ -479,227 +476,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg, backgroundColor: '#F7F0DA',
     paddingHorizontal: 12,
   },
-  screen: {
-    flex: 1,
-    backgroundColor: colors.surfaceAlt,
-  },
-  searchField: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: '#89939F', borderRadius: radius.md,
-    backgroundColor: colors.surface, paddingHorizontal: 12, marginBottom: spacing.md,
-  },
-  searchInput: { flex: 1, minWidth: 0, minHeight: 48, color: colors.neutral, paddingVertical: 12 },
-  filterSelector: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    minHeight: 64, paddingVertical: 10, paddingHorizontal: 12,
-    borderWidth: 1, borderColor: '#89939F', borderRadius: radius.md,
-    backgroundColor: colors.surface, marginBottom: spacing.sm, overflow: 'hidden',
-  },
-  selectorText: { flex: 1, minWidth: 0, gap: 2 },
-  filterLabel: { color: colors.secondary },
-  filterValue: { color: '#192D40', flexShrink: 1 },
-  listHeading: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 4 },
-  listTitle: { color: '#192D40', flexGrow: 1, flexShrink: 1 },
-  listActions: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto' },
-  dataToggle: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 48, paddingHorizontal: 8, borderRadius: radius.md, overflow: 'hidden' },
-  dataToggleText: { color: colors.secondary },
-  listRefresh: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: colors.border, overflow: 'hidden' },
-  dataDetails: { gap: 4, padding: 12, backgroundColor: '#EDF1F4', borderRadius: radius.md, marginBottom: 8 },
-  dataText: { color: colors.secondary },
-  listNotice: { color: colors.secondary, marginVertical: 8 },
+  screen: { flex: 1, backgroundColor: colors.surfaceAlt },
   listMore: { paddingVertical: 16 },
-  tabActive: { borderBottomWidth: 3, borderBottomColor: colors.primary },
-  tabLabel: { fontSize: 13, lineHeight: 20, flexShrink: 1, textAlign: 'center', color: colors.secondary },
-  tabLabelActive: { color: '#192D40', fontFamily: 'Roboto-Medium' },
-  segments: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 56,
-    gap: spacing.xs,
-    padding: 0,
-    marginBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 48,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  segmentActive: {
-    backgroundColor: '#192D40',
-    borderWidth: 1,
-    borderColor: '#192D40',
-  },
-  segmentLabel: {
-    fontFamily: 'Roboto',
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.secondary,
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  segmentLabelActive: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#FFFFFF',
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  countBadge: {
-    minWidth: 20,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    backgroundColor: colors.border,
-    alignItems: 'center',
-  },
-  countBadgeActive: {
-    backgroundColor: '#F3E7C0',
-  },
-  countText: {
-    color: colors.secondary,
-  },
-  countTextActive: {
-    color: '#192D40',
-    fontVariant: ['tabular-nums'],
-  },
-  modeFilters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  modeFilter: {
-    minHeight: 48,
-    maxWidth: '100%',
-    paddingVertical: spacing.sm,
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#CFD7DD',
-    backgroundColor: '#F3F5F6',
-  },
-  modeFilterLabel: {
-    color: colors.secondary,
-  },
-  taskCard: {
-    backgroundColor: 'transparent',
-    padding: 0,
-    borderRadius: 0,
-    overflow: 'hidden',
-    borderTopWidth: 1,
-    borderColor: colors.border,
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  taskPressable: { overflow: 'hidden' },
-  taskContent: { paddingTop: 16, gap: 6 },
-  taskTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  taskList: {
-    paddingBottom: spacing.sm,
-  },
-  taskHeader: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  taskMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexShrink: 1,
-  },
-  taskDistPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexShrink: 0,
-  },
-  taskDist: {
-    color: colors.secondary,
-  },
-  taskTitle: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 18,
-    lineHeight: 24,
-    color: '#192D40',
-  },
-  taskCode: {
-    color: colors.secondary,
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: 'Roboto',
-  },
-  taskRouteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  taskRoute: {
-    flex: 1,
-    color: colors.secondary,
-    fontSize: 13,
-    lineHeight: 21,
-  },
-  taskDefect: {
-    color: colors.secondary,
-    marginTop: spacing.xs,
-  },
-  taskBatch: {
-    color: colors.warning,
-  },
-  taskFooter: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: 6,
-    paddingBottom: 16,
-  },
-  woChip: {
-    maxWidth: '100%',
-    paddingVertical: 2,
-    backgroundColor: 'transparent',
-  },
-  duePill: {
-    flexGrow: 1,
-    flexShrink: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  duePillUrgent: {
-    // Same quiet deadline treatment as Home; urgency stays in text and icon.
-  },
-  taskDue: {
-    color: colors.secondary,
-    flexShrink: 1,
-  },
-  taskDueUrgent: {
-    color: colors.error,
-    fontFamily: 'Roboto-Medium',
-  },
-  taskChevron: {
-    marginLeft: spacing.xs,
-  },
 });

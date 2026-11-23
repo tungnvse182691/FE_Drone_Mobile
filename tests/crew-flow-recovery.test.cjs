@@ -15,7 +15,8 @@ test('Crew NORMAL replay rejection cannot prove an earlier timed-out command had
 test('Crew restore truthful labels and shared specialized NORMAL screens',()=>{
  const read=p=>fs.readFileSync(p,'utf8');assert.match(read('app/(crew)/sync.tsx'),/done: 'Đã xác nhận'/);
  for(const p of ['progress','complete']){const s=read('app/(crew)/'+p+'.tsx');assert.match(s,/NormalRepairPanel/);assert.match(s,/CrewTaskBoundary operational=\{false\}/);assert.doesNotMatch(s,/dispatchRepair|useEffect|LockedRepairScreen/);}
- for(const p of ['home','tasks']){const s=read('app/(crew)/'+p+'.tsx');assert.match(s,/task.wo_code \|\| `ID nhiệm vụ:/);assert.doesNotMatch(s,/Chưa có mã công việc/);}
+ assert.match(read('app/(crew)/home.tsx'),/task.wo_code \|\| `ID nhiệm vụ:/);
+ const tasks=read('app/(crew)/tasks.tsx');assert.match(tasks,/crewTaskCodePreview\(task.wo_code \|\| task.id\)/);assert.match(tasks,/Clipboard.setString\(task.wo_code \|\| task.id\)/);assert.doesNotMatch(tasks,/Chưa có mã công việc/);
 });
 const vm=require('node:vm'),path=require('node:path');
 test('Crew specialized routes and recovery modules have no runtime import cycle',()=>{
