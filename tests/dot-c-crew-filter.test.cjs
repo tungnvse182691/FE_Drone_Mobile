@@ -77,7 +77,7 @@ test('C4 filtered empty state, cached transient error and foreign-owner protecti
 test('Selected acceptance is white on navy; unselected chips retain navy text',()=>{
  const f=fixture();f.tap('Đã nhận');
  const flat=s=>Object.assign({},...s.flat(Infinity).filter(Boolean));
- for(const [label,foreground,background] of [['Đã nhận','#FFFFFF','#192D40'],['Tất cả tiếp nhận','#192D40','#FFFFFF']]){
+ for(const [label,foreground,background] of [['Đã nhận','#FFFFFF','#192D40'],['Tất cả tiếp nhận','#192D40','#F8F9FA']]){
   const chip=f.s.nodes().find(n=>n.props.accessibilityLabel===label);
   assert.equal(flat(chip.props.style).backgroundColor,background);
   assert.equal(flat(chip.props.children[0].props.style).color,foreground);
@@ -105,7 +105,7 @@ test('Rejected history keeps tabs and both filter groups; clear and close do not
  f.tap('Chỉ đo kiểm');assert.equal(f.s.nodes().find(n=>n.props.accessibilityLabel==='Chỉ đo kiểm').props.accessibilityState.selected,true);
  f.tap('Xóa lọc');
  for(const label of ['Tất cả','Tất cả tiếp nhận'])assert.equal(f.s.nodes().find(n=>n.props.accessibilityLabel===label).props.accessibilityState.selected,true);
- f.tap('Xem kết quả');assert.equal(f.s.nodes().some(n=>n.type==='Modal'),false);
+ f.tap('Hoàn tất');assert.equal(f.s.nodes().some(n=>n.type==='Modal'),false);
  assert.equal(f.s.h.calls.length,0);f.s.unmount();
 });
 

@@ -287,7 +287,8 @@ export default function CrewTasksScreen() {
           {segments.map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label}
             accessibilityState={{ selected: segment === item.key }} android_ripple={ripple}
             style={[v2.tab, segment === item.key && v2.tabActive]} onPress={() => setSegment(item.key)}>
-            <Text style={[typography.labelLg, v2.tabText, segment === item.key && v2.tabTextActive]}>{item.label} <Text style={v2.tabCount}>{tabCount(item.key)}</Text></Text>
+            <Text style={[typography.labelLg, v2.tabText, segment === item.key && v2.tabTextActive]}>{item.label}</Text>
+            <View style={[v2.tabBadge, segment === item.key && v2.tabBadgeActive]}><Text style={[typography.caption, v2.tabCount, segment === item.key && v2.tabTextActive]}>{tabCount(item.key)}</Text></View>
           </Pressable>)}
         </View>
         <View style={v2.searchRow}>
@@ -358,7 +359,7 @@ export default function CrewTasksScreen() {
           </ScrollView>
           <View style={v2.sheetActions}>
             <Pressable accessibilityRole="button" accessibilityLabel="Xóa lọc" android_ripple={ripple} style={[v2.sheetButton, v2.resetButton]} onPress={() => { setAcceptance('ALL'); setModeFilter('ALL'); }}><Text style={[typography.labelLg, v2.chipText]}>Xóa lọc</Text></Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel="Xem kết quả" android_ripple={ripple} style={[v2.sheetButton, v2.applyButton]} onPress={() => setFilterOpen(false)}><Text style={[typography.labelLg, v2.chipText]}>Xem kết quả</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Hoàn tất" android_ripple={ripple} style={[v2.sheetButton, v2.applyButton]} onPress={() => setFilterOpen(false)}><Text style={[typography.labelLg, v2.chipText]}>Hoàn tất</Text></Pressable>
           </View>
         </View>
       </View>
@@ -369,22 +370,24 @@ export default function CrewTasksScreen() {
 // Approved v2 palette; local token debt only, no shared token changes.
 const v2Palette = { navy: '#192D40', muted: '#5A6470', quiet: '#6E7A85' };
 const v2 = StyleSheet.create({
-  summary: { flexDirection: 'row', paddingVertical: 16, backgroundColor: colors.surface },
-  summaryColumn: { flex: 1, alignItems: 'center', paddingHorizontal: 4, gap: 4 },
+  summary: { flexDirection: 'row', paddingVertical: 14, backgroundColor: colors.surface },
+  summaryColumn: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 8, gap: 4 },
   summaryDivider: { borderLeftWidth: 1, borderLeftColor: colors.border },
-  summaryNumber: { color: v2Palette.navy, fontVariant: ['tabular-nums'] },
-  summaryLabel: { color: v2Palette.quiet, textAlign: 'center', lineHeight: 18 },
+  summaryNumber: { color: v2Palette.navy, fontSize: 26, lineHeight: 32, fontVariant: ['tabular-nums'] },
+  summaryLabel: { color: v2Palette.muted, textAlign: 'center', lineHeight: 18 },
   controls: { backgroundColor: colors.surface, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
   tabs: { flexDirection: 'row', gap: 8 },
-  tab: { flexGrow: 1, flexShrink: 1, minHeight: 48, justifyContent: 'center', paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  tab: { flex: 1, flexShrink: 1, minWidth: 0, minHeight: 48, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: 'transparent' },
   tabActive: { borderBottomColor: colors.primary },
   tabText: { color: v2Palette.muted, textAlign: 'center', lineHeight: 20, fontSize: 13 },
   tabTextActive: { color: v2Palette.navy },
-  tabCount: { fontVariant: ['tabular-nums'], fontSize: 12 },
+  tabBadge: { minWidth: 22, paddingHorizontal: 5, paddingVertical: 2, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
+  tabBadgeActive: { backgroundColor: colors.border },
+  tabCount: { fontVariant: ['tabular-nums'], fontSize: 12, color: v2Palette.muted, textAlign: 'center' },
   searchRow: { flexDirection: 'row', gap: 8, paddingTop: 12 },
-  searchField: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#89939F', borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
+  searchField: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
   searchInput: { flex: 1, minWidth: 0, minHeight: 48, color: colors.neutral, paddingVertical: 10 },
-  iconButton: { width: 48, height: 48, borderRadius: 12, borderWidth: 1, borderColor: '#89939F', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  iconButton: { width: 48, height: 48, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   groupHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 16, paddingBottom: 16 },
   groupTitle: { color: v2Palette.navy, flexShrink: 1 },
   muted: { color: v2Palette.muted },
@@ -404,15 +407,15 @@ const v2 = StyleSheet.create({
   sheet: { maxHeight: '90%', backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 12 },
   handle: { width: 42, height: 5, borderRadius: 3, backgroundColor: colors.border, alignSelf: 'center', marginBottom: 16 },
   sheetContent: { paddingHorizontal: 20, gap: 6, paddingBottom: 16 },
-  filterHeading: { color: v2Palette.muted, marginTop: 18, marginBottom: 4 },
+  filterHeading: { color: v2Palette.navy, marginTop: 14, marginBottom: 4, fontSize: 14, lineHeight: 20 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: '#D8DEE3', borderRadius: 26, minHeight: 48, maxWidth: '100%', justifyContent: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.surface, overflow: 'hidden' },
+  chip: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, minHeight: 48, maxWidth: '100%', justifyContent: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
   chipSelected: { backgroundColor: v2Palette.navy, borderColor: v2Palette.navy },
   chipText: { color: v2Palette.navy, flexShrink: 1, lineHeight: 22, textAlign: 'center' },
   chipTextSelected: { color: colors.surface },
   sheetActions: { flexDirection: 'row', gap: 12, paddingHorizontal: 20 },
-  sheetButton: { flex: 1, minHeight: 48, borderRadius: 26, alignItems: 'center', justifyContent: 'center', padding: 12, overflow: 'hidden' },
-  resetButton: { borderWidth: 1, borderColor: '#D8DEE3' },
+  sheetButton: { flex: 1, minHeight: 48, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', padding: 12, overflow: 'hidden' },
+  resetButton: { borderWidth: 1, borderColor: colors.border },
   applyButton: { backgroundColor: colors.primary },
 });
 
