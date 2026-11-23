@@ -14,7 +14,14 @@ test('Crew tabs grow with font size; filter and refresh controls retain 48dp tar
 });
 test('Crew long badge/deadline rows wrap instead of forcing cards wider',()=>{
  for(const [name,rows] of [['home',['taskCardHeader','taskCardFooter','footerLeftMeta']],['receiving',['rowHeader','infoRow']]])for(const row of rows)assert.equal(styles(name)[row].flexWrap,'wrap',`${name}.${row}`);
- const task=styles('tasks','v2');assert.equal(task.statusRow.flexWrap,'wrap');assert.equal(task.statusText.flexShrink,1);assert.equal(task.acceptance.flexShrink,1);assert.equal(task.taskTitle.flex,1);assert.equal(styles('home').sectionTitle.flexShrink,1);
+ const task=styles('tasks','v2');for(const row of ['taskIdentity','taskCardHeader','taskCardFooter'])assert.equal(task[row].flexWrap,'wrap');assert.equal(task.codeText.flexShrink,1);assert.equal(task.acceptance.flexShrink,1);assert.equal(task.taskTitle.numberOfLines,undefined);assert.equal(styles('home').sectionTitle.flexShrink,1);
+});
+
+test('Tasks cards retain the approved Home typography, chip, deadline and footer dimensions',()=>{
+ const task=styles('tasks','v2'),home=styles('home');
+ for(const key of ['taskCardHeader','modeChip','modeChipText','dueWrap','dueText','dueTextUrgent','taskTitle','locationRow','locationText','taskCardFooter','footerLeftMeta','actionPrompt','actionPromptText'])assert.deepEqual(JSON.parse(JSON.stringify(task[key])),JSON.parse(JSON.stringify(home[key])),key);
+ for(const key of ['backgroundColor','borderWidth','borderColor','borderRadius'])assert.equal(task.taskRow[key],home.taskCard[key]);
+ assert.equal(task.taskBody.paddingHorizontal,home.taskCard.padding);assert.equal(task.taskRow.borderLeftWidth,2);assert.equal(task.taskRow.marginBottom,12);assert.ok(task.copyCode.minHeight>=48);
 });
 const task={id:'task',projectId:'project',status:'Submitted',task_mode:'MEASURE_ONLY',title:'Rất dài '.repeat(50),description:'Backend FIELD text',detail:{instructions:'Backend text'},coordinates:null};
 const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'./tasks':{CrewTaskBoundary:'Boundary',crewStatusLabel:()=> 'Đã gửi hồ sơ',useCrewIdentity:()=>({})},'expo-router':{router:{back(){},replace(){}},useFocusEffect:()=>{}}};

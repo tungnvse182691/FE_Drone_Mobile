@@ -23,6 +23,9 @@ import {
 import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewPressable } from '../../src/components/crew/CrewMotion';
+import { CrewHomeTaskPressable } from '../../src/components/crew/CrewHomeTaskPressable';
+import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
+import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export type { CrewTask, OperationalCrewTask } from '../../src/api/crewApi';
 
@@ -321,25 +324,39 @@ export default function CrewTasksScreen() {
         : !list.length ? <EmptyState icon="check-circle" title="Không có công việc trong bộ lọc này" message="Chuyển sang bộ lọc khác để xem danh sách công việc." />
         : groups.map(group => <View key={group.label}>
           <View style={v2.groupHeading}><Text style={[typography.titleLg, v2.groupTitle]}>{group.label}</Text><Text style={[typography.bodyMd, v2.muted]}>{group.tasks.length} việc</Text></View>
-          {group.tasks.map(task => <View key={task.assignmentId} style={v2.taskRow}>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Mở nhiệm vụ ${task.title || crewTaskCodePreview(task.wo_code || task.id)}`}
-              disabled={!crewAssignmentCanOpen(task)} android_ripple={ripple} style={v2.taskBody}
+          {group.tasks.map(task => <View key={task.assignmentId} style={[v2.taskRow, { borderLeftColor: crewHomeModeTone(task.task_mode).border }]}>
+            <View style={v2.taskIdentity}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Sao chép mã nhiệm vụ ${crewTaskCodePreview(task.wo_code || task.id)}`}
+                android_ripple={ripple} style={v2.copyCode} onPress={() => { Clipboard.setString(task.wo_code || task.id); AccessibilityInfo.announceForAccessibility('Đã sao chép mã nhiệm vụ'); }}>
+                <Text style={[typography.labelSm, v2.codeText]}>{crewTaskCodePreview(task.wo_code || task.id)}</Text>
+              </Pressable>
+              <CrewTaskStatus status={task.isHistory ? 'REJECTED' : task.status} label={task.isHistory ? 'Phân công đã từ chối' : crewStatusLabel(task.status)} />
+            </View>
+            <CrewHomeTaskPressable accessibilityRole="button" accessibilityLabel={`Mở nhiệm vụ ${task.title || crewTaskCodePreview(task.wo_code || task.id)}`}
+              disabled={!crewAssignmentCanOpen(task)} accessibilityState={{ disabled: !crewAssignmentCanOpen(task) }}
+              android_ripple={{ color: '#1A1D2029', foreground: true }} style={({ pressed }) => [v2.taskBody, pressed && v2.taskPressed]}
               onPress={() => crewAssignmentCanOpen(task) && router.push({ pathname: '/(crew)/wo-detail', params: { id: task.id, projectId: task.projectId } })}>
-              <View style={v2.statusRow}>
-                <View style={v2.statusBadge}><MaterialIcons name="description" size={14} color={colors.neutral} /><Text style={[typography.caption, v2.statusText]}>{task.isHistory ? 'Phân công đã từ chối' : crewStatusLabel(task.status)}</Text></View>
-                <Text style={[typography.caption, v2.acceptance]}>{task.isHistory ? `Đã từ chối · ${crewDateTime(task.rejectedAt)}` : task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text>
+              <View style={v2.taskCardHeader}>
+                <View style={[v2.modeChip, { backgroundColor: crewHomeModeTone(task.task_mode).background }]}>
+                  <Text style={[typography.labelSm, v2.modeChipText, { color: crewHomeModeTone(task.task_mode).foreground }]}>{TASK_MODE_CHIP[task.task_mode].label}</Text>
+                </View>
+                {task.due_label && task.due_label !== '—' ? <View style={v2.dueWrap}>
+                  <MaterialIcons name={task.due_urgency === 'urgent' ? 'alarm' : 'access-time'} size={13} color={task.due_urgency === 'urgent' ? colors.error : colors.secondary} />
+                  <Text style={[typography.caption, v2.dueText, task.due_urgency === 'urgent' && v2.dueTextUrgent]}>{crewDateTime(task.due_label)}</Text>
+                </View> : null}
               </View>
-              <View style={v2.titleRow}><Text style={[typography.titleMd, v2.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>{crewAssignmentCanOpen(task) ? <MaterialIcons name="chevron-right" size={22} color={v2Palette.navy} /> : null}</View>
+              <Text style={[typography.titleMd, v2.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
+              <View style={v2.locationRow}><Text style={[typography.bodyMd, v2.locationText]}>{[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage].filter(Boolean).join(' • ') || 'Chưa có tuyến / vị trí'}</Text></View>
+              <View style={v2.taskMetadata}>
+              <Text style={[typography.caption, v2.acceptance]}>{task.isHistory ? `Đã từ chối · ${crewDateTime(task.rejectedAt)}` : task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text>
               {task.isHistory ? <Text style={[typography.bodyMd, v2.muted]}>Lịch sử từ chối · {crewDateTime(task.rejectedAt)}. Không mở hồ sơ hiện hành.</Text> : !crewAssignmentCanOpen(task) ? <Text style={[typography.bodyMd, v2.muted]}>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
-              {task.route_code || task.section_name || task.chainage ? <Text style={[typography.bodyMd, v2.muted]}>{[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage].filter(Boolean).join(' • ')}</Text> : null}
-              <Text style={[typography.bodyMd, v2.muted]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Nhiệm vụ kiểm tra hiện trường'}{task.batch_size > 1 ? ` • Đợt gom ${task.batch_size} vị trí` : ''}</Text>
-              {task.distance_label && task.distance_label !== '—' ? <Text style={[typography.caption, v2.muted]}>{task.distance_label}</Text> : null}
-              {task.due_label && task.due_label !== '—' ? <Text style={[typography.bodyMd, v2.muted]}>Hạn hoàn thành: {crewDateTime(task.due_label)}</Text> : null}
-            </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Sao chép mã nhiệm vụ ${crewTaskCodePreview(task.wo_code || task.id)}`}
-              android_ripple={ripple} style={v2.copyCode} onPress={() => { Clipboard.setString(task.wo_code || task.id); AccessibilityInfo.announceForAccessibility('Đã sao chép mã nhiệm vụ'); }}>
-              <Text style={[typography.bodyMd, v2.muted]}>{crewTaskCodePreview(task.wo_code || task.id)}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
-            </Pressable>
+              <Text style={[typography.caption, v2.acceptance]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Nhiệm vụ kiểm tra hiện trường'}{task.batch_size > 1 ? ` • Đợt gom ${task.batch_size} vị trí` : ''}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
+              </View>
+              <View style={v2.taskCardFooter}>
+                <View style={v2.footerLeftMeta}>{task.distance_label && task.distance_label !== '—' ? <Text style={[typography.caption, v2.dueText]}>{task.distance_label}</Text> : null}</View>
+                <View style={v2.actionPrompt}><Text style={[typography.caption, v2.actionPromptText]}>Chi tiết</Text><MaterialIcons name="chevron-right" size={18} color={colors.secondary} /></View>
+              </View>
+            </CrewHomeTaskPressable>
           </View>)}
         </View>)}
       {inbox.query.hasNextPage && !inbox.error ? <View style={styles.listMore}><Button variant="secondary" title="Tải thêm" loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} /></View> : null}
@@ -392,15 +409,27 @@ const v2 = StyleSheet.create({
   groupTitle: { color: v2Palette.navy, flexShrink: 1 },
   muted: { color: v2Palette.muted },
   notice: { color: v2Palette.muted, marginVertical: 8 },
-  taskRow: { borderTopWidth: 1, borderTopColor: colors.border },
-  taskBody: { paddingTop: 16, gap: 8 },
-  statusRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6, backgroundColor: '#EDF1F4', maxWidth: '100%' },
-  statusText: { color: colors.neutral, flexShrink: 1, fontFamily: 'Roboto-Medium', lineHeight: 18 },
+  taskRow: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 2, borderRadius: radius.lg, marginBottom: 12, overflow: 'hidden' },
+  taskIdentity: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingHorizontal: spacing.cardPadding, paddingTop: spacing.cardPadding, marginBottom: 12 },
+  codeText: { color: v2Palette.navy, fontSize: 12, lineHeight: 18, fontFamily: 'Roboto-Medium', flexShrink: 1 },
+  taskBody: { minHeight: 48, paddingHorizontal: spacing.cardPadding, paddingBottom: spacing.cardPadding, borderRadius: radius.lg, overflow: 'hidden' },
+  taskPressed: { opacity: 0.92 },
+  taskCardHeader: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  modeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 3, paddingHorizontal: 8, borderRadius: radius.full, maxWidth: '100%', flexShrink: 1 },
+  modeChipText: { letterSpacing: 0.2, fontSize: 12, lineHeight: 18, flexShrink: 1 },
+  dueWrap: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1 },
+  dueText: { color: colors.secondary, flexShrink: 1 },
+  dueTextUrgent: { color: colors.error, fontFamily: 'Roboto-Medium' },
   acceptance: { color: v2Palette.muted, flexShrink: 1, lineHeight: 18 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  taskTitle: { flex: 1, fontSize: 18, lineHeight: 26, color: v2Palette.navy },
-  copyCode: { minHeight: 48, justifyContent: 'center', paddingBottom: 8 },
+  taskTitle: { color: colors.neutral, fontSize: 16, lineHeight: 22, marginBottom: 6, fontFamily: 'Roboto-Medium', fontWeight: '400' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: spacing.sm },
+  locationText: { color: colors.secondary, flex: 1, fontSize: 13 },
+  taskMetadata: { gap: spacing.xs, marginBottom: spacing.sm },
+  taskCardFooter: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center', justifyContent: 'space-between', paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.surfaceAlt },
+  footerLeftMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center', flexShrink: 1 },
+  actionPrompt: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  actionPromptText: { color: colors.secondary, fontSize: 12 },
+  copyCode: { minHeight: 48, maxWidth: '100%', justifyContent: 'center' },
   skeletonRow: { paddingVertical: 20, borderTopWidth: 1, borderTopColor: colors.border, gap: 14 },
   skeletonLine: { height: 16, borderRadius: 4, backgroundColor: '#D8DEE3' },
   modalRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#1A1D2080' },

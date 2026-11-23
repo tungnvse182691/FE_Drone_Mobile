@@ -123,3 +123,16 @@ test('Copy is a separate target from navigation and uses the full original code'
  assert.ok(copy);copy.props.onPress();assert.equal(f.copied[0],f.rows[3].id);
  assert.equal(f.s.h.calls.length,0);f.s.unmount();
 });
+
+test('Home-style card keeps rejected history disabled while the original code remains copyable',()=>{
+ const f=fixture();f.tap('Đã từ chối');
+ f.rows.splice(0,f.rows.length,{...f.rows[0],isHistory:true,assignmentStatus:'REJECTED',acceptanceOutcome:'REJECTED',status:null,mode:null,version:'',defectIds:[],woCode:'FIELD-original-code-not-shortened',rejectedAt:'2026-11-22T03:00:00Z'});
+ f.query.data.pages=[{items:f.rows}];f.s.render();
+ const open=f.s.nodes().find(n=>n.props.accessibilityLabel?.startsWith('Mở nhiệm vụ'));
+ assert.ok(open);assert.equal(open.props.disabled,true);assert.equal(open.props.accessibilityState.disabled,true);
+ open.props.onPress();assert.equal(f.s.h.calls.length,0);
+ const copy=f.s.nodes().find(n=>n.props.accessibilityLabel?.startsWith('Sao chép mã nhiệm vụ'));
+ copy.props.onPress();assert.equal(f.copied.length,1);
+ const status=f.s.nodes().find(n=>n.type==='CrewTaskStatus');assert.equal(status.props.status,'REJECTED');assert.equal(status.props.label,'Phân công đã từ chối');
+ f.s.unmount();
+});
