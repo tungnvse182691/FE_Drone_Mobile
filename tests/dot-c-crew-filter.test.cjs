@@ -44,15 +44,14 @@ test('Cached summary uses exact session/environment key, deduplicates and exclud
  const f=fixture(undefined,rows=>[...rows,rows[0],{...rows[0],assignmentId:'00000000-0000-4000-8000-000000000099',crewId:'foreign'}]);
  const summary=()=>f.s.nodes().find(n=>n.props.accessibilityLabel==='Thống kê trong các nhiệm vụ đã tải');
  const text=n=>n==null?'':Array.isArray(n)?n.map(text).join(''):typeof n==='object'?text(n.props?.children):String(n);
- assert.equal(text(summary()),'2Đang mở5Đã tải3Đã xong');
+ assert.equal(summary(),undefined);
  assert.ok(f.s.nodes().some(n=>n.type==='Text'&&text(n)==='Trong các nhiệm vụ đã tải · Tải lúc 09:30'));
  const controls=f.s.nodes().find(n=>n.type==='View'&&n.props.children?.some?.(child=>child?.props?.accessibilityRole==='tablist'));
  const children=controls.props.children;
  assert.equal(children[0].props.accessibilityRole,'tablist');
- assert.equal(children[1].props.accessibilityLabel,'Thống kê trong các nhiệm vụ đã tải');
- assert.equal(children[2].type,'Text');
- assert.ok(children[3].props.children.some(child=>child?.props?.accessibilityLabel==='Bộ lọc'));
- f.tap('Chỉ đo kiểm');assert.equal(text(summary()),'2Đang mở5Đã tải3Đã xong');
+ assert.equal(children[1].type,'Text');
+ assert.ok(children[2].props.children.some(child=>child?.props?.accessibilityLabel==='Bộ lọc'));
+ f.tap('Chỉ đo kiểm');assert.equal(summary(),undefined);
  f.s.unmount();
 });
 
@@ -99,7 +98,7 @@ test('Summary replaces disclosure while refresh, warnings and pagination remain 
  f.s.nodes().find(n=>n.type==='Button'&&n.props.title==='Tải thêm').props.onPress();
  assert.equal(refreshes,1);assert.equal(pages,1);
  assert.ok(!f.s.nodes().some(n=>n.props.accessibilityLabel==='Dữ liệu danh sách nhiệm vụ'));
- assert.ok(f.s.nodes().some(n=>n.props.accessibilityLabel==='Thống kê trong các nhiệm vụ đã tải'));
+ assert.ok(!f.s.nodes().some(n=>n.props.accessibilityLabel==='Thống kê trong các nhiệm vụ đã tải'));
  f.query.isError=true;f.query.error={response:{status:503}};f.s.render();
  assert.match(JSON.stringify(f.s.nodes()),/Đang hiển thị danh sách đã tải trước đó/);
  assert.equal(f.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Tải thêm'),false);f.s.unmount();

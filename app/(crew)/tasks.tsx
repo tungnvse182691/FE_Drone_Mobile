@@ -283,17 +283,6 @@ export default function CrewTasksScreen() {
             <View style={[v2.tabBadge, segment === item.key && v2.tabBadgeActive]}><Text style={[typography.caption, v2.tabCount, segment === item.key && v2.tabTextActive]}>{tabCount(item.key)}</Text></View>
           </Pressable>)}
         </View>
-        <View style={v2.summary} accessibilityLabel="Thống kê trong các nhiệm vụ đã tải">
-          {[
-            { value: loaded.length - completed, label: 'Đang mở', accent: colors.primary },
-            { value: loaded.length, label: 'Đã tải', accent: colors.border },
-            { value: completed, label: 'Đã xong', accent: colors.success },
-          ].map(item => <View key={item.label} style={v2.summaryColumn}>
-            <View style={[v2.summaryAccent, { backgroundColor: item.accent }]} />
-            <Text style={[typography.titleLg, v2.summaryNumber]}>{inbox.query.isPending && !loaded.length ? '—' : item.value}</Text>
-            <Text style={[typography.caption, v2.summaryLabel]}>{item.label}</Text>
-          </View>)}
-        </View>
         <Text style={[typography.caption, v2.summaryCaption]}>Trong các nhiệm vụ đã tải · {loadedTime === '—' ? 'Chưa có thời gian tải' : `Tải lúc ${loadedTime}`}</Text>
         <View style={v2.searchRow}>
           <View style={v2.searchField}>
@@ -387,20 +376,15 @@ export default function CrewTasksScreen() {
 // Approved v2 palette; local token debt only, no shared token changes.
 const v2Palette = { navy: '#192D40', muted: '#5A6470', quiet: '#6E7A85' };
 const v2 = StyleSheet.create({
-  summary: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  summaryColumn: { flex: 1, minWidth: 0, alignItems: 'flex-start', padding: spacing.sm + spacing.xs, gap: spacing.xs, backgroundColor: colors.surface, borderRadius: radius.lg },
-  summaryAccent: { width: 16, height: 2, borderRadius: radius.sm, marginBottom: spacing.xs },
-  summaryNumber: { color: v2Palette.navy, fontSize: 26, lineHeight: 32, fontVariant: ['tabular-nums'] },
-  summaryLabel: { color: v2Palette.muted, lineHeight: 18, flexShrink: 1 },
   summaryCaption: { color: v2Palette.muted, marginTop: spacing.sm, lineHeight: 18 },
   controls: { paddingBottom: spacing.xs },
   tabs: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.xs, padding: spacing.xs, backgroundColor: colors.border, borderRadius: radius.lg + spacing.xs },
   tab: { flex: 1, flexShrink: 1, minWidth: 0, minHeight: 48, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
-  tabActive: { backgroundColor: v2Palette.navy },
+  tabActive: { backgroundColor: colors.primary },
   tabText: { color: v2Palette.muted, textAlign: 'center', lineHeight: 20, fontSize: 13 },
-  tabTextActive: { color: colors.surface },
+  tabTextActive: { color: v2Palette.navy },
   tabBadge: { minWidth: 22, paddingHorizontal: 5, paddingVertical: 2, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
-  tabBadgeActive: { backgroundColor: v2Palette.navy },
+  tabBadgeActive: { backgroundColor: colors.primary },
   tabCount: { fontVariant: ['tabular-nums'], fontSize: 12, color: v2Palette.muted, textAlign: 'center' },
   searchRow: { flexDirection: 'row', gap: 8, paddingTop: 12 },
   searchField: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
