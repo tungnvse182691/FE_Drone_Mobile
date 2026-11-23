@@ -273,18 +273,7 @@ export default function CrewTasksScreen() {
   const ripple = { color: '#1A1D2020' };
 
   return <View style={styles.screen}>
-    <SafeAreaScreen scroll header={<>
-      <AppHeader subtitle="Công việc" />
-      <View style={v2.summary} accessibilityLabel="Thống kê trong các nhiệm vụ đã tải">
-        {[
-          { value: loaded.length - completed, label: 'đang mở' },
-          { value: loaded.length, label: `đã tải lúc ${loadedTime}` },
-          { value: completed, label: 'đã xong' },
-        ].map((item, index) => <View key={item.label} style={[v2.summaryColumn, index > 0 && v2.summaryDivider]}>
-          <Text style={[typography.titleLg, v2.summaryNumber]}>{inbox.query.isPending && !loaded.length ? '—' : item.value}</Text>
-          <Text style={[typography.caption, v2.summaryLabel]}>{item.label}</Text>
-        </View>)}
-      </View>
+    <SafeAreaScreen scroll header={<AppHeader subtitle="Công việc" />}>
       <View style={v2.controls}>
         <View style={v2.tabs} accessibilityRole="tablist">
           {segments.map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label}
@@ -294,6 +283,18 @@ export default function CrewTasksScreen() {
             <View style={[v2.tabBadge, segment === item.key && v2.tabBadgeActive]}><Text style={[typography.caption, v2.tabCount, segment === item.key && v2.tabTextActive]}>{tabCount(item.key)}</Text></View>
           </Pressable>)}
         </View>
+        <View style={v2.summary} accessibilityLabel="Thống kê trong các nhiệm vụ đã tải">
+          {[
+            { value: loaded.length - completed, label: 'Đang mở', accent: colors.primary },
+            { value: loaded.length, label: 'Đã tải', accent: colors.border },
+            { value: completed, label: 'Đã xong', accent: colors.success },
+          ].map(item => <View key={item.label} style={v2.summaryColumn}>
+            <View style={[v2.summaryAccent, { backgroundColor: item.accent }]} />
+            <Text style={[typography.titleLg, v2.summaryNumber]}>{inbox.query.isPending && !loaded.length ? '—' : item.value}</Text>
+            <Text style={[typography.caption, v2.summaryLabel]}>{item.label}</Text>
+          </View>)}
+        </View>
+        <Text style={[typography.caption, v2.summaryCaption]}>Trong các nhiệm vụ đã tải · {loadedTime === '—' ? 'Chưa có thời gian tải' : `Tải lúc ${loadedTime}`}</Text>
         <View style={v2.searchRow}>
           <View style={v2.searchField}>
             <MaterialIcons name="search" size={20} color={v2Palette.muted} />
@@ -312,7 +313,6 @@ export default function CrewTasksScreen() {
           </Pressable>
         </View>
       </View>
-    </>}>
       {acceptance === 'REJECTED' ? <Text style={[typography.bodyMd, v2.notice]}>Lịch sử phân công đã từ chối</Text> : null}
       {inbox.stale ? <Text style={[typography.bodyMd, v2.notice]}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
       {inbox.error && list.length > 0 ? <Text style={[typography.bodyMd, v2.notice]} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
@@ -387,19 +387,20 @@ export default function CrewTasksScreen() {
 // Approved v2 palette; local token debt only, no shared token changes.
 const v2Palette = { navy: '#192D40', muted: '#5A6470', quiet: '#6E7A85' };
 const v2 = StyleSheet.create({
-  summary: { flexDirection: 'row', paddingVertical: 14, backgroundColor: colors.surface },
-  summaryColumn: { flex: 1, minWidth: 0, alignItems: 'center', paddingHorizontal: 8, gap: 4 },
-  summaryDivider: { borderLeftWidth: 1, borderLeftColor: colors.border },
+  summary: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  summaryColumn: { flex: 1, minWidth: 0, alignItems: 'flex-start', padding: spacing.sm + spacing.xs, gap: spacing.xs, backgroundColor: colors.surface, borderRadius: radius.lg },
+  summaryAccent: { width: 16, height: 2, borderRadius: radius.sm, marginBottom: spacing.xs },
   summaryNumber: { color: v2Palette.navy, fontSize: 26, lineHeight: 32, fontVariant: ['tabular-nums'] },
-  summaryLabel: { color: v2Palette.muted, textAlign: 'center', lineHeight: 18 },
-  controls: { backgroundColor: colors.surface, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tabs: { flexDirection: 'row', gap: 8 },
-  tab: { flex: 1, flexShrink: 1, minWidth: 0, minHeight: 48, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderBottomWidth: 3, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: colors.primary },
+  summaryLabel: { color: v2Palette.muted, lineHeight: 18, flexShrink: 1 },
+  summaryCaption: { color: v2Palette.muted, marginTop: spacing.sm, lineHeight: 18 },
+  controls: { paddingBottom: spacing.xs },
+  tabs: { flexDirection: 'row', alignItems: 'stretch', gap: spacing.xs, padding: spacing.xs, backgroundColor: colors.border, borderRadius: radius.lg + spacing.xs },
+  tab: { flex: 1, flexShrink: 1, minWidth: 0, minHeight: 48, flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, borderRadius: radius.lg, backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
+  tabActive: { backgroundColor: v2Palette.navy },
   tabText: { color: v2Palette.muted, textAlign: 'center', lineHeight: 20, fontSize: 13 },
-  tabTextActive: { color: v2Palette.navy },
+  tabTextActive: { color: colors.surface },
   tabBadge: { minWidth: 22, paddingHorizontal: 5, paddingVertical: 2, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
-  tabBadgeActive: { backgroundColor: colors.border },
+  tabBadgeActive: { backgroundColor: v2Palette.navy },
   tabCount: { fontVariant: ['tabular-nums'], fontSize: 12, color: v2Palette.muted, textAlign: 'center' },
   searchRow: { flexDirection: 'row', gap: 8, paddingTop: 12 },
   searchField: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceAlt, borderRadius: radius.lg, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },

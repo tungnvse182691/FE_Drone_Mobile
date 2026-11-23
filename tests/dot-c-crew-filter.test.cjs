@@ -44,8 +44,15 @@ test('Cached summary uses exact session/environment key, deduplicates and exclud
  const f=fixture(undefined,rows=>[...rows,rows[0],{...rows[0],assignmentId:'00000000-0000-4000-8000-000000000099',crewId:'foreign'}]);
  const summary=()=>f.s.nodes().find(n=>n.props.accessibilityLabel==='Thống kê trong các nhiệm vụ đã tải');
  const text=n=>n==null?'':Array.isArray(n)?n.map(text).join(''):typeof n==='object'?text(n.props?.children):String(n);
- assert.equal(text(summary()),'2đang mở5đã tải lúc 09:303đã xong');
- f.tap('Chỉ đo kiểm');assert.equal(text(summary()),'2đang mở5đã tải lúc 09:303đã xong');
+ assert.equal(text(summary()),'2Đang mở5Đã tải3Đã xong');
+ assert.ok(f.s.nodes().some(n=>n.type==='Text'&&text(n)==='Trong các nhiệm vụ đã tải · Tải lúc 09:30'));
+ const controls=f.s.nodes().find(n=>n.type==='View'&&n.props.children?.some?.(child=>child?.props?.accessibilityRole==='tablist'));
+ const children=controls.props.children;
+ assert.equal(children[0].props.accessibilityRole,'tablist');
+ assert.equal(children[1].props.accessibilityLabel,'Thống kê trong các nhiệm vụ đã tải');
+ assert.equal(children[2].type,'Text');
+ assert.ok(children[3].props.children.some(child=>child?.props?.accessibilityLabel==='Bộ lọc'));
+ f.tap('Chỉ đo kiểm');assert.equal(text(summary()),'2Đang mở5Đã tải3Đã xong');
  f.s.unmount();
 });
 

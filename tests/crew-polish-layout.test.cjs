@@ -12,6 +12,17 @@ test('Crew tabs grow with font size; filter and refresh controls retain 48dp tar
  const s=styles('sync');assert.equal(s.segments.height,undefined);assert.ok(s.segment.minHeight>=48);assert.equal(s.segment.height,undefined);assert.equal(s.segmentLabel.flexShrink,1);
  assert.ok(s.iconBtn.minWidth>=48);assert.ok(s.iconBtn.minHeight>=48);assert.equal(s.iconBtn.height,undefined);assert.equal(s.titleRow.flexWrap,'wrap');assert.ok(styles('navigation').floatingBack.width>=48);
 });
+
+test('Tasks segmented selection and separate KPI surfaces grow without dividers or clipping',()=>{
+ const task=styles('tasks','v2');
+ assert.equal(task.tabActive.backgroundColor,'#192D40');assert.equal(task.tabTextActive.color,'#FFFFFF');
+ assert.equal(task.tab.borderBottomWidth,undefined);assert.equal(task.tab.borderRightWidth,undefined);
+ assert.equal(task.summaryColumn.flex,1);assert.equal(task.summaryColumn.minWidth,0);
+ assert.equal(task.summaryColumn.height,undefined);assert.equal(task.summaryColumn.borderLeftWidth,undefined);
+ assert.ok(task.summaryColumn.borderRadius>=12);assert.ok(task.summary.gap>0);
+ assert.equal(task.summaryDivider,undefined);assert.equal(task.summaryLabel.numberOfLines,undefined);
+ assert.ok(task.summaryNumber.fontVariant.includes('tabular-nums'));
+});
 test('Crew long badge/deadline rows wrap instead of forcing cards wider',()=>{
  for(const [name,rows] of [['home',['taskCardHeader','taskCardFooter','footerLeftMeta']],['receiving',['rowHeader','infoRow']]])for(const row of rows)assert.equal(styles(name)[row].flexWrap,'wrap',`${name}.${row}`);
  const task=styles('tasks','v2');for(const row of ['taskIdentity','taskCardHeader','taskCardFooter'])assert.equal(task[row].flexWrap,'wrap');assert.equal(task.codeText.flexShrink,1);assert.equal(task.acceptance.flexShrink,1);assert.equal(task.taskTitle.numberOfLines,undefined);assert.equal(styles('home').sectionTitle.flexShrink,1);
