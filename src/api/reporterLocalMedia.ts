@@ -1,8 +1,11 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { randomUUID } from 'expo-crypto';
 import { MAX_PHOTO_BYTES, sha256HexOfBytes } from './uploads';
+import { readPhotoGps, type PhotoGps } from '../utils/photoGps';
+import type { ReportLocationSource } from '../types/position';
 
-export type ReporterPhotoSource = { uri: string; fileName: string; mediaType?: string | null; capturedAt: string };
+export type ReporterPhotoSource = { uri: string; fileName: string; mediaType?: string | null; capturedAt: string;
+  photoLocation?: PhotoGps | null; locationSource?: ReportLocationSource };
 export type PreservedReporterPhoto = ReporterPhotoSource & {
   mediaType: 'image/jpeg' | 'image/png'; sizeBytes: number; checksumSha256: string;
 };
@@ -52,8 +55,12 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     if (finalBytes.length !== size || finalHash !== checksumSha256) throw failure('photo_copy_mismatch');
     // No input path/name is used in the destination. Leftover partials are retained
     // on failure; no cleanup may infer that an old file is unreferenced.
+    const embeddedGps = source.locationSource === 'CAPTURE' ? null : readPhotoGps(bytes);
     return { uri: final.uri, fileName: key + (jpeg ? '.jpg' : '.png'), mediaType,
-      capturedAt: source.capturedAt, sizeBytes: size, checksumSha256 };
+      capturedAt: source.capturedAt, sizeBytes: size, checksumSha256,
+      ...(source.locationSource === 'CAPTURE'
+        ? { photoLocation: source.photoLocation ?? null, locationSource: source.photoLocation ? 'CAPTURE' as const : 'UNKNOWN' as const }
+        : { photoLocation: embeddedGps, locationSource: embeddedGps ? 'EXIF' as const : 'UNKNOWN' as const }) };
   } catch (error) {
     guard();
     const code = (error as { code?: string })?.code;

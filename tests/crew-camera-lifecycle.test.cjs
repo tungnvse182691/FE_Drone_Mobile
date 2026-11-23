@@ -4,9 +4,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 
-function harness() {
+function harness(location = { getForegroundPermissionsAsync: async () => ({ status: 'denied' }) }) {
   const state = [], refs = [], effects = [], captures = [];
-  let stateSlot = 0, refSlot = 0, effectSlot = 0, rendered;
+  let stateSlot = 0, refSlot = 0, effectSlot = 0, rendered, appStateListener;
   const react = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
     useState(initial) {
@@ -26,9 +26,9 @@ function harness() {
   const module = { exports: {} };
   const deps = {
     react: { ...react, default: react },
-    'react-native': { StyleSheet: { create: value => value, absoluteFill: {} } },
+    'react-native': { Pressable:'Pressable',Text:'Text',View:'View',AppState:{currentState:'active',addEventListener:(_,fn)=>{appStateListener=fn;return {remove(){appStateListener=undefined;}};}}, StyleSheet: { create: value => value, absoluteFill: {} } },
     'expo-camera': { CameraView: 'CameraView', useCameraPermissions: () => [{ granted: true }, () => {}] },
-    'expo-location': { getForegroundPermissionsAsync: async () => ({ status: 'denied' }) },
+    'expo-location': location,
     '@expo/vector-icons': { MaterialIcons: 'Icon' },
     './Button': { Button: 'Button' },
     '../design-tokens': { colors: {}, radius: {}, spacing: {}, typography: {} },
@@ -45,10 +45,70 @@ function harness() {
     stateSlot = refSlot = effectSlot = 0;
     rendered = module.exports.ViewFinder({ defectType: '', onCapture: photo => captures.push(photo), ...props });
     const all = nodes(rendered);
-    return { camera: all.find(node => node.type === 'CameraView'), shutter: all.find(node => node.props?.testID === 'capture-button'), texts: all.filter(node => node.type === 'Text').map(node => node.props.children.flat().join('')) };
+    return { retry:all.find(node=>node.props?.accessibilityLabel==='Lấy lại GPS'), camera: all.find(node => node.type === 'CameraView'), shutter: all.find(node => node.props?.testID === 'capture-button'), texts: all.filter(node => node.type === 'Text').map(node => node.props.children.flat().join('')) };
   }
-  return { render, captures, dispose: () => effects.forEach(effect => effect?.cleanup?.()) };
+  return { render, captures, appState:value=>appStateListener?.(value), dispose: () => effects.forEach(effect => effect?.cleanup?.()) };
 }
+
+test('Crew previews GPS before shutter, retries, and reacquires after returning from Settings',async()=>{
+  let reads=0;const fixes=[],statuses=[];
+  const h=harness({Accuracy:{High:4},getForegroundPermissionsAsync:async()=>({status:'granted'}),getCurrentPositionAsync:async()=>({timestamp:Date.now(),coords:{latitude:++reads,longitude:106,accuracy:5}})});
+  const props={active:true,taskKey:'A',freshLocationOnCapture:true,onCoordsChange:v=>fixes.push(v),onLocationStatusChange:v=>statuses.push(v)};
+  let ui=h.render(props);await new Promise(done=>setImmediate(done));
+  assert.equal(reads,1);assert.equal(fixes.at(-1).latitude,1);assert.equal(statuses.at(-1),'ready');
+  ui=h.render(props);assert.ok(ui.retry);ui.retry.props.onPress();h.render(props);await new Promise(done=>setImmediate(done));assert.equal(reads,2);
+  h.appState('background');h.render(props);h.appState('active');h.render(props);await new Promise(done=>setImmediate(done));assert.equal(reads,3);
+  h.dispose();
+});
+
+test('Crew denied preview reports unavailable and can retry after permission is granted',async()=>{
+  let granted=false,reads=0;const statuses=[];
+  const permission=async()=>({status:granted?'granted':'denied'});
+  const h=harness({Accuracy:{High:4},getForegroundPermissionsAsync:permission,requestForegroundPermissionsAsync:permission,getCurrentPositionAsync:async()=>{reads++;return {timestamp:Date.now(),coords:{latitude:10,longitude:106,accuracy:5}};}});
+  const props={active:true,freshLocationOnCapture:true,onLocationStatusChange:v=>statuses.push(v)};
+  h.render(props);await new Promise(done=>setImmediate(done));assert.equal(reads,0);assert.equal(statuses.at(-1),'unavailable');
+  granted=true;h.render(props).retry.props.onPress();h.render(props);await new Promise(done=>setImmediate(done));assert.equal(reads,1);assert.equal(statuses.at(-1),'ready');h.dispose();
+});
+
+test('a delayed preview cannot overwrite the fresh photo fix after capture finishes',async()=>{
+  let finishPreview,reads=0;const fixes=[],photos=[];
+  const h=harness({Accuracy:{High:4},getForegroundPermissionsAsync:async()=>({status:'granted'}),getCurrentPositionAsync:()=>++reads===1?new Promise(done=>{finishPreview=done;}):Promise.resolve({timestamp:Date.now(),coords:{latitude:20,longitude:106,accuracy:5}})});
+  const props={active:true,taskKey:'A',freshLocationOnCapture:true,onCoordsChange:v=>fixes.push(v),onCapture:(_,meta)=>photos.push(meta)};
+  let ui=h.render(props);await new Promise(done=>setImmediate(done));
+  ui.camera.props.ref.current={takePictureAsync:async()=>({uri:'file://photo'})};ui.camera.props.onCameraReady();ui=h.render(props);
+  await ui.shutter.props.onPress();assert.equal(photos[0].coordinates.latitude,20);
+  finishPreview({timestamp:Date.now(),coords:{latitude:10,longitude:106,accuracy:5}});await new Promise(done=>setImmediate(done));
+  assert.equal(fixes.at(-1).latitude,20);h.dispose();
+});
+
+test('Crew shutter requests a new fix per photo and passes that fix directly with its timestamp', async () => {
+  let reads=0;
+  const h=harness({Accuracy:{High:4},getForegroundPermissionsAsync:async()=>({status:'granted'}),
+    getCurrentPositionAsync:async()=>({timestamp:Date.now(),coords:{latitude:++reads,longitude:106,accuracy:5}})});
+  const metadata=[];
+  const props={active:true,taskKey:'A',freshLocationOnCapture:true,onCapture:(photo,meta)=>metadata.push(meta)};
+  let ui=h.render(props);
+  ui.camera.props.ref.current={takePictureAsync:async()=>({uri:'file://photo'})};
+  ui.camera.props.onCameraReady();ui=h.render(props);
+  await ui.shutter.props.onPress();await ui.shutter.props.onPress();
+  assert.equal(metadata.length,2);
+  assert.ok(metadata[1].coordinates.latitude>metadata[0].coordinates.latitude);
+  assert.ok(Number.isFinite(Date.parse(metadata[0].capturedAt)));
+  h.dispose();
+});
+
+test('Crew does not take a photo after losing focus while waiting for a GPS fix', async () => {
+  let resolve,shots=0;
+  const h=harness({Accuracy:{High:4},getForegroundPermissionsAsync:async()=>({status:'granted'}),
+    getCurrentPositionAsync:()=>new Promise(done=>{resolve=done;})});
+  let ui=h.render({active:true,taskKey:'A',freshLocationOnCapture:true});
+  ui.camera.props.ref.current={takePictureAsync:async()=>{shots++;return {uri:'file://photo'};}};
+  ui.camera.props.onCameraReady();ui=h.render({active:true,taskKey:'A',freshLocationOnCapture:true});
+  const pending=ui.shutter.props.onPress();await new Promise(done=>setImmediate(done));
+  h.render({active:false,taskKey:'A',freshLocationOnCapture:true});
+  resolve({timestamp:Date.now(),coords:{latitude:10,longitude:106,accuracy:5}});
+  await pending;assert.equal(shots,0);assert.equal(h.captures.length,0);h.dispose();
+});
 
 test('camera task A → B → A and focus changes remount preview and require fresh ready event', async () => {
   const h = harness();

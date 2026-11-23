@@ -5,7 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { Card } from '../Card';
 import { Button } from '../Button';
-import { groupCrewLocalDrafts, readCrewLocalDrafts, type CrewLocalDraftSummary } from '../../api/crewLocalDrafts';
+import { groupCrewLocalDrafts, readCrewLocalDrafts, readCrewLocalTaskCode, type CrewLocalDraftSummary } from '../../api/crewLocalDrafts';
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
 import { colors, radius, spacing, typography } from '../../design-tokens';
 
@@ -13,15 +13,29 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
   const [rows,setRows]=useState<CrewLocalDraftSummary[]>([]),[error,setError]=useState('');
   const [loading,setLoading]=useState(false),[expanded,setExpanded]=useState(false);
   const sequence=useRef(0);
-  useEffect(()=>()=>{sequence.current++;},[]);
+  const lookup=useRef<AbortController|null>(null);
+  useEffect(()=>()=>{sequence.current++;lookup.current?.abort();},[]);
   const refresh=useCallback(async()=>{
     const n=++sequence.current;
+    lookup.current?.abort();
+    const controller=new AbortController();lookup.current=controller;
     setLoading(true);
-    try {const result=await readCrewLocalDrafts(identity);if(n===sequence.current&&sameQueueIdentity(identity)){setRows(result);setError('');}}
+    try {
+      const result=await readCrewLocalDrafts(identity);
+      if(n!==sequence.current||!sameQueueIdentity(identity))return;
+      setRows(result);setError('');setLoading(false);
+      const codes=new Map<string,string|null>();
+      // Sequential reads avoid a request burst when many historical drafts exist.
+      for(const {latest:row} of groupCrewLocalDrafts(result)) {
+        if(n!==sequence.current||!sameQueueIdentity(identity)||controller.signal.aborted)return;
+        codes.set(JSON.stringify([row.projectId,row.taskId]),await readCrewLocalTaskCode(identity,row,controller.signal));
+      }
+      if(n===sequence.current&&sameQueueIdentity(identity))setRows(result.map(row=>({...row,taskCode:codes.get(JSON.stringify([row.projectId,row.taskId]))??null})));
+    }
     catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Không đọc được danh sách nháp. Dữ liệu vẫn được giữ trên máy.');}
     finally {if(n===sequence.current&&sameQueueIdentity(identity))setLoading(false);}
   },[identity]);
-  useFocusEffect(useCallback(()=>{void refresh();return()=>{sequence.current++;};},[refresh]));
+  useFocusEffect(useCallback(()=>{void refresh();return()=>{sequence.current++;lookup.current?.abort();};},[refresh]));
   useEffect(()=>{if(refreshSignal>0)void refresh();},[refresh,refreshSignal]);
   if(!sameQueueIdentity(identity))return null;
   const groups=groupCrewLocalDrafts(rows),visible=expanded?groups:groups.slice(0,3);
@@ -37,6 +51,7 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
     {!loading&&!error&&!rows.length?<Text style={[typography.bodyMd,{color:colors.secondary}]}>Chưa có hồ sơ lưu trên thiết bị.</Text>:null}
     {visible.map(({latest:row,versions,hasCommand})=><View key={JSON.stringify([row.projectId,row.taskId])} style={styles.draftRow}>
       <Text style={[typography.labelLg,styles.taskId]}>Nhiệm vụ · {row.taskId.slice(0,8)}</Text>
+      <Text selectable style={[typography.caption,styles.secondaryText]}>Mã nhiệm vụ: {row.taskCode??(row.taskCode===null?'Chưa tải được':'Đang tải…')}</Text>
       <View style={styles.snapshot}>
         <Text style={[typography.caption,styles.secondaryText]}>Bản lưu gần nhất</Text>
         <View style={styles.evidenceRow}>

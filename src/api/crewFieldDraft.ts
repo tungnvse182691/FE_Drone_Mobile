@@ -7,6 +7,7 @@ import { apiClient } from './client';
 import { sha256HexOfBytes } from './uploads';
 import * as crew from './crewApi';
 import type { Coords } from '../components/ViewFinder';
+import { readPhotoGps } from '../utils/photoGps';
 import { type RepairJournalRecord } from './crewRepairDraft';
 import { readRepairHistory } from './crewRepairHistory';
 
@@ -250,7 +251,10 @@ export async function startNewFieldSessionDraft(context: FieldContext): Promise<
 }
 /** Native bytes closed by arrayBuffer; hash durable temp, rename, then commit its URI in SQLite. */
 export async function captureFieldPhoto(context: FieldContext, uri: string, purpose: FieldCapture['purpose'],
-  mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false): Promise<FieldDraft> {
+  mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false, capturedAt?: string): Promise<FieldDraft> {
+  // Snapshot at entry for legacy callers too; file/network work must not move the shutter time.
+  const captureTime = camera ? (capturedAt ?? new Date().toISOString()) : null;
+  if (captureTime !== null && (!Number.isFinite(Date.parse(captureTime)) || Date.parse(captureTime) > Date.now())) throw new Error('Thời gian chụp ảnh không hợp lệ.');
   return exclusive(context, async () => {
     let captureStage='read_draft';
     try {
@@ -266,10 +270,18 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     }
     captureStage='read_photo';
     const bytes = await guarded(context,runtime,() => runtime.bytes(uri));
+    if (!bytes.length) throw new Error('Ảnh đã chọn không có dữ liệu. Vui lòng tải ảnh gốc về thiết bị rồi chọn lại.');
+    if (bytes.length > 20 * 1024 * 1024) {
+      const sizeMB = (bytes.length / 1000000).toFixed(2).replace('.', ',');
+      throw new Error(`Dung lượng ảnh ${sizeMB} MB vượt giới hạn 20.971.520 byte (khoảng 20,97 MB). Vui lòng chọn ảnh nhỏ hơn.`);
+    }
     const isJpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
     const isPng = bytes.length >= 8 && [137,80,78,71,13,10,26,10].every((v,i) => bytes[i] === v);
     const actualType = isJpeg ? 'image/jpeg' : isPng ? 'image/png' : null;
-    if (!actualType || !bytes.length || bytes.length > 20 * 1024 * 1024 || (mediaType && mediaType !== actualType)) throw new Error('Chỉ nhận JPEG/PNG tối đa 20 MiB, đúng định dạng thực.');
+    if (!actualType) throw new Error('Nội dung ảnh không phải JPEG hoặc PNG được hỗ trợ. Vui lòng xuất ảnh sang JPEG/PNG rồi chọn lại; đổi tên đuôi file không chuyển được định dạng.');
+    // DocumentPicker can return its generic fallback when the extension is
+    // unknown. This is not a contradictory image type; retain the sniffed type.
+    if (mediaType && mediaType !== 'application/octet-stream' && mediaType !== actualType) throw new Error(`Loại file do thiết bị cung cấp không khớp nội dung ảnh ${isJpeg ? 'JPEG' : 'PNG'}. Vui lòng xuất lại ảnh JPEG/PNG rồi chọn lại.`);
     captureStage='write_photo';
     const id = runtime.uuid(), directory = new Directory(Paths.document,'crew-field');
     directory.create({ idempotent: true, intermediates: true });
@@ -281,7 +293,7 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     captureStage='move_photo';
     await guarded(context,runtime,async () => { await temp.move(file); });
     draft.captures.push({ id,uri:file.uri,purpose,mediaType:actualType,checksum,size:bytes.length,
-      capturedAt:camera ? new Date().toISOString() : null, coordinates:camera ? coordinates : null,
+      capturedAt:captureTime, coordinates:camera ? coordinates : readPhotoGps(bytes),
       createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],localOnly:true,
       postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
     captureStage='save_draft';

@@ -1,5 +1,6 @@
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import { preserveReporterPhoto } from '../../src/api/reporterLocalMedia';
+import { acquireReporterPhotoGps } from '../../src/api/photoLocation';
 import { reportDescriptionError } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -17,7 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
-import * as Location from 'expo-location';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/reporter/Button';
 import { useReporterKeyboard } from '../../src/components/reporter/keyboardVisibility';
@@ -33,7 +33,6 @@ import {
   isReporterSession,
   normalizePhotoMediaType,
 } from '../../src/api/uploads';
-import { hasUsableCoordinate } from '../../src/types/position';
 import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type ReporterSubmissionProgress, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { REPORTER_REPORT_DETAIL, REPORTER_TRACK } from '../../src/constants/routes';
@@ -82,7 +81,11 @@ export default function ReporterReportSupplementScreen() {
   const metadata = useRef<Map<string, DraftPhoto>>(new Map());
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+  const photoBusy = useRef(false);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const cameraGeneration = useRef(0);
+  const [gpsBusy, setGpsBusy] = useState(false);
+  const closeCamera = () => { cameraGeneration.current++; setCameraReady(false); setCameraOpen(false); };
   const [cameraReady, setCameraReady] = useState(false);
 
   const [report, setReport] = useState<OwnReportDto | null>(null);
@@ -105,33 +108,6 @@ export default function ReporterReportSupplementScreen() {
 
   useEffect(() => {
     setNotice(null);
-  }, [scope.key]);
-
-  // Cố gắng lấy tọa độ thiết bị (không bắt buộc, nếu có thì gắn CAPTURE, không có thì UNKNOWN)
-  useEffect(() => {
-    let active = true;
-    const isCurrent = scope.capture();
-    (async () => {
-      try {
-        const perm = await Location.getForegroundPermissionsAsync();
-        if (!active || !isCurrent()) return;
-        if (perm.status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          if (active && isCurrent() &&
-              !useReporterStore.getState().pendingDraft && !submittingRef.current && !completed.current &&
-              hasUsableCoordinate(loc.coords.latitude, loc.coords.longitude)) {
-            setCoords({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-              accuracyMeters: loc.coords.accuracy ?? null,
-            });
-          }
-        }
-      } catch {
-        // Không có GPS thì tiếp tục với UNKNOWN
-      }
-    })();
-    return () => { active = false; };
   }, [scope.key]);
 
   const loadReport = useCallback(async () => {
@@ -176,7 +152,8 @@ export default function ReporterReportSupplementScreen() {
 
   const handlePickImage = async () => {
     const isCurrent = scope.capture();
-    if (!isCurrent()) return;
+    if (!isCurrent() || photoBusy.current || draftLocked || submittingRef.current || photos.length >= MAX_PHOTOS) return;
+    photoBusy.current = true;
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
@@ -196,12 +173,12 @@ export default function ReporterReportSupplementScreen() {
       }
     } catch {
       if (isCurrent()) setError('Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
-    }
+    } finally { photoBusy.current = false; }
   };
 
   const handleOpenCam = async () => {
     const isCurrent = scope.capture();
-    if (!isCurrent()) return;
+    if (!isCurrent() || photoBusy.current || draftLocked || submittingRef.current) return;
     try {
     if (!permission?.granted) {
       const res = await requestPermission();
@@ -219,16 +196,24 @@ export default function ReporterReportSupplementScreen() {
   };
 
   const handleCapture = async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
+    const isOwner = scope.capture();
+    const generation = cameraGeneration.current;
+    const isCurrent = () => isOwner() && generation === cameraGeneration.current;
+    if (!isCurrent() || photoBusy.current || draftLocked || submittingRef.current) return;
     if (!cameraReady || photos.length >= MAX_PHOTOS) {
       return;
     }
+    photoBusy.current = true;
+    setGpsBusy(true);
     try {
+    const photoLocation = await acquireReporterPhotoGps(isCurrent);
+    if (!isCurrent()) return;
+    const capturedAt = new Date().toISOString();
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
     if (photo?.uri) {
-      const saved = await preserveReporterPhoto({ uri: photo.uri, fileName: photo.uri.split('/').pop() ?? '', mediaType: 'image/jpeg', capturedAt: new Date().toISOString() }, isCurrent);
+      const saved = await preserveReporterPhoto({ uri: photo.uri, fileName: photo.uri.split('/').pop() ?? '', mediaType: 'image/jpeg', capturedAt,
+        photoLocation, locationSource: 'CAPTURE' }, isCurrent);
       if (!isCurrent()) return;
       metadata.current.set(saved.uri, saved);
       setPhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
@@ -239,7 +224,7 @@ export default function ReporterReportSupplementScreen() {
     }
     } catch {
       if (isCurrent()) setError('Không chụp được ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
-    }
+    } finally { photoBusy.current = false; setGpsBusy(false); }
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -260,7 +245,7 @@ export default function ReporterReportSupplementScreen() {
 
   const submit = async () => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || dataScope !== scope.key || submittingRef.current || phase === 'conflict' || !restored || !expectedVersion) return;
+    if (!isCurrent() || photoBusy.current || dataScope !== scope.key || submittingRef.current || phase === 'conflict' || !restored || !expectedVersion) return;
     const descriptionError = reportDescriptionError(description);
     if (descriptionError) { setError(descriptionError); return; }
     if (!photos.length) {
@@ -527,7 +512,7 @@ export default function ReporterReportSupplementScreen() {
         </Text>
       ) : null}
 
-      <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
+      <Modal visible={cameraOpen} animationType="slide" onRequestClose={closeCamera}>
         <View style={styles.cameraModal}>
           <CameraView
             ref={cameraRef}
@@ -538,7 +523,7 @@ export default function ReporterReportSupplementScreen() {
           <SafeAreaView testID="camera-controls" style={styles.cameraControls} edges={['top', 'bottom']}>
           <View style={styles.cameraTopBar}>
             <Pressable
-              onPress={() => setCameraOpen(false)}
+              onPress={closeCamera}
               style={styles.cameraClose}
               accessibilityRole="button"
               accessibilityLabel="Đóng camera"
@@ -551,9 +536,10 @@ export default function ReporterReportSupplementScreen() {
             <View style={styles.cameraClose} />
           </View>
           <View testID="camera-footer" style={styles.cameraFooter}>
+            {gpsBusy ? <Text accessibilityLiveRegion="polite" style={{ color: colors.onPrimary }}>Đang lấy GPS và chuẩn bị ảnh…</Text> : null}
             <Pressable
               onPress={() => void handleCapture()}
-              disabled={!cameraReady}
+              disabled={!cameraReady || gpsBusy}
               style={({ pressed }) => [styles.shutter, pressed && styles.shutterPressed]}
               accessibilityRole="button"
               accessibilityLabel="Chụp ảnh"

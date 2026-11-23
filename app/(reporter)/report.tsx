@@ -34,6 +34,7 @@ import { useUploadsStore, reporterContext } from '../../src/store/uploads';
 import { useReporterStore, useReporterDraftScope, reporterFailureMessage, type ReporterSubmissionProgress, type DraftPhoto } from '../../src/store/reporter';
 import { useAuthStore } from '../../src/store/auth';
 import { preserveReporterPhoto, reporterPhotoFailureMessage } from '../../src/api/reporterLocalMedia';
+import { acquireReporterPhotoGps } from '../../src/api/photoLocation';
 import { REPORTER_REPORT_DETAIL, REPORTER_HOME, REPORTER_UPLOADS } from '../../src/constants/routes';
 
 const softShadow = Platform.select({
@@ -63,6 +64,9 @@ export default function ReporterReportScreen() {
   const captureInFlight = useRef(false);
 
   const [cameraOpen, setCameraOpen] = useState(false);
+  const cameraGeneration = useRef(0);
+  const [gpsBusy, setGpsBusy] = useState(false);
+  const closeCamera = () => { cameraGeneration.current++; setCameraReady(false); setCameraOpen(false); };
   const [cameraReady, setCameraReady] = useState(false);
   const [photos, setPhotos] = useState<string[]>([]);
   const [showVerifiedPhotos, setShowVerifiedPhotos] = useState(false);
@@ -200,19 +204,24 @@ export default function ReporterReportScreen() {
   };
 
   const handleCapture = async () => {
-    const isCurrent = scope.capture();
+    const isOwner = scope.capture();
+    const generation = cameraGeneration.current;
+    const isCurrent = () => isOwner() && generation === cameraGeneration.current;
     if (!isCurrent() || submitting || submitted.current || draftLocked || !restored || dataScope !== scope.key) return;
     if (!cameraReady || captureInFlight.current || selectedPhotos.current.length >= MAX_PHOTOS) {
       return;
     }
     captureInFlight.current = true;
-    const capturedAt = new Date().toISOString();
+    setGpsBusy(true);
     try {
+    const photoLocation = await acquireReporterPhotoGps(isCurrent);
+    if (!isCurrent()) return;
+    const capturedAt = new Date().toISOString();
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
     if (photo?.uri) {
       const saved = await preserveReporterPhoto({ uri: photo.uri, fileName: photo.uri.split('/').pop() ?? '',
-        mediaType: 'image/jpeg', capturedAt }, isCurrent);
+        mediaType: 'image/jpeg', capturedAt, photoLocation, locationSource: 'CAPTURE' }, isCurrent);
       if (!isCurrent()) return;
       photoMeta.current.set(saved.uri, saved);
       updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
@@ -222,6 +231,7 @@ export default function ReporterReportScreen() {
       if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không chụp được ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     } finally {
       captureInFlight.current = false;
+      setGpsBusy(false);
     }
   };
 
@@ -521,13 +531,13 @@ export default function ReporterReportScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal visible={cameraOpen} animationType="slide" onRequestClose={() => setCameraOpen(false)}>
+      <Modal visible={cameraOpen} animationType="slide" onRequestClose={closeCamera}>
         <View style={styles.cameraModal}>
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="back" onCameraReady={() => setCameraReady(true)} />
           <SafeAreaView testID="camera-controls" style={styles.cameraControls} edges={['top', 'bottom']}>
           <View style={styles.cameraTopBar}>
             <Pressable
-              onPress={() => setCameraOpen(false)}
+              onPress={closeCamera}
               style={styles.cameraClose}
               accessibilityRole="button"
               accessibilityLabel="Đóng camera"
@@ -540,9 +550,10 @@ export default function ReporterReportScreen() {
             <View style={styles.cameraClose} />
           </View>
           <View testID="camera-footer" style={styles.cameraFooter}>
+            {gpsBusy ? <Text accessibilityLiveRegion="polite" style={{ color: colors.onPrimary }}>Đang lấy GPS và chuẩn bị ảnh…</Text> : null}
             <Pressable
               onPress={handleCapture}
-              disabled={!cameraReady}
+              disabled={!cameraReady || gpsBusy}
               style={({ pressed }) => [styles.shutter, pressed && styles.shutterPressed]}
               accessibilityRole="button"
               accessibilityLabel="Chụp ảnh"

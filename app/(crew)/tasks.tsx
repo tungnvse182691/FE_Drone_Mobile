@@ -219,11 +219,13 @@ export function crewTaskCodePreview(code: string): string {
 const ACCEPTANCE_FILTERS = [
   { key: 'ALL', label: 'Tất cả tiếp nhận' }, { key: 'PENDING', label: 'Chờ tiếp nhận' },
   { key: 'ACCEPTED', label: 'Đã nhận' }, { key: 'REJECTED', label: 'Đã từ chối' },
+  { key: 'SUPPLEMENTREQUIRED', label: 'Cần bổ sung' },
 ] as const;
 
 export default function CrewTasksScreen() {
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUPPLEMENTREQUIRED'>('ALL');
   const [acceptance, setAcceptance] = useState<'ALL' | 'PENDING' | 'ACCEPTED' | 'REJECTED'>('ALL');
   const [filterOpen, setFilterOpen] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(true);
@@ -245,6 +247,7 @@ export default function CrewTasksScreen() {
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
   const inbox = useCrewInbox({
     statusGroup: segment === 'active' ? 'INCOMPLETE' : segment === 'done' ? 'COMPLETED' : 'OTHER',
+    status: statusFilter === 'ALL' ? undefined : statusFilter,
     mode: modeFilter === 'ALL' ? undefined : modeFilter,
     acceptance: acceptance === 'ALL' ? undefined : acceptance, search: debouncedSearch,
   });
@@ -279,7 +282,7 @@ export default function CrewTasksScreen() {
         <View style={v2.tabs} accessibilityRole="tablist">
           {segments.map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label}
             accessibilityState={{ selected: segment === item.key }} android_ripple={ripple}
-            style={[v2.tab, segment === item.key && v2.tabActive]} onPress={() => setSegment(item.key)}>
+            style={[v2.tab, segment === item.key && v2.tabActive]} onPress={() => { setSegment(item.key); if (item.key !== 'active') setStatusFilter('ALL'); }}>
             <Text style={[typography.labelLg, v2.tabText, segment === item.key && v2.tabTextActive]}>{item.label}</Text>
             <View style={[v2.tabBadge, segment === item.key && v2.tabBadgeActive]}><Text style={[typography.caption, v2.tabCount, segment === item.key && v2.tabTextActive]}>{tabCount(item.key)}</Text></View>
           </Pressable>)}
@@ -359,12 +362,28 @@ export default function CrewTasksScreen() {
             <Text style={[typography.titleLg, v2.groupTitle]}>Bộ lọc</Text>
             <Text style={[typography.bodyMd, v2.muted]}>Chọn xong danh sách tự cập nhật ngay.</Text>
             <Text style={[typography.titleMd, v2.filterHeading]}>Tiếp nhận</Text>
-            <View style={v2.chips}>{ACCEPTANCE_FILTERS.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: acceptance === item.key }} android_ripple={ripple} onPress={() => setAcceptance(item.key)} style={[v2.chip, acceptance === item.key && v2.chipSelected]}><Text style={[typography.bodyMd, v2.chipText, acceptance === item.key && v2.chipTextSelected]}>{item.label}</Text></Pressable>)}</View>
+            <View style={v2.chips}>{ACCEPTANCE_FILTERS.map(item => {
+              // One UI choice; keep acceptance and task status distinct on the wire.
+              const selected = item.key === 'SUPPLEMENTREQUIRED'
+                ? statusFilter === 'SUPPLEMENTREQUIRED'
+                : statusFilter === 'ALL' && acceptance === item.key;
+              return <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected }} android_ripple={ripple}
+                onPress={() => {
+                  if (item.key === 'SUPPLEMENTREQUIRED') {
+                    setStatusFilter('SUPPLEMENTREQUIRED');
+                    setAcceptance('ALL');
+                    setSegment('active');
+                  } else {
+                    setAcceptance(item.key);
+                    setStatusFilter('ALL');
+                  }
+                }} style={[v2.chip, selected && v2.chipSelected]}><Text style={[typography.bodyMd, v2.chipText, selected && v2.chipTextSelected]}>{item.label}</Text></Pressable>;
+            })}</View>
             <Text style={[typography.titleMd, v2.filterHeading]}>Loại công việc</Text>
             <View style={v2.chips}>{TASK_MODE_FILTERS.map(item => <Pressable key={item.key} accessibilityRole="button" accessibilityLabel={item.label} accessibilityState={{ selected: modeFilter === item.key }} android_ripple={ripple} onPress={() => setModeFilter(item.key)} style={[v2.chip, modeFilter === item.key && v2.chipSelected]}><Text style={[typography.bodyMd, v2.chipText, modeFilter === item.key && v2.chipTextSelected]}>{item.label}</Text></Pressable>)}</View>
           </ScrollView>
           <View style={v2.sheetActions}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Xóa lọc" android_ripple={ripple} style={[v2.sheetButton, v2.resetButton]} onPress={() => { setAcceptance('ALL'); setModeFilter('ALL'); }}><Text style={[typography.labelLg, v2.chipText]}>Xóa lọc</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Xóa lọc" android_ripple={ripple} style={[v2.sheetButton, v2.resetButton]} onPress={() => { setAcceptance('ALL'); setModeFilter('ALL'); setStatusFilter('ALL'); }}><Text style={[typography.labelLg, v2.chipText]}>Xóa lọc</Text></Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel="Hoàn tất" android_ripple={ripple} style={[v2.sheetButton, v2.applyButton]} onPress={() => setFilterOpen(false)}><Text style={[typography.labelLg, v2.chipText]}>Hoàn tất</Text></Pressable>
           </View>
         </View>

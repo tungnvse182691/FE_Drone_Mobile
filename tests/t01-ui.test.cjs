@@ -46,5 +46,8 @@ for(const restoreFirst of [true,false]) for(const coords of [null,{latitude:10,l
   const restore=()=>h.report.resolve({report:{id:'fixture-report'},etag:'"new-version"'});
   const locate=()=>h.gps.resolve({coords:{latitude:11,longitude:107,accuracy:20}});
   (restoreFirst?restore:locate)();await settle();(restoreFirst?locate:restore)();await settle();
-  assert.equal(JSON.stringify(h.states[9].value),JSON.stringify(coords));
+  const source=fs.readFileSync(path.join(__dirname,'../app/(reporter)/report-supplement.tsx'),'utf8');
+  const stateNames=[...source.matchAll(/const \[([^,]+),[^\]]+\] = useState/g)].map(match=>match[1]);
+  const index=stateNames.indexOf('coords');assert.ok(index>=0);
+  assert.equal(JSON.stringify(h.states[index].value),JSON.stringify(coords));
 });

@@ -5,7 +5,7 @@ import { router, useLocalSearchParams, useFocusEffect, useIsFocused } from 'expo
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
-import { ViewFinder, type Coords } from '../../src/components/ViewFinder';
+import { ViewFinder, type Coords, type CaptureMetadata } from '../../src/components/ViewFinder';
 import { Button } from '../../src/components/Button';
 import { defectTypeLabel } from '../../src/constants/defect-types';
 import { CrewTaskBoundary, useCrewIdentity } from './tasks';
@@ -56,6 +56,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const [ready, setReady] = useState(false);
   const [postRepairCapture,setPostRepairCapture]=useState(false);
   const [cameraShooting, setCameraShooting] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<'locating' | 'ready' | 'unavailable'>('locating');
   const normalAfter=mode==='after'&&(task.detail?.mode==='NORMAL'||task.detail?.mode==='CONDITIONAL_FT');
   const afterBlocked=normalAfter&&(!draft?.repairClaim||!postRepairCapture);
   const activeRef=useRef(false),savingRef=useRef(false),pickerRef=useRef(false),cameraShootingRef=useRef(false);
@@ -72,8 +73,8 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const afterReady = !!draft?.captures.some(c=>c.purpose==='AFTER');
   const photoCount = draft?.captures.length??0;
   const previewDate = new Date();
-  const gpsText = coords ? `${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : 'Chưa có GPS quan sát';
-  const savePhoto = async (uri: string, mediaType: string, camera: boolean) => {
+  const gpsText = coords ? `GPS: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}` : locationStatus === 'locating' ? 'Đang lấy vị trí thiết bị…' : 'Chưa lấy được vị trí. Bấm Lấy lại GPS để thử lại.';
+  const savePhoto = async (uri: string, mediaType: string, camera: boolean, metadata?: CaptureMetadata) => {
     if (!isFocused || !activeRef.current || savingRef.current || busy || block || afterBlocked || localRecoveryBlocked || !ready || !draft || draft.command) {
       if (activeRef.current && !busy && (block || afterBlocked || localRecoveryBlocked)) setNotice(block || (afterBlocked ? 'Cần xác nhận điều kiện ảnh sau sửa.' : 'Cần đối soát nháp cũ trước khi lưu ảnh mới.'));
       return;
@@ -81,14 +82,14 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     const context=currentFieldContext(task.projectId,task.id);if(!context)return;
     savingRef.current=true;setBusy(true);
     try {
-      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,coords,camera,normalAfter&&postRepairCapture);
+      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,metadata?.coordinates??null,camera,normalAfter&&postRepairCapture,metadata?.capturedAt);
       if(!activeRef.current||!matches(context))return;
-      setDraft(value);setNotice('Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa tải ảnh lên hoặc gửi hồ sơ.');
+      setDraft(value);setNotice(camera&&!metadata?.coordinates?'Đã lưu ảnh vào nháp, chưa lấy được GPS cho ảnh này. Xem trong Thông tin ảnh tại hồ sơ.':'Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa tải ảnh lên hoặc gửi hồ sơ.');
     } catch(error) {if(activeRef.current&&matches(context))setNotice(fieldErrorMessage(error));}
     finally {savingRef.current=false;if(activeRef.current&&matches(context))setBusy(false);}
   };
   const renderedContext=currentFieldContext(task.projectId,task.id);
-  const handleCapture = (photo: CameraCapturedPicture) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true);};
+  const handleCapture = (photo: CameraCapturedPicture, metadata?: CaptureMetadata) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true,metadata);};
   const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId, ...(params.supplement === '1' ? { supplement: '1' } : {}) } };
   const closeCamera = () => { if (router.canGoBack()) router.back(); else router.dismissTo(fieldHref); };
   if (block) return <SafeAreaView style={styles.blockedSafe}>
@@ -109,7 +110,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           <MaterialIcons name="location-on" size={14} color={colors.warning} />
           <Text style={[typography.labelSm, styles.watermarkGpsText]}>{gpsText}</Text>
         </View>
-        <Text style={styles.rtkBadge}>{coords ? 'Có GPS' : 'GPS…'}</Text>
+        <Text style={styles.rtkBadge}>{coords ? 'Có GPS' : locationStatus === 'locating' ? 'Đang lấy' : 'Chưa có'}</Text>
       </View>
       <View style={styles.watermarkMeta}>
         <MaterialIcons name="description" size={13} color="#94A3B8" />
@@ -272,8 +273,10 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
           disabled={busy||!ready||!!draft?.command||afterBlocked||localRecoveryBlocked}
           disabledReason={localRecoveryBlocked ? 'Nháp phiên cũ cần đối soát trước khi chụp ảnh.' : !ready ? 'Đang mở hồ sơ hiện trường…' : draft?.command ? 'Hồ sơ có lệnh đang chờ đối soát.' : afterBlocked ? 'Cần xác nhận điều kiện ảnh sau sửa.' : busy ? 'Đang lưu ảnh vào nháp…' : undefined}
           onCapture={handleCapture}
+          freshLocationOnCapture
           onShootingChange={handleShootingChange}
           onCoordsChange={setCoords}
+          onLocationStatusChange={setLocationStatus}
           defectType={task.defect_type_code ? defectTypeLabel(task.defect_type_code) : ''}
           flashMode={flashOn ? 'on' : 'off'}
           facing={facing}
@@ -289,7 +292,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
         <Button variant="primary" title="Đo kiểm và hồ sơ hiện trường" disabled={busy || !ready} onPress={handleConfirm} />
 
         <Text style={[typography.caption, styles.sheetHint]}>
-          {notice || 'Chỉ lưu tọa độ camera quan sát được. Ảnh thư viện không được gán GPS hoặc thời gian chụp mới.'}
+          {notice || 'Ảnh chụp lưu GPS tại lần chụp. Ảnh chọn từ máy chỉ đọc GPS gốc nếu ảnh còn thông tin này.'}
         </Text>
       </View>
     </SafeAreaView>

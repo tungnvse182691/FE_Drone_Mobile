@@ -1,10 +1,23 @@
 import { initDatabase, openDatabase } from '../offline/database';
 import { sameQueueIdentity, type QueueIdentity } from '../offline/upload-queue';
-import { isCrewResourceId } from './crewApi';
+import { isCrewResourceId, searchCrewTaskIdentityPage } from './crewApi';
 
 export interface CrewLocalDraftSummary {
   id:string; projectId:string; taskId:string; photos:number; verifiedPhotos:number;
-  measurements:number; currentSession:boolean; hasCommand:boolean; updatedAt:string|null;
+  measurements:number; currentSession:boolean; hasCommand:boolean; updatedAt:string|null; taskCode?:string|null;
+}
+/** Display-only identity lookup. Failure must not hide or modify a local draft. */
+export async function readCrewLocalTaskCode(identity:QueueIdentity,row:Pick<CrewLocalDraftSummary,'projectId'|'taskId'>,signal?:AbortSignal):Promise<string|null> {
+  try {
+    if(identity.role!=='REPAIR_CREW'||!sameQueueIdentity(identity))return null;
+    const result=await searchCrewTaskIdentityPage(null,100,signal??new AbortController().signal,{search:row.taskId},{
+      actorId:identity.actor,
+      assertCurrent:()=>{if(!sameQueueIdentity(identity))throw Error('crew_session_changed');},
+    });
+    if(!sameQueueIdentity(identity)||signal?.aborted)return null;
+    const task=result.items.find(item=>item.id.toLowerCase()===row.taskId.toLowerCase()&&item.projectId.toLowerCase()===row.projectId.toLowerCase()&&item.crewId.toLowerCase()===identity.actor.toLowerCase());
+    return task?.taskCode?.trim()||null;
+  } catch {return null;}
 }
 /** Read-only index of FIELD storage, separate from signed-sync receipts. No payload or URI escapes. */
 export async function readCrewLocalDrafts(identity:QueueIdentity):Promise<CrewLocalDraftSummary[]> {

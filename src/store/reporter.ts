@@ -21,6 +21,8 @@ export interface DraftPhoto {
   fileName: string;
   mediaType: string;
   capturedAt: string;
+  photoLocation?: { latitude: number; longitude: number; accuracyMeters: number | null } | null;
+  locationSource?: import('../types/position').ReportLocationSource;
   itemId?: string;
   /** Admission proof for NEW durable selections; never backfilled onto historical media. */
   sizeBytes?: number;
@@ -375,10 +377,13 @@ export const useReporterStore = create<ReporterSessionState>()(
               assertOwner();
               if ((photo.checksumSha256 && photo.checksumSha256 !== checksumSha256) ||
                   (photo.sizeBytes !== undefined && photo.sizeBytes !== bytes.length)) throw { code: 'upload_bytes_changed', stage: 'local_read' };
-              const location = buildReportEvidenceLocation(draft.coords?.latitude, draft.coords?.longitude, draft.coords?.accuracyMeters);
+              // Explicit null on new photos must not inherit a screen/another photo's fix.
+              // Undefined preserves historical unstarted drafts; bound uploads/requests stay immutable.
+              const fix = photo.photoLocation === undefined ? draft.coords : photo.photoLocation;
+              const location = buildReportEvidenceLocation(fix?.latitude, fix?.longitude, fix?.accuracyMeters);
               id = await queue.enqueuePhoto({ partitionId: context.partition, uriLocal: photo.uri, fileName: photo.fileName, mediaType: photo.mediaType,
                 sizeBytes: bytes.length, checksumSha256, capturedAt: photo.capturedAt,
-                locationSource: sourceFor(Boolean(location)), ...location });
+                locationSource: location ? photo.locationSource ?? sourceFor(true) : 'UNKNOWN', ...location });
               await putDraft({ ...draft, photos: draft.photos.map((p, i) => i === index ? { ...p, itemId: id } : p) });
             }
             const linked = useUploadsStore.getState().items.find(p => p.id === id);

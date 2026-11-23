@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {screen,harness}=require('./helpers/roadfe-screen.cjs');
 const actor='00000000-0000-4000-8000-000000000001',projectId='00000000-0000-4000-8000-000000000002';
 function fixture(modes,cache,motion=true){
- const copied=[];
+ const copied=[], queries=[];
  const api=harness().load('src/api/crewApi.ts');
  const rows=(modes??[['Completed','MEASURE_ONLY'],['Completed','INSPECT_AND_REPAIR'],['Completed','FUTURE'],['Submitted','MEASURE_ONLY'],['Assigned','INSPECT_AND_REPAIR']]).map(([status,mode],i)=>({id:'00000000-0000-4000-8000-00000000001'+i,assignmentId:'00000000-0000-4000-8000-00000000001'+i,assignmentStatus:'ACTIVE',projectId,crewId:actor,mode,status,version:'v1',defectIds:[]}));
  const query={data:{pages:[{items:rows.slice(0,2)},{items:rows.slice(2)}]},isPending:false,isFetching:false,isError:false,hasNextPage:true,refetch(){},fetchNextPage(){}};
@@ -10,7 +10,7 @@ function fixture(modes,cache,motion=true){
  const s=screen('app/(crew)/tasks.tsx',{moduleFactories:{'react-native':({modules})=>({...modules['react-native'],Keyboard:{...modules['react-native'].Keyboard,dismiss(){}},Clipboard:{setString(value){copied.push(value);}},AccessibilityInfo:{announceForAccessibility(){},isReduceMotionEnabled:()=>Promise.resolve(motion),addEventListener:(name,fn)=>{listeners.set(name,fn);return {remove:()=>listeners.delete(name)};}}})},modules:{
   '../../src/components/crew/CrewHomeTaskPressable':{CrewHomeTaskPressable:'Pressable'},
   '@tanstack/react-query':{useQueryClient:()=>({resetQueries(){},getQueryData(key){if(!cache)return undefined;assert.equal(key[0],'crew-inbox');assert.equal(key[1],'["'+actor+'","s1"]');assert.equal(key[3],'fixture-env');assert.equal(key[2].statusGroup,undefined);assert.equal(key[2].mode,undefined);return {pages:[{items:cache(rows),asOf:'2026-11-23T02:30:00Z'}]};}}),useInfiniteQuery:options=>{
-    const f=options.queryKey[2],selected=query.data.pages.flatMap(p=>p.items).filter(r=>(!f.mode||r.mode===f.mode)&&(!f.statusGroup|| (f.statusGroup==='COMPLETED'?r.status.toUpperCase()==='COMPLETED':f.statusGroup==='INCOMPLETE'?r.status.toUpperCase()!=='COMPLETED':false)));
+    queries.push(options); const f=options.queryKey[2],selected=query.data.pages.flatMap(p=>p.items).filter(r=>(!f.status||r.status.toUpperCase()===f.status)&&(!f.mode||r.mode===f.mode)&&(!f.statusGroup|| (f.statusGroup==='COMPLETED'?r.status.toUpperCase()==='COMPLETED':f.statusGroup==='INCOMPLETE'?r.status.toUpperCase()!=='COMPLETED':false)));
     return {...query,data:{pages:[{items:selected}]}};
   }},
   'expo-router':{router:{push(){throw Error('unexpected navigation');}},useFocusEffect(){},usePathname:()=>'/tasks'},
@@ -28,7 +28,7 @@ function fixture(modes,cache,motion=true){
   const node=s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel===label);assert.ok(node,label);node.props.onPress();s.render();
  };
  const ids=()=>s.nodes().filter(n=>n.type==='View'&&rows.some(r=>r.id===n.props.key)).map(n=>n.props.key);
- s.render();return {s,query,rows,tap,ids,copied,listeners};
+ s.render();return {s,query,rows,tap,ids,copied,listeners,queries};
 }
 
 test('Sheet slides only after OS permits motion, follows changes and removes subscription',async()=>{
@@ -140,5 +140,53 @@ test('Home-style card keeps rejected history disabled while the original code re
  const copy=f.s.nodes().find(n=>n.props.accessibilityLabel?.startsWith('Sao chép mã nhiệm vụ'));
  copy.props.onPress();assert.equal(f.copied.length,1);
  const status=f.s.nodes().find(n=>n.type==='CrewTaskStatus');assert.equal(status.props.status,'REJECTED');assert.equal(status.props.label,'Phân công đã từ chối');
+ f.s.unmount();
+});
+
+
+test('Supplement filter reaches API037 query and has isolated pagination/cache identity',()=>{
+ const f=fixture([['SupplementRequired','NORMAL'],['InProgress','NORMAL'],['Completed','NORMAL']]);
+ f.tap('Bộ lọc');f.tap('Cần bổ sung');
+ const options=f.queries.at(-1), q=options.queryKey[2];
+ assert.equal(q.status,'SUPPLEMENTREQUIRED');assert.equal(q.statusGroup,'INCOMPLETE');
+ assert.equal(options.initialPageParam,null);
+ assert.deepEqual(f.ids(),[f.rows[0].id]);
+ f.tap('Tất cả tiếp nhận');
+ assert.equal(f.queries.at(-1).queryKey[2].status,undefined);
+ assert.notDeepEqual(options.queryKey,f.queries.at(-1).queryKey);
+ f.tap('Cần bổ sung');f.tap('Xóa lọc');
+ assert.equal(f.queries.at(-1).queryKey[2].status,undefined);
+ f.s.unmount();
+});
+
+test('Supplement selection resolves incompatible tabs/acceptance and never persists invisibly',()=>{
+ const f=fixture([['SupplementRequired','NORMAL'],['Completed','NORMAL']]);
+ f.tap('Hoàn thành');f.tap('Bộ lọc');f.tap('Chờ tiếp nhận');f.tap('Cần bổ sung');
+ let q=f.queries.at(-1).queryKey[2];
+ assert.equal(q.statusGroup,'INCOMPLETE');assert.equal(q.acceptance,undefined);
+ assert.equal(f.s.nodes().find(n=>n.props.accessibilityLabel==='Chưa hoàn thành').props.accessibilityState.selected,true);
+ f.tap('Hoàn thành');assert.equal(f.queries.at(-1).queryKey[2].status,undefined);
+ f.tap('Cần bổ sung');f.tap('Khác');assert.equal(f.queries.at(-1).queryKey[2].status,undefined);
+ f.tap('Cần bổ sung');f.tap('Đã từ chối');
+ q=f.queries.at(-1).queryKey[2];assert.equal(q.acceptance,'REJECTED');assert.equal(q.status,undefined);
+ assert.equal(f.s.nodes().find(n=>n.props.accessibilityLabel==='Đã từ chối').props.accessibilityState.selected,true);
+ f.tap('Cần bổ sung');assert.equal(f.queries.at(-1).queryKey[2].acceptance,undefined);
+ f.tap('Đã nhận');assert.equal(f.queries.at(-1).queryKey[2].status,undefined);assert.equal(f.queries.at(-1).queryKey[2].acceptance,'ACCEPTED');
+ f.tap('Chờ tiếp nhận');assert.equal(f.queries.at(-1).queryKey[2].status,undefined);
+ f.s.unmount();
+});
+
+
+test('Supplement is one exclusive choice in receiving group, without a separate status section',()=>{
+ const f=fixture();f.tap('Bộ lọc');
+ assert.doesNotMatch(JSON.stringify(f.s.nodes()),/Trạng thái công việc|Tất cả trạng thái/);
+ const labels=['Tất cả tiếp nhận','Chờ tiếp nhận','Đã nhận','Đã từ chối','Cần bổ sung'];
+ const nodes=()=>labels.map(label=>f.s.nodes().find(n=>n.type==='Pressable'&&n.props.accessibilityLabel===label));
+ const group=f.s.nodes().find(n=>n.type==='View'&&nodes().every(chip=>n.props.children?.flat(Infinity).includes(chip)));
+ assert.ok(group,'all five receiving choices share the same group');
+ for(const label of ['Cần bổ sung','Tất cả tiếp nhận','Cần bổ sung','Đã nhận','Cần bổ sung','Đã từ chối']){
+   f.tap(label);
+   assert.deepEqual(nodes().filter(n=>n.props.accessibilityState.selected).map(n=>n.props.accessibilityLabel),[label]);
+ }
  f.s.unmount();
 });

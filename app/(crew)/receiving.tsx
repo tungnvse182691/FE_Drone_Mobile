@@ -9,7 +9,6 @@ import { Card } from '../../src/components/Card';
 import { Chip, type ChipVariant } from '../../src/components/Chip';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
-import { Toast } from '../../src/components/Toast';
 import { repairCommandErrorMessage } from '../../src/hooks/useRepairBootstrap';
 import { useAuthStore } from '../../src/store/auth';
 import { currentReceivingIdentity, sameReceivingIdentity, type ReceivingIdentity } from '../../src/api/crewReceivingDraft';
@@ -160,12 +159,12 @@ function ReceivingProjects({identity}:{identity:ReceivingIdentity}) {
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Yêu cầu cần tiếp nhận" showBack fallbackRoute="/(crew)/home" />}>
     <CrewContentTransition ready={!loading} replayOnFocus>
     <Pressable onPress={()=>setShowHelp(value=>!value)} accessibilityRole="button" accessibilityState={{expanded:showHelp}} style={styles.helpToggle}>
-      <MaterialIcons name="help-outline" size={18} color={colors.brandGold}/><Text style={styles.helpLabel}>Vì sao cần chọn dự án?</Text>
+      <MaterialIcons name="help-outline" size={18} color={colors.brandGold}/><Text style={styles.helpLabel}>Trợ giúp và cập nhật dự án</Text>
     </Pressable>
     {showHelp?<Text style={[typography.caption,styles.helpText]}>Chỉ hiển thị yêu cầu trong các dự án mà máy chủ xác nhận quyền hiện tại. Danh sách có thể chưa bao phủ tất cả dự án của bạn.</Text>:null}
     <View style={styles.projectHeader}>
       <Text style={typography.labelLg}>Dự án</Text>
-      <Button variant="text" title="Tải lại" loading={loading} onPress={()=>void load(false)} style={styles.compactButton} />
+      {showHelp || error || !projects.length ? <Button variant="text" title="Cập nhật dự án" loading={loading} onPress={()=>void load(false)} style={styles.compactButton} /> : null}
     </View>
     {projects.map(p=>selected===p.projectId&&projects.length===1?
       <View key={p.projectId} style={styles.projectSelected}><MaterialIcons name="check-circle" size={18} color={colors.success}/><View style={styles.projectText}><Text style={typography.labelLg}>{p.projectCode}</Text><Text style={typography.caption}>{p.name}</Text></View></View>:
@@ -186,14 +185,14 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
   const [listError, setListError] = useState<string | null>(null);
   const [selected, setSelected] = useState<BusinessDutyView | null>(null);
   const [acking, setAcking] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const [toastType,setToastType]=useState<'error'|'success'>('error');
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackType,setFeedbackType]=useState<'error'|'success'>('error');
   const [cursor,setCursor]=useState<string|null>(null);
   const sequence=useRef(0),mounted=useRef(true),ackLock=useRef(false);
   useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;sequence.current++;};},[]);
   const active=()=>mounted.current&&sameReceivingIdentity(identity,currentReceivingIdentity(identity.projectId));
   const loadList = useCallback(async (more=false) => {
-    const n=++sequence.current;setLoading(true);setListError(null);setStep('list');setSelected(null);
+    const n=++sequence.current;setLoading(true);setListError(null);setStep('list');setSelected(null);setFeedback(null);
     try {const result=await listReceiving(identity,{limit:25,after:more?cursor??undefined:undefined});
       if(!active()||n!==sequence.current)return;
       setItems(old=>Array.from(new Map([...(more?old:[]),...result.items].map(v=>[v.id,v])).values()));setCursor(result.continuation);
@@ -203,17 +202,17 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
   useEffect(()=>{void loadList();},[identity.projectId]);
   const openDetail=async(requestId:string)=>{
     if(ackLock.current)return;
-    const n=++sequence.current;setLoading(true);
+    const n=++sequence.current;setLoading(true);setFeedback(null);
     try{const detail=await readReceiving(identity,requestId);if(active()&&n===sequence.current){setSelected(detail);setStep('detail');}}
-    catch(e){if(active()&&n===sequence.current){setToastType('error');setToast(repairCommandErrorMessage(e));}}
+    catch(e){if(active()&&n===sequence.current){setFeedbackType('error');setFeedback(repairCommandErrorMessage(e));}}
     finally{if(active()&&n===sequence.current)setLoading(false);}
   };
   const handleAck=async()=>{
     if(!selected||selected.acknowledgmentId||selected.completedAt||ackLock.current)return;
-    ackLock.current=true;setAcking(true);setToast(null);
+    ackLock.current=true;setAcking(true);setFeedback(null);
     try{const result=await acknowledgeReceiving(identity,selected.id);if(active()){
-      setSelected(result);setItems(old=>old.map(v=>v.id===result.id?result:v));setToastType('success');setToast('Máy chủ đã xác nhận bạn tiếp nhận yêu cầu. Đây không phải phê duyệt hay hoàn thành sửa chữa.');
-    }}catch(e){if(active()){setToastType('error');setToast(repairCommandErrorMessage(e)+' Lệnh được giữ để đối soát; thử lại giữ nguyên khóa và phiên bản.');}}
+      setSelected(result);setItems(old=>old.map(v=>v.id===result.id?result:v));setFeedbackType('success');setFeedback('Máy chủ đã xác nhận bạn tiếp nhận yêu cầu. Đây không phải phê duyệt hay hoàn thành sửa chữa.');
+    }}catch(e){if(active()){setFeedbackType('error');setFeedback(repairCommandErrorMessage(e)+' Lệnh được giữ để đối soát; thử lại giữ nguyên khóa và phiên bản.');}}
     finally{ackLock.current=false;if(active())setAcking(false);}
   };
 
@@ -285,6 +284,13 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
     );
   };
 
+  const renderFeedback = () => feedback ? (
+    <View accessibilityRole={feedbackType === 'error' ? 'alert' : undefined} accessibilityLiveRegion="polite"
+      style={[styles.feedback, { borderLeftColor: feedbackType === 'error' ? colors.error : colors.success }]}>
+      <Text style={styles.feedbackText}>{feedback}</Text>
+    </View>
+  ) : null;
+
   const renderDetail = () => {
     if (!selected) {
       return null;
@@ -341,6 +347,7 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
           </Text>
         </View> : null}
 
+        {renderFeedback()}
         <Button
           variant={closed || acknowledged || ackInconsistent ? 'secondary' : 'primary'}
           title={closed ? 'Đã đóng' : acknowledged ? 'Đã xác nhận' : ackInconsistent ? 'Đang đối soát' : 'Xác nhận đã tiếp nhận yêu cầu'}
@@ -355,9 +362,16 @@ function ReceivingRequests({identity}:{identity:ReceivingIdentity}) {
 
   return (
     <View style={styles.screen}>
-      {step==='detail'?<Pressable disabled={acking} onPress={()=>{sequence.current++;setStep('list');setSelected(null);}} accessibilityRole="button" accessibilityLabel="Quay lại danh sách" style={{minHeight:48,justifyContent:'center'}}><Text style={typography.labelLg}>← Danh sách yêu cầu</Text></Pressable>:null}
-        {step === 'list' ? <><View style={styles.listHeader}><Text style={typography.labelLg}>Danh sách yêu cầu</Text><Button variant="text" title="Tải lại" disabled={loading||acking} onPress={()=>void loadList()} style={styles.compactButton} /></View>{renderList()}{cursor?<Button variant="secondary" title="Tải thêm yêu cầu" disabled={loading||acking} onPress={()=>void loadList(true)} />:null}</> : renderDetail()}
-      {toast ? <Toast type={toastType} message={toast} /> : null}
+      {step==='detail'?<Pressable disabled={acking} onPress={()=>{sequence.current++;setStep('list');setSelected(null);setFeedback(null);}} accessibilityRole="button" accessibilityLabel="Quay lại danh sách" style={{minHeight:48,justifyContent:'center'}}><Text style={typography.labelLg}>← Danh sách yêu cầu</Text></Pressable>:null}
+      {step === 'list' ? <>
+        <View style={styles.listHeader}>
+          <Text style={typography.labelLg}>Danh sách yêu cầu</Text>
+          {!listError ? <Button variant="text" title="Làm mới yêu cầu" loading={loading} disabled={loading||acking} onPress={()=>void loadList()} style={styles.compactButton} /> : null}
+        </View>
+        {renderFeedback()}
+        {renderList()}
+        {cursor?<Button variant="secondary" title="Tải thêm yêu cầu" disabled={loading||acking} onPress={()=>void loadList(true)} />:null}
+      </> : renderDetail()}
     </View>
   );
 }
@@ -367,6 +381,16 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+  feedback: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 3,
+  },
+  feedbackText: { ...typography.bodyMd, color: colors.onSurface },
   loading: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -477,6 +501,7 @@ const styles = StyleSheet.create({
   helpLabel: {
     ...typography.labelLg,
     color: colors.secondary,
+    flexShrink: 1,
   },
   helpText: {
     color: colors.secondary,
@@ -508,6 +533,8 @@ const styles = StyleSheet.create({
   projectText: { flex: 1, gap: spacing.xs },
   projectHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.xs,
@@ -515,6 +542,8 @@ const styles = StyleSheet.create({
   },
   listHeader: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,

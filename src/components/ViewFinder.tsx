@@ -1,5 +1,5 @@
 import React, { ReactNode, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,7 +11,9 @@ interface ViewFinderProps {
   taskKey?: string;
   disabled?: boolean;
   disabledReason?: string;
-  onCapture: (photo: CameraCapturedPicture) => void;
+  onCapture: (photo: CameraCapturedPicture, metadata?: CaptureMetadata) => void;
+  /** Crew opt-in; other camera callers keep their existing behavior. */
+  freshLocationOnCapture?: boolean;
   onShootingChange?: (shooting: boolean) => void;
   defectType: string;
   showGridGuide?: boolean;
@@ -22,6 +24,7 @@ interface ViewFinderProps {
   rightControl?: ReactNode;
   flashMode?: 'off' | 'on' | 'auto';
   onCoordsChange?: (coords: Coords | null) => void;
+  onLocationStatusChange?: (status: 'locating' | 'ready' | 'unavailable') => void;
   facing?: 'back' | 'front';
 }
 
@@ -32,36 +35,68 @@ export interface Coords {
   accuracyMeters: number | null;
 }
 
+export interface CaptureMetadata {
+  coordinates: Coords | null;
+  capturedAt: string;
+}
+
 /** One bounded acquisition. Cleanup suppresses callbacks and further native requests. */
 export function watchCaptureLocation(onCoords: (value: Coords | null) => void,
-  location: Pick<typeof Location, 'getForegroundPermissionsAsync' | 'requestForegroundPermissionsAsync' | 'getCurrentPositionAsync'> = Location,
-  timeoutMs = 12000): () => void {
+  location: Pick<typeof Location, 'getForegroundPermissionsAsync' | 'requestForegroundPermissionsAsync' | 'getCurrentPositionAsync'> & Partial<Pick<typeof Location, 'watchPositionAsync'>> = Location,
+  timeoutMs = 12000, minimumTimestamp = -Infinity, isCurrent = () => true): () => void {
   let active = true;
-  const timer = setTimeout(() => { if (active) { active = false; onCoords(null); } }, timeoutMs);
+  let subscription: Location.LocationSubscription | undefined;
+  const finish = (value: Coords | null) => {
+    if (!active) return;
+    active = false; clearTimeout(timer); subscription?.remove();
+    onCoords(value);
+  };
+  const timer = setTimeout(() => finish(null), timeoutMs);
+  const receive = (result: Location.LocationObject) => {
+    if (!active) return;
+    if (!isCurrent()) { finish(null); return; }
+    // Native may initially deliver a cached fix. Wait for a post-request reading.
+    if (minimumTimestamp !== -Infinity && (!Number.isFinite(result.timestamp) || result.timestamp < minimumTimestamp)) return;
+    const { latitude, longitude, accuracy } = result.coords;
+    const valid = Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+    finish(valid ? { latitude, longitude, accuracyMeters: typeof accuracy === 'number' && Number.isFinite(accuracy) && accuracy >= 0 ? accuracy : null } : null);
+  };
   void (async () => {
     try {
       let permission = await location.getForegroundPermissionsAsync();
       if (!active) return;
+      if (!isCurrent()) { finish(null); return; }
       if (permission.status !== 'granted') permission = await location.requestForegroundPermissionsAsync();
       if (!active) return;
-      if (permission.status !== 'granted') { onCoords(null); return; }
-      const result = await location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      if (!active) return;
-      const { latitude, longitude, accuracy } = result.coords;
-      const valid = Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
-      onCoords(valid ? { latitude, longitude, accuracyMeters: typeof accuracy === 'number' && Number.isFinite(accuracy) ? accuracy : null } : null);
-    } catch { if (active) onCoords(null); }
-    finally { clearTimeout(timer); active = false; }
+      if (!isCurrent()) { finish(null); return; }
+      if (permission.status !== 'granted') { finish(null); return; }
+      if (minimumTimestamp !== -Infinity && location.watchPositionAsync) {
+        const created = await location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 0, timeInterval: 0 }, receive, () => finish(null));
+        if (!active) created.remove(); else subscription = created;
+      } else {
+        const result = await location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        // Single-read ports cannot supply a later fix; retain their bounded failure.
+        if (minimumTimestamp !== -Infinity && (!Number.isFinite(result.timestamp) || result.timestamp < minimumTimestamp)) finish(null);
+        else receive(result);
+      }
+    } catch { finish(null); }
   })();
-  return () => { active = false; clearTimeout(timer); };
+  return () => { active = false; clearTimeout(timer); subscription?.remove(); };
+}
+
+/** No last-known-position fallback. A late native result cannot replace a timed-out fix. */
+export function acquirePhotoLocation(location: Parameters<typeof watchCaptureLocation>[1] = Location, timeoutMs = 12000, isCurrent = () => true): Promise<Coords | null> {
+  const requestedAt = Date.now();
+  return new Promise(resolve => { watchCaptureLocation(resolve, location, timeoutMs, requestedAt, isCurrent); });
 }
 
 export function ViewFinder({
-  active = true,
+  active: screenActive = true,
   taskKey = '',
   disabled = false,
   disabledReason,
   onCapture,
+  freshLocationOnCapture = false,
   onShootingChange,
   defectType,
   showGridGuide,
@@ -72,14 +107,19 @@ export function ViewFinder({
   rightControl,
   flashMode = 'off',
   onCoordsChange,
+  onLocationStatusChange,
   facing = 'back',
 }: ViewFinderProps) {
   const [permission, requestPermission] = useCameraPermissions();
   const [coords, setCoords] = useState<Coords | null>(null);
+  const [foreground, setForeground] = useState(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
+  const [locationRetry, setLocationRetry] = useState(0);
+  const active = screenActive && (!freshLocationOnCapture || foreground);
   const [readySession, setReadySession] = useState('');
   const [shooting, setShooting] = useState(false);
   const [captureError, setCaptureError] = useState('');
   const mounted = useRef(true), captureLock = useRef(false);
+  const previewGeneration = useRef(0);
   const cameraRef = useRef<CameraView>(null);
   const cameraIdentity = `${taskKey}:${facing}`;
   const activeRef = useRef(active);
@@ -95,9 +135,29 @@ export function ViewFinder({
   useEffect(() => { mounted.current=true; return () => { mounted.current=false; activeRef.current=false; }; }, []);
 
   useEffect(() => {
-    if (!active) return;
+    if (!freshLocationOnCapture) return;
+    const subscription = AppState.addEventListener('change', state => setForeground(state === 'active'));
+    return () => subscription.remove();
+  }, [freshLocationOnCapture]);
+
+  useEffect(() => {
+    if (!active || freshLocationOnCapture) return;
     return watchCaptureLocation(next => { setCoords(next); onCoordsChange?.(next); });
-  }, [active, onCoordsChange]);
+  }, [active, onCoordsChange, freshLocationOnCapture]);
+
+  useEffect(() => {
+    if (!active || !freshLocationOnCapture) return;
+    const session = cameraSession;
+    const preview = ++previewGeneration.current;
+    const isCurrent = () => mounted.current && activeRef.current && currentSession.current === session && previewGeneration.current === preview && !captureLock.current;
+    setCoords(null); onCoordsChange?.(null); onLocationStatusChange?.('locating');
+    // Preview is display-only. Capture below always acquires its own new fix.
+    return watchCaptureLocation(next => {
+      if (!isCurrent()) return;
+      setCoords(next); onCoordsChange?.(next);
+      onLocationStatusChange?.(next ? 'ready' : 'unavailable');
+    }, Location, 12000, -Infinity, isCurrent);
+  }, [active, cameraSession, onCoordsChange, onLocationStatusChange, freshLocationOnCapture, locationRetry]);
 
   useEffect(() => {
     if (!active) { setReadySession(''); setCaptureError(''); setShooting(false); captureLock.current=false; }
@@ -131,11 +191,20 @@ export function ViewFinder({
     }
     const capturedSession = cameraSession;
     const capturedGeneration = generation.current.value;
+    previewGeneration.current++;
     captureLock.current=true;setShooting(true);onShootingChange?.(true);setCaptureError('');
     try {
+      let captureCoords: Coords | null = null;
+      if (freshLocationOnCapture) {
+        setCoords(null); onCoordsChange?.(null); onLocationStatusChange?.('locating');
+        captureCoords = await acquirePhotoLocation(Location, 12000, () => mounted.current && activeRef.current && currentSession.current === capturedSession && generation.current.value === capturedGeneration);
+        if (!mounted.current || !activeRef.current || currentSession.current !== capturedSession || generation.current.value !== capturedGeneration) return;
+        setCoords(captureCoords); onCoordsChange?.(captureCoords); onLocationStatusChange?.(captureCoords ? 'ready' : 'unavailable');
+      }
+      const capturedAt = new Date().toISOString();
       const photo = await cameraRef.current?.takePictureAsync();
       if (photo && mounted.current && activeRef.current && currentSession.current === capturedSession && generation.current.value === capturedGeneration) {
-        onCapture(photo);
+        onCapture(photo, freshLocationOnCapture ? { coordinates: captureCoords, capturedAt } : undefined);
       }
     } catch {
       if (mounted.current && activeRef.current && currentSession.current === capturedSession && generation.current.value === capturedGeneration) setCaptureError('Camera không chụp được ảnh. Đóng rồi mở lại camera và thử lại.');
@@ -190,7 +259,10 @@ export function ViewFinder({
         )}
 
         {hudItems}
-        {captureError || disabledReason || !active || !cameraReady ? <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>{disabledReason || captureError || (!active ? 'Camera đang tạm dừng.' : 'Đang khởi động camera…')}</Text> : null}
+        {freshLocationOnCapture && active && !shooting ? <Pressable accessibilityRole="button" accessibilityLabel="Lấy lại GPS" style={styles.locationRetry} onPress={() => setLocationRetry(value => value + 1)}>
+          <Text style={[typography.labelSm, styles.watermarkText]}>Lấy lại GPS</Text>
+        </Pressable> : null}
+        {captureError || disabledReason || !active || !cameraReady || (shooting && freshLocationOnCapture) ? <Text accessibilityLiveRegion="polite" style={styles.captureStatus}>{disabledReason || captureError || (!active ? 'Camera đang tạm dừng.' : !cameraReady ? 'Đang khởi động camera…' : 'Đang lấy vị trí và chụp ảnh…')}</Text> : null}
 
         <View style={styles.bottomBar}>
           <View style={styles.bottomSideLeft}>{leftControl ?? null}</View>
@@ -241,6 +313,14 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     backgroundColor: 'rgba(15, 20, 28, 0.82)',
     textAlign: 'center',
+  },
+  locationRetry: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.sm,
+    backgroundColor: colors.secondary,
   },
   overlay: {
     flex: 1,

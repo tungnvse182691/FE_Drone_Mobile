@@ -12,6 +12,7 @@ import { Chip } from '../../src/components/Chip';
 import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { CrewPressable, CrewContentTransition } from '../../src/components/crew/CrewMotion';
 import { CrewFastTrackMeasurementGuide } from '../../src/components/crew/CrewFastTrackMeasurementGuide';
+import { CrewPhotoInfo } from '../../src/components/crew/CrewPhotoInfo';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
@@ -473,12 +474,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         <View style={styles.photoGrid}>{(latest.evidence??[]).filter(e=>e.fileId).map((e,index)=>{
           const local=draft?.captures.find(c=>c.verified&&c.upload?.fileId===e.fileId);
           const label=e.purpose==='AFTER'?'Sau sửa chữa':e.purpose==='BEFORE'?'Hiện trạng':'Đo kiểm';
-          return <CrewPressable key={e.captureOriginId} accessibilityRole="button" accessibilityLabel={`Xem ảnh ${index+1}: ${label}`} disabled={busy} onPress={()=>void run('download',e.fileId!)} style={styles.photoTile}>
+          return <View key={e.captureOriginId} style={styles.photoTile}><CrewPressable accessibilityRole="button" accessibilityLabel={`Xem ảnh ${index+1}: ${label}`} disabled={busy} onPress={()=>void run('download',e.fileId!)}>
             <View style={[styles.photoFrame,styles.serverPhoto]}>{local?<Image source={{uri:local.uri}} style={styles.photoImage} resizeMode="cover"/>:<View style={styles.photoPlaceholder}><MaterialIcons name="image" size={24} color={colors.secondary}/><Text style={styles.placeholderLabel}>Chạm để tải ảnh</Text></View>}
               <View pointerEvents="none" style={[styles.photoCaption,!local&&styles.placeholderCaption]}><Text style={[styles.photoStatus,!local&&styles.placeholderLabel]}>Ảnh {index+1} · {label}</Text></View>
               <View pointerEvents="none" style={styles.viewPhotoBadge}><MaterialIcons name="zoom-in" size={20} color={colors.neutral}/></View>
             </View>
-          </CrewPressable>;
+          </CrewPressable><CrewPhotoInfo label={`Ảnh ${index+1} · ${label}`} coordinates={local?.coordinates} capturedAt={e.capturedAt??local?.capturedAt} localMetadata={!!local}/></View>;
         })}</View>
       </Card>:serverLoaded&&!loading?<Card style={styles.card}><Text style={styles.sectionTitle}>Hồ sơ đã gửi</Text><Text style={styles.muted}>Chưa có hồ sơ đã gửi.</Text></Card>:null}
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={()=>setPreview(null)}>
@@ -579,6 +580,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
               {!c.upload&&!c.uploadAttempt&&!c.completed&&!c.verified&&!frozen&&!busy&&!cancelling?<Pressable accessibilityRole="button" accessibilityLabel="Xóa ảnh cục bộ" style={styles.removePhoto} onPress={()=>removeLocalCapture(c.id)}><MaterialIcons name="close" size={20} color={colors.neutral}/></Pressable>:null}
             </View>
             <Text style={typography.labelSm}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
+            <CrewPhotoInfo label={`Ảnh ${index+1} · ${c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}`} coordinates={c.coordinates} capturedAt={c.capturedAt} localMetadata />
             {!evidenceModel.readOnly&&!frozen&&serverLoaded?<View style={styles.evidenceActions}>
               {normalMeasurement&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
               {c.upload?.id&&(['PENDING','UPLOADING'].includes(c.upload.status)||['REQUESTED','UNKNOWN','BLOCKED'].includes(c.cancelState??''))?<Button variant="text" title={c.cancelState?'Đối soát hủy phiên':'Hủy tải lên'} disabled={cancelling||(busy&&uploadingCaptureId!==c.id)} onPress={()=>setCancelTarget(c.id)}/>:null}

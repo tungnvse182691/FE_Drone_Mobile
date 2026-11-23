@@ -363,7 +363,7 @@ export function crewInboxOptions(scope: string, detailContext?: { actorId: strin
     queryFn: async ({ pageParam, signal }: { pageParam: string | null; signal: AbortSignal }) => {
       detailContext?.assertCurrent();
       signal.throwIfAborted();
-      const page = await listCrewInspectionTasksReal(pageParam, filters.limit, signal, filters);
+      const page = await searchCrewTaskIdentityPage(pageParam, filters.limit, signal, filters, detailContext);
       detailContext?.assertCurrent();
       signal.throwIfAborted();
       if (detailContext) for (const item of page.items) validateCrewAssignment(item, detailContext.actorId);
@@ -863,6 +863,30 @@ export async function listCrewInspectionTasksReal(
     signal,
   });
   return response.data;
+}
+
+/** API037 searches TaskCode only. For ID-like input, scan its filtered pages
+ * until a matching page is found; retain the real cursor for Load more. */
+export async function searchCrewTaskIdentityPage(
+  cursor: string | null, limit = 50, signal: AbortSignal, query: CrewListQuery = {},
+  context?: { actorId: string; assertCurrent: () => void },
+): Promise<InspectionTaskPageResponseDto> {
+  const filters = crewListQuery(query), term = filters.search?.toLowerCase();
+  if (!term || !/^[a-f0-9][a-f0-9-]{5,35}$/.test(term)) return listCrewInspectionTasksReal(cursor, limit, signal, filters);
+  const seen = new Set<string>();
+  if (cursor) seen.add(cursor);
+  let next = cursor;
+  for (;;) {
+    context?.assertCurrent(); signal.throwIfAborted();
+    const page = await listCrewInspectionTasksReal(next, limit, signal, { ...filters, search: undefined });
+    context?.assertCurrent(); signal.throwIfAborted();
+    if (context) for (const item of page.items) validateCrewAssignment(item, context.actorId);
+    if (page.nextCursor && seen.has(page.nextCursor)) throw Error('crew_search_cursor_invalid');
+    if (page.nextCursor) seen.add(page.nextCursor);
+    const items = page.items.filter(item => item.id.toLowerCase().includes(term) || item.taskCode?.toLowerCase().includes(term));
+    if (items.length || !page.nextCursor) return { ...page, items };
+    next = page.nextCursor;
+  }
 }
 
 /**

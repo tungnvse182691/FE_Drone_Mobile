@@ -143,6 +143,7 @@ test('FIELD evidence capture persists camera and gallery provenance only for an 
   const field = loadCommonJs('src/api/crewFieldDraft.ts', {
     'expo-crypto': { randomUUID: nextUuid },
     'expo-file-system': { Directory: FakeDirectory, File: FakeFile, Paths },
+    '../utils/photoGps': loadCommonJs('src/utils/photoGps.ts'),
     '../offline/database': { openDatabase: () => database, initDatabase: async () => {}, saveDraft },
     '../store/auth': auth,
     './authApi': { passwordSessionIdentity: () => scope },
@@ -166,11 +167,42 @@ test('FIELD evidence capture persists camera and gallery provenance only for an 
   assert.deepEqual(files.get(galleryDraft.captures[1].uri), bytes.get('file://gallery.png'));
   assert.equal(stored.captures.length, 2);
 
+  // Small valid photos must not fail the size gate; each rejection must explain
+  // its own cause without implying that every rejected image is too large.
+  for (const [name, data, mime, expected] of [
+    ['empty', new Uint8Array(), 'image/jpeg', /Ảnh đã chọn không có dữ liệu/],
+    ['unsupported', Uint8Array.from([0, 0, 0, 24, 102, 116, 121, 112]), '', /không phải JPEG hoặc PNG/],
+    ['mismatch', bytes.get('file://gallery.png'), 'image/jpeg', /Loại file.*không khớp.*PNG/],
+    ['oversize', new Uint8Array(20 * 1024 * 1024 + 1), 'image/jpeg', /Dung lượng ảnh.*20\.971\.520 byte/],
+  ]) {
+    if (name === 'oversize') data.set([255, 216, 255]);
+    bytes.set(`file://${name}`, data);
+    const previous = JSON.stringify(stored), fileCount = files.size;
+    await assert.rejects(() => field.captureFieldPhoto(context, `file://${name}`, 'BEFORE', mime, null, false), expected);
+    assert.equal(JSON.stringify(stored), previous);
+    assert.equal(files.size, fileCount);
+  }
+  for (const size of [2000000, 3200000, 20 * 1024 * 1024]) {
+    const data = new Uint8Array(size); data.set([255, 216, 255]);
+    bytes.set('file://size-check.jpg', data);
+    const accepted = await field.captureFieldPhoto(context, 'file://size-check.jpg', 'BEFORE', 'image/jpeg', null, false);
+    assert.equal(accepted.captures.at(-1).size, size);
+    assert.equal(accepted.captures.at(-1).mediaType, 'image/jpeg');
+  }
+  // iOS DocumentPicker falls back to a generic MIME when its filename
+  // extension cannot be resolved. Real JPEG/PNG bytes still identify the photo.
+  for (const mime of ['', 'application/octet-stream']) {
+    const accepted = await field.captureFieldPhoto(context, 'file://camera.jpg', 'BEFORE', mime, null, false);
+    assert.equal(accepted.captures.at(-1).mediaType, 'image/jpeg');
+    assert.deepEqual(files.get(accepted.captures.at(-1).uri), bytes.get('file://camera.jpg'));
+  }
+
   const blockedTask = { ...task, status: 'Completed' };
   const blockedUuid = () => '77777777-7777-4777-8777-777777777777';
   const blockedField = loadCommonJs('src/api/crewFieldDraft.ts', {
     'expo-crypto': { randomUUID: blockedUuid },
     'expo-file-system': { Directory: FakeDirectory, File: FakeFile, Paths },
+    '../utils/photoGps': loadCommonJs('src/utils/photoGps.ts'),
     '../offline/database': { openDatabase: () => database, initDatabase: async () => {}, saveDraft },
     '../store/auth': auth,
     './authApi': { passwordSessionIdentity: () => scope },

@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-function harness(rows,afterRead=()=>{}) {
+function harness(rows,afterRead=()=>{},detailRead=async()=>{throw Error('offline');}) {
  const identity={actor:'actor',environment:'https://sandbox',scope:'session',role:'REPAIR_CREW',partition:'partition'};
  let current=identity,writes=0;
  const db={getAllAsync:async()=>{afterRead(()=>current=null);return rows;},runAsync:async()=>writes++};
@@ -7,8 +7,8 @@ function harness(rows,afterRead=()=>{}) {
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewLocalDrafts.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module,exports:module.exports,require:n=>({
   '../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},
   '../offline/upload-queue':{sameQueueIdentity:i=>i===current},
-  './crewApi':{isCrewResourceId:v=>['project','task'].includes(v)},
- }[n])});
+  './crewApi':{isCrewResourceId:v=>['project','task'].includes(v),searchCrewTaskIdentityPage:detailRead},
+ }[n]),AbortController});
  return {identity,m:module.exports,writes:()=>writes};
 }
 const draft={actor:'actor',environment:'https://sandbox',scope:'session',projectId:'project',taskId:'task',measurements:[{}],captures:[{uri:'private-file',verified:false},{uri:'private-file-2',verified:true}]};
@@ -16,6 +16,14 @@ test('Crew local draft index exposes counts, never private paths or command payl
  const h=harness([{id:'row',payload:JSON.stringify(draft)}]),rows=await h.m.readCrewLocalDrafts(h.identity);
  assert.equal(rows[0].photos,2);assert.equal(rows[0].verifiedPhotos,1);assert.equal(rows[0].measurements,1);assert.equal(rows[0].currentSession,true);
  assert.ok(!JSON.stringify(rows).includes('private-file'));assert.equal(h.writes(),0);
+});
+test('Sync task code comes from the matching API037 task; offline or wrong identity gives no invented code',async()=>{
+ const detail={id:'task',projectId:'project',crewId:'actor',taskCode:'REPAIR-real'};
+ const h=harness([],undefined,async()=>({items:[detail]}));
+ assert.equal(await h.m.readCrewLocalTaskCode(h.identity,draft), 'REPAIR-real');
+ detail.id='wrong';assert.equal(await h.m.readCrewLocalTaskCode(h.identity,draft),null);
+ detail.id='task';detail.crewId='other';assert.equal(await h.m.readCrewLocalTaskCode(h.identity,draft),null);
+ const offline=harness([]);assert.equal(await offline.m.readCrewLocalTaskCode(offline.identity,draft),null);
 });
 test('Crew local draft index excludes other actors/environments and marks historical session',async()=>{
  const h=harness([draft,{...draft,actor:'other'},{...draft,environment:'other'},{...draft,scope:'old'}].map((d,i)=>({id:String(i),payload:JSON.stringify(d)})));
