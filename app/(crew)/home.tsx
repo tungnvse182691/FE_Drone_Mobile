@@ -114,6 +114,7 @@ export default function CrewHomeScreen() {
         </View>
 
         {/* SECTION HEADER: Danh sách việc */}
+        <View style={styles.taskSectionSummary}>
         <View style={styles.sectionHeader}>
           <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ chưa hoàn thành</Text>
           <CrewPressable
@@ -129,8 +130,9 @@ export default function CrewHomeScreen() {
           </CrewPressable>
         </View>
 
-        {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, mã nhiệm vụ thật, chevron phải */}
         <CrewInboxState inbox={inbox} presentation="home" />
+        </View>
+        {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, mã nhiệm vụ thật, chevron phải */}
         {inbox.enabled && inbox.query.isPending && tasks.length === 0 ? <View testID="crew-home-loading"
           accessible accessibilityRole="progressbar" accessibilityLabel="Đang tải danh sách nhiệm vụ" style={styles.taskList}>
           {[0, 1].map(key => <View key={key} style={styles.loadingCard} importantForAccessibility="no-hide-descendants">
@@ -334,13 +336,22 @@ const styles = StyleSheet.create({
   },
 
   /* Section Header */
+  taskSectionSummary: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
   sectionHeader: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    marginBottom: 0,
   },
   sectionTitle: {
     color: colors.neutral,

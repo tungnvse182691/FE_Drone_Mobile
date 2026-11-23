@@ -128,9 +128,9 @@ export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: Ret
     {!homePresentation && inbox.query.data?.pages[0]?.asOf ? <View style={styles.inboxTimestamp}>
       <Text style={[typography.caption, styles.inboxTimestampText]}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text>
     </View> : null}
-    {inbox.query.hasNextPage && !inbox.error ? <View style={styles.inboxMore}>
+    {inbox.query.hasNextPage && !inbox.error ? <View style={[styles.inboxMore, homePresentation && styles.homeInboxMore]}>
       <Button variant="secondary" title="Tải thêm" icon={<MaterialIcons name="expand-more" size={20} color={colors.secondary} />}
-        style={[styles.inboxMoreButton, tasksPresentation && styles.tasksInboxMoreButton]}
+        style={[styles.inboxMoreButton, tasksPresentation && styles.tasksInboxMoreButton, homePresentation && styles.homeInboxMoreButton]}
         loading={inbox.query.isFetchingNextPage} disabled={inbox.query.isFetching} onPress={() => { void inbox.query.fetchNextPage(); }} />
     </View> : null}
     </View>
@@ -438,6 +438,8 @@ const styles = StyleSheet.create({
   homeInboxHeader: { paddingHorizontal: 0, paddingVertical: 0, backgroundColor: 'transparent', borderBottomWidth: 0 },
   homeInboxRefresh: { backgroundColor: colors.surface, borderColor: colors.border },
   homeInboxBody: { paddingHorizontal: 0, paddingVertical: 0 },
+  homeInboxMore: { width: '100%', marginLeft: 0, marginTop: spacing.sm },
+  homeInboxMoreButton: { width: '100%' },
   inboxPanel: {
     padding: 0,
     marginBottom: spacing.md,

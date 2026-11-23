@@ -28,3 +28,9 @@ Folder: `.cache/crew-copy-grouping-20261123/`.
 Load more remains conditional on `hasNextPage && !inbox.error`. Tasks renders it after the list; Home retains it in its inbox presentation. `getNextPageParam` accepts a nonrepeated `nextCursor`. Refresh calls existing refetch (reset only for HTTP 400); focus refetch remains unchanged. Absence of the button is not evidence of automatic all-page loading or realtime updates.
 
 Local checkpoint only; no push. Existing untracked caches/logs/database/native build retained.
+
+## Follow-up: Home summary container / iPhone pagination spacing
+- Owner requested a compact bounded surface around the incomplete-task heading, see-all action and inbox controls. Added a token-colored white surface, thin border and rounded corners in Home only.
+- Owner iPhone screenshot showed Refresh touching the right-aligned load-more button. Home load-more now occupies a separate full-width row with an 8dp top gap and centered label. Other presentations, query handlers, cursor and disabled/loading guards unchanged.
+- `npx tsc --noEmit`: exit 0 (`summary-typecheck-final.log`). Related Home/inbox/layout/recovery tests: 63/63 (`summary-targeted-final.log`). `git diff --check`: PASS. Full 2024/2024 result above predates this layout-only follow-up; not rerun.
+- Owner iPhone screenshot confirms the summary surface before the pagination-spacing adjustment; final iPhone layout NOT_VERIFIED locally. Android Expo Go displayed an ANR dialog during inspection; no restart/reset/close-app performed. The files `home-summary-box*.png` show Tasks, not Home, and are NOT valid Home AFTER evidence. Final native layout remains NOT_VERIFIED.
