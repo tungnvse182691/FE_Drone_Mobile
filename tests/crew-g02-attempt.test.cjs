@@ -42,3 +42,18 @@ test('G02 API-080 readback preserves the new submission as pending after review 
   assert.match(next.title, /đang chờ quản lý đánh giá/);
   assert.equal(next.technical.effectiveSubmissionId, '44444444-4444-4444-8444-444444444444');
 });
+
+test('86e9f4e current review reason is verbatim, nullable and replaced on fresh read', () => {
+  const view = presentation();
+  const attempt = {attemptId: ids.attemptId, effectiveSubmissionId: ids.submissionId};
+  const read = (decision,reason) => view({...attempt,review:{reviewId:ids.reviewId,decision,reason}});
+  const original = '  Bổ sung ảnh sau sửa\nGiữ đúng vị trí.  ';
+  assert.equal(read('SUPPLEMENT',original).message,original);
+  for(const reason of [null,undefined,'','   ']) assert.equal(read('SUPPLEMENT',reason).message,'Cần bổ sung hồ sơ');
+  assert.equal(read('ACCEPT',null).canSupplement,false);
+  assert.equal(read('ACCEPT',original).message.includes(original),false);
+  assert.equal(view({...attempt,review:null}).canSupplement,false);
+  assert.equal(view({...attempt,review:null}).message.includes(original),false);
+  assert.equal(read('SUPPLEMENT','Lý do lần mới').message,'Lý do lần mới');
+  assert.equal(view(null).message.includes('Lý do lần mới'),false);
+});

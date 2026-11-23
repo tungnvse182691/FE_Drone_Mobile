@@ -110,7 +110,7 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
   };
   if (attempt.review.decision === 'SUPPLEMENT') return {
     title: 'Quản lý yêu cầu bổ sung hồ sơ sửa chữa',
-    message: attempt.review.reason?.trim() || 'Chưa tải được nội dung yêu cầu từ máy chủ',
+    message: attempt.review.reason?.trim() ? attempt.review.reason : 'Cần bổ sung hồ sơ',
     technical,
     canSupplement: true,
     statusLabel: 'Cần bổ sung hồ sơ',

@@ -435,7 +435,7 @@ export interface CrewRepairAttempt {
 export interface CrewRepairReview {
   reviewId: string;
   decision: 'SUPPLEMENT' | 'ACCEPT';
-  /** Optional until API-080 exposes the PM review reason to Crew. */
+  /** API-080 current effective review reason (86e9f4e); legacy absence remains compatible. */
   reason?: string | null;
 }
 
