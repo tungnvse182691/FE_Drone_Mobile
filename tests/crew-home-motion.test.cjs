@@ -95,7 +95,7 @@ test('Mode colors differ by work type, meet readable contrast and never supply a
 function home(inbox) {
  const nav=[];
  const s=screen('app/(crew)/home.tsx',{modules:{
-  './tasks':{useCrewInbox:()=>inbox,CrewInboxState:'CrewInboxState',TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}},crewStatusLabel:s=>'Trạng thái: '+s,crewDateTime:s=>s},
+  './tasks':{useCrewInbox:()=>inbox,CrewInboxState:'CrewInboxState',TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}},crewStatusLabel:s=>'Trạng thái: '+s,crewDateTime:s=>s,crewTaskCodePreview:s=>s.length>16?s.slice(0,14)+'…':s},
   '../../src/api/crewApi':{crewTaskIsComplete:t=>t.status==='Completed'},
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
   '../../src/components/CrewTaskStatus':{CrewTaskStatus:'CrewTaskStatus'},
@@ -121,4 +121,13 @@ test('Home uses loading placeholders only while initial real query is pending',(
  assert.ok(!s.nodes().some(n=>n.props.testID==='crew-home-loading'));
  assert.ok(s.nodes().some(n=>n.type==='CrewInboxState'&&n.props.inbox.error));
  assert.equal(s.h.calls.length,0);s.unmount();
+});
+
+test('Home uses one list heading and leaves the loaded-scope note only in the overview',()=>{
+ const {s}=home({enabled:true,tasks:[],query:{}});s.render();
+ const text=JSON.stringify(s.nodes());
+ assert.equal(s.nodes().filter(n=>n.type==='Text'&&String(n.props.children)==='Thống kê trong các nhiệm vụ đã tải').length,1);
+ assert.ok(text.includes('Nhiệm vụ chưa hoàn thành'));
+ assert.ok(!text.includes('Nhiệm vụ đang theo dõi'));
+ assert.equal(s.nodes().find(n=>n.type==='CrewInboxState').props.presentation,'home');s.unmount();
 });

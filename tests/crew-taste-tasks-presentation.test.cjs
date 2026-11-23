@@ -25,7 +25,7 @@ test('Tasks variant preserves loading and pagination availability',()=>{
 });
 
 test('Tasks presentation retains stale/error/empty messages and never offers pagination on error',()=>{
- for(const presentation of [undefined,'tasks']){
+ for(const presentation of [undefined,'tasks','home']){
   const stale=setup(presentation,{}, {stale:true,error:'Không tải được dữ liệu nhiệm vụ.'});
   const text=JSON.stringify(stale.s.nodes());
   assert.ok(text.includes('Đang hiển thị danh sách đã tải trước đó.'));
@@ -39,4 +39,17 @@ test('Tasks presentation retains stale/error/empty messages and never offers pag
   const pendingText=JSON.stringify(pending.s.nodes());assert.ok(pendingText.includes('Đang tải nhiệm vụ…'));
   assert.equal(pendingText.includes('Chưa có nhiệm vụ được giao.'),false);pending.s.unmount();
  }
+});
+
+test('Home inbox groups one timestamp with refresh and retains pagination without repeating headings',()=>{
+ const {s,calls}=setup('home');
+ const text=JSON.stringify(s.nodes());
+ assert.ok(!text.includes('Nhiệm vụ được giao'));
+ assert.ok(!text.includes('Thống kê trong các nhiệm vụ đã tải'));
+ assert.equal(s.nodes().filter(n=>n.type==='Text'&&String(n.props.children).includes('giờ Việt Nam')).length,1);
+ assert.equal(flat(s.nodes().find(n=>n.type==='Card').props.style).borderWidth,0);
+ s.nodes().find(n=>n.props.accessibilityLabel==='Tải lại nhiệm vụ').props.onPress();
+ s.press('Tải thêm');assert.deepEqual(calls,['refresh','more']);s.unmount();
+ const busy=setup('home',{isFetching:true});
+ assert.equal(busy.s.nodes().find(n=>n.props.accessibilityLabel==='Tải lại nhiệm vụ').props.disabled,true);busy.s.unmount();
 });

@@ -11,7 +11,7 @@ import { crewHomeModeTone } from '../../src/components/crew/crewHomeTones';
 import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
-import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP, crewStatusLabel, crewDateTime } from './tasks';
+import { useCrewInbox, CrewInboxState, TASK_MODE_CHIP, crewStatusLabel, crewDateTime, crewTaskCodePreview } from './tasks';
 import { crewTaskIsComplete } from '../../src/api/crewApi';
 import { CREW_RECEIVING } from '../../src/constants/routes';
 
@@ -115,7 +115,7 @@ export default function CrewHomeScreen() {
 
         {/* SECTION HEADER: Danh sách việc */}
         <View style={styles.sectionHeader}>
-          <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ đang theo dõi</Text>
+          <Text style={[typography.titleMd, styles.sectionTitle]}>Nhiệm vụ chưa hoàn thành</Text>
           <CrewPressable
             onPress={() => router.push('/(crew)/tasks')}
             accessibilityRole="button"
@@ -130,7 +130,7 @@ export default function CrewHomeScreen() {
         </View>
 
         {/* LIST CÔNG VIỆC: Card thoáng, chip chế độ, mã nhiệm vụ thật, chevron phải */}
-        <CrewInboxState inbox={inbox} />
+        <CrewInboxState inbox={inbox} presentation="home" />
         {inbox.enabled && inbox.query.isPending && tasks.length === 0 ? <View testID="crew-home-loading"
           accessible accessibilityRole="progressbar" accessibilityLabel="Đang tải danh sách nhiệm vụ" style={styles.taskList}>
           {[0, 1].map(key => <View key={key} style={styles.loadingCard} importantForAccessibility="no-hide-descendants">
@@ -155,7 +155,7 @@ export default function CrewHomeScreen() {
               >
                 <Card style={[styles.taskCard, { borderLeftWidth: 2, borderLeftColor: tone.border }]}>
                   <View style={styles.taskIdentity}>
-                    <Text style={[typography.labelSm, styles.woCodeText]}>{task.wo_code || `ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text>
+                    <Text accessibilityLabel={task.wo_code || task.id} style={[typography.labelSm, styles.woCodeText]}>{crewTaskCodePreview(task.wo_code || task.id)}</Text>
                     <CrewTaskStatus status={task.status} label={crewStatusLabel(task.status)} />
                   </View>
                   {/* Hàng 1: Chip chế độ + Hạn xử lý */}

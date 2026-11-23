@@ -103,28 +103,29 @@ export function useCrewInbox(filters: CrewListQuery = {}) {
     : query.refetch();
   return { ...identity, environment, query, refresh, error, stale, tasks: (!identity.enabled || foreign || (query.isError && !transient)) ? [] : [...items.values()] };
 }
-export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: ReturnType<typeof useCrewInbox>; presentation?: 'default' | 'tasks' }) {
+export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: ReturnType<typeof useCrewInbox>; presentation?: 'default' | 'tasks' | 'home' }) {
   const tasksPresentation = presentation === 'tasks';
-  return <Card style={[styles.inboxPanel, tasksPresentation && styles.tasksInboxPanel]}>
-    <View style={[styles.inboxHeader, tasksPresentation && styles.tasksInboxHeader]}>
+  const homePresentation = presentation === 'home';
+  return <Card style={[styles.inboxPanel, tasksPresentation && styles.tasksInboxPanel, homePresentation && styles.homeInboxPanel]}>
+    <View style={[styles.inboxHeader, tasksPresentation && styles.tasksInboxHeader, homePresentation && styles.homeInboxHeader]}>
       <View style={styles.inboxHeading}>
-        <Text style={[typography.titleMd, styles.inboxTitle]}>{inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
-        <Text style={[typography.caption, styles.inboxSubtitle]}>Thống kê trong các nhiệm vụ đã tải.</Text>
+        <Text style={[homePresentation ? typography.caption : typography.titleMd, homePresentation ? styles.inboxSubtitle : styles.inboxTitle]}>{homePresentation && !inbox.query.isPending && !inbox.error ? (inbox.query.data?.pages[0]?.asOf ? `Đã tải lúc ${crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)` : 'Chưa có thời gian tải') : inbox.query.isPending && inbox.enabled ? 'Đang tải nhiệm vụ…' : inbox.error ? 'Chưa tải được nhiệm vụ' : 'Nhiệm vụ được giao'}</Text>
+        {!homePresentation ? <Text style={[typography.caption, styles.inboxSubtitle]}>Thống kê trong các nhiệm vụ đã tải.</Text> : null}
       </View>
       <CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại nhiệm vụ"
         accessibilityState={{ busy: !!inbox.query.isFetching, disabled: !inbox.enabled || !!inbox.query.isFetching }}
         disabled={!inbox.enabled || inbox.query.isFetching}
-        style={[styles.inboxRefresh, tasksPresentation && styles.tasksInboxRefresh]}
+        style={[styles.inboxRefresh, tasksPresentation && styles.tasksInboxRefresh, homePresentation && styles.homeInboxRefresh]}
         onPress={() => { void inbox.refresh(); }}>
         {inbox.query.isFetching ? <ActivityIndicator color={colors.secondary} /> : <MaterialIcons name="refresh" size={24} color={colors.secondary} />}
       </CrewPressable>
     </View>
-    <View style={[styles.inboxBody, tasksPresentation && styles.tasksInboxBody]}>
+    <View style={[styles.inboxBody, tasksPresentation && styles.tasksInboxBody, homePresentation && styles.homeInboxBody]}>
     {inbox.stale ? <Text style={typography.bodyMd}>Đang hiển thị danh sách đã tải trước đó. Chưa cập nhật được dữ liệu mới; mở nhiệm vụ để kiểm tra lại quyền và trạng thái.</Text> : null}
     {inbox.error ? <Text style={typography.bodyMd} accessibilityLiveRegion="polite">{inbox.error}</Text> : null}
     {!inbox.error && !inbox.query.isPending && !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
     <View style={styles.inboxFooter}>
-    {inbox.query.data?.pages[0]?.asOf ? <View style={styles.inboxTimestamp}>
+    {!homePresentation && inbox.query.data?.pages[0]?.asOf ? <View style={styles.inboxTimestamp}>
       <Text style={[typography.caption, styles.inboxTimestampText]}>Đã tải lúc: {crewDateTime(inbox.query.data.pages[0].asOf)} (giờ Việt Nam)</Text>
     </View> : null}
     {inbox.query.hasNextPage && !inbox.error ? <View style={styles.inboxMore}>
@@ -337,12 +338,11 @@ export default function CrewTasksScreen() {
               <Text style={[typography.titleMd, v2.taskTitle]}>{task.title || 'Nhiệm vụ hiện trường'}</Text>
               <View style={v2.locationRow}><Text style={[typography.bodyMd, v2.locationText]}>{[task.route_code ? `Tuyến ${task.route_code}` : null, task.section_name, task.chainage].filter(Boolean).join(' • ') || 'Chưa có tuyến / vị trí'}</Text></View>
               <View style={v2.taskMetadata}>
-              <Text style={[typography.caption, v2.acceptance]}>{task.isHistory ? `Đã từ chối · ${crewDateTime(task.rejectedAt)}` : task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text>
               {task.isHistory ? <Text style={[typography.bodyMd, v2.muted]}>Lịch sử từ chối · {crewDateTime(task.rejectedAt)}. Không mở hồ sơ hiện hành.</Text> : !crewAssignmentCanOpen(task) ? <Text style={[typography.bodyMd, v2.muted]}>Thiếu dự án hoặc phiên bản; chưa thể mở nhiệm vụ.</Text> : null}
-              <Text style={[typography.caption, v2.acceptance]}>{task.defect_type_code ? defectTypeLabel(task.defect_type_code) : 'Nhiệm vụ kiểm tra hiện trường'}{task.batch_size > 1 ? ` • Đợt gom ${task.batch_size} vị trí` : ''}{['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? ' · Sau sửa' : ''}</Text>
+              {task.defect_type_code || task.batch_size > 1 || ['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? <Text style={[typography.caption, v2.acceptance]}>{[task.defect_type_code ? defectTypeLabel(task.defect_type_code) : null, task.batch_size > 1 ? `Đợt gom ${task.batch_size} vị trí` : null, ['NORMAL', 'CONDITIONAL_FT'].includes(task.rawMode) ? 'Sau sửa' : null].filter(Boolean).join(' · ')}</Text> : null}
               </View>
               <View style={v2.taskCardFooter}>
-                <View style={v2.footerLeftMeta}>{task.distance_label && task.distance_label !== '—' ? <Text style={[typography.caption, v2.dueText]}>{task.distance_label}</Text> : null}</View>
+                <View style={v2.footerLeftMeta}><Text style={[typography.caption, v2.acceptance]}>{task.isHistory ? `Đã từ chối · ${crewDateTime(task.rejectedAt)}` : task.acceptanceOutcome === 'ACCEPTED' ? `Đã nhận · ${crewDateTime(task.acceptedAt)}` : task.acceptanceOutcome === 'PENDING' ? 'Chờ tiếp nhận' : 'Chưa xác định kết quả tiếp nhận'}</Text>{task.distance_label && task.distance_label !== '—' ? <Text style={[typography.caption, v2.dueText]}>{task.distance_label}</Text> : null}</View>
                 <View style={v2.actionPrompt}><Text style={[typography.caption, v2.actionPromptText]}>Chi tiết</Text><MaterialIcons name="chevron-right" size={18} color={colors.secondary} /></View>
               </View>
             </CrewHomeTaskPressable>
@@ -434,6 +434,10 @@ const v2 = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  homeInboxPanel: { backgroundColor: 'transparent', borderWidth: 0, padding: 0, elevation: 0, shadowOpacity: 0 },
+  homeInboxHeader: { paddingHorizontal: 0, paddingVertical: 0, backgroundColor: 'transparent', borderBottomWidth: 0 },
+  homeInboxRefresh: { backgroundColor: colors.surface, borderColor: colors.border },
+  homeInboxBody: { paddingHorizontal: 0, paddingVertical: 0 },
   inboxPanel: {
     padding: 0,
     marginBottom: spacing.md,
