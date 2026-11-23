@@ -33,6 +33,8 @@ export interface FieldDraft extends FieldContext {
   command?: { key: string; body: crew.FieldSubmissionInput; ifMatch: string; assignmentId: string;
     phase: 'pending' | 'acknowledged' | 'confirmed' | 'rejected'; responseId?: string; rejectionStatus?: number };
   result?: crew.FieldSubmissionViewFact;
+  supplement?: { parentId: string; rootId: string; revision: number; contentHash: string;
+    reviewId: string; attemptId: string };
   repairClaim?: { finishId: string; executionStartId: string; firstStartId: string; finishAt: string;
     packageId: string; itemId: string; bindingId: string; assignmentId: string; itemVersion: string };
 }
@@ -313,9 +315,60 @@ async function claimSource(context: FieldContext,task: crew.FieldTaskViewFact,ru
     assignmentId:task.assignmentId!,itemVersion:ctx.itemVersion};
 }
 async function verifyRepairClaim(draft: FieldDraft,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
+  if(draft.supplement)return verifyFieldRepairSupplement(draft,task,runtime);
   const source=await claimSource(draft,task,runtime);
   if(!draft.repairClaim||Object.entries(source).some(([key,value])=>draft.repairClaim![key as keyof typeof source]!==value))throw Error('repair_claim_source_changed');
   return source;
+}
+/** Pinned review/attempt and physical finish remain separate from changing item rowversion. */
+async function verifyFieldRepairSupplement(draft: FieldDraft,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
+  const s=draft.supplement,claim=draft.repairClaim,ctx=task.repairContext;
+  const block=runtime.api.repairSupplementBlock(task,`"${task.version}"`,draft.actor);
+  if(block)throw Error(block);
+  if(!s||!claim||!ctx||ctx.attempt!.review!.reviewId!==s.reviewId||ctx.attempt!.attemptId!==s.attemptId||
+    ctx.attempt!.effectiveSubmissionId!==s.parentId||claim.assignmentId!==task.assignmentId||
+    claim.firstStartId!==task.firstStartOriginId||claim.packageId!==ctx.packageId||claim.itemId!==ctx.itemId||
+    claim.bindingId!==ctx.bindingId||!crew.isCrewResourceId(claim.finishId)||!crew.isCrewResourceId(claim.executionStartId)||
+    !Number.isFinite(Date.parse(claim.finishAt))||
+    (!draft.command&&task.latestSubmissionId!==s.parentId))throw Error('repair_supplement_source_changed');
+  const parent=await guarded(draft,runtime,()=>runtime.api.getFieldSubmissionDetailReal(draft.projectId,draft.taskId,s.parentId));
+  if(parent.data.id!==s.parentId||parent.data.taskId!==draft.taskId||parent.data.rootId!==s.rootId||
+    parent.data.revision!==s.revision||parent.data.contentHash!==s.contentHash||parent.data.captureType!=='REPAIR_CLAIM'||
+    parent.data.repaired!==true)throw Error('field_lineage_invalid');
+  const history=await guarded(draft,runtime,()=>runtime.repairHistory?runtime.repairHistory():readRepairHistory(draft));
+  if(history.some(row=>row.phase!=='CONFIRMED'))throw Error('repair_unresolved_command');
+  const finish=history.find(row=>row.operation==='finish'&&row.receipt?.data.id===claim.finishId);
+  const intake=history.filter(row=>['attempt','supplement'].includes(row.operation)).at(-1);
+  if(!finish?.receipt||!intake?.receipt||intake.receipt.data.attemptId!==s.attemptId||
+    intake.payload.fieldSubmissionId!==s.parentId||finish.payload.executionStartId!==claim.executionStartId||
+    finish.receipt.data.verifiedOriginalAt!==claim.finishAt||!sameResource(finish.identity,draft)||
+    [finish,intake].some(row=>row.identity.bindingId!==claim.bindingId||row.identity.assignmentId!==claim.assignmentId||
+      row.identity.itemId!==claim.itemId||row.identity.packageId!==claim.packageId))throw Error('repair_finish_required');
+  return claim;
+}
+/** Explicit generation append. The runtime retains L1 and its recovery overlay byte-for-byte. */
+export async function prepareFieldRepairSupplement(context:FieldContext,runtime?:FieldRuntime):Promise<FieldDraft> {
+  const r=runtime??await openFieldRuntime(context);
+  return exclusive(context,async()=>{
+    const saved=await loadFieldDraft(context,r);
+    if(saved.command?.phase!=='confirmed'||!saved.result||!saved.repairClaim||fieldCancelPending(saved)||
+      saved.command.responseId!==saved.result.id)throw Error('field_command_pending');
+    const fresh=await guarded(context,r,()=>r.api.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
+    const block=r.api.repairSupplementBlock(fresh.data,fresh.etag,context.actor);if(block)throw Error(block);
+    const ctx=fresh.data.repairContext!,attempt=ctx.attempt!;
+    if(saved.result.id!==attempt.effectiveSubmissionId||saved.result.id!==fresh.data.latestSubmissionId||
+      saved.command.assignmentId!==fresh.data.assignmentId)throw Error('field_lineage_invalid');
+    const read=await guarded(context,r,()=>r.api.getFieldSubmissionDetailReal(context.projectId,context.taskId,saved.result!.id));
+    if(saved.supplement)validateRepairSupplementReadback(read.data,saved.command.body,saved.supplement);
+    else validateRepairClaimReadback(read.data,saved.command.body);
+    if(read.data.taskId!==context.taskId||read.data.id!==saved.result.id||read.data.contentHash!==saved.result.contentHash)throw Error('field_lineage_invalid');
+    const next:FieldDraft={...newFieldDraft(context),measurements:JSON.parse(JSON.stringify(saved.measurements)),
+      locationProof:saved.locationProof?JSON.parse(JSON.stringify(saved.locationProof)):null,repairClaim:{...saved.repairClaim},
+      supplement:{parentId:read.data.id,rootId:read.data.rootId!,revision:read.data.revision,contentHash:read.data.contentHash!,
+        reviewId:attempt.review!.reviewId,attemptId:attempt.attemptId}};
+    await verifyFieldRepairSupplement(next,fresh.data,r);
+    await persist(next,r);return next;
+  });
 }
 /** Explicit repair claim from a confirmed finish, retaining pre-execution evidence. */
 export async function prepareFieldRepairClaim(context: FieldContext,runtime?: FieldRuntime): Promise<FieldDraft> {
@@ -610,9 +663,9 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
       const fresh = await freshTask(draft,runtime,'submit');
       if(draft.repairClaim) {
         const source=await verifyRepairClaim(draft,fresh.data,runtime);
-        if(fresh.data.latestSubmissionId)throw Error('repair_claim_root_required');
+        if(fresh.data.latestSubmissionId&&!draft.supplement)throw Error('repair_claim_root_required');
         const after=draft.captures.filter(c=>c.purpose==='AFTER');
-        if(!after.length||after.some(c=>!c.postRepairCapture||!c.capturedAt||!Number.isFinite(Date.parse(c.capturedAt))||
+        if((!draft.supplement&&!after.length)||after.some(c=>!c.postRepairCapture||!c.capturedAt||!Number.isFinite(Date.parse(c.capturedAt))||
           Date.parse(c.capturedAt)<Date.parse(source.finishAt)||Date.parse(c.capturedAt)>Date.now()))throw Error('repair_after_camera_required');
       }
       validateFieldMeasurements(draft);
@@ -672,7 +725,10 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
     const read = await guarded(draft,runtime,()=>runtime.api.getFieldSubmissionDetailReal(draft.projectId,draft.taskId,cmd!.responseId!));
     if (read.data.id !== cmd.responseId || read.data.taskId !== draft.taskId || !read.data.contentHash ||
         (read.data.parentId??null) !== (cmd.body.parentSubmissionId??null)) throw new Error('field_readback_mismatch');
-    if(cmd.body.captureType==='REPAIR_CLAIM')validateRepairClaimReadback(read.data,cmd.body);
+    if(cmd.body.captureType==='REPAIR_CLAIM') {
+      if(draft.supplement)validateRepairSupplementReadback(read.data,cmd.body,draft.supplement);
+      else validateRepairClaimReadback(read.data,cmd.body);
+    }
     for (const evidence of cmd.body.evidence??[]) if (!(read.data.evidence??[]).some(e=>e.captureOriginId===evidence.captureOriginId && e.fileId===evidence.fileId && e.checksumSha256===evidence.checksumSha256 && e.purpose===evidence.purpose)) throw new Error('field_readback_mismatch');
     for (const measurement of cmd.body.measurements??[]) if (!(read.data.measurements??[]).some(m=>Object.entries(measurement).every(([key,value])=>(m[key as keyof crew.FieldMeasurementInput]??null)===(value??null)))) throw new Error('field_readback_mismatch');
     for (const c of draft.captures) {
@@ -686,6 +742,12 @@ export async function submitFieldDraft(draft: FieldDraft,runtime: FieldRuntime,r
     if(cmd.body.captureType==='REPAIR_CLAIM')await verifyRepairClaim(draft,latest.data,runtime);
     cmd.phase='confirmed';draft.result=read.data;await persist(draft,runtime);return draft;
   });
+}
+export function validateRepairSupplementReadback(read:crew.FieldSubmissionViewFact,body:crew.FieldSubmissionInput,s:NonNullable<FieldDraft['supplement']>):void {
+  if(!crew.isCrewResourceId(read.id)||read.rootId!==s.rootId||read.parentId!==s.parentId||read.revision!==s.revision+1||
+    body.parentSubmissionId!==s.parentId)throw Error('field_lineage_invalid');
+  // Reuse strict content/evidence comparison without relaxing the root-only intake validator.
+  validateRepairClaimReadback({...read,rootId:read.id,parentId:null,revision:1},{...body,parentSubmissionId:null});
 }
 /** Only real API-096 root claim is eligible for formal API-157 intake. */
 export function validateRepairClaimReadback(read: crew.FieldSubmissionViewFact,body: crew.FieldSubmissionInput): void {

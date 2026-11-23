@@ -19,7 +19,7 @@ import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { randomUUID } from 'expo-crypto';
 import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
-import { createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal,
+import { repairSupplementBlock, createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal,
   validateCrewTaskDetail, repairExecutionBlock, getFieldInspectionTaskDetailReal,
   fastTrackRepairBlock, isRepairItemVersion,
   isConcurrencyConflict, isPreconditionRequired, newIdempotencyKey,
@@ -338,6 +338,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
   const identity=useCrewIdentity();
   const assessmentBlock=task.detail&&identity.user&&identity.scope?repairExecutionBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên đội sửa chữa hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';
   const fastTrack=task.detail?.mode==='CONDITIONAL_FT';
+  const supplementAllowed=task.detail?.repairContext?.attempt?.review?.decision==='SUPPLEMENT'&&!!identity.user&&!!identity.scope&&!repairSupplementBlock(task.detail,task.etag??'',identity.user.id);
   const [storedHistory,setHistory]=useState<RepairJournalRecord[]>([]),[storedDraft,setDraft]=useState<FieldDraft|null>(null);
   const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
   const [showRepairTechnical,setShowRepairTechnical]=useState(false);
@@ -439,6 +440,7 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       <Pressable accessibilityRole="button" accessibilityLabel="Tải lại ngữ cảnh sửa chữa" accessibilityState={{disabled:busy||result.status==='loading',busy:busy||result.status==='loading'}} disabled={busy||result.status==='loading'} style={styles.refreshButton} onPress={()=>{void result.reload();void load();}}>
         {busy||result.status==='loading'?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={24} color={colors.brandGold}/>}</Pressable>
     </View>
+    {supplementAllowed?<Button variant="primary" title="Xem yêu cầu bổ sung" onPress={()=>router.push({pathname:'/(crew)/repair-correction',params:{id:task.id,projectId:task.projectId}})}/>:null}
     {stage!=='overview'&&stage!=='closeout'?<Card style={[styles.repairStepCard,started&&!finished&&styles.repairActiveCard]}>
       <View style={styles.sectionHeading}>
         <View style={styles.flex}><Text style={styles.hint}>Bước hiện tại</Text><Text style={styles.progressTitle}>{!loaded?'Đang đọc tiến trình…':finished?'Hồ sơ sau thi công':started?'Đang thi công':assessmentChanged?'Cần gửi lại đánh giá':ready?(task.detail?.mode==='CONDITIONAL_FT'?'Kiểm tra điều kiện sửa nhanh':'Sẵn sàng thi công'):incomplete?'Cần bổ sung đánh giá':sourceReady?'Đánh giá trước sửa':'Chuẩn bị số đo và ảnh'}</Text></View>

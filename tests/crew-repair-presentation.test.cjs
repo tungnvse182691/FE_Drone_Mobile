@@ -2,7 +2,8 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {screen}=require('./helpers/roadfe-screen.cjs');
 function correction(decision){
  return screen('app/(crew)/repair-correction.tsx',{exportName:'CorrectionReadOnly',props:{task:{id:'task-id',projectId:'project',status:'Completed',detail:{repairContext:{attempt:{attemptId:'attempt',effectiveSubmissionId:'submission',review:decision?{decision}:null}}}}},modules:{
-  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'./tasks':{crewStatusLabel:()=> 'Hoàn thành nhiệm vụ'},
+  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'./tasks':{crewStatusLabel:()=> 'Hoàn thành nhiệm vụ',useCrewIdentity:()=>({scope:'fixture',user:{id:'actor'}})},
+  '../../src/api/crewApi':{repairSupplementBlock:()=>null},
   '../../src/api/crewRepairDraft':{},'../../src/api/crewRepairWorkflow':{},
  },moduleFactories:{'expo-router':()=>({router:{push(){},back(){},replace(){}},useFocusEffect(){}})}});
 }

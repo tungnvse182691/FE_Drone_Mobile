@@ -1,7 +1,7 @@
 import * as api from './crewApi';
 import { sameRepairIdentity, repairAssessmentMatchesDraft,
   type RepairIdentity, type RepairCommandIdentity, type RepairJournalRecord } from './crewRepairDraft';
-import { openFieldRuntime, loadFieldDraft, readHistoricalFieldDraft, validateRepairClaimReadback, type FieldDraft } from './crewFieldDraft';
+import { openFieldRuntime, loadFieldDraft, readHistoricalFieldDraft, validateRepairClaimReadback, validateRepairSupplementReadback, type FieldDraft } from './crewFieldDraft';
 import { repairRuntime, guard, guarded, timestamp, fresh, validateRepairReceipt, readRepairHistory, type RepairRuntime } from './crewRepairHistory';
 export { repairRuntime, validateRepairReceipt, readRepairHistory, type RepairRuntime } from './crewRepairHistory';
 
@@ -166,6 +166,29 @@ export async function prepareRepairAttempt(i: RepairIdentity,r=repairRuntime(i))
   return guarded(i,r,()=>j.prepare({identity:commandIdentity(i,task),operation:'attempt',key:r.uuid(),itemVersion:ctxVersion(task),payload}));
 }
 /** Prepare API-159 only after a real API-095/096 revision and current SUPPLEMENT review proof. */
+async function supplementSource(i:RepairIdentity,draft:FieldDraft,r:RepairRuntime,task:api.FieldTaskViewFact,alreadyBound=false,sourceIdentity=i) {
+  const s=draft.supplement,claim=draft.repairClaim,cmd=draft.command,ctx=task.repairContext,attempt=ctx?.attempt;
+  if(!sameRepairIdentity(sourceIdentity,draft)||!s||!claim||cmd?.phase!=='confirmed'||!draft.result||!attempt||
+    task.mode!=='NORMAL'||ctx?.mode!=='NORMAL'||ctx.finalDecision!=null||
+    claim.assignmentId!==task.assignmentId||cmd.assignmentId!==task.assignmentId||claim.firstStartId!==task.firstStartOriginId||
+    cmd.body.startOriginId!==task.firstStartOriginId||claim.bindingId!==ctx.bindingId||claim.packageId!==ctx.packageId||claim.itemId!==ctx.itemId||
+    s.attemptId!==attempt.attemptId||cmd.responseId!==draft.result.id||task.latestSubmissionId!==draft.result.id||
+    (alreadyBound?attempt.effectiveSubmissionId!==draft.result.id:
+      attempt.effectiveSubmissionId!==s.parentId||attempt.review?.decision!=='SUPPLEMENT'||attempt.review.reviewId!==s.reviewId))throw Error('repair_supplement_source_invalid');
+  const read=await guarded(i,r,()=>r.api.getFieldSubmissionDetailReal(i.projectId,i.taskId,draft.result!.id));
+  validateRepairSupplementReadback(read.data,cmd.body,s);
+  if(read.data.id!==draft.result.id||read.data.taskId!==i.taskId||read.data.contentHash!==draft.result.contentHash)throw Error('repair_supplement_source_invalid');
+  const parent=await guarded(i,r,()=>r.api.getFieldSubmissionDetailReal(i.projectId,i.taskId,s.parentId));
+  if(parent.data.id!==s.parentId||parent.data.taskId!==i.taskId||parent.data.rootId!==s.rootId||parent.data.revision!==s.revision||
+    parent.data.contentHash!==s.contentHash||parent.data.captureType!=='REPAIR_CLAIM'||parent.data.repaired!==true)throw Error('repair_supplement_source_invalid');
+  const after=(cmd.body.evidence??[]).filter(e=>e.purpose==='AFTER');
+  if(!timestamp(claim.finishAt)||!after.length||after.some(e=>e.attemptChecklist!=='POST_REPAIR_CAPTURE'||!timestamp(e.capturedAt)||Date.parse(e.capturedAt)<Date.parse(claim.finishAt)))throw Error('repair_after_camera_required');
+  for(const e of cmd.body.evidence??[]) {
+    if(!api.isCrewResourceId(e.fileId))throw Error('repair_verified_evidence_required');
+    const file=await guarded(i,r,()=>r.api.getFieldEvidenceReal(i.projectId,i.taskId,e.fileId!));
+    if(file.fileId!==e.fileId||file.state!=='VERIFIED'||file.checksum!==e.checksumSha256||file.mediaType!==e.mediaType)throw Error('repair_verified_evidence_required');
+  }
+}
 export async function prepareRepairSupplement(i: RepairIdentity, draft: FieldDraft, r=repairRuntime(i)) {
   guard(i,r);
   if(!sameRepairIdentity(i,draft)||!draft.command||draft.command.phase!=='confirmed'||!draft.result?.contentHash||
@@ -179,6 +202,11 @@ export async function prepareRepairSupplement(i: RepairIdentity, draft: FieldDra
     !attempt||!api.isCrewResourceId(attempt.attemptId)||!api.isCrewResourceId(attempt.effectiveSubmissionId)||
     draft.command.body.parentSubmissionId!==attempt.effectiveSubmissionId||
     !attempt.review||attempt.review.decision!=='SUPPLEMENT') throw Error('repair_supplement_not_allowed');
+  const block=r.api.repairSupplementBlock(task,response.etag,i.actor);if(block)throw Error(block);
+  await supplementSource(i,draft,r,task);
+  const latest=await fresh(i,r,commandIdentity(i,task));
+  if(latest.data.repairContext!.itemVersion!==ctx.itemVersion||latest.data.repairContext!.attempt?.review?.reviewId!==attempt.review.reviewId||
+    latest.data.repairContext!.attempt?.effectiveSubmissionId!==attempt.effectiveSubmissionId)throw Error('repair_supplement_not_allowed');
   const payload={fieldSubmissionId:draft.result.id,expectedContentHash:draft.result.contentHash};
   validateRepairInput('supplement',payload);
   const j=await guarded(i,r,()=>r.journal(i));
@@ -230,6 +258,10 @@ export async function dispatchRepair(i: RepairIdentity,key: string,r=repairRunti
         (c.phase==='PREPARED' && (!attempt.review||attempt.review.decision!=='SUPPLEMENT')) ||
         (c.phase!=='PREPARED' && !attempt.review && attempt.effectiveSubmissionId!==c.payload.fieldSubmissionId))
         throw Error('repair_supplement_not_allowed');
+      const draft=await guarded(i,r,()=>r.fieldDraft?r.fieldDraft():sameRepairIdentity(i,c!.identity)?readRepairFieldDraft(i):readHistoricalFieldDraft(i,c!.identity.scope));
+      const bound=attempt.effectiveSubmissionId===c.payload.fieldSubmissionId;
+      await supplementSource(i,draft,r,task,bound,c.identity);
+      if(draft.result?.id!==c.payload.fieldSubmissionId||draft.result?.contentHash!==c.payload.expectedContentHash)throw Error('repair_supplement_source_invalid');
     }
     const firstDispatch=c.phase==='PREPARED';
     if(c.phase==='PREPARED') {

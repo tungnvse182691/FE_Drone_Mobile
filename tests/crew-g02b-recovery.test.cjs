@@ -15,6 +15,23 @@ function supplementReceipt(h, submission) {
   return {attemptId:fixtures.ids.start,linkId:fixtures.ids.upload,itemId:fixtures.ids.itemId,
     submissionId:submission,reviewClockId:fixtures.ids.file,originalReviewDueAt:'2026-11-07T10:00:00Z',intakeReadiness:'READY'};
 }
+// Real L2 content/lineage proof is required even for an immutable API-159 replay.
+function supplementSource(h, hash) {
+  const id=fixtures.ids, parent=id.assessment, revision=id.capture;
+  h.task.purpose='PostRepair';h.task.status='Submitted';h.task.latestSubmissionId=revision;
+  h.task.repairContext.status='Submitted';
+  const body={startOriginId:id.first,parentSubmissionId:parent,captureType:'REPAIR_CLAIM',repaired:true,unrepairedReason:null,
+    measurements:[],evidence:[{captureOriginId:id.upload,fileId:id.file,purpose:'AFTER',checksumSha256:'a'.repeat(64),mediaType:'image/jpeg',capturedAt:'2026-11-07T09:01:00Z',attemptChecklist:'POST_REPAIR_CAPTURE'}]};
+  const result={id:revision,taskId:id.taskId,rootId:parent,parentId:parent,revision:2,contentHash:hash,
+    serverReceivedAt:'2026-11-07T09:02:00Z',readiness:'READY',missingReasons:[],...body};
+  const draft={...h.identity,supplement:{parentId:parent,rootId:parent,revision:1,contentHash:'f'.repeat(64),reviewId:id.capture,attemptId:id.start},
+    repairClaim:{assignmentId:id.assignmentId,firstStartId:id.first,packageId:id.packageId,itemId:id.itemId,bindingId:id.bindingId,finishAt:'2026-11-07T09:00:00Z'},
+    command:{phase:'confirmed',assignmentId:id.assignmentId,responseId:revision,body},result};
+  h.runtime.fieldDraft=async()=>structuredClone(draft);
+  h.runtime.api.getFieldSubmissionDetailReal=async(p,t,sub)=>({data:sub===revision?structuredClone(result):
+    {id:parent,taskId:id.taskId,rootId:parent,revision:1,contentHash:'f'.repeat(64),captureType:'REPAIR_CLAIM',repaired:true}});
+  h.runtime.api.getFieldEvidenceReal=async()=>({fileId:id.file,state:'VERIFIED',checksum:'a'.repeat(64),mediaType:'image/jpeg'});
+}
 
 test('G02B recovery replays the exact API-159 intent after commit lost ACK and API-080 review reset',async()=>{
   const h=fixtures.harness(),j=await h.runtime.journal();
@@ -24,6 +41,7 @@ test('G02B recovery replays the exact API-159 intent after commit lost ACK and A
     payload:{fieldSubmissionId:revision,expectedContentHash:hash},
   });
   supplementContext(h,'SUPPLEMENT',fixtures.ids.assessment);
+  supplementSource(h,hash);
   const calls=[];let first=true,serverReceipt;
   h.runtime.api.supplementRepairAttemptReal=async(...args)=>{
     calls.push(structuredClone(args));
@@ -53,6 +71,7 @@ test('G02B timeout before server commit keeps the original command pending witho
     payload:{fieldSubmissionId:fixtures.ids.capture,expectedContentHash:'a'.repeat(64)},
   });
   supplementContext(h,'SUPPLEMENT',fixtures.ids.assessment);
+  supplementSource(h,'a'.repeat(64));
   let posts=0;h.runtime.api.supplementRepairAttemptReal=async()=>{posts++;throw Error('timeout-before-server-commit');};
   await assert.rejects(h.workflow.dispatchRepair(h.identity,command.key,h.runtime),/timeout-before-server-commit/);
   const pending=await j.read(command.key);assert.equal(posts,1);assert.equal(pending.phase,'PENDING');assert.equal(pending.receipt,undefined);

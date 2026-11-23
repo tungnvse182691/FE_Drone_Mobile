@@ -15,10 +15,10 @@ import { CrewFastTrackMeasurementGuide } from '../../src/components/crew/CrewFas
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
-import { fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
+import { repairSupplementBlock, fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
   type CrewTask, type FieldTaskGeometry, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
 import { chooseCrewPosition, crewPositionSources, crewPositionInputError } from '../../src/utils/crew-position-proof';
-import { reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
+import { prepareFieldRepairSupplement, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, cancelFieldUpload, uploadAndSubmitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
@@ -266,6 +266,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const captureBlock=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi thêm ảnh.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
   const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
+  const supplementAllowed=verifiedTask?.repairContext?.attempt?.review?.decision==='SUPPLEMENT'&&!!identity.user&&!repairSupplementBlock(verifiedTask,verifiedEtag,identity.user.id);
   const repairContext=verifiedTask?.repairContext;
   const finalConfirmed=repairContext?.status==='Confirmed'&&repairContext.finalDecision?.result==='CONFIRMED';
   const repairAccepted=repairContext?.attempt?.review?.decision==='ACCEPT';
@@ -289,7 +290,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     }catch(e){if(current(c)){setNotice(fieldErrorMessage(e));setNoticeDetail(safeFieldErrorDetail(e));}}
     finally{busyRef.current=false;if(current(c))setBusy(false);}
   };
-  const run=async(action:'save'|'camera'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
+  const run=async(action:'prepare-supplement'|'bind-supplement'|'save'|'camera'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
     if(busyRef.current||cancelRef.current)return;
     const c=context();if(!c)return;
     if(action==='replay'&&(!replayConfirmed||replayConfirmed.key!==draft?.command?.key||replayConfirmed.context!==JSON.stringify(c)))return;
@@ -300,6 +301,11 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     try {
       const runtime=await openFieldRuntime(c);
       let saved:FieldDraft;
+      if(action==='prepare-supplement') {
+        await prepareFieldRepairSupplement(c,runtime);
+        if(current(c))await load();
+        return;
+      }
       if(action==='recover') {
         const i=currentRepairIdentity(task.projectId,task.id);if(!i||!repairRecovery)throw Error('repair_session_changed');
         const result=await dispatchRepair(i,repairRecovery.key,repairRuntime(i));
@@ -330,8 +336,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         setUploadingCaptureId(fileId??null);
         saved=await uploadFieldCapture(saved,index,runtime,(updated,percent)=>{if(current(c)){setDraft(updated);setTransferProgress(percent===undefined?null:{captureId:fileId!,percent});}});
       }
-      if(action==='submit') {
-        saved=await uploadAndSubmitFieldDraft(saved,runtime,(updated,captureId,percent)=>{if(current(c)){setUploadingCaptureId(captureId);setDraft(updated);setTransferProgress(percent===undefined?null:{captureId,percent});}});
+      if(action==='submit'||action==='bind-supplement') {
+        if(action==='submit')saved=await uploadAndSubmitFieldDraft(saved,runtime,(updated,captureId,percent)=>{if(current(c)){setUploadingCaptureId(captureId);setDraft(updated);setTransferProgress(percent===undefined?null:{captureId,percent});}});
         if(current(c))setUploadingCaptureId(null);
         if(supplementMode&&saved.command?.phase==='confirmed') {
           const repairIdentity=currentRepairIdentity(task.projectId,task.id);
@@ -427,6 +433,11 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         </View>
         {supplementMode||draft?.repairClaim?<Text style={styles.muted}>{supplementMode?'Bổ sung hồ sơ sửa chữa':'Đo kiểm sau sửa chữa'}</Text>:null}
       </Card>
+      {serverLoaded&&supplementAllowed?<View style={{gap:spacing.sm}}>
+        <Button variant="secondary" title="Xem yêu cầu bổ sung" onPress={()=>router.push({pathname:'/(crew)/repair-correction',params:{id:task.id,projectId:task.projectId}})}/>
+        {supplementMode&&draft?.command?.phase==='confirmed'&&linkedSubmission?<Button variant="primary" title="Tạo bản bổ sung từ hồ sơ đã xác nhận" disabled={busy||cancelling||localRecoveryBlocked} onPress={()=>void run('prepare-supplement')}/>:null}
+        {supplementMode&&draft?.supplement&&draft.command?.phase==='confirmed'&&!linkedSubmission&&!repairRecovery?<Button variant="primary" title="Liên kết bản bổ sung đã xác nhận" disabled={busy||cancelling||localRecoveryBlocked} onPress={()=>void run('bind-supplement')}/>:null}
+      </View>:null}
       {loading?<View style={styles.loadingRow}><ActivityIndicator size="small" color={colors.primaryDark}/><Text style={styles.muted}>Đang tải hồ sơ…</Text></View>:null}
       {error?<FieldErrorPanel title="Không đọc được hồ sơ" message={error} detail={noticeDetail} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)} />:null}
       {localRecoveryBlocked?<Card style={[styles.card,styles.recoveryCard]}>

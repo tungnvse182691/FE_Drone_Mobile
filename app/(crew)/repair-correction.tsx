@@ -7,7 +7,7 @@ import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { CrewPressable } from '../../src/components/crew/CrewMotion';
-import type { CrewRepairAttempt, CrewTask } from '../../src/api/crewApi';
+import { repairSupplementBlock, type CrewRepairAttempt, type CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskBoundary,useCrewIdentity } from './tasks';
 
@@ -22,6 +22,8 @@ export default function CrewRepairCorrectionScreen() {
 }
 
 export function CorrectionReadOnly({ task }: { task: CrewTask }) {
+  const identity=useCrewIdentity();
+  const allowed=task.detail?.repairContext?.attempt?.review?.decision==='SUPPLEMENT'&&!!identity.user&&!!identity.scope&&!repairSupplementBlock(task.detail,task.etag??'',identity.user.id);
   const [technical, setTechnical] = useState(false);
   const review = repairReviewPresentation(task.detail?.repairContext?.attempt);
   const accepted=task.detail?.repairContext?.attempt?.review?.decision==='ACCEPT';
@@ -40,7 +42,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
         <View style={styles.identity}><Text selectable style={styles.code}>{task.wo_code||`ID nhiệm vụ: ${task.id.slice(0,8)}`}</Text></View>
         <Text style={styles.body}>{task.title||'Nhiệm vụ hiện trường'}</Text>
       </View>
-      {review.canSupplement?<Button variant="primary" title="Gửi bổ sung" onPress={() => router.push({
+      {review.canSupplement&&allowed?<Button variant="primary" title="Gửi bổ sung" onPress={() => router.push({
         pathname: '/(crew)/field-review', params: { id: task.id, projectId: task.projectId, supplement: '1' },
       })} />:null}
     </Card>
@@ -108,7 +110,7 @@ export function repairReviewPresentation(attempt: CrewRepairAttempt | null | und
   };
   if (attempt.review.decision === 'SUPPLEMENT') return {
     title: 'Quản lý yêu cầu bổ sung hồ sơ sửa chữa',
-    message: 'Mở hồ sơ để bổ sung số đo và ảnh theo yêu cầu.',
+    message: attempt.review.reason?.trim() || 'Chưa tải được nội dung yêu cầu từ máy chủ',
     technical,
     canSupplement: true,
     statusLabel: 'Cần bổ sung hồ sơ',

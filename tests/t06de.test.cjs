@@ -15,7 +15,7 @@ function render(file,exportName,task){
  vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,
  {module,exports:module.exports,require:n=>{
   if(n==='react')return React;
-  if(n==='./tasks')return require('./helpers/crew-ui-labels.cjs');
+  if(n==='./tasks')return {...require('./helpers/crew-ui-labels.cjs'),useCrewIdentity:()=>({user:null,scope:null})};
   if(n==='react-native')return {View:'View',Text:'Text',StyleSheet:{create:x=>x}};
   if(n==='expo-router')return {router:{push:r=>routes.push(r),replace:r=>routes.push(r),back:()=>routes.push('back')}};
   // Any accidental mutation/storage call fails this read-only screen test.

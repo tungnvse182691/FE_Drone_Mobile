@@ -103,7 +103,8 @@ export function validateCrewTaskDetail(item: FieldTaskViewFact, etag: string, pr
   if (attempt !== undefined && attempt !== null &&
       (!isCrewResourceId(attempt.attemptId) || !isCrewResourceId(attempt.effectiveSubmissionId) ||
        (attempt.review !== null && (!isCrewResourceId(attempt.review.reviewId) ||
-        !['SUPPLEMENT', 'ACCEPT'].includes(attempt.review.decision))))) {
+        !['SUPPLEMENT', 'ACCEPT'].includes(attempt.review.decision) ||
+        (attempt.review.reason != null && typeof attempt.review.reason !== 'string'))))) {
     throw new Error('crew_repair_attempt_invalid');
   }
   const decision = item.repairContext?.finalDecision;
@@ -434,6 +435,21 @@ export interface CrewRepairAttempt {
 export interface CrewRepairReview {
   reviewId: string;
   decision: 'SUPPLEMENT' | 'ACCEPT';
+  /** Optional until API-080 exposes the PM review reason to Crew. */
+  reason?: string | null;
+}
+
+/** Current API-080 authority only; task status alone never authorizes a repair revision. */
+export function repairSupplementBlock(task: FieldTaskViewFact, etag: string, actorId: string): string | null {
+  const block=normalRepairBlock(task,etag,actorId,'bootstrap');
+  if(block)return block;
+  const ctx=task.repairContext!,attempt=ctx.attempt;
+  if(ctx.status!=='Submitted'||ctx.finalDecision!=null||task.purpose!=='PostRepair'||
+    !['SupplementRequired','Submitted'].includes(task.status??'')||!isCrewResourceId(task.firstStartOriginId)||
+    !attempt||!isCrewResourceId(attempt.attemptId)||!isCrewResourceId(attempt.effectiveSubmissionId)||
+    !attempt.review||attempt.review.decision!=='SUPPLEMENT'||!isCrewResourceId(attempt.review.reviewId))
+    return 'Chưa có yêu cầu bổ sung sửa chữa hiện hành với phân công hợp lệ.';
+  return null;
 }
 
 export type NormalRepairCapability = 'bootstrap' | 'assessment' | 'start' | 'finish' | 'attempt' | 'supplement';
