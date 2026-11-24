@@ -21,8 +21,11 @@ test('cold draft view displays saved counts and offers no submit or route action
  const f=fixture();f.s.render();await f.s.flush();
  assert.ok(text(f.s).includes('saved-task'));assert.match(text(f.s),/2\s+ảnh/);
  assert.ok(text(f.s).includes('Cần đối soát khi kết nối lại'));
- assert.deepEqual(f.s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title),['Quay lại kết nối']);
- f.change();await f.s.flush();assert.equal(f.closed(),1);assert.ok(!text(f.s).includes('saved-task'));f.s.unmount();
+ const footer=f.s.nodes().find(n=>n.type==='FlatList').props.ListFooterComponent;
+ const button=footer.props.children.flat().find(n=>n?.type==='Button');
+ assert.equal(button.props.title,'Quay lại kết nối');
+ button.props.onPress();assert.equal(f.closed(),1);
+ f.change();await f.s.flush();assert.equal(f.closed(),2);assert.ok(!text(f.s).includes('saved-task'));f.s.unmount();
 });
 test('late SQLite result after auth change cannot reveal old account drafts',async()=>{
  const f=fixture(true);f.s.render();await f.s.flush();f.change();
