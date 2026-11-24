@@ -1,16 +1,30 @@
 import * as SQLite from 'expo-sqlite';
 import type { SQLiteBindValue } from 'expo-sqlite';
+import * as SecureStore from 'expo-secure-store';
+import { getRandomBytes } from 'expo-crypto';
+import { File } from 'expo-file-system';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { openProtectedDatabase } from './encryptedDatabase';
 import type { FastTrackPolicyVersion, RepairWorkOrder } from '../types/domain';
 
-const DB_NAME = 'roadguard.db';
 let database: SQLite.SQLiteDatabase | undefined;
 const initialization = new WeakMap<SQLite.SQLiteDatabase, Promise<void>>();
 
 export function openDatabase(): SQLite.SQLiteDatabase {
   // Android's cached native handle may have been released by another JS wrapper.
-  // Own one dedicated connection per runtime, still opening the original database file.
+  // Own one dedicated connection per runtime, after protected migration if available.
   // Callers borrow it: do not close/recreate it on navigation or account changes.
-  return database ??= SQLite.openDatabaseSync(DB_NAME, { useNewConnection: true });
+  return database ??= openProtectedDatabase({
+    allowPlaintext: Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
+    open: name => SQLite.openDatabaseSync(name, { useNewConnection: true }),
+    // Android SQLite exposes a bare path; Expo File's native Java URI requires a scheme.
+    exists: name => new File(SQLite.defaultDatabaseDirectory.startsWith('/')
+      ? `file://${SQLite.defaultDatabaseDirectory}` : SQLite.defaultDatabaseDirectory, name).exists,
+    read: () => SecureStore.getItem('roadguard.database.protection.v1'),
+    save: value => SecureStore.setItem('roadguard.database.protection.v1', value,
+      { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }),
+    randomHex: () => Array.from(getRandomBytes(32), b => b.toString(16).padStart(2, '0')).join(''),
+  });
 }
 
 const DDL = `

@@ -85,7 +85,7 @@ function diskHarness(file) {
     runAsync: async (sql, ...args) => native.prepare(sql).run(...args) };
   const m = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/offline/database.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
-    { module: m, exports: m.exports, require: () => ({ openDatabaseSync: () => db }), Date });
+    { module: m, exports: m.exports, require: name => name === 'expo-constants' ? { default: {}, ExecutionEnvironment: {StoreClient:'storeClient'} } : name === './encryptedDatabase' ? { openProtectedDatabase: p => p.open('roadguard.db') } : ({ openDatabaseSync: () => db }), Date });
   return { h: harness({ db, modules: { '../offline/database': m.exports } }), native };
 }
 test('A3 disk reopen preserves unknown command; GET matching evidence and new actor/session do not retire it', async () => {

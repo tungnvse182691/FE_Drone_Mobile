@@ -13,7 +13,7 @@ function runtime(file){
     runAsync:async(sql,...args)=>sqlite.prepare(sql).run(...args),
     getAllAsync:async(sql,...args)=>sqlite.prepare(sql).all(...args),
     getFirstAsync:async(sql,...args)=>sqlite.prepare(sql).get(...args)??null};
-  const modules={'expo-sqlite':{openDatabaseSync:()=>db}};
+  const modules={'expo-constants':{default:{},ExecutionEnvironment:{StoreClient:'storeClient'}},'expo-sqlite':{openDatabaseSync:()=>db},'./encryptedDatabase':{openProtectedDatabase:p=>p.open('roadguard.db')}};
   const h=harness({db,modules});
   const transport={...h.transport};
   for(const name of Object.keys(transport))h.transport[name]=(...args)=>transport[name](...args);

@@ -68,6 +68,26 @@ Restore the exact recorded mappings and radio states in `finally`. Restart only
 the app process, never the emulator. A successful cold start/session restoration
 does not prove pending-upload replay, per-item receipts or encrypted storage.
 
+## Actual JavaScript storage adapter probe (2026-11-25)
+
+Add `'-Droadguard.native.storageQa=true'` to the embedded QA build above to
+select `storage-entry.tsx` instead of Expo Router. This is an explicit test entry,
+never imported by the application. Save the currently installed normal APK first;
+after the probe, reinstall that APK with `adb install -r` and open MainActivity.
+Never uninstall or clear app data. Do not leave the user on the probe screen.
+
+The probe calls the real `openProtectedDatabase` adapter with Expo SQLite and
+SecureStore. Separate SQLite subdirectories `rg.qa.storage.20261125.` and
+`rg.qa.interruption.20261125.` contain synthetic pending/blob/duplicate rows;
+their SecureStore metadata uses the corresponding prefix. Runtime account
+databases and pending operations are not probe fixtures. Two fresh app processes
+passed migration/reopen, keyed exclusive transaction commit/rollback, full blob
+and duplicate preservation, interrupted activation recovery and wrong-key
+rejection. Expected injected errors emit only sanitized stage names.
+
+This establishes Android adapter behavior, not complete at-rest coverage:
+the retained original plaintext DB and runtime media still require separate work.
+
 ## Independent protocol checks
 
 The Android probe also exercises the strict `HandoverPackageJson` codec with isolated keys: roundtrip, wrong trusted sender/device, tampered header/ciphertext, duplicate/unknown fields and trailing JSON. Production JS exports retain the hardware policy and are not considered accepted on a SOFTWARE emulator. See `docs/worklogs/OFFLINE-HANDOVER-NATIVE-BRIDGE-20261124-review.md`.

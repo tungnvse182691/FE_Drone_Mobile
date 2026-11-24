@@ -6,7 +6,7 @@ const {mkdtempSync}=fs,os=require('node:os'),path=require('node:path');
 function load(sqlite){
   const m={exports:{}};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/offline/database.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,
-    {module:m,exports:m.exports,require:()=>sqlite,Date});
+    {module:m,exports:m.exports,require:name=>name==='expo-constants'?{default:{},ExecutionEnvironment:{StoreClient:'storeClient'}}:name==='./encryptedDatabase'?{openProtectedDatabase:p=>p.open('roadguard.db')}:sqlite,Date});
   return m.exports;
 }
 const tick=()=>new Promise(r=>setImmediate(r));

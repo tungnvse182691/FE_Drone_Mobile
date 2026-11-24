@@ -3,6 +3,11 @@
 // No dependency changes/cache deletion. Default application behavior is unchanged;
 // the separate opt-in loopbackQa property adds only the sandbox network overlay.
 gradle.beforeProject { project ->
+  project.afterEvaluate {
+    if (project.plugins.hasPlugin('com.android.application') && System.getProperty('roadguard.native.storageQa') == 'true') {
+      project.extensions.getByName('react').entryFile = new File(project.rootDir.parentFile, 'tests/native-probe/storage-entry.tsx')
+    }
+  }
   project.plugins.withId('com.android.application') {
     // Opt-in standalone sandbox QA only. Default release remains unchanged.
     // HTTP is limited to loopback, not LAN or arbitrary public destinations.
