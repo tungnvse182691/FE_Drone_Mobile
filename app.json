@@ -28,7 +28,7 @@
       "expo-router",
       "expo-status-bar",
       ["expo-screen-orientation", { "initialOrientation": "PORTRAIT_UP" }],
-      "expo-sqlite",
+      ["expo-sqlite", { "useSQLCipher": true }],
       "expo-camera",
       "expo-location",
       "@react-native-community/datetimepicker",

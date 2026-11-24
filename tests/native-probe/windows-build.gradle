@@ -1,0 +1,12 @@
+// Optional Windows build-only workaround for older Ninja's MAX_PATH limit.
+// Example: -I tests/native-probe/windows-build.gradle -Droadguard.native.cxxRoot=D:/rg-cxx-20261124
+// No source copies, dependency changes, cache deletion or application behavior changes.
+gradle.beforeProject { project ->
+  project.plugins.withId('com.android.application') {
+    project.android.defaultConfig.externalNativeBuild.cmake.arguments.add('-DCMAKE_OBJECT_PATH_MAX=250')
+    def staging = System.getProperty('roadguard.native.cxxRoot')
+    if (staging != null) {
+      project.android.externalNativeBuild.cmake.buildStagingDirectory = new File(staging)
+    }
+  }
+}

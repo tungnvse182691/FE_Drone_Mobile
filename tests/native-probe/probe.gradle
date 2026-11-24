@@ -1,0 +1,7 @@
+// Test-only instrumentation, injected with -I. Never packaged in the application APK.
+gradle.beforeProject { app ->
+  app.plugins.withId('com.android.application') {
+    app.android.defaultConfig.testInstrumentationRunner = 'roadguard.probe.NativeProbe'
+    app.android.sourceSets.androidTest.java.srcDir(new File(app.rootProject.projectDir.parentFile, 'tests/native-probe/java'))
+  }
+}
