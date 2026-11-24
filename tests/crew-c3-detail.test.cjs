@@ -39,18 +39,18 @@ test('C3 closeout distinguishes all three depression dimensions without treating
  for(const text of ['Chiều dài chỗ lõm: 2 m','Chiều rộng chỗ lõm: 50 cm','Độ sâu chỗ lõm: Có nước đọng'])assert.ok(result.includes(text),text);
 });
 const common={'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'}};
-function repairOverview(context,history=[],stage='overview'){
+function repairOverview(context,history=[],stage='overview',taskDetail={}){
  const identity={actor:'actor',scope:'scope',environment:'qa',projectId:'project',taskId:'task'};
- let mutations=0;
- const s=screen('app/(crew)/wo-detail.tsx',{exportName:'NormalRepairBootstrap',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL'}},stage},modules:{...common,
+ let mutations=0;const navigation=[];
+ const s=screen('app/(crew)/wo-detail.tsx',{exportName:'NormalRepairBootstrap',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL',...taskDetail}},stage},modules:{...common,
   '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:context,reload:async()=>{}})},
   '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>identity,sameRepairIdentity:(a,b)=>a?.actor===b?.actor},
   '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>history,readRepairFieldDraft:async()=>null,dispatchRepair:async()=>{mutations++;},repairErrorMessage:()=>''},
   '../../src/api/crewFieldDraft':{},'expo-crypto':{},'../../src/offline/database':{},'../../src/api/authApi':{},'../../src/api/crewApi':{repairExecutionBlock:()=>null},
   './tasks':{useCrewIdentity:()=>({scope:'scope',user:{id:'actor'}})},
- },moduleFactories:{'expo-router':({react})=>({useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{push:()=>{}}})}});
+ },moduleFactories:{'expo-router':({react})=>({useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{push:value=>navigation.push(value)}})}});
  // Run the actual focus effect through the screen harness so persisted journal is loaded.
- return {s,get mutations(){return mutations;}};
+ return {s,navigation,get mutations(){return mutations;}};
 }
 
 test('C3 ongoing construction keeps finish visible and collapses preparation evidence',async()=>{
@@ -122,5 +122,16 @@ test('FE3 corrected submission and reopened context supersede old final intake w
   const f=repairOverview(context,[{key:'old',phase:'CONFIRMED',operation:'attempt',receipt:{data:{intakeReadiness:'READY'}}}],'closeout');
   f.s.render();await f.s.flush();const text=JSON.stringify(f.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));
   assert.doesNotMatch(text,/Đã nghiệm thu|PM đã chấp nhận hồ sơ/);assert.equal(f.mutations,0);f.s.unmount();
+ }
+});
+
+test('field evidence action remains guarded and opens the same task without issuing a command',async()=>{
+ for(const ready of [false,true]){
+ const f=repairOverview({status:'Assigned'},[],'progress',ready?{firstStartOriginId:'origin'}:{});
+ f.s.render();await f.s.flush();
+ const action=f.s.nodes().find(n=>n.props.accessibilityLabel==='Số đo / ảnh hiện trường');assert.ok(action);
+ assert.equal(action.props.accessibilityRole,'button');assert.equal(action.props.disabled,!ready);
+ if(ready){action.props.onPress();assert.equal(f.navigation.at(-1).pathname,'/(crew)/field-review');assert.equal(f.navigation.at(-1).params.id,'task');assert.equal(f.navigation.at(-1).params.projectId,'project');}
+ assert.equal(f.mutations,0);f.s.unmount();
  }
 });

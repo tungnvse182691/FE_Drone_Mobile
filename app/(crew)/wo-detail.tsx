@@ -484,7 +484,16 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
       <View style={styles.progressStat}><View style={styles.statHeading}><MaterialIcons name="straighten" size={20} color={colors.secondary}/><Text style={styles.progressTitle}>{draft?.measurements.length??0}</Text></View><Text style={styles.hint}>Số đo đã lưu</Text></View>
       <View style={styles.progressStat}><View style={styles.statHeading}><MaterialIcons name="photo-library" size={20} color={colors.secondary}/><Text style={styles.progressTitle}>{draft?.captures.filter(c=>c.purpose!=='AFTER'&&c.verified).length??0}</Text></View><Text style={styles.hint}>Ảnh đã xác minh</Text></View>
     </View>
-    <Button variant={!sourceReady&&!started&&!finished?'primary':'text'} title="Số đo / ảnh hiện trường" disabled={busy||!task.detail?.firstStartOriginId} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}/>
+    <CrewPressable accessibilityRole="button" accessibilityLabel="Số đo / ảnh hiện trường"
+      accessibilityHint="Mở số đo, vị trí và ảnh của nhiệm vụ này"
+      accessibilityState={{disabled:busy||!task.detail?.firstStartOriginId}}
+      disabled={busy||!task.detail?.firstStartOriginId}
+      style={({pressed})=>[styles.fieldEvidenceLink,pressed&&styles.linkPressed,(busy||!task.detail?.firstStartOriginId)&&styles.fieldEvidenceDisabled]}
+      onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:task.id,projectId:task.projectId}})}>
+      <View style={styles.fieldEvidenceIcon}><MaterialIcons name="perm-media" size={24} color={colors.brandGold}/></View>
+      <View style={styles.flex}><Text style={styles.fieldEvidenceTitle}>Số đo / ảnh hiện trường</Text><Text style={styles.fieldEvidenceHint}>Xem số đo, vị trí và ảnh đã lưu</Text></View>
+      <MaterialIcons name="chevron-right" size={24} color={colors.secondary}/>
+    </CrewPressable>
     </>:null}
     {assessmentBlock&&!started?<View style={styles.repairNotice}><MaterialIcons name="info-outline" size={18} color={colors.secondary}/><Text style={[styles.hint,styles.flex]}>{assessmentBlock}</Text></View>:null}
     {assessmentChanged&&!started&&!finished?<Text accessibilityRole="alert" style={styles.hint}>Số đo, ảnh hoặc vị trí đã thay đổi trong nháp. Đánh giá cũ chưa bao gồm thay đổi này; cần gửi lại để máy chủ kiểm tra trước khi thi công.</Text>:null}
@@ -578,6 +587,11 @@ export function RepairFieldSummary({draft}:{draft:FieldDraft|null}) {
 }
 
 const styles = StyleSheet.create({
+  fieldEvidenceLink: { minHeight: 72, padding: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.surfaceAlt, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md },
+  fieldEvidenceIcon: { width: 40, height: 40, borderRadius: radius.sm, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  fieldEvidenceTitle: { ...typography.labelLg, color: colors.neutral, flexShrink: 1 },
+  fieldEvidenceHint: { ...typography.caption, color: colors.secondary, marginTop: spacing.xs },
+  fieldEvidenceDisabled: { opacity: 0.5 },
   detailCard: { borderColor: '#DCE2E7', borderRadius: 16, marginBottom: 16, gap: 16, padding: 16 },
   detailHero: { backgroundColor: colors.surface, gap: 12 },
   detailTitle: { ...typography.titleLg, lineHeight: 28, color: '#192D40' },
