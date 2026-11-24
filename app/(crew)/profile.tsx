@@ -15,12 +15,12 @@ const PERFORMANCE_STATS = [
   {
     value: '',
     label: 'Hoàn thành',
-    color: '#187047',
+    color: colors.secondary,
   },
   {
     value: '',
     label: 'Chưa hoàn thành',
-    color: '#8A5200',
+    color: colors.secondary,
   },
   {
     value: '',
@@ -98,29 +98,31 @@ export default function CrewProfileScreen() {
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Hồ sơ" />}>
       <CrewContentTransition ready>
-      <View style={styles.profileHeader}>
-        <View style={styles.avatar} accessibilityLabel="Biểu tượng tài khoản">
-          <MaterialIcons name="person" size={36} color={colors.secondary} />
+      <Card style={styles.profileHeader}>
+        <View style={styles.identityRow}>
+          <View style={styles.avatar} accessibilityLabel="Biểu tượng tài khoản">
+            <MaterialIcons name="person" size={28} color={colors.secondary} />
+          </View>
+          <View style={styles.identityText}>
+            <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
+            <Text style={[typography.caption, styles.roleText]}>Kỹ thuật viên sửa chữa</Text>
+          </View>
         </View>
-        <Text style={[typography.titleLg, styles.name]}>{displayName}</Text>
-        <Text style={[typography.bodyMd, styles.meta]}>
-          Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
-        </Text>
-        <Text style={[typography.caption, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
-
-        <View style={styles.roleChip}>
-          <Text style={[typography.labelSm, styles.roleText]}>Kỹ thuật viên sửa chữa</Text>
+        <View style={styles.accountDetails}>
+          <Text selectable style={[typography.bodyMd, styles.email]}>{inbox.enabled ? user?.phone_or_email ?? 'Chưa có dữ liệu liên hệ' : 'Chưa đăng nhập'}</Text>
+          <Text style={[typography.caption, styles.meta]}>
+            Mã nhân viên: {user?.employee_code?.trim() || 'Chưa có dữ liệu'}
+          </Text>
         </View>
-      </View>
+      </Card>
 
       <Card style={styles.statsCard}>
-        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, styles.statsTitle]}>Tiến độ nhiệm vụ</Text><Text style={[typography.caption, { color: colors.secondary }]}>Thống kê trong nhiệm vụ đã tải · Không phải toàn bộ lịch sử.</Text></View><CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
+        <View style={styles.statsHeading}><View style={styles.statsHeadingText}><Text style={[typography.titleMd, styles.statsTitle]}>Tiến độ nhiệm vụ</Text></View><CrewPressable accessibilityRole="button" accessibilityLabel="Tải lại thống kê" disabled={!inbox.enabled || inbox.query.isFetching} onPress={() => { void inbox.query.refetch(); }} style={styles.refreshButton}>
             {inbox.query.isFetching ? <ActivityIndicator size="small" color={colors.secondary} /> : <MaterialIcons name="refresh" size={22} color={colors.secondary} />}
           </CrewPressable></View>
         {inbox.error ? <Text accessibilityLiveRegion="polite" style={[typography.bodyMd, { color: colors.secondary }]}>{inbox.error}</Text> :
           inbox.query.isPending && inbox.enabled ? <Text style={typography.bodyMd}>Đang tải thống kê…</Text> :
           !inbox.tasks.length ? <Text style={typography.bodyMd}>Chưa có nhiệm vụ được giao.</Text> : null}
-        {inbox.query.hasNextPage && !inbox.error ? <Text style={[typography.caption, { color: colors.secondary }]}>Còn nhiệm vụ chưa tải; các số dưới đây chỉ tính phần đã tải.</Text> : null}
         <View style={styles.statsRow}>
           {PERFORMANCE_STATS.map((stat, idx) => (
             <React.Fragment key={stat.label}>
@@ -133,7 +135,11 @@ export default function CrewProfileScreen() {
             </React.Fragment>
           ))}
         </View>
-
+        <Text style={[typography.caption, styles.statsCaption]}>
+          {inbox.query.hasNextPage && !inbox.error
+            ? 'Chỉ tính nhiệm vụ đã tải. Còn dữ liệu chưa tải.'
+            : 'Chỉ tính nhiệm vụ đã tải, không phải toàn bộ lịch sử.'}
+        </Text>
       </Card>
 
       <Text style={[typography.labelSm, styles.sectionLabel]}>Cài đặt hệ thống</Text>
@@ -146,7 +152,7 @@ export default function CrewProfileScreen() {
             style={({ pressed }) => [styles.row, index < SETTINGS_ROWS.length && styles.rowBorder, pressed && styles.rowPressed]}
             onPress={() => handleRow(row)}
           >
-            <MaterialIcons name={row.icon} size={20} color={colors.secondary} />
+            <View style={styles.settingIcon}><MaterialIcons name={row.icon} size={20} color={colors.secondary} /></View>
             <View style={styles.rowText}>
               <Text style={[typography.bodyMd, styles.rowLabel]}>{row.label}</Text>
               {row.subtitle ? <Text style={[typography.caption, styles.rowSubtitle]}>{row.subtitle}</Text> : null}
@@ -182,48 +188,34 @@ export default function CrewProfileScreen() {
 
 const styles = StyleSheet.create({
   profileHeader: {
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.full,
-    backgroundColor: '#F3F5F6',
     borderWidth: 1,
-    borderColor: '#DCE2E7',
+    borderColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  identityText: { flex: 1, minWidth: 0, gap: spacing.xs },
+  accountDetails: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: spacing.md, paddingTop: spacing.sm, gap: spacing.xs },
+  avatar: {
+    width: 48,
+    height: 48,
+    flexShrink: 0,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
   },
   name: {
-    color: '#192D40',
+    color: colors.secondary,
     fontSize: 18,
     lineHeight: 26,
-    textAlign: 'center',
   },
   meta: {
     color: colors.secondary,
-    marginTop: spacing.xs,
-    textAlign: 'center',
   },
   email: {
     color: colors.secondary,
-    marginTop: spacing.xs,
-    textAlign: 'center',
-  },
-  roleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-    backgroundColor: '#F3F5F6',
-    borderWidth: 1,
-    borderColor: '#DCE2E7',
   },
   roleText: {
     color: colors.secondary,
@@ -233,9 +225,9 @@ const styles = StyleSheet.create({
   },
   statsCard: {
     borderRadius: radius.lg,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#DCE2E7',
+    borderColor: colors.border,
   },
   statsRow: {
     flexDirection: 'row',
@@ -243,28 +235,28 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  statsHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, gap: spacing.sm },
+  statsHeading: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.sm },
   statsHeadingText: { flex: 1, gap: 2 },
-  statsTitle: { color: '#192D40', fontSize: 16, lineHeight: 24 },
+  statsTitle: { color: colors.secondary },
+  statsCaption: { color: colors.secondary, marginTop: spacing.sm },
   refreshButton: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: radius.full },
   statCol: {
     flex: 1,
     minWidth: 88,
     alignItems: 'center',
     padding: spacing.sm,
-    backgroundColor: '#F3F5F6',
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,
   },
   statLabel: {
     color: colors.secondary,
     marginTop: spacing.xs,
     textAlign: 'center',
-    minHeight: 36,
     fontSize: 12,
     lineHeight: 18,
     fontFamily: 'Roboto',
   },
-  statNumber: { fontSize: 28, lineHeight: 36, fontVariant: ['tabular-nums'] },
+  statNumber: { fontSize: 24, lineHeight: 32, color: colors.secondary, fontVariant: ['tabular-nums'] },
   sectionLabel: {
     color: colors.secondary,
     fontSize: 13,
@@ -275,15 +267,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#DCE2E7',
+    borderColor: colors.border,
+    paddingVertical: spacing.xs,
   },
+  settingIcon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-    minHeight: 64,
+    minHeight: 56,
     borderRadius: radius.md,
   },
   rowBorder: {

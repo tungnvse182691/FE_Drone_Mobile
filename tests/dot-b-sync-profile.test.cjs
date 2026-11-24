@@ -6,8 +6,14 @@ const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../sr
 for(const state of ['loading','empty','error','pages'])test('B5 profile prioritizes identity and retains scoped stats '+state,()=>{
  let reads=0;const inbox={enabled:true,tasks:state==='pages'?[{done:true},{done:false}]:[],error:state==='error'?'Không tải được thống kê':null,query:{isPending:state==='loading',isFetching:false,hasNextPage:state==='pages',refetch:()=>reads++}};
  const s=screen('app/(crew)/profile.tsx',{modules:{...common,'./tasks':{useCrewInbox:()=>inbox},'../../src/api/crewApi':{crewTaskIsComplete:t=>t.done},'expo-router':{router:{push(){},replace(){}}}}});
- s.render();const value=text(s);assert.doesNotMatch(value,/Nhiệm vụ được giao/);assert.ok(value.indexOf('Chưa có tên tài khoản')<value.indexOf('Thống kê trong nhiệm vụ đã tải'));
- assert.match(value,/Không phải toàn bộ lịch sử/);if(state==='loading'||state==='error')assert.match(value,/—/);if(state==='empty')assert.match(value,/Chưa có nhiệm vụ được giao/);if(state==='pages')assert.match(value,/Còn nhiệm vụ chưa tải/);
+ s.render();const value=text(s);assert.doesNotMatch(value,/Nhiệm vụ được giao/);assert.ok(value.indexOf('Chưa có tên tài khoản')<value.indexOf('Tiến độ nhiệm vụ'));
+ assert.equal((value.match(/Chỉ tính nhiệm vụ đã tải/g)||[]).length,1);
+ if(state==='loading'||state==='error')assert.match(value,/—/);if(state==='empty')assert.match(value,/Chưa có nhiệm vụ được giao/);
+ if(state==='pages'){
+  assert.match(value,/Còn dữ liệu chưa tải/);
+  const labels=s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).join(''));
+  assert.ok(labels.includes('1'));assert.ok(labels.includes('2'));
+ }else assert.match(value,/không phải toàn bộ lịch sử/);
  s.nodes().find(n=>n.props.accessibilityLabel==='Tải lại thống kê').props.onPress();assert.equal(reads,1);s.unmount();
 });
 test('B4 sync keeps unavailable capabilities out of the overview and diagnostics remain functional',async()=>{
