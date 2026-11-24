@@ -15,6 +15,10 @@ public final class StorageInspection extends Instrumentation {
   @Override public void onStart() {
     Bundle result = new Bundle();
     try {
+      android.security.NetworkSecurityPolicy policy = android.security.NetworkSecurityPolicy.getInstance();
+      result.putBoolean("network.loopbackHttp", policy.isCleartextTrafficPermitted("127.0.0.1"));
+      result.putBoolean("network.sandboxStorageHttp", policy.isCleartextTrafficPermitted("192.168.1.211"));
+      result.putBoolean("network.publicHttp", policy.isCleartextTrafficPermitted("example.com"));
       File directory = new File(getTargetContext().getFilesDir(), "SQLite");
       for (String name : new String[]{"roadguard.db", "roadguard.db-wal", "roadguard.db-shm",
           "roadguard.encrypted.v1.db", "roadguard.encrypted.v1.db-wal"}) {

@@ -45,6 +45,17 @@ recorded API/MinIO reverse ports and a bundle configured for loopback. Without
 this opt-in, release security configuration is unchanged and local HTTP fails.
 Never distribute this debug-signed QA artifact as a production release.
 
+If the existing sandbox signs storage URLs with its LAN address, add
+`'-Droadguard.native.storageQaHost=192.168.1.211'` with the actual current host
+to the same explicit QA invocation. The init script accepts only one private
+IPv4 literal and generates an additional exact-domain exception under `build/`.
+It does not rewrite presigned URLs, modify BE configuration, or permit arbitrary
+HTTP. Without this option, only loopback remains allowed; without `loopbackQa`,
+the release overlay is not used. A LAN storage URL is unaffected by an ADB reverse
+mapping: turn off radios as well when testing genuine upload disconnection.
+The `StorageInspection` instrumentation reports loopback, this recorded sandbox
+address and public-domain cleartext policy without reading credentials or rows.
+
 Check the live reverse-port inventory after every ADB reconnect; a previous
 successful setup does not prove the mappings still exist. For this sandbox:
 

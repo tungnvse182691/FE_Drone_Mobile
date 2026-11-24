@@ -10,11 +10,25 @@ gradle.beforeProject { project ->
   }
   project.plugins.withId('com.android.application') {
     // Opt-in standalone sandbox QA only. Default release remains unchanged.
-    // HTTP is limited to loopback, not LAN or arbitrary public destinations.
+    // HTTP defaults to loopback. A single explicit private IPv4 storage host
+    // may be opted into for real sandbox-presigned URLs; never global cleartext.
     if (System.getProperty('roadguard.native.loopbackQa') == 'true') {
       def qaRoot = new File(project.rootDir.parentFile, 'tests/native-probe/loopback-qa')
       project.android.sourceSets.release.manifest.srcFile(new File(qaRoot, 'AndroidManifest.xml'))
-      project.android.sourceSets.release.res.srcDir(new File(qaRoot, 'res'))
+      def storageHost = System.getProperty('roadguard.native.storageQaHost')
+      if (storageHost != null) {
+        def octets = storageHost.split('\\.', -1)
+        def valid = octets.length == 4 && octets.every { it ==~ /0|[1-9][0-9]{0,2}/ } && octets.every { it.toInteger() <= 255 }
+        def privateAddress = valid && (octets[0] == '10' || (octets[0] == '172' && octets[1].toInteger() in 16..31) || (octets[0] == '192' && octets[1] == '168'))
+        if (!privateAddress) throw new GradleException('storageQaHost must be one explicit private IPv4 address')
+        def generated = new File(project.buildDir, 'generated/roadguard-sandbox-network')
+        def resource = new File(generated, 'xml/roadguard_loopback_qa.xml')
+        resource.parentFile.mkdirs()
+        resource.text = new File(qaRoot, 'res/xml/roadguard_loopback_qa.xml').text.replace('</domain-config>', '<domain includeSubdomains="false">' + storageHost + '</domain></domain-config>')
+        project.android.sourceSets.release.res.srcDir(generated)
+      } else {
+        project.android.sourceSets.release.res.srcDir(new File(qaRoot, 'res'))
+      }
     }
     project.android.defaultConfig.externalNativeBuild.cmake.arguments.add('-DCMAKE_OBJECT_PATH_MAX=250')
     def staging = System.getProperty('roadguard.native.cxxRoot')
