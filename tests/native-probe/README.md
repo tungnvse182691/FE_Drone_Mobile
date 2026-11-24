@@ -23,6 +23,37 @@ The probe checks non-exportable Android Keystore signing/agreement keys, direct-
 
 It also checks the local file primitive on a 2 MiB+47-byte QA file, wrong-context rejection and kernel no-replace destination collision. Android publication uses JNI `renameat2(RENAME_NOREPLACE)` and directory fsync, failing closed if unavailable. No runtime media migration is invoked. The local format is independent of the BE handover wire format. See the local file checkpoint worklog for current APK hash and two fresh-process runs; the foundation hash below describes the earlier build only.
 
+## Embedded-JavaScript QA build
+
+The development client needs Metro and cannot by itself prove offline cold start.
+For a standalone **QA-only**, debug-signed APK, use the same Windows init script:
+
+```powershell
+./android/gradlew.bat -p android -I D:/Do_AN_Drone/FE_AppMobile/tests/native-probe/windows-build.gradle '-Droadguard.native.cxxRoot=D:/rg-cxx-20261124' '-Droadguard.native.loopbackQa=true' :app:assembleRelease -PreactNativeArchitectures=x86_64 '-Pandroid.enableMinifyInReleaseBuilds=false' '-Pandroid.enableShrinkResourcesInReleaseBuilds=false' --no-parallel --max-workers=2 --console=plain
+```
+
+These command-line flags leave generated Gradle configuration unchanged. They
+disable release optimization for this QA invocation after R8 exhausted the
+configured 512 MiB Metaspace. The init script also shortens the separate release
+CMake staging paths of Reanimated and Worklets on Windows. This is not a
+distribution or optimized-release acceptance result.
+
+`roadguard.native.loopbackQa=true` opts into a test-only release manifest/resource
+overlay under `tests/native-probe/loopback-qa`. It permits HTTP only to `127.0.0.1`
+and `localhost` (not subdomains); other cleartext traffic remains denied. Use the
+recorded API/MinIO reverse ports and a bundle configured for loopback. Without
+this opt-in, release security configuration is unchanged and local HTTP fails.
+Never distribute this debug-signed QA artifact as a production release.
+
+Before `install -r`, verify that `assets/index.android.bundle` exists and the
+signing certificate matches the existing native app. Never uninstall or clear
+data to install this build. Leave Expo Go untouched. For a genuine API-offline
+test, record and temporarily remove the API/MinIO `adb reverse` mappings as well
+as disabling radios; loopback reverse can remain reachable with Wi-Fi disabled.
+Restore the exact recorded mappings and radio states in `finally`. Restart only
+the app process, never the emulator. A successful cold start/session restoration
+does not prove pending-upload replay, per-item receipts or encrypted storage.
+
 ## Independent protocol checks
 
 The Android probe also exercises the strict `HandoverPackageJson` codec with isolated keys: roundtrip, wrong trusted sender/device, tampered header/ciphertext, duplicate/unknown fields and trailing JSON. Production JS exports retain the hardware policy and are not considered accepted on a SOFTWARE emulator. See `docs/worklogs/OFFLINE-HANDOVER-NATIVE-BRIDGE-20261124-review.md`.

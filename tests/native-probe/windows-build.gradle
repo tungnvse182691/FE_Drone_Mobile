@@ -1,12 +1,31 @@
 // Optional Windows build-only workaround for older Ninja's MAX_PATH limit.
 // Example: -I tests/native-probe/windows-build.gradle -Droadguard.native.cxxRoot=D:/rg-cxx-20261124
-// No source copies, dependency changes, cache deletion or application behavior changes.
+// No dependency changes/cache deletion. Default application behavior is unchanged;
+// the separate opt-in loopbackQa property adds only the sandbox network overlay.
 gradle.beforeProject { project ->
   project.plugins.withId('com.android.application') {
+    // Opt-in standalone sandbox QA only. Default release remains unchanged.
+    // HTTP is limited to loopback, not LAN or arbitrary public destinations.
+    if (System.getProperty('roadguard.native.loopbackQa') == 'true') {
+      def qaRoot = new File(project.rootDir.parentFile, 'tests/native-probe/loopback-qa')
+      project.android.sourceSets.release.manifest.srcFile(new File(qaRoot, 'AndroidManifest.xml'))
+      project.android.sourceSets.release.res.srcDir(new File(qaRoot, 'res'))
+    }
     project.android.defaultConfig.externalNativeBuild.cmake.arguments.add('-DCMAKE_OBJECT_PATH_MAX=250')
     def staging = System.getProperty('roadguard.native.cxxRoot')
     if (staging != null) {
       project.android.externalNativeBuild.cmake.buildStagingDirectory = new File(staging)
+    }
+  }
+  // Release compiles separate C++ variants for these libraries. Their default
+  // node_modules staging paths also exceed Windows/Ninja limits.
+  project.plugins.withId('com.android.library') {
+    if (project.name in ['react-native-reanimated', 'react-native-worklets']) {
+      project.android.defaultConfig.externalNativeBuild.cmake.arguments.add('-DCMAKE_OBJECT_PATH_MAX=250')
+      def staging = System.getProperty('roadguard.native.cxxRoot')
+      if (staging != null) {
+        project.android.externalNativeBuild.cmake.buildStagingDirectory = new File(staging, project.name)
+      }
     }
   }
 }
