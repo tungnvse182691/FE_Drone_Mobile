@@ -61,3 +61,18 @@ test('offline scope reads SecureStore continuity without granting session or cha
  assert.equal(await h.store.getState().operatorLocalReadScope(),null);
  h.store.getState().logout();assert.equal(await h.store.getState().operatorLocalReadScope(),null);
 });
+
+for(const role of ['REPAIR_CREW','REPORTER'])test(`cold ${role} can inspect its secure local identity without granting a session`,async()=>{
+ const h=harness({value:null},async()=>{throw Error('offline');});
+ h.store.getState().login({id:'A',role_code:role},{...pair(),user:{...pair().user,role:role==='REPAIR_CREW'?'RepairCrew':'REPORTER'}});
+ await new Promise(r=>setImmediate(r));h.store.setState({token:null,status:'VERIFIED_NEEDS_LOGIN'});
+ await h.store.getState().restoreRefreshToken();const before=h.disk.value,calls=h.calls.length;
+ const identity=await h.store.getState().localDraftReadIdentity(role);
+ assert.equal(JSON.stringify(identity),JSON.stringify({environment:'fixture-env',actor:'A',scope:JSON.stringify(['A','session']),role}));
+ assert.equal(h.store.getState().authReady,false);assert.equal(h.store.getState().token,null);
+ assert.equal(h.disk.value,before);assert.equal(h.calls.length,calls);
+ assert.equal(await h.store.getState().localDraftReadIdentity(role==='REPORTER'?'REPAIR_CREW':'REPORTER'),null);
+ h.store.setState({user:{...h.store.getState().user,must_change_password:true}});
+ assert.equal(await h.store.getState().localDraftReadIdentity(role),null);
+ h.store.getState().logout();assert.equal(await h.store.getState().localDraftReadIdentity(role),null);
+});

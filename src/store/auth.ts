@@ -15,6 +15,7 @@ import { mapProfileRole } from '../types/roleAdapter';
 import { logoutReal, passwordSessionIdentity } from '../api/authApi';
 import { uuidv4 } from '../utils/uuid';
 import { createSecureSession } from './secureSession';
+import type { LocalDraftReadIdentity } from '../offline/localDraftRead';
 
 export type AuthStatus =
   | 'SIGNED_OUT'
@@ -53,6 +54,7 @@ interface AuthState {
   requirePasswordChange: () => void;
   restoreRefreshToken: () => Promise<void>;
   operatorLocalReadScope: () => Promise<string | null>;
+  localDraftReadIdentity: (role: LocalDraftReadIdentity['role']) => Promise<LocalDraftReadIdentity | null>;
 }
 
 function stripCredentials(user: User | null): PersistedUser | null {
@@ -213,6 +215,19 @@ export const useAuthStore = create<AuthState>()(
         const identity = await secureSession.localIdentity(API_BASE_URL, owner.id);
         if (!identity || get().user !== owner || !get().authRestoreError || get().authReady || get().token) return null;
         return JSON.stringify([API_BASE_URL, identity, '']);
+      },
+
+      localDraftReadIdentity: async (role) => {
+        if (role !== RoleCode.REPAIR_CREW && role !== RoleCode.REPORTER) return null;
+        const owner = get().user;
+        const eligible = () => get().user === owner && get().role === role &&
+          owner?.role_code === role && !owner.must_change_password &&
+          get().authRestoreError && !get().authReady && !get().token;
+        if (!eligible() || !owner) return null;
+        const scope = await secureSession.localIdentity(API_BASE_URL, owner.id);
+        if (!scope || !eligible()) return null;
+        // Read-only provenance, never a restored Bearer session or dispatch authority.
+        return { environment: API_BASE_URL, actor: owner.id, scope, role };
       },
 
       restoreRefreshToken: async () => {

@@ -8,6 +8,7 @@ import { AppFontGate } from '../src/components/AppFontGate';
 import { colors } from '../src/design-tokens';
 import { Button } from '../src/components/Button';
 import { OperatorLocalTasks } from '../src/components/OperatorLocalTasks';
+import { LocalSavedDrafts } from '../src/components/LocalSavedDrafts';
 import { useAuthStore } from '../src/store/auth';
 import {
   PUBLIC_ROUTE_GROUP,
@@ -126,7 +127,10 @@ function AuthGuard({ children }: { children: ReactNode }) {
       {authReady === false ? (
         <View style={styles.loading} accessibilityLiveRegion="polite">
           {showLocalTasks && authRestoreError && user?.role_code === 'DRONE_OPERATOR' ?
-            <OperatorLocalTasks onClose={closeLocalTasks} /> : <>
+            <OperatorLocalTasks onClose={closeLocalTasks} /> :
+            showLocalTasks && authRestoreError && !user?.must_change_password &&
+              (user?.role_code === 'REPAIR_CREW' || user?.role_code === 'REPORTER') ?
+            <LocalSavedDrafts role={user.role_code} onClose={closeLocalTasks} /> : <>
           <Image source={require('../assets/logo_hoanghai.png')} style={styles.loadingLogo} resizeMode="contain" />
           {authRestoreError ? <View style={styles.sessionRecovery}>
             <Text style={styles.sessionTitle}>Chưa kết nối được phiên đăng nhập</Text>
@@ -134,6 +138,8 @@ function AuthGuard({ children }: { children: ReactNode }) {
             <Button variant="primary" title="Thử lại" onPress={() => { void useAuthStore.getState().restoreRefreshToken(); }} />
             {user?.role_code === 'DRONE_OPERATOR' && !user.must_change_password ?
               <Button variant="text" title="Xem nhiệm vụ đã tải" onPress={() => setShowLocalTasks(true)} /> : null}
+            {(user?.role_code === 'REPAIR_CREW' || user?.role_code === 'REPORTER') && !user.must_change_password ?
+              <Button variant="text" title="Xem bản nháp đã lưu" onPress={() => setShowLocalTasks(true)} /> : null}
             <Button variant="text" title="Đến màn đăng nhập" onPress={() => {
               useAuthStore.getState().dismissAuthRestore();
               router.replace('/(auth)');
