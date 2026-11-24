@@ -1,5 +1,17 @@
 import type { TokenPair } from '../api/client';
 
+/** No error body/message/config or credentials may cross this diagnostic boundary. */
+export function sessionRestoreDiagnostic(error: unknown): string {
+  const e = error as { response?: { status?: unknown }; code?: unknown; message?: unknown } | null;
+  const status = e?.response?.status;
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599) return `http-${status}`;
+  if (e?.code === 'ERR_NETWORK') return 'network';
+  if (e?.code === 'ECONNABORTED' || e?.code === 'ETIMEDOUT') return 'timeout';
+  if (e?.message === 'auth_credential_mismatch') return 'credential-continuity';
+  if (e?.message === 'auth_secure_store_unavailable') return 'secure-store-unavailable';
+  return 'local-or-response';
+}
+
 interface Credential {
   version: 1;
   environment: string;

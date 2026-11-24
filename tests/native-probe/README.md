@@ -45,6 +45,20 @@ recorded API/MinIO reverse ports and a bundle configured for loopback. Without
 this opt-in, release security configuration is unchanged and local HTTP fails.
 Never distribute this debug-signed QA artifact as a production release.
 
+Check the live reverse-port inventory after every ADB reconnect; a previous
+successful setup does not prove the mappings still exist. For this sandbox:
+
+```powershell
+D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 reverse --list
+D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 reverse tcp:18181 tcp:18181
+D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 reverse tcp:19101 tcp:19101
+```
+
+Missing mappings produce `AUTH_RESTORE_FAILED network` even when the host's
+health check succeeds. Restore the mappings and use the existing Retry action;
+do not clear the session or app data. Diagnostic categories never include the
+refresh token, request body, server body or raw error text.
+
 Before `install -r`, verify that `assets/index.android.bundle` exists and the
 signing certificate matches the existing native app. Never uninstall or clear
 data to install this build. Leave Expo Go untouched. For a genuine API-offline

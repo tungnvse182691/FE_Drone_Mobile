@@ -14,7 +14,7 @@ import {
 import { mapProfileRole } from '../types/roleAdapter';
 import { logoutReal, passwordSessionIdentity } from '../api/authApi';
 import { uuidv4 } from '../utils/uuid';
-import { createSecureSession } from './secureSession';
+import { createSecureSession, sessionRestoreDiagnostic } from './secureSession';
 import type { LocalDraftReadIdentity } from '../offline/localDraftRead';
 
 export type AuthStatus =
@@ -241,6 +241,7 @@ export const useAuthStore = create<AuthState>()(
           set({ authReady: true });
         } catch (error) {
           if (get().user !== owner || get().token) return;
+          console.warn('AUTH_RESTORE_FAILED', sessionRestoreDiagnostic(error));
           const status = (error as { response?: { status?: number } })?.response?.status;
           if (status === 401 || status === 403) {
             get().logout();
