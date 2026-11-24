@@ -1,5 +1,21 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {harness}=require('./helpers/roadfe-screen.cjs');
+test('typing each ID prefix finds the task from the first character, including later pages',async()=>{
+ const h=harness(),calls=[];
+ const target={id:'60a04265-aaaa-4bbb-8ccc-123456789012',taskCode:'FIELD-1a6fd922'};
+ h.client.get=async(path,{params})=>{
+  calls.push(params);
+  // API037 searches taskCode, so none of these ID prefixes match it.
+  if(params.search)return {data:{items:[],nextCursor:null}};
+  return {data:{items:params.cursor?[target]:[{id:'bbbbbbbb-aaaa',taskCode:'FIELD-X'}],nextCursor:params.cursor?null:'next'}};
+ };
+ const m=h.load('src/api/crewApi.ts');
+ for(const term of ['6','60','60A','60a0','60a04','60a042','60a0426','60a04265',target.id]){
+  const result=await m.searchCrewTaskIdentityPage(null,50,new AbortController().signal,{search:term,statusGroup:'INCOMPLETE',mode:'MEASURE_ONLY',acceptance:'ACCEPTED'});
+  assert.deepEqual(result.items,[target],`ID prefix ${term} must match`);
+ }
+ for(const q of calls){assert.equal(q.search,undefined);assert.equal(q.statusGroup,'INCOMPLETE');assert.equal(q.mode,'MEASURE_ONLY');assert.equal(q.acceptance,'ACCEPTED');}
+});
 test('ID search scans later pages with unchanged filters and matches ID or task code',async()=>{
  const h=harness(),calls=[];
  h.client.get=async(path,{params})=>{calls.push(params);return {data:{items:params.cursor?[{id:'5ad738f9-aaaa',taskCode:'REPAIR-X'},{id:'other',taskCode:'FIELD-5ad738'}]:[{id:'unrelated',taskCode:'FIELD-X'}],nextCursor:params.cursor?null:'next',asOf:'now'}};};

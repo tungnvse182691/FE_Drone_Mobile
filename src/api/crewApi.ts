@@ -865,14 +865,14 @@ export async function listCrewInspectionTasksReal(
   return response.data;
 }
 
-/** API037 searches TaskCode only. For ID-like input, scan its filtered pages
+/** API037 searches TaskCode only. For ID-like input (even a single character), scan its filtered pages
  * until a matching page is found; retain the real cursor for Load more. */
 export async function searchCrewTaskIdentityPage(
   cursor: string | null, limit = 50, signal: AbortSignal, query: CrewListQuery = {},
   context?: { actorId: string; assertCurrent: () => void },
 ): Promise<InspectionTaskPageResponseDto> {
   const filters = crewListQuery(query), term = filters.search?.toLowerCase();
-  if (!term || !/^[a-f0-9][a-f0-9-]{5,35}$/.test(term)) return listCrewInspectionTasksReal(cursor, limit, signal, filters);
+  if (!term || !/^[a-f0-9][a-f0-9-]{0,35}$/.test(term)) return listCrewInspectionTasksReal(cursor, limit, signal, filters);
   const seen = new Set<string>();
   if (cursor) seen.add(cursor);
   let next = cursor;
