@@ -37,3 +37,24 @@ test('local draft inspection fails on storage error or identity change during an
  const j=harness();j.disk.close();await assert.rejects(j.load(identity,()=>true));
  await assert.rejects(h.load({...identity,scope:JSON.stringify(['B','sid'])},()=>true),/local_identity_invalid/);
 });
+
+test('Crew inventories owned repair and receiving commands without exposing payloads or changing originals',async()=>{
+ const h=harness();
+ const repair={schema:1,identity:{...identity,projectId:'project',taskId:'repair-task',itemId:'item'},operation:'supplement',key:'command-key',phase:'PENDING',payload:{evidence:[{uri:'private'}],measurements:[{}]}};
+ const repairKey=d=>'t06a:'+JSON.stringify([d.identity.environment,d.identity.actor,d.identity.projectId,d.identity.taskId])+':'+JSON.stringify([d.identity.scope,d.identity.itemId,d.key]);
+ const receiving={identity:{...identity,projectId:'project'},requestId:'receiving-request',phase:'PENDING',body:{claimedDeviceAt:null}};
+ const receivingKey=d=>'h01ack:'+JSON.stringify([d.identity.environment,d.identity.actor,d.identity.projectId,d.requestId]);
+ h.put(repairKey(repair),'T06A_REPAIR_COMMAND',repair);h.put(receivingKey(receiving),'H01_RECEIVING_ACK',receiving);
+ h.put(repairKey(repair)+':recovery','HARDEN02_REPAIR_RECOVERY',{record:repair});
+ for(const change of [{actor:'B'},{environment:'other'},{scope:'old'}]){
+  const bad={...repair,identity:{...repair.identity,...change}};h.put(repairKey(bad),'T06A_REPAIR_COMMAND',bad);
+  const ack={...receiving,requestId:'other-'+Object.keys(change)[0],identity:{...receiving.identity,...change}};h.put(receivingKey(ack),'H01_RECEIVING_ACK',ack);
+ }
+ h.put('forged','T06A_REPAIR_COMMAND',repair);h.put('forged-ack','H01_RECEIVING_ACK',receiving);
+ const before=h.disk.prepare('SELECT * FROM local_draft ORDER BY id').all();
+ const rows=await h.load(identity,()=>true);assert.equal(rows.length,2);
+ assert.ok(rows.some(r=>r.reference==='repair-task'&&r.hasCommand&&r.photoCount===1));
+ assert.ok(rows.some(r=>r.reference==='receiving-request'&&r.referenceLabel==='Yêu cầu tiếp nhận'&&r.hasCommand));
+ for(const r of rows){assert.equal(r.payload,undefined);assert.equal(r.identity,undefined);assert.equal(r.command,undefined);}
+ assert.deepEqual(h.disk.prepare('SELECT * FROM local_draft ORDER BY id').all(),before);
+});

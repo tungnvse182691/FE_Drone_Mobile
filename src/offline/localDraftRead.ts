@@ -10,6 +10,7 @@ export interface LocalDraftReadIdentity {
 export interface LocalDraftSummary {
   key: string;
   reference: string;
+  referenceLabel?: string;
   updatedAt: string;
   photoCount: number;
   measurementCount: number;
@@ -27,9 +28,11 @@ export async function loadLocalDraftSummaries(identity: LocalDraftReadIdentity, 
   const check = () => { if (!current()) throw Error('local_session_changed'); };
   check();
   const db = openDatabase(); await initDatabase(db); check();
-  const rows = await db.getAllAsync<{id: string; payload: string; updated_at: string}>(
-    'SELECT id, payload, updated_at FROM local_draft WHERE kind = ? ORDER BY updated_at DESC, id',
-    identity.role === 'REPAIR_CREW' ? 'T05B_FIELD' : 'reporter_pending_v1');
+  const kinds = identity.role === 'REPAIR_CREW'
+    ? ['T05B_FIELD', 'T06A_REPAIR_COMMAND', 'H01_RECEIVING_ACK'] : ['reporter_pending_v1'];
+  const rows = await db.getAllAsync<{id: string; kind: string; payload: string; updated_at: string}>(
+    `SELECT id, kind, payload, updated_at FROM local_draft WHERE kind IN (${kinds.map(() => '?').join(',')}) ORDER BY updated_at DESC, id`,
+    ...kinds);
   check();
   const result: LocalDraftSummary[] = [];
   for (const row of rows) {
@@ -37,6 +40,31 @@ export async function loadLocalDraftSummaries(identity: LocalDraftReadIdentity, 
       const d = JSON.parse(row.payload);
       if (!d || !Number.isFinite(Date.parse(row.updated_at))) continue;
       if (identity.role === 'REPAIR_CREW') {
+        if (row.kind !== 'T05B_FIELD') {
+          // Inventory only. Never treat a local phase/overlay as a durable server receipt.
+          const i = d.identity;
+          if (!i || i.actor !== identity.actor || i.environment !== identity.environment || i.scope !== identity.scope ||
+              typeof i.projectId !== 'string' || !i.projectId) continue;
+          if (row.kind === 'T06A_REPAIR_COMMAND') {
+            if (d.schema !== 1 || typeof i.taskId !== 'string' || !i.taskId || typeof i.itemId !== 'string' || !i.itemId ||
+                typeof d.key !== 'string' || !d.key || !['PREPARED','PENDING','ACKNOWLEDGED','CONFIRMED','REJECTED'].includes(d.phase) ||
+                !['assessment','start','finish','attempt','supplement'].includes(d.operation) ||
+                !d.payload || typeof d.payload !== 'object' || Array.isArray(d.payload)) continue;
+            const key = 't06a:' + JSON.stringify([i.environment,i.actor,i.projectId,i.taskId]) + ':' + JSON.stringify([i.scope,i.itemId,d.key]);
+            if (row.id !== key) continue;
+            result.push({key:row.id, reference:i.taskId, updatedAt:row.updated_at,
+              photoCount:Array.isArray(d.payload.evidence) ? d.payload.evidence.length : 0,
+              measurementCount:Array.isArray(d.payload.measurements) ? d.payload.measurements.length : 0,
+              description:'Hồ sơ sửa chữa đã lưu', hasCommand:true});
+          } else if (row.kind === 'H01_RECEIVING_ACK') {
+            if (typeof d.requestId !== 'string' || !d.requestId || !['PENDING','CONFIRMED'].includes(d.phase) ||
+                !d.body || d.body.claimedDeviceAt !== null || Object.keys(d.body).length !== 1) continue;
+            if (row.id !== 'h01ack:' + JSON.stringify([i.environment,i.actor,i.projectId,d.requestId])) continue;
+            result.push({key:row.id, reference:d.requestId, referenceLabel:'Yêu cầu tiếp nhận', updatedAt:row.updated_at,
+              photoCount:0, measurementCount:0, description:'Lệnh tiếp nhận đã lưu', hasCommand:true});
+          }
+          continue;
+        }
         if (d.actor !== identity.actor || d.environment !== identity.environment || d.scope !== identity.scope ||
             typeof d.projectId !== 'string' || !d.projectId || typeof d.taskId !== 'string' || !d.taskId ||
             !Array.isArray(d.captures) || !Array.isArray(d.measurements)) continue;
