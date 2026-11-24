@@ -4,7 +4,7 @@ import { operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import { operatorTaskDisplayCode, operatorTaskTargetBand } from '../../src/api/operator-task-view';
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
@@ -72,6 +72,7 @@ function compactTechnicalId(value: string): string {
 }
 
 export default function DroneWorkPackageScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
   const { workPackage, geometries, loading, geometryError, error, cachedAt, reload: load } = useOperatorWorkPackage(target);

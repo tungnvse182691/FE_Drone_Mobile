@@ -13,7 +13,7 @@ function fixture(modes,cache,motion=true){
     queries.push(options); const f=options.queryKey[2],selected=query.data.pages.flatMap(p=>p.items).filter(r=>(!f.status||r.status.toUpperCase()===f.status)&&(!f.mode||r.mode===f.mode)&&(!f.statusGroup|| (f.statusGroup==='COMPLETED'?r.status.toUpperCase()==='COMPLETED':f.statusGroup==='INCOMPLETE'?r.status.toUpperCase()!=='COMPLETED':false)));
     return {...query,data:{pages:[{items:selected}]}};
   }},
-  'expo-router':{router:{push(){throw Error('unexpected navigation');}},useFocusEffect(){},usePathname:()=>'/tasks'},
+  'expo-router':{useRouter:()=>({push(){throw Error('unexpected navigation');}}),useFocusEffect(){},usePathname:()=>'/tasks'},
   '../../src/api/authApi':{passwordSessionIdentity:t=>t?'["'+actor+'","s1"]':null},
   '../../src/api/client':{apiClient:{defaults:{baseURL:'fixture-env'}}},
   '../../src/api/crewApi':api,

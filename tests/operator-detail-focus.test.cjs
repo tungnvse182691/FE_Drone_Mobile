@@ -25,7 +25,7 @@ test('Operator supplement task follows an authorized server link and hides the d
     const s = drone('request-detail', {
       getOperatorSurveyTaskDetailReal: async () => ({data:task,etag:'"v2"'}),
       getOperatorWorkPackageReal: async () => ({data:{task,geometryRefs:[]}}),
-    }, {params:{taskId:task.id}, moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],router:{push:value=>navigation.push(value)}})}});
+    }, {params:{taskId:task.id}, moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],useRouter:()=>({push:value=>navigation.push(value)})})}});
     s.render(); await s.flush();
     assert.ok(!s.nodes().some(n=>n.props.title==='Gửi dữ liệu khảo sát'));
     const action=s.nodes().find(n=>n.props.title==='Mở nhiệm vụ bổ sung');

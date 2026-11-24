@@ -244,7 +244,7 @@ test('Crew FIELD supplement saves local edits before camera and carries mode wit
  const h=harness(),c=h.identity,nav=[],events=[];let posts=0;
  const draft={...c,captures:[],measurements:[],locationProof:null};
  const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},
-  moduleFactories:{'expo-router':({react})=>({router:{push:value=>{events.push('navigate');nav.push(value);}},useLocalSearchParams:()=>({supplement:'1'}),useFocusEffect:fn=>react.useEffect(fn,[fn])})},
+  moduleFactories:{'expo-router':({react})=>({useRouter:()=>({push:value=>{events.push('navigate');nav.push(value);}}),useLocalSearchParams:()=>({supplement:'1'}),useFocusEffect:fn=>react.useEffect(fn,[fn])})},
   modules:{'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
    '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>({data:h.task,etag:'"fresh"'})},
    '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,saveFieldMeasurements:async()=>{events.push('save');return draft;},measurementTemplate:()=>null,fieldDraftPending:()=>false,submitFieldDraft:async()=>{posts++;}},

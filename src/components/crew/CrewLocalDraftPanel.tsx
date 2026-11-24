@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { CrewPressable as Pressable } from './CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { groupCrewLocalDrafts, readCrewLocalDrafts, readCrewLocalTaskCode, type CrewLocalDraftSummary } from '../../api/crewLocalDrafts';
@@ -10,6 +10,7 @@ import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queu
 import { colors, radius, spacing, typography } from '../../design-tokens';
 
 export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueIdentity;refreshSignal?:number}) {
+  const router = useRouter();
   const [rows,setRows]=useState<CrewLocalDraftSummary[]>([]),[error,setError]=useState('');
   const [loading,setLoading]=useState(false),[expanded,setExpanded]=useState(false);
   const sequence=useRef(0);

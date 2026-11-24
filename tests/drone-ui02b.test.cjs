@@ -7,7 +7,7 @@ const fixture = { ...task, status: 'SUBMITTED', version: 'AAAAAAAAAAE=', scope: 
 test('UI05 Home supersedes 02B duplicate shortcuts with compact summary and survey navigation', async () => {
   const routes = [];
   const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [fixture], nextCursor: null }) }, {
-    moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: r => routes.push(r) } }) },
+    moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], useRouter:()=>({ push: r => routes.push(r) }) }) },
   });
   s.render(); await s.flush();
   assert.doesNotMatch(text(s), /Chưa xác nhận an toàn|AAAAAAAAAAE=|Đồng bộ/);
@@ -22,7 +22,7 @@ test('02B Detail keeps technical IDs collapsed, toggles them and preserves Work 
   const s = drone('request-detail', {
     getOperatorSurveyTaskDetailReal: async () => ({ data: fixture, etag: '"AAAAAAAAAAE="' }),
     getOperatorWorkPackageReal: async () => ({ data: { task: fixture, geometryRefs: [] } }),
-  }, { params: { taskId: fixture.id }, moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: r => routes.push(r), back: () => routes.push('back'), canGoBack: () => true } }) } });
+  }, { params: { taskId: fixture.id }, moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], useRouter:()=>({ push: r => routes.push(r), back: () => routes.push('back'), canGoBack: () => true }) }) } });
   s.render(); await s.flush();
   assert.doesNotMatch(text(s), /AAAAAAAAAAE=/);
   const toggle = () => s.nodes().find(n => n.props.accessibilityLabel === 'Thông tin kỹ thuật');

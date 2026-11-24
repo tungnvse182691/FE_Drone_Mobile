@@ -21,7 +21,7 @@ for(const kind of ['restored','expired','crew','forced'])test('C1 '+kind+' canno
  f.go('/(reporter)/uploads');assert.equal(f.nav.length,0);assert.equal(f.notices.length,1);f.s.unmount();
 });
 test('C1 real BottomNav delegates only when callback provided and keeps default push/active state',()=>{
- for(const custom of [false,true]){const nav=[],delegated=[];const s=screen('src/components/BottomNav.tsx',{exportName:'BottomNav',props:{tabs:[{label:'Ảnh',route:'/(reporter)/uploads',icon:'photo-library'}],activeRoute:'/(reporter)/uploads',...(custom?{onNavigate:r=>delegated.push(r)}:{})},modules:{'expo-router':{router:{push:r=>nav.push(r)}}}});
+ for(const custom of [false,true]){const nav=[],delegated=[];const s=screen('src/components/BottomNav.tsx',{exportName:'BottomNav',props:{tabs:[{label:'Ảnh',route:'/(reporter)/uploads',icon:'photo-library'}],activeRoute:'/(reporter)/uploads',...(custom?{onNavigate:r=>delegated.push(r)}:{})},modules:{'expo-router':{useRouter:()=>({push:r=>nav.push(r)})}}});
  s.render();const tab=s.nodes().find(n=>n.type==='Pressable');assert.equal(tab.props.accessibilityState.selected,true);tab.props.onPress();assert.deepEqual(nav,custom?[]:['/(reporter)/uploads']);assert.deepEqual(delegated,custom?['/(reporter)/uploads']:[]);s.unmount();}
 });
 test('C1 unchanged root guard protects direct URLs/expired session, public pages and cross-role',()=>{

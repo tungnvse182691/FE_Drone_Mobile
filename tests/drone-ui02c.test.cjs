@@ -4,7 +4,7 @@ const {drone,id,task}=require('./package45-drone.test.cjs');
 const text=s=>JSON.stringify(s.nodes().filter(n=>n.type==='Text'));
 const walk=n=>!n?[]:Array.isArray(n)?n.flatMap(walk):typeof n==='object'?[n,...walk(n.props?.children)]:[];
 test('02C Profile wraps menus, preserves queue route and avoids empty fake KPI cards',async()=>{
- const routes=[];const s=drone('profile',{}, {moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],router:{push:r=>routes.push(r)}})}});
+ const routes=[];const s=drone('profile',{}, {moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],useRouter:()=>({push:r=>routes.push(r)})})}});
  s.render();await s.flush();
  assert.equal(s.nodes().find(n=>n.type==='SafeAreaScreen').props.header?.props.subtitle,'Hồ sơ');
  assert.doesNotMatch(text(s),/Giờ bay|Sự cố/);

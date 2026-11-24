@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -51,6 +51,7 @@ function normalizeName(raw: string | undefined, fallback: string): string {
 }
 
 export default function CrewHomeScreen() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const inbox = useCrewInbox();
   const tasks = inbox.tasks.filter(t => !crewTaskIsComplete(t));

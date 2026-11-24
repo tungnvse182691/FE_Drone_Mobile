@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../design-tokens';
 import { useAuthStore } from '../store/auth';
@@ -15,6 +15,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({ subtitle, showBack = false, onBack, fallbackRoute, variant }: AppHeaderProps) {
+  const router = useRouter();
   const role = useAuthStore((state) => state.role);
 
   const crew = role === RoleCode.REPAIR_CREW;

@@ -3,7 +3,7 @@ import { readOperatorSnapshot, operatorCachedNotice } from '../../src/api/operat
 import { useAuthStore } from '../../src/store/auth';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Card } from '../../src/components/Card';
@@ -68,6 +68,7 @@ function operatorErrorMessage(error: unknown): string {
 }
 
 export default function DroneRequestDetailScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ code?: string; taskId?: string }>();
   const target = params.taskId || params.code || '';
   const scope = useOperatorReadScope(target);

@@ -17,7 +17,7 @@ function render(file,exportName,task){
   if(n==='react')return React;
   if(n==='./tasks')return {...require('./helpers/crew-ui-labels.cjs'),useCrewIdentity:()=>({user:null,scope:null})};
   if(n==='react-native')return {View:'View',Text:'Text',StyleSheet:{create:x=>x}};
-  if(n==='expo-router')return {router:{push:r=>routes.push(r),replace:r=>routes.push(r),back:()=>routes.push('back')}};
+  if(n==='expo-router')return {useRouter:()=>({push:r=>routes.push(r),replace:r=>routes.push(r),back:()=>routes.push('back')})};
   // Any accidental mutation/storage call fails this read-only screen test.
   if(/api|offline|hooks/.test(n))return new Proxy({},{get:(_,p)=>()=>{writes.push(p);throw Error('unexpected side effect '+String(p));}});
   return new Proxy({},{get:(_,p)=>String(p)});

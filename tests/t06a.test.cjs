@@ -216,7 +216,7 @@ test('T06A deep links to legacy execution screens never mount even with complete
   const m = load('app/(crew)/tasks.tsx', {
     react,
     'react-native': { StyleSheet: { create: x => x }, Platform: { select: x => x.default } },
-    'expo-router': { usePathname: () => pathname, useLocalSearchParams: () => ({ id: taskId, projectId }), useFocusEffect() {} },
+    'expo-router': { useRouter: () => ({}), usePathname: () => pathname, useLocalSearchParams: () => ({ id: taskId, projectId }), useFocusEffect() {} },
     '@tanstack/react-query': { useQueryClient: () => ({resetQueries(){}}), useInfiniteQuery: () => ({data:{pages:[]}}), useQuery: () => ({data:task}) },
     '../../src/api/crewApi': a,
     '../../src/store/auth': {useAuthStore: f => f({user:{id:actor,role_code:'REPAIR_CREW'},token:'fixture',status:'AUTHENTICATED'})},

@@ -33,7 +33,7 @@ test('Tasks cards retain the approved Home typography, chip, deadline and footer
  assert.equal(task.taskBody.paddingHorizontal,home.taskCard.padding);assert.equal(task.taskRow.borderLeftWidth,2);assert.equal(task.taskRow.marginBottom,12);assert.ok(task.copyCode.minHeight>=48);
 });
 const task={id:'task',projectId:'project',status:'Submitted',task_mode:'MEASURE_ONLY',title:'Rất dài '.repeat(50),description:'Backend FIELD text',detail:{instructions:'Backend text'},coordinates:null};
-const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'./tasks':{CrewTaskBoundary:'Boundary',crewStatusLabel:()=> 'Đã gửi hồ sơ',useCrewIdentity:()=>({})},'expo-router':{router:{back(){},replace(){}},useFocusEffect:()=>{}}};
+const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'./tasks':{CrewTaskBoundary:'Boundary',crewStatusLabel:()=> 'Đã gửi hồ sơ',useCrewIdentity:()=>({})},'expo-router':{useRouter:()=>({back(){},replace(){}}),useFocusEffect:()=>{}}};
 test('Crew defect read-only screen uses branded header and retains all backend free text',()=>{
  const s=screen('app/(crew)/report-defect.tsx',{expose:'CrewReportDefectScreenContent',exportName:'CrewReportDefectScreenContent',props:{task},modules:common});s.render();
  const safe=s.nodes().find(n=>n.type==='SafeAreaScreen');assert.equal(safe.props.header.type,'AppHeader');assert.equal(safe.props.header.props.showBack,true);

@@ -2,7 +2,7 @@ import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import { readOperatorSnapshot, operatorCachedNotice } from '../../src/api/operatorOfflineCache';
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -16,6 +16,7 @@ import { operatorTaskDisplayCode, operatorTaskStatusLabel, operatorTaskTargetBan
 import { operatorAppearance } from '../../src/components/drone/appearance';
 
 export default function DroneHomeScreen() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const scope = useOperatorReadScope();
   const loadedScope = useRef<string | null>(null);

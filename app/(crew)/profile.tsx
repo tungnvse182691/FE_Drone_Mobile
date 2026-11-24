@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/store/auth';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -61,6 +61,7 @@ function normalizeName(raw: string | undefined, fallback: string): string {
 }
 
 export default function CrewProfileScreen() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const inbox = useCrewInbox();
   const completed = inbox.tasks.filter(crewTaskIsComplete).length;

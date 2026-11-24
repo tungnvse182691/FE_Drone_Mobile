@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { CREW_WO_DETAIL } from '../../src/constants/routes';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
@@ -19,6 +19,7 @@ export default function CrewNavigationScreen() {
   return <CrewTaskBoundary operational={false}>{task => <CrewNavigationScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewNavigationScreenContent({ task }: { task: CrewTask }) {
+  const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const modeChip = TASK_MODE_CHIP[task.task_mode];
 

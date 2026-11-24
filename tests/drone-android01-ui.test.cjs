@@ -24,7 +24,7 @@ test('Operator decline summary follows validated receipt without refetching a re
 test('DRONE-ANDROID-01 Home names the task-list shortcut honestly and keeps its destination', async () => {
   const routes = [];
   const s = drone('home', { listOperatorSurveyTasksReal: async () => ({ items: [], nextCursor: null }) }, {
-    moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: route => routes.push(route) } }) },
+    moduleFactories: { 'expo-router': ({ modules }) => ({ ...modules['expo-router'], useRouter:()=>({ push: route => routes.push(route) }) }) },
   });
   s.render(); await s.flush();
   const shortcut = s.nodes().find(n => n.type === 'AnimatedPressable' && n.props.accessibilityLabel === 'Xem tất cả nhiệm vụ khảo sát');

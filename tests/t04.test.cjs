@@ -52,7 +52,7 @@ function screenHarness(file,options={}){
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'..',relative),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,require:n=>{
    if(n==='react')return react;
    if(n==='react-native')return {StyleSheet:{create:o=>o},Platform:{select:o=>o.default},View:'View',Text:'Text',Pressable:'Pressable'};
-   if(n==='expo-router')return {router:{replace(){}},useLocalSearchParams:()=>params,usePathname:()=>`/(crew)/${file}`,useFocusEffect:()=>{}};
+   if(n==='expo-router')return {useRouter:()=>({replace(){}}),useLocalSearchParams:()=>params,usePathname:()=>`/(crew)/${file}`,useFocusEffect:()=>{}};
    if(n==='@tanstack/react-query')return {useQueryClient:()=>options.client??({resetQueries(){},setQueryData(){}}),useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:!!options.readError,error:options.readError,refetch(){}};}};
    if(n.endsWith('/store/auth'))return {useAuthStore:Object.assign(s=>s(state),{getState:()=>state})};
    if(n.endsWith('/offline/upload-queue'))return {currentQueueIdentity:()=>({actor,role:'REPAIR_CREW',partition:'test-crew',scope:'test-session',environment:'http://fixture/api/v1'})};

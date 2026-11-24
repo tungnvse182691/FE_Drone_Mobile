@@ -8,7 +8,7 @@ async function mounted(options={}){
  const s=screen('app/(crew)/field-review.tsx',{
  expose:'CrewFieldReviewScreenContent,fieldNoticeModel,safeFieldErrorDetail',exportName:'CrewFieldReviewScreenContent',
  props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY',detail:{status:'InProgress',mode:'MEASURE_ONLY',requiredMeasurementType:1},etag:'version'}},
- moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>({}),router:{push:p=>{navigation.push(p);cleanup?.();}},useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
+ moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>({}),useRouter:()=>({push:p=>{navigation.push(p);cleanup?.();}}),useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
  modules:{
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},

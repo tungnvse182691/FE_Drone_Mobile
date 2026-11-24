@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams, useFocusEffect, useIsFocused } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect, useIsFocused } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraCapturedPicture } from 'expo-camera';
 import * as DocumentPicker from 'expo-document-picker';
@@ -39,6 +39,7 @@ export default function CrewViewfinderScreen() {
   return <CrewTaskBoundary operational={false} localDraft>{task => <CrewViewfinderScreenContent key={`${task.projectId}:${task.id}`} task={task} />}</CrewTaskBoundary>;
 }
 function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
+  const router = useRouter();
   const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ id?: string; mode?: string; supplement?: string }>();
   const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';

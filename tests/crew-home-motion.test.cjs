@@ -101,7 +101,7 @@ function home(inbox) {
   '../../src/components/CrewTaskStatus':{CrewTaskStatus:'CrewTaskStatus'},
   '../../src/components/crew/CrewMotion':{CrewPressable:'CrewPressable',CrewContentTransition:'CrewContentTransition'},
   '../../src/components/crew/CrewHomeTaskPressable':{CrewHomeTaskPressable:'Pressable'},
-  'expo-router':{router:{push:r=>nav.push(r)}},
+  'expo-router':{useRouter:()=>({push:r=>nav.push(r)})},
  }});return {s,nav};
 }
 test('Crew home motion does not change task identity, disabled navigation or API calls',()=>{

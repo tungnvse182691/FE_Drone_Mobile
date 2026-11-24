@@ -8,7 +8,7 @@ test('Crew defect summary opens submitted evidence for the same task',async()=>{
  const s=screen('app/(crew)/report-defect.tsx',{
   expose:'CrewReportDefectScreenContent',exportName:'CrewReportDefectScreenContent',
   props:{task:{id:'task-a',projectId:'project-a',detail:{latestSubmissionId:'submission-a'}}},
-  modules:{...components,'./tasks':{},'expo-router':{router:{push:value=>navigation=value}}},
+  modules:{...components,'./tasks':{},'expo-router':{useRouter:()=>({push:value=>navigation=value})}},
  });
  s.render();await s.press('Xem hồ sơ đã nộp');
  assert.deepEqual(JSON.parse(JSON.stringify(navigation)),{pathname:'/(crew)/field-review',params:{id:'task-a',projectId:'project-a'}});

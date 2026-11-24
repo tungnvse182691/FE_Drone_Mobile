@@ -7,7 +7,7 @@ function fixture(fail=false){
   '../Card':{Card:'Card'},'../Button':{Button:'Button'},
   '../../api/crewSafetyWorkflow':{currentQueueIdentity:()=>identity,crewReadGuard:()=>{},readAssignedFieldFacts:async(...args)=>{calls.push(args);if(fail)throw {response:{status:403}};return facts;}},
   '../../offline/upload-queue':{sameQueueIdentity:()=>true},'../../utils/crew-map-geometry':{crewDefectCoordinates:()=>null},
-  '../../constants/routes':{CREW_TASK_MAP:'/(crew)/task-map'},'expo-router':{router:{push:p=>nav.push(p)}},
+  '../../constants/routes':{CREW_TASK_MAP:'/(crew)/task-map'},'expo-router':{useRouter:()=>({push:p=>nav.push(p)})},
  }});s.render();return {s,calls,nav};
 }
 const words=s=>JSON.stringify(s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children));

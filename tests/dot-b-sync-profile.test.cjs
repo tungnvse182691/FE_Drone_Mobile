@@ -5,7 +5,7 @@ const text=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(
 const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Toast':{Toast:'Toast'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'}};
 for(const state of ['loading','empty','error','pages'])test('B5 profile prioritizes identity and retains scoped stats '+state,()=>{
  let reads=0;const inbox={enabled:true,tasks:state==='pages'?[{done:true},{done:false}]:[],error:state==='error'?'Không tải được thống kê':null,query:{isPending:state==='loading',isFetching:false,hasNextPage:state==='pages',refetch:()=>reads++}};
- const s=screen('app/(crew)/profile.tsx',{modules:{...common,'./tasks':{useCrewInbox:()=>inbox},'../../src/api/crewApi':{crewTaskIsComplete:t=>t.done},'expo-router':{router:{push(){},replace(){}}}}});
+ const s=screen('app/(crew)/profile.tsx',{modules:{...common,'./tasks':{useCrewInbox:()=>inbox},'../../src/api/crewApi':{crewTaskIsComplete:t=>t.done},'expo-router':{useRouter:()=>({push(){},replace(){}})}}});
  s.render();const value=text(s);assert.doesNotMatch(value,/Nhiệm vụ được giao/);assert.ok(value.indexOf('Chưa có tên tài khoản')<value.indexOf('Tiến độ nhiệm vụ'));
  assert.equal((value.match(/Chỉ tính nhiệm vụ đã tải/g)||[]).length,1);
  if(state==='loading'||state==='error')assert.match(value,/—/);if(state==='empty')assert.match(value,/Chưa có nhiệm vụ được giao/);

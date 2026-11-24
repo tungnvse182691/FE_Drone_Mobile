@@ -7,7 +7,7 @@ const row=n=>n.type?.name==='OperatorTaskRow';
 test('Premium Home preserves real first-five ordering, case-insensitive dedupe, KPI and exact route identity',async()=>{
  const routes=[];const items=Array.from({length:7},(_,i)=>({...task,id:id(i+2),status:i===0?'SUBMITTED':'ACCEPTED'}));
  const s=drone('home',{listOperatorSurveyTasksReal:async(cursor,size)=>{assert.equal(cursor,null);assert.equal(size,50);return {items:[...items,items[0]],nextCursor:'more'};}},
- {moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],router:{push:r=>routes.push(r)}})}});
+ {moduleFactories:{'expo-router':({modules})=>({...modules['expo-router'],useRouter:()=>({push:r=>routes.push(r)})})}});
  s.render();await s.flush();
  const cards=s.nodes().filter(row);assert.equal(cards.length,5);
  assert.deepEqual(cards.map(n=>n.props.task.id),items.slice(0,5).map(t=>t.id));

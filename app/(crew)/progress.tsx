@@ -1,6 +1,6 @@
 import React from 'react';
 import {StyleSheet,Text,View} from 'react-native';
-import {router} from 'expo-router';
+import {useRouter} from 'expo-router';
 import {SafeAreaScreen} from '../../src/components/SafeAreaScreen';
 import {AppHeader} from '../../src/components/AppHeader';
 import {Card} from '../../src/components/Card';
@@ -10,6 +10,7 @@ import {CrewContentTransition} from '../../src/components/crew/CrewMotion';
 import {CrewTaskBoundary,crewStatusLabel} from './tasks';
 import {colors,radius,spacing,typography} from '../../src/design-tokens';
 export default function CrewRepairProgressScreen(){
+  const router = useRouter();
  return <CrewTaskBoundary operational={false}>{task=><SafeAreaScreen scroll header={<AppHeader subtitle="Theo dõi thi công" showBack onBack={()=>router.back()}/>}>
  <CrewContentTransition ready>
  <Card style={styles.summary}>

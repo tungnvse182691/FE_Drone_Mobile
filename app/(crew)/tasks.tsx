@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Clipboard, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -142,6 +142,7 @@ type TaskBoundaryProps = { operational: false; localDraft?: boolean; children: (
   { operational?: true; children: (task: OperationalCrewTask) => React.ReactNode };
 function isOperational(task: CrewTask): task is OperationalCrewTask { return !crewTaskActionBlock(task); }
 export function CrewTaskBoundary(props: TaskBoundaryProps) {
+  const router = useRouter();
   const operational = props.operational !== false;
   const localDraft = props.operational === false && props.localDraft === true;
   const client = useQueryClient();
@@ -250,6 +251,7 @@ const ACCEPTANCE_FILTERS = [
 ] as const;
 
 export default function CrewTasksScreen() {
+  const router = useRouter();
   const [segment, setSegment] = useState<TaskSegment>('active');
   const [modeFilter, setModeFilter] = useState<TaskModeFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUPPLEMENTREQUIRED'>('ALL');

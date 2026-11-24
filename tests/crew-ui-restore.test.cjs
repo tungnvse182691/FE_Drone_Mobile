@@ -27,7 +27,7 @@ const uiModules={
 function detailScreen(t){const nav=[];const s=screen('app/(crew)/wo-detail.tsx',{expose:'CrewFieldActions',exportName:'CrewFieldActions',props:{task:t},modules:{...uiModules,
  './tasks':{...labels,CrewTaskBoundary:'Boundary',useCrewIdentity:()=>({scope:'fixture-scope',user:{id:actor},enabled:true})},
  '../../src/api/authApi':{passwordSessionIdentity:()=>null},
- 'expo-router':{router:{push:p=>nav.push(p),replace:p=>nav.push(p)},useFocusEffect:()=>{}},
+ 'expo-router':{useRouter:()=>({push:p=>nav.push(p),replace:p=>nav.push(p)}),useFocusEffect:()=>{}},
  }});return {s,nav};}
 const textNodes=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).filter(v=>typeof v==='string'||typeof v==='number').join('')).join('\n');
 test('Crew Submitted detail renders instructions with null GPS, hidden technical IDs and no commands',async()=>{
@@ -45,7 +45,7 @@ test('Crew missing GPS does not block valid accept/start API guards; Submitted r
 function navigation(t){const nav=[],urls=[];
  const native={View:'View',Text:'Text',Pressable:'Pressable',StyleSheet:{create:o=>o,absoluteFill:{}},Animated:{View:'AnimatedView',Value:class{setValue(){}},spring:()=>({start(){}})},PanResponder:{create:()=>({panHandlers:{}})}};
  const s=screen('app/(crew)/navigation.tsx',{expose:'CrewNavigationScreenContent',exportName:'CrewNavigationScreenContent',props:{task:t},modules:{
- 'react-native':native,'expo-linking':{openURL:u=>{urls.push(u);return Promise.resolve();}},'expo-router':{router:{push:p=>nav.push(p),back(){}},useLocalSearchParams:()=>({})},
+ 'react-native':native,'expo-linking':{openURL:u=>{urls.push(u);return Promise.resolve();}},'expo-router':{useRouter:()=>({push:p=>nav.push(p),back(){}}),useLocalSearchParams:()=>({})},
  './tasks':{CrewTaskBoundary:'Boundary',TASK_MODE_CHIP:{MEASURE_ONLY:{variant:'measure-only',label:'Chỉ đo kiểm'}}},
  '../../src/components/Chip':{Chip:'Chip'},'../../src/components/map/RoadGuardMapLibre':{RoadGuardMapLibre:'Map'},
  }});return {s,nav,urls};

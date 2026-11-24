@@ -7,7 +7,7 @@ import { Button } from '../Button';
 import { Card } from '../Card';
 import { readAssignedFieldFacts, currentQueueIdentity, crewReadGuard } from '../../api/crewSafetyWorkflow';
 import { sameQueueIdentity } from '../../offline/upload-queue';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { CREW_TASK_MAP } from '../../constants/routes';
 import { crewDefectCoordinates } from '../../utils/crew-map-geometry';
 
@@ -24,6 +24,7 @@ export function crewHistoryTime(value?: string | null): string {
 
 /** Mounted on the real assigned detail route. Explicit reads only; no mutation on mount/focus. */
 export function CrewTaskFacts({projectId,taskId}:{projectId:string;taskId:string}) {
+  const router = useRouter();
   const [identity]=useState(currentQueueIdentity);
   const [facts,setFacts]=useState<Awaited<ReturnType<typeof readAssignedFieldFacts>>|null>(null);
   const [error,setError]=useState(''),[busy,setBusy]=useState(false);

@@ -118,7 +118,7 @@ test('G02B correction screen exposes durable supplement recovery after restart w
     '../../src/components/AppHeader':{AppHeader:'AppHeader'},
     '../../src/components/Card':{Card:'Card'},
     '../../src/components/Button':{Button:'Button'},
-    'expo-router':{router:{push:p=>s?.nav?.push(p)},useFocusEffect:fn=>fn()},
+    'expo-router':{useRouter:()=>({push:p=>s?.nav?.push(p)}),useFocusEffect:fn=>fn()},
     './tasks':{useCrewIdentity:()=>({scope:i.scope,user:{id:i.actor}})},
     '../../src/api/crewRepairDraft':{currentRepairIdentity:()=>current,sameRepairIdentity:(a,b)=>!!b&&a.scope===b.scope&&a.actor===b.actor&&a.taskId===b.taskId&&a.projectId===b.projectId},
     '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>[{key:'saved-supplement',operation:'supplement',phase:'PENDING',identity:{...i,packageId:fixtures.ids.packageId,itemId:fixtures.ids.itemId,bindingId:fixtures.ids.bindingId,assignmentId:fixtures.ids.assignmentId},itemVersion:fixtures.version,payload:{fieldSubmissionId:fixtures.ids.capture},receipt:undefined}],repairErrorMessage:e=>e.message},

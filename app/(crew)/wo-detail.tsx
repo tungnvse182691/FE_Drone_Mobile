@@ -5,7 +5,7 @@ import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepa
 import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -118,6 +118,7 @@ export function crewDetailPresentation(status: string | null | undefined, comman
 }
 
 function CrewFieldActions({ task }: { task: CrewTask }) {
+  const router = useRouter();
   const identity = useCrewIdentity();
   const [fresh, setFresh] = useState(task);
   const [record, setRecord] = useState<FieldCommandRecord | null>(null);
@@ -276,6 +277,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
 
 /** Read-only D/E capability status. Never derive repair admission from task state. */
 export function RepairContractStatus({ task }: { task: CrewTask }) {
+  const router = useRouter();
   return <View style={{ gap: spacing.sm }}>
     {task.detail?.mode === 'CONDITIONAL_FT' ? FastTrackRepairSummary({ task }) : null}
     <Text>Hồ sơ sửa chữa chỉ được bổ sung khi có yêu cầu phù hợp từ người quản lý.</Text>
@@ -334,6 +336,7 @@ function repairAssessmentReasonLabel(reason: string): string {
 
 /** Explicit online repair commands. Legacy repair content remains unmounted. */
 export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; stage?:'all'|'progress'|'closeout'|'overview' }) {
+  const router = useRouter();
   const result = useRepairBootstrap(task.id, { projectId: task.projectId });
   const identity=useCrewIdentity();
   const assessmentBlock=task.detail&&identity.user&&identity.scope?repairExecutionBlock(task.detail,task.etag??'',identity.user.id,'assessment'):'Phiên đội sửa chữa hoặc ngữ cảnh nhiệm vụ chưa hợp lệ.';

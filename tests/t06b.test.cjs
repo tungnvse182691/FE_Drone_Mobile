@@ -143,7 +143,7 @@ test('T06B mount/remount only reads; detail actions never navigate into legacy e
  const h=harness();let mutations=0,reads=0;const routes=[];
  const react={createElement:(type,props,...children)=>({type,props,children}),useState:value=>[value,()=>{}],useRef:value=>({current:value}),useCallback:f=>f};
  const m=load('app/(crew)/wo-detail.tsx',{
-  react,'react-native':{StyleSheet:{create:x=>x},Platform:{select:x=>x.default}},'expo-router':{useFocusEffect:f=>f(),router:{push:r=>routes.push(r)}},
+  react,'react-native':{StyleSheet:{create:x=>x},Platform:{select:x=>x.default}},'expo-router':{useFocusEffect:f=>f(),useRouter:()=>({push:r=>routes.push(r)})},
   '../../src/design-tokens':{colors:{},radius:{},spacing:{},typography:{}},
   '../../src/hooks/useRepairBootstrap':{useRepairBootstrap:()=>({status:'ready',repairContext:h.task.repairContext,reload:async()=>{reads++;}})},
   './tasks':{useCrewIdentity:()=>({user:{id:ids.actor},scope:h.identity.scope})},

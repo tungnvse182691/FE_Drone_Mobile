@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -22,6 +22,7 @@ export default function CrewRepairCorrectionScreen() {
 }
 
 export function CorrectionReadOnly({ task }: { task: CrewTask }) {
+  const router = useRouter();
   const identity=useCrewIdentity();
   const allowed=task.detail?.repairContext?.attempt?.review?.decision==='SUPPLEMENT'&&!!identity.user&&!!identity.scope&&!repairSupplementBlock(task.detail,task.etag??'',identity.user.id);
   const [technical, setTechnical] = useState(false);
@@ -64,6 +65,7 @@ export function CorrectionReadOnly({ task }: { task: CrewTask }) {
 
 /** Entry point for an already durable API-159 command; it never creates or sends a new command. */
 export function CrewRepairRecoveryEntry({task}:{task:CrewTask}) {
+  const router = useRouter();
   const identity=useCrewIdentity(),live=currentRepairIdentity(task.projectId,task.id);
   const [recovery,setRecovery]=useState<RepairJournalRecord|null>(null),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
   const active=useRef(false),generation=useRef(0);

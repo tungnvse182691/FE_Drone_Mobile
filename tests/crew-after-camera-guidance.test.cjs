@@ -4,7 +4,7 @@ const {screen}=require('./helpers/roadfe-screen.cjs');
 test('Crew AFTER camera guides to this task progress while preserving the capture guard',async()=>{
  const context={actor:'crew',scope:'session',environment:'sandbox',projectId:'project',taskId:'task'};
  let navigated,captures=0;
- const s=screen('app/(crew)/viewfinder.tsx',{expose:'CrewViewfinderScreenContent',exportName:'CrewViewfinderScreenContent',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL',purpose:'PostRepair'}}},moduleFactories:{'expo-router':({react})=>({useIsFocused:()=>true,useLocalSearchParams:()=>({mode:'AFTER'}),useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{dismissTo:href=>navigated=href}})},modules:{
+ const s=screen('app/(crew)/viewfinder.tsx',{expose:'CrewViewfinderScreenContent',exportName:'CrewViewfinderScreenContent',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL',purpose:'PostRepair'}}},moduleFactories:{'expo-router':({react})=>({useIsFocused:()=>true,useLocalSearchParams:()=>({mode:'AFTER'}),useFocusEffect:fn=>react.useEffect(fn,[fn]),useRouter:()=>({dismissTo:href=>navigated=href})})},modules:{
   './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'})},
   '../../src/api/crewApi':{fieldCapabilityBlock:()=>null},
   '../../src/components/ViewFinder':{ViewFinder:'ViewFinder'},
@@ -22,7 +22,7 @@ test('Crew AFTER camera guides to this task progress while preserving the captur
 test('Crew AFTER confirmation is readable on camera and only explicit selection unlocks capture',async()=>{
  const context={actor:'crew',scope:'session',environment:'sandbox',projectId:'project',taskId:'task'};
  let navigated,captures=0;
- const s=screen('app/(crew)/viewfinder.tsx',{expose:'CrewViewfinderScreenContent',exportName:'CrewViewfinderScreenContent',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL',purpose:'PostRepair'}}},moduleFactories:{'expo-router':({react})=>({useIsFocused:()=>true,useLocalSearchParams:()=>({mode:'AFTER'}),useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{dismissTo:href=>navigated=href}})},modules:{
+ const s=screen('app/(crew)/viewfinder.tsx',{expose:'CrewViewfinderScreenContent',exportName:'CrewViewfinderScreenContent',props:{task:{id:'task',projectId:'project',detail:{mode:'NORMAL',purpose:'PostRepair'}}},moduleFactories:{'expo-router':({react})=>({useIsFocused:()=>true,useLocalSearchParams:()=>({mode:'AFTER'}),useFocusEffect:fn=>react.useEffect(fn,[fn]),useRouter:()=>({dismissTo:href=>navigated=href})})},modules:{
   './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'})},
   '../../src/api/crewApi':{fieldCapabilityBlock:()=>null},
   '../../src/components/ViewFinder':{ViewFinder:'ViewFinder'},

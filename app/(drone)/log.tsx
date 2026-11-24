@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CrewContentTransition } from '../../src/components/crew/CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
@@ -63,6 +63,7 @@ export default function DroneLogScreen() {
   return <DroneLogContent key={scope} scope={scope} />;
 }
 function DroneLogContent({ scope }: { scope: string }) {
+  const router = useRouter();
   const readScope = useOperatorReadScope('log');
   const [activeTab, setActiveTab] = useState<'commands' | 'lookup'>('commands');
   const [advanced, setAdvanced] = useState(false);

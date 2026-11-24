@@ -27,7 +27,7 @@ function fieldScreen(failRead=false){
  const s=screen('app/(crew)/wo-detail.tsx',{expose:'CrewFieldActions',exportName:'CrewFieldActions',props:{task:{id:'task',projectId:'project',status:'Submitted',rawMode:'MEASURE_ONLY',version:'v1',detail:{mode:'MEASURE_ONLY'},coordinates:null}},modules:{...common,
  '../../src/hooks/useRepairBootstrap':{},'../../src/api/crewRepairDraft':{},'../../src/api/crewRepairWorkflow':{},'../../src/api/crewFieldDraft':{},'../../src/api/crewApi':api,
  '../../src/offline/database':{openDatabase:()=>({getFirstAsync:async()=>{reads++;if(failRead)throw Error('private path');return {payload:JSON.stringify({...record,actorId:'actor',projectId:'project',taskId:'task'})};}}),initDatabase:async()=>{},saveDraft:async()=>{throw Error('unexpected write');}},
- './tasks':{useCrewIdentity:()=>({scope:record.scope,user:{id:'actor'}}),crewStatusLabel:()=> 'Đã gửi kết quả',crewModeLabel:()=> 'Chỉ đo kiểm'},'../../src/api/authApi':{passwordSessionIdentity:()=>record.scope},'expo-crypto':{randomUUID:()=>{throw Error('unexpected key');}},'expo-router':{router:{replace:p=>nav.push(p)},useFocusEffect(){}}
+ './tasks':{useCrewIdentity:()=>({scope:record.scope,user:{id:'actor'}}),crewStatusLabel:()=> 'Đã gửi kết quả',crewModeLabel:()=> 'Chỉ đo kiểm'},'../../src/api/authApi':{passwordSessionIdentity:()=>record.scope},'expo-crypto':{randomUUID:()=>{throw Error('unexpected key');}},'expo-router':{useRouter:()=>({replace:p=>nav.push(p)}),useFocusEffect(){}}
  }});s.h.changeAuth({status:'AUTHENTICATED',user:{id:'actor',role_code:'REPAIR_CREW'},token:'fixture'});
  return {s,nav,record,original,get dispatches(){return dispatches;},get reads(){return reads;}};
 }

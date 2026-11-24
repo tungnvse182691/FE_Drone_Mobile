@@ -5,7 +5,7 @@ function correction(decision){
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'./tasks':{crewStatusLabel:()=> 'Hoàn thành nhiệm vụ',useCrewIdentity:()=>({scope:'fixture',user:{id:'actor'}})},
   '../../src/api/crewApi':{repairSupplementBlock:()=>null},
   '../../src/api/crewRepairDraft':{},'../../src/api/crewRepairWorkflow':{},
- },moduleFactories:{'expo-router':()=>({router:{push(){},back(){},replace(){}},useFocusEffect(){}})}});
+ },moduleFactories:{'expo-router':()=>({useRouter:()=>({push(){},back(){},replace(){}}),useFocusEffect(){}})}});
 }
 test('accepted repair shows one decision and hides irrelevant supplement actions and local history',()=>{
  const s=correction('ACCEPT');s.render();

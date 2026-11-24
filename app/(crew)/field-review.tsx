@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -167,6 +167,7 @@ export default function CrewFieldReviewScreen() {
   return <CrewTaskBoundary operational={false} localDraft>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
+  const router = useRouter();
   const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string}>():{};
   const supplementMode=params.supplement==='1';
   const identity=useCrewIdentity();

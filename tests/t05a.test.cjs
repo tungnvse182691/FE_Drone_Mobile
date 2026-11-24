@@ -97,6 +97,7 @@ function uiHarness(){
  const module={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('app/(crew)/wo-detail.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,require:n=>{
   if(n==='react')return react;
+  if(n==='expo-router')return {useRouter:()=>({push(){throw Error('unexpected navigation');},replace(){throw Error('unexpected navigation');},back(){throw Error('unexpected navigation');}})};
   if(n==='react-native')return {StyleSheet:{create:o=>o},View:'View',Text:'Text',Platform:{select:o=>o.default}};
   if(n==='./tasks')return {...require('./helpers/crew-ui-labels.cjs'),CrewTaskBoundary:'Boundary',useCrewIdentity:()=>({scope:scope(),user:auth.user})};
   if(n.endsWith('/store/auth'))return {useAuthStore};

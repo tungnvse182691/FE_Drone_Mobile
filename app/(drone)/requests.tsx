@@ -3,7 +3,7 @@ import { Button } from '../../src/components/Button';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AnimatedPressable } from '../../src/components/AnimatedPressable';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
@@ -28,6 +28,7 @@ const FILTER_ICON: Record<TabKey | 'all', { name: React.ComponentProps<typeof Ma
 const STATUS_GROUP = { all: undefined, pending: 'WAITING', ongoing: 'IN_PROGRESS', submitted: 'SUBMITTED', supplement: 'SUPPLEMENT_REQUIRED', completed: 'COMPLETED', other: 'OTHER' } as const;
 
 export default function DroneRequestsScreen() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey | 'all'>('all');
   const [filterOpen, setFilterOpen] = useState(false);
   const [search, setSearch] = useState(''), [debouncedSearch, setDebouncedSearch] = useState('');

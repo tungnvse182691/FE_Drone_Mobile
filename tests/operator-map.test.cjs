@@ -34,7 +34,7 @@ test('Operator dedicated map reads every pinned ref and switches only assigned s
 test('Work package opens a dedicated map instead of embedding gesture content',async()=>{
  const nav=[];
  const s=drone('work-package',{getOperatorWorkPackageReal:async()=>({data:{task,geometryRefs:[ref]}}),getOperatorGeometryPackageReal:async()=>({data:gp})},
- {params:{taskId:task.id},modules:{'expo-router':{router:{push:p=>nav.push(p)},useLocalSearchParams:()=>({taskId:task.id})}}});
+ {params:{taskId:task.id},modules:{'expo-router':{useRouter:()=>({push:p=>nav.push(p)}),useLocalSearchParams:()=>({taskId:task.id})}}});
  s.render();await s.flush();assert.ok(!s.nodes().some(n=>n.type==='RoadGuardMapLibre'));
  await s.tap('open-survey-map');assert.equal(nav[0].pathname,'/(drone)/survey-map');assert.equal(nav[0].params.taskId,task.id);s.unmount();
 });

@@ -4,7 +4,7 @@ const {screen}=require('./helpers/roadfe-screen.cjs');
 test('Crew gallery reads the granted content URI and preserves it before the picker grant ends',async()=>{
  const context={actor:'crew',scope:'session',environment:'sandbox',projectId:'project',taskId:'task'};
  const draft={...context,captures:[],measurements:[]};let options,captured;
- const s=screen('app/(crew)/viewfinder.tsx',{expose:'CrewViewfinderScreenContent',exportName:'CrewViewfinderScreenContent',props:{task:{id:'task',projectId:'project',detail:{mode:'FIELD',purpose:'PreRepair'}}},moduleFactories:{'expo-router':({react})=>({useIsFocused:()=>true,useLocalSearchParams:()=>({}),useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{}})},modules:{
+ const s=screen('app/(crew)/viewfinder.tsx',{expose:'CrewViewfinderScreenContent',exportName:'CrewViewfinderScreenContent',props:{task:{id:'task',projectId:'project',detail:{mode:'FIELD',purpose:'PreRepair'}}},moduleFactories:{'expo-router':({react})=>({useIsFocused:()=>true,useLocalSearchParams:()=>({}),useFocusEffect:fn=>react.useEffect(fn,[fn]),useRouter:()=>({})})},modules:{
   './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'})},
   '../../src/api/crewApi':{fieldCapabilityBlock:()=>null},
   '../../src/components/ViewFinder':{ViewFinder:'ViewFinder'},

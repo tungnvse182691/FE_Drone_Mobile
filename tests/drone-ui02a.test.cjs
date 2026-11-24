@@ -5,7 +5,7 @@ const { screen } = require('./helpers/roadfe-screen.cjs');
 const text = s => JSON.stringify(s.nodes().filter(n => n.type === 'Text' || n.type === 'Chip' || n.type === 'EmptyState' || n.type === 'OperatorTaskRow'));
 const fixture = status => ({ ...task, status, version: 'AAAAAAAAAAE=', scope: [{ routeVersionId: id(4), segmentSetId: id(5), segmentIds: [id(6)], targetBand: 'SURFACE' }] });
 const apiFor = t => ({ getOperatorSurveyTaskDetailReal: async () => ({ data: t, etag: `"${t.version}"` }), getOperatorWorkPackageReal: async () => ({ data: { task: t, geometryRefs: [] } }) });
-const routeSpy = routes => ({ 'expo-router': ({ modules }) => ({ ...modules['expo-router'], router: { push: route => routes.push(route) } }) });
+const routeSpy = routes => ({ 'expo-router': ({ modules }) => ({ ...modules['expo-router'], useRouter:()=>({ push: route => routes.push(route) }) }) });
 
 test('Requests selector queries server and retains all filter choices including empty results', async () => {
   const states = ['NEW_ASSIGNED', 'Reassigned', 'ACCEPTED', 'InProgress', 'SUBMITTED', 'Submitted', 'SUPPLEMENT_REQUIRED', 'SupplementRequired', 'COMPLETED', 'UnknownFuture'];

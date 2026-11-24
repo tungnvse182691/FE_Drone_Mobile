@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useOperatorWorkPackage } from '../../src/hooks/useOperatorWorkPackage';
 import { operatorMapSegments } from '../../src/api/operatorMapGeometry';
@@ -13,6 +13,7 @@ import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 
 /** Focused MapLibre view. API-225 pins remain the authority for API-104 reads. */
 export default function DroneSurveyMapScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ taskId?: string; code?: string }>();
   const target = params.taskId || params.code || '';
   const { scopeKey, workPackage, geometries, loading, geometryError, error, cachedAt, reload } = useOperatorWorkPackage(target);

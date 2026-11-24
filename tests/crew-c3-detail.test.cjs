@@ -48,7 +48,7 @@ function repairOverview(context,history=[],stage='overview',taskDetail={}){
   '../../src/api/crewRepairWorkflow':{readRepairHistory:async()=>history,readRepairFieldDraft:async()=>null,dispatchRepair:async()=>{mutations++;},repairErrorMessage:()=>''},
   '../../src/api/crewFieldDraft':{},'expo-crypto':{},'../../src/offline/database':{},'../../src/api/authApi':{},'../../src/api/crewApi':{repairExecutionBlock:()=>null},
   './tasks':{useCrewIdentity:()=>({scope:'scope',user:{id:'actor'}})},
- },moduleFactories:{'expo-router':({react})=>({useFocusEffect:fn=>react.useEffect(fn,[fn]),router:{push:value=>navigation.push(value)}})}});
+ },moduleFactories:{'expo-router':({react})=>({useFocusEffect:fn=>react.useEffect(fn,[fn]),useRouter:()=>({push:value=>navigation.push(value)})})}});
  // Run the actual focus effect through the screen harness so persisted journal is loaded.
  return {s,navigation,get mutations(){return mutations;}};
 }

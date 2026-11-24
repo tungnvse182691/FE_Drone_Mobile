@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ComponentProps } from 'react';
 import { colors, typography } from '../design-tokens';
@@ -26,6 +26,7 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ tabs, activeRoute, onNavigate, appearance = 'default' }: BottomNavProps) {
+  const router = useRouter();
   const isWarm = appearance === 'reporter' || appearance === 'crew';
   const activeIndex = tabs.findIndex(tab =>
     (tab.activeRoutes ?? tab.activePrefixes ?? [tab.route]).includes(activeRoute));

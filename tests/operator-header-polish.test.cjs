@@ -6,7 +6,7 @@ const flatten = style => Object.assign({}, ...[style].flat(Infinity).filter(Bool
 function header(role, props = {}, router = {}) {
   const s = screen('src/components/AppHeader.tsx', {
     exportName: 'AppHeader', props: { subtitle: 'Nhiệm vụ khảo sát', ...props },
-    modules: { 'expo-router': { router } },
+    modules: { 'expo-router': { useRouter: () => router } },
   });
   s.h.login(role, '11111111-1111-4111-8111-111111111111');
   s.h.changeAuth({ ...s.h.getAuth(), role });

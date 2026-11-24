@@ -2,7 +2,7 @@ import { useOperatorReadScope } from '../../src/hooks/useOperatorReadScope';
 import React, { useEffect, useRef, useState } from 'react';
 
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
@@ -21,6 +21,7 @@ import { openOperatorUploadDraft } from '../../src/api/operatorUploadDraft';
 import { useAuthStore } from '../../src/store/auth';
 
 export default function DroneUploadScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ code?: string; taskId?: string; projectId?: string }>();
   const scope = useOperatorReadScope(params.taskId ?? '');
 

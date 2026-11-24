@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CrewPressable as Pressable } from './CrewMotion';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { CREW_WO_DETAIL } from '../../constants/routes';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, typography } from '../../design-tokens';
@@ -13,6 +13,7 @@ import { RoadGuardMapLibre } from '../map/RoadGuardMapLibre';
 
 /** Read-only assigned task map. Source geometry and current assignment remain server authority. */
 export function CrewTaskMap({ projectId, taskId }: { projectId: string; taskId: string }) {
+  const router = useRouter();
   const [identity] = useState(currentQueueIdentity);
   const [facts, setFacts] = useState<Awaited<ReturnType<typeof readAssignedFieldFacts>> | null>(null);
   const [busy, setBusy] = useState(true);
