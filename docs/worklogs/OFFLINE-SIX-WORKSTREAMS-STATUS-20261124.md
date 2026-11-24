@@ -1,25 +1,26 @@
 # Six offline workstreams — evidence and remaining gates
 
-Reviewer: Codex. Mode: IMPLEMENT_AND_SELF_REVIEW. Date: 2026-11-24.
+Reviewer: Codex. Mode: IMPLEMENT_AND_SELF_REVIEW. Updated: 2026-11-25.
 
-FE implementation checkpoint: `275bf52` on main. BE deployed/local read-only source:
-`fb2761619cce11e05e439f322efbf41e00f8a7bf`.
+FE implementation checkpoint: `e1e9652` on main. BE local read-only source:
+`fb2761619cce11e05e439f322efbf41e00f8a7bf`; deployed API: `b891e88`.
 Remote develop checked again on 2026-11-24: `b891e88ea20073bab7b110f301b7b37ebfa1c40c`.
 The two remote-only commits change Supervisor road-coverage document discovery,
 Survey tests and handoff documentation; no offline controller/DTO/repository delta.
-They were fetched for source inspection only. No BE checkout/merge/deployment occurred.
+The authorized existing sandbox API update has since deployed `b891e88` without
+replacing SQL/MinIO/Mailpit or their volumes. No BE source was edited.
 This report does **not** accept the six workstreams as complete.
 
 ## Delivery status
 
 | Workstream | Executed progress | Not delivered / not accepted |
 |---|---|---|
-| Crew signed offline | Enrollment/snapshot/immutable dispatch and reconciliation helpers exist; durable storage failures now throw; native signing primitives exercised | Real screen enrollment/snapshot/send flow, hardware-approved provider, isolated HTTP mutation and per-origin durable receipts |
+| Crew signed offline | Enrollment/snapshot/immutable dispatch and reconciliation helpers; dedicated HTTP fixture enrollment/snapshot/signed accept, durable origin readback and exact replay with one ACCEPTED event | Real screen enrollment/snapshot/send flow and hardware-approved provider; HTTP software fixture is not native signing acceptance |
 | Handover 42A | Strict native codec; Java/BE protocol parity; Android QA roundtrip, tamper and wrong-key rejection | Real grant/export/import caller, independently authenticated recipient discovery, native production bridge acceptance and cross-client E2E |
-| Local encryption | SQLCipher library included; encrypted QA database reopen and wrong-key tests; authenticated streaming QA file primitive | Runtime database remains plaintext; no DB/media/cache/queue migration; no runtime media caller of the file primitive |
-| Legacy | Old ACK is not projected as durable receipt; unsupported replay is blocked; native app read-only inventory executed; owned Crew field/Reporter pending draft metadata can be inspected during failed restore | Expo Go's actual pending inventory, Crew repair/receiving coverage, supported recovery/readback and tested migration of nonempty pending data |
+| Local encryption | Runtime SQLCipher candidate activated; complete schema/row verification; keyed exclusive transactions; actual JS adapter two-process and interruption tests | Original plaintext DB retained for preservation; runtime media still plaintext; full at-rest coverage is not accepted |
+| Legacy | Old ACK is not projected as durable receipt; unsupported replay blocked; owned Crew field/repair/receiving and Reporter draft metadata available during failed restore; nonempty Crew draft preserved across real app restart | Expo Go's actual pending inventory, remaining command families, supported reconciliation of historical pending data |
 | Native | Separate Android app; repeated process instrumentation tests; native primitives and provider level measured | TEE/StrongBox acceptance: emulator reports SOFTWARE; production gate remains false. Android evidence does not establish iOS support |
-| Three-role E2E | Logic regression and native primitives; embedded QA Crew cold start/local-draft empty view/back/reconnect executed, session restored after explicit retry | Local inspection is not offline editing/sending. Nonempty Crew/Operator/Reporter offline → process death → reconnect → exactly-once effect/receipt scenarios remain NOT_RUN |
+| Three-role E2E | Actual Crew dedicated task started in app; API unavailable → save 7.58 cm draft → app-only cold restart → read-only inventory → API restore/retry → same session and 7.58 cm draft retained | Crew photo/upload/submit and Operator/Reporter interruption/reconnect/exactly-once scenarios remain NOT_RUN; API-unavailable test did not disable all radios |
 
 The six implementation/test commits are `a0f6e08`, `d943806`, `dfa7667`, `f86afa6`,
 `00f2df0`, `275bf52`.
@@ -27,15 +28,16 @@ Their worklogs record commands, APK hashes and evidence limits separately.
 
 ## Storage migration prerequisites found in current source
 
-- `src/offline/database.ts` opens the owned `roadguard.db` connection without a key.
+- `src/offline/database.ts` now opens the verified encrypted candidate through
+  `encryptedDatabase.ts`; the original `roadguard.db` remains preserved.
 - `src/offline/kvStore.ts` shares this connection for Zustand/device state.
 - Structured drafts/journals are stored in `local_draft`; legacy/current outboxes,
   media references, caches, partitions, wire commands and upload ledger also need
   migration inventory. Counting only an outbox does not inventory all pending work.
 - SDK58 `expo-sqlite` `withExclusiveTransactionAsync` calls `Transaction.createAsync`
   and opens another connection. Setting a key on only the main handle cannot
-  safely enable encryption. Existing callers include Crew journals/receiving/repair,
-  Operator selection/task journals and upload queue.
+  safely enable encryption. The new adapter keys the transaction connection too.
+  Existing callers include Crew journals/receiving/repair, Operator journals and upload queue.
 - Crew files (`crewFieldDraft.ts`), Operator sources (`droneLocalFiles.ts`), Reporter
   photos (`reporterLocalMedia.ts`) and Operator preview cache (`operatorVideoCache.ts`)
   are separate lifecycle paths. Every reader/upload/checksum/thumbnail path must be
@@ -75,10 +77,9 @@ whether that requires a new endpoint is a contract decision, not proof of a
 Backend defect. Never trust a public key supplied by an imported package merely
 because decryption succeeds. See `OFFLINE-42A-AUTHENTICATED-KEY-SOURCE-20261124.md`.
 
-SOFTWARE key custody, missing runtime encryption and unconnected FE actions are
-not Backend bugs. No BE source, Docker, SQL or shared fixture was changed in this
-checkpoint. `/health` on local API port18181 returned HTTP200 `Healthy` during
-this review; this proves liveness only, not offline business API behavior.
+SOFTWARE key custody, remaining media encryption and unconnected FE actions are
+not Backend bugs. Dedicated fixture HTTP evidence is now available; it must not
+be described as Android signed-send acceptance. See the 20261125 Crew checkpoint.
 
 ## QA standalone build checkpoint
 
@@ -101,7 +102,7 @@ or three-role exactly-once scenario was tested.
 ## Remaining evidence required
 
 1. Hardware-backed Android device/provider and build acceptance without policy bypass.
-2. Keyed-connection design and interrupted candidate migration with nonempty fixtures.
+2. Remaining storage crash points and preservation of original plaintext DB.
 3. Runtime encrypted file access/migration preserving pending references.
 4. Explicit Crew workflow and trusted grant/recipient sources, then authorized HTTP checks.
 5. Read-only inventory and supported reconciliation of actual preserved legacy data.
