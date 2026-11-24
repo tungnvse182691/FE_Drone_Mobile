@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(roadguard_storage LANGUAGES CXX)
+add_library(roadguard_storage SHARED publication.cpp)
+target_compile_features(roadguard_storage PRIVATE cxx_std_17)
+target_link_options(roadguard_storage PRIVATE "-Wl,-z,max-page-size=16384")

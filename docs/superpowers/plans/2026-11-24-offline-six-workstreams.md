@@ -16,11 +16,13 @@
 - [x] Build SDK58 x86_64 APK with bounded Gradle workers; inspect manifest/signature/module autolinking.
 - [x] Install beside Expo Go; launch without resetting either application's data.
 - [x] Probe module and SQLCipher on Android; measure native key capabilities without claiming hardware proof from missing keys. Five fresh-process probes pass; SOFTWARE custody does not satisfy production hardware policy.
-- [ ] Typecheck, targeted/full regression, diff/secret review; commit this build foundation only after verified installation. The commit must not claim full native crypto acceptance.
+- [x] Typecheck, targeted/full regression, diff/secret review and verified installation; foundation committed as `a0f6e08`, without full native crypto acceptance.
 
 Files: `app.json`, `package.json`, `package-lock.json`, checkpoint worklog. Android output remains generated/ignored.
 
 ## 2. Protected local storage (workstream 3)
+
+Progress: durable storage errors now fail closed (`d943806`). Local file primitive verified in two Android processes; it is not yet wired into media callers. DB/file migration and exclusive-connection keying remain incomplete. See `OFFLINE-LOCAL-FILE-CRYPTO-20261124-review.md`.
 
 - [ ] Map DB, exclusive transaction connections, files/thumbnails/cache and pending media callers across all roles.
 - [ ] Add interrupted-migration tests before implementation; nonempty pending fixtures and account/environment isolation.

@@ -11,7 +11,7 @@ $env:JAVA_HOME='C:/Program Files/Java/jdk-24'
 $env:ANDROID_HOME='D:/Android/Sdk'
 $env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
 $env:JAVA_TOOL_OPTIONS='--enable-native-access=ALL-UNNAMED'
-./android/gradlew.bat -p android -I D:/Do_AN_Drone/FE_AppMobile/tests/native-probe/windows-build.gradle -I D:/Do_AN_Drone/FE_AppMobile/tests/native-probe/probe.gradle -Droadguard.native.cxxRoot=D:/rg-cxx-20261124 :app:assembleDebug :app:assembleDebugAndroidTest -PreactNativeArchitectures=x86_64 --no-parallel --max-workers=2 --console=plain
+./android/gradlew.bat -p android -I D:/Do_AN_Drone/FE_AppMobile/tests/native-probe/windows-build.gradle -I D:/Do_AN_Drone/FE_AppMobile/tests/native-probe/probe.gradle '-Droadguard.native.cxxRoot=D:/rg-cxx-20261124' :app:assembleDebug :app:assembleDebugAndroidTest -PreactNativeArchitectures=x86_64 --no-parallel --max-workers=2 --console=plain
 D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r android/app/build/outputs/apk/debug/app-debug.apk
 D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 install -r android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
 D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 shell am instrument -w com.hoanghai.roadguard.test/roadguard.probe.NativeProbe
@@ -20,6 +20,8 @@ D:/Android/Sdk/platform-tools/adb.exe -s emulator-5554 shell am instrument -w co
 Instrumentation starts a new app process. It preserves app data. It waits for the real Application initialization before accessing SQLCipher; otherwise RN's NativeLoader can race on the instrumentation thread. Test aliases use `roadguard.qa.20261124.*`, preferences use `roadguard.qa.20261124.probe`, and files use `qa-native-probe-20261124/`. Do not reuse these identities in runtime callers.
 
 The probe checks non-exportable Android Keystore signing/agreement keys, direct-sync P1363 signing, native sealed-package roundtrip, SQLCipher encrypted header, wrong-key rejection and reopen persistence. It reports the actual security level. SOFTWARE is a negative hardware-policy result even when all primitive checks pass. No production key is exported; printed keys/signatures are public QA vectors.
+
+It also checks the local file primitive on a 2 MiB+47-byte QA file, wrong-context rejection and kernel no-replace destination collision. Android publication uses JNI `renameat2(RENAME_NOREPLACE)` and directory fsync, failing closed if unavailable. No runtime media migration is invoked. The local format is independent of the BE handover wire format. See the local file checkpoint worklog for current APK hash and two fresh-process runs; the foundation hash below describes the earlier build only.
 
 ## Independent protocol checks
 

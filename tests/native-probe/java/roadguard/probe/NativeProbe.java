@@ -83,6 +83,7 @@ public final class NativeProbe extends Instrumentation {
       }
       handoverProbe(ks,result);
       sqlCipherProbe(ks,result);
+      localFileProbe(ks,result);
       result.putString("status", "PASS"); finish(Activity.RESULT_OK,result);
     } catch (Throwable t) {
       while (t instanceof InvocationTargetException && t.getCause()!=null) t=t.getCause();
@@ -96,6 +97,34 @@ public final class NativeProbe extends Instrumentation {
     }
   }
   private String stage="keystore";
+  private void localFileProbe(KeyStore ks,Bundle result)throws Exception {
+    stage="local_file_crypto";
+    File dir=new File(getTargetContext().getFilesDir(),"qa-native-probe-20261124");require(dir.mkdirs()||dir.isDirectory(),"probe_directory");
+    java.nio.file.Path source=new File(dir,"file-source-chunked-v1").toPath();
+    java.nio.file.Path sealed=new File(dir,"file-sealed-"+UUID.randomUUID()).toPath();
+    java.nio.file.Path opened=new File(dir,"file-opened-"+UUID.randomUUID()).toPath();
+    byte[] data=new byte[2*1024*1024+47];for(int i=0;i<data.length;i++)data[i]=(byte)(i%251);
+    if(!java.nio.file.Files.exists(source))java.nio.file.Files.write(source,data);
+    Class<?> file=Class.forName("roadguard.offline.LocalFileCrypto",true,loader);
+    SecretKey key=(SecretKey)ks.getKey(PREFIX+"storage",null);
+    Class<?>[] types={java.nio.file.Path.class,java.nio.file.Path.class,SecretKey.class,String.class};
+    String binding="qa-account:qa-environment:qa-asset:1";
+    Object hash=file.getMethod("seal",types).invoke(null,source,sealed,key,binding);
+    Object actual=file.getMethod("open",types).invoke(null,sealed,opened,key,binding);
+    require(hash.equals(actual)&&MessageDigest.isEqual(data,java.nio.file.Files.readAllBytes(opened)),"native_file_roundtrip");
+    require(MessageDigest.isEqual(data,java.nio.file.Files.readAllBytes(source)),"native_file_original_changed");
+    java.nio.file.Path rejected=new File(dir,"file-rejected-"+UUID.randomUUID()).toPath();
+    boolean refused=false;try{file.getMethod("open",types).invoke(null,sealed,rejected,key,"other-account");}catch(InvocationTargetException expected){refused=true;}
+    require(refused&&!java.nio.file.Files.exists(rejected),"native_file_binding_accepted");
+    // Exercise the actual kernel NOREPLACE branch, not only Java's early existence check.
+    java.nio.file.Path collisionSource=new File(dir,"publication-source-"+UUID.randomUUID()).toPath();
+    java.nio.file.Path collisionTarget=new File(dir,"publication-target-"+UUID.randomUUID()).toPath();
+    java.nio.file.Files.write(collisionSource,new byte[]{1});java.nio.file.Files.write(collisionTarget,new byte[]{2});
+    Method publish=file.getDeclaredMethod("publishAndroid",String.class,String.class,String.class);publish.setAccessible(true);
+    boolean collision=false;try{publish.invoke(null,dir.getCanonicalPath(),collisionSource.getFileName().toString(),collisionTarget.getFileName().toString());}catch(InvocationTargetException expected){collision=true;}
+    require(collision&&java.nio.file.Files.readAllBytes(collisionSource)[0]==1&&java.nio.file.Files.readAllBytes(collisionTarget)[0]==2,"native_publication_clobbered");
+    result.putString("localFile","KEYSTORE_FILE_ROUNDTRIP_AND_WRONG_CONTEXT_PASS");
+  }
   private void handoverProbe(KeyStore ks,Bundle result)throws Exception {
     stage="handover_native";
     Class<?> pkg=Class.forName("roadguard.offline.HandoverPackage",true,loader);
