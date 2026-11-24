@@ -145,8 +145,44 @@ public final class NativeProbe extends Instrumentation {
     byte[] opened=(byte[])pkg.getMethod("open",envelope,PrivateKey.class,String.class,String.class,String.class,String.class)
       .invoke(null,sealed,(PrivateKey)ks.getKey(PREFIX+"agree",null),agree,actor,device,sign);
     require(MessageDigest.isEqual(plain,opened),"native_handover_mismatch");
+    stage="handover_json_codec";
+    Class<?> codec=Class.forName("roadguard.offline.HandoverPackageJson",true,loader);
+    String headerJson=new String((byte[])pkg.getMethod("canonicalHeader",header).invoke(null,h),java.nio.charset.StandardCharsets.UTF_8);
+    org.json.JSONObject request=new org.json.JSONObject();
+    request.put("header",new org.json.JSONObject(headerJson));
+    request.put("payloadBase64",Base64.getEncoder().encodeToString(plain));
+    org.json.JSONObject receiver=new org.json.JSONObject();
+    receiver.put("actorId",actor);receiver.put("deviceId",device);receiver.put("encryptionPublicKey",agree);receiver.put("signingPublicKey",sign);
+    request.put("recipients",new org.json.JSONArray().put(receiver));
+    Method encode=codec.getMethod("seal",String.class,PrivateKey.class,String.class,String.class,String.class);
+    Method decode=codec.getMethod("open",String.class,PrivateKey.class,String.class,String.class,String.class,String.class);
+    PrivateKey signingKey=(PrivateKey)ks.getKey(PREFIX+"sign",null),agreementKey=(PrivateKey)ks.getKey(PREFIX+"agree",null);
+    String encoded=(String)encode.invoke(null,request.toString(),signingKey,sign,actor,device);
+    String decoded=(String)decode.invoke(null,encoded,agreementKey,agree,actor,device,sign);
+    require(MessageDigest.isEqual(plain,Base64.getDecoder().decode(decoded)),"native_codec_roundtrip");
+    rejects(decode,encoded,agreementKey,agree,actor,device,agree);
+    rejects(decode,encoded,agreementKey,agree,actor,"wrong-device",sign);
+    org.json.JSONObject tampered=new org.json.JSONObject(encoded);
+    tampered.put("ciphertext",Base64.getEncoder().encodeToString(new byte[plain.length]));
+    rejects(decode,tampered.toString(),agreementKey,agree,actor,device,sign);
+    org.json.JSONObject changedHeader=new org.json.JSONObject(encoded);
+    changedHeader.getJSONObject("header").put("projectId","66666666-6666-4666-8666-666666666666");
+    rejects(decode,changedHeader.toString(),agreementKey,agree,actor,device,sign);
+    rejects(decode,"{\"header\":"+headerJson+","+encoded.substring(1),agreementKey,agree,actor,device,sign);
+    rejects(decode,encoded+" {}",agreementKey,agree,actor,device,sign);
+    rejects(decode,new org.json.JSONObject(encoded).put("unknown","field").toString(),agreementKey,agree,actor,device,sign);
+    rejects(encode,request.toString()+" {}",signingKey,sign,actor,device);
+    rejects(encode,new org.json.JSONObject(request.toString()).put("unknown","field").toString(),signingKey,sign,actor,device);
+    result.putString("handoverCodec","STRICT_JSON_ROUNDTRIP_TAMPER_TRUST_RECIPIENT_PASS");
     Arrays.fill(opened,(byte)0);Arrays.fill(plain,(byte)0);
     result.putString("handover","KEYSTORE_SEAL_OPEN_PASS_NOT_BUSINESS_AUTHORITY");
+  }
+  private static void rejects(Method method,Object... args)throws Exception {
+    boolean rejected=false;
+    try {method.invoke(null,args);}catch(InvocationTargetException expected){
+      require(expected.getCause() instanceof IllegalArgumentException,"unexpected_codec_exception");rejected=true;
+    }
+    require(rejected,"invalid_codec_input_accepted");
   }
   private void sqlCipherProbe(KeyStore ks, Bundle result) throws Exception {
     stage="cipher_key";

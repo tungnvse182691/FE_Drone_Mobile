@@ -11,6 +11,10 @@ interface NativeCrypto {
   publicKeys(binding: string): Promise<{signingPublicKey:string;encryptionPublicKey:string}>;
   signManifest(binding: string, manifest: string): Promise<string>;
   verifyManifest(publicKey: string, manifest: string, signature: string): Promise<boolean>;
+  /** Request binds header, canonical attached-payload bytes (base64), and independently verified recipient keys. */
+  sealPackage(binding: string, request: string): Promise<string>;
+  /** trustedSender must come from authenticated registration, never the imported envelope. */
+  openPackage(binding: string, envelope: string, trustedSender: string): Promise<string>;
 }
 let native: NativeCrypto | null = null;
 try { native = requireOptionalNativeModule<NativeCrypto>('RoadguardOfflineCrypto'); } catch { /* Expo Go/web: fail closed. */ }

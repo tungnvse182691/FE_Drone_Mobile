@@ -42,6 +42,8 @@ Progress: durable storage errors now fail closed (`d943806`). Local file primiti
 
 ## 4. Encrypted handover 42A (workstream 2)
 
+Progress: package primitives have independent JVM/BE interoperability; strict native JSON codec passes two Android process runs. Hardware-gated bridge compiled and structurally checked; successful production JS invocation and grant/import workflow remain unverified. See OFFLINE-HANDOVER-NATIVE-BRIDGE-20261124-review.md.
+
 - [ ] Port exact canonical header/package/recipient context and validation from pinned BE source.
 - [ ] Add independent .NET interoperability and tamper/wrong-recipient/key-loss tests before adding bridge seal/open.
 - [ ] Implement native P256 ECDH -> HKDF-SHA256 -> AES256-GCM, nonce12/tag16 and P1363 signature64; private/shared keys stay native.

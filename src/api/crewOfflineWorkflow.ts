@@ -67,4 +67,4 @@ export async function dispatchOfflineIntent(record:OfflineJournalRecord):Promise
   }
 }
 
-export const HANDOVER_GATE='BLOCKED_CRYPTO_CONTRACT: KDF/AES-GCM/encrypted-package chưa có native proof; API-113/122/125 không phát lệnh.';
+export const HANDOVER_GATE='BLOCKED_HANDOVER_WORKFLOW: primitive mã hóa đã có; quyền bàn giao, nguồn khóa tin cậy và nghiệm thu native chưa đủ; không phát lệnh bàn giao.';

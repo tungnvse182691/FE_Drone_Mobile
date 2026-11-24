@@ -98,5 +98,14 @@ class RoadguardOfflineCryptoModule : Module() {
       Base64.getEncoder().encodeToString(StrictP256.sign(store().getKey("$p.sign", null) as PrivateKey, manifest))
     }
     AsyncFunction("verifyManifest") { publicKey: String, manifest: String, signature: String -> StrictP256.verify(publicKey, manifest, signature) }
+    AsyncFunction("sealPackage") { binding: String, request: String ->
+      val p = usable(binding); val ks = store(); val identity = JSONArray(binding)
+      HandoverPackageJson.seal(request, ks.getKey("$p.sign", null) as PrivateKey,
+        Base64.getEncoder().encodeToString(ks.getCertificate("$p.sign").publicKey.encoded), identity.getString(0), identity.getString(3))
+    }
+    AsyncFunction("openPackage") { binding: String, envelope: String, trustedSender: String ->
+      val p = usable(binding); val ks = store(); val identity = JSONArray(binding)
+      HandoverPackageJson.open(envelope, ks.getKey("$p.agree", null) as PrivateKey, Base64.getEncoder().encodeToString(ks.getCertificate("$p.agree").publicKey.encoded), identity.getString(0), identity.getString(3), trustedSender)
+    }
   }
 }

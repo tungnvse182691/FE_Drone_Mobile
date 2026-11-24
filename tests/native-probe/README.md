@@ -25,6 +25,8 @@ It also checks the local file primitive on a 2 MiB+47-byte QA file, wrong-contex
 
 ## Independent protocol checks
 
+The Android probe also exercises the strict `HandoverPackageJson` codec with isolated keys: roundtrip, wrong trusted sender/device, tampered header/ciphertext, duplicate/unknown fields and trailing JSON. Production JS exports retain the hardware policy and are not considered accepted on a SOFTWARE emulator. See `docs/worklogs/OFFLINE-HANDOVER-NATIVE-BRIDGE-20261124-review.md`.
+
 ```powershell
 node --test tests/offline-handover-primitives.test.cjs tests/offline-handover-package.test.cjs
 node tests/native-probe/package-interop.cjs D:/Do_AN_Drone/RoadGuardSystem-develop
