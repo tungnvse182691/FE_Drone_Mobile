@@ -2,8 +2,12 @@
 
 Reviewer: Codex. Mode: IMPLEMENT_AND_SELF_REVIEW. Date: 2026-11-24.
 
-FE checkpoint: `f86afa6` on main. BE read-only source:
+FE implementation checkpoint: `275bf52` on main. BE deployed/local read-only source:
 `fb2761619cce11e05e439f322efbf41e00f8a7bf`.
+Remote develop checked again on 2026-11-24: `b891e88ea20073bab7b110f301b7b37ebfa1c40c`.
+The two remote-only commits change Supervisor road-coverage document discovery,
+Survey tests and handoff documentation; no offline controller/DTO/repository delta.
+They were fetched for source inspection only. No BE checkout/merge/deployment occurred.
 This report does **not** accept the six workstreams as complete.
 
 ## Delivery status
@@ -13,11 +17,12 @@ This report does **not** accept the six workstreams as complete.
 | Crew signed offline | Enrollment/snapshot/immutable dispatch and reconciliation helpers exist; durable storage failures now throw; native signing primitives exercised | Real screen enrollment/snapshot/send flow, hardware-approved provider, isolated HTTP mutation and per-origin durable receipts |
 | Handover 42A | Strict native codec; Java/BE protocol parity; Android QA roundtrip, tamper and wrong-key rejection | Real grant/export/import caller, independently authenticated recipient discovery, native production bridge acceptance and cross-client E2E |
 | Local encryption | SQLCipher library included; encrypted QA database reopen and wrong-key tests; authenticated streaming QA file primitive | Runtime database remains plaintext; no DB/media/cache/queue migration; no runtime media caller of the file primitive |
-| Legacy | Old ACK is not projected as durable receipt; unsupported replay is blocked; native app read-only inventory executed | Expo Go's actual pending inventory, supported recovery/readback and tested migration of nonempty pending data |
+| Legacy | Old ACK is not projected as durable receipt; unsupported replay is blocked; native app read-only inventory executed; owned Crew field/Reporter pending draft metadata can be inspected during failed restore | Expo Go's actual pending inventory, Crew repair/receiving coverage, supported recovery/readback and tested migration of nonempty pending data |
 | Native | Separate Android app; repeated process instrumentation tests; native primitives and provider level measured | TEE/StrongBox acceptance: emulator reports SOFTWARE; production gate remains false. Android evidence does not establish iOS support |
-| Three-role E2E | Logic regression and native primitives; embedded QA Crew cold start/reconnect executed, session restored after explicit retry | Crew cold-start local usability is incomplete (refresh overlay blocks local work). Actual pending Crew/Operator/Reporter offline → process death → reconnect → exactly-once effect/receipt scenarios remain NOT_RUN |
+| Three-role E2E | Logic regression and native primitives; embedded QA Crew cold start/local-draft empty view/back/reconnect executed, session restored after explicit retry | Local inspection is not offline editing/sending. Nonempty Crew/Operator/Reporter offline → process death → reconnect → exactly-once effect/receipt scenarios remain NOT_RUN |
 
-The four earlier local commits are `a0f6e08`, `d943806`, `dfa7667`, `f86afa6`.
+The six implementation/test commits are `a0f6e08`, `d943806`, `dfa7667`, `f86afa6`,
+`00f2df0`, `275bf52`.
 Their worklogs record commands, APK hashes and evidence limits separately.
 
 ## Storage migration prerequisites found in current source
@@ -37,10 +42,10 @@ Their worklogs record commands, APK hashes and evidence limits separately.
   audited before replacing files with encrypted bytes.
 - Preserve source and pending references across interruption/key loss. Retaining
   plaintext originals is data preservation, not completed encryption coverage.
-- `app/_layout.tsx` offers local task reads during failed session restoration only
-  to Operator. Crew/Reporter cold-start access while refresh cannot reach the
-  server is not implemented by merely persisting drafts. Do not turn a stored
-  user object into an authenticated mutation identity to bypass this boundary.
+- `app/_layout.tsx` now offers Operator local tasks and an isolated Crew/Reporter
+  local draft metadata reader during failed refresh. It does not grant editing,
+  role-route access or network mutation authority. Do not turn a stored user
+  object into an authenticated mutation identity to bypass this boundary.
 - `useCrewInbox` uses TanStack Query's runtime cache; that cache alone is not a
   durable task snapshot across a killed process. Existing SQLite draft persistence
   does not prove the task list can be reconstructed offline.
@@ -61,9 +66,14 @@ Do not report these APIs as absent.
 Authenticated device/grant GET requires known registration/grant IDs. This
 controller has no collection discovery route. A trusted discovery/distribution
 channel for recipient keys and grant IDs must be established before wiring a
-recipient picker; whether that requires a new endpoint is a contract decision,
-not proof of a Backend defect. Never trust a public key supplied by an imported
-package merely because decryption succeeds.
+recipient picker. There is a further current authorization boundary: repository
+`OfflineWorkflowRepository.cs:88` rejects Crew device-get for another actor.
+Package/grant GET contains registration IDs but does not independently return the
+source and recipient registered public-key pair. Cross-actor source validation
+and recipient-key selection therefore need an approved authenticated source;
+whether that requires a new endpoint is a contract decision, not proof of a
+Backend defect. Never trust a public key supplied by an imported package merely
+because decryption succeeds. See `OFFLINE-42A-AUTHENTICATED-KEY-SOURCE-20261124.md`.
 
 SOFTWARE key custody, missing runtime encryption and unconnected FE actions are
 not Backend bugs. No BE source, Docker, SQL or shared fixture was changed in this
