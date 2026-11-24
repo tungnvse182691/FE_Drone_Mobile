@@ -3,17 +3,17 @@ const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 async function mounted(options={}){
  const context={actor:'crew',scope:'session',environment:'test',projectId:'project',taskId:'task'};
  const navigation=[];
- let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0;
+ let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0,readError=null;
  let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN'}],captures:options.emptyCaptures?[]:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
  const s=screen('app/(crew)/field-review.tsx',{
  expose:'CrewFieldReviewScreenContent,fieldNoticeModel,safeFieldErrorDetail',exportName:'CrewFieldReviewScreenContent',
- props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY'}},
+ props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY',detail:{status:'InProgress',mode:'MEASURE_ONLY',requiredMeasurementType:1},etag:'version'}},
  moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>({}),router:{push:p=>{navigation.push(p);cleanup?.();}},useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
  modules:{
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  './tasks':{useCrewIdentity:()=>({user:{id:'crew'},scope:'session'}),TASK_MODE_CHIP:{MEASURE_ONLY:{label:'Chỉ đo kiểm'}}},
- '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',mode:options.normal?'NORMAL':'MEASURE_ONLY',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
+ '../../src/api/crewApi':{crewLocalReadUnavailable:e=>e?.code==='ERR_NETWORK'&&!e.response,fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;if(readError)throw readError;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',mode:options.normal?'NORMAL':'MEASURE_ONLY',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
  '../../src/api/crewFieldDraft':{currentFieldContext:()=>context,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>structuredClone(draft),measurementTemplate:()=>draft.measurements[0],fieldDraftPending:d=>d.command?.phase==='pending',fieldErrorMessage:e=>e.message,
  saveFieldMeasurements:async()=>{if(waitSave)await waitSave.promise;if(failSave)throw Error('Lưu chưa thành công');return structuredClone(draft);},acknowledgeFieldResult:async()=>({...draft,command:null}),
  uploadAndSubmitFieldDraft:async(d,r,onProgress)=>{
@@ -28,7 +28,7 @@ async function mounted(options={}){
  },
  }});
  s.render();await s.flush();
- return {s,navigation,detailReads:()=>detailReads,focus:async()=>{cleanup=focus();await s.flush();},setFailure:v=>failSave=v,setWait:d=>waitSave=d,setCommand:c=>draft.command=c,
+ return {s,navigation,detailReads:()=>detailReads,setReadError:e=>readError=e,focus:async()=>{cleanup=focus();await s.flush();},setFailure:v=>failSave=v,setWait:d=>waitSave=d,setCommand:c=>draft.command=c,
  submit:()=>s.nodes().find(n=>n.type==='Button'&&n.props.title==='Gửi hồ sơ đo kiểm'),notice:()=>s.nodes().find(n=>typeof n.type==='function'&&n.type.name==='FieldNotice')};
 }
 test('FIELD camera navigation clears busy when returning to the editor',async()=>{
@@ -166,3 +166,18 @@ test('FIELD long help is opt-in and each section expands independently',async()=
  assert.doesNotMatch(copy(),/Ảnh chụp được lưu trên máy trước/);
  h.s.unmount();
 });
+
+ test('FIELD offline return restores local form and camera but never enables send or upload',async()=>{
+ const h=await mounted();h.setReadError({code:'ERR_NETWORK'});await h.focus();
+ const action=title=>h.s.nodes().find(n=>n.type==='Button'&&n.props.title===title);
+ assert.ok(action('Chỉnh số đo'));assert.equal(action('Chụp / chọn ảnh').props.disabled,false);
+ assert.equal(h.submit().props.disabled,true);assert.equal(action('Tải ảnh này lên'),undefined);
+ assert.match(JSON.stringify(h.s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children)),/Chỉ lưu nháp trên máy/);
+ h.s.press('Chụp / chọn ảnh');await h.s.flush();assert.equal(h.navigation.at(-1).pathname,'/(crew)/viewfinder');h.s.unmount();
+ });
+ test('FIELD definitive denial cannot fall back to a snapshot on a later offline read',async()=>{
+ const h=await mounted();h.setReadError({response:{status:403}});await h.focus();
+ assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Chụp / chọn ảnh'),false);
+ h.setReadError({code:'ERR_NETWORK'});await h.focus();
+ assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Chụp / chọn ảnh'),false);h.s.unmount();
+ });

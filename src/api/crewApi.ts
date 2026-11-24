@@ -57,6 +57,11 @@ export type CrewTask = Omit<CrewFieldTaskCard, 'coordinates' | 'task_mode' | 'de
   acceptedAt?: string | null; rejectedAt?: string | null; isHistory?: boolean;
 };
 export type OperationalCrewTask = CrewTask & CrewFieldTaskCard;
+/** Only transport failures allow local draft work; HTTP/validation failures never do. */
+export function crewLocalReadUnavailable(error: unknown): boolean {
+  return axios.isAxiosError(error) && !error.response &&
+    ['ERR_NETWORK', 'ECONNABORTED', 'ETIMEDOUT'].includes(error.code ?? '');
+}
 export function isCrewResourceId(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
     value !== '00000000-0000-0000-0000-000000000000';

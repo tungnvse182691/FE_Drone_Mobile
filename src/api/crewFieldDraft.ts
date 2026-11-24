@@ -251,7 +251,8 @@ export async function startNewFieldSessionDraft(context: FieldContext): Promise<
 }
 /** Native bytes closed by arrayBuffer; hash durable temp, rename, then commit its URI in SQLite. */
 export async function captureFieldPhoto(context: FieldContext, uri: string, purpose: FieldCapture['purpose'],
-  mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false, capturedAt?: string): Promise<FieldDraft> {
+  mediaType: string, coordinates: Coords | null, camera: boolean, postRepairCapture=false, capturedAt?: string,
+  localTask?: FieldContext & {data:crew.FieldTaskViewFact;etag:string}): Promise<FieldDraft> {
   // Snapshot at entry for legacy callers too; file/network work must not move the shutter time.
   const captureTime = camera ? (capturedAt ?? new Date().toISOString()) : null;
   if (captureTime !== null && (!Number.isFinite(Date.parse(captureTime)) || Date.parse(captureTime) > Date.now())) throw new Error('Thời gian chụp ảnh không hợp lệ.');
@@ -260,7 +261,12 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     try {
     const runtime = await openFieldRuntime(context), draft = await loadFieldDraft(context,runtime);
     if (draft.command) throw new Error('field_command_pending');
-    const detail = await guarded(context,runtime,() => crew.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
+    // Local evidence is not a server command. The route supplies a previously
+    // validated snapshot for this exact login/environment/task; upload/submit
+    // still call freshTask and enforce current server preconditions.
+    if(localTask&&!sameContext(localTask,context))throw Error('field_session_changed');
+    const detail = localTask ?? await guarded(context,runtime,() => crew.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
+    if(localTask)crew.validateCrewTaskDetail(detail.data,detail.etag,context.projectId,context.taskId,context.actor);
     const reason = crew.fieldCapabilityBlock(detail.data,detail.etag,context.actor,'capture');
     if (reason) throw new Error(reason);
     if (purpose === 'AFTER' && detail.data.purpose !== 'PostRepair') throw new Error('Ảnh sau sửa chỉ hợp lệ với nhiệm vụ sau sửa chữa.');

@@ -84,15 +84,15 @@ test('capture persistence keeps the shutter timestamp and per-photo fix; gallery
   const source=fs.readFileSync('src/api/crewFieldDraft.ts','utf8');
   const ast=ts.createSourceFile('draft.ts',source,ts.ScriptTarget.Latest,true);
   const fn=ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='captureFieldPhoto');
-  const module={exports:{}},saved=[];
+  const module={exports:{}},saved=[];let reads=0,validations=0;
   class Directory {create(){}}
   class File {constructor(dir,name){this.uri='file://'+name;}write(bytes){this.bytes=bytes;}bytesSync(){return this.bytes;}move(){}}
   const runtime={uuid:()=>String(saved.length),bytes:async()=>new Uint8Array([255,216,255,1]),hash:async()=> 'a'.repeat(64)};
-  vm.runInNewContext(ts.transpileModule(fn.getText(ast),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
+  vm.runInNewContext(ts.transpileModule(ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='sameContext').getText(ast)+'\n'+fn.getText(ast),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
     module,exports:module.exports,Directory,File,Paths:{document:'local'},Uint8Array,
     readPhotoGps:load('src/utils/photoGps.ts').readPhotoGps,
     exclusive:async(c,run)=>run(),openFieldRuntime:async()=>runtime,loadFieldDraft:async()=>({captures:[]}),
-    guarded:async(c,r,run)=>run(),crew:{getFieldInspectionTaskDetailReal:async()=>({data:{},etag:'real'}),fieldCapabilityBlock:()=>null},
+    guarded:async(c,r,run)=>run(),crew:{getFieldInspectionTaskDetailReal:async()=>{reads++;return {data:{},etag:'real'};},validateCrewTaskDetail(){validations++;},fieldCapabilityBlock:()=>null},
     persist:async draft=>{saved.push(JSON.parse(JSON.stringify(draft)));},
   });
   const shutter='2026-11-23T01:00:00Z',coords={latitude:10,longitude:106,accuracyMeters:8};
@@ -105,4 +105,13 @@ test('capture persistence keeps the shutter timestamp and per-photo fix; gallery
   await module.exports.captureFieldPhoto({},'file://original','BEFORE','image/jpeg',coords,false,false,shutter);
   assert.deepEqual(saved[2].captures[0].coordinates,{latitude:10.5,longitude:106.25,accuracyMeters:null});
   assert.equal(saved[2].captures[0].capturedAt,null);
+  const context={actor:'crew',scope:'sid',environment:'docker',projectId:'project',taskId:'task'};
+  const snapshot={...context,data:{},etag:'real'},before=reads;
+  await module.exports.captureFieldPhoto(context,'file://offline','BEFORE','image/jpeg',coords,true,false,shutter,snapshot);
+  assert.equal(reads,before,'local capture must not require HTTP');assert.equal(validations,1);
+  assert.deepEqual(saved[3].captures[0].coordinates,coords);assert.equal(saved[3].captures[0].capturedAt,shutter);
+  for(const key of ['actor','scope','environment','projectId','taskId']){
+    await assert.rejects(module.exports.captureFieldPhoto(context,'file://bad','BEFORE','image/jpeg',coords,true,false,shutter,{...snapshot,[key]:'different'}),/field_session_changed/);
+  }
+  assert.equal(saved.length,4,'foreign snapshots cannot persist a photo');
 });

@@ -16,7 +16,7 @@ import { CrewPhotoInfo } from '../../src/components/crew/CrewPhotoInfo';
 import { InputField } from '../../src/components/InputField';
 import { Toast } from '../../src/components/Toast';
 import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
-import { repairSupplementBlock, fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
+import { repairSupplementBlock, crewLocalReadUnavailable, fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
   type CrewTask, type FieldTaskGeometry, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
 import { chooseCrewPosition, crewPositionSources, crewPositionInputError } from '../../src/utils/crew-position-proof';
 import { prepareFieldRepairSupplement, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
@@ -164,7 +164,7 @@ export function fieldSubmissionReadinessLabel(readiness: string | null | undefin
 }
 
 export default function CrewFieldReviewScreen() {
-  return <CrewTaskBoundary operational={false}>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
+  return <CrewTaskBoundary operational={false} localDraft>{task => <CrewFieldReviewScreenContent task={task} />}</CrewTaskBoundary>;
 }
 function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string}>():{};
@@ -199,6 +199,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const [localRecoveryError,setLocalRecoveryError]=useState('');
   const [recoveryDecision,setRecoveryDecision]=useState<'new'|'replay'|null>(null);
   const [serverLoaded,setServerLoaded]=useState(false);
+  const [localOnly,setLocalOnly]=useState(false);
+  // The boundary scopes this snapshot to the current actor, session, environment and task.
+  // Definitive read failures revoke it until a successful read replaces it.
+  const localSnapshot=useRef(task.detail ? {data:task.detail,etag:task.etag??''} : null);
   const [deleteTarget,setDeleteTarget]=useState<string|null>(null),[showErrorDetail,setShowErrorDetail]=useState(false);
   const [cancelTarget,setCancelTarget]=useState<string|null>(null);
   const [cancelling,setCancelling]=useState(false),cancelRef=useRef(false);
@@ -222,7 +226,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     const c=currentFieldContext(task.projectId,task.id);if(!c)return;
     const sequence=++loadSequence.current;
     const isLatest=()=>current(c)&&fieldRequestIsCurrent(sequence,loadSequence.current);
-    setLoading(true);setError('');setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRecoveryDecision(null);
+    setLoading(true);setError('');setLocalOnly(false);setReplayConfirmed(null);setRepairRecoveryConfirmed(null);setRecoveryDecision(null);
     if(!refresh){setDraft(null);setLatest(null);setPreview(null);setVerifiedTask(null);setVerifiedEtag('');setPreviousMeasurements([]);setServerLoaded(false);}
     let saved:FieldDraft|null=null, localError='', historical:FieldDraft|null=null;
     try {
@@ -245,6 +249,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       if(previous&&(previous.taskId!==task.id||previous.id!==fresh.data.latestSubmissionId))throw Error('field_lineage_invalid');
       if(!isLatest())return;
       if(!localError)setDraft(saved);
+      localSnapshot.current=fresh;
       setLatest(previous);setVerifiedTask(fresh.data);setVerifiedEtag(fresh.etag);setServerLoaded(true);
       setPositionGeometry(null);
       if(fresh.data.segmentSetId&&!fresh.data.slabId){
@@ -259,11 +264,29 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       const prior = previous?.measurements?.length ? previous.measurements : [];
       setPreviousMeasurements(prior);
       if(!refresh&&!localError)setMeasurements(saved?.measurements.length ? saved.measurements : initial ? [initial] : []);
-    } catch(e){if(isLatest()){setServerLoaded(false);setVerifiedTask(null);setVerifiedEtag('');setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được trạng thái nhiệm vụ từ máy chủ.');}}
+    } catch(e){if(isLatest()){
+      setServerLoaded(false);setVerifiedTask(null);setVerifiedEtag('');
+      if(!crewLocalReadUnavailable(e))localSnapshot.current=null;
+      const snapshot=localSnapshot.current;
+      if(crewLocalReadUnavailable(e)&&snapshot&&!localError){
+        try {
+          validateCrewTaskDetail(snapshot.data,snapshot.etag,task.projectId,task.id,c.actor);
+          setDraft(saved);setLatest(null);setVerifiedTask(snapshot.data);setVerifiedEtag(snapshot.etag);setLocalOnly(true);
+          setPositionGeometry(null);setRepairRecovery(null);
+          if(!refresh){
+            setLocationProof(saved?.locationProof??null);
+            setChainage(saved?.locationProof?.observedChainageMeters==null?'':String(saved.locationProof.observedChainageMeters));
+            setRawValues({});
+            const initial=measurementTemplate(snapshot.data.requiredMeasurementType,randomUUID());
+            setMeasurements(saved?.measurements.length?saved.measurements:initial?[initial]:[]);
+          }
+        }catch{localSnapshot.current=null;setError('Dữ liệu đã tải không còn hợp lệ. Kết nối mạng để kiểm tra lại.');}
+      }else{setError(fieldErrorMessage(e));setNoticeDetail('Không đọc được trạng thái nhiệm vụ từ máy chủ.');}
+    }}
     finally{if(isLatest())setLoading(false);}
   },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;setBusy(busyRef.current);setCancelling(cancelRef.current);if(!busyRef.current){setBusyAction('');setUploadingCaptureId(null);}void load();return()=>{active.current=false;};},[load]));
-  const block=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi lưu hoặc gửi hồ sơ.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
+  const block=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi lưu hoặc gửi hồ sơ.':!identity.user||!identity.scope||!verifiedTask||loading||!serverLoaded?'Kết nối mạng để xác minh trạng thái và gửi hồ sơ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
   const captureBlock=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi thêm ảnh.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
   const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
@@ -488,7 +511,8 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           <Button variant="secondary" title="Đóng ảnh" style={styles.previewClose} onPress={()=>setPreview(null)}/>
         </View>
       </Modal>
-      {draft&&serverLoaded&&!localRecoveryBlocked?<>
+      {localOnly?<Card style={styles.card}><Text style={styles.sectionTitle}>Đang làm việc với dữ liệu đã tải</Text><Text style={styles.muted}>Chỉ lưu nháp trên máy. Kết nối mạng để xác minh trạng thái và gửi hồ sơ.</Text></Card>:null}
+      {draft&&(serverLoaded||localOnly)&&!localRecoveryBlocked?<>
         {!taskReadOnly&&!frozen?<>
         <Card style={styles.card}>
           <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Số đo hiện trường</Text><MaterialIcons name="straighten" size={24} color={colors.primaryDark}/></View>

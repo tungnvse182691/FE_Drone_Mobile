@@ -296,7 +296,7 @@ test('Crew FIELD refresh preserves local editor until GET fails, then fails clos
  const draft={...c,captures:[],measurements:[],locationProof:null};
  const s=mount('app/(crew)/field-review.tsx',{expose:'CrewFieldReviewScreenContent',exportName:'CrewFieldReviewScreenContent',props:{task:{id:c.taskId,projectId:c.projectId,task_mode:'NORMAL',detail:h.task}},modules:{
   'expo-crypto':{randomUUID:require('node:crypto').randomUUID},'./tasks':{useCrewIdentity:()=>({scope:c.scope,user:{id:c.actor}}),TASK_MODE_CHIP:{NORMAL:{label:'Theo kế hoạch'}}},
-  '../../src/api/crewApi':{fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>{requests++;if(fail)throw Error('GET failed');return {data:h.task,etag:'"fresh"'};}},
+  '../../src/api/crewApi':{crewLocalReadUnavailable:e=>e?.isAxiosError&&!e.response&&e.code==='ERR_NETWORK',fieldCapabilityBlock:()=>null,validateCrewTaskDetail:()=>{},getFieldInspectionTaskDetailReal:async()=>{requests++;if(fail)throw Error('GET failed');return {data:h.task,etag:'"fresh"'};}},
   '../../src/api/crewFieldDraft':{currentFieldContext:()=>c,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>draft,fieldErrorMessage:e=>e.message,measurementTemplate:()=>null,fieldDraftPending:()=>false,submitFieldDraft:async()=>{post++;}},
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
  }});s.render();await s.flush();assert.equal(requests,1);

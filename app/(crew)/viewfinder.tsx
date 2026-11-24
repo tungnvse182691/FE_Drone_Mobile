@@ -36,7 +36,7 @@ function formatDateTime(date: Date): string {
 }
 
 export default function CrewViewfinderScreen() {
-  return <CrewTaskBoundary operational={false}>{task => <CrewViewfinderScreenContent key={`${task.projectId}:${task.id}`} task={task} />}</CrewTaskBoundary>;
+  return <CrewTaskBoundary operational={false} localDraft>{task => <CrewViewfinderScreenContent key={`${task.projectId}:${task.id}`} task={task} />}</CrewTaskBoundary>;
 }
 function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const isFocused = useIsFocused();
@@ -82,7 +82,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     const context=currentFieldContext(task.projectId,task.id);if(!context)return;
     savingRef.current=true;setBusy(true);
     try {
-      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,metadata?.coordinates??null,camera,normalAfter&&postRepairCapture,metadata?.capturedAt);
+      const value=await captureFieldPhoto(context,uri,mode==='after'?'AFTER':mode==='measurement'?'MEASUREMENT':'BEFORE',mediaType,metadata?.coordinates??null,camera,normalAfter&&postRepairCapture,metadata?.capturedAt,{...context,data:task.detail!,etag:task.etag??''});
       if(!activeRef.current||!matches(context))return;
       setDraft(value);setNotice(camera&&!metadata?.coordinates?'Đã lưu ảnh vào nháp, chưa lấy được GPS cho ảnh này. Xem trong Thông tin ảnh tại hồ sơ.':'Đã lưu ảnh vào nháp riêng của nhiệm vụ; chưa tải ảnh lên hoặc gửi hồ sơ.');
     } catch(error) {if(activeRef.current&&matches(context))setNotice(fieldErrorMessage(error));}

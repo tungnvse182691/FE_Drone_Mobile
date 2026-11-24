@@ -18,7 +18,7 @@ import { passwordSessionIdentity } from '../../src/api/authApi';
 import {
   crewInboxOptions, crewTaskFromWire, crewTaskIsComplete, crewTaskActionBlock,
   getFieldInspectionTaskDetailReal, isCrewResourceId, validateCrewTaskDetail,
-  crewAssignmentCanOpen, type CrewListQuery, type CrewTask, type OperationalCrewTask,
+  crewAssignmentCanOpen, crewLocalReadUnavailable, type CrewListQuery, type CrewTask, type OperationalCrewTask,
 } from '../../src/api/crewApi';
 import { RoleCode } from '../../src/types/enums';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
@@ -138,11 +138,13 @@ export function CrewInboxState({ inbox, presentation = 'default' }: { inbox: Ret
   </Card>;
 }
 /** Mount children only after an owner-scoped detail read. A new sid unmounts old task UI. */
-type TaskBoundaryProps = { operational: false; children: (task: CrewTask) => React.ReactNode } |
+type TaskBoundaryProps = { operational: false; localDraft?: boolean; children: (task: CrewTask) => React.ReactNode } |
   { operational?: true; children: (task: OperationalCrewTask) => React.ReactNode };
 function isOperational(task: CrewTask): task is OperationalCrewTask { return !crewTaskActionBlock(task); }
 export function CrewTaskBoundary(props: TaskBoundaryProps) {
   const operational = props.operational !== false;
+  const localDraft = props.operational === false && props.localDraft === true;
+  const client = useQueryClient();
   const pathname = usePathname();
   const params = useLocalSearchParams<{ id?: string; projectId?: string }>();
   const inbox = useCrewInbox();
@@ -150,23 +152,45 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
   const item = inbox.tasks.find(t => t.id === id);
   const projectId = typeof params.projectId === 'string' ? params.projectId : item?.projectId ?? '';
   const validIds = isCrewResourceId(id) && isCrewResourceId(projectId);
+  const queryKey = ['crew-task', inbox.scope, inbox.environment, projectId, id];
+  const assertCurrent = () => {
+    const current = useAuthStore.getState();
+    if (!inbox.enabled || passwordSessionIdentity(current.token) !== inbox.scope ||
+        current.user?.id !== inbox.user?.id || current.user?.role_code !== RoleCode.REPAIR_CREW ||
+        current.user.must_change_password || !['AUTHENTICATED', 'REFRESHING'].includes(current.status) ||
+        (apiClient.defaults?.baseURL ?? '') !== inbox.environment) throw Error('crew_task_session_changed');
+  };
   const query = useQuery({
-    queryKey: ['crew-task', inbox.scope, inbox.environment, projectId, id], enabled: inbox.enabled && validIds, retry: false, gcTime: 0,
+    queryKey, enabled: inbox.enabled && validIds, retry: false, gcTime: 30 * 60 * 1000,
     queryFn: async ({ signal }) => {
+      assertCurrent();
+      try {
       const response = await getFieldInspectionTaskDetailReal(projectId, id, signal);
+      assertCurrent();
       validateCrewTaskDetail(response.data, response.etag, projectId, id, inbox.user!.id);
       return crewTaskFromWire({ id, projectId, crewId: response.data.assignedToUserId!, mode: response.data.mode ?? '',
         status: response.data.status ?? '', version: response.data.version!, defectIds: [response.data.defectId], policyVersionId: null }, response.data, response.etag);
+      } catch (error) {
+        // Revoke a previous snapshot after any definitive HTTP/contract denial.
+        // A later network failure must not resurrect it.
+        if (!crewLocalReadUnavailable(error)) client.setQueryData(queryKey, null);
+        throw error;
+      }
     },
   });
   const { refetch } = query;
   useFocusEffect(useCallback(() => { if (inbox.enabled && validIds) void refetch(); }, [inbox.enabled, validIds, refetch]));
-  const task = inbox.enabled && validIds && !query.isError ? query.data : undefined;
+  const task = inbox.enabled && validIds && (!query.isError || localDraft && crewLocalReadUnavailable(query.error)) ? query.data : undefined;
   const executionRoute = /\/(progress|complete|repair-correction)$/.test(pathname);
   const blocked = operational && executionRoute ? 'Chức năng thi công này chưa sẵn sàng. Xem các thao tác được hỗ trợ tại chi tiết nhiệm vụ.' : operational && task ? crewTaskActionBlock(task) : null;
-  if (!task || blocked) return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ" />}>
-    <Card style={{ gap: spacing.md, marginBottom: spacing.md }}><MaterialIcons name="assignment" size={32} color={colors.brandGold} /><Text style={typography.titleMd}>Thông tin nhiệm vụ</Text><Text style={typography.bodyMd}>{blocked ?? (!inbox.enabled ? 'Vui lòng đăng nhập bằng tài khoản đội sửa chữa.' : !id ? 'Chưa chọn nhiệm vụ.' : !validIds ? 'Chưa xác định được dự án của nhiệm vụ. Chọn nhiệm vụ trong danh sách.' : query.isError ? crewReadError(query.error) : 'Đang tải nhiệm vụ…')}</Text></Card>
-    {query.isError ? <Button variant="secondary" title="Thử lại" onPress={() => { void query.refetch(); }} /> : null}
+  const readUnavailable = crewLocalReadUnavailable(query.error) || query.fetchStatus === 'paused';
+  if (!task || blocked) return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ" showBack fallbackRoute="/(crew)/tasks" />}>
+    <Card style={{ gap: spacing.md, marginBottom: spacing.md }}>
+      <MaterialIcons name={readUnavailable ? 'cloud-off' : 'assignment'} size={28} color={colors.secondary} />
+      <Text style={[typography.titleLg, { color: colors.neutral }]}>{blocked ? 'Chưa thể thao tác' : readUnavailable ? 'Chưa có dữ liệu để mở nhiệm vụ' : query.isError ? 'Chưa mở được nhiệm vụ' : 'Thông tin nhiệm vụ'}</Text>
+      <Text style={[typography.bodyMd, { color: colors.secondary }]}>{blocked ?? (!inbox.enabled ? 'Vui lòng đăng nhập bằng tài khoản đội sửa chữa.' : !id ? 'Chưa chọn nhiệm vụ.' : !validIds ? 'Chưa xác định được dự án của nhiệm vụ. Chọn nhiệm vụ trong danh sách.' : readUnavailable ? 'Chưa kết nối được máy chủ và chưa có dữ liệu hợp lệ trong phiên này. Kết nối mạng rồi thử lại.' : query.isError ? crewReadError(query.error) : 'Đang tải nhiệm vụ…')}</Text>
+      {query.isError || readUnavailable ? <Button variant="primary" title="Thử kết nối lại" loading={query.isFetching} disabled={query.isFetching} onPress={() => { void query.refetch(); }} /> : inbox.enabled && validIds && !blocked && query.isFetching ? <ActivityIndicator color={colors.secondary} /> : null}
+    </Card>
     {!validIds && id ? <CrewInboxState inbox={inbox} /> : null}
     <Button variant="secondary" title="Danh sách nhiệm vụ" onPress={() => router.replace('/(crew)/tasks')} />
   </SafeAreaScreen>;

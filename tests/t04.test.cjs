@@ -53,11 +53,11 @@ function screenHarness(file,options={}){
    if(n==='react')return react;
    if(n==='react-native')return {StyleSheet:{create:o=>o},Platform:{select:o=>o.default},View:'View',Text:'Text',Pressable:'Pressable'};
    if(n==='expo-router')return {router:{replace(){}},useLocalSearchParams:()=>params,usePathname:()=>`/(crew)/${file}`,useFocusEffect:()=>{}};
-   if(n==='@tanstack/react-query')return {useQueryClient:()=>({resetQueries(){}}),useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:false,refetch(){}};}};
-   if(n.endsWith('/store/auth'))return {useAuthStore:s=>s(state)};
+   if(n==='@tanstack/react-query')return {useQueryClient:()=>options.client??({resetQueries(){},setQueryData(){}}),useInfiniteQuery:c=>{configs.push(c);return {data:{pages:[]},isPending:false,refetch(){}};},useQuery:c=>{configs.push(c);return {data:options.noTask?undefined:task,isPending:!!options.noTask,isError:!!options.readError,error:options.readError,refetch(){}};}};
+   if(n.endsWith('/store/auth'))return {useAuthStore:Object.assign(s=>s(state),{getState:()=>state})};
    if(n.endsWith('/offline/upload-queue'))return {currentQueueIdentity:()=>({actor,role:'REPAIR_CREW',partition:'test-crew',scope:'test-session',environment:'http://fixture/api/v1'})};
    if(n.endsWith('/api/authApi'))return {passwordSessionIdentity:t=>t?JSON.stringify([state.user.id,'sid-'+state.user.id]):null};
-   if(n.endsWith('/api/crewApi'))return {...api,getFieldInspectionTaskDetailReal:async()=>({data:options.wireDetail??detail,etag:'"'+detail.version+'"'})};
+   if(n.endsWith('/api/crewApi'))return {...api,getFieldInspectionTaskDetailReal:async()=>options.read?options.read({data:detail,etag:'"'+detail.version+'"'}):({data:options.wireDetail??detail,etag:'"'+detail.version+'"'})};
    if(n==='./tasks')return load('app/(crew)/tasks.tsx');
    if(n.endsWith('/design-tokens'))return load('src/design-tokens.ts');
    if(n.endsWith('/types/enums'))return load('src/types/enums.ts');
@@ -68,7 +68,7 @@ function screenHarness(file,options={}){
  }
  const route=load('app/(crew)/'+file+'.tsx'),shared=load('app/(crew)/tasks.tsx');
  const tree=route.default();
- function guard(operational=true){return shared.CrewTaskBoundary({operational,children:()=>{mounted++;return 'PRIVATE';}});}
+ function guard(operational=true,localDraft=false){return shared.CrewTaskBoundary({operational,localDraft,children:()=>{mounted++;return 'PRIVATE';}});}
  return {tree,state,params,configs,effects,guard,shared,get mounted(){return mounted;}};
 }
 for(const file of ['report-defect','viewfinder','progress','complete','field-review','repair-correction']){
@@ -153,4 +153,38 @@ test('Crew inbox does not project a foreign assignment from API037',async()=>{
   : {data:{...wire(),assignedToUserId:project,mode:'NORMAL'},headers:{etag:'"'+wire().version+'"'}});
  const opts=h.api.crewInboxOptions('scope',{actorId:actor,assertCurrent(){}});
  await assert.rejects(opts.queryFn({pageParam:null,signal:new AbortController().signal}),/crew_identity_invalid/);
+});
+
+test('task cache cannot resurrect a denied snapshot after a later transport failure',async()=>{
+ const {QueryObserver}=require('@tanstack/react-query'),client=new QueryClient();let failure;
+ const h=screenHarness('viewfinder',{client,read:async response=>{if(failure)throw failure;return response;}});
+ h.guard(false,true);const config=h.configs.at(-1),observer=new QueryObserver(client,config),off=observer.subscribe(()=>{});
+ await observer.refetch();assert.ok(client.getQueryData(config.queryKey));
+ failure={response:{status:403}};await observer.refetch();assert.equal(client.getQueryData(config.queryKey),null);
+ failure={isAxiosError:true,code:'ERR_NETWORK'};await observer.refetch();assert.equal(client.getQueryData(config.queryKey),null);
+ off();client.clear();
+});
+test('task query discards a detail response when the login changes during the read',async()=>{
+ let finish;const h=screenHarness('viewfinder',{read:response=>new Promise(resolve=>{finish=()=>resolve(response);})});
+ h.guard(false,true);const pending=h.configs.at(-1).queryFn({signal:new AbortController().signal});
+ h.state.status='ANONYMOUS';finish();await assert.rejects(pending,/crew_task_session_changed/);
+});
+
+test('offline local camera can use a previously validated task, but other routes cannot',()=>{
+ const error={isAxiosError:true,code:'ERR_NETWORK'};
+ const h=screenHarness('viewfinder',{readError:error});
+ h.guard(false,true);assert.equal(h.mounted,1);
+ h.guard(false);assert.equal(h.mounted,1);
+ const absent=screenHarness('viewfinder',{readError:error,noTask:true});absent.guard(false,true);assert.equal(absent.mounted,0);
+ for(const status of [400,401,403,404,409,412,500]){const denied=screenHarness('viewfinder',{readError:{response:{status}}});denied.guard(false,true);assert.equal(denied.mounted,0);}
+ const invalid=screenHarness('viewfinder',{readError:Error('crew_version_or_identity_invalid')});invalid.guard(false,true);assert.equal(invalid.mounted,0);
+ h.state.token=null;h.guard(false,true);assert.equal(h.mounted,1);
+});
+test('task query survives route unmount and refetch error only for local work, with no authority after denied read',async()=>{
+ const {QueryObserver}=require('@tanstack/react-query');
+ const h=screenHarness('viewfinder');h.guard(false,true);const config=h.configs.at(-1);
+ const client=new QueryClient(),observer=new QueryObserver(client,config),off=observer.subscribe(()=>{});
+ await observer.refetch();off();await new Promise(r=>setTimeout(r,10));
+ assert.ok(client.getQueryData(config.queryKey),'detail must remain available across camera navigation');
+ client.clear();
 });
