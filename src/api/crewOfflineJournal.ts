@@ -29,7 +29,8 @@ function immutable(i:OfflineIntent):OfflineIntent {
   return JSON.parse(JSON.stringify({id:i.id,identity:i.identity,projectId:i.projectId,path:i.path,key:i.key,body:i.body,proof:i.proof}));
 }
 const immutableBytes=(i:OfflineIntent)=>JSON.stringify(immutable(i));
-function decode(payload:string):OfflineJournalRecord {
+/** Shared strict reader for read-only recovery; does not grant dispatch authority. */
+export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord {
   const r=JSON.parse(payload) as OfflineJournalRecord;immutable(r);
   if(r.schema!==1||!['PREPARED','IN_FLIGHT','UNKNOWN_OUTCOME','RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase))throw Error('offline_journal_invalid');
   if(['RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase)&&r.receipt===undefined)throw Error('offline_receipt_missing');
@@ -41,6 +42,7 @@ function decode(payload:string):OfflineJournalRecord {
     safe(r.verifiedItems);
   }return r;
 }
+const decode=decodeOfflineJournalRecord;
 function partition(i:QueueIdentity):string {return 'c10bc:'+JSON.stringify([i.environment,i.actor,i.role])+':';}
 /** Additive use of existing table. Never REPLACE, migrate, delete or adopt historical queues. */
 export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLiteDatabase,current= currentQueueIdentity) {

@@ -10,7 +10,15 @@ function harness(){
  const disk=new DatabaseSync(':memory:');disk.exec('CREATE TABLE local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,updated_at TEXT)');let during=()=>{};
  const mod={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/offline/localDraftRead.ts','utf8'),{compilerOptions:{module:1}}).outputText,
- {module:mod,exports:mod.exports,require:()=>({openDatabase:()=>({getAllAsync:async(sql,...args)=>{during();return disk.prepare(sql).all(...args);}}),initDatabase:async()=>{}}),Date});
+ {module:mod,exports:mod.exports,require:name=>{
+  if(name==='../api/crewOfflineJournal'){
+   const journal={exports:{}};
+   vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewOfflineJournal.ts','utf8'),{compilerOptions:{module:1}}).outputText,
+    {module:journal,exports:journal.exports,require:()=>({}),Date});
+   return journal.exports;
+  }
+  return {openDatabase:()=>({getAllAsync:async(sql,...args)=>{during();return disk.prepare(sql).all(...args);}}),initDatabase:async()=>{}};
+ },Date});
  return {disk,load:mod.exports.loadLocalDraftSummaries,during:fn=>during=fn,
  put:(id,kind,d)=>disk.prepare('INSERT OR REPLACE INTO local_draft VALUES(?,?,?,?)').run(id,kind,JSON.stringify(d),'2026-11-24T00:00:00Z')};
 }
@@ -23,6 +31,34 @@ test('cold Crew reads only exact-owned field drafts and exposes no dispatch payl
  assert.equal(rows[0].reference,'task');assert.equal(rows[0].photoCount,1);assert.equal(rows[0].measurementCount,1);assert.equal(rows[0].hasCommand,true);
  assert.equal(rows[0].command,undefined);assert.equal(rows[0].scope,undefined);assert.equal(rows[0].uri,undefined);
  assert.deepEqual(h.disk.prepare('SELECT * FROM local_draft ORDER BY id').all(),before);
+});
+
+test('cold Crew inventories signed journals with exact ownership, without leaking or replaying commands',async()=>{
+ const h=harness(),actor='11111111-1111-4111-8111-111111111111';
+ const owner={...identity,actor,scope:JSON.stringify([actor,'sid'])};
+ const i={...owner,partition:'h01:'+JSON.stringify([owner.environment,actor,owner.role])};
+ const record={schema:1,id:'22222222-2222-4222-8222-222222222222',identity:i,
+  projectId:'33333333-3333-4333-8333-333333333333',path:'/projects/fixture/offline/sync',
+  key:'private-command-key',body:JSON.stringify({privateEvidence:'not-for-view'}),proof:{kind:'signed-batch'},phase:'UNKNOWN_OUTCOME'};
+ const key=d=>'c10bc:'+JSON.stringify([d.identity.environment,d.identity.actor,d.identity.role])+':'+d.id;
+ h.put(key(record),'C10BC_IMMUTABLE_COMMAND_V1',record);
+ for(const [n,change] of [{actor:'44444444-4444-4444-8444-444444444444'},{environment:'https://other.test'},{scope:'old'},{role:'DRONE_OPERATOR'}].entries()){
+  const d={...record,id:`55555555-5555-4555-8555-55555555555${n}`,identity:{...i,...change}};
+  h.put(key(d),'C10BC_IMMUTABLE_COMMAND_V1',d);
+ }
+ for(const [n,change] of [{phase:'ACKED'},{phase:'RECONCILED'},{schema:2},{body:'not-json'},{body:JSON.stringify({password:'forbidden'})}].entries()){
+  const d={...record,id:`66666666-6666-4666-8666-66666666666${n}`,...change};h.put(key(d),'C10BC_IMMUTABLE_COMMAND_V1',d);
+ }
+ h.put('forged','C10BC_IMMUTABLE_COMMAND_V1',record);
+ // Legacy online commands have no environment provenance: preserve, never adopt.
+ h.put('t05a-field:'+actor+':project:task','T05A_FIELD_COMMAND',{actorId:actor,scope:owner.scope,projectId:'project',taskId:'task',phase:'pending'});
+ const before=h.disk.prepare('SELECT * FROM local_draft ORDER BY id').all();
+ const rows=await h.load(owner,()=>true);assert.equal(rows.length,1);
+ assert.equal(rows[0].reference,record.id);assert.equal(rows[0].referenceLabel,'Lệnh đồng bộ');
+ assert.equal(rows[0].hasCommand,true);assert.equal(rows[0].photoCount,0);
+ const exposed=JSON.stringify(rows);for(const secret of ['private-command-key','privateEvidence','UNKNOWN_OUTCOME','/projects/fixture','proof','receipt'])assert.ok(!exposed.includes(secret));
+ assert.deepEqual(h.disk.prepare('SELECT * FROM local_draft ORDER BY id').all(),before);
+ assert.equal((await h.load({...owner,role:'REPORTER'},()=>true)).length,0);
 });
 test('cold Reporter reads its pending and archived command keys but never guests or a different session',async()=>{
  const h=harness();h.put(reporterKey(report),'reporter_pending_v1',report);

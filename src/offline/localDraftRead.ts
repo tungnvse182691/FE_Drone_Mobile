@@ -1,4 +1,5 @@
 import { initDatabase, openDatabase } from './database';
+import { decodeOfflineJournalRecord } from '../api/crewOfflineJournal';
 
 /** SecureStore continuity permits inspection only, never a network request. */
 export interface LocalDraftReadIdentity {
@@ -29,7 +30,7 @@ export async function loadLocalDraftSummaries(identity: LocalDraftReadIdentity, 
   check();
   const db = openDatabase(); await initDatabase(db); check();
   const kinds = identity.role === 'REPAIR_CREW'
-    ? ['T05B_FIELD', 'T06A_REPAIR_COMMAND', 'H01_RECEIVING_ACK'] : ['reporter_pending_v1'];
+    ? ['T05B_FIELD', 'T06A_REPAIR_COMMAND', 'H01_RECEIVING_ACK', 'C10BC_IMMUTABLE_COMMAND_V1'] : ['reporter_pending_v1'];
   const rows = await db.getAllAsync<{id: string; kind: string; payload: string; updated_at: string}>(
     `SELECT id, kind, payload, updated_at FROM local_draft WHERE kind IN (${kinds.map(() => '?').join(',')}) ORDER BY updated_at DESC, id`,
     ...kinds);
@@ -40,6 +41,16 @@ export async function loadLocalDraftSummaries(identity: LocalDraftReadIdentity, 
       const d = JSON.parse(row.payload);
       if (!d || !Number.isFinite(Date.parse(row.updated_at))) continue;
       if (identity.role === 'REPAIR_CREW') {
+        if (row.kind === 'C10BC_IMMUTABLE_COMMAND_V1') {
+          const command = decodeOfflineJournalRecord(row.payload);
+          const i = command.identity;
+          if (i.actor !== identity.actor || i.environment !== identity.environment || i.scope !== identity.scope ||
+              i.role !== identity.role || i.partition !== 'h01:' + JSON.stringify([i.environment,i.actor,i.role]) ||
+              row.id !== 'c10bc:' + JSON.stringify([i.environment,i.actor,i.role]) + ':' + command.id) continue;
+          result.push({key:row.id, reference:command.id, referenceLabel:'Lệnh đồng bộ', updatedAt:row.updated_at,
+            photoCount:0, measurementCount:0, description:'Nhật ký đồng bộ đã lưu', hasCommand:true});
+          continue;
+        }
         if (row.kind !== 'T05B_FIELD') {
           // Inventory only. Never treat a local phase/overlay as a durable server receipt.
           const i = d.identity;

@@ -101,6 +101,13 @@ or three-role exactly-once scenario was tested.
 
 ## Remaining evidence required
 
+2026-11-25 recovery inventory update: signed C10BC journal summaries are now
+included with strict ownership and shared decoder validation (LOGIC_TESTED).
+2106/2106 regression tests and typecheck passed. New embedded APK preserved the
+Crew field draft through radio-off app restart on Android. This does not prove
+signed dispatch or three-role exactly-once behavior. See
+`OFFLINE-JOURNAL-RECOVERY-20261125-review.md` for exact evidence and limits.
+
 1. Hardware-backed Android device/provider and build acceptance without policy bypass.
 2. Remaining storage crash points and preservation of original plaintext DB.
 3. Runtime encrypted file access/migration preserving pending references.
