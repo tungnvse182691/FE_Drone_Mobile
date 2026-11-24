@@ -33,10 +33,12 @@ export default function DroneRequestsScreen() {
   const [search, setSearch] = useState(''), [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => { const timer = setTimeout(() => setDebouncedSearch(search.trim()), 350); return () => clearTimeout(timer); }, [search]);
   const pages = useOperatorTaskPages({ statusGroup: STATUS_GROUP[activeTab], search: debouncedSearch });
-  const { loading, error } = pages;
+  const { error } = pages;
+  const loading = !pages.ready || pages.loading;
   const tasks = search.trim() === debouncedSearch ? pages.tasks : [];
   const fetchTasks = pages.refresh;
-  if (!pages.ready) return <SafeAreaScreen><Text>Đang tải dữ liệu của phiên hiện tại…</Text></SafeAreaScreen>;
+  // A query change briefly makes pages unready before its read effect runs.
+  // Keep the controls mounted so the focused native input and keyboard survive.
 
   const filters: { key: TabKey; label: string }[] = [
     { key: 'pending', label: 'Chờ nhận' },
