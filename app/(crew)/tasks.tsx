@@ -173,7 +173,10 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
       } catch (error) {
         // Revoke a previous snapshot after any definitive HTTP/contract denial.
         // A later network failure must not resurrect it.
-        if (!crewLocalReadUnavailable(error)) client.setQueryData(queryKey, null);
+        // TanStack cancels the read when its route unmounts. Cancellation says
+        // nothing about assignment validity and must not erase verified data.
+        const cancelled = signal?.aborted && (error as { code?: string } | null)?.code === 'ERR_CANCELED';
+        if (!cancelled && !crewLocalReadUnavailable(error)) client.setQueryData(queryKey, null);
         throw error;
       }
     },

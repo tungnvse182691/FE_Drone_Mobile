@@ -188,3 +188,18 @@ test('task query survives route unmount and refetch error only for local work, w
  assert.ok(client.getQueryData(config.queryKey),'detail must remain available across camera navigation');
  client.clear();
 });
+
+test('camera navigation cancels refetch without deleting previously verified detail',async()=>{
+ const {QueryObserver}=require('@tanstack/react-query'),client=new QueryClient();
+ let rejectRead, pending=false;
+ const h=screenHarness('viewfinder',{client,read:async response=>pending?new Promise((_,reject)=>{rejectRead=reject;}):response});
+ h.guard(false,true);const config=h.configs.at(-1);
+ const observer=new QueryObserver(client,config),off=observer.subscribe(()=>{});
+ try {
+  await observer.refetch();const verified=client.getQueryData(config.queryKey);assert.ok(verified);
+  pending=true;const next=observer.refetch();await Promise.resolve();
+  off();rejectRead({isAxiosError:true,code:'ERR_CANCELED'});
+  await next;await new Promise(resolve=>setTimeout(resolve,0));
+  assert.deepEqual(client.getQueryData(config.queryKey),verified,'route cancellation must retain the verified snapshot');
+ }finally{off();client.clear();}
+});
