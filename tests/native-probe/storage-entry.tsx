@@ -7,12 +7,13 @@ import { registerRootComponent } from 'expo';
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
 import { Directory, File, Paths } from 'expo-file-system';
-import { getRandomBytes, randomUUID } from 'expo-crypto';
+import { CryptoDigestAlgorithm, digest, getRandomBytes, randomUUID } from 'expo-crypto';
 import { openProtectedDatabase, type DatabaseProtectionPorts } from '../../src/offline/encryptedDatabase';
 import { offlineNative } from '../../modules/roadguard-offline-crypto';
 import { base64ToBytes } from '../../src/utils/base64';
 import { AppFontGate } from '../../src/components/AppFontGate';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
+import { openMediaVaultAccess, type MediaVaultIdentity, type MediaVaultReference } from '../../src/offline/mediaVaultAccess';
 
 function assert(value: unknown, category: string): asserts value { if (!value) throw Error(category); }
 const base = SQLite.defaultDatabaseDirectory;
@@ -104,7 +105,42 @@ async function mediaBridge() {
   }
   const original = await source.bytes();
   assert(original.length===expected.length && original.every((b,i)=>b===expected[i]),'media_original_changed');
-  return restart ? 'three-role media bridge restart PASS' : 'three-role media bridge seal/read PASS';
+  await mediaAccess(source.uri,expected);
+  return (restart ? 'three-role media bridge restart PASS' : 'three-role media bridge seal/read PASS') + '; guarded media access PASS';
+}
+async function mediaAccess(sourceUri: string, expected: Uint8Array) {
+  assert(offlineNative,'media_native_missing');
+  const native = offlineNative;
+  const hash = async (bytes: Uint8Array) => Array.from(new Uint8Array(await digest(CryptoDigestAlgorithm.SHA256,Uint8Array.from(bytes).buffer)),b=>b.toString(16).padStart(2,'0')).join('');
+  const checksumSha256 = await hash(expected);
+  for (const role of ['REPAIR_CREW','DRONE_OPERATOR','REPORTER'] as const) {
+    let live: MediaVaultIdentity = {actor:'96969696-9696-4696-8696-969696969696',environment:'http://qa.invalid/api/v1',role,session:'isolated-session-1'};
+    const first = openMediaVaultAccess(live,()=>live,{native,uuid:randomUUID,hash});
+    const key = 'rg.qa.media.access.20261125.' + role;
+    const saved = SecureStore.getItem(key);
+    const ref: MediaVaultReference = saved ? JSON.parse(saved) : await first.seal(sourceUri,{sizeBytes:expected.length,checksumSha256});
+    if (!saved) SecureStore.setItem(key,JSON.stringify(ref),{keychainAccessible:SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY});
+    const bytes = await first.readAll(ref,1024*1024);
+    assert(bytes.length===expected.length && bytes.every((b,i)=>b===expected[i]),'media_access_bytes_changed');bytes.fill(0);
+    live = {...live,session:'isolated-session-2'};
+    let denied = false;
+    try { await first.readRange(ref,0,10); } catch { denied = true; }
+    assert(denied,'media_access_old_session_accepted');
+    const reopened = openMediaVaultAccess(live,()=>live,{native,uuid:randomUUID,hash});
+    const range = await reopened.readRange(ref,65530,65550);
+    assert(range.every((b,i)=>b===expected[65530+i]),'media_access_reopen_changed');range.fill(0);
+    const late = openMediaVaultAccess(live,()=>live,{uuid:randomUUID,hash,native:{
+      prepareMediaKey:binding=>native.prepareMediaKey(binding),
+      sealMedia:(binding,id,uri)=>native.sealMedia(binding,id,uri),
+      readMediaRange:async(binding,id,offset,length)=>{
+        const value = await native.readMediaRange(binding,id,offset,length);
+        live = {...live,session:'isolated-session-3'};return value;
+      },
+    }});
+    denied = false;
+    try { await late.readRange(ref,0,10); } catch { denied = true; }
+    assert(denied,'media_access_late_session_accepted');
+  }
 }
 function Probe() {
   const [result,setResult] = useState('Running isolated storage QA');
@@ -144,7 +180,9 @@ function Probe() {
         <Text style={styles.disclosureText}>{expanded ? 'Ẩn chi tiết' : 'Xem chi tiết kỹ thuật'}</Text>
         <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} accessible={false} />
       </Pressable>
-      {expanded && <Text selectable style={styles.detail} accessibilityLabel="Storage QA result">{result}</Text>}
+      {expanded && <Text selectable style={styles.detail} accessibilityLabel="Kết quả kiểm tra lưu trữ">{passed
+        ? `Đạt: ${result.startsWith('PASS: restart') ? 'mở lại cơ sở dữ liệu' : 'chuyển đổi cơ sở dữ liệu'}; giao dịch có khóa; hoàn tác; dữ liệu nhị phân; khôi phục khi gián đoạn; từ chối khóa sai.\n\nẢnh mã hóa: đọc ở cả ba vai trò, mở lại sau đổi phiên hợp lệ và chặn phiên đã thay đổi.`
+        : status === 'running' ? 'Đang chạy phép kiểm tra riêng trên thiết bị.' : 'Phép kiểm tra chưa đạt. Xem nhật ký kỹ thuật để xác định nguyên nhân.'}</Text>}
     </ScrollView>
   </SafeAreaView>;
 }
