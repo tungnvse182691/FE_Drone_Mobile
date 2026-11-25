@@ -35,7 +35,7 @@ export function LocalSavedDrafts({ role, onClose }: {role: LocalDraftReadIdentit
         <Text style={styles.caption}>Chỉ xem trên thiết bị</Text>
       </View>
       <Text accessibilityRole="header" style={styles.title}>Bản nháp đã lưu</Text>
-      <Text style={styles.body}>Kết nối lại để kiểm tra và tiếp tục gửi.</Text>
+      <Text style={styles.body}>Dữ liệu trên máy của phiên này. Khôi phục phiên đăng nhập để tiếp tục xử lý.</Text>
     </View>
     <FlatList data={rows} keyExtractor={row => row.key} contentContainerStyle={styles.content}
       ListEmptyComponent={<View style={styles.empty} accessibilityLiveRegion="polite">
@@ -46,18 +46,18 @@ export function LocalSavedDrafts({ role, onClose }: {role: LocalDraftReadIdentit
         <Text style={styles.stateTitle}>{loading ? 'Đang đọc bản nháp' : error
           ? 'Chưa đọc được bản lưu' : 'Chưa tìm thấy bản nháp của phiên này'}</Text>
         <Text style={styles.body}>{loading ? 'Đang kiểm tra dữ liệu trên thiết bị.' : error
-          ? 'Dữ liệu vẫn được giữ trên máy. Quay lại kết nối để thử lại.'
+          ? 'Dữ liệu vẫn được giữ trên máy. Quay lại màn khôi phục phiên để thử lại.'
           : 'Dữ liệu phiên cũ vẫn được giữ trên máy. Kết nối lại để kiểm tra.'}</Text>
       </View>}
       ListFooterComponent={<View style={styles.footer}>
-        <Text style={styles.caption}>Cần xác thực phiên trước khi gửi dữ liệu.</Text>
-        <Button variant="secondary" title="Quay lại kết nối" onPress={onClose}
+        <Button variant="secondary" title="Quay lại khôi phục phiên" onPress={onClose}
           icon={<MaterialIcons name="arrow-back" size={20} color={colors.secondary} importantForAccessibility="no" />} />
       </View>}
       renderItem={({item}) => <View style={styles.card}>
-        <Text style={styles.reference}>{item.referenceLabel ?? (role === 'REPAIR_CREW' ? 'Nhiệm vụ' : 'Nháp phản ánh')} {item.reference}</Text>
+        <Text style={styles.reference}>{item.referenceLabel ?? (item.hasCommand ? 'Lệnh đã lưu' : role === 'REPAIR_CREW' ? 'Bản nháp nhiệm vụ' : 'Bản nháp phản ánh')}</Text>
+        <Text style={styles.caption}>Mã tham chiếu: {item.reference.slice(0, 8)}</Text>
         {item.description ? <Text style={styles.body}>{item.description}</Text> : null}
-        <Text style={styles.body}>{item.photoCount} ảnh{role === 'REPAIR_CREW' ? ` · ${item.measurementCount} số đo` : ''}</Text>
+        {item.photoCount>0||item.measurementCount>0?<Text style={styles.body}>{item.photoCount>0?`${item.photoCount} ảnh`:''}{item.photoCount>0&&role==='REPAIR_CREW'&&item.measurementCount>0?' · ':''}{role==='REPAIR_CREW'&&item.measurementCount>0?`${item.measurementCount} số đo`:''}</Text>:null}
         <Text style={styles.caption}>{item.hasCommand ? 'Có lệnh đã lưu · Cần đối soát khi kết nối lại' : 'Bản nháp cục bộ · Chưa gửi'}</Text>
         <Text style={styles.caption}>Đã lưu {new Date(item.updatedAt).toLocaleString('vi-VN')}</Text>
       </View>}/>
@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border},
   stateIcon: {alignSelf: 'flex-start', marginBottom: spacing.sm},
   stateTitle: {...typography.titleMd, color: colors.neutral},
-  card: {padding: spacing.md, gap: spacing.sm, borderWidth: 1, borderColor: colors.border, borderRadius: 12},
+  card: {padding: spacing.md, gap: spacing.sm, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg},
   footer: {gap: spacing.md, paddingTop: spacing.sm},
 });

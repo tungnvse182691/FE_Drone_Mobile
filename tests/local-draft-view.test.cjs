@@ -19,11 +19,11 @@ function text(s){
 }
 test('cold draft view displays saved counts and offers no submit or route action',async()=>{
  const f=fixture();f.s.render();await f.s.flush();
- assert.ok(text(f.s).includes('saved-task'));assert.match(text(f.s),/2\s+ảnh/);
+ assert.match(text(f.s),/Mã tham chiếu:\s+saved-ta/);assert.ok(!text(f.s).includes('saved-task'));assert.match(text(f.s),/2\s+ảnh/);
  assert.ok(text(f.s).includes('Cần đối soát khi kết nối lại'));
  const footer=f.s.nodes().find(n=>n.type==='FlatList').props.ListFooterComponent;
  const button=footer.props.children.flat().find(n=>n?.type==='Button');
- assert.equal(button.props.title,'Quay lại kết nối');
+ assert.equal(button.props.title,'Quay lại khôi phục phiên');
  button.props.onPress();assert.equal(f.closed(),1);
  f.change();await f.s.flush();assert.equal(f.closed(),2);assert.ok(!text(f.s).includes('saved-task'));f.s.unmount();
 });

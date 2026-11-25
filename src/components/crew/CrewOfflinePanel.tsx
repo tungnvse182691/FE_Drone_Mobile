@@ -19,6 +19,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
   const [probe,setProbe]=useState<Awaited<ReturnType<typeof inspectOfflineDevice>>|null>(null);
   const [records,setRecords]=useState<OfflineJournalRecord[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showDiagnostics,setShowDiagnostics]=useState(false);
+  const [showHistory,setShowHistory]=useState(false);
   const sequence=useRef(0),running=useRef(false);
   useEffect(()=>()=>{sequence.current++;},[]);
   const refresh=useCallback(async()=>{
@@ -68,14 +69,21 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
     }
   };
-  const pending=records.filter(r=>['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
+  const waiting=records.filter(r=>r.phase==='PREPARED').length;
+  const reconciling=records.filter(r=>['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
   const confirmed=records.filter(r=>r.phase==='RECONCILED').length;
+  const attention=records.filter(r=>['CONFLICT','REJECTED'].includes(r.phase)).length;
+  const activeRecords=records.filter(r=>r.phase!=='RECONCILED');
+  const historyRecords=records.filter(r=>r.phase==='RECONCILED');
   return <Card style={styles.panel}>
     <View style={styles.heading}><Text style={[typography.titleMd,{color:'#192D40',fontSize:16,lineHeight:24}]}>Hàng đợi trên thiết bị</Text></View>
-    <View style={styles.stateRow}><View><Text style={styles.value}>{records.length}</Text><Text style={styles.label}>Đã lưu</Text></View><View><Text style={styles.value}>{pending}</Text><Text style={styles.label}>Chờ đối soát</Text></View><View><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View></View>
+    <Text style={styles.description}>{records.length} thao tác được lưu trong nhật ký thiết bị.</Text>
+    <View style={styles.stateRow}><View style={styles.stateCell}><Text style={styles.value}>{waiting}</Text><Text style={styles.label}>Chờ gửi</Text></View><View style={styles.stateCell}><Text style={styles.value}>{reconciling}</Text><Text style={styles.label}>Cần đối soát</Text></View><View style={styles.stateCell}><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View><View style={styles.stateCell}><Text style={styles.value}>{attention}</Text><Text style={styles.label}>Cần xử lý</Text></View></View>
     <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
     {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
-    {records.length===0?<Text style={styles.description}>Chưa có lệnh cần đối soát.</Text>:records.map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
+    {activeRecords.length===0?<Text style={styles.description}>Không có lệnh đang chờ gửi hoặc đối soát.</Text>:null}
+    {historyRecords.length>0?<Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Lịch sử đã xác nhận ({historyRecords.length})</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>:null}
+    {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
       {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
       {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='signed-field-batch'&&['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
       {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
@@ -89,7 +97,8 @@ const styles = StyleSheet.create({
   panel: { borderWidth: 1, borderColor: '#DCE2E7', borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
   description: { ...typography.caption, color: colors.secondary },
   heading: { flexDirection:'row', alignItems:'center', gap: spacing.sm },
-  stateRow: { flexDirection:'row', justifyContent:'space-around', borderTopWidth:1, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.md },
+  stateRow: { flexDirection:'row', flexWrap:'wrap', gap:spacing.sm },
+  stateCell: { flexBasis:'47%', flexGrow:1, backgroundColor:colors.surfaceAlt, borderRadius:radius.lg, padding:spacing.sm },
   value: { ...typography.titleMd, fontSize:28, lineHeight:36, fontVariant:['tabular-nums'], color: '#192D40', textAlign:'center' },
   label: { ...typography.caption, color: colors.secondary, textAlign:'center' },
   record: { gap: spacing.xs, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },

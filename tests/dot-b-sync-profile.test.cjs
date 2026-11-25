@@ -28,7 +28,9 @@ test('Crew sync reads durable commands even when native inspection is unavailabl
  let reads=0;const identity={actor:'A',scope:'S',environment:'E'};
  const records=[{id:'review',phase:'RECONCILED',proof:{kind:'review-request'}},{id:'safety',phase:'RECEIVED',proof:{kind:'safety',operation:'check'}}];
  const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{throw Error('native unavailable');}},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return records;}})},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
- s.render();await s.flush();assert.equal(reads,1);assert.match(text(s),/Yêu cầu xem xét lại/);assert.match(text(s),/An toàn hiện trường/);assert.doesNotMatch(text(s),/native unavailable|Thao tác thiết bị/);assert.ok(!s.nodes().some(n=>n.props?.title==='Gửi dữ liệu đã ký'));s.unmount();
+ s.render();await s.flush();assert.equal(reads,1);assert.doesNotMatch(text(s),/Yêu cầu xem xét lại/);assert.match(text(s),/An toàn hiện trường/);
+ s.nodes().find(n=>n.props?.accessibilityLabel==='Lịch sử đã xác nhận').props.onPress();s.render();
+ assert.match(text(s),/Yêu cầu xem xét lại/);assert.doesNotMatch(text(s),/native unavailable|Thao tác thiết bị/);assert.ok(!s.nodes().some(n=>n.props?.title==='Gửi dữ liệu đã ký'));s.unmount();
 });
 
 
