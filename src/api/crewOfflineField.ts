@@ -14,6 +14,8 @@ import { uuidv4 } from '../utils/uuid';
 export async function readOfflineFieldTask(identity:QueueIdentity,projectId:string,taskId:string) {
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const j=await openOfflineJournal(identity),rows=await j.list();crewReadGuard(identity);
+  if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&
+    (r.phase!=='RECONCILED'||r.identity.scope!==identity.scope||r.identity.partition!==identity.partition)))throw Error('offline_snapshot_reconciliation_required');
   const registrations=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='enrollment');
   if(registrations.length!==1)throw Error('offline_registration_reconciliation_required');
   const registrationId=(registrations[0].receipt as {id?:string})?.id;
@@ -22,8 +24,8 @@ export async function readOfflineFieldTask(identity:QueueIdentity,projectId:stri
   if(!probe.deviceId)throw Error('BLOCKED_NATIVE');
   const source=await readLocalOfflineSources(identity,projectId,registrationId,probe.deviceId);crewReadGuard(identity);
   const snapshots=source.snapshots.filter(s=>s.taskId===taskId);
-  if(snapshots.length!==1)throw Error('offline_verified_snapshot_not_downloaded');
-  const snapshot=snapshots[0],facts=snapshot.snapshot as OfflineRecord;
+  if(!snapshots.length)throw Error('offline_verified_snapshot_not_downloaded');
+  const snapshot=snapshots.at(-1)!,facts=snapshot.snapshot as OfflineRecord;
   // Do not interpret a repair snapshot as an independent FIELD capability.
   if(facts.repair!=null)throw Error('offline_field_repair_source_not_supported');
   return {snapshot,facts,registrationId,deviceId:probe.deviceId};

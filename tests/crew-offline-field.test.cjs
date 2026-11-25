@@ -21,6 +21,7 @@ test('snapshot screen only prepares after explicit tap and prevents duplicate ta
   '../../offline/upload-queue':{currentQueueIdentity:()=>h.identity,sameQueueIdentity:()=>true},
   '../../api/crewOfflineField':{readOfflineFieldTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldStart:async()=>{prepared++;return wait.promise;}},
   '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})}
+  ,'../../api/crewOfflinePreparation':{}
  }});ui.render();await ui.flush();assert.equal(prepared,0);
  const first=ui.press('Nhận và bắt đầu offline');ui.press('Nhận và bắt đầu offline');assert.equal(prepared,1);
  wait.resolve({phase:'PREPARED'});await first;await ui.flush();assert.ok(JSON.stringify(ui.nodes()).includes('Chưa gửi tới máy chủ'));assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Nhận và bắt đầu offline'));ui.unmount();

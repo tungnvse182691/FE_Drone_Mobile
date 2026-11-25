@@ -95,3 +95,24 @@ test('online FIELD journal cannot bypass an offline intent in the shared SQLite 
  await assert.rejects(h.m.writeOnlineFieldJournal(h.db,{...command,scope:'foreign'}),/session_changed/);
  h.raw.close();
 });
+
+test('snapshot refresh appends a verified version lineage without rewriting historical bytes',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
+ let old=await j.prepare({...base,body:JSON.stringify({taskId:task,deviceRegistrationId:randomUUID()}),proof:{kind:'snapshot',taskVersion:'v1'}});
+ old=await j.transition(old,'IN_FLIGHT');old=await j.transition(old,'RECEIVED',{id:randomUUID()});old=await j.transition(old,'RECONCILED');
+ const before=JSON.stringify(old),next={...base,id:randomUUID(),key:randomUUID(),body:old.body,proof:{kind:'snapshot',taskVersion:'v2',previousSnapshotIntentId:old.id}};
+ const refreshed=await j.prepare(next);assert.equal(refreshed.phase,'PREPARED');assert.equal(JSON.stringify((await j.list())[0]),before);
+ await assert.rejects(j.prepare({...next,id:randomUUID(),key:randomUUID()}),/reconciliation/);
+ h.raw.close();
+});
+
+for(const mode of ['pending-snapshot','same-version','wrong-parent','pending-batch','other-session'])test('snapshot refresh refuses '+mode,async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
+ let old=await j.prepare({...base,body:JSON.stringify({taskId:task,deviceRegistrationId:randomUUID()}),proof:{kind:'snapshot',taskVersion:'v1'}});
+ if(mode!=='pending-snapshot'){old=await j.transition(old,'IN_FLIGHT');old=await j.transition(old,'RECEIVED',{id:randomUUID()});old=await j.transition(old,'RECONCILED');}
+ if(mode==='pending-batch')await j.prepare({...base,id:randomUUID(),key:randomUUID(),body:JSON.stringify({operations:[{taskId:task,snapshotId:old.receipt.id}]}),proof:{kind:'signed-field-batch'}});
+ if(mode==='other-session')h.switch();
+ const current=await h.m.openOfflineJournal(h.current(),h.db);
+ await assert.rejects(current.prepare({...base,identity:h.current(),id:randomUUID(),key:randomUUID(),body:old.body,proof:{kind:'snapshot',taskVersion:mode==='same-version'?'v1':'v2',previousSnapshotIntentId:mode==='wrong-parent'?randomUUID():old.id}}));
+ assert.equal(JSON.stringify((await current.list())[0]),JSON.stringify(old));h.raw.close();
+});

@@ -26,3 +26,12 @@ for(const change of ['session','actor','environment','project','unconfirmed','re
  await assert.rejects(h.module.readLocalOfflineSources(h.identity,h.project,h.registration,h.deviceId));
 });
 test('local source denies reads after session changes',async()=>{const h=fixture();h.switch();await assert.rejects(h.module.readLocalOfflineSources(h.identity,h.project,h.registration,h.deviceId),/session/);assert.equal(h.reads,0);});
+
+test('local snapshots retain ordered confirmed history and reject a broken predecessor',async()=>{
+ const h=fixture();h.rows[1].id='first';const newer={...h.snapshot,id:id()};
+ h.rows.push({...h.rows[1],id:'second',proof:{...h.rows[1].proof,previousSnapshotIntentId:'first'},receipt:newer});
+ const sources=await h.module.readLocalOfflineSources(h.identity,h.project,h.registration,h.deviceId);
+ assert.deepEqual(Array.from(sources.snapshots,s=>s.id),[h.snapshotId,newer.id]);
+ h.rows[2].proof.previousSnapshotIntentId='missing';
+ await assert.rejects(h.module.readLocalOfflineSources(h.identity,h.project,h.registration,h.deviceId),/lineage/);
+});

@@ -100,13 +100,28 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
         if(copy.proof.kind==='enrollment'&&records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='enrollment'))throw Error('offline_existing_intent_reconciliation_required');
         if(copy.proof.kind==='snapshot'){
           const source=JSON.parse(copy.body);
-          if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&
-            JSON.parse(r.body).taskId===source.taskId&&JSON.parse(r.body).deviceRegistrationId===source.deviceRegistrationId))throw Error('offline_existing_intent_reconciliation_required');
+          const history=records.filter(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&
+            JSON.parse(r.body).taskId===source.taskId&&JSON.parse(r.body).deviceRegistrationId===source.deviceRegistrationId);
+          const previous=history.at(-1);
+          if(previous){
+            if(history.some(r=>r.phase!=='RECONCILED'||!sameQueueIdentity(r.identity,owner))||
+              copy.proof.previousSnapshotIntentId!==previous.id||!copy.proof.taskVersion||copy.proof.taskVersion===previous.proof.taskVersion)throw Error('offline_existing_intent_reconciliation_required');
+            if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='signed-field-batch'&&r.phase!=='RECONCILED'&&
+              (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===source.taskId)))throw Error('offline_pending_batch_reconciliation_required');
+            const online=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=?',`t05a-field:${owner.actor}:${copy.projectId}:${source.taskId}`);guard();
+            if(online){const c=JSON.parse(online.payload);if(!['confirmed','rejected'].includes(c.phase)||c.readbackStatus!==200)throw Error('offline_online_command_reconciliation_required');}
+          }else if(copy.proof.previousSnapshotIntentId)throw Error('offline_snapshot_source_mismatch');
         }
         if(copy.proof.kind==='signed-field-batch'&&copy.proof.fieldStartTaskId){
           if(records.some(r=>r.projectId===copy.projectId&&r.proof.fieldStartTaskId===copy.proof.fieldStartTaskId))throw Error('offline_existing_intent_reconciliation_required');
           const online=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=?',`t05a-field:${copy.identity.actor}:${copy.projectId}:${copy.proof.fieldStartTaskId}`);guard();
           if(online){const command=JSON.parse(online.payload);if(!['confirmed','rejected'].includes(command.phase)||command.readbackStatus!==200)throw Error('offline_online_command_reconciliation_required');}
+        }
+        if(copy.proof.kind==='signed-field-batch'){
+          for(const op of JSON.parse(copy.body).operations??[]){
+            const head=records.filter(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===op.taskId).at(-1);
+            if(head&&(head.phase!=='RECONCILED'||!sameQueueIdentity(head.identity,owner)||(head.receipt as {id?:string})?.id!==op.snapshotId))throw Error('offline_current_snapshot_required');
+          }
         }
         // Serialize safety writes per measure inside the durable transaction, including older sessions.
         if(copy.proof.kind==='safety'&&records.some(r=>r.proof.kind==='safety'&&

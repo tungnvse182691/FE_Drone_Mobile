@@ -8,6 +8,7 @@ import { Button } from '../Button';
 import { colors, spacing, typography } from '../../design-tokens';
 import { currentQueueIdentity, sameQueueIdentity } from '../../offline/upload-queue';
 import { readOfflineFieldTask, prepareOfflineFieldStart } from '../../api/crewOfflineField';
+import { downloadCrewOfflineTask } from '../../api/crewOfflinePreparation';
 import { openOfflineJournal, type OfflineJournalRecord } from '../../api/crewOfflineJournal';
 
 /** Explicit snapshot screen, separate from online permission/error handling. */
@@ -38,6 +39,16 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
     }catch {if(live.current&&sameQueueIdentity(identity))setNotice('Chưa lưu được thao tác mới. Kiểm tra Đồng bộ; không tạo lại lệnh đang chờ hoặc chưa rõ kết quả.');}
     finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
   };
+  const refreshSnapshot=async()=>{
+    if(!identity||running.current||!sameQueueIdentity(identity))return;
+    running.current=true;setBusy(true);setNotice('');
+    try{
+      await downloadCrewOfflineTask(identity,projectId,taskId,true);
+      const loaded=await readOfflineFieldTask(identity,projectId,taskId);
+      if(live.current&&sameQueueIdentity(identity)){setSource(loaded);setNotice('Đã tải và đối soát bản dữ liệu mới. Lịch sử và gói ký cũ vẫn được giữ nguyên.');}
+    }catch{if(live.current&&sameQueueIdentity(identity))setNotice('Chưa tải được phiên bản mới. Kiểm tra kết nối và Đồng bộ; bản đã lưu được giữ nguyên.');}
+    finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
+  };
   if(!identity||!sameQueueIdentity(identity))return null;
   const state=String(source?.facts.status??'');
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ offline" showBack fallbackRoute="/(crew)/sync"/>}>
@@ -47,6 +58,7 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
       <Text style={styles.body}>{typeof source?.facts.instructions==='string'?source.facts.instructions:'Đang đọc dữ liệu nhiệm vụ…'}</Text>
       {source?<Text style={styles.caption}>Đã tải: {new Date(source.snapshot.downloadedAt).toLocaleString('vi-VN')}</Text>:null}
       <Text style={styles.caption}>Đây là bản đã lưu trên thiết bị. Máy chủ sẽ kiểm tra lại quyền, phân công và phiên bản khi đồng bộ.</Text>
+      {!source||record?.phase==='RECONCILED'&&['NewAssigned','Accepted'].includes(state)?<Button title={source?'Tải phiên bản sau khi bắt đầu':'Tải và đối soát dữ liệu nhiệm vụ'} variant="secondary" loading={busy} disabled={busy} onPress={()=>void refreshSnapshot()}/>:null}
     </Card>
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Thao tác hiện trường</Text>

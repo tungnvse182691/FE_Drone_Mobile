@@ -7,7 +7,7 @@ import { dispatchOfflineIntent, requireOfflineNativeAcceptance, type DeviceRegis
 /** Explicit task-scoped action. Persist each step before transport; resume the same
  * bytes/key after response loss. A session change never adopts an earlier command.
  */
-export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:string,taskId:string):Promise<SourceSnapshot> {
+export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:string,taskId:string,refresh=false):Promise<SourceSnapshot> {
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const journal=await openOfflineJournal(identity);
   const owned=(r:OfflineJournalRecord)=>r.identity.actor===identity.actor&&r.identity.role===identity.role&&
@@ -30,7 +30,12 @@ export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:s
   if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===device.id))throw Error('offline_device_revocation_requires_online_check');
   const snapshots=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&JSON.parse(r.body).deviceRegistrationId===device.id);
   if(snapshots.some(r=>!owned(r)))throw Error('offline_session_recovery_required');
-  if(snapshots.length>1)throw Error('offline_snapshot_reconciliation_required');
-  const downloaded=await finish(snapshots[0]??await prepareDeviceSnapshot(identity,projectId,taskId,device.id));
+  if(snapshots.some((r,index)=>index===0?!!r.proof.previousSnapshotIntentId:r.proof.previousSnapshotIntentId!==snapshots[index-1].id||snapshots[index-1].phase!=='RECONCILED'))throw Error('offline_snapshot_reconciliation_required');
+  const head=snapshots.at(-1);
+  // A pending refresh resumes the same intent; confirmed history is immutable.
+  const next=refresh&&head?.phase==='RECONCILED'
+    ?await prepareDeviceSnapshot(identity,projectId,taskId,device.id,head.id)
+    :head??await prepareDeviceSnapshot(identity,projectId,taskId,device.id);
+  const downloaded=await finish(next);
   return downloaded.receipt as SourceSnapshot;
 }

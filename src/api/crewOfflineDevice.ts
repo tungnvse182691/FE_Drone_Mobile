@@ -40,10 +40,14 @@ export async function readLocalOfflineSources(identity:QueueIdentity,projectId:s
   validateDevice(device,identity,registrationId,deviceId);
   if(device.projectId!==projectId||request.deviceId!==deviceId||request.signingPublicKey!==device.signingPublicKey||request.encryptionPublicKey!==device.encryptionPublicKey)throw Error('offline_device_source_mismatch');
   const snapshots:SourceSnapshot[]=[];
+  const heads=new Map<string,OfflineJournalRecord>();
   for(const r of rows){
     if(!owned(r)||r.phase!=='RECONCILED'||r.proof.kind!=='snapshot'||r.path!==base+'/snapshots')continue;
     const request=JSON.parse(r.body);
     if(request.deviceRegistrationId!==registrationId)continue;
+    const prior=heads.get(request.taskId);
+    if((prior&&r.proof.previousSnapshotIntentId!==prior.id)||(!prior&&r.proof.previousSnapshotIntentId))throw Error('offline_snapshot_lineage_invalid');
+    heads.set(request.taskId,r);
     const snapshot=r.receipt as SourceSnapshot;
     validateSnapshot(snapshot,identity,{id:snapshot?.id,taskId:request.taskId,assignmentId:String(r.proof.assignmentId),deviceRegistrationId:registrationId,taskVersion:String(r.proof.taskVersion)});
     const source=snapshot.snapshot as Record<string,unknown>;
@@ -69,7 +73,7 @@ export async function prepareDeviceEnrollment(identity:QueueIdentity,projectId:s
   return j.prepare({id:uuidv4(),identity,projectId,path:offlineProjectPath(projectId)+'/devices',key:uuidv4(),
     body:JSON.stringify({deviceId,...keys}),proof:{kind:'enrollment',taskId,assignmentId:detail.data.assignmentId,taskVersion:detail.data.version}});
 }
-export async function prepareDeviceSnapshot(identity:QueueIdentity,projectId:string,taskId:string,registrationId:string) {
+export async function prepareDeviceSnapshot(identity:QueueIdentity,projectId:string,taskId:string,registrationId:string,previousSnapshotIntentId?:string) {
   const offlineNative=crewOfflineNative(identity);
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const probe=await inspectOfflineDevice(identity);crewReadGuard(identity);
@@ -81,8 +85,16 @@ export async function prepareDeviceSnapshot(identity:QueueIdentity,projectId:str
   const t=await getFieldInspectionTaskDetailReal(projectId,taskId);crewReadGuard(identity);
   validateCrewTaskDetail(t.data,t.etag,projectId,taskId,identity.actor);
   if(!isCrewResourceId(t.data.assignmentId)||!['NewAssigned','Accepted','InProgress','SupplementRequired'].includes(t.data.status??''))throw Error('offline_assignment_not_active');
-  const j=await openOfflineJournal(identity);return j.prepare({id:uuidv4(),identity,projectId,path:offlineProjectPath(projectId)+'/snapshots',key:uuidv4(),
-    body:JSON.stringify({deviceRegistrationId:registrationId,taskId}),proof:{kind:'snapshot',assignmentId:t.data.assignmentId,taskVersion:t.data.version}});
+  const j=await openOfflineJournal(identity);
+  if(previousSnapshotIntentId){
+    const previous=(await j.list()).find(r=>r.id===previousSnapshotIntentId);crewReadGuard(identity);
+    if(previous?.phase==='RECONCILED'&&previous.identity.scope===identity.scope&&previous.identity.partition===identity.partition&&
+      previous.projectId===projectId&&previous.proof.kind==='snapshot'&&previous.proof.assignmentId===t.data.assignmentId&&previous.proof.taskVersion===t.data.version&&
+      JSON.parse(previous.body).taskId===taskId&&JSON.parse(previous.body).deviceRegistrationId===registrationId)return previous;
+  }
+  return j.prepare({id:uuidv4(),identity,projectId,path:offlineProjectPath(projectId)+'/snapshots',key:uuidv4(),
+    body:JSON.stringify({deviceRegistrationId:registrationId,taskId}),proof:{kind:'snapshot',assignmentId:t.data.assignmentId,taskVersion:t.data.version,
+      ...(previousSnapshotIntentId?{previousSnapshotIntentId}:{})}});
 }
 
 /** API118 is an explicit command, never called by logout. Existing receipts/keys are preserved. */
