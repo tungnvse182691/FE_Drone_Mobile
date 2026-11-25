@@ -10,11 +10,14 @@ import type { Coords } from '../components/ViewFinder';
 import { readPhotoGps } from '../utils/photoGps';
 import { type RepairJournalRecord } from './crewRepairDraft';
 import { readRepairHistory } from './crewRepairHistory';
+import { sealCrewPhoto, readCrewPhotoBytes } from './crewMediaVault';
+import type { MediaVaultReference } from '../offline/mediaVaultAccess';
 
 export interface FieldContext { actor: string; scope: string; environment: string; projectId: string; taskId: string }
 export interface FieldCapture {
   id: string; uri: string; purpose: 'BEFORE' | 'AFTER' | 'MEASUREMENT'; mediaType: string;
   checksum: string; size: number; capturedAt: string | null; coordinates: Coords | null;
+  vault?: MediaVaultReference;
   createKey: string; completeKey: string; parts: crew.CrewCompletedPartDto[];
   upload?: crew.CrewUploadSessionDto; complete?: { version: string; parts: crew.CrewCompletedPartDto[] };
   completed?: boolean; verified?: boolean;
@@ -47,6 +50,7 @@ export interface FieldRuntime {
   repairHistory?: () => Promise<RepairJournalRecord[]>;
   recoveryRead?: () => Promise<FieldDraft|null>;
   historicalRead?: (scope:string) => Promise<FieldDraft|null>;
+  sealPhoto?: (photo: Pick<FieldCapture,'uri'|'size'|'checksum'>) => Promise<MediaVaultReference | undefined>;
 }
 export function newFieldDraft(context: FieldContext): FieldDraft {
   return { ...context, captures: [], measurements: [], locationProof: null };
@@ -149,6 +153,7 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
       }
       await saveDraft(db,target,'T05B_FIELD',{...draft});check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
+    sealPhoto: photo => sealCrewPhoto(context,photo,()=>sameContext(context,current())),
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,
   };
 }
@@ -298,7 +303,10 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     const file = new File(directory,`${id}.${isJpeg ? 'jpg' : 'png'}`);
     captureStage='move_photo';
     await guarded(context,runtime,async () => { await temp.move(file); });
+    captureStage='seal_photo';
+    const vault = await guarded(context,runtime,async () => runtime.sealPhoto?.({uri:file.uri,size:bytes.length,checksum}));
     draft.captures.push({ id,uri:file.uri,purpose,mediaType:actualType,checksum,size:bytes.length,
+      ...(vault !== undefined ? {vault} : {}),
       capturedAt:captureTime, coordinates:camera ? coordinates : readPhotoGps(bytes),
       createKey:runtime.uuid(),completeKey:runtime.uuid(),parts:[],localOnly:true,
       postRepairCapture:purpose==='AFTER'&&camera&&postRepairCapture });
@@ -423,7 +431,8 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   if (c.purpose === 'AFTER' && response.data.purpose !== 'PostRepair') throw new Error('field_after_not_allowed');
   if(draft.repairClaim)await verifyRepairClaim(draft,response.data,runtime);
   if(c.purpose==='AFTER'&&['NORMAL','CONDITIONAL_FT'].includes(response.data.mode??'')&&!draft.repairClaim)throw Error('repair_finish_required');
-  const bytes = await guarded(draft,runtime,() => runtime.bytes(c.uri));
+  const bytes = await guarded(draft,runtime,() => c.vault !== undefined
+    ? readCrewPhotoBytes(draft,c,()=>sameContext(draft,runtime.current())) : runtime.bytes(c.uri));
   if (bytes.length !== c.size || await guarded(draft,runtime,() => runtime.hash(bytes)) !== c.checksum) throw new Error('field_checksum_mismatch');
   checkCancel();
   if (!c.upload) {
@@ -811,7 +820,7 @@ export function fieldErrorMessage(error: unknown): string {
   if (messages[message]) return messages[message];
   if (message && /[À-ỹ]/.test(message)) return message;
   const captureStage=(error as {fieldCaptureStage?:string})?.fieldCaptureStage;
-  const captureErrors:Record<string,string>={read_photo:'Không đọc được ảnh đã chọn.',write_photo:'Không ghi được ảnh vào bộ nhớ ứng dụng.',hash_photo:'Không kiểm tra được dữ liệu ảnh đã lưu.',move_photo:'Không hoàn tất được tệp ảnh trên thiết bị.',save_draft:'Không thêm được ảnh vào hồ sơ nháp.'};
+  const captureErrors:Record<string,string>={read_photo:'Không đọc được ảnh đã chọn.',write_photo:'Không ghi được ảnh vào bộ nhớ ứng dụng.',hash_photo:'Không kiểm tra được dữ liệu ảnh đã lưu.',move_photo:'Không hoàn tất được tệp ảnh trên thiết bị.',seal_photo:'Không bảo vệ được ảnh trong bộ nhớ ứng dụng.',save_draft:'Không thêm được ảnh vào hồ sơ nháp.'};
   if(captureStage&&captureErrors[captureStage])return captureErrors[captureStage]+' Ảnh và nháp cũ vẫn được giữ.';
   return 'Chưa xác nhận được thao tác. Nháp và lệnh đã lưu được giữ nguyên; tải lại hoặc đối soát trước khi gửi mới.';
 }

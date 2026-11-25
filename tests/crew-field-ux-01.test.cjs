@@ -84,7 +84,7 @@ function loadCommonJs(file, deps = {}, globals = {}) {
   vm.runInNewContext(output, {
     module,
     exports: module.exports,
-    require: name => deps[name] ?? require(name),
+    require: name => deps[name] ?? (name === './crewMediaVault' ? {sealCrewPhoto:async()=>undefined} : require(name)),
     setTimeout,
     clearTimeout,
     Uint8Array,
