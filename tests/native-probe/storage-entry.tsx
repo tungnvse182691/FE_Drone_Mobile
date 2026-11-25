@@ -1,6 +1,8 @@
 /** Opt-in QA entry only; never imported by Expo Router or the production app. */
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { registerRootComponent } from 'expo';
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
@@ -9,6 +11,8 @@ import { getRandomBytes, randomUUID } from 'expo-crypto';
 import { openProtectedDatabase, type DatabaseProtectionPorts } from '../../src/offline/encryptedDatabase';
 import { offlineNative } from '../../modules/roadguard-offline-crypto';
 import { base64ToBytes } from '../../src/utils/base64';
+import { AppFontGate } from '../../src/components/AppFontGate';
+import { colors, radius, spacing, typography } from '../../src/design-tokens';
 
 function assert(value: unknown, category: string): asserts value { if (!value) throw Error(category); }
 const base = SQLite.defaultDatabaseDirectory;
@@ -104,9 +108,65 @@ async function mediaBridge() {
 }
 function Probe() {
   const [result,setResult] = useState('Running isolated storage QA');
+  const [status,setStatus] = useState<'running'|'passed'|'failed'>('running');
+  const [expanded,setExpanded] = useState(false);
   useEffect(() => { void run().then(value => {
-    console.info('STORAGE_ADAPTER_QA',value);setResult(value);
-  }).catch(() => {console.error('STORAGE_ADAPTER_QA','FAIL');setResult('FAIL: inspect isolated probe');}); },[]);
-  return <View style={{padding:30,paddingTop:80}}><Text accessibilityLabel="Storage QA result">{result}</Text></View>;
+    console.info('STORAGE_ADAPTER_QA',value);setResult(value);setStatus('passed');
+  }).catch(() => {console.error('STORAGE_ADAPTER_QA','FAIL');setResult('FAIL: inspect isolated probe');setStatus('failed');}); },[]);
+  const passed = status === 'passed';
+  return <SafeAreaView style={styles.screen}>
+    <StatusBar barStyle="dark-content" />
+    <View style={styles.header}>
+      <Image source={require('../../assets/logo_hoanghai_icon.png')} resizeMode="contain" style={styles.logo} accessible={false} />
+      <Text style={styles.brand}>RoadGuard</Text>
+      <Text style={styles.qaLabel}>Bản kiểm tra</Text>
+    </View>
+    <ScrollView contentContainerStyle={styles.content}>
+      <Text accessibilityRole="header" style={styles.title}>Kiểm tra kỹ thuật</Text>
+      <Text style={styles.description}>Kiểm tra lưu trữ ngoại tuyến trên thiết bị này bằng dữ liệu thử riêng.</Text>
+      <View style={styles.result} accessibilityLiveRegion="polite">
+        <View style={styles.resultHeading}>
+          {status === 'running' ? <ActivityIndicator color={colors.brandGold} /> :
+            <MaterialIcons name={passed ? 'check-circle' : 'error-outline'} size={28} color={passed ? colors.success : colors.error} accessible={false} />}
+          <Text style={styles.resultTitle}>{status === 'running' ? 'Đang kiểm tra lưu trữ…' : passed ? 'Kiểm tra lưu trữ đạt' : 'Kiểm tra chưa đạt'}</Text>
+        </View>
+        <Text style={styles.body}>{status === 'running' ? 'Đang kiểm tra cơ sở dữ liệu và ảnh mã hóa. Vui lòng chờ kết quả.' : passed ?
+          'Cơ sở dữ liệu và ảnh mã hóa đã qua các bước kiểm tra của phiên này.' : 'Cần kiểm tra log kỹ thuật để xác định bước lỗi.'}</Text>
+        {passed && <View style={styles.checks}>
+          <Text style={styles.checkText}>Cơ sở dữ liệu: giao dịch và khôi phục</Text>
+          <Text style={styles.checkText}>Ảnh mã hóa: đọc dữ liệu ở cả ba vai trò</Text>
+        </View>}
+      </View>
+      <Text style={styles.note}>Kết quả này chỉ xác nhận phép thử lưu trữ. Luồng gửi dữ liệu lên máy chủ được kiểm tra riêng.</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={expanded ? 'Ẩn chi tiết kỹ thuật' : 'Xem chi tiết kỹ thuật'}
+        accessibilityState={{expanded}} onPress={() => setExpanded(value => !value)}
+        style={({pressed}) => [styles.disclosure, pressed && styles.pressed]}>
+        <Text style={styles.disclosureText}>{expanded ? 'Ẩn chi tiết' : 'Xem chi tiết kỹ thuật'}</Text>
+        <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={24} color={colors.secondary} accessible={false} />
+      </Pressable>
+      {expanded && <Text selectable style={styles.detail} accessibilityLabel="Storage QA result">{result}</Text>}
+    </ScrollView>
+  </SafeAreaView>;
 }
-registerRootComponent(Probe);
+function Entry() { return <SafeAreaProvider><AppFontGate><Probe /></AppFontGate></SafeAreaProvider>; }
+const styles = StyleSheet.create({
+  screen: {flex:1,backgroundColor:colors.surfaceAlt},
+  header: {flexDirection:'row',alignItems:'center',gap:spacing.sm,padding:spacing.md,backgroundColor:colors.surface,borderBottomWidth:1,borderBottomColor:colors.border,flexWrap:'wrap'},
+  logo: {width:40,height:40}, brand: {...typography.titleLg,color:colors.secondary,flexShrink:1},
+  qaLabel: {...typography.caption,color:colors.primaryDark,marginLeft:'auto'},
+  content: {padding:spacing.lg,gap:spacing.md,maxWidth:600,width:'100%',alignSelf:'center',paddingBottom:spacing.xl},
+  title: {...typography.headlineLg,color:colors.secondary,marginTop:spacing.sm},
+  description: {...typography.bodyLg,color:colors.secondary},
+  result: {backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border,borderRadius:radius.lg,padding:spacing.md,gap:spacing.md,marginTop:spacing.sm},
+  resultHeading: {flexDirection:'row',alignItems:'center',gap:spacing.sm},
+  resultTitle: {...typography.titleMd,color:colors.onSurface,flex:1},
+  body: {...typography.bodyMd,color:colors.secondary},
+  checks: {borderTopWidth:1,borderTopColor:colors.border,paddingTop:spacing.md,gap:spacing.sm},
+  checkText: {...typography.bodyMd,color:colors.onSurface},
+  note: {...typography.bodyMd,color:colors.secondary},
+  disclosure: {minHeight:48,flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:spacing.sm,paddingVertical:spacing.sm},
+  disclosureText: {...typography.labelLg,color:colors.primaryDark,flexShrink:1},
+  pressed: {backgroundColor:colors.border,borderRadius:radius.md},
+  detail: {...typography.bodyMd,color:colors.secondary,paddingBottom:spacing.md},
+});
+registerRootComponent(Entry);
