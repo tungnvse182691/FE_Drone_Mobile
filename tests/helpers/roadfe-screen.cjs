@@ -81,6 +81,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/crew/CrewMotion')||name==='./CrewMotion')return{CrewPressable:'Pressable',CrewContentTransition:'CrewContentTransition'};
     if(name.endsWith('/crew/CrewRepairFacts'))return{CrewRepairFacts:'CrewRepairFacts'};
     if(name.endsWith('/crew/CrewOfflinePreparation'))return{CrewOfflinePreparation:'CrewOfflinePreparation'};
+    if(name.endsWith('/crew/CrewOfflineFieldTask'))return{CrewOfflineFieldTask:'CrewOfflineFieldTask'};
     // Photo metadata modal has its own behavior tests in crew-photo-gps.
     if(name.endsWith('/crew/CrewPhotoInfo'))return{CrewPhotoInfo:'CrewPhotoInfo'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};

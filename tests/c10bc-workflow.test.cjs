@@ -12,6 +12,15 @@ function setup(native=true){const project=randomUUID(),actor=randomUUID(),scope=
 }
 test('C10BC native acceptance gate denies every POST before journal/network',async()=>{const h=setup(false);await assert.rejects(h.w.dispatchOfflineIntent(h.record),/BLOCKED_NATIVE/);assert.equal(h.calls.length,0);assert.equal(h.phases.length,0);});
 test('C10BC offline transport preserves exact bytes and key after UNKNOWN_OUTCOME',async()=>{const h=setup();h.setError(Error('timeout'));await assert.rejects(h.w.dispatchOfflineIntent(h.record),/timeout/);assert.deepEqual(h.phases,['IN_FLIGHT','UNKNOWN_OUTCOME']);h.setError(null);const r=await h.w.dispatchOfflineIntent({...h.record,phase:'UNKNOWN_OUTCOME'});assert.equal(r.phase,'RECEIVED');assert.equal(h.calls[0].data,h.calls[1].data);assert.equal(h.calls[0].headers.get('Idempotency-Key'),h.record.key);assert.equal(h.calls[1].headers.get('Idempotency-Key'),h.record.key);});
+
+test('FIELD sender reads latest durable row and rejects changed bytes or foreign kind before HTTP',async()=>{
+ const h=setup();let row={...h.record,proof:{kind:'signed-field-batch'},path:`/projects/${h.project}/offline/sync`},sent=0;
+ const module=load('src/offline/crewSignedSync.ts',{'../api/crewOfflineWorkflow':{...h.w,dispatchOfflineIntent:async()=>{sent++;throw Error('transport');}},'../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[row]})},'../api/crewSafetyWorkflow':{crewReadGuard:()=>{}},'../api/crewOfflineProtocol':{},'../api/crewOfflineCrypto':{},'../api/crewOfflineDevice':{},'../../modules/roadguard-offline-crypto':{},'../utils/uuid':{}});
+ assert.equal(typeof module.sendSignedFieldIntent,'function');
+ await assert.rejects(module.sendSignedFieldIntent({...row,body:'altered'}),/source/);assert.equal(sent,0);
+ await assert.rejects(module.sendSignedFieldIntent({...row,proof:{kind:'snapshot'}}),/source/);assert.equal(sent,0);
+ await assert.rejects(module.sendSignedFieldIntent(row),/transport/);assert.equal(sent,1);
+});
 for(const status of [401,403,404,409,412,428,429,503])test(`C10BC HTTP ${status} retains uncertain intent without fake ACK`,async()=>{const h=setup();h.setError(Object.assign(Error('http failure'),{response:{status}}));await assert.rejects(h.w.dispatchOfflineIntent(h.record));assert.deepEqual(h.phases,['IN_FLIGHT','UNKNOWN_OUTCOME']);assert.equal(h.calls.length,1);});
 test('C10BC actor switch after response cannot write receipt to old/new journal',async()=>{const h=setup();h.switchDuring();await assert.rejects(h.w.dispatchOfflineIntent(h.record),/session/);assert.deepEqual(h.phases,['IN_FLIGHT']);});
 test('C10BC old session cannot dispatch or read authenticated resource',async()=>{const h=setup();h.switch();await assert.rejects(h.w.dispatchOfflineIntent(h.record),/session/);await assert.rejects(h.w.readOfflineResource(h.i,h.project,'devices',randomUUID()),/session/);assert.equal(h.calls.length,0);});

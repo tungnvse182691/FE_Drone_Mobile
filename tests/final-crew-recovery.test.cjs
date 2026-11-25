@@ -11,7 +11,29 @@ function fixture(){const actor=id(),project=id(),origin=id(),effect=id(),canonic
  const w=load('src/api/crewOfflineWorkflow.ts',{'./crewApi':{isCrewResourceId:guid,isRepairItemVersion:()=>true}});
  const deps={'../api/crewOfflineWorkflow':{...w,requireOfflineNativeAcceptance:()=>{},readOfflineResource:async(_i,_p,kind,resource)=>{reads.push({kind,resource});return kind==='batches'?result:originResult;}},'../api/crewSafetyWorkflow':{crewReadGuard:()=>{}},'../api/crewOfflineJournal':{openOfflineJournal:async()=>journal},'../utils/uuid':{uuidv4:id}};
  const s=load('src/offline/crewSignedSync.ts',deps);
- return {s,w,record,item,receipt,d,phases,checkpoints,reads,setBatch:v=>result=v,setOrigin:v=>originResult=v};}
+ return {s,w,record,item,receipt,d,phases,checkpoints,reads,setBatch:v=>result=v,setOrigin:v=>originResult=v,deps};}
+
+for(const status of [404,401,403,503])test(`FIELD recovery ${status} only treats explicit not_found as absent, never ACK`,async()=>{
+ const h=fixture();h.record.phase='UNKNOWN_OUTCOME';
+ h.deps['../api/crewOfflineWorkflow'].readOfflineResource=async()=>{throw {response:{status,data:{code:'not_found'}}};};
+ if(status===404){const r=await h.s.recoverSignedOrigins(h.record);assert.equal(r.phase,'UNKNOWN_OUTCOME');assert.equal(h.checkpoints.length,0);}
+ else await assert.rejects(h.s.recoverSignedOrigins(h.record));
+ assert.equal(h.phases.length,0);
+});
+test('FIELD recovery does not treat generic route 404 as absent origin',async()=>{
+ const h=fixture();h.record.phase='UNKNOWN_OUTCOME';
+ h.deps['../api/crewOfflineWorkflow'].readOfflineResource=async()=>{throw {response:{status:404,data:'Not Found'}};};
+ await assert.rejects(h.s.recoverSignedOrigins(h.record));
+});
+test('FIELD uncertain sender retains partial checkpoints before exact replay',async()=>{
+ const h=fixture(),second={...h.d,originId:id(),effectId:id()};h.record.phase='IN_FLIGHT';
+ h.record.proof.descriptors.push(second);const body=JSON.parse(h.record.body);body.operations.push({...body.operations[0],...second});h.record.body=JSON.stringify(body);
+ let durable=h.record,sent=0;
+ h.deps['../api/crewOfflineJournal'].openOfflineJournal=async()=>({list:async()=>[durable],checkpoint:async(r,items)=>durable={...r,verifiedItems:items},transition:async(r,phase)=>{assert.equal(r,durable);return durable={...r,phase};}});
+ h.deps['../api/crewOfflineWorkflow'].readOfflineResource=async(_i,_p,_k,origin)=>{if(origin===second.originId)throw {response:{status:404,data:{code:'not_found'}}};return h.item;};
+ h.deps['../api/crewOfflineWorkflow'].dispatchOfflineIntent=async r=>{sent++;assert.equal(r.body,h.record.body);assert.equal(r.key,h.record.key);assert.equal(r.verifiedItems[0].originId,h.d.originId);throw Error('replay reached');};
+ await assert.rejects(h.s.sendSignedFieldIntent(h.record),/replay reached/);assert.equal(sent,1);
+});
 test('FINAL canonical origin is server record ID, not input origin; mismatched server record rejected',()=>{const h=fixture();assert.notEqual(h.item.canonicalOriginId,h.item.originId);assert.equal(h.s.matchBatchReadback(h.record,h.receipt),true);assert.equal(h.s.matchBatchReadback(h.record,{...h.receipt,items:[{...h.item,canonicalOriginId:id()}]}),false);});
 test('FINAL mixed batch persists only individually verified origin outcomes; no blanket ACK',async()=>{const h=fixture(),second={...h.d,originId:id(),effectId:id()};h.record.proof.descriptors.push(second);const body=JSON.parse(h.record.body);body.operations.push({...body.operations[0],...second});h.record.body=JSON.stringify(body);
  h.record.receipt={...h.receipt,items:[h.item,{...h.item,...second,state:'CONFLICT',durableAcknowledgment:false,canonicalOriginId:null}]};h.setBatch(h.record.receipt);

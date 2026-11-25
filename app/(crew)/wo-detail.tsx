@@ -5,7 +5,7 @@ import { prepareRepairAssessment, prepareRepairStart, prepareRepairFinish, prepa
 import { prepareFieldRepairClaim, type FieldDraft } from '../../src/api/crewFieldDraft';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,7 +18,7 @@ import { CrewTaskBoundary, useCrewIdentity, crewStatusLabel, crewModeLabel, crew
 import { useAuthStore } from '../../src/store/auth';
 import { passwordSessionIdentity } from '../../src/api/authApi';
 import { randomUUID } from 'expo-crypto';
-import { openDatabase, initDatabase, saveDraft } from '../../src/offline/database';
+import { openDatabase, initDatabase } from '../../src/offline/database';
 import { repairSupplementBlock, createFieldCommand, executeFieldCommand, fieldCommandBlock, fieldCapabilityBlock, getFieldTaskStartOriginReal,
   validateCrewTaskDetail, repairExecutionBlock, getFieldInspectionTaskDetailReal,
   fastTrackRepairBlock, isRepairItemVersion,
@@ -27,6 +27,9 @@ import { repairSupplementBlock, createFieldCommand, executeFieldCommand, fieldCo
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
 import { CrewOfflinePreparation } from '../../src/components/crew/CrewOfflinePreparation';
+import { CrewOfflineFieldTask } from '../../src/components/crew/CrewOfflineFieldTask';
+import { currentQueueIdentity } from '../../src/offline/upload-queue';
+import { openOfflineJournal, writeOnlineFieldJournal } from '../../src/api/crewOfflineJournal';
 import { CrewFastTrackEligibility } from '../../src/components/crew/CrewFastTrackEligibility';
 import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
 
@@ -69,6 +72,8 @@ export function crewRepairPlanLabel(value?: string | null): string {
 }
 
 export default function CrewWoDetailScreen() {
+  const params=useLocalSearchParams<{offline?:string;id?:string;projectId?:string}>();
+  if(params.offline==='1')return <CrewOfflineFieldTask key={JSON.stringify([params.projectId,params.id])} projectId={typeof params.projectId==='string'?params.projectId:''} taskId={typeof params.id==='string'?params.id:''}/>;
   return <CrewTaskBoundary operational={false}>{task => <CrewFieldActions task={task} />}</CrewTaskBoundary>;
 }
 
@@ -86,7 +91,7 @@ async function fieldJournal(actor: string, project: string, task: string) {
         !['pending','acknowledged','confirmed','rejected'].includes(record.phase)) throw new Error('field_journal_invalid');
       return record;
     },
-    write: async (record: FieldCommandRecord) => saveDraft(db, key, 'T05A_FIELD_COMMAND', { ...record }),
+    write: async (record: FieldCommandRecord) => writeOnlineFieldJournal(db,record),
   };
 }
 
@@ -167,6 +172,12 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
       if (currentCrewScope() !== scope) return;
       const unresolved = saved && !['confirmed','rejected'].includes(saved.phase);
       if (action && unresolved) throw new Error('field_command_pending');
+      if(action){
+        const owner=currentQueueIdentity();if(!owner)throw Error('crew_session_changed');
+        const offline=await (await openOfflineJournal(owner)).list();
+        if(offline.some(r=>r.projectId===task.projectId&&r.proof.fieldStartTaskId===task.id&&r.phase!=='RECONCILED'))throw Error('field_command_pending');
+        if(currentCrewScope()!==scope)return;
+      }
       const command = action ? createFieldCommand({ task: fresh.detail!, etag: fresh.etag ?? '', actorId: actor, scope, action,
         reason: action === 'accept' ? 'Nhận nhiệm vụ hiện trường' : reason, key: newIdempotencyKey(),
         originId: action === 'start' ? randomUUID() : undefined, claimedAt: new Date().toISOString() }) : saved;

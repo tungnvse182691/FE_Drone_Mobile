@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { CrewPressable as Pressable } from './CrewMotion';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
@@ -11,9 +11,11 @@ import { reconcileSignedBatch, recoverSignedOrigins, reconcileStartIntent } from
 import { openOfflineJournal, type OfflineJournalRecord } from '../../api/crewOfflineJournal';
 import { NATIVE_ACCEPTANCE_VERIFIED } from '../../../modules/roadguard-offline-crypto';
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
+import { sendSignedFieldIntent } from '../../offline/crewSignedSync';
 
 /** Real Crew sync route, actor/session keyed by parent. Read never changes pending/legacy state. */
 export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIdentity; refreshSignal?: number}) {
+  const router=useRouter();
   const [probe,setProbe]=useState<Awaited<ReturnType<typeof inspectOfflineDevice>>|null>(null);
   const [records,setRecords]=useState<OfflineJournalRecord[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showDiagnostics,setShowDiagnostics]=useState(false);
@@ -53,7 +55,20 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   if(!sameQueueIdentity(identity))return null;
-  const pending=records.filter(r=>['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
+  const send=async(record:OfflineJournalRecord)=>{
+    if(running.current||!sameQueueIdentity(identity)||!sameQueueIdentity(record.identity,identity))return;
+    running.current=true;setBusy(true);setError('');const n=++sequence.current;
+    try{
+      await sendSignedFieldIntent(record);
+      const rows=await (await openOfflineJournal(identity)).list();
+      if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows);
+    }catch{if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả gửi. Gói ký và khóa gửi lại được giữ nguyên; đối soát trước khi thử lại.');}
+    finally{
+      try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows);}catch{/* Keep last view; durable journal remains authoritative. */}
+      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
+    }
+  };
+  const pending=records.filter(r=>['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
   const confirmed=records.filter(r=>r.phase==='RECONCILED').length;
   return <Card style={styles.panel}>
     <View style={styles.heading}><Text style={[typography.titleMd,{color:'#192D40',fontSize:16,lineHeight:24}]}>Hàng đợi trên thiết bị</Text></View>
@@ -61,6 +76,8 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
     {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
     {records.length===0?<Text style={styles.description}>Chưa có lệnh cần đối soát.</Text>:records.map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
+      {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
+      {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='signed-field-batch'&&['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
       {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
     </View>)}
     <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>

@@ -3,7 +3,7 @@ function load(deps){const m={exports:{}};vm.runInNewContext(ts.transpileModule(f
 function fixture(filename=':memory:'){let raw=new DatabaseSync(filename);raw.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
  const db={getAllAsync:async(s,...p)=>raw.prepare(s).all(...p),getFirstAsync:async(s,...p)=>raw.prepare(s).get(...p),runAsync:async(s,...p)=>raw.prepare(s).run(...p),withExclusiveTransactionAsync:async f=>{raw.exec('BEGIN IMMEDIATE');try{await f(db);raw.exec('COMMIT');}catch(e){raw.exec('ROLLBACK');throw e;}}};
  const i={actor:randomUUID(),role:'REPAIR_CREW',environment:'http://fixture/api/v1',scope:'session-A',partition:'unused'};let current=i;
- const m=load({'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../offline/upload-queue':{currentQueueIdentity:()=>current,sameQueueIdentity:(a,b=current)=>JSON.stringify(a)===JSON.stringify(b)}});
+ const m=load({'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{},saveDraft:async(tx,id,kind,payload)=>tx.runAsync('INSERT OR REPLACE INTO local_draft(id,kind,payload) VALUES (?,?,?)',id,kind,JSON.stringify(payload))},'../offline/upload-queue':{currentQueueIdentity:()=>current,sameQueueIdentity:(a,b=current)=>JSON.stringify(a)===JSON.stringify(b)}});
  const intent=()=>({id:randomUUID(),identity:i,projectId:randomUUID(),path:'/devices',key:randomUUID(),body:'{"deviceId":"synthetic"}',proof:{kind:'device'}});
  return {m,db,get raw(){return raw;},i,intent,restart:()=>{raw.close();raw=new DatabaseSync(filename);},current:()=>current,setCurrent:v=>current=v,switch:()=>current={...i,scope:'session-B'}};}
 test('C10BC immutable journal uses SQLite INSERT/CAS, rejects key reuse and altered bytes',async()=>{const h=fixture();assert.equal(typeof h.m.openOfflineJournal,'function');const j=await h.m.openOfflineJournal(h.i,h.db),i=h.intent();const a=await j.prepare(i);assert.equal(a.phase,'PREPARED');assert.equal((await j.prepare(i)).body,i.body);await assert.rejects(j.prepare({...i,body:'{}'}),/immutable/);const pending=await j.transition(a,'IN_FLIGHT');assert.equal((await j.list())[0].phase,'IN_FLIGHT');await assert.rejects(j.transition(a,'IN_FLIGHT'),/cas/);const unknown=await j.transition(pending,'UNKNOWN_OUTCOME');assert.equal(unknown.body,i.body);assert.equal(unknown.key,i.key);assert.equal((await (await h.m.openOfflineJournal(h.i,h.db)).list())[0].phase,'UNKNOWN_OUTCOME');});
@@ -71,4 +71,27 @@ test('Enrollment and snapshot creation serialize durable resource identities acr
  await assert.rejects(newer.prepare({...snapshot,identity:h.current(),id:randomUUID(),key:randomUUID()}),/offline_existing_intent/);
  await newer.prepare({...snapshot,identity:h.current(),id:randomUUID(),key:randomUUID(),body:JSON.stringify({...JSON.parse(snapshot.body),taskId:randomUUID()})});
  assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,3);h.raw.close();
+});
+
+test('FIELD start producer cannot duplicate a task or bypass an uncertain online command',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
+ const intent={...base,proof:{kind:'signed-field-batch',fieldStartTaskId:task}};
+ const onlineId=`t05a-field:${h.i.actor}:${base.projectId}:${task}`;
+ h.raw.prepare('INSERT INTO local_draft(id,kind,payload) VALUES (?,?,?)').run(onlineId,'T05A_FIELD_COMMAND',JSON.stringify({phase:'pending'}));
+ await assert.rejects(j.prepare(intent),/reconciliation/);
+ h.raw.prepare('UPDATE local_draft SET payload=? WHERE id=?').run(JSON.stringify({phase:'confirmed',readbackStatus:200}),onlineId);
+ await j.prepare(intent);
+ await assert.rejects(j.prepare({...intent,id:randomUUID(),key:randomUUID()}),/reconciliation/);
+ h.raw.close();
+});
+
+test('online FIELD journal cannot bypass an offline intent in the shared SQLite transaction',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
+ await j.prepare({...base,proof:{kind:'signed-field-batch',fieldStartTaskId:task}});
+ const command={actorId:h.i.actor,scope:h.i.scope,projectId:base.projectId,taskId:task,phase:'pending'};
+ await assert.rejects(h.m.writeOnlineFieldJournal(h.db,command),/field_command_pending/);
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft WHERE kind=?').get('T05A_FIELD_COMMAND').n,0);
+ await h.m.writeOnlineFieldJournal(h.db,{...command,taskId:randomUUID()});
+ await assert.rejects(h.m.writeOnlineFieldJournal(h.db,{...command,scope:'foreign'}),/session_changed/);
+ h.raw.close();
 });

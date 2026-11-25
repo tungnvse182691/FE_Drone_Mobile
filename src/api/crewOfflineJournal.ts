@@ -1,6 +1,23 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { openDatabase, initDatabase } from '../offline/database';
 import { currentQueueIdentity, sameQueueIdentity, type QueueIdentity } from '../offline/upload-queue';
+import type { FieldCommandRecord } from './crewApi';
+import { saveDraft } from '../offline/database';
+
+/** Serialize online FIELD writes against offline preparation in the same DB.
+ * Neither path may create an independent command while the other is pending.
+ */
+export async function writeOnlineFieldJournal(db:SQLiteDatabase,record:FieldCommandRecord) {
+  const owner=currentQueueIdentity();
+  if(!owner||owner.actor!==record.actorId||owner.scope!==record.scope)throw Error('offline_session_changed');
+  await db.withExclusiveTransactionAsync(async tx=>{
+    const rows=await (await openOfflineJournal(owner,tx)).list();
+    if(rows.some(r=>r.projectId===record.projectId&&r.proof.fieldStartTaskId===record.taskId&&r.phase!=='RECONCILED'))throw Error('field_command_pending');
+    if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+    await saveDraft(tx,`t05a-field:${record.actorId}:${record.projectId}:${record.taskId}`,'T05A_FIELD_COMMAND',{...record});
+    if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+  });
+}
 
 export type OfflinePhase='PREPARED'|'IN_FLIGHT'|'UNKNOWN_OUTCOME'|'RECEIVED'|'RECONCILED'|'REJECTED'|'CONFLICT';
 export interface OfflineIntent {
@@ -85,6 +102,11 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
           const source=JSON.parse(copy.body);
           if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&
             JSON.parse(r.body).taskId===source.taskId&&JSON.parse(r.body).deviceRegistrationId===source.deviceRegistrationId))throw Error('offline_existing_intent_reconciliation_required');
+        }
+        if(copy.proof.kind==='signed-field-batch'&&copy.proof.fieldStartTaskId){
+          if(records.some(r=>r.projectId===copy.projectId&&r.proof.fieldStartTaskId===copy.proof.fieldStartTaskId))throw Error('offline_existing_intent_reconciliation_required');
+          const online=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=?',`t05a-field:${copy.identity.actor}:${copy.projectId}:${copy.proof.fieldStartTaskId}`);guard();
+          if(online){const command=JSON.parse(online.payload);if(!['confirmed','rejected'].includes(command.phase)||command.readbackStatus!==200)throw Error('offline_online_command_reconciliation_required');}
         }
         // Serialize safety writes per measure inside the durable transaction, including older sessions.
         if(copy.proof.kind==='safety'&&records.some(r=>r.proof.kind==='safety'&&
