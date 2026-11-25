@@ -3,6 +3,8 @@ import { crewReadGuard } from './crewSafetyWorkflow';
 import { openOfflineJournal, type OfflineJournalRecord } from './crewOfflineJournal';
 import { prepareDeviceEnrollment, prepareDeviceSnapshot, reconcileDeviceIntent } from './crewOfflineDevice';
 import { dispatchOfflineIntent, requireOfflineNativeAcceptance, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
+import { getFieldInspectionTaskDetailReal, crewTaskFromWire, validateCrewTaskDetail } from './crewApi';
+import { retainCrewEditorSource } from './crewOfflineEditorSource';
 
 /** Explicit task-scoped action. Persist each step before transport; resume the same
  * bytes/key after response loss. A session change never adopts an earlier command.
@@ -37,5 +39,20 @@ export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:s
     ?await prepareDeviceSnapshot(identity,projectId,taskId,device.id,head.id)
     :head??await prepareDeviceSnapshot(identity,projectId,taskId,device.id);
   const downloaded=await finish(next);
-  return downloaded.receipt as SourceSnapshot;
+  const snapshot=downloaded.receipt as SourceSnapshot;
+  // The editor needs fields absent from the signed snapshot. Keep the official
+  // snapshot as signing authority and save API-080 only when both sources match.
+  try {
+    const detail=await getFieldInspectionTaskDetailReal(projectId,taskId);
+    crewReadGuard(identity);
+    validateCrewTaskDetail(detail.data,detail.etag,projectId,taskId,identity.actor);
+    if(detail.data.version===snapshot.taskVersion&&detail.data.assignmentId===snapshot.assignmentId&&
+       detail.data.assignedToUserId===snapshot.originalActorId){
+      const task=crewTaskFromWire({id:taskId,projectId,crewId:identity.actor,mode:detail.data.mode??'',
+        status:detail.data.status??'',version:detail.data.version!,defectIds:[detail.data.defectId],policyVersionId:null},detail.data,detail.etag);
+      await retainCrewEditorSource(identity,task);
+    }
+  } catch { /* Snapshot remains usable for signed commands; editor source stays unavailable. */ }
+  crewReadGuard(identity);
+  return snapshot;
 }

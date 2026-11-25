@@ -21,6 +21,8 @@ import {
   crewAssignmentCanOpen, crewLocalReadUnavailable, type CrewListQuery, type CrewTask, type OperationalCrewTask,
 } from '../../src/api/crewApi';
 import { RoleCode } from '../../src/types/enums';
+import { currentQueueIdentity } from '../../src/offline/upload-queue';
+import { retainCrewEditorSource, readCrewEditorSource } from '../../src/api/crewOfflineEditorSource';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewPressable } from '../../src/components/crew/CrewMotion';
 import { CrewHomeTaskPressable } from '../../src/components/crew/CrewHomeTaskPressable';
@@ -169,14 +171,28 @@ export function CrewTaskBoundary(props: TaskBoundaryProps) {
       const response = await getFieldInspectionTaskDetailReal(projectId, id, signal);
       assertCurrent();
       validateCrewTaskDetail(response.data, response.etag, projectId, id, inbox.user!.id);
-      return crewTaskFromWire({ id, projectId, crewId: response.data.assignedToUserId!, mode: response.data.mode ?? '',
+      const detailTask = crewTaskFromWire({ id, projectId, crewId: response.data.assignedToUserId!, mode: response.data.mode ?? '',
         status: response.data.status ?? '', version: response.data.version!, defectIds: [response.data.defectId], policyVersionId: null }, response.data, response.etag);
+      if (localDraft) {
+        const owner = currentQueueIdentity();
+        if (owner) try { await retainCrewEditorSource(owner, detailTask); } catch { /* Online detail remains usable; offline storage is optional until verified. */ }
+        assertCurrent();
+      }
+      return detailTask;
       } catch (error) {
         // Revoke a previous snapshot after any definitive HTTP/contract denial.
         // A later network failure must not resurrect it.
         // TanStack cancels the read when its route unmounts. Cancellation says
         // nothing about assignment validity and must not erase verified data.
         const cancelled = signal?.aborted && (error as { code?: string } | null)?.code === 'ERR_CANCELED';
+        if (!cancelled && localDraft && crewLocalReadUnavailable(error)) {
+          const owner = currentQueueIdentity();
+          if (owner) try {
+            const saved = await readCrewEditorSource(owner, projectId, id);
+            assertCurrent();
+            return saved;
+          } catch { /* A missing or stale source must not become an editor capability. */ }
+        }
         if (!cancelled && !crewLocalReadUnavailable(error)) client.setQueryData(queryKey, null);
         throw error;
       }
