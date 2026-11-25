@@ -1,7 +1,7 @@
 import type { QueueIdentity } from '../offline/upload-queue';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { inspectOfflineDevice, readLocalOfflineSources } from './crewOfflineDevice';
-import { requireOfflineNativeAcceptance } from './crewOfflineWorkflow';
+import { requireOfflineNativeAcceptance, validateRepairSnapshot } from './crewOfflineWorkflow';
 import { openOfflineJournal } from './crewOfflineJournal';
 import { fieldCoreHash, type OfflineRecord } from './crewOfflineProtocol';
 import { prepareSignedFieldBatch } from '../offline/crewSignedSync';
@@ -12,7 +12,7 @@ import { validateFieldMeasurements, type FieldDraft } from './crewFieldDraft';
 /** Explicit local mode: never invoked as a fallback from a forbidden HTTP read.
  * Reconciled snapshot is a preparation source, not current server permission.
  */
-export async function readOfflineFieldTask(identity:QueueIdentity,projectId:string,taskId:string) {
+export async function readOfflineCrewTask(identity:QueueIdentity,projectId:string,taskId:string) {
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const j=await openOfflineJournal(identity),rows=await j.list();crewReadGuard(identity);
   if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&
@@ -27,9 +27,15 @@ export async function readOfflineFieldTask(identity:QueueIdentity,projectId:stri
   const snapshots=source.snapshots.filter(s=>s.taskId===taskId);
   if(!snapshots.length)throw Error('offline_verified_snapshot_not_downloaded');
   const snapshot=snapshots.at(-1)!,facts=snapshot.snapshot as OfflineRecord;
-  // Do not interpret a repair snapshot as an independent FIELD capability.
-  if(facts.repair!=null)throw Error('offline_field_repair_source_not_supported');
+  if(facts.repair!=null)validateRepairSnapshot(snapshot,identity);
   return {snapshot,facts,registrationId,deviceId:probe.deviceId};
+}
+
+export async function readOfflineFieldTask(identity:QueueIdentity,projectId:string,taskId:string) {
+  const source=await readOfflineCrewTask(identity,projectId,taskId);
+  // Do not interpret a repair snapshot as an independent FIELD capability.
+  if(source.facts.repair!=null)throw Error('offline_field_repair_source_not_supported');
+  return source;
 }
 
 /** One explicit local action, with typed accept -> start dependency when needed.

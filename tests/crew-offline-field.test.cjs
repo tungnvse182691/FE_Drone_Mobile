@@ -1,6 +1,60 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),crypto=require('node:crypto');
 function load(file,deps={}){if(!fs.existsSync(file))return {};const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,Date,require:n=>{if(!(n in deps))throw Error('unmocked '+n);return deps[n];}});return m.exports;}
 const sha=async s=>crypto.createHash('sha256').update(s).digest('hex'),id=crypto.randomUUID;
+
+function repairFixture(){
+ const h=submissionFixture(),ctx={schemaVersion:1,packageId:id(),itemId:id(),bindingId:id(),itemVersion:'AAAAAAAAB9E=',taskId:h.h.task,assignmentId:h.h.snapshot.assignmentId,crewId:h.h.identity.actor,mode:'Normal',state:'Assigned',approvedBy:id(),approvedPlanHash:'a'.repeat(64),proposalPlanHash:'a'.repeat(64),originalCrewFirstStartId:h.origin,currentAssessmentId:null,currentExecutionStartId:null,currentExecutionFinishId:null,executeAuthority:'REVALIDATE_CURRENT_SOURCE_AT_ADMISSION'};
+ h.draft.measurements[0].sampleId=id();let saved;
+ const validator=load('src/api/crewRepairWorkflow.ts',new Proxy({'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairHistory':{timestamp:v=>typeof v==='string'&&Number.isFinite(Date.parse(v))}},{has:()=>true,get:(o,k)=>o[k]??{}}));
+ const m=load('src/api/crewOfflineRepair.ts',{'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx},'./crewSafetyWorkflow':{crewReadGuard:()=>{}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':{repairAssessmentMatchesDraft:()=>true},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>h.h.rows})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
+ return {...h,ctx,m,get saved(){return saved;}};
+}
+test('signed REPAIR assessment freezes VERIFIED draft and preserves item identity',async()=>{
+ const f=repairFixture();assert.equal(typeof f.m.prepareOfflineRepairAssessment,'function');
+ const pending=f.m.prepareOfflineRepairAssessment(f.h.identity,f.h.project,f.h.task,f.draft);f.draft.measurements[0].value=99;
+ await pending;const op=f.saved[0];assert.equal(op.kind,'REPAIR_ASSESSMENT');assert.equal(op.repair.resourceId,f.ctx.itemId);assert.equal(op.repair.assessment.measurements[0].value.decimal,'1.25');assert.equal(op.repair.assessment.fieldFirstStartId,f.origin);assert.equal(op.taskVersion,f.h.snapshot.taskVersion);
+});
+for(const fault of ['unverified','foreign','finish-exists'])test('signed REPAIR assessment rejects '+fault,async()=>{
+ const f=repairFixture();assert.equal(typeof f.m.prepareOfflineRepairAssessment,'function');
+ if(fault==='unverified')f.draft.captures[0].verified=false;
+ if(fault==='foreign')f.draft.actor=id();
+ if(fault==='finish-exists')f.ctx.currentExecutionFinishId=id();
+ await assert.rejects(f.m.prepareOfflineRepairAssessment(f.h.identity,f.h.project,f.h.task,f.draft));assert.equal(f.saved,undefined);
+});
+test('signed REPAIR assessment refuses stale assessment and unresolved repair batch',async()=>{
+ const stale=repairFixture();stale.ctx.currentAssessmentId=id();
+ await assert.rejects(stale.m.prepareOfflineRepairAssessment(stale.h.identity,stale.h.project,stale.h.task,stale.draft));assert.equal(stale.saved,undefined);
+ const pending=repairFixture();pending.h.rows.push({identity:pending.h.identity,projectId:pending.h.project,phase:'PREPARED',proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId:pending.h.task,assignmentId:pending.h.snapshot.assignmentId,repair:{resourceId:pending.ctx.itemId}}]})});
+ await assert.rejects(pending.m.prepareOfflineRepairAssessment(pending.h.identity,pending.h.project,pending.h.task,pending.draft));assert.equal(pending.saved,undefined);
+});
+test('signed REPAIR assessment does not sign twice from the same reconciled snapshot',async()=>{
+ const f=repairFixture();
+ f.h.rows.push({identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch'},
+  body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',snapshotId:f.h.snapshot.id,taskId:f.h.task,
+   assignmentId:f.h.snapshot.assignmentId,repair:{resourceId:f.ctx.itemId}}]})});
+ await assert.rejects(f.m.prepareOfflineRepairAssessment(f.h.identity,f.h.project,f.h.task,f.draft),/snapshot_refresh_required/);
+ assert.equal(f.saved,undefined);
+});
+for(const operation of ['start','finish'])test('signed REPAIR '+operation+' refuses absent canonical predecessor',async()=>{
+ const f=repairFixture(),fn=operation==='start'?f.m.prepareOfflineRepairStart:f.m.prepareOfflineRepairFinish;assert.equal(typeof fn,'function');
+ await assert.rejects(fn(f.h.identity,f.h.project,f.h.task,f.draft));assert.equal(f.saved,undefined);
+});
+function addReconciledRepair(f,kind,effectId,body,outcome){
+ const origin=id(),op={schemaVersion:1,originId:origin,effectId,kind,taskId:f.h.task,assignmentId:f.h.snapshot.assignmentId,originalActorId:f.h.identity.actor,sourceDeviceId:f.h.device,repair:{resourceId:f.ctx.itemId,...body}};
+ f.h.rows.push({identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch',registrationId:f.h.registration,deviceId:f.h.device},body:JSON.stringify({operations:[op]}),verifiedItems:[{originId:origin,effectId,canonicalOriginId:origin,kind,state:'COMMITTED'}],receipt:{items:[{originId:origin,effectId,canonicalOriginId:origin,kind,durableAcknowledgment:true,outcome:{id:effectId,itemId:f.ctx.itemId,taskId:f.h.task,...outcome}}]}});
+}
+test('signed REPAIR start uses reconciled assessment and current approved source',async()=>{
+ const f=repairFixture(),assessmentId=id();f.ctx.currentAssessmentId=assessmentId;
+ addReconciledRepair(f,'REPAIR_ASSESSMENT',assessmentId,{assessment:{originId:id(),fieldFirstStartId:f.origin,measurements:f.draft.measurements.map(m=>({...m,value:{decimal:String(m.value)}})),evidence:f.draft.captures.map(c=>({captureOriginId:c.id,fileId:c.upload.fileId,purpose:c.purpose,checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),locationProof:f.draft.locationProof,deviceId:f.h.device}},{readiness:'READY',stage:'PRE_EXECUTION',firstStartId:f.origin});
+ await f.m.prepareOfflineRepairStart(f.h.identity,f.h.project,f.h.task,f.draft);
+ assert.equal(f.saved[0].kind,'REPAIR_EXECUTION_START');assert.equal(f.saved[0].repair.start.assessmentId,assessmentId);
+});
+test('signed REPAIR finish uses reconciled execution start',async()=>{
+ const f=repairFixture(),startId=id();f.ctx.state='InProgress';f.ctx.currentExecutionStartId=startId;
+ addReconciledRepair(f,'REPAIR_EXECUTION_START',startId,{start:{originId:id(),fieldFirstStartId:f.origin,assessmentId:id(),claimedAt:'2026-11-25T00:00:00Z',deviceId:f.h.device}},{firstStartId:f.origin});
+ await f.m.prepareOfflineRepairFinish(f.h.identity,f.h.project,f.h.task);
+ assert.equal(f.saved[0].kind,'REPAIR_EXECUTION_FINISH');assert.equal(f.saved[0].repair.finish.executionStartId,startId);
+});
 function fixture(status='NewAssigned'){
  const identity={actor:id(),role:'REPAIR_CREW',environment:'http://fixture/api/v1',scope:'A',partition:'fixture'},project=id(),task=id(),device=id(),registration=id();
  const snapshot={id:id(),taskId:task,assignmentId:id(),originalActorId:identity.actor,deviceRegistrationId:registration,taskVersion:'AAAAAAAAB9E=',snapshot:{id:task,projectId:project,originalActorId:identity.actor,status,repair:null,location:{}}};snapshot.snapshot.assignmentId=snapshot.assignmentId;
@@ -47,7 +101,7 @@ test('snapshot screen only prepares after explicit tap and prevents duplicate ta
  const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:h.project,taskId:h.task},modules:{
   '../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},
   '../../offline/upload-queue':{currentQueueIdentity:()=>h.identity,sameQueueIdentity:()=>true},
-  '../../api/crewOfflineField':{readOfflineFieldTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldStart:async()=>{prepared++;return wait.promise;}},
+  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldStart:async()=>{prepared++;return wait.promise;}},
   '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})}
   ,'../../api/crewOfflinePreparation':{}
  }});ui.render();await ui.flush();assert.equal(prepared,0);
@@ -55,17 +109,52 @@ test('snapshot screen only prepares after explicit tap and prevents duplicate ta
  wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'FIELD_START',taskId:h.task}]})});await first;await ui.flush();assert.ok(JSON.stringify(ui.nodes()).includes('Chưa gửi tới máy chủ'));assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Nhận và bắt đầu offline'));ui.unmount();
 });
 
+test('offline snapshot can refresh an assigned task before any signed record exists',async()=>{
+ const {screen}=require('./helpers/roadfe-screen.cjs'),h=fixture();let downloads=0;
+ const source={snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot};
+ const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:h.project,taskId:h.task},modules:{
+  '../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},
+  '../../offline/upload-queue':{currentQueueIdentity:()=>h.identity,sameQueueIdentity:()=>true},
+  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>source},
+  '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})},
+  '../../api/crewOfflinePreparation':{downloadCrewOfflineTask:async()=>{downloads++;}}
+ }});
+ ui.render();await ui.flush();assert.equal(downloads,0);
+ assert.ok(ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Tải phiên bản mới'));
+ await ui.press('Tải phiên bản mới');await ui.flush();assert.equal(downloads,1);
+ assert.ok(JSON.stringify(ui.nodes()).includes('Đã tải và đối soát bản dữ liệu mới'));
+ ui.unmount();
+});
+
 test('offline snapshot signs the persisted draft only after tap and retains one pending submission action',async()=>{
  const {screen,deferred}=require('./helpers/roadfe-screen.cjs'),{h,draft}=submissionFixture(),wait=deferred();let calls=0,read=0;
  const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:h.project,taskId:h.task},modules:{
   '../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},
   '../../offline/upload-queue':{currentQueueIdentity:()=>h.identity,sameQueueIdentity:()=>true},
-  '../../api/crewOfflineField':{readOfflineFieldTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldSubmission:async(...args)=>{calls++;assert.equal(args[3],draft);return wait.promise;}},
+  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldSubmission:async(...args)=>{calls++;assert.equal(args[3],draft);return wait.promise;}},
   '../../api/crewFieldDraft':{currentFieldContext:()=>draft,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>{read++;return draft;}},
   '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>h.rows.slice(1)})},'../../api/crewOfflinePreparation':{}
  }});ui.render();await ui.flush();assert.equal(calls,0);assert.equal(read,0);
  const first=ui.press('Ký hồ sơ từ nháp đã lưu');ui.press('Ký hồ sơ từ nháp đã lưu');await ui.flush();assert.equal(calls,1);assert.equal(read,1);
  wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:h.task}]})});await first;await ui.flush();
  assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Ký hồ sơ từ nháp đã lưu'));
- ui.press('Mở Đồng bộ');assert.equal(ui.nav.at(-1),'/(crew)/sync');ui.unmount();
+ assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Mở Đồng bộ'));ui.unmount();
+});
+
+test('REPAIR snapshot exposes the assessed action and blocks duplicate taps while signing',async()=>{
+ const {screen,deferred}=require('./helpers/roadfe-screen.cjs'),f=repairFixture(),wait=deferred();let calls=0;
+ const source={snapshot:{...f.h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:{...f.h.snapshot.snapshot,status:'InProgress',repair:f.ctx}};
+ const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:f.h.project,taskId:f.h.task},modules:{
+  '../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},
+  '../../offline/upload-queue':{currentQueueIdentity:()=>f.h.identity,sameQueueIdentity:()=>true},
+  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>source},
+  '../../api/crewOfflineRepair':{prepareOfflineRepairAssessment:async(...args)=>{calls++;assert.equal(args[3],f.draft);return wait.promise;}},
+  '../../api/crewFieldDraft':{currentFieldContext:()=>f.draft,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>f.draft},
+  '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})},'../../api/crewOfflinePreparation':{}
+ }});
+ ui.render();await ui.flush();assert.equal(calls,0);
+ const first=ui.press('Ký đánh giá hiện trường');ui.press('Ký đánh giá hiện trường');await ui.flush();assert.equal(calls,1);
+ wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId:f.h.task}]})});await first;await ui.flush();
+ assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Ký đánh giá hiện trường'));
+ assert.ok(JSON.stringify(ui.nodes()).includes('Đã lưu gói ký trên thiết bị'));ui.unmount();
 });
