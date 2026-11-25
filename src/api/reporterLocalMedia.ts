@@ -3,11 +3,13 @@ import { randomUUID } from 'expo-crypto';
 import { MAX_PHOTO_BYTES, sha256HexOfBytes } from './uploads';
 import { readPhotoGps, type PhotoGps } from '../utils/photoGps';
 import type { ReportLocationSource } from '../types/position';
+import { sealReporterPhoto } from './reporterMediaVault';
+import type { MediaVaultReference } from '../offline/mediaVaultAccess';
 
 export type ReporterPhotoSource = { uri: string; fileName: string; mediaType?: string | null; capturedAt: string;
   photoLocation?: PhotoGps | null; locationSource?: ReportLocationSource };
 export type PreservedReporterPhoto = ReporterPhotoSource & {
-  mediaType: 'image/jpeg' | 'image/png'; sizeBytes: number; checksumSha256: string;
+  mediaType: 'image/jpeg' | 'image/png'; sizeBytes: number; checksumSha256: string; vault?: MediaVaultReference;
 };
 const failure = (code: string) => ({ code, stage: 'local_admission' });
 
@@ -53,11 +55,13 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     const finalBytes = await final.bytes(); guard();
     const finalHash = await sha256HexOfBytes(finalBytes); guard();
     if (finalBytes.length !== size || finalHash !== checksumSha256) throw failure('photo_copy_mismatch');
+    phase = 'storage';
+    const vault = await sealReporterPhoto({uri:final.uri,sizeBytes:size,checksumSha256},isCurrent); guard();
     // No input path/name is used in the destination. Leftover partials are retained
     // on failure; no cleanup may infer that an old file is unreferenced.
     const embeddedGps = source.locationSource === 'CAPTURE' ? null : readPhotoGps(bytes);
     return { uri: final.uri, fileName: key + (jpeg ? '.jpg' : '.png'), mediaType,
-      capturedAt: source.capturedAt, sizeBytes: size, checksumSha256,
+      capturedAt: source.capturedAt, sizeBytes: size, checksumSha256, ...(vault ? {vault} : {}),
       ...(source.locationSource === 'CAPTURE'
         ? { photoLocation: source.photoLocation ?? null, locationSource: source.photoLocation ? 'CAPTURE' as const : 'UNKNOWN' as const }
         : { photoLocation: embeddedGps, locationSource: embeddedGps ? 'EXIF' as const : 'UNKNOWN' as const }) };
@@ -85,6 +89,7 @@ export function reporterPhotoFailureMessage(error: unknown): string | null {
     case 'photo_read_failed': return 'Không đọc được ảnh trên thiết bị. Nháp và ảnh cũ vẫn được giữ; vui lòng kiểm tra quyền truy cập.';
     case 'photo_write_failed': case 'photo_move_failed': case 'photo_copy_mismatch':
       return 'Chưa lưu được bản ảnh bền vững trên thiết bị. Nháp và ảnh cũ vẫn được giữ; vui lòng thử chọn hoặc chụp lại.';
+    case 'photo_storage_failed': return 'Chưa bảo vệ được ảnh trên thiết bị. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại trong phiên hiện tại.';
     case 'photo_context_changed': return 'Phiên đã thay đổi. Ảnh vừa chọn chưa được thêm vào nháp.';
     default: return null;
   }

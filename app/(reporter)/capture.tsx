@@ -4,16 +4,14 @@ import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { File } from 'expo-file-system';
+import { preserveReporterPhoto, reporterPhotoFailureMessage } from '../../src/api/reporterLocalMedia';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/reporter/Button';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import {
-  MAX_PHOTO_BYTES,
   locationSourceFor,
   normalizePhotoMediaType,
-  sha256HexOfBytes,
 } from '../../src/api/uploads';
 import { hasUsableCoordinate } from '../../src/types/position';
 import {
@@ -138,25 +136,17 @@ export default function ReporterCaptureScreen() {
 
     setBusy(true);
     try {
-      const bytes = new Uint8Array(await new File(asset.uri).arrayBuffer());
-      if (!isCurrent()) return;
-      if (bytes.byteLength <= 0) {
-        setError('Không đọc được nội dung ảnh. Vui lòng chụp lại.');
-        return;
-      }
-      if (bytes.byteLength > MAX_PHOTO_BYTES) {
-        setError('Ảnh vượt quá 20 MiB. Vui lòng chọn ảnh nhỏ hơn.');
-        return;
-      }
-      const checksumSha256 = await sha256HexOfBytes(bytes);
+      const saved = await preserveReporterPhoto({uri:asset.uri,fileName,mediaType,capturedAt:new Date().toISOString()},isCurrent);
       if (!isCurrent()) return;
       const usable = hasUsableCoordinate(coordinates?.latitude, coordinates?.longitude);
       const itemId = await enqueuePhoto({
-        uriLocal: asset.uri,
-        fileName,
-        mediaType,
-        sizeBytes: bytes.byteLength,
-        checksumSha256,
+        uriLocal: saved.uri,
+        fileName: saved.fileName,
+        mediaType: saved.mediaType,
+        sizeBytes: saved.sizeBytes,
+        checksumSha256: saved.checksumSha256,
+        capturedAt: saved.capturedAt,
+        ...(saved.vault===undefined?{}:{vault:saved.vault}),
         locationSource: locationSourceFor(usable),
         latitude: usable ? coordinates?.latitude ?? null : null,
         longitude: usable ? coordinates?.longitude ?? null : null,
@@ -165,9 +155,9 @@ export default function ReporterCaptureScreen() {
       });
       if (!isCurrent()) return;
       await advanceItem(itemId);
-    } catch {
+    } catch (error) {
       if (!isCurrent()) return;
-      setError('Không xử lý được ảnh đã chọn. Vui lòng thử lại.');
+      setError(reporterPhotoFailureMessage(error) ?? 'Không xử lý được ảnh đã chọn. Vui lòng thử lại.');
     } finally {
       if (isCurrent()) setBusy(false);
     }

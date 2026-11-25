@@ -448,7 +448,8 @@ export default function ReporterReportScreen() {
                 disabled={submitting || photos.length >= MAX_PHOTOS}
                 onPress={() => {
                   if (!scope.capture()() || submitting || draftLocked || photos.length >= MAX_PHOTOS) return;
-                  photoMeta.current.set(item.uriLocal, { uri: item.uriLocal, fileName: item.fileName, mediaType: item.mediaType, capturedAt: item.capturedAt, itemId: item.id });
+                  photoMeta.current.set(item.uriLocal, { uri: item.uriLocal, fileName: item.fileName, mediaType: item.mediaType, capturedAt: item.capturedAt, itemId: item.id,
+                    sizeBytes: item.sizeBytes, checksumSha256: item.checksumSha256, ...(item.vault===undefined?{}:{vault:item.vault}) });
                   updatePhotos(current => current.includes(item.uriLocal) ? current : [...current, item.uriLocal].slice(0, MAX_PHOTOS));
                 }} /></View>
             </View>) : null}

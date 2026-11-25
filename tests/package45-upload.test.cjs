@@ -57,7 +57,7 @@ test('upload progress measures acknowledged bytes including partial last part', 
 });
 const { screen } = require('./helpers/roadfe-screen.cjs');
 test('retained failed ledger does not prevent adding replacement or selecting verified evidence', async () => {
-  const s = screen('app/(reporter)/capture.tsx', { library: async () => ({ canceled: false, assets: [{ uri: 'new.jpg', fileName: 'new.jpg', mimeType: 'image/jpeg' }] }) });
+  const s = screen('app/(reporter)/capture.tsx', { library: async () => ({ canceled: false, assets: [{ uri: 'file:///cache/new.jpg', fileName: 'new.jpg', mimeType: 'image/jpeg' }] }) });
   s.h.login();
   for (let i = 0; i < 3; i++) {
     const id = await s.uploads.useUploadsStore.getState().enqueuePhoto({ uriLocal: `old-${i}.jpg`, fileName: 'old.jpg', mediaType: 'image/jpeg', sizeBytes: 3, checksumSha256: 'a'.repeat(64) });

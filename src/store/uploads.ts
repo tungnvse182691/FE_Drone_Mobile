@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AppState, type AppStateStatus } from 'react-native';
-import { File } from 'expo-file-system';
+import { readReporterPhotoBytes } from '../api/reporterMediaVault';
+import type { MediaVaultReference } from '../offline/mediaVaultAccess';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { openDatabase } from '../offline/database';
 import { uuidv4 } from '../utils/uuid';
@@ -137,6 +138,7 @@ export const UPLOAD_STATE_LABELS: Record<UploadMediaState, string> = {
 };
 
 export interface UploadQueueItem {
+  vault?: MediaVaultReference;
   id: string;
   partitionId: string;
   uriLocal: string;
@@ -170,6 +172,7 @@ export interface UploadQueueItem {
 }
 
 export interface EnqueuePhotoInput {
+  vault?: MediaVaultReference;
   uriLocal: string;
   fileName: string;
   mediaType: string;
@@ -234,6 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_upload_ledger_partition
   ON upload_ledger (partition_id, media_state, created_at ASC);`;
 
 interface UploadLedgerRow {
+  media_vault?: string | null;
   id: string;
   partition_id: string;
   uri_local: string;
@@ -276,6 +280,9 @@ async function migrateLedger(db: SQLiteDatabase): Promise<void> {
   if (!columns.some((column) => column.name === 'cancel_state')) {
     await db.execAsync('ALTER TABLE upload_ledger ADD COLUMN cancel_state TEXT');
   }
+  if (!columns.some((column) => column.name === 'media_vault')) {
+    await db.execAsync('ALTER TABLE upload_ledger ADD COLUMN media_vault TEXT');
+  }
 }
 
 async function ledger(): Promise<SQLiteDatabase> {
@@ -311,6 +318,7 @@ function mapRow(row: UploadLedgerRow): UploadQueueItem {
       diagnostic = { stage: value.stage, status: Number.isInteger(value.status) ? value.status : undefined, message: value.message };
   } catch { /* Historical human-readable message. */ }
   return {
+    ...(row.media_vault == null ? {} : {vault:JSON.parse(row.media_vault) as MediaVaultReference}),
     id: row.id,
     partitionId: row.partition_id,
     uriLocal: row.uri_local,
@@ -352,8 +360,8 @@ async function writeItem(item: UploadQueueItem): Promise<void> {
       id, partition_id, uri_local, file_name, media_type, size_bytes, checksum_sha256,
       media_state, upload_id, cancel_state, file_id, session_version, part_size_bytes, part_etags,
       server_status, verified_version, attempt, last_error_code, last_error_message,
-      location_source, latitude, longitude, accuracy_meters, captured_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      location_source, latitude, longitude, accuracy_meters, captured_at, created_at, updated_at, media_vault
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     item.id,
     item.partitionId,
     item.uriLocal,
@@ -381,6 +389,7 @@ async function writeItem(item: UploadQueueItem): Promise<void> {
     item.capturedAt,
     item.createdAt,
     item.updatedAt,
+    item.vault===undefined?null:JSON.stringify(item.vault),
   );
 }
 
@@ -406,12 +415,6 @@ async function loadItems(partitionId: string): Promise<UploadQueueItem[]> {
   return rows.map(mapRow);
 }
 
-async function readPhotoBytes(uri: string): Promise<Uint8Array> {
-  const file = new File(uri);
-  const buffer = await file.arrayBuffer();
-  return new Uint8Array(buffer);
-}
-
 type ItemPatch = Partial<UploadQueueItem>;
 type ItemUpdater = (patch: ItemPatch) => Promise<UploadQueueItem>;
 
@@ -430,7 +433,10 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater, transport
       item.sessionVersion!, `complete:${item.id}:${item.checksumSha256}`);
     return update({ mediaState: 'VERIFYING' });
   }
-  const bytes = await readPhotoBytes(item.uriLocal);
+  const context=reporterContext();
+  const bytes = await readReporterPhotoBytes({...item,uri:item.uriLocal},()=>{
+    try {assertReporterContext(context);return true;} catch {return false;}
+  });
   if (bytes.byteLength <= 0) {
     throw { code: 'upload_validation_failed', message: 'Tệp ảnh rỗng, vui lòng chụp lại.' };
   }
@@ -665,6 +671,7 @@ export const useUploadsStore = create<UploadsState>()((set, get) => ({
       id: uuidv4(),
       partitionId: context.partition,
       uriLocal: input.uriLocal,
+      ...(input.vault===undefined?{}:{vault:{...input.vault}}),
       fileName: input.fileName,
       mediaType: input.mediaType,
       sizeBytes: input.sizeBytes,

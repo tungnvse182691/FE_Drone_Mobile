@@ -4,7 +4,8 @@ import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
 import type { CreateReporterReportRequestDto } from '../api/mock/reporter';
 import { openDatabase, initDatabase, saveDraft, getDraft } from '../offline/database';
-import { File } from 'expo-file-system';
+import { readReporterPhotoBytes } from '../api/reporterMediaVault';
+import type { MediaVaultReference } from '../offline/mediaVaultAccess';
 import { useAuthStore } from './auth';
 import { useUploadsStore, reporterContext, assertReporterContext, uploadedRatio } from './uploads';
 import { isReporterSession, MAX_PHOTO_BYTES, sha256HexOfBytes, strongUploadETag, uploadFailureMessage, UPLOAD_FAILURE_STAGES, type UploadFailureStage } from '../api/uploads';
@@ -17,6 +18,7 @@ import { isTemporaryVerificationFailure, waitForReporterVerification } from './r
 import { buildReportEvidenceLocation, locationSourceFor as sourceFor } from '../types/position';
 
 export interface DraftPhoto {
+  vault?: MediaVaultReference;
   uri: string;
   fileName: string;
   mediaType: string;
@@ -362,10 +364,7 @@ export const useReporterStore = create<ReporterSessionState>()(
             if (!id) {
               let bytes: Uint8Array;
               try {
-                const file = new File(photo.uri);
-                if (file.exists === false) throw { code: 'local_photo_missing', stage: 'local_read' };
-                if (typeof file.size === 'number' && (file.size <= 0 || file.size > MAX_PHOTO_BYTES)) throw { code: 'validation_error', status: 400, stage: 'local_read' };
-                bytes = new Uint8Array(await file.arrayBuffer());
+                bytes = await readReporterPhotoBytes(photo,()=>{try{assertOwner();return true;}catch{return false;}});
               } catch (error) {
                 assertOwner();
                 if ((error as { stage?: string })?.stage === 'local_read') throw error;
@@ -382,7 +381,7 @@ export const useReporterStore = create<ReporterSessionState>()(
               const fix = photo.photoLocation === undefined ? draft.coords : photo.photoLocation;
               const location = buildReportEvidenceLocation(fix?.latitude, fix?.longitude, fix?.accuracyMeters);
               id = await queue.enqueuePhoto({ partitionId: context.partition, uriLocal: photo.uri, fileName: photo.fileName, mediaType: photo.mediaType,
-                sizeBytes: bytes.length, checksumSha256, capturedAt: photo.capturedAt,
+                sizeBytes: bytes.length, checksumSha256, capturedAt: photo.capturedAt, ...(photo.vault===undefined?{}:{vault:photo.vault}),
                 locationSource: location ? photo.locationSource ?? sourceFor(true) : 'UNKNOWN', ...location });
               await putDraft({ ...draft, photos: draft.photos.map((p, i) => i === index ? { ...p, itemId: id } : p) });
             }
