@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),{randomUUID:id}=require('node:crypto');
 function load(file,deps={}){const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,{module:m,exports:m.exports,require:n=>deps[n]??{},Date,URL});return m.exports;}
 const guid=x=>typeof x==='string'&&/^[a-f0-9-]{36}$/.test(x);
-function fixture(){const actor=id(),project=id(),origin=id(),effect=id(),canonical=id(),batch=id(),task=id(),snapshot=id(),assignment=id(),registration=id();
- const i={actor,role:'REPAIR_CREW',environment:'https://example.test/api/v1',scope:'A'},d={originId:origin,effectId:effect,kind:'FIELD_START',taskId:task,snapshotId:snapshot,assignmentId:assignment};
+function fixture(kind='FIELD_START'){const actor=id(),project=id(),origin=id(),effect=id(),canonical=id(),batch=id(),task=id(),snapshot=id(),assignment=id(),registration=id();
+ const i={actor,role:'REPAIR_CREW',environment:'https://example.test/api/v1',scope:'A'},d={originId:origin,effectId:effect,kind,taskId:task,snapshotId:snapshot,assignmentId:assignment};
  const item={originId:origin,effectId:effect,kind:d.kind,canonicalOriginId:canonical,state:'COMMITTED',durableAcknowledgment:true,serverReceivedAt:'2026-10-28T00:00:00Z'};
  const receipt={batchId:batch,items:[item],localQueueInstruction:'KEEP_UNACKNOWLEDGED_OR_CONFLICTED_ITEMS'};
  const record={id:id(),identity:i,projectId:project,phase:'RECEIVED',path:`/projects/${project}/offline/sync`,key:id(),body:JSON.stringify({batchId:id(),sourceDeviceRegistrationId:registration,operations:[{...d,originalActorId:actor,sourceDeviceId:id(),taskVersion:'AAAAAAAAB9E='}]}),proof:{kind:'signed-field-batch',descriptors:[d]},receipt};
@@ -62,4 +62,16 @@ test('FINAL partial recovery checkpoints positive origin before later GET failur
  const h=fixture(),d2={...h.d,originId:id(),effectId:id()};h.record.phase='UNKNOWN_OUTCOME';h.record.proof.descriptors.push(d2);const body=JSON.parse(h.record.body);body.operations.push({...body.operations[0],...d2});h.record.body=JSON.stringify(body);
  // API123 supplies no result for the second member; the first must already be persisted.
  await assert.rejects(h.s.recoverSignedOrigins(h.record),/origin_readback/);assert.equal(h.checkpoints.length,1);assert.equal(h.checkpoints[0][0].originId,h.d.originId);assert.equal(h.phases.length,0);
+});
+
+for(const kind of ['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'])test('REPAIR receipt and unknown-outcome recovery require independent origin readback '+kind,async()=>{
+ const h=fixture(kind);
+ const reconciled=await h.s.reconcileSignedBatch(h.record);
+ assert.equal(reconciled.phase,'RECONCILED');assert.equal(reconciled.verifiedItems[0].kind,kind);
+ assert.ok(h.reads.some(r=>r.kind==='origins'&&r.resource===h.item.originId));
+ const uncertain={...h.record,phase:'UNKNOWN_OUTCOME'};delete uncertain.receipt;
+ const recovered=await h.s.recoverSignedOrigins(uncertain);
+ assert.equal(recovered.phase,'UNKNOWN_OUTCOME');assert.equal(recovered.verifiedItems[0].serverBatchId,null);
+ assert.equal(recovered.body,uncertain.body);assert.equal(recovered.key,uncertain.key);
+ h.setOrigin({...h.item,durableAcknowledgment:false});await assert.rejects(h.s.reconcileSignedBatch(h.record),/origin_readback/);
 });

@@ -10,6 +10,14 @@ function containsSubmission(record:OfflineJournalRecord,projectId:string,taskId:
     (JSON.parse(record.body).operations??[]).some((o:{kind?:string;taskId?:string})=>o.kind==='FIELD_SUBMISSION'&&o.taskId===taskId);
 }
 
+function fieldStartTasks(record:OfflineIntent):string[] {
+  if(record.proof.kind!=='signed-field-batch')return [];
+  const tasks=(JSON.parse(record.body).operations??[])
+    .filter((o:{kind?:string})=>o.kind==='FIELD_START').map((o:{taskId:string})=>o.taskId);
+  if(typeof record.proof.fieldStartTaskId==='string')tasks.push(record.proof.fieldStartTaskId);
+  return [...new Set<string>(tasks)];
+}
+
 /** The online command and signed submission share one durable exclusion gate.
  * Check the immutable operation, not optional presentation metadata. */
 export async function writeOnlineFieldSubmissionDraft(db:SQLiteDatabase,id:string,draft:FieldDraft) {
@@ -32,7 +40,7 @@ export async function writeOnlineFieldJournal(db:SQLiteDatabase,record:FieldComm
   if(!owner||owner.actor!==record.actorId||owner.scope!==record.scope)throw Error('offline_session_changed');
   await db.withExclusiveTransactionAsync(async tx=>{
     const rows=await (await openOfflineJournal(owner,tx)).list();
-    if(rows.some(r=>r.projectId===record.projectId&&r.proof.fieldStartTaskId===record.taskId&&r.phase!=='RECONCILED'))throw Error('field_command_pending');
+    if(rows.some(r=>r.projectId===record.projectId&&fieldStartTasks(r).includes(record.taskId)&&r.phase!=='RECONCILED'))throw Error('field_command_pending');
     if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
     await saveDraft(tx,`t05a-field:${record.actorId}:${record.projectId}:${record.taskId}`,'T05A_FIELD_COMMAND',{...record});
     if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
@@ -75,7 +83,7 @@ export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord 
   if(r.verifiedItems!==undefined){
     if(!Array.isArray(r.verifiedItems)||new Set(r.verifiedItems.map(i=>i.originId)).size!==r.verifiedItems.length||r.verifiedItems.some(i=>
       !guid(i.originId)||!guid(i.effectId)||!guid(i.canonicalOriginId)||(i.serverBatchId!==null&&!guid(i.serverBatchId))||
-      !['COMMITTED','REPLAYED'].includes(i.state)||!['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION'].includes(i.kind)||!Number.isFinite(Date.parse(i.serverReceivedAt))))throw Error('offline_checkpoint_invalid');
+      !['COMMITTED','REPLAYED'].includes(i.state)||!['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION','REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'].includes(i.kind)||!Number.isFinite(Date.parse(i.serverReceivedAt))))throw Error('offline_checkpoint_invalid');
     safe(r.verifiedItems);
   }return r;
 }
@@ -132,13 +140,26 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
             if(online){const c=JSON.parse(online.payload);if(!['confirmed','rejected'].includes(c.phase)||c.readbackStatus!==200)throw Error('offline_online_command_reconciliation_required');}
           }else if(copy.proof.previousSnapshotIntentId)throw Error('offline_snapshot_source_mismatch');
         }
-        if(copy.proof.kind==='signed-field-batch'&&copy.proof.fieldStartTaskId){
-          if(records.some(r=>r.projectId===copy.projectId&&r.proof.fieldStartTaskId===copy.proof.fieldStartTaskId))throw Error('offline_existing_intent_reconciliation_required');
-          const online=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=?',`t05a-field:${copy.identity.actor}:${copy.projectId}:${copy.proof.fieldStartTaskId}`);guard();
+        for(const taskId of fieldStartTasks(copy)){
+          if(records.some(r=>r.projectId===copy.projectId&&fieldStartTasks(r).includes(taskId)))throw Error('offline_existing_intent_reconciliation_required');
+          const online=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=?',`t05a-field:${copy.identity.actor}:${copy.projectId}:${taskId}`);guard();
           if(online){const command=JSON.parse(online.payload);if(!['confirmed','rejected'].includes(command.phase)||command.readbackStatus!==200)throw Error('offline_online_command_reconciliation_required');}
         }
         if(copy.proof.kind==='signed-field-batch'){
+          const repairOperations=new Set<string>();
           for(const op of JSON.parse(copy.body).operations??[]){
+            if(['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'].includes(op.kind)){
+              const operationKey=JSON.stringify([op.kind,op.taskId,op.repair?.resourceId]);
+              if(repairOperations.has(operationKey))throw Error('repair_signed_command_pending');
+              repairOperations.add(operationKey);
+              // Independent online history cannot be adopted into a signed lineage.
+              const online=await tx.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=?','T06A_REPAIR_COMMAND');guard();
+              if(online.some(row=>{const c=JSON.parse(row.payload),i=c.identity;return i?.actor===owner.actor&&i.environment===owner.environment&&
+                i.projectId===copy.projectId&&i.taskId===op.taskId&&i.itemId===op.repair?.resourceId;}))throw Error('repair_online_history_reconciliation_required');
+              if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='signed-field-batch'&&
+                (JSON.parse(r.body).operations??[]).some((old:{kind?:string;taskId?:string;repair?:{resourceId?:string}})=>
+                  old.kind===op.kind&&old.taskId===op.taskId&&old.repair?.resourceId===op.repair?.resourceId)))throw Error('repair_signed_command_pending');
+            }
             if(op.kind==='FIELD_SUBMISSION'){
               if(records.some(r=>containsSubmission(r,copy.projectId,op.taskId)))throw Error('field_submission_pending');
               const drafts=await tx.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=?','T05B_FIELD');guard();

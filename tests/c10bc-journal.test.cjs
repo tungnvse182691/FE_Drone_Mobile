@@ -130,3 +130,29 @@ for(const mode of ['pending-snapshot','same-version','wrong-parent','pending-bat
  await assert.rejects(current.prepare({...base,identity:h.current(),id:randomUUID(),key:randomUUID(),body:old.body,proof:{kind:'snapshot',taskVersion:mode==='same-version'?'v1':'v2',previousSnapshotIntentId:mode==='wrong-parent'?randomUUID():old.id}}));
  assert.equal(JSON.stringify((await current.list())[0]),JSON.stringify(old));h.raw.close();
 });
+
+for(const online of [false,true])test('signed REPAIR blocks duplicate or online history atomically '+online,async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID(),item=randomUUID();
+ const intent={...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId:task,repair:{resourceId:item}}]})};
+ if(online){h.raw.prepare('INSERT INTO local_draft(id,kind,payload) VALUES (?,?,?)').run('online','T06A_REPAIR_COMMAND',JSON.stringify({identity:{actor:h.i.actor,environment:h.i.environment,projectId:base.projectId,taskId:task,itemId:item},phase:'CONFIRMED'}));}
+ else await j.prepare(intent);
+ await assert.rejects(j.prepare({...intent,id:randomUUID(),key:randomUUID()}),/repair.*(pending|reconciliation)/);
+ h.switch();const next=await h.m.openOfflineJournal(h.current(),h.db);
+ await assert.rejects(next.prepare({...intent,identity:h.current(),id:randomUUID(),key:randomUUID()}),/repair.*(pending|reconciliation)/);
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);h.raw.close();
+});
+
+for(const kind of ['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'])test('signed REPAIR rejects duplicate operation within one batch '+kind,async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),op={kind,taskId:randomUUID(),repair:{resourceId:randomUUID()}};
+ await assert.rejects(j.prepare({...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[op,{...op}]})}),/repair_signed_command_pending/);
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,0);h.raw.close();
+});
+
+test('mixed REPAIR batch excludes online FIELD start using immutable body without metadata',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID(),otherTask=randomUUID();
+ const body=JSON.stringify({operations:[{kind:'FIELD_START',taskId:task},{kind:'FIELD_START',taskId:otherTask},{kind:'REPAIR_ASSESSMENT',taskId:task,repair:{resourceId:randomUUID()}}]});
+ const intent={...base,proof:{kind:'signed-field-batch'},body};await j.prepare(intent);
+ for(const taskId of [task,otherTask])await assert.rejects(h.m.writeOnlineFieldJournal(h.db,{actorId:h.i.actor,scope:h.i.scope,projectId:base.projectId,taskId,phase:'pending'}),/field_command_pending/);
+ await assert.rejects(j.prepare({...base,id:randomUUID(),key:randomUUID(),proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_START',taskId:otherTask}]})}),/reconciliation/);
+ h.raw.close();
+});

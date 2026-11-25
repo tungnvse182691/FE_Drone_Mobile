@@ -4,7 +4,7 @@ function setup(native=true){const project=randomUUID(),actor=randomUUID(),scope=
  const guard=x=>{if(x.actor!==current.actor||x.scope!==current.scope||x.role!=='REPAIR_CREW'||x.environment!==current.environment)throw Error('crew_session_changed');};
  const client=axios.create({baseURL:i.environment,adapter:async c=>{calls.push(c);if(switchDuring)current={...i,actor:randomUUID(),scope:'session-B'};if(error)throw error;return {status:200,data:{id:randomUUID()},headers:{},config:c};}});
  const phases=[];const journal={transition:async(r,p,receipt)=>{guard(r.identity);phases.push(p);return {...r,phase:p,...(receipt?{receipt}:{})};}};
- const api={isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x)&&!/^0+-0+-0+-0+-0+$/.test(x),isRepairItemVersion:x=>x==='AAAAAAAAB9E='};
+ const api={isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x)&&!/^0+-0+-0+-0+-0+$/.test(x),isRepairItemVersion:x=>['AAAAAAAAB9E=','AAAAAAAAB9I='].includes(x)};
  const deps={'./client':{apiClient:client},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':api,'./crewOfflineJournal':{openOfflineJournal:async()=>journal},'../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:native,offlineQaNativeFor:()=>null}};
  const w=load('src/api/crewOfflineWorkflow.ts',deps);
  const record={schema:1,phase:'PREPARED',id:randomUUID(),identity:i,projectId:project,path:`/projects/${project}/offline/devices`,key:randomUUID(),body:'{"deviceId":"synthetic-only"}',proof:{kind:'enrollment'}};
@@ -46,4 +46,27 @@ test('C10BC signed FIELD preparation preserves negative zero, freezes source, jo
  '../../modules/roadguard-offline-crypto':{offlineNative:{publicKeys:async()=>({signingPublicKey:'sign',encryptionPublicKey:'enc'}),signManifest:async()=>{signs++;return 'synthetic-public-signature';},verifyManifest:async()=>true}},'../api/crewOfflineJournal':{openOfflineJournal:async()=>({prepare:async r=>{saved=r;return {...r,phase:'PREPARED'};}})},'../utils/uuid':{uuidv4:randomUUID}});
  const r=await module.prepareSignedFieldBatch(h.i,h.project,registration,[op],sha);assert.equal(r.phase,'PREPARED');assert.match(saved.body,/"longitude":-0/);assert.match(saved.body,/"latitude":10/);assert.equal(signs,1);assert.equal(h.calls.length,0);
  op.originalActorId=randomUUID();await assert.rejects(module.prepareSignedFieldBatch(h.i,h.project,registration,[op],sha),/source/);assert.equal(signs,1);
+});
+
+test('REPAIR signer requires actual item version and binding, preserves typed hash',async()=>{
+ const h=setup(),crypto=require('node:crypto'),p=load('src/api/crewOfflineProtocol.ts',{}),sha=async s=>crypto.createHash('sha256').update(s).digest('hex');
+ const device=randomUUID(),registration=randomUUID(),task=randomUUID(),assignment=randomUUID(),origin=randomUUID(),item=randomUUID();let saved,signs=0;
+ const repair={schemaVersion:1,packageId:randomUUID(),itemId:item,bindingId:randomUUID(),itemVersion:'AAAAAAAAB9I=',taskId:task,assignmentId:assignment,crewId:h.i.actor,mode:'Normal',state:'Assigned',executeAuthority:'REVALIDATE_CURRENT_SOURCE_AT_ADMISSION'};
+ const snapshot={id:randomUUID(),taskId:task,assignmentId:assignment,originalActorId:h.i.actor,deviceRegistrationId:registration,taskVersion:'AAAAAAAAB9E=',assignmentHash:'a'.repeat(64),contentHash:'b'.repeat(64),snapshot:{repair}};
+ const op={schemaVersion:1,originId:origin,effectId:origin,kind:'REPAIR_ASSESSMENT',originalActorId:h.i.actor,sourceDeviceId:device,snapshotId:snapshot.id,taskId:task,assignmentId:assignment,taskVersion:snapshot.taskVersion,dependencies:[],claimedFinishedAt:null,fieldStart:null,fieldSubmission:null,fieldAction:null,repair:{resourceId:item,action:'assessment',assessment:{originId:origin,fieldFirstStartId:randomUUID(),deviceId:device,measurements:[],evidence:[],locationProof:null}}};
+ op.corePayloadHash=await p.repairCoreHash(op,sha);
+ const native={publicKeys:async()=>({signingPublicKey:'sign',encryptionPublicKey:'enc'}),signManifest:async()=>{signs++;return 'test-only';},verifyManifest:async()=>true};
+ const s=load('src/offline/crewSignedSync.ts',{'../api/crewOfflineWorkflow':{...h.w},'../api/crewOfflineProtocol':p,'../api/crewOfflineCrypto':{offlineP1363:()=>{}},'../api/crewSafetyWorkflow':{crewReadGuard:()=>{}},'../api/crewOfflineDevice':{crewOfflineNative:()=>native,inspectOfflineDevice:async()=>({deviceId:device,capability:{signingUsable:true,agreementUsable:true}}),deviceBinding:()=> 'binding',readLocalOfflineSources:async()=>({device:{id:registration,deviceId:device,actorId:h.i.actor,role:'RepairCrew',revokedAt:null,signingPublicKey:'sign',encryptionPublicKey:'enc'},snapshots:[snapshot]})},'../api/crewOfflineJournal':{openOfflineJournal:async()=>({prepare:async r=>{saved=r;return {...r,phase:'PREPARED'};}})},'../../modules/roadguard-offline-crypto':{},'../utils/uuid':{uuidv4:randomUUID}});
+ assert.equal(typeof s.prepareSignedRepairBatch,'function');
+ await s.prepareSignedRepairBatch(h.i,h.project,registration,[op],sha);assert.equal(signs,1);assert.equal(JSON.parse(saved.body).operations[0].repair.resourceId,item);
+ for(const change of [{itemVersion:'task-etag'},{taskId:randomUUID()},{assignmentId:randomUUID()},{crewId:randomUUID()},{itemId:randomUUID()},{bindingId:null},{executeAuthority:null}]){
+  snapshot.snapshot.repair={...repair,...change};await assert.rejects(s.prepareSignedRepairBatch(h.i,h.project,registration,[op],sha),/repair.*source/);
+ }
+ assert.equal(signs,1);snapshot.snapshot.repair=repair;
+ const startOrigin=randomUUID(),start={...op,originId:startOrigin,effectId:startOrigin,kind:'FIELD_START',repair:null,fieldStart:{originId:startOrigin,claimedAt:'2026-11-25T00:00:00Z',deviceId:device}};
+ start.corePayloadHash=await p.fieldCoreHash(start,sha);
+ await s.prepareSignedRepairBatch(h.i,h.project,registration,[start,op],sha);
+ assert.equal(saved.proof.fieldStartTaskId,task);
+
+ await assert.rejects(s.prepareSignedFieldBatch(h.i,h.project,registration,[op],sha),/source/);
 });

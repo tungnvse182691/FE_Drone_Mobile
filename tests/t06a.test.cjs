@@ -234,3 +234,11 @@ test('T06A deep links to legacy execution screens never mount even with complete
   m.CrewTaskBoundary({operational:false,children:()=>{mounted++;}});
   assert.equal(mounted, 1); // Read-only detail capability remains independent.
 });
+
+test('online repair journal refuses independently signed repair history without adopting it',async()=>{
+ const h=journal(),j=await h.open(),command=h.command(),origin=randomUUID();
+ const prefix='c10bc:'+JSON.stringify([command.identity.environment,actor,'REPAIR_CREW'])+':';
+ h.raw.prepare("INSERT INTO local_draft(id,kind,payload,created_at,updated_at) VALUES (?,?,?,'2026-11-25','2026-11-25')").run(prefix+origin,'C10BC_IMMUTABLE_COMMAND_V1',JSON.stringify({projectId,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId,repair:{resourceId:itemId}}]})}));
+ await assert.rejects(j.prepare(command),/repair.*pending/);
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);
+});

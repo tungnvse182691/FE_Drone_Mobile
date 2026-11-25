@@ -3,7 +3,7 @@ import { crewReadGuard } from '../api/crewSafetyWorkflow';
 import { openOfflineJournal, type OfflineJournalRecord, type VerifiedOfflineItem } from '../api/crewOfflineJournal';
 import { canonicalOfflineAttached, canonicalOfflineManifest, describeOfflineOperation, type OfflineRecord, type Sha256 } from '../api/crewOfflineProtocol';
 import { offlineP1363 } from '../api/crewOfflineCrypto';
-import { dispatchOfflineIntent, readOfflineResource, validateDevice, validateSnapshot, validateBatch, offlineProjectPath, requireOfflineNativeAcceptance,
+import { dispatchOfflineIntent, readOfflineResource, validateDevice, validateSnapshot, validateRepairSnapshot, validateBatch, offlineProjectPath, requireOfflineNativeAcceptance,
   type DeviceRegistration, type SourceSnapshot, type OfflineBatchReceipt, type OfflineItemReceipt } from '../api/crewOfflineWorkflow';
 import { inspectOfflineDevice, deviceBinding, readLocalOfflineSources, crewOfflineNative } from '../api/crewOfflineDevice';
 import { offlineNative } from '../../modules/roadguard-offline-crypto';
@@ -44,8 +44,14 @@ function snapshotOperations(input:OfflineRecord[]):OfflineRecord[] {
   return copy(input,0) as OfflineRecord[];
 }
 
-/** Only explicit FIELD intents with authoritative snapshots. No legacy queue/T06 journal conversion. */
-export async function prepareSignedFieldBatch(identity:QueueIdentity,projectId:string,registrationId:string,input:OfflineRecord[],sha:Sha256) {
+/** No legacy queue/T06 journal conversion. FIELD remains an independently bounded capability. */
+export function prepareSignedRepairBatch(identity:QueueIdentity,projectId:string,registrationId:string,input:OfflineRecord[],sha:Sha256) {
+  return prepareSignedBatch(identity,projectId,registrationId,input,sha,true);
+}
+export function prepareSignedFieldBatch(identity:QueueIdentity,projectId:string,registrationId:string,input:OfflineRecord[],sha:Sha256) {
+  return prepareSignedBatch(identity,projectId,registrationId,input,sha,false);
+}
+async function prepareSignedBatch(identity:QueueIdentity,projectId:string,registrationId:string,input:OfflineRecord[],sha:Sha256,repairMode:boolean) {
   const offlineNative=crewOfflineNative(identity);
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   if(!offlineNative||input.length<1||input.length>1000)throw Error('offline_batch_invalid');
@@ -60,10 +66,12 @@ export async function prepareSignedFieldBatch(identity:QueueIdentity,projectId:s
   if(keys.signingPublicKey!==device.signingPublicKey||keys.encryptionPublicKey!==device.encryptionPublicKey)throw Error('offline_key_mismatch');
   const descriptors:OfflineRecord[]=[];
   for(const o of operations) {
-    if(!['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION'].includes(String(o.kind))||o.originalActorId!==identity.actor||o.sourceDeviceId!==probe.deviceId)throw Error('offline_operation_source_invalid');
+    if(!(repairMode?['FIELD_ACCEPT','FIELD_START','REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH']:['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION']).includes(String(o.kind))||o.originalActorId!==identity.actor||o.sourceDeviceId!==probe.deviceId)throw Error('offline_operation_source_invalid');
     const snapshot=local.snapshots.find(s=>s.id===o.snapshotId);
     if(!snapshot)throw Error('offline_verified_snapshot_not_downloaded');
     validateSnapshot(snapshot,identity,{id:String(o.snapshotId),taskId:String(o.taskId),assignmentId:String(o.assignmentId),deviceRegistrationId:registrationId,taskVersion:String(o.taskVersion)});
+    if(repairMode)validateRepairSnapshot(snapshot,identity,(o.repair as OfflineRecord|null)?.resourceId);
+    else if((snapshot.snapshot as OfflineRecord)?.repair!=null)throw Error('offline_repair_snapshot_source_required');
     descriptors.push(await describeOfflineOperation(o,sha));crewReadGuard(identity);
   }
   const batchId=uuidv4(),manifest=canonicalOfflineManifest(projectId,batchId,registrationId,descriptors);
@@ -74,7 +82,7 @@ export async function prepareSignedFieldBatch(identity:QueueIdentity,projectId:s
   const journal=await openOfflineJournal(identity);
   return journal.prepare({id:uuidv4(),identity,projectId,path:offlineProjectPath(projectId)+'/sync',key:uuidv4(),body,
     proof:{kind:'signed-field-batch',sourceBatchId:batchId,registrationId,deviceId:probe.deviceId,manifest,descriptors,
-      ...(operations.every(o=>['FIELD_ACCEPT','FIELD_START'].includes(String(o.kind)))&&operations.filter(o=>o.kind==='FIELD_START').length===1
+      ...(operations.filter(o=>o.kind==='FIELD_START').length===1
         ?{fieldStartTaskId:operations.find(o=>o.kind==='FIELD_START')!.taskId}:{} )}});
 }
 
@@ -130,7 +138,7 @@ function sourceDescriptors(r:OfflineJournalRecord):OfflineRecord[]{
     new Set(expected.map(d=>d.originId)).size!==expected.length||expected.some(d=>{
       const o=operations.find((v:OfflineRecord)=>v.originId===d.originId);
       return !o||o.originalActorId!==r.identity.actor||!resourceId(o.sourceDeviceId)||!resourceId(d.effectId)||
-        !['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION'].includes(String(d.kind))||
+        !['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION','REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'].includes(String(d.kind))||
         ['originId','effectId','kind','taskId','assignmentId','snapshotId'].some(k=>d[k]!==o[k]);
     }))throw Error('offline_origin_source_invalid');
   return expected;

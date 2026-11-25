@@ -1,8 +1,8 @@
-# Crew FIELD receive/start checkpoint — 2026-11-25
+# Crew FIELD receive/start checkpoint â€” 2026-11-25
 
 - Reviewer: Codex, IMPLEMENT_AND_SELF_REVIEW; no independent review claimed.
 - Base: main@cff3114; Backend deployed contract b891e88, read-only source.
-- Scope: explicit saved-snapshot route, native signed FIELD_ACCEPT → FIELD_START preparation, durable dispatch and authenticated receipt reconciliation. No submission/handover completion claim.
+- Scope: explicit saved-snapshot route, native signed FIELD_ACCEPT â†’ FIELD_START preparation, durable dispatch and authenticated receipt reconciliation. No submission/handover completion claim.
 
 ## Executed evidence
 
@@ -38,7 +38,7 @@ Online permission/error paths remain separate; offline is explicit and cannot se
 - Native generated .cxx/build, other logs, SQLite/journals/media and unrelated untracked files preserved and excluded from commit. No cleanup task undertaken.
 
 
-## Snapshot refresh checkpoint — base 5209b28, 2026-11-25
+## Snapshot refresh checkpoint â€” base 5209b28, 2026-11-25
 
 - Codex IMPLEMENT_AND_SELF_REVIEW. Append-only snapshot lineage; refresh never replaces historical snapshot or signed package bytes. Pending/foreign-session snapshot, pending signed batch and unresolved online FIELD journal block new preparation. Producers use latest reconciled snapshot; exact journal replay stays immutable.
 - Reused unchanged source tests: targeted 48/48; full regression 2182/2182, 0 failures/skips (field-full.log, 165324 ms); npm run typecheck exit 0 (field-tsc.log). Outputs inspected again; no redundant build/full run. git diff --check exit 0.
@@ -48,14 +48,14 @@ Online permission/error paths remain separate; offline is explicit and cannot se
 - Keep .cache/offline-session-20261124/snapshot-refresh-readback.json, snapshot-refresh-restart.png, snapshot-refresh-offline-open.png as QA evidence. Existing APK output/rollback and caches listed above remain; no APK copy created, no artifact deletion. No BE/Web/security gate changes, no push. SOFTWARE emulator evidence does not prove hardware custody.
 - FIELD_SUBMISSION with uploads, REPAIR, UI polish and remaining workstreams are not covered by this checkpoint.
 
-## FIELD submission mutual exclusion — base 32b89f3, 2026-11-25
+## FIELD submission mutual exclusion â€” base 32b89f3, 2026-11-25
 
 - Codex IMPLEMENT_AND_SELF_REVIEW. Online T05B command creation and signed FIELD_SUBMISSION preparation now check each other in the same exclusive SQLite transaction. Check immutable operations rather than optional UI metadata; retain all historical commands and reject cross-session duplicate preparation. Existing command recovery overlays remain unchanged. Historical online submission roots/revisions are not converted to signed roots.
 - Test-first failure: new SQLite test initially failed because writeOnlineFieldSubmissionDraft was absent. After implementation: node --test tests/c10bc-journal.test.cjs tests/t05b.test.cjs tests/crew-field-send-once.test.cjs 75/75 PASS; npx tsc --noEmit exit 0; full regression node --test tests/*.test.cjs 2183/2183 PASS, 146123 ms; git diff --check exit 0. Reused field-targeted.log, field-tsc.log and field-full.log in .cache/offline-session-20261124; no extra report/log family.
 - LOGIC_TESTED: actual Node SQLite transaction and both creation orders, including changed session. Android/HTTP for this new exclusion gate NOT_RUN; installed APK unchanged, no build performed. This is a prerequisite checkpoint, not FIELD_SUBMISSION end-to-end acceptance. No UI, BE, upload contract, native security gate or API host changed. No push, data removal or artifact copies.
 - Keep existing current QA APK, verified rollback, snapshot/journal/media evidence and updated logs. No newly obsolete build artifact was produced; existing owner-approval-only cleanup candidates remain unchanged.
 
-## Signed FIELD submission from saved evidence — base e6b6c77, 2026-11-25
+## Signed FIELD submission from saved evidence â€” base e6b6c77, 2026-11-25
 
 - Codex IMPLEMENT_AND_SELF_REVIEW. Added immutable draft-to-signed FIELD_SUBMISSION producer, validating actor/environment/session, latest reconciled non-repair snapshot, exact assignment and reconciled canonical FIELD_START. Rejects nonfinite measurements, ordinary submission roots, supplement/repair claims, and unverified/cancelled media. Original draft and all journal history remain intact.
 - Existing field editor/camera reused through explicit signed=1 navigation. Per-image upload is reachable without enabling ordinary submission in this mode. Mounted test first failed on missing upload action, then passed after implementation; ordinary editor behavior remains covered.
@@ -67,8 +67,19 @@ Online permission/error paths remain separate; offline is explicit and cannot se
 - Limits: this checkpoint bridges already VERIFIED uploads and an earlier reconciled start. Same-batch receive/start/submit, null-file offline admission upload, cold-start operational editing without session verification, signed REPAIR and fault-injected response-loss Android replay are NOT_RUN / not implemented here. Do not claim whole group1 or six workstreams complete. SOFTWARE emulator is not hardware custody proof; production gate remains unchanged.
 - Keep current APK output and existing verified rollback storage-resume-normal.apk, native caches, preserved journals/media and QA evidence field-submission-readback.json, field-submission-receipts.json, field-file-readback.json, field-submission-confirmed.png, field-signed-offline.png. field-upload-verified.png captures the task screen after returning from verified upload, not the upload success banner. Existing field-before.png retained. No artifact deletion; prior obsolete APK candidates remain owner-review-only. No push.
 
-## REPAIR core hash prerequisite — base f04be3e, 2026-11-25
+## REPAIR core hash prerequisite â€” base f04be3e, 2026-11-25
 
 - Codex IMPLEMENT_AND_SELF_REVIEW. Recompute typed REPAIR assessment/start/finish hashes using deployed b891e88 RepairCommandCoreHash wrapper. Reject altered actor/task/item or forged core hash before signing. No repair producer or runtime capability enabled by this checkpoint.
 - Test-first failure: repairCoreHash undefined. Targeted node --test tests/c10a.test.cjs 23/23 PASS (repair-protocol.log); npx tsc --noEmit exit0; full node --test tests/*.test.cjs 2196/2196 PASS, 0 skipped, 103626.5967 ms (field-full.log). .NET oracle checks decimals, null/defaults and source identity. PROTOCOL_INTEROP_TESTED / LOGIC_TESTED; Android/HTTP REPAIR NOT_RUN. Existing APK unchanged, no build needed for protocol-only checkpoint.
 - Source provenance recorded separately from older extracted oracle snapshot. No BE/Web/native config, hardware gate or existing journal changed. Retain existing APK/rollback and QA logs, no new artifact copy or cleanup. No push.
+
+
+## REPAIR signing/journal foundation — 2026-11-25
+- Mode: Codex IMPLEMENT_AND_SELF_REVIEW; parent fe7a7e8; BE b891e88 read-only.
+- Validates repair snapshot package/item/binding/actor/assignment/itemVersion independently of taskVersion. Adds bounded REPAIR signing entry; FIELD entry cannot adopt repair snapshots.
+- Serializes online T06A and signed REPAIR history in both directions in exclusive SQLite transactions. Does not adopt confirmed online roots. Rejects duplicate repair kind/task/item within a new batch and across sessions. Existing identical online replay preserved.
+- FIELD_START exclusion now reads immutable operations, including mixed REPAIR and multiple-task batches, retaining legacy metadata compatibility.
+- Adds REPAIR origin reconciliation/recovery and durable checkpoint decoding. HTTP success alone never ACKs. Unknown outcomes retain exact body/key.
+- Executed: targeted 99/99; npx tsc --noEmit exit 0; node --test tests/*.test.cjs 2207/2207, 0 skipped, 125996.3468ms; git diff --check exit 0.
+- Evidence: .cache/offline-session-20261124/repair-protocol.log, repair-full.log, field-tsc.log. LOGIC_TESTED only for this checkpoint; REPAIR UI/HTTP/Android NOT_RUN, not group completion.
+- Keep current app-release.apk, existing storage-resume-normal.apk rollback, journals/media and these QA logs; no artifact deleted/copied. No native build performed.

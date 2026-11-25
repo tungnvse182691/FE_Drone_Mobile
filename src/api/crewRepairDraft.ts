@@ -204,6 +204,14 @@ export async function openRepairJournal(identity: RepairIdentity,
           if (canonical(snapshot(identical)) !== canonical(record)) throw new Error('repair_unresolved_command');
           return;
         }
+        // Same exclusive transaction as command INSERT: do not mix online and signed repair roots.
+        const signedPrefix='c10bc:'+JSON.stringify([context.environment,context.actor,'REPAIR_CREW'])+':';
+        const signed=await transaction.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=? AND substr(id,1,?)=?',
+          'C10BC_IMMUTABLE_COMMAND_V1',signedPrefix.length,signedPrefix);guard();
+        if(signed.some(row=>{const r=JSON.parse(row.payload);return r.projectId===record.identity.projectId&&r.proof?.kind==='signed-field-batch'&&
+          (JSON.parse(r.body).operations??[]).some((op:{kind?:string;taskId?:string;repair?:{resourceId?:string}})=>
+            ['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'].includes(String(op.kind))&&op.taskId===record.identity.taskId&&op.repair?.resourceId===record.identity.itemId);
+        }))throw Error('repair_signed_command_pending');
         const existing = stored.find(r => !['CONFIRMED','REJECTED'].includes(r.phase));
         // Includes old sessions and replaced items: unknown work cannot be overwritten by relogin/reassignment.
         if (existing) {

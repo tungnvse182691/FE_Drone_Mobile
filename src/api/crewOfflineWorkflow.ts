@@ -38,6 +38,15 @@ export function validateSnapshot(v:SourceSnapshot,identity:QueueIdentity,expecte
     !isRepairItemVersion(v.taskVersion)||!v.snapshot||!isCrewResourceId(v.id)||!isCrewResourceId(v.assignmentId)||
     !/^[a-f0-9]{64}$/i.test(v.assignmentHash)||!/^[a-f0-9]{64}$/i.test(v.contentHash))throw Error('offline_snapshot_invalid');
 }
+/** Repair item rowversion and binding are distinct from the task version. Server revalidates authority at admission. */
+export function validateRepairSnapshot(v:SourceSnapshot,identity:QueueIdentity,itemId?:unknown):Record<string,unknown> {
+  const r=(v.snapshot as {repair?:Record<string,unknown>})?.repair;
+  if(!r||r.schemaVersion!==1||!['packageId','itemId','bindingId'].every(k=>isCrewResourceId(r[k]))||
+    !isRepairItemVersion(r.itemVersion)||r.taskId!==v.taskId||r.assignmentId!==v.assignmentId||r.crewId!==identity.actor||
+    (itemId!==undefined&&r.itemId!==itemId)||!['Normal','FastTrack'].includes(String(r.mode))||
+    r.executeAuthority!=='REVALIDATE_CURRENT_SOURCE_AT_ADMISSION')throw Error('offline_repair_snapshot_source_required');
+  return r;
+}
 export function validateBatch(v:OfflineBatchReceipt):void {
   if(!v||!isCrewResourceId(v.batchId)||v.localQueueInstruction!=='KEEP_UNACKNOWLEDGED_OR_CONFLICTED_ITEMS'||!Array.isArray(v.items)||
     v.items.length===0||new Set(v.items.map(i=>i.originId)).size!==v.items.length||v.items.some(i=>!isCrewResourceId(i.originId)||typeof i.state!=='string'||
