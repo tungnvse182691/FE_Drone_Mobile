@@ -98,6 +98,14 @@ export async function fieldCoreHash(operation:OfflineRecord,sha:Sha256):Promise<
  const type=kind==='FIELD_ACCEPT'?'action':kind==='FIELD_START'?'start':'submission';
  return hash('{"id":'+value('guid',operation.taskId)+',"input":'+value(type,operation[key])+',"originalActorId":'+value('guid',operation.originalActorId)+'}',sha);
 }
+/** b891e88 RepairCommandCoreHash: hash the typed input, never the task ETag or a local view. */
+export async function repairCoreHash(operation:OfflineRecord,sha:Sha256):Promise<string> {
+ const o=snapshotRecord(operation),r=record(o.repair);
+ const pair=({REPAIR_ASSESSMENT:['assessment','assessment'],REPAIR_EXECUTION_START:['execution-start','start'],REPAIR_EXECUTION_FINISH:['execution-finish','finish']} as Record<string,[string,string]>)[String(o.kind)];
+ if(!pair||r.action!==pair[0])return fail();
+ return hash('{"schemaVersion":1,"kind":'+value('string',o.kind)+',"taskId":'+value('guid',o.taskId)+
+  ',"itemId":'+value('guid',r.resourceId)+',"originalActorId":'+value('guid',o.originalActorId)+',"input":'+value(pair[1]==='start'?'repairStart':pair[1]==='finish'?'repairFinish':'assessment',r[pair[1]])+'}',sha);
+}
 export async function describeOfflineOperation(input:OfflineRecord,sha:Sha256):Promise<OfflineRecord> {
  // Snapshot first, so asynchronous hashing cannot observe caller mutations.
  const snapshot=snapshotRecord(input);
@@ -124,6 +132,7 @@ export async function describeOfflineOperation(input:OfflineRecord,sha:Sha256):P
   const pair=map[kind];if(!pair||r.action!==pair[0])return fail();const b=record(r[pair[1]]);
   if(['start','finish','assessment'].some(k=>k!==pair[1]&&r[k]!==null)||b.originId!==origin||b.deviceId!==o.sourceDeviceId)return fail();
   offlineGuid(b[pair[1]==='finish'?'executionStartId':'fieldFirstStartId']);if(pair[1]==='start')offlineGuid(b.assessmentId);
+  if(await repairCoreHash(snapshot,sha)!==o.corePayloadHash)return fail();
  }
  return {originId:origin,effectId:o.effectId,kind,envelopeHash:await hash(serialized,sha),corePayloadHash:o.corePayloadHash,taskId:o.taskId,assignmentId:o.assignmentId,snapshotId:o.snapshotId,repairResourceId:o.repair?record(o.repair).resourceId:null};
 }

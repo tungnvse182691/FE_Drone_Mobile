@@ -11,6 +11,17 @@ while(Console.ReadLine() is { } line) {
   }
   var op=r.GetProperty("operation").Deserialize<OfflineOperationInput>(options)!;
   if(op.Kind.StartsWith("FIELD_"))op=op with {CorePayloadHash=OfflineWorkflowEngine.FieldCoreHash(op)};
+  else if(op.Repair is { } repair) {
+   // b891e88 RepairCommandCoreHash.Compute<T>: same ordered wrapper and Web serializer.
+   string Core<T>(T input) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(
+    new {schemaVersion=1,kind=op.Kind,taskId=op.TaskId,itemId=repair.ResourceId,originalActorId=op.OriginalActorId,input},options))).ToLowerInvariant();
+   op=op with {CorePayloadHash=op.Kind switch {
+    "REPAIR_ASSESSMENT" => Core(repair.Assessment!),
+    "REPAIR_EXECUTION_START" => Core(repair.Start!),
+    "REPAIR_EXECUTION_FINISH" => Core(repair.Finish!),
+    _ => throw new ArgumentException()
+   }};
+  }
   var descriptor=OfflineWorkflowEngine.Describe(op);
   var manifest=OfflineWorkflowEngine.CanonicalManifest(r.GetProperty("projectId").GetGuid(),r.GetProperty("batchId").GetGuid(),r.GetProperty("registrationId").GetGuid(),new[]{descriptor});
   using var key=ECDsa.Create(ECCurve.NamedCurves.nistP256);

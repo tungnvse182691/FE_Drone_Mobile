@@ -8,5 +8,11 @@
     "RoadGuardSystem.BusinessObjects/Offline/OfflinePackageAuthentication.cs": "b31bb324c6c800a4a044468d602c942bd21727f3cdd3e71773d922ea2ba0759f",
     "RoadGuardSystem.BusinessObjects/Offline/OfflineCryptoFormat.cs": "b7dd1097b681fd9f58fa05fa7b96086895a3a0fe8b6a8326786176d42fd008cc"
   },
-  "extraction": "DTO constructors and attributes verbatim (conversion operators omitted); Engine verbatim excluding DescribeHistoricalStart (requires repository rows); Authentication direct digest, Decode, ImportSigningKey and P256 verbatim. No encrypted-package algorithm substituted."
+  "extraction": "DTO constructors and attributes verbatim (conversion operators omitted); Engine verbatim excluding DescribeHistoricalStart (requires repository rows); Authentication direct digest, Decode, ImportSigningKey and P256 verbatim. No encrypted-package algorithm substituted.",
+  "repairCoreHash": {
+    "source": "b891e88ea20073bab7b110f301b7b37ebfa1c40c",
+    "path": "RoadGuardSystem.Repositories/Interfaces/Repairs/RepairCommandCoreHash.cs",
+    "sha256": "d2ba7a9676e10029f8c7df21d49f4029372ce219905c9596fb7133b0aca9b72e",
+    "extraction": "Compute<T> ordered schemaVersion/kind/taskId/itemId/originalActorId/input wrapper with Web serializer; Program.cs uses extracted typed DTOs."
+  }
 }
