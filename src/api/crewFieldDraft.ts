@@ -151,7 +151,8 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
         // Append a generation; the original intent and recovery overlay remain byte-for-byte intact.
         target=scoped(context.scope)+':'+randomUUID();
       }
-      await saveDraft(db,target,'T05B_FIELD',{...draft});check();}, uuid: randomUUID,
+      if(draft.command){const {writeOnlineFieldSubmissionDraft}=await import('./crewOfflineJournal');check();await writeOnlineFieldSubmissionDraft(db,target,draft);}
+      else await saveDraft(db,target,'T05B_FIELD',{...draft});check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
     sealPhoto: photo => sealCrewPhoto(context,photo,()=>sameContext(context,current())),
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,

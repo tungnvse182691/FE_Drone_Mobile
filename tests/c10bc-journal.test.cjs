@@ -6,6 +6,20 @@ function fixture(filename=':memory:'){let raw=new DatabaseSync(filename);raw.exe
  const m=load({'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{},saveDraft:async(tx,id,kind,payload)=>tx.runAsync('INSERT OR REPLACE INTO local_draft(id,kind,payload) VALUES (?,?,?)',id,kind,JSON.stringify(payload))},'../offline/upload-queue':{currentQueueIdentity:()=>current,sameQueueIdentity:(a,b=current)=>JSON.stringify(a)===JSON.stringify(b)}});
  const intent=()=>({id:randomUUID(),identity:i,projectId:randomUUID(),path:'/devices',key:randomUUID(),body:'{"deviceId":"synthetic"}',proof:{kind:'device'}});
  return {m,db,get raw(){return raw;},i,intent,restart:()=>{raw.close();raw=new DatabaseSync(filename);},current:()=>current,setCurrent:v=>current=v,switch:()=>current={...i,scope:'session-B'}};}
+
+test('FIELD submission serializes online draft and signed intent in both directions across sessions',async()=>{
+ for(const onlineFirst of [true,false]){
+  const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
+  const draft={actor:h.i.actor,scope:h.i.scope,environment:h.i.environment,projectId:base.projectId,taskId:task,captures:[],measurements:[],command:{key:randomUUID(),phase:'pending'}};
+  const signed={...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task}]})};
+  assert.equal(typeof h.m.writeOnlineFieldSubmissionDraft,'function');
+  if(onlineFirst){await h.m.writeOnlineFieldSubmissionDraft(h.db,'field-fixture',draft);await assert.rejects(j.prepare(signed),/field_submission_pending/);}
+  else {await j.prepare(signed);await assert.rejects(h.m.writeOnlineFieldSubmissionDraft(h.db,'field-fixture',draft),/field_submission_pending/);}
+  h.switch();const newer=await h.m.openOfflineJournal(h.current(),h.db);
+  await assert.rejects(newer.prepare({...signed,id:randomUUID(),key:randomUUID(),identity:h.current()}),/field_submission_pending/);
+  assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);h.raw.close();
+ }
+});
 test('C10BC immutable journal uses SQLite INSERT/CAS, rejects key reuse and altered bytes',async()=>{const h=fixture();assert.equal(typeof h.m.openOfflineJournal,'function');const j=await h.m.openOfflineJournal(h.i,h.db),i=h.intent();const a=await j.prepare(i);assert.equal(a.phase,'PREPARED');assert.equal((await j.prepare(i)).body,i.body);await assert.rejects(j.prepare({...i,body:'{}'}),/immutable/);const pending=await j.transition(a,'IN_FLIGHT');assert.equal((await j.list())[0].phase,'IN_FLIGHT');await assert.rejects(j.transition(a,'IN_FLIGHT'),/cas/);const unknown=await j.transition(pending,'UNKNOWN_OUTCOME');assert.equal(unknown.body,i.body);assert.equal(unknown.key,i.key);assert.equal((await (await h.m.openOfflineJournal(h.i,h.db)).list())[0].phase,'UNKNOWN_OUTCOME');});
 test('C10BC journal preserves pending old session and denies old-session writes',async()=>{const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),a=await j.prepare(h.intent());h.switch();await assert.rejects(j.transition(a,'IN_FLIGHT'),/session/);assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,1);});
 test('C10BC journal rejects credentials and never acknowledges without reconciliation',async()=>{const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db);await assert.rejects(j.prepare({...h.intent(),body:'{"password":"synthetic"}'}),/secret/);const a=await j.prepare(h.intent());await assert.rejects(j.transition(a,'COMMITTED_VERIFIED'),/transition/);});

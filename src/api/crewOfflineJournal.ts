@@ -3,6 +3,26 @@ import { openDatabase, initDatabase } from '../offline/database';
 import { currentQueueIdentity, sameQueueIdentity, type QueueIdentity } from '../offline/upload-queue';
 import type { FieldCommandRecord } from './crewApi';
 import { saveDraft } from '../offline/database';
+import type { FieldDraft } from './crewFieldDraft';
+
+function containsSubmission(record:OfflineJournalRecord,projectId:string,taskId:string):boolean {
+  return record.projectId===projectId&&record.proof.kind==='signed-field-batch'&&
+    (JSON.parse(record.body).operations??[]).some((o:{kind?:string;taskId?:string})=>o.kind==='FIELD_SUBMISSION'&&o.taskId===taskId);
+}
+
+/** The online command and signed submission share one durable exclusion gate.
+ * Check the immutable operation, not optional presentation metadata. */
+export async function writeOnlineFieldSubmissionDraft(db:SQLiteDatabase,id:string,draft:FieldDraft) {
+  const owner=currentQueueIdentity();
+  const guard=()=>{if(!owner||owner.role!=='REPAIR_CREW'||owner.actor!==draft.actor||owner.scope!==draft.scope||
+    owner.environment!==draft.environment||!sameQueueIdentity(owner))throw Error('offline_session_changed');};
+  guard();
+  await db.withExclusiveTransactionAsync(async tx=>{
+    guard();const rows=await (await openOfflineJournal(owner!,tx)).list();guard();
+    if(rows.some(r=>containsSubmission(r,draft.projectId,draft.taskId)))throw Error('field_submission_pending');
+    await saveDraft(tx,id,'T05B_FIELD',{...draft});guard();
+  });guard();
+}
 
 /** Serialize online FIELD writes against offline preparation in the same DB.
  * Neither path may create an independent command while the other is pending.
@@ -119,6 +139,13 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
         }
         if(copy.proof.kind==='signed-field-batch'){
           for(const op of JSON.parse(copy.body).operations??[]){
+            if(op.kind==='FIELD_SUBMISSION'){
+              if(records.some(r=>containsSubmission(r,copy.projectId,op.taskId)))throw Error('field_submission_pending');
+              const drafts=await tx.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=?','T05B_FIELD');guard();
+              // Do not adopt an online root/revision or an uncertain historical command.
+              if(drafts.some(row=>{const d=JSON.parse(row.payload);return d.actor===owner.actor&&d.environment===owner.environment&&
+                d.projectId===copy.projectId&&d.taskId===op.taskId&&d.command;}))throw Error('field_submission_pending');
+            }
             const head=records.filter(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===op.taskId).at(-1);
             if(head&&(head.phase!=='RECONCILED'||!sameQueueIdentity(head.identity,owner)||(head.receipt as {id?:string})?.id!==op.snapshotId))throw Error('offline_current_snapshot_required');
           }
