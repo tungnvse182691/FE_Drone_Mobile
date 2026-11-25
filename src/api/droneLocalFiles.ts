@@ -6,11 +6,13 @@ import { passwordSessionIdentity } from './authApi';
 import { apiClient } from './client';
 import { getOperatorSurveyTaskDetailReal } from './droneApi';
 import { readOperatorSnapshot } from './operatorOfflineCache';
+import { offlineNative } from '../../modules/roadguard-offline-crypto';
+import { openMediaVaultAccess, type MediaVaultReference } from '../offline/mediaVaultAccess';
 
 type Kind = 'VIDEO' | 'TELEMETRY';
 export type DroneLocalFile = { schema: 1; key: string; actor: string; environment: string; session: string;
   taskId: string; projectId: string; taskVersion: string; kind: Kind; name: string; size: number;
-  uri: string; partialUri: string; checksumSha256: string | null };
+  uri: string; partialUri: string; checksumSha256: string | null; vault?: MediaVaultReference };
 const KIND = 'DRONE_LOCAL_SOURCE';
 const uuid = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) && !v.startsWith('00000000-0000-0000-0000-');
 const version = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9+/]{10}[AEIMQUYcgkosw048]=$/.test(v);
@@ -69,8 +71,32 @@ async function hashFile(file: File, expectedSize: number, guard: () => void): Pr
   if (read !== expectedSize || !file.exists || file.size !== expectedSize) throw Error('drone_file_size_changed');
   return hash.digest();
 }
+/** Storage custody only. This never restores task/version or upload authority. */
+function mediaAccess(owner: {actor:string;environment:string;session:string}, guard:()=>void) {
+  if (!offlineNative) throw Error('drone_media_native_unavailable');
+  const identity = {...owner,role:'DRONE_OPERATOR' as const};
+  return openMediaVaultAccess(identity,()=>{guard();return identity;},{native:offlineNative,uuid:randomUUID,
+    hash:async bytes=>{const hash=new Sha256();hash.update(bytes);return hash.digest();}});
+}
+function checkedVault(file:DroneLocalFile): MediaVaultReference {
+  const ref=file.vault;
+  if (!ref || ref.actor!==file.actor || ref.environment!==file.environment || ref.role!=='DRONE_OPERATOR' ||
+      ref.sizeBytes!==file.size || ref.checksumSha256!==file.checksumSha256) throw Error('drone_media_reference_invalid');
+  return ref;
+}
+async function sealFile(file:DroneLocalFile,owner:{actor:string;environment:string;session:string},guard:()=>void):Promise<DroneLocalFile> {
+  guard();
+  if (file.vault !== undefined) return file;
+  // Expo Go/iOS without this provider retain the existing legacy custody path.
+  // A present provider must succeed; an encryption error never falls back.
+  if (!offlineNative) return file;
+  if (!file.checksumSha256) throw Error('drone_file_unhashed');
+  const vault=await mediaAccess(owner,guard).seal(file.uri,{sizeBytes:file.size,checksumSha256:file.checksumSha256});guard();
+  return {...file,vault};
+}
 /** Read only one bounded multipart range; never materialize the whole video. */
 export async function readDroneFileRange(file: DroneLocalFile, offset: number, length: number): Promise<Uint8Array> {
+  file={...file,...(file.vault!==undefined?{vault:{...file.vault}}:{})};
   const owner=identity();
   if (!owner || file.actor!==owner.actor || file.environment!==owner.environment || !file.checksumSha256 || !Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset<0 || length<=0 || length>64*1024**2 || offset+length>file.size) throw Error('drone_file_range_invalid');
   let invalid=false;
@@ -78,6 +104,16 @@ export async function readDroneFileRange(file: DroneLocalFile, offset: number, l
   const guard=()=>{if(invalid || JSON.stringify(identity())!==JSON.stringify(owner))throw Error('drone_file_session_changed');};
   let handle: ReturnType<File['open']> | undefined;
   try {
+    if (file.vault!==undefined) {
+      const vault=checkedVault(file),access=mediaAccess(owner,guard),result=new Uint8Array(length);
+      try {
+        for(let read=0;read<length;read+=1024*1024){
+          const chunk=await access.readRange(vault,offset+read,Math.min(1024*1024,length-read));
+          try {guard();result.set(chunk,read);} finally {chunk.fill(0);}
+        }
+        guard();return result;
+      } catch(error){result.fill(0);throw error;}
+    }
     const source=new File(file.uri);
     if(!source.exists || source.size!==file.size)throw Error('drone_file_size_changed');
     handle=source.open(); handle.offset=offset;
@@ -142,27 +178,32 @@ async function openFileStore(taskId:string,owner:{actor:string;session:string;en
       guard();
       const rows = await db.getAllAsync<{id: string; payload: string}>('SELECT id, payload FROM local_draft WHERE kind = ? AND substr(id, 1, ?) = ?',KIND,prefix.length,prefix);
       guard();
-      return rows.map(row => {
+      return Promise.all(rows.map(async row => {
         const file = JSON.parse(row.payload) as DroneLocalFile;
         if (file.schema !== 1 || !uuid(file.key) || row.id !== prefix + file.key || file.actor !== owner.actor ||
           file.environment !== owner.environment || file.taskId !== taskId || !uuid(file.projectId) || !version(file.taskVersion) ||
           !['VIDEO','TELEMETRY'].includes(file.kind) || (file.checksumSha256 !== null && !/^[a-f0-9]{64}$/.test(file.checksumSha256)) || !Number.isSafeInteger(file.size) || file.size <= 0 ||
           typeof file.session !== 'string' || JSON.parse(file.session)[0] !== owner.actor || !JSON.parse(file.session)[1] ||
           file.uri !== paths(file.key,file.kind).uri || file.partialUri !== paths(file.key,file.kind).partialUri) throw Error('drone_file_history_invalid');
+        if(file.vault!==undefined){
+          const access=mediaAccess(owner,guard),ref=checkedVault(file);
+          const probe=await access.readRange(ref,0,1);probe.fill(0);guard();
+          return {...file,availability:'LOCAL_READY' as const};
+        }
         const final = new File(file.uri), partial = new File(file.partialUri);
         const availability = final.exists && final.size === file.size ? (file.checksumSha256 ? 'LOCAL_READY' : 'LOCAL_UNHASHED') as 'LOCAL_READY' | 'LOCAL_UNHASHED' :
           final.exists || partial.exists ? 'INCOMPLETE' as const : 'MISSING' as const;
         return { ...file, availability };
-      });
+      }));
     },
     rehash: async (key: string): Promise<DroneLocalFile> => {
       guard();
       const saved = (await runtime.list()).find(file => file.key === key); guard();
       if (!saved || !['LOCAL_READY', 'LOCAL_UNHASHED'].includes(saved.availability)) throw Error('drone_file_unavailable');
       const { availability: _availability, ...record } = saved;
-      if (record.checksumSha256) return record;
-      const checksumSha256 = await hashFile(new File(record.uri), record.size, guard); guard();
-      const hashed: DroneLocalFile = { ...record, checksumSha256 };
+      if (record.checksumSha256 && (record.vault!==undefined || !offlineNative)) return record;
+      const checksumSha256 = record.checksumSha256 ?? await hashFile(new File(record.uri), record.size, guard); guard();
+      const hashed = await sealFile({...record,checksumSha256},owner,guard);guard();
       await db.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ? AND kind = ?', JSON.stringify(hashed), new Date().toISOString(), prefix + key, KIND); guard();
       return hashed;
     },
@@ -192,7 +233,7 @@ async function openFileStore(taskId:string,owner:{actor:string;session:string;en
       await partial.move(new File(record.uri)); guard();
       if (!new File(record.uri).exists || new File(record.uri).size !== size) throw Error('drone_file_copy_incomplete');
       const checksumSha256 = await hashFile(new File(record.uri), size, guard); guard();
-      const hashed: DroneLocalFile = { ...record, checksumSha256 };
+      const hashed = await sealFile({...record,checksumSha256},owner,guard);guard();
       const nowHashed = new Date().toISOString();
       await db.runAsync('UPDATE local_draft SET payload = ?, updated_at = ? WHERE id = ?', JSON.stringify(hashed), nowHashed, prefix + key); guard();
       return hashed;

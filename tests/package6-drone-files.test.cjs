@@ -9,7 +9,7 @@ function fixture(options={}){
  const db={getFirstAsync:async(sql,...args)=>disk.prepare(sql).get(...args),runAsync:async(sql,...args)=>disk.prepare(sql).run(...args),getAllAsync:async(sql,...args)=>disk.prepare(sql).all(...args)};
  const listeners=new Set();let actor=id(1),sid='A',env='https://fixture.test',copy=async(from,to)=>fs.copyFileSync(from,to,fs.constants.COPYFILE_EXCL);
  const docs=pathToFileURL(root+path.sep).href;
- class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}open(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return {get offset(){return offset;},set offset(v){offset=v;},readBytes:async length=>{const chunk=Uint8Array.from(bytes.subarray(offset,offset+Math.min(length,2)));offset+=chunk.length;return chunk;},close(){}};}readableStream(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return new ReadableStream({pull(controller){if(offset>=bytes.length){controller.close();return;}const end=Math.min(offset+2,bytes.length);controller.enqueue(Uint8Array.from(bytes.subarray(offset,end)));offset=end;}});}}
+ class File {constructor(...parts){this.uri=parts.map(p=>p.uri??p).join('/').replace(/([^:])\/{2,}/g,'$1/');this.uri=new URL(this.uri).href;}get exists(){return fs.existsSync(fileURLToPath(this.uri));}get size(){return this.uri.endsWith('/source.mp4')&&sourceSize!==undefined?sourceSize:this.exists?fs.statSync(fileURLToPath(this.uri)).size:0;}async copy(to){await copy(fileURLToPath(this.uri),fileURLToPath(to.uri));}async move(to){fs.renameSync(fileURLToPath(this.uri),fileURLToPath(to.uri));this.uri=to.uri;}open(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return {get offset(){return offset;},set offset(v){offset=v;},readBytes:async length=>{const chunk=Uint8Array.from(bytes.subarray(offset,offset+Math.min(length,2)));offset+=chunk.length;return chunk;},close(){}};}readableStream(){const bytes=fs.readFileSync(fileURLToPath(this.uri));let offset=0;return new ReadableStream({pull(controller){if(offset>=bytes.length){controller.close();return;}const end=Math.min(offset+2,bytes.length);controller.enqueue(Uint8Array.from(bytes.subarray(offset,end)));offset=end;}});}}
  class Directory extends File {create(){fs.mkdirSync(fileURLToPath(this.uri),{recursive:true});}}
  const task={id:id(2),projectId:id(3),operatorId:actor,version:'AAAAAAAAAAE='};
  if(options.configureFile)options.configureFile(File);
@@ -17,6 +17,16 @@ function fixture(options={}){
  const cached={exports:{}};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/operatorOfflineCache.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:cached,exports:cached.exports,require:n=>n==='../hooks/useOperatorReadScope'?{operatorReadScope:()=>JSON.stringify([env,actor,sid])}:deps[n],Date});
  deps['./operatorOfflineCache']=cached.exports;
+ const vaults=new Map(),nativeCalls=[];
+ const native=options.native?{
+  prepareMediaKey:async()=>({available:true,securityLevel:'SOFTWARE'}),
+  sealMedia:async(binding,assetId,uri)=>{nativeCalls.push(['seal',assetId]);if(options.sealError)throw Error('seal_failed');const data=fs.readFileSync(fileURLToPath(uri));vaults.set(assetId,data);return {version:1,assetId,sizeBytes:data.length,checksumSha256:require('node:crypto').createHash('sha256').update(data).digest('hex')};},
+  readMediaRange:async(binding,assetId,offset,length)=>{nativeCalls.push(['read',length]);options.onRead?.();if(options.readError)throw Error('key_unavailable');return vaults.get(assetId).subarray(offset,offset+length).toString('base64');}
+ }:null;
+ deps['../../modules/roadguard-offline-crypto']={offlineNative:native};
+ const vaultModule={exports:{}};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/offline/mediaVaultAccess.ts','utf8'),{compilerOptions:{module:1}}).outputText,{module:vaultModule,exports:vaultModule.exports,URL,Uint8Array,require:()=>({base64ToBytes:s=>Uint8Array.from(Buffer.from(s,'base64')),bytesToBase64:b=>Buffer.from(b).toString('base64')})});
+ deps['../offline/mediaVaultAccess']=vaultModule.exports;
  const mod={exports:{}};
  let localUser;
  const localScope=()=>JSON.stringify([env,JSON.stringify([actor,sid]),'']);
@@ -24,7 +34,7 @@ function fixture(options={}){
  deps['../store/auth'].useAuthStore.getState=()=>localUser?{user:localUser,token:null,status:'RESTORING',operatorLocalReadScope:async()=>localScope()}:originalGetState();
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneLocalFiles.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date});
  const source=path.join(root,'source.mp4');fs.writeFileSync(source,Buffer.from([1,2,3,4]));
- return {api:mod.exports,reopen,task,source,offline:()=>offline=true,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n,
+ return {nativeCalls,vaults,api:mod.exports,reopen,task,source,offline:()=>offline=true,asset:{name:'flight.mp4',uri:pathToFileURL(source).href,size:4},rows:()=>disk.prepare('SELECT * FROM local_draft').all(),copy:f=>copy=f,change:(a=actor,s=sid,e=env)=>{actor=a;sid=s;env=e;listeners.forEach(f=>f());},listeners,sourceSize:n=>sourceSize=n,
   cold:()=>{offline=true;localUser={id:actor,role_code:'DRONE_OPERATOR'};},cacheLocal:()=>{const scope=localScope(),resource=`task:${task.id}`;disk.prepare('INSERT OR REPLACE INTO task_cache VALUES (?,?,?,?)').run(JSON.stringify(['operator_read_v1',scope,resource]),'operator_read_v1',JSON.stringify({schema:1,scope,resource,value:{data:task}}),new Date().toISOString());}};
 }
 test('Cold local recovery reselects and preserves bytes using only the secure owner cache',async()=>{
@@ -132,4 +142,55 @@ test('Operator can preserve a new file offline from an already downloaded assign
  const f=fixture();let r=await f.api.openDroneLocalFiles(id(2));await r.preserve('VIDEO',f.asset);r.close();
  f.reopen();f.offline();r=await f.api.openDroneLocalFiles(id(2));const saved=await r.preserve('VIDEO',f.asset);
  assert.ok(saved.checksumSha256);assert.equal((await r.list()).length,2);assert.equal(saved.taskVersion,f.task.version);r.close();
+});
+
+
+test('Native Operator files seal before publication, prefer authenticated ranges and survive source loss/relogin',async()=>{
+ const f=fixture({native:true}),r=await f.api.openDroneLocalFiles(id(2));
+ const saved=await r.preserve('VIDEO',f.asset);
+ assert.ok(saved.vault,'production preserve must persist encrypted reference');
+ assert.equal(saved.vault.role,'DRONE_OPERATOR');
+ assert.equal(f.nativeCalls.filter(c=>c[0]==='seal').length,1);
+ fs.unlinkSync(fileURLToPath(saved.uri));r.close();f.reopen();f.change(id(1),'B');
+ const next=await f.api.openDroneLocalFiles(id(2));
+ assert.equal((await next.list())[0].availability,'LOCAL_READY');
+ assert.deepEqual(Array.from(await f.api.readDroneFileRange(saved,1,3)),[2,3,4]);next.close();
+});
+
+test('Native seal or vault read failure never silently downgrades to retained plaintext',async()=>{
+ const options={native:true},f=fixture(options),r=await f.api.openDroneLocalFiles(id(2));
+ options.sealError=true;await assert.rejects(r.preserve('VIDEO',f.asset),/seal_failed/);
+ assert.equal(JSON.parse(f.rows()[0].payload).checksumSha256,null);
+ options.sealError=false;const saved=await r.preserve('VIDEO',f.asset);
+ options.readError=true;await assert.rejects(f.api.readDroneFileRange(saved,0,4),/key_unavailable/);
+ assert.ok(fs.existsSync(fileURLToPath(saved.uri)));r.close();
+});
+
+test('Operator legacy rehash seals retained source once without changing journal identity',async()=>{
+ const f=fixture({native:true}),r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',f.asset);
+ const row=f.rows()[0],record=JSON.parse(row.payload);delete record.vault;
+ const disk=new DatabaseSync(path.join(path.dirname(fileURLToPath(saved.uri)),'..','draft.db'));
+ disk.prepare('UPDATE local_draft SET payload=? WHERE id=?').run(JSON.stringify(record),row.id);disk.close();
+ const migrated=await r.rehash(saved.key);assert.ok(migrated.vault);
+ assert.equal(migrated.key,saved.key);assert.equal(migrated.uri,saved.uri);assert.equal(migrated.checksumSha256,saved.checksumSha256);
+ const count=f.nativeCalls.filter(c=>c[0]==='seal').length;
+ await r.rehash(saved.key);assert.equal(f.nativeCalls.filter(c=>c[0]==='seal').length,count);r.close();
+});
+
+
+test('Encrypted Operator multipart reads stay bounded and stop on a live session change',async()=>{
+ const options={native:true},f=fixture(options),bytes=Buffer.alloc(2200007,7);
+ fs.writeFileSync(f.source,bytes);const r=await f.api.openDroneLocalFiles(id(2));
+ const saved=await r.preserve('VIDEO',{...f.asset,size:bytes.length});
+ assert.deepEqual(Buffer.from(await f.api.readDroneFileRange(saved,17,2100000)),bytes.subarray(17,2100017));
+ assert.ok(f.nativeCalls.filter(c=>c[0]==='read').every(c=>c[1]<=1024*1024));
+ options.onRead=()=>f.change(id(1),'changed');
+ await assert.rejects(f.api.readDroneFileRange(saved,0,4),/session_changed/);r.close();
+});
+
+test('Encrypted file reference cannot change owner, checksum or size independently of its upload source',async()=>{
+ const f=fixture({native:true}),r=await f.api.openDroneLocalFiles(id(2)),saved=await r.preserve('VIDEO',f.asset);
+ for(const change of [{actor:id(9)},{environment:'https://other.test'},{role:'REPORTER'},{sizeBytes:5},{checksumSha256:'ab'.repeat(32)}])
+  await assert.rejects(f.api.readDroneFileRange({...saved,vault:{...saved.vault,...change}},0,4),/reference_invalid/);
+ r.close();
 });
