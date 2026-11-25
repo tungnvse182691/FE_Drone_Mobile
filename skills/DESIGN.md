@@ -156,6 +156,27 @@ components:
     activeTextColor: "{colors.primary}"
 ---
 
+## UI runtime và luồng thao tác — owner 2026-11-25
+
+Áp dụng cho mọi màn mới hoặc được sửa, kể cả màn nối API/offline. Authority theo `AGENTS.md`; các ví dụ màu, mã và wireframe lịch sử dưới đây không thay thế tokens, current DTO hoặc giao diện runtime đã được owner chấp nhận.
+
+### Chuẩn bị và tái sử dụng
+
+- Trước sửa UI: đọc tài liệu này, `src/design-tokens.ts`, shared components và màn cùng role đã được owner chấp nhận. Lấy runtime hiện hành làm reference, không tự lấy mock/wireframe cũ làm chuẩn.
+- Tái sử dụng khi phù hợp: `AppHeader`, `SafeAreaScreen`, `Card`, `Button`, `MaterialIcons`, `BottomNav`, badge/status presentation và color/typography/spacing/radius tokens hiện có. Không tạo design system hoặc component trùng trách nhiệm; không hardcode màu/font/spacing tùy tiện.
+- Chức năng mới phải nằm đúng vị trí/thứ tự nghiệp vụ, giữ bố cục và trải nghiệm cũ; tính năng phụ không thành CTA chính. Không tự sửa Home, Profile, Tasks, Camera, BottomNav hoặc màn đã nghiệm thu ngoài phạm vi task.
+- Không làm màn sơ sài chỉ để có caller API; không đưa debug panel vào production. Không dùng UUID dài làm tiêu đề nghiệp vụ, raw JSON/enum kỹ thuật/stack trace làm nội dung người dùng. Mã cần sao chép/đối soát được trình bày thứ cấp, không lấn át tên công việc.
+- Không tạo card quá lớn, nội dung lặp, khoảng trống vô lý, dữ liệu rỗng hoặc chỉ số không có ý nghĩa. Dùng tiếng Việt tự nhiên, hierarchy rõ và nội dung đúng role.
+
+### Hành trình, nút bấm và điều hướng
+
+- Với mỗi nút, xác định đủ: mục đích, điều kiện hiển thị, actor/quyền, trạng thái cho phép, handler thực, dữ liệu/API tác động, màn đích/kết quả, loading/lỗi và chống bấm trùng.
+- CTA theo trạng thái thực và current BE guard. Không có nút vô tác dụng, CTA chỉ để chứng minh có UI, nút thực hiện lại nghiệp vụ đã hoàn tất hoặc navigation để che lỗi nghiệp vụ.
+- Không tạo màn mới nếu màn hiện có tái sử dụng an toàn với đúng quyền và nguồn dữ liệu. Không đẩy người dùng sang màn không có bước tiếp theo hoặc bắt họ hiểu kiến trúc nội bộ.
+- Tránh vòng lặp dư thừa `Đồng bộ → Mở dữ liệu nhiệm vụ → Nhiệm vụ offline → Mở Đồng bộ` nếu màn đích không cung cấp nghiệp vụ tiếp theo. Màn nhiệm vụ phục vụ xem/thực hiện công việc; màn Đồng bộ phục vụ gửi/đối soát.
+- Kiểm safe area, font scaling, scroll, accessibility; đủ loading, empty, offline, error, disabled, success và conflict states. Disabled có lý do; lưu local không được báo như máy chủ đã nhận/hoàn tất.
+- Gate UI/Android trước commit nằm tại `skills/code-review/SKILL.md`; typecheck hoặc component tests không thay thế nghiệm thu UX.
+
 ## Overview
 
 Hoàng Hải Field (RoadGuard) là app di động dành cho đội ngũ hiện trường và người dân phản ánh của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**, phục vụ khảo sát drone, xác minh đo đạc hiện trường, sửa chữa bảo hành theo cơ chế Fast Track, và tiếp nhận phản ánh hư hại mặt đường bê tông nông thôn (TCVN 10380:2014).

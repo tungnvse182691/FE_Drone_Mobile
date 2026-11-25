@@ -142,7 +142,32 @@ Catalog 241 operations / 223 paths / 357 schemas / 47 controllers là snapshot P
 - Không runtime mock/adapter giả khi BE gap. Mock chỉ isolated test/dev harness. Giữ problem code/status/source để truy vết; UI fallback trung tính, không log token/password/OTP/signed URL/PII.
 - Gate: typecheck, full regression, route mount/reachability, permission/headers/preconditions, immutable replay, actor/session/env switch, SQLite persistence/restart, upload `VERIFIED`, receipt/readback, privacy, secret scan và `git diff --check`. Missing native/Android evidence phải ghi `NOT_RUN`, không suy PASS từ Node/.NET.
 - Không tự thêm package/provider/native crypto/plugin/app config. Chỉ triển khai sau approval cụ thể và native proof phù hợp; không private key plaintext trong SQLite/AsyncStorage. SecureStore không tự là EC signer hay hardware-backed proof.
-- Commit/push riêng từng checkpoint khi gate và quyền cho phép, kiểm remote không tiến lên; không force-push. Roadmap không là quyền tự mở checkpoint tiếp theo.
+- Commit local riêng từng checkpoint đạt gate; push chỉ khi owner cho phép, kiểm remote không tiến lên và không force-push. Tự tiếp tục checkpoint tiếp theo trong phạm vi owner đã giao rõ; roadmap đơn thuần không cấp quyền mở rộng phạm vi.
+
+## Quy định thực thi lâu dài — owner 2026-11-25
+
+Áp dụng ngay cho công việc Offline hiện tại và các phiên sau. Giữ nguyên authority, nghiệp vụ và security gates phía trên. Không nhân bản toàn bộ quy định vào các skill; đọc đúng phần liên quan:
+
+| Trách nhiệm | Hướng dẫn chi tiết bắt buộc |
+|---|---|
+| UI đồng bộ, CTA, hành trình và điều hướng | `skills/DESIGN.md` — UI runtime và luồng thao tác |
+| Triển khai nghiệp vụ, tổ chức source/test, hiệu quả checkpoint | `skills/roadguard/SKILL.md` — A5–A7 |
+| Kiểm tra trước commit, UI/Android và artifact | `skills/code-review/SKILL.md` — Gate bổ sung trước commit |
+
+### Dung lượng, APK và cache
+
+- Không tự tạo clone, worktree, backup hoặc bản sao source. Đọc BE tại repo hiện có bằng `git show` / `git grep` trên SHA đã pin; không sao chép source BE hàng loạt vào cache Mobile.
+- Tái sử dụng build output/cache; không lưu APK riêng cho mỗi sửa nhỏ. Ưu tiên giữ APK nghiệm thu mới nhất và một bản rollback đã xác minh.
+- Trước mỗi native build: kiểm dung lượng ổ đĩa, API host, thiết bị, native config và đường dẫn build. Gom thay đổi liên quan trước khi build.
+- Không tạo log/report/evidence trùng nội dung. Khi chốt checkpoint, liệt kê chính xác đường dẫn artifact cần giữ và artifact đã hết tác dụng để owner xét duyệt.
+- Không tự xóa bất kỳ file/artifact, database, journal, media, pending upload hoặc dữ liệu người dùng. Chỉ dọn các đường dẫn cụ thể owner đã phê duyệt; không tự chuyển task hiện tại sang dọn ổ đĩa.
+- Không commit APK, `.cache`, build output, `.cxx` hoặc log QA tạm.
+
+### Git và phạm vi checkpoint
+
+- Giữ branch hiện tại; task hiện tại dùng `main`. Không tự tạo/đổi branch, switch, reset, clean, stash hoặc push.
+- Bảo toàn WIP của agent khác. Stage bằng đường dẫn cụ thể; chỉ commit checkpoint đạt gate, không gom UI không liên quan hoặc artifact QA vào commit nghiệp vụ.
+- Đo tiến độ bằng thao tác người dùng thực hiện được, dữ liệu BE nhận được và evidence xác nhận; không lấy số test, file hay commit làm thước đo hoàn thành.
 
 ### Evidence labels
 

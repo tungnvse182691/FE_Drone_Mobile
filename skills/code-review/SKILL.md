@@ -32,6 +32,28 @@ Mọi nhãn Auto-Fix/Self-Healing còn ở checklist dưới đây CHỈ áp d�
 - `LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`; HTTP 200 batch/local flag không là durable per-item ACK. Timeout giữ immutable journal/identity/payload/key/version và unknown outcome.
 - FastTrack API-146/policy revision + bootstrap package/item/binding/itemVersion thật; không số đo local, không NORMAL context thay FT. Thiếu contract production fail closed; mock chỉ isolated tests/dev harness.
 
+## Gate bổ sung trước commit — owner 2026-11-25
+
+Áp dụng trong mode được giao; không cấp quyền sửa cho independent reviewer. Quy tắc UI nằm tại `skills/DESIGN.md`, quản lý dung lượng/Git tại `AGENTS.md`, source/test tại `skills/roadguard/SKILL.md`; không sao chép lại toàn bộ quy định.
+
+### Checklist cho checkpoint có thay đổi UI
+
+- [ ] So với runtime đã được owner chấp nhận: đồng bộ design system, shared components/tokens; không phá bố cục màn cũ.
+- [ ] Mọi nút có mục đích và handler thực; kiểm actor/quyền, điều kiện hiển thị, trạng thái, API/dữ liệu và kết quả sau bấm.
+- [ ] CTA đúng trạng thái/BE guard; không thao tác lại nghiệp vụ hoàn tất, không mutation trùng khi bấm nhiều lần.
+- [ ] Route đi tới/back hoạt động; màn đích có bước hữu ích, không navigation loop dư thừa.
+- [ ] Không raw ID/JSON kỹ thuật không cần thiết; loading/empty/offline/error/disabled/success/conflict hợp lệ, không báo SENT khi mới LOCAL_SAVED.
+- [ ] Safe area, font scale, scroll và accessibility phù hợp; regression chức năng cũ trong các luồng bị tác động được kiểm.
+- [ ] Kiểm Android thực tế trong phạm vi khả dụng; ảnh trước/sau màn sửa, không bắt buộc video animation.
+
+TypeScript/component test PASS không đồng nghĩa UI/UX đã nghiệm thu. Thiếu Android: ghi `NOT_VERIFIED` cho nghiệm thu UI/UX (`NOT_RUN` cho bước chưa chạy), không tự nhận DONE checkpoint UI.
+
+### Phạm vi kiểm chứng và artifact
+
+- Source chức năng thay đổi: giữ đầy đủ quality gates hiện hành, kiểm các handler/caller và chức năng cũ chịu ảnh hưởng. Không sửa/xóa assertion hợp lệ để làm xanh suite.
+- Chỉ sửa Markdown: review diff, liên kết/đường dẫn, phân trách nhiệm, tính nhất quán với authority/nghiệp vụ/bảo mật/Git và chạy `git diff --check`; không build APK hoặc chạy full regression chỉ vì tài liệu.
+- Trước commit: kiểm staged paths chính xác; không WIP ngoài scope, APK/cache/build/`.cxx`/log QA thừa hoặc secret. Ghi danh sách artifact cần giữ/hết tác dụng theo đường dẫn khi chốt checkpoint; chỉ đề xuất dọn, không tự xóa.
+
 ## ⚙️ CORE PRINCIPLES — BẤT DI BẤT DỊCH
 
 | # | Nguyên tắc | Giải thích |
@@ -82,6 +104,8 @@ git status --short
 ---
 
 ### BƯỚC 2 — Cổng Compiler TypeScript (Deterministic Gate)
+
+Chỉ áp dụng khi source chức năng thay đổi hoặc có gate cụ thể yêu cầu. Task thuần Markdown dùng mục “Phạm vi kiểm chứng và artifact” ở trên; không chạy compiler/regression/build chỉ để sửa tài liệu.
 
 ```powershell
 cd D:\Do_AN_Drone\FE_AppMobile

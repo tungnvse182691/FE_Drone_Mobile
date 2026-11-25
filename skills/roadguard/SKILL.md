@@ -102,6 +102,28 @@ Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi 
 
 ---
 
+### A5. Tận dụng nghiệp vụ hiện có
+
+- Đối chiếu current BE source tại SHA đã pin: controller, DTO, service, repository, guard, tests và tài liệu liên quan. Chỉ báo BE gap khi có proof cụ thể; không hỏi lại thông tin tìm được trong source.
+- Tận dụng chức năng đang hoạt động; không viết lại nếu không cần. Bảo toàn API integration, auth, permission guards, camera, GPS, upload, recovery và offline journal.
+- Không runtime mock để che lỗi BE, bỏ guard để UI chạy, hạ bảo mật production, sửa BE khi chưa được giao hoặc mở rộng nghiệp vụ ngoài canonical/current contract.
+- UI phải theo `skills/DESIGN.md`; caller/API hoạt động chưa đủ để hoàn thành một màn.
+
+### A6. Tổ chức source và test
+
+- Đọc và tái sử dụng component/helper/service đúng trách nhiệm hiện có trước khi tạo mới.
+- Ưu tiên thêm test vào file cùng phạm vi nghiệp vụ; chỉ tạo file mới khi thực sự cần tách trách nhiệm. Không kiểm trùng hành vi đã có, không refactor toàn suite ngoài scope.
+- Script/artifact QA tạm đặt trong `.cache`, không trong cây source production. Không xóa test hợp lệ hoặc sửa assertion để che regression.
+- Chọn test theo rủi ro/hành vi cần chứng minh; số test/file/commit không phải độ hoàn thành nghiệp vụ.
+
+### A7. Hiệu quả checkpoint
+
+- Hoàn thành checkpoint nghiệp vụ hiện tại trước khi mở rộng hạng mục khác. Không audit lặp toàn repo, đọc lại file không đổi vô ích hoặc nghiên cứu lại primitive đã triển khai tốt.
+- Trong lúc sửa chạy targeted tests; tại checkpoint chạy typecheck/full regression theo gate hiện hành. Tái sử dụng evidence còn hợp lệ khi source và điều kiện kiểm thử không đổi; không chạy regression chỉ vì thao tác QA hoặc sửa Markdown.
+- Native build tuân thủ kiểm tra môi trường/dung lượng và tái sử dụng output tại `AGENTS.md`; không build lặp khi chưa có thay đổi hoặc giả thuyết cần kiểm chứng.
+- Không mở checkpoint UI ngoài scope, báo cáo dài lặp nội dung cũ hoặc sửa/build/test vô hạn. Mỗi lần thử phải trả lời nguyên nhân/giả thuyết cụ thể; giữ giới hạn self-review hiện hành và ghi gap có proof, tiếp tục phần độc lập được giao.
+- Chốt bằng kết quả sử dụng thực trên app, readback BE và vị trí evidence, không bằng số lượng việc kỹ thuật đã chạy.
+
 ## PHẦN B — Nguồn-sự-thật & đặc tả kỹ thuật RoadGuard Canonical 17_10
 
 ### B0. Nguồn-sự-thật
