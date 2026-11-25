@@ -14,5 +14,11 @@
     "path": "RoadGuardSystem.Repositories/Interfaces/Repairs/RepairCommandCoreHash.cs",
     "sha256": "d2ba7a9676e10029f8c7df21d49f4029372ce219905c9596fb7133b0aca9b72e",
     "extraction": "Compute<T> ordered schemaVersion/kind/taskId/itemId/originalActorId/input wrapper with Web serializer; Program.cs uses extracted typed DTOs."
+  },
+  "admissionEvidence": {
+    "source": "8d7595afa5caed33f4c71834d3d8c6d796568c7b",
+    "path": "RoadGuardSystem.DTOs/Inspections/FieldInspectionWorkflowDtos.cs",
+    "sha256": "b7504129f93670a694e23ea007ad84ba0415952134a8bfa237d45d6611b53180",
+    "extraction": "FieldEvidenceDeclaration constructor and JsonIgnore attribute verbatim; conversion operators omitted. Other extracts retain their individual historical provenance."
   }
 }

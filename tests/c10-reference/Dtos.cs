@@ -28,7 +28,8 @@ public sealed record FieldMeasurementInput(string SampleId, string Type, decimal
     string? LocationReason, string Instrument, string Method, string? Notes = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record FieldEvidenceDeclaration(Guid CaptureOriginId, Guid? FileId, string Purpose,
-    string ChecksumSha256, string MediaType, DateTimeOffset? CapturedAt, string? AttemptChecklist);
+    string ChecksumSha256, string MediaType, DateTimeOffset? CapturedAt, string? AttemptChecklist,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? SizeBytes = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record FieldPositionProofInput(string Kind, string? Checklist, double? Longitude, double? Latitude, string? ObservedSlabId = null, Guid? ObservedSegmentId = null, Guid? ObservedRouteVersionId = null, double? ObservedChainageMeters = null);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

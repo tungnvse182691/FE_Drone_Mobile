@@ -9,6 +9,23 @@ function operation(kind='FIELD_ACCEPT') {const o={schemaVersion:1,originId:guid(
 function reference(o){return oracle({mode:'vector',projectId,batchId,registrationId,operation:o});}
 // Build the committed source-derived oracle, without changing Backend or downloading packages.
 test('C10A .NET reference executable builds from committed source extracts',()=>{const r=cp.spawnSync('dotnet',['build','tests/c10-reference/Reference.csproj','--nologo'],{encoding:'utf8'});assert.equal(r.status,0,r.stdout+r.stderr);});
+test('admission evidence size preserves legacy bytes and matches the official nullable long DTO',async()=>{
+ for(const kind of ['FIELD_SUBMISSION','REPAIR_ASSESSMENT']) {
+  const o=operation(kind);o.fieldAction=null;
+  const input={originId:o.originId,deviceId:o.sourceDeviceId,evidence:[{captureOriginId:guid(),fileId:null,purpose:'BEFORE',checksumSha256:'a'.repeat(64),mediaType:'image/jpeg',capturedAt:null,attemptChecklist:null}]};
+  if(kind==='FIELD_SUBMISSION'){input.startOriginId=guid();input.captureType='BEFORE';o.fieldSubmission=input;}
+  else {input.fieldFirstStartId=guid();o.repair={resourceId:guid(),action:'assessment',assessment:input};}
+  const core=()=>kind==='FIELD_SUBMISSION'?p.fieldCoreHash(o,sha):p.repairCoreHash(o,sha);
+  o.corePayloadHash=await core();const legacy=p.serializeOfflineOperation(o),legacyHash=o.corePayloadHash;
+  for(const size of [null,undefined,1,4294967296,Number.MAX_SAFE_INTEGER]) {
+   input.evidence[0].sizeBytes=size;o.corePayloadHash=await core();const r=reference(o);assert.ok(!r.error,r.error);
+   assert.equal(p.serializeOfflineOperation(o),r.operation);await p.describeOfflineOperation(o,sha);
+   if(size==null){assert.equal(o.corePayloadHash,legacyHash);assert.equal(p.serializeOfflineOperation(o),legacy);}
+   else {const wire=JSON.parse(r.operation);assert.equal((wire.fieldSubmission??wire.repair.assessment).evidence[0].sizeBytes,size);assert.notEqual(o.corePayloadHash,legacyHash);}
+  }
+  for(const size of [NaN,Infinity,1.5,Number.MAX_SAFE_INTEGER+1]){input.evidence[0].sizeBytes=size;await assert.rejects(core());}
+ }
+});
 for(const reason of ['plain','Hoàng Hải / 😀','quote " slash \\ <>&\' + `','\b\t\n\f\r\u0000\u007f\u2028'])test('C10A .NET FIELD_ACCEPT byte/hash/claim/attached parity '+JSON.stringify(reason),async()=>{
  const o=operation();o.fieldAction.reason=reason;const r=reference(o);assert.ok(!r.error,r.error);o.corePayloadHash=await p.fieldCoreHash(o,sha);
  assert.equal(p.serializeOfflineOperation(o),r.operation);const d=await p.describeOfflineOperation(o,sha);assert.equal(JSON.stringify(d),JSON.stringify(r.descriptor));

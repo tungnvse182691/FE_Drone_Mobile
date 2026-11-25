@@ -16,7 +16,7 @@ const schemas:Record<string,Field[]> = {
  start: fields('originId:guid claimedAt:date deviceId:guid? monotonicMilliseconds:int? bootId:string? offlineProof:string?'),
  submission: fields('originId:guid startOriginId:guid parentSubmissionId:guid? measurements:measurement[]? evidence:evidence[]? locationProof:position? captureType:string repaired:bool? unrepairedReason:string? deviceId:guid?'),
  measurement: fields('sampleId:string type:string value:decimal? state:string unknownReason:string? dimension:string unit:string longitude:double? latitude:double? locationReason:string? instrument:string method:string notes:string?'),
- evidence: fields('captureOriginId:guid fileId:guid? purpose:string checksumSha256:string mediaType:string capturedAt:date? attemptChecklist:string?'),
+ evidence: fields('captureOriginId:guid fileId:guid? purpose:string checksumSha256:string mediaType:string capturedAt:date? attemptChecklist:string? sizeBytes:int?'),
  position: fields('kind:string checklist:string? longitude:double? latitude:double? observedSlabId:string? observedSegmentId:guid? observedRouteVersionId:guid? observedChainageMeters:double?'),
  repair: fields('resourceId:guid action:string start:repairStart? finish:repairFinish? assessment:assessment?'),
  repairStart: fields('originId:guid fieldFirstStartId:guid claimedAt:date assessmentId:guid deviceId:guid? monotonicMilliseconds:int? bootId:string?'),
@@ -74,7 +74,7 @@ function value(type:string,v:unknown):string {
  if(type==='conditions') { const r=record(v);return '{'+Object.keys(r).map(k=>offlineWebString(k)+':'+value('bool?',r[k])).join(',')+'}'; }
  const fs=schemas[type];if(!fs)return fail();const r=record(v);
  if(Object.keys(r).some(k=>!fs.some(([name])=>name===k)))return fail();
- return '{'+fs.filter(([name])=>!(type==='assessment'&&name==='stopConditions'&&r[name]==null))
+ return '{'+fs.filter(([name])=>!(((type==='assessment'&&name==='stopConditions')||(type==='evidence'&&name==='sizeBytes'))&&r[name]==null))
   .map(([name,t])=>offlineWebString(name)+':'+value(t,r[name])).join(',')+'}';
 }
 /** Preserve numeric identity and reject cyclic/non-data inputs before any await. */
