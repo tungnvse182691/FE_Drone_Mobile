@@ -7,7 +7,8 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { colors, spacing, typography } from '../../design-tokens';
 import { currentQueueIdentity, sameQueueIdentity } from '../../offline/upload-queue';
-import { readOfflineFieldTask, prepareOfflineFieldStart } from '../../api/crewOfflineField';
+import { readOfflineFieldTask, prepareOfflineFieldStart, prepareOfflineFieldSubmission } from '../../api/crewOfflineField';
+import { currentFieldContext, openFieldRuntime, loadFieldDraft } from '../../api/crewFieldDraft';
 import { downloadCrewOfflineTask } from '../../api/crewOfflinePreparation';
 import { openOfflineJournal, type OfflineJournalRecord } from '../../api/crewOfflineJournal';
 
@@ -24,7 +25,8 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
         const loaded=await readOfflineFieldTask(identity,projectId,taskId);
         const rows=await (await openOfflineJournal(identity)).list();
         if(live.current&&sameQueueIdentity(identity)){
-          setSource(loaded);setRecord(rows.find(r=>r.projectId===projectId&&r.proof.fieldStartTaskId===taskId)??null);
+          setSource(loaded);setRecord(rows.filter(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
+            (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===taskId)).at(-1)??null);
         }
       }catch {if(live.current&&identity&&sameQueueIdentity(identity))setNotice('Chưa đọc được dữ liệu offline hợp lệ. Dữ liệu hiện có được giữ nguyên.');}
     })();
@@ -49,8 +51,26 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
     }catch{if(live.current&&sameQueueIdentity(identity))setNotice('Chưa tải được phiên bản mới. Kiểm tra kết nối và Đồng bộ; bản đã lưu được giữ nguyên.');}
     finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
   };
+  const prepareSubmission=async()=>{
+    if(!identity||running.current||!sameQueueIdentity(identity))return;
+    running.current=true;setBusy(true);setNotice('');
+    try {
+      const context=currentFieldContext(projectId,taskId);
+      if(!context)throw Error('field_session_changed');
+      const runtime=await openFieldRuntime(context),draft=await loadFieldDraft(context,runtime);
+      if(!sameQueueIdentity(identity))return;
+      const saved=await prepareOfflineFieldSubmission(identity,projectId,taskId,draft);
+      if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã ký hồ sơ từ nháp đã lưu. Chưa gửi tới máy chủ; mở Đồng bộ để gửi và đối soát.');}
+    }catch(error){
+      if(live.current&&sameQueueIdentity(identity))setNotice((error as Error)?.message==='field_evidence_not_verified'
+        ?'Ảnh trong nháp chưa được máy chủ xác minh. Giữ nguyên nháp và tải ảnh lên khi có kết nối trước khi ký hồ sơ.'
+        :(error as Error)?.message==='field_measurements_required'?'Nháp chưa có đủ số đo và thông tin đo đạc. Hoàn thiện hồ sơ đo kiểm trước khi ký.'
+        :'Chưa ký được hồ sơ. Kiểm tra nháp, dữ liệu nhiệm vụ và biên nhận bắt đầu tại Đồng bộ; dữ liệu hiện có được giữ nguyên.');
+    }finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
+  };
   if(!identity||!sameQueueIdentity(identity))return null;
   const state=String(source?.facts.status??'');
+  const submission=!!record&&(JSON.parse(record.body).operations??[]).some((o:{kind?:string})=>o.kind==='FIELD_SUBMISSION');
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ offline" showBack fallbackRoute="/(crew)/sync"/>}>
     <Card style={styles.card}>
       <Text style={typography.titleLg}>Dữ liệu đã tải</Text>
@@ -63,12 +83,19 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
     <Card style={styles.card}>
       <Text style={typography.titleMd}>Thao tác hiện trường</Text>
       {record?<>
-        <Text accessibilityLiveRegion="polite" style={styles.body}>{record.phase==='RECONCILED'?'Máy chủ đã xác nhận thao tác nhận / bắt đầu.':'Đã có thao tác nhận / bắt đầu lưu trên thiết bị. Kiểm tra kết quả tại Đồng bộ.'}</Text>
-        <Button title="Mở Đồng bộ" variant="secondary" onPress={()=>router.push('/(crew)/sync')}/>
+        <Text accessibilityLiveRegion="polite" style={styles.body}>{submission
+          ?record.phase==='RECONCILED'?'Máy chủ đã xác nhận hồ sơ đo kiểm. Chưa phải kết quả nghiệm thu.':'Hồ sơ đã ký được giữ trên thiết bị. Gửi và kiểm tra biên nhận tại Đồng bộ.'
+          :record.phase==='RECONCILED'?'Máy chủ đã xác nhận thao tác nhận / bắt đầu.':'Đã có thao tác nhận / bắt đầu lưu trên thiết bị. Kiểm tra kết quả tại Đồng bộ.'}</Text>
+        {record.phase!=='RECONCILED'?<Button title="Mở Đồng bộ" variant="secondary" onPress={()=>router.push('/(crew)/sync')}/>:null}
       </>:source&&['NewAssigned','Accepted'].includes(state)?<>
         <Text style={styles.body}>{state==='NewAssigned'?'Lưu thao tác nhận và bắt đầu nhiệm vụ. Thứ tự hai thao tác được giữ trong gói ký.':'Lưu thao tác bắt đầu cho nhiệm vụ đã nhận.'}</Text>
         <Button title={state==='NewAssigned'?'Nhận và bắt đầu offline':'Bắt đầu offline'} variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepare()}/>
       </>:<Text style={styles.body}>Bản dữ liệu này không cho phép tạo thao tác nhận / bắt đầu mới.</Text>}
+      {source&&state==='InProgress'&&!submission&&(!record||record.phase==='RECONCILED')?<>
+        <Text style={styles.body}>Ký hồ sơ từ số đo và ảnh đã lưu của nhiệm vụ. Ảnh phải được máy chủ xác minh; nháp gốc vẫn được giữ nguyên.</Text>
+        <Button title="Mở hồ sơ đo kiểm" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:taskId,projectId,signed:'1'}})}/>
+        <Button title="Ký hồ sơ từ nháp đã lưu" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareSubmission()}/>
+      </>:null}
       {notice?<Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text>:null}
     </Card>
   </SafeAreaScreen>;

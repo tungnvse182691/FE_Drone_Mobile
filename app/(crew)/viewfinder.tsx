@@ -41,7 +41,7 @@ export default function CrewViewfinderScreen() {
 function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   const router = useRouter();
   const isFocused = useIsFocused();
-  const params = useLocalSearchParams<{ id?: string; mode?: string; supplement?: string }>();
+  const params = useLocalSearchParams<{ id?: string; mode?: string; supplement?: string; signed?: string }>();
   const initialMode: ViewfinderMode = params.mode === 'AFTER' ? 'after' : 'before';
 
   const [mode, setMode] = useState<ViewfinderMode>(initialMode);
@@ -91,7 +91,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
   };
   const renderedContext=currentFieldContext(task.projectId,task.id);
   const handleCapture = (photo: CameraCapturedPicture, metadata?: CaptureMetadata) => {if(matches(renderedContext))void savePhoto(photo.uri,'image/jpeg',true,metadata);};
-  const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId, ...(params.supplement === '1' ? { supplement: '1' } : {}) } };
+  const fieldHref = { pathname: '/(crew)/field-review' as const, params: { id: task.id, projectId: task.projectId, ...(params.supplement === '1' ? { supplement: '1' } : {}), ...(params.signed === '1' ? { signed: '1' } : {}) } };
   const closeCamera = () => { if (router.canGoBack()) router.back(); else router.dismissTo(fieldHref); };
   if (block) return <SafeAreaView style={styles.blockedSafe}>
     <ScrollView contentContainerStyle={styles.blockedContent}>

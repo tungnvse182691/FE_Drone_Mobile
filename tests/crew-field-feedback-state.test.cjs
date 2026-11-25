@@ -3,12 +3,12 @@ const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 async function mounted(options={}){
  const context={actor:'crew',scope:'session',environment:'test',projectId:'project',taskId:'task'};
  const navigation=[];
- let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0,readError=null;
+ let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0,readError=null,uploads=0;
  let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN'}],captures:options.emptyCaptures?[]:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
  const s=screen('app/(crew)/field-review.tsx',{
  expose:'CrewFieldReviewScreenContent,fieldNoticeModel,safeFieldErrorDetail',exportName:'CrewFieldReviewScreenContent',
  props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY',detail:{status:'InProgress',mode:'MEASURE_ONLY',requiredMeasurementType:1},etag:'version'}},
- moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>({}),useRouter:()=>({push:p=>{navigation.push(p);cleanup?.();}}),useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
+ moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>options.signed?{signed:'1'}:{},useRouter:()=>({push:p=>{navigation.push(p);cleanup?.();}}),useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
  modules:{
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
@@ -16,6 +16,7 @@ async function mounted(options={}){
  '../../src/api/crewApi':{crewLocalReadUnavailable:e=>e?.code==='ERR_NETWORK'&&!e.response,fieldCapabilityBlock:()=>null,validateCrewTaskDetail(){},getFieldInspectionTaskDetailReal:async()=>{detailReads++;if(readError)throw readError;return {data:{status:options.completed?'Completed':submitted?'Submitted':options.previous?'SupplementRequired':'InProgress',mode:options.normal?'NORMAL':'MEASURE_ONLY',repairContext:options.repairContext,requiredMeasurementType:1,latestSubmissionId:submitted?'receipt':options.previous?'parent':null},etag:'version'};},getFieldSubmissionDetailReal:async()=>({data:{id:submitted?'receipt':'parent',taskId:'task',readiness:options.incomplete?'INCOMPLETE':'READY',missingReasons:options.incomplete?['AFTER_ATTEMPT_BINDING_UNAVAILABLE']:[],measurements:draft.measurements,evidence:options.previous?[{fileId:'retained-file',captureOriginId:'old-photo',purpose:'MEASUREMENT'}]:[]}})},
  '../../src/api/crewFieldDraft':{currentFieldContext:()=>context,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>structuredClone(draft),measurementTemplate:()=>draft.measurements[0],fieldDraftPending:d=>d.command?.phase==='pending',fieldErrorMessage:e=>e.message,
  saveFieldMeasurements:async()=>{if(waitSave)await waitSave.promise;if(failSave)throw Error('Lưu chưa thành công');return structuredClone(draft);},acknowledgeFieldResult:async()=>({...draft,command:null}),
+ uploadFieldCapture:async(d,index)=>{uploads++;draft.captures[index]={...draft.captures[index],verified:true,upload:{status:'VERIFIED',fileId:'verified-file'}};return structuredClone(draft);},
  uploadAndSubmitFieldDraft:async(d,r,onProgress)=>{
   if(options.transfer){
    draft.captures[0]={...draft.captures[0],upload:{status:'UPLOADING',partSizeBytes:3}};
@@ -28,7 +29,7 @@ async function mounted(options={}){
  },
  }});
  s.render();await s.flush();
- return {s,navigation,detailReads:()=>detailReads,setReadError:e=>readError=e,focus:async()=>{cleanup=focus();await s.flush();},setFailure:v=>failSave=v,setWait:d=>waitSave=d,setCommand:c=>draft.command=c,
+ return {s,navigation,uploads:()=>uploads,detailReads:()=>detailReads,setReadError:e=>readError=e,focus:async()=>{cleanup=focus();await s.flush();},setFailure:v=>failSave=v,setWait:d=>waitSave=d,setCommand:c=>draft.command=c,
  submit:()=>s.nodes().find(n=>n.type==='Button'&&n.props.title==='Gửi hồ sơ đo kiểm'),notice:()=>s.nodes().find(n=>typeof n.type==='function'&&n.type.name==='FieldNotice')};
 }
 test('FIELD camera navigation clears busy when returning to the editor',async()=>{
@@ -181,3 +182,15 @@ test('FIELD long help is opt-in and each section expands independently',async()=
  h.setReadError({code:'ERR_NETWORK'});await h.focus();
  assert.equal(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Chụp / chọn ảnh'),false);h.s.unmount();
  });
+
+
+test('FIELD signed editor uploads existing measurement evidence without ordinary submission',async()=>{
+ const h=await mounted({signed:true});
+ const action=t=>h.s.nodes().find(n=>n.type==='Button'&&n.props.title===t);
+ assert.ok(action('Tải ảnh này lên'));
+ assert.equal(h.submit(),undefined);
+ h.s.press('Tải ảnh này lên');await h.s.flush();assert.equal(h.uploads(),1);
+ assert.equal(action('Tải ảnh này lên'),undefined);
+ h.s.press('Chụp / chọn ảnh');await h.s.flush();assert.equal(h.navigation.at(-1).params.signed,'1');
+ h.s.unmount();
+});

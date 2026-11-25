@@ -659,7 +659,7 @@ export function measurementTemplate(type: number, sampleId: string): crew.FieldM
   return {sampleId,type:names[type],value:null,state:'UNKNOWN',unknownReason:'Chưa đo tại hiện trường',
     dimension:type===4?'AREA':'LENGTH',unit:type===4?'m²':type>=5?'m':'cm',instrument:'',method:'',locationReason:'Chưa có tọa độ quan sát'};
 }
-function validateFieldMeasurements(draft: FieldDraft): void {
+export function validateFieldMeasurements(draft: FieldDraft): void {
   if (!draft.measurements.length || draft.measurements.some(m=>!m.instrument.trim() || !m.method.trim() ||
     (m.value === null ? m.state!=='UNKNOWN' || !m.unknownReason?.trim() : m.state!=='KNOWN' || !Number.isFinite(m.value) || m.value < 0) ||
     ((m.latitude == null || m.longitude == null) ? !m.locationReason?.trim() :

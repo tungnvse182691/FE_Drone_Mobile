@@ -168,8 +168,9 @@ export default function CrewFieldReviewScreen() {
 }
 function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const router = useRouter();
-  const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string}>():{};
+  const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string;signed?:string}>():{};
   const supplementMode=params.supplement==='1';
+  const signedMode=params.signed==='1';
   const identity=useCrewIdentity();
   const [draft,setDraft]=useState<FieldDraft|null>(null);
   const [measurements,setMeasurements]=useState<FieldMeasurementInput[]>([]);
@@ -317,6 +318,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   };
   const run=async(action:'prepare-supplement'|'bind-supplement'|'save'|'camera'|'upload'|'submit'|'replay'|'reconcile'|'recover'|'new'|'download',fileId?:string)=>{
     if(busyRef.current||cancelRef.current)return;
+    if(signedMode&&['submit','replay','bind-supplement','prepare-supplement'].includes(action))return;
     const c=context();if(!c)return;
     if(action==='replay'&&(!replayConfirmed||replayConfirmed.key!==draft?.command?.key||replayConfirmed.context!==JSON.stringify(c)))return;
     if(action==='recover'&&(!repairRecovery||repairRecovery.phase==='CONFIRMED'||
@@ -352,7 +354,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
         if(action==='save'&&current(c)){setShowMeasurements(false);setShowPosition(false);setEditingSampleId(null);}
       }
       if(action==='camera') {
-        if(current(c))router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:saved.repairClaim?'AFTER':'BEFORE',...(supplementMode?{supplement:'1'}:{})}});
+        if(current(c))router.push({pathname:'/(crew)/viewfinder',params:{id:task.id,projectId:task.projectId,mode:saved.repairClaim?'AFTER':'BEFORE',...(supplementMode?{supplement:'1'}:{}),...(signedMode?{signed:'1'}:{})}});
         return;
       }
       if(action==='upload') {
@@ -607,7 +609,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             <Text style={typography.labelSm}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
             <CrewPhotoInfo label={`Ảnh ${index+1} · ${c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}`} coordinates={c.coordinates} capturedAt={c.capturedAt} localMetadata />
             {!evidenceModel.readOnly&&!frozen&&serverLoaded?<View style={styles.evidenceActions}>
-              {normalMeasurement&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
+              {(normalMeasurement||signedMode)&&serverLoaded&&!taskReadOnly&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
               {c.upload?.id&&(['PENDING','UPLOADING'].includes(c.upload.status)||['REQUESTED','UNKNOWN','BLOCKED'].includes(c.cancelState??''))?<Button variant="text" title={c.cancelState?'Đối soát hủy phiên':'Hủy tải lên'} disabled={cancelling||(busy&&uploadingCaptureId!==c.id)} onPress={()=>setCancelTarget(c.id)}/>:null}
             </View>:null}
           </View>;})}</View>
@@ -621,7 +623,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           {showAssessmentHelp?<Text style={styles.muted}>Sau khi lưu số đo và tải ảnh, mở theo dõi thi công để gửi đánh giá trước sửa.</Text>:null}
           <Button variant="primary" title="Mở theo dõi thi công" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/progress',params:{id:task.id,projectId:task.projectId}})}/>
         </Card>:null}
-        {!taskReadOnly&&!frozen&&!normalMeasurement?<View style={styles.submitActions}><Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy&&busyAction==='submit'} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/></View>:null}
+        {!signedMode&&!taskReadOnly&&!frozen&&!normalMeasurement?<View style={styles.submitActions}><Button variant="primary" title={supplementMode?'Gửi bản bổ sung và liên kết lượt sửa chữa':draft.repairClaim?'Gửi hồ sơ đo kiểm sau sửa':latest?'Gửi bổ sung đo kiểm':'Gửi hồ sơ đo kiểm'} loading={busy&&busyAction==='submit'} disabled={busy||cancelling||frozen||normalMeasurement||!!block||!measurements.length||(!draft.captures.length&&!latest?.evidence?.length)} onPress={()=>void run('submit')}/></View>:null}
         </>:null}
         {fieldDraftPending(draft)?<Card style={styles.card}>
           <View style={styles.summaryHeader}><Text style={typography.labelLg}>{replayConfirmed?'Xác nhận gửi lại':'Kiểm tra lần gửi'}</Text><MaterialIcons name="sync" size={20} color={colors.secondary}/></View>
