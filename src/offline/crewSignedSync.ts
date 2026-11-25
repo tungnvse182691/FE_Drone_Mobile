@@ -21,13 +21,27 @@ export async function sendSignedFieldIntent(record:OfflineJournalRecord):Promise
     JSON.stringify(current.proof)!==JSON.stringify(record.proof))throw Error('offline_batch_source_changed');
   crewReadGuard(current.identity);
   if(current.phase==='RECONCILED')return current;
-  if(current.phase==='RECEIVED')return reconcileSignedBatch(current);
+  if(current.phase==='RECEIVED')return continueReceivedBatch(current);
   if(['IN_FLIGHT','UNKNOWN_OUTCOME'].includes(current.phase)){
     current=await recoverSignedOrigins(current);crewReadGuard(record.identity);
     if(current.phase==='IN_FLIGHT')current=await journal.transition(current,'UNKNOWN_OUTCOME');
   }
   if(!['PREPARED','UNKNOWN_OUTCOME'].includes(current.phase))throw Error('offline_batch_source_phase_invalid');
   const received=await dispatchOfflineIntent(current);crewReadGuard(record.identity);
+  return continueReceivedBatch(received);
+}
+
+async function continueReceivedBatch(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
+  const reconciled=await reconcileSignedBatch(record);crewReadGuard(record.identity);
+  if(reconciled.phase==='RECONCILED')return reconciled;
+  const items=(reconciled.receipt as OfflineBatchReceipt).items;
+  // Conflicts, stale snapshots and rejected members are never blindly replayed.
+  if(items.some(i=>!i.durableAcknowledgment&&i.state!=='PENDING_DEPENDENCY'))return reconciled;
+  if(!items.some(i=>!i.durableAcknowledgment&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??'')))return reconciled;
+  await (await import('../api/crewOfflineAdmission')).resumeSignedEvidence(reconciled);crewReadGuard(record.identity);
+  // The original journal row still owns body/signature/key. Transport only changed
+  // capture mapping and upload state, so dispatch exactly these persisted bytes.
+  const received=await dispatchOfflineIntent(reconciled);crewReadGuard(record.identity);
   return reconcileSignedBatch(received);
 }
 

@@ -6,7 +6,7 @@ function repairFixture(){
  const h=submissionFixture(),ctx={schemaVersion:1,packageId:id(),itemId:id(),bindingId:id(),itemVersion:'AAAAAAAAB9E=',taskId:h.h.task,assignmentId:h.h.snapshot.assignmentId,crewId:h.h.identity.actor,mode:'Normal',state:'Assigned',approvedBy:id(),approvedPlanHash:'a'.repeat(64),proposalPlanHash:'a'.repeat(64),originalCrewFirstStartId:h.origin,currentAssessmentId:null,currentExecutionStartId:null,currentExecutionFinishId:null,executeAuthority:'REVALIDATE_CURRENT_SOURCE_AT_ADMISSION'};
  h.draft.measurements[0].sampleId=id();let saved;
  const validator=load('src/api/crewRepairWorkflow.ts',new Proxy({'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairHistory':{timestamp:v=>typeof v==='string'&&Number.isFinite(Date.parse(v))}},{has:()=>true,get:(o,k)=>o[k]??{}}));
- const m=load('src/api/crewOfflineRepair.ts',{'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx},'./crewSafetyWorkflow':{crewReadGuard:()=>{}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':{repairAssessmentMatchesDraft:()=>true},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>h.h.rows})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
+ const m=load('src/api/crewOfflineRepair.ts',{'./crewFieldDraft':load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx},'./crewSafetyWorkflow':{crewReadGuard:()=>{}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':{repairAssessmentMatchesDraft:()=>true},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>h.h.rows})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
  return {...h,ctx,m,get saved(){return saved;}};
 }
 test('signed REPAIR assessment freezes VERIFIED draft and preserves item identity',async()=>{
@@ -101,12 +101,12 @@ test('snapshot screen only prepares after explicit tap and prevents duplicate ta
  const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:h.project,taskId:h.task},modules:{
   '../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},
   '../../offline/upload-queue':{currentQueueIdentity:()=>h.identity,sameQueueIdentity:()=>true},
-  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldStart:async()=>{prepared++;return wait.promise;}},
+  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),recordOfflineFieldStart:async()=>{prepared++;return wait.promise;}},
   '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})}
-  ,'../../api/crewOfflinePreparation':{}
+  ,'../../api/crewOfflinePreparation':{},'../../api/crewFieldDraft':{currentFieldContext:()=>null}
  }});ui.render();await ui.flush();assert.equal(prepared,0);
  const first=ui.press('Nhận và bắt đầu offline');ui.press('Nhận và bắt đầu offline');assert.equal(prepared,1);
- wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'FIELD_START',taskId:h.task}]})});await first;await ui.flush();assert.ok(JSON.stringify(ui.nodes()).includes('Chưa gửi tới máy chủ'));assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Nhận và bắt đầu offline'));ui.unmount();
+ wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'FIELD_START',taskId:h.task}]})});await first;await ui.flush();assert.ok(JSON.stringify(ui.nodes()).includes('chưa gửi tới máy chủ'));assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Nhận và bắt đầu offline'));ui.unmount();
 });
 
 test('offline snapshot can refresh an assigned task before any signed record exists',async()=>{
@@ -134,8 +134,8 @@ test('offline snapshot signs the persisted draft only after tap and retains one 
   '../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...h.snapshot,downloadedAt:'2026-11-25T00:00:00Z'},facts:h.snapshot.snapshot}),prepareOfflineFieldSubmission:async(...args)=>{calls++;assert.equal(args[3],draft);return wait.promise;}},
   '../../api/crewFieldDraft':{currentFieldContext:()=>draft,openFieldRuntime:async()=>({}),loadFieldDraft:async()=>{read++;return draft;}},
   '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>h.rows.slice(1)})},'../../api/crewOfflinePreparation':{}
- }});ui.render();await ui.flush();assert.equal(calls,0);assert.equal(read,0);
- const first=ui.press('Ký hồ sơ từ nháp đã lưu');ui.press('Ký hồ sơ từ nháp đã lưu');await ui.flush();assert.equal(calls,1);assert.equal(read,1);
+ }});ui.render();await ui.flush();assert.equal(calls,0);assert.equal(read,1);
+ const first=ui.press('Ký hồ sơ từ nháp đã lưu');ui.press('Ký hồ sơ từ nháp đã lưu');await ui.flush();assert.equal(calls,1);assert.equal(read,2);
  wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:h.task}]})});await first;await ui.flush();
  assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Ký hồ sơ từ nháp đã lưu'));
  assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Mở Đồng bộ'));ui.unmount();
@@ -157,4 +157,32 @@ test('REPAIR snapshot exposes the assessed action and blocks duplicate taps whil
  wait.resolve({phase:'PREPARED',body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId:f.h.task}]})});await first;await ui.flush();
  assert.ok(!ui.nodes().some(n=>n.type==='Button'&&n.props.title==='Ký đánh giá hiện trường'));
  assert.ok(JSON.stringify(ui.nodes()).includes('Đã lưu gói ký trên thiết bị'));ui.unmount();
+});
+
+for(const kind of ['FIELD','REPAIR'])test('signed '+kind+' preserves sealed local capture with null file and declared size',async()=>{
+ const f=kind==='FIELD'?submissionFixture():repairFixture(),h=f.h,c=f.draft.captures[0];
+ delete c.upload;c.verified=false;c.localOnly=true;c.size=68;c.uri='file:///original.png';
+ c.createKey=id();c.parts=[];c.vault={id:id()};
+ if(kind==='FIELD'){
+  await h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft);
+  const e=h.saved[3][0].fieldSubmission.evidence[0];assert.equal(e.fileId,null);assert.equal(e.sizeBytes,68);
+ }else{
+  await f.m.prepareOfflineRepairAssessment(h.identity,h.project,h.task,f.draft);
+  const e=f.saved[0].repair.assessment.evidence[0];assert.equal(e.fileId,null);assert.equal(e.sizeBytes,68);
+ }
+});
+
+for(const status of ['NewAssigned','Accepted'])test('same outage FIELD signs dependency chain from persisted physical start '+status,async()=>{
+ const f=submissionFixture(),h=f.h;h.rows.pop();h.snapshot.snapshot.status=status;
+ await h.module.prepareOfflineFieldStart(h.identity,h.project,h.task);
+ const operations=h.saved[3],claimedAt=operations.at(-1).fieldStart.claimedAt;
+ f.draft.offlineStart={snapshotId:h.snapshot.id,registrationId:h.registration,deviceId:h.device,operations};
+ await h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft);
+ const all=h.saved[3],submission=all.at(-1);
+ assert.deepEqual(Array.from(all,o=>o.kind),status==='NewAssigned'?['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION']:['FIELD_START','FIELD_SUBMISSION']);
+ assert.equal(all.at(-2).fieldStart.claimedAt,claimedAt);
+ assert.equal(submission.dependencies[0],all.at(-2).originId);
+ assert.equal(submission.fieldSubmission.startOriginId,all.at(-2).originId);
+ f.draft.offlineStart.operations.at(-1).taskVersion='changed';
+ await assert.rejects(h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft),/source_mismatch/);
 });

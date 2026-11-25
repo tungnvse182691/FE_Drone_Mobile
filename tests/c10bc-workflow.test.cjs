@@ -1,4 +1,18 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),axios=require('axios'),{randomUUID}=require('node:crypto');
+test('admission continuation binds every source identity and signed capture without rewriting the batch',()=>{
+ const a=load('src/api/crewOfflineAdmission.ts',new Proxy({},{has:()=>true,get:()=>({})}));
+ const identity={actor:randomUUID()},origin=randomUUID(),capture=randomUUID(),source=randomUUID(),registration=randomUUID();
+ const op={originId:origin,kind:'FIELD_SUBMISSION',taskId:randomUUID(),assignmentId:randomUUID(),snapshotId:randomUUID(),originalActorId:identity.actor,
+  fieldSubmission:{evidence:[{captureOriginId:capture,fileId:null,purpose:'BEFORE',mediaType:'image/jpeg',checksumSha256:'a'.repeat(64),sizeBytes:99}]}};
+ const record={identity,projectId:randomUUID(),proof:{sourceBatchId:source,registrationId:registration},body:JSON.stringify({batchId:source,sourceDeviceRegistrationId:registration,operations:[op]}),receipt:{batchId:randomUUID()}};
+ const admission={id:randomUUID(),projectId:record.projectId,batchId:record.receipt.batchId,sourceBatchId:source,sourceDeviceRegistrationId:registration,originId:origin,taskId:op.taskId,assignmentId:op.assignmentId,snapshotId:op.snapshotId,originalActorId:identity.actor,currentImporterId:identity.actor,grantId:null,status:'WAITING_UPLOAD',captures:[{captureOriginId:capture,fileId:null,uploadId:null,uploadStatus:'NOT_CREATED',purpose:'BEFORE',mediaType:'image/jpeg',checksumSha256:'a'.repeat(64),declaredSizeBytes:99,sizeBytes:null}]};
+ const item={originId:origin,kind:op.kind,admission},before=record.body;
+ assert.equal(a.validateAdmissionSource(record,item).operation.originId,origin);
+ for(const field of ['projectId','batchId','sourceBatchId','sourceDeviceRegistrationId','originId','taskId','assignmentId','snapshotId','originalActorId','currentImporterId'])assert.throws(()=>a.validateAdmissionSource(record,{...item,admission:{...admission,[field]:randomUUID()}}),/admission/);
+ for(const change of [{checksumSha256:'b'.repeat(64)},{declaredSizeBytes:100},{mediaType:'image/png'},{purpose:'AFTER'},{captureOriginId:randomUUID()},{fileId:randomUUID(),uploadId:null}])assert.throws(()=>a.validateAdmissionSource(record,{...item,admission:{...admission,captures:[{...admission.captures[0],...change}]}}),/admission/);
+ for(const status of ['CONFLICT','REJECTED','STALE_SNAPSHOT','invented'])assert.throws(()=>a.validateAdmissionSource(record,{...item,admission:{...admission,status}}),/admission/);
+ assert.equal(record.body,before);
+});
 function load(file,deps){const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText,{module:m,exports:m.exports,require:n=>{if(!(n in deps))throw Error('unmocked '+n);return deps[n];},Date,URL});return m.exports;}
 function setup(native=true){const project=randomUUID(),actor=randomUUID(),scope='session-A';const i={actor,role:'REPAIR_CREW',scope,environment:'http://fixture/api/v1',partition:'fixture'};let current=i,calls=[],error=null,switchDuring=false;
  const guard=x=>{if(x.actor!==current.actor||x.scope!==current.scope||x.role!=='REPAIR_CREW'||x.environment!==current.environment)throw Error('crew_session_changed');};
@@ -69,4 +83,39 @@ test('REPAIR signer requires actual item version and binding, preserves typed ha
  assert.equal(saved.proof.fieldStartTaskId,task);
 
  await assert.rejects(s.prepareSignedFieldBatch(h.i,h.project,registration,[op],sha),/source/);
+});
+
+function admissionHarness(){
+ const id=randomUUID,i={actor:id(),scope:'session-A',environment:'http://fixture/api/v1',role:'REPAIR_CREW',partition:'A'},project=id(),origin=id(),capture=id(),registration=id(),client=id(),server=id();let active=true,intent=null,sent=[],events=[];
+ const op={originId:origin,kind:'FIELD_SUBMISSION',taskId:id(),assignmentId:id(),snapshotId:id(),originalActorId:i.actor,fieldSubmission:{evidence:[{captureOriginId:capture,fileId:null,purpose:'BEFORE',mediaType:'image/png',checksumSha256:'a'.repeat(64),sizeBytes:68}]}};
+ const batch={id:id(),identity:i,projectId:project,phase:'RECEIVED',proof:{kind:'signed-field-batch',sourceBatchId:client,registrationId:registration},body:JSON.stringify({batchId:client,sourceDeviceRegistrationId:registration,operations:[op]}),receipt:{batchId:server}};
+ const admission={id:id(),projectId:project,batchId:server,sourceBatchId:client,sourceDeviceRegistrationId:registration,originId:origin,taskId:op.taskId,assignmentId:op.assignmentId,snapshotId:op.snapshotId,originalActorId:i.actor,currentImporterId:i.actor,grantId:null,status:'WAITING_UPLOAD',captures:[{captureOriginId:capture,fileId:null,uploadId:null,purpose:'BEFORE',mediaType:'image/png',checksumSha256:'a'.repeat(64),declaredSizeBytes:68,sizeBytes:null}]};
+ const item={originId:origin,kind:op.kind,state:'PENDING_DEPENDENCY',code:'evidence_upload_required',durableAcknowledgment:false,admission};
+ const c={id:capture,purpose:'BEFORE',mediaType:'image/png',checksum:'a'.repeat(64),size:68,localOnly:true,createKey:id(),offlineUpload:{batchIntentId:batch.id,originId:origin,admissionId:admission.id,createIntentId:id()}};
+ const draft={actor:i.actor,scope:i.scope,environment:i.environment,projectId:project,taskId:op.taskId,captures:[c]};
+ const guard=()=>{if(!active)throw Error('session_changed');},upload={id:id(),fileId:id(),status:'PENDING',partSizeBytes:100,version:'v1'};
+ const runtime={api:{getCrewUploadSession:async uploadId=>{assert.equal(uploadId,upload.id);events.push('session-get');return upload;}},write:async()=>events.push('persist-mapping')};
+ const journal={list:async()=>[batch],prepare:async value=>{events.push('prepare');if(intent){assert.equal(value.body,intent.body);assert.equal(value.key,intent.key);return intent;}return intent={...value,phase:'PREPARED'};},transition:async(r,phase)=>{events.push(phase);return intent={...r,phase};}};
+ const module=load('src/api/crewOfflineAdmission.ts',{'./crewOfflineJournal':{openOfflineJournal:async()=>journal},'./crewSafetyWorkflow':{crewReadGuard:guard},'../offline/upload-queue':{currentQueueIdentity:()=>i},'./crewFieldDraft':{assertFieldContext:guard},'../utils/uuid':{uuidv4:id},'./crewOfflineWorkflow':{readOfflineResource:async()=>{guard();events.push('origin-get');return item;},dispatchOfflineIntent:async r=>{assert.ok(intent);assert.equal(r.body,intent.body);assert.equal(r.key,c.createKey);events.push('dispatch');sent.push(r);admission.captures[0].uploadId=upload.id;admission.captures[0].fileId=upload.fileId;return intent={...r,phase:'RECEIVED',receipt:upload};}}});
+ return {module,draft,c,runtime,upload,item,admission,batch,events,sent,get intent(){return intent;},uncertain:()=>intent={...intent,phase:'IN_FLIGHT'},switch:()=>active=false};
+}
+test('admission create persists exact body/key and replays uncertain create without changing signed null',async()=>{
+ const h=admissionHarness(),bytes=h.batch.body;
+ const transport=await h.module.admissionCaptureTransport(h.draft,h.c,h.runtime);
+ assert.equal(h.sent.length,0);assert.ok(h.intent);assert.equal(JSON.parse(h.intent.body).admissionId,h.admission.id);
+ const first=await transport.create();assert.equal(first.id,h.upload.id);h.uncertain();h.admission.captures[0].uploadId=null;h.admission.captures[0].fileId=null;
+ const resumed=await h.module.admissionCaptureTransport(h.draft,h.c,h.runtime);await resumed.create();
+ assert.equal(h.sent.length,2);assert.equal(h.sent[0].body,h.sent[1].body);assert.equal(h.sent[0].key,h.sent[1].key);
+ assert.ok(h.events.includes('UNKNOWN_OUTCOME'));assert.equal(h.batch.body,bytes);assert.equal(JSON.parse(bytes).operations[0].fieldSubmission.evidence[0].fileId,null);
+});
+test('admission lost create response restores exact authenticated mapping without another POST',async()=>{
+ const h=admissionHarness();h.admission.captures[0].uploadId=h.upload.id;h.admission.captures[0].fileId=h.upload.fileId;
+ const transport=await h.module.admissionCaptureTransport(h.draft,h.c,h.runtime);await transport.create();
+ assert.equal(h.sent.length,0);assert.equal(h.c.upload.id,h.upload.id);assert.ok(h.events.includes('persist-mapping'));
+});
+test('admission cached source cannot bypass fresh actor or stale mapping checks',async()=>{
+ const h=admissionHarness(),t=await h.module.admissionCaptureTransport(h.draft,h.c,h.runtime);h.switch();
+ await assert.rejects(t.create(),/session/);assert.equal(h.sent.length,0);
+ const stale=admissionHarness();stale.c.upload={...stale.upload};
+ await assert.rejects(stale.module.admissionCaptureTransport(stale.draft,stale.c,stale.runtime),/admission/);assert.equal(stale.sent.length,0);
 });

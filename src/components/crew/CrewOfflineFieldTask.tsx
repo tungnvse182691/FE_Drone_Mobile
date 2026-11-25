@@ -7,7 +7,7 @@ import { Card } from '../Card';
 import { Button } from '../Button';
 import { colors, spacing, typography } from '../../design-tokens';
 import { currentQueueIdentity, sameQueueIdentity } from '../../offline/upload-queue';
-import { readOfflineCrewTask, prepareOfflineFieldStart, prepareOfflineFieldSubmission } from '../../api/crewOfflineField';
+import { readOfflineCrewTask, recordOfflineFieldStart, prepareOfflineFieldSubmission } from '../../api/crewOfflineField';
 import { prepareOfflineRepairAssessment, prepareOfflineRepairStart, prepareOfflineRepairFinish } from '../../api/crewOfflineRepair';
 import { currentFieldContext, openFieldRuntime, loadFieldDraft } from '../../api/crewFieldDraft';
 import { downloadCrewOfflineTask } from '../../api/crewOfflinePreparation';
@@ -17,6 +17,7 @@ import { openOfflineJournal, type OfflineJournalRecord } from '../../api/crewOff
 export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId:string}) {
   const router=useRouter(),[identity]=useState(currentQueueIdentity);
   const [source,setSource]=useState<Awaited<ReturnType<typeof readOfflineCrewTask>>|null>(null);
+  const [localStarted,setLocalStarted]=useState(false);
   const [record,setRecord]=useState<OfflineJournalRecord|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
   const live=useRef(true),running=useRef(false);
   useEffect(()=>{
@@ -25,8 +26,10 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
       try {
         const loaded=await readOfflineCrewTask(identity,projectId,taskId);
         const rows=await (await openOfflineJournal(identity)).list();
+        const context=currentFieldContext(projectId,taskId);
+        const draft=context?await loadFieldDraft(context,await openFieldRuntime(context)):null;
         if(live.current&&sameQueueIdentity(identity)){
-          setSource(loaded);setRecord(rows.filter(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
+          setSource(loaded);setLocalStarted(!!draft?.offlineStart);setRecord(rows.filter(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
             (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===taskId)).at(-1)??null);
         }
       }catch {if(live.current&&identity&&sameQueueIdentity(identity))setNotice('Chưa đọc được dữ liệu offline hợp lệ. Dữ liệu hiện có được giữ nguyên.');}
@@ -37,8 +40,8 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
     if(!identity||running.current||!sameQueueIdentity(identity))return;
     running.current=true;setBusy(true);setNotice('');
     try {
-      const saved=await prepareOfflineFieldStart(identity,projectId,taskId);
-      if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã lưu và ký trên thiết bị. Chưa gửi tới máy chủ; vào Đồng bộ khi có mạng.');}
+      await recordOfflineFieldStart(identity,projectId,taskId);
+      if(live.current&&sameQueueIdentity(identity)){setLocalStarted(true);setNotice('Đã lưu mốc bắt đầu trên thiết bị. Hoàn thiện số đo và ảnh rồi ký chung hồ sơ; chưa gửi tới máy chủ.');}
     }catch {if(live.current&&sameQueueIdentity(identity))setNotice('Chưa lưu được thao tác mới. Kiểm tra Đồng bộ; không tạo lại lệnh đang chờ hoặc chưa rõ kết quả.');}
     finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
   };
@@ -64,7 +67,7 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
       if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã ký hồ sơ từ nháp đã lưu. Chưa gửi tới máy chủ; mở Đồng bộ để gửi và đối soát.');}
     }catch(error){
       if(live.current&&sameQueueIdentity(identity))setNotice((error as Error)?.message==='field_evidence_not_verified'
-        ?'Ảnh trong nháp chưa được máy chủ xác minh. Giữ nguyên nháp và tải ảnh lên khi có kết nối trước khi ký hồ sơ.'
+        ?'Ảnh chưa đủ dữ liệu gốc để ký hoặc đang có lượt tải chưa xác định. Giữ nguyên nháp và kiểm tra trạng thái ảnh.'
         :(error as Error)?.message==='field_measurements_required'?'Nháp chưa có đủ số đo và thông tin đo đạc. Hoàn thiện hồ sơ đo kiểm trước khi ký.'
         :'Chưa ký được hồ sơ. Kiểm tra nháp, dữ liệu nhiệm vụ và biên nhận bắt đầu tại Đồng bộ; dữ liệu hiện có được giữ nguyên.');
     }finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
@@ -86,7 +89,7 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
       }
       if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã lưu gói ký trên thiết bị. Mở Đồng bộ để gửi và kiểm tra biên nhận máy chủ.');}
     }catch{
-      if(live.current&&sameQueueIdentity(identity))setNotice('Chưa tạo được lệnh sửa chữa. Kiểm tra nháp, ảnh đã xác minh, bản dữ liệu mới và biên nhận ở Đồng bộ; dữ liệu cũ được giữ nguyên.');
+      if(live.current&&sameQueueIdentity(identity))setNotice('Chưa tạo được lệnh sửa chữa. Kiểm tra nháp, ảnh gốc đã lưu, bản dữ liệu mới và biên nhận ở Đồng bộ; dữ liệu cũ được giữ nguyên.');
     }finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   if(!identity||!sameQueueIdentity(identity))return null;
@@ -96,7 +99,6 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ offline" showBack fallbackRoute="/(crew)/sync"/>}>
     <Card style={styles.card}>
       <Text style={typography.titleLg}>Dữ liệu đã tải</Text>
-      <Text selectable style={styles.body}>ID nhiệm vụ: {taskId.slice(0,8)}</Text>
       <Text style={styles.body}>{typeof source?.facts.instructions==='string'?source.facts.instructions:'Đang đọc dữ liệu nhiệm vụ…'}</Text>
       {source?<Text style={styles.caption}>Đã tải: {new Date(source.snapshot.downloadedAt).toLocaleString('vi-VN')}</Text>:null}
       <Text style={styles.caption}>Đây là bản đã lưu trên thiết bị. Máy chủ sẽ kiểm tra lại quyền, phân công và phiên bản khi đồng bộ.</Text>
@@ -116,12 +118,12 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
         <Text accessibilityLiveRegion="polite" style={styles.body}>{submission
           ?record.phase==='RECONCILED'?'Máy chủ đã xác nhận hồ sơ đo kiểm. Chưa phải kết quả nghiệm thu.':'Hồ sơ đã ký được giữ trên thiết bị. Gửi và kiểm tra biên nhận tại Đồng bộ.'
           :record.phase==='RECONCILED'?'Máy chủ đã xác nhận thao tác nhận / bắt đầu.':'Đã có thao tác nhận / bắt đầu lưu trên thiết bị. Kiểm tra kết quả tại Đồng bộ.'}</Text>
-      </>:source&&['NewAssigned','Accepted'].includes(state)?<>
+      </>:source&&!localStarted&&['NewAssigned','Accepted'].includes(state)?<>
         <Text style={styles.body}>{state==='NewAssigned'?'Lưu thao tác nhận và bắt đầu nhiệm vụ. Thứ tự hai thao tác được giữ trong gói ký.':'Lưu thao tác bắt đầu cho nhiệm vụ đã nhận.'}</Text>
         <Button title={state==='NewAssigned'?'Nhận và bắt đầu offline':'Bắt đầu offline'} variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepare()}/>
       </>:<Text style={styles.body}>Bản dữ liệu này không cho phép tạo thao tác nhận / bắt đầu mới.</Text>}
-      {!repair&&source&&state==='InProgress'&&!submission&&(!record||record.phase==='RECONCILED')?<>
-        <Text style={styles.body}>Ký hồ sơ từ số đo và ảnh đã lưu của nhiệm vụ. Ảnh phải được máy chủ xác minh; nháp gốc vẫn được giữ nguyên.</Text>
+      {!repair&&source&&(state==='InProgress'||localStarted)&&!submission&&(!record||record.phase==='RECONCILED')?<>
+        <Text style={styles.body}>Ký hồ sơ từ số đo và ảnh đã lưu của nhiệm vụ. Có thể ký với ảnh gốc chưa tải lên; khi có mạng, ứng dụng tải và xác minh ảnh trước khi đối soát hồ sơ.</Text>
         <Button title="Mở hồ sơ đo kiểm" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:taskId,projectId,signed:'1'}})}/>
         <Button title="Ký hồ sơ từ nháp đã lưu" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareSubmission()}/>
       </>:null}

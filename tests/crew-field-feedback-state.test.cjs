@@ -184,13 +184,12 @@ test('FIELD long help is opt-in and each section expands independently',async()=
  });
 
 
-test('FIELD signed editor uploads existing measurement evidence without ordinary submission',async()=>{
+test('FIELD signed editor retains local evidence for admission without ordinary upload or submission',async()=>{
  const h=await mounted({signed:true});
  const action=t=>h.s.nodes().find(n=>n.type==='Button'&&n.props.title===t);
- assert.ok(action('Tải ảnh này lên'));
- assert.equal(h.submit(),undefined);
- h.s.press('Tải ảnh này lên');await h.s.flush();assert.equal(h.uploads(),1);
  assert.equal(action('Tải ảnh này lên'),undefined);
+ assert.equal(h.submit(),undefined);
+ assert.equal(h.uploads(),0);
  h.s.press('Chụp / chọn ảnh');await h.s.flush();assert.equal(h.navigation.at(-1).params.signed,'1');
  h.s.unmount();
 });

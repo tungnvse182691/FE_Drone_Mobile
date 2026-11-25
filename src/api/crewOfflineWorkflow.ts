@@ -15,7 +15,16 @@ export interface SourceSnapshot {
 }
 export interface OfflineItemReceipt {
   originId:string;kind:string;state:string;code:string|null;effectId:string|null;canonicalOriginId:string|null;
-  durableAcknowledgment:boolean;serverReceivedAt:string;outcome:unknown;
+  durableAcknowledgment:boolean;serverReceivedAt:string;outcome:unknown;admission?:OfflineAdmissionReadback|null;
+}
+export interface OfflineCaptureReadback {
+  captureOriginId:string;fileId:string|null;uploadId:string|null;uploadStatus:string;
+  purpose:string;mediaType:string;checksumSha256:string;declaredSizeBytes:number|null;sizeBytes:number|null;
+}
+export interface OfflineAdmissionReadback {
+  id:string;projectId:string;batchId:string;sourceBatchId:string;sourceDeviceRegistrationId:string;
+  originId:string;taskId:string;assignmentId:string;snapshotId:string;originalActorId:string;currentImporterId:string;
+  grantId:string|null;status:string;captures:OfflineCaptureReadback[];
 }
 export interface OfflineBatchReceipt {batchId:string;items:OfflineItemReceipt[];localQueueInstruction:string}
 export type OfflineReadKind='artifacts'|'batches'|'devices'|'grants'|'origins'|'packages'|'snapshots';
@@ -61,7 +70,8 @@ export function requireOfflineNativeAcceptance(identity?:QueueIdentity):void {
 export async function dispatchOfflineIntent(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
   requireOfflineNativeAcceptance(record.identity);crewReadGuard(record.identity);
   const base=offlineProjectPath(record.projectId);
-  if(!['/devices','/snapshots','/sync','/starts/reconcile'].some(s=>record.path===base+s)&&
+  if(!(record.path==='/offline/uploads'&&record.proof.kind==='admission-upload')&&
+    !['/devices','/snapshots','/sync','/starts/reconcile'].some(s=>record.path===base+s)&&
     !new RegExp('^'+base+'/devices/[a-fA-F0-9-]{36}/revoke$').test(record.path))throw Error('offline_write_not_admitted');
   const journal=await openOfflineJournal(record.identity);
   // CAS before transport makes concurrent taps fail closed; IN_FLIGHT after crash requires explicit reconciliation.

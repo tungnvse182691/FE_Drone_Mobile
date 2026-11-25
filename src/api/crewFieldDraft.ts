@@ -30,8 +30,23 @@ export interface FieldCapture {
   uploadAttempt?: { key: string; stage: 'CREATE_INTENT' | 'CREATE_UNKNOWN' | 'SESSION_CREATED'; startedAt: string };
   /** Local outcome for the server cancel request; never a Backend upload status. */
   cancelState?: 'REQUESTED' | 'UNKNOWN' | 'CONFIRMED' | 'BLOCKED';
+  /** Transport provenance only; never copied into the signed evidence declaration. */
+  offlineUpload?: {batchIntentId:string;originId:string;admissionId:string;createIntentId:string};
+}
+/** Signed declarations may refer to sealed local bytes. Uncertain online uploads
+ * cannot be silently converted into an offline admission. Bytes are rehashed by
+ * the existing uploader before transport. */
+export function signedCaptureReady(c:FieldCapture):boolean {
+  if(c.cancelState)return false;
+  if(c.verified&&c.upload?.status==='VERIFIED'&&c.upload.fileId)return true;
+  return c.localOnly===true&&!c.upload&&!c.uploadAttempt&&!c.offlineUpload&&
+    !c.completed&&!c.verified&&!!c.uri&&!!c.vault&&!!c.createKey&&
+    Number.isSafeInteger(c.size)&&c.size>0&&/^[a-f0-9]{64}$/i.test(c.checksum)&&
+    ['image/jpeg','image/png'].includes(c.mediaType)&&!c.parts?.length&&!c.partCommands;
 }
 export interface FieldDraft extends FieldContext {
+  /** Physical local start, awaiting a single combined signed FIELD packet. */
+  offlineStart?: {snapshotId:string;registrationId:string;deviceId:string;operations:import('./crewOfflineProtocol').OfflineRecord[]};
   captures: FieldCapture[]; measurements: crew.FieldMeasurementInput[];
   locationProof: crew.FieldPositionProofInput | null;
   command?: { key: string; body: crew.FieldSubmissionInput; ifMatch: string; assignmentId: string;
@@ -41,6 +56,14 @@ export interface FieldDraft extends FieldContext {
     reviewId: string; attemptId: string };
   repairClaim?: { finishId: string; executionStartId: string; firstStartId: string; finishAt: string;
     packageId: string; itemId: string; bindingId: string; assignmentId: string; itemVersion: string };
+}
+/** Editing permission only. Never changes the server DTO or permits dispatch. */
+export function localFieldStartAllowsCapture(draft:FieldDraft|null,task:crew.FieldTaskViewFact,actor:string):boolean {
+  const s=draft?.offlineStart,ops=s?.operations,start=ops?.at(-1);
+  return !!draft&&draft.actor===actor&&draft.taskId===task.id&&draft.projectId===task.projectId&&
+    !!s&&['NewAssigned','Accepted'].includes(task.status??'')&&!!task.assignmentId&&task.assignedToUserId===actor&&
+    start?.kind==='FIELD_START'&&start.snapshotId===s.snapshotId&&start.assignmentId===task.assignmentId&&
+    start.taskVersion===task.version&&start.originalActorId===actor&&start.sourceDeviceId===s.deviceId;
 }
 export interface FieldRuntime {
   current: () => FieldContext | null;
@@ -133,6 +156,7 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
     },
     write: async draft=>{
       check();if(!sameContext(draft,context))throw Error('field_session_changed');
+      const {writeProtectedFieldDraft}=await import('./crewOfflineJournal');check();
       const rows=await db.getAllAsync<{id:string;payload:string}>(
         'SELECT id, payload FROM local_draft WHERE kind = ? AND (id = ? OR substr(id, 1, ?) = ?) ORDER BY rowid',
         'T05B_FIELD',key,key.length+1,key+':');check();
@@ -142,7 +166,7 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
         validateRecovery(source,draft);
         const previous=(await stored()).find(d=>d.scope===source.scope&&d.command?.key===source.command!.key);check();
         if(!previous)throw Error('field_draft_invalid');validateFieldTransition(previous,draft);
-        await saveDraft(db,recoveryKey(source),'CREW_FIELD_RECOVERY',{source:JSON.stringify(source),draft});check();return;
+        await writeProtectedFieldDraft(db,recoveryKey(source),'CREW_FIELD_RECOVERY',{source:JSON.stringify(source),draft},draft);check();return;
       }
       let target=row?.id??scoped(context.scope);
       if(source?.command){
@@ -152,7 +176,7 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
         target=scoped(context.scope)+':'+randomUUID();
       }
       if(draft.command){const {writeOnlineFieldSubmissionDraft}=await import('./crewOfflineJournal');check();await writeOnlineFieldSubmissionDraft(db,target,draft);}
-      else await saveDraft(db,target,'T05B_FIELD',{...draft});check();}, uuid: randomUUID,
+      else await writeProtectedFieldDraft(db,target,'T05B_FIELD',{...draft},draft);check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
     sealPhoto: photo => sealCrewPhoto(context,photo,()=>sameContext(context,current())),
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,
@@ -273,7 +297,7 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
     if(localTask&&!sameContext(localTask,context))throw Error('field_session_changed');
     const detail = localTask ?? await guarded(context,runtime,() => crew.getFieldInspectionTaskDetailReal(context.projectId,context.taskId));
     if(localTask)crew.validateCrewTaskDetail(detail.data,detail.etag,context.projectId,context.taskId,context.actor);
-    const reason = crew.fieldCapabilityBlock(detail.data,detail.etag,context.actor,'capture');
+    const reason = localTask&&localFieldStartAllowsCapture(draft,detail.data,context.actor)?null:crew.fieldCapabilityBlock(detail.data,detail.etag,context.actor,'capture');
     if (reason) throw new Error(reason);
     if (purpose === 'AFTER' && detail.data.purpose !== 'PostRepair') throw new Error('Ảnh sau sửa chỉ hợp lệ với nhiệm vụ sau sửa chữa.');
     if (purpose==='AFTER'&&['NORMAL','CONDITIONAL_FT'].includes(detail.data.mode??'')) {
@@ -427,11 +451,15 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   const key = captureKey(draft,c.id);
   const checkCancel = () => { if (cancelGates.has(key) || controller.signal.aborted || c.cancelState) throw Error('field_upload_cancel_pending'); };
   checkCancel();
-  const response = await freshTask(draft,runtime,'capture');
+  // Admission continuation has its own authenticated, exact signed-source guard.
+  // It must not borrow authority from a cached task or from the normal upload route.
+  const admission = c.offlineUpload
+    ? await (await import('./crewOfflineAdmission')).admissionCaptureTransport(draft,c,runtime) : null;
+  const response = admission ? null : await freshTask(draft,runtime,'capture');
   checkCancel();
-  if (c.purpose === 'AFTER' && response.data.purpose !== 'PostRepair') throw new Error('field_after_not_allowed');
-  if(draft.repairClaim)await verifyRepairClaim(draft,response.data,runtime);
-  if(c.purpose==='AFTER'&&['NORMAL','CONDITIONAL_FT'].includes(response.data.mode??'')&&!draft.repairClaim)throw Error('repair_finish_required');
+  if (response && c.purpose === 'AFTER' && response.data.purpose !== 'PostRepair') throw new Error('field_after_not_allowed');
+  if(response&&draft.repairClaim)await verifyRepairClaim(draft,response.data,runtime);
+  if(response&&c.purpose==='AFTER'&&['NORMAL','CONDITIONAL_FT'].includes(response.data.mode??'')&&!draft.repairClaim)throw Error('repair_finish_required');
   const bytes = await guarded(draft,runtime,() => c.vault !== undefined
     ? readCrewPhotoBytes(draft,c,()=>sameContext(draft,runtime.current())) : runtime.bytes(c.uri));
   if (bytes.length !== c.size || await guarded(draft,runtime,() => runtime.hash(bytes)) !== c.checksum) throw new Error('field_checksum_mismatch');
@@ -443,7 +471,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     c.uploadAttempt = { key: c.createKey, stage: 'CREATE_INTENT', startedAt: new Date().toISOString() };
     await persist(draft,runtime);
     try {
-      c.upload = await guarded(draft,runtime,() => runtime.api.createCrewUploadSession(draft.projectId,draft.taskId,
+      c.upload = await guarded(draft,runtime,() => admission ? admission.create() : runtime.api.createCrewUploadSession(draft.projectId,draft.taskId,
         `${c.id}.${c.mediaType === 'image/png' ? 'png' : 'jpg'}`,c.mediaType,c.size,c.checksum,c.purpose,c.createKey));
     } catch (error) {
       c.uploadAttempt.stage = 'CREATE_UNKNOWN';

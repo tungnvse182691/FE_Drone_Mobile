@@ -13,6 +13,18 @@ import { NATIVE_ACCEPTANCE_VERIFIED } from '../../../modules/roadguard-offline-c
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
 import { sendSignedFieldIntent } from '../../offline/crewSignedSync';
 
+function pendingEvidence(r:OfflineJournalRecord):boolean {
+  return ((r.receipt as {items?:{durableAcknowledgment?:boolean;state?:string;code?:string}[]})?.items??[])
+    .some(i=>!i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
+}
+function evidenceLabel(r:OfflineJournalRecord):string {
+  const items=(r.receipt as {items?:{code?:string}[]})?.items??[];
+  return items.some(i=>i.code==='evidence_upload_required')?'Chờ tải ảnh':'Chờ xác minh ảnh';
+}
+function phaseLabel(r:OfflineJournalRecord):string {
+  if(r.phase==='RECEIVED'&&pendingEvidence(r))return evidenceLabel(r);
+  return ({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase]??'Chưa xác nhận';
+}
 /** Real Crew sync route, actor/session keyed by parent. Read never changes pending/legacy state. */
 export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIdentity; refreshSignal?: number}) {
   const router=useRouter();
@@ -27,7 +39,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     try {
       const j=await openOfflineJournal(identity),rows=await j.list();
       if(n!==sequence.current||!sameQueueIdentity(identity))return;
-      setRecords(rows);
+      setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'));
       // Native capability is diagnostic; it must not hide durable online commands.
       try {
         const p=await inspectOfflineDevice(identity);
@@ -51,7 +63,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       }else if(record.proof.kind==='start-reconciliation')await reconcileStartIntent(record);
       else await reconcileDeviceIntent(record);
       const j=await openOfflineJournal(identity),rows=await j.list();
-      if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows);
+      if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'));
     }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả. Lệnh, khóa và dữ liệu chờ vẫn được giữ nguyên.');}
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   };
@@ -62,10 +74,10 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     try{
       await sendSignedFieldIntent(record);
       const rows=await (await openOfflineJournal(identity)).list();
-      if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows);
+      if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'));
     }catch{if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả gửi. Gói ký và khóa gửi lại được giữ nguyên; đối soát trước khi thử lại.');}
     finally{
-      try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows);}catch{/* Keep last view; durable journal remains authoritative. */}
+      try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'));}catch{/* Keep last view; durable journal remains authoritative. */}
       running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
     }
   };
@@ -77,15 +89,15 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
   const historyRecords=records.filter(r=>r.phase==='RECONCILED');
   return <Card style={styles.panel}>
     <View style={styles.heading}><Text style={[typography.titleMd,{color:'#192D40',fontSize:16,lineHeight:24}]}>Hàng đợi trên thiết bị</Text></View>
-    <Text style={styles.description}>{records.length} thao tác được lưu trong nhật ký thiết bị.</Text>
+    <Text style={styles.description}>{records.length} bản ghi được lưu trong nhật ký thiết bị.</Text>
     <View style={styles.stateRow}><View style={styles.stateCell}><Text style={styles.value}>{waiting}</Text><Text style={styles.label}>Chờ gửi</Text></View><View style={styles.stateCell}><Text style={styles.value}>{reconciling}</Text><Text style={styles.label}>Cần đối soát</Text></View><View style={styles.stateCell}><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View><View style={styles.stateCell}><Text style={styles.value}>{attention}</Text><Text style={styles.label}>Cần xử lý</Text></View></View>
     <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
     {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
     {activeRecords.length===0?<Text style={styles.description}>Không có lệnh đang chờ gửi hoặc đối soát.</Text>:null}
     {historyRecords.length>0?<Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Lịch sử đã xác nhận ({historyRecords.length})</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>:null}
-    {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase] ?? 'Chưa xác nhận'}</Text></View>
+    {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>
       {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
-      {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='signed-field-batch'&&['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
+      {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='signed-field-batch'&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?'Tiếp tục tải ảnh và đồng bộ':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
       {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
     </View>)}
     <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>

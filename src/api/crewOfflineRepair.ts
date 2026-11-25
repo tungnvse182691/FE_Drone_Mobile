@@ -1,10 +1,10 @@
 import type { QueueIdentity } from '../offline/upload-queue';
-import type { FieldDraft } from './crewFieldDraft';
+import { signedCaptureReady, type FieldDraft } from './crewFieldDraft';
 import { readOfflineCrewTask } from './crewOfflineField';
 import { validateRepairSnapshot } from './crewOfflineWorkflow';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { isCrewResourceId } from './crewApi';
-import { validateRepairInput } from './crewRepairWorkflow';
+import { validateRepairInput, validateSignedRepairAssessment } from './crewRepairWorkflow';
 import { repairAssessmentMatchesDraft } from './crewRepairDraft';
 import { openOfflineJournal } from './crewOfflineJournal';
 import { repairCoreHash, type OfflineRecord } from './crewOfflineProtocol';
@@ -70,11 +70,11 @@ export async function prepareOfflineRepairAssessment(identity:QueueIdentity,proj
   if(s.repair.state!=='Assigned'||s.repair.currentAssessmentId!=null||s.repair.currentExecutionStartId!=null)throw Error('offline_repair_not_available');
   if(!isCrewResourceId(s.repair.originalCrewFirstStartId))throw Error('offline_repair_first_start_required');
   const captures=draft.captures.filter(c=>c.purpose!=='AFTER');
-  if(captures.some(c=>!c.verified||c.upload?.status!=='VERIFIED'||c.cancelState))throw Error('repair_verified_evidence_required');
+  if(captures.some(c=>!signedCaptureReady(c)))throw Error('repair_verified_evidence_required');
   const payload:OfflineRecord={originId:uuidv4(),fieldFirstStartId:s.repair.originalCrewFirstStartId,measurements:draft.measurements,
-    evidence:captures.map(c=>({captureOriginId:c.id,fileId:c.upload?.fileId,purpose:c.purpose,checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),
+    evidence:captures.map(c=>({captureOriginId:c.id,fileId:c.upload?.fileId??null,purpose:c.purpose,...(c.size!=null?{sizeBytes:c.size}:{}),checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),
     locationProof:draft.locationProof,deviceId:s.deviceId};
-  validateRepairInput('assessment',payload);
+  validateSignedRepairAssessment(payload);
   payload.measurements=draft.measurements.map(m=>({...m,value:m.value===null?null:{decimal:String(m.value)}}));
   return prepare(identity,projectId,s,'REPAIR_ASSESSMENT','assessment','assessment',payload);
 }
@@ -86,7 +86,14 @@ export async function prepareOfflineRepairStart(identity:QueueIdentity,projectId
   const a=await previous(identity,projectId,s,'REPAIR_ASSESSMENT',s.repair.currentAssessmentId);crewReadGuard(identity);
   const assessment=(a.op.repair as OfflineRecord).assessment as OfflineRecord;
   // Typed decimals are wire wrappers; comparison uses the original finite draft domain.
-  const comparable={...assessment,measurements:(assessment.measurements as OfflineRecord[]).map(m=>({...m,value:m.value===null?null:Number((m.value as {decimal?:string})?.decimal??m.value)}))};
+  const evidence=(assessment.evidence as OfflineRecord[]).map(e=>{
+    const c=draft.captures.find(c=>c.id===e.captureOriginId);
+    if(e.fileId===null&&(!c?.verified||c.upload?.status!=='VERIFIED'||!c.upload.fileId||
+      c.offlineUpload?.originId!==a.op.originId||(e.sizeBytes!=null&&e.sizeBytes!==c.size)))throw Error('repair_assessment_source_changed');
+    const {sizeBytes,...original}=e;
+    return {...original,fileId:e.fileId===null?c!.upload!.fileId:e.fileId};
+  });
+  const comparable={...assessment,evidence,measurements:(assessment.measurements as OfflineRecord[]).map(m=>({...m,value:m.value===null?null:Number((m.value as {decimal?:string})?.decimal??m.value)}))};
   if(a.outcome.readiness!=='READY'||a.outcome.stage!=='PRE_EXECUTION'||a.outcome.firstStartId!==s.repair.originalCrewFirstStartId||
     assessment.fieldFirstStartId!==s.repair.originalCrewFirstStartId||!repairAssessmentMatchesDraft(comparable,draft))throw Error('repair_assessment_source_changed');
   const payload={originId:uuidv4(),fieldFirstStartId:s.repair.originalCrewFirstStartId,assessmentId:s.repair.currentAssessmentId,claimedAt:new Date().toISOString(),deviceId:s.deviceId,monotonicMilliseconds:null,bootId:null};

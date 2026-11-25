@@ -44,7 +44,14 @@ async function requireFastTrackStart(i: RepairIdentity,r: RepairRuntime,task: ap
   if(after.etag!==`"${task.version}"`||after.data.repairContext!.itemVersion!==ctx.itemVersion||
     r.api.repairExecutionBlock(after.data,after.etag,i.actor,'start'))throw Error('fasttrack_context_changed');
 }
+/** Separate entry point for signed admission; online callers still require file IDs. */
+export function validateSignedRepairAssessment(body:Record<string,unknown>):void {
+  validateRepairInputCore('assessment',body,true);
+}
 export function validateRepairInput(operation: 'assessment'|'start'|'finish'|'attempt'|'supplement',body: Record<string,unknown>): void {
+  validateRepairInputCore(operation,body,false);
+}
+function validateRepairInputCore(operation: 'assessment'|'start'|'finish'|'attempt'|'supplement',body: Record<string,unknown>,signed:boolean):void {
   if(operation==='attempt' || operation==='supplement') {
     if(!api.isCrewResourceId(body.fieldSubmissionId)||
       (operation==='attempt'&&!api.isCrewResourceId(body.executionFinishId))||
@@ -66,7 +73,7 @@ export function validateRepairInput(operation: 'assessment'|'start'|'finish'|'at
     (m.value===null?m.state!=='UNKNOWN'||!m.unknownReason?.trim():m.state!=='KNOWN'||!Number.isFinite(m.value)||m.value<0)||
     ((m.latitude==null||m.longitude==null)?!m.locationReason?.trim():!Number.isFinite(m.latitude)||!Number.isFinite(m.longitude)||Math.abs(m.latitude)>90||Math.abs(m.longitude)>180)))throw Error('repair_measurements_required');
   if(!Array.isArray(evidence)||!evidence.length||evidence.length>100 || evidence.some(e=>
-    !api.isCrewResourceId(e.captureOriginId)||!api.isCrewResourceId(e.fileId)||!['BEFORE','MEASUREMENT'].includes(e.purpose)||
+    !api.isCrewResourceId(e.captureOriginId)||!(api.isCrewResourceId(e.fileId)||(signed&&e.fileId===null))||!['BEFORE','MEASUREMENT'].includes(e.purpose)||
     !/^[a-f0-9]{64}$/i.test(e.checksumSha256)||!['image/jpeg','image/png'].includes(e.mediaType)||
     (e.capturedAt!=null&&!timestamp(e.capturedAt))))throw Error('repair_verified_evidence_required');
 }

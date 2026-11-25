@@ -91,7 +91,7 @@ test('capture persistence keeps the shutter timestamp and per-photo fix; gallery
   vm.runInNewContext(ts.transpileModule(ast.statements.find(node=>ts.isFunctionDeclaration(node)&&node.name?.text==='sameContext').getText(ast)+'\n'+fn.getText(ast),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
     module,exports:module.exports,Directory,File,Paths:{document:'local'},Uint8Array,
     readPhotoGps:load('src/utils/photoGps.ts').readPhotoGps,
-    exclusive:async(c,run)=>run(),openFieldRuntime:async()=>runtime,loadFieldDraft:async()=>({captures:[]}),
+    localFieldStartAllowsCapture:()=>false,exclusive:async(c,run)=>run(),openFieldRuntime:async()=>runtime,loadFieldDraft:async()=>({captures:[]}),
     guarded:async(c,r,run)=>run(),crew:{getFieldInspectionTaskDetailReal:async()=>{reads++;return {data:{},etag:'real'};},validateCrewTaskDetail(){validations++;},fieldCapabilityBlock:()=>null},
     persist:async draft=>{saved.push(JSON.parse(JSON.stringify(draft)));},
   });

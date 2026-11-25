@@ -55,7 +55,6 @@ export function LocalSavedDrafts({ role, onClose }: {role: LocalDraftReadIdentit
       </View>}
       renderItem={({item}) => <View style={styles.card}>
         <Text style={styles.reference}>{item.referenceLabel ?? (item.hasCommand ? 'Lệnh đã lưu' : role === 'REPAIR_CREW' ? 'Bản nháp nhiệm vụ' : 'Bản nháp phản ánh')}</Text>
-        <Text style={styles.caption}>Mã tham chiếu: {item.reference.slice(0, 8)}</Text>
         {item.description ? <Text style={styles.body}>{item.description}</Text> : null}
         {item.photoCount>0||item.measurementCount>0?<Text style={styles.body}>{item.photoCount>0?`${item.photoCount} ảnh`:''}{item.photoCount>0&&role==='REPAIR_CREW'&&item.measurementCount>0?' · ':''}{role==='REPAIR_CREW'&&item.measurementCount>0?`${item.measurementCount} số đo`:''}</Text>:null}
         <Text style={styles.caption}>{item.hasCommand ? 'Có lệnh đã lưu · Cần đối soát khi kết nối lại' : 'Bản nháp cục bộ · Chưa gửi'}</Text>

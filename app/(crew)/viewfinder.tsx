@@ -10,7 +10,7 @@ import { Button } from '../../src/components/Button';
 import { defectTypeLabel } from '../../src/constants/defect-types';
 import { CrewTaskBoundary, useCrewIdentity } from './tasks';
 import { fieldCapabilityBlock, type CrewTask } from '../../src/api/crewApi';
-import { currentFieldContext, openFieldRuntime, loadFieldDraft, captureFieldPhoto, fieldDraftPending, fieldErrorMessage, type FieldDraft } from '../../src/api/crewFieldDraft';
+import { localFieldStartAllowsCapture, currentFieldContext, openFieldRuntime, loadFieldDraft, captureFieldPhoto, fieldDraftPending, fieldErrorMessage, type FieldDraft } from '../../src/api/crewFieldDraft';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewPressable } from '../../src/components/crew/CrewMotion';
 
@@ -69,7 +69,7 @@ function CrewViewfinderScreenContent({ task }: { task: CrewTask }) {
     if (context) void openFieldRuntime(context).then(runtime=>loadFieldDraft(context,runtime)).then(value=>{if(active&&matches(context)){setDraft(value);setReady(true);}}).catch(error=>{if(active&&matches(context)){setDraft({ ...context, captures: [], measurements: [], locationProof: null });setReady(true);setLocalRecoveryBlocked(true);setNotice(`Không thể dùng nháp cũ: ${fieldErrorMessage(error)} Chỉ đọc hồ sơ máy chủ; cần đối soát trước khi lưu ảnh mới.`);}});
     return ()=>{active=false;activeRef.current=false;};
   },[task.id,task.projectId,scope]));
-  const block = !user || !scope || !task.detail ? 'Phiên đội sửa chữa không hợp lệ.' : fieldCapabilityBlock(task.detail,task.etag??'',user.id,'capture');
+  const block = !user || !scope || !task.detail ? 'Phiên đội sửa chữa không hợp lệ.' : params.signed==='1'&&draft?.offlineStart&&localFieldStartAllowsCapture(draft,task.detail,user.id)?null:fieldCapabilityBlock(task.detail,task.etag??'',user.id,'capture');
   const beforeReady = !!draft?.captures.some(c=>c.purpose==='BEFORE');
   const afterReady = !!draft?.captures.some(c=>c.purpose==='AFTER');
   const photoCount = draft?.captures.length??0;

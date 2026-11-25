@@ -19,7 +19,7 @@ import { CrewTaskBoundary, useCrewIdentity, TASK_MODE_CHIP } from './tasks';
 import { repairSupplementBlock, crewLocalReadUnavailable, fieldCapabilityBlock, validateCrewTaskDetail, getFieldInspectionTaskDetailReal, getFieldSubmissionDetailReal, getFieldTaskGeometryReal,
   type CrewTask, type FieldTaskGeometry, type FieldMeasurementInput, type FieldPositionProofInput, type FieldSubmissionViewFact } from '../../src/api/crewApi';
 import { chooseCrewPosition, crewPositionSources, crewPositionInputError } from '../../src/utils/crew-position-proof';
-import { prepareFieldRepairSupplement, reconcileFieldDraft, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
+import { prepareFieldRepairSupplement, reconcileFieldDraft, localFieldStartAllowsCapture, currentFieldContext, openFieldRuntime, loadFieldDraft, startNewFieldSessionDraft, measurementTemplate, saveFieldMeasurements,
   uploadFieldCapture, cancelFieldUpload, uploadAndSubmitFieldDraft, acknowledgeFieldResult, fieldDraftPending, fieldErrorMessage, downloadFieldPhoto, removeLocalFieldCapture,
   type FieldDraft } from '../../src/api/crewFieldDraft';
 import { prepareRepairSupplement, dispatchRepair, readRepairHistory, repairRuntime, repairErrorMessage } from '../../src/api/crewRepairWorkflow';
@@ -289,7 +289,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   },[loadRepairRecovery,task.id,task.projectId,identity.scope]);
   useFocusEffect(useCallback(()=>{active.current=true;setBusy(busyRef.current);setCancelling(cancelRef.current);if(!busyRef.current){setBusyAction('');setUploadingCaptureId(null);}void load();return()=>{active.current=false;};},[load]));
   const block=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi lưu hoặc gửi hồ sơ.':!identity.user||!identity.scope||!verifiedTask||loading||!serverLoaded?'Kết nối mạng để xác minh trạng thái và gửi hồ sơ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'submit');
-  const captureBlock=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi thêm ảnh.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
+  const captureBlock=localRecoveryBlocked?'Cần đối soát nháp cũ trước khi thêm ảnh.':!identity.user||!identity.scope||!verifiedTask||loading?'Chưa xác minh trạng thái nhiệm vụ mới nhất từ máy chủ.':signedMode&&draft?.offlineStart&&localFieldStartAllowsCapture(draft,verifiedTask,identity.user.id)?null:fieldCapabilityBlock(verifiedTask,verifiedEtag,identity.user.id,'capture');
   const evidenceModel=fieldEvidenceActionModel(verifiedTask?.status, captureBlock, draft?.captures.length ?? 0);
   const taskReadOnly=fieldTaskReadOnly(verifiedTask?.status);
   const supplementAllowed=verifiedTask?.repairContext?.attempt?.review?.decision==='SUPPLEMENT'&&!!identity.user&&!repairSupplementBlock(verifiedTask,verifiedEtag,identity.user.id);
@@ -595,7 +595,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </SafeAreaProvider>
         </Modal>
         <Card style={styles.card}><View style={styles.helpHeading}><MaterialIcons name="photo-library" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Ảnh bằng chứng</Text>{normalMeasurement?<CrewPressable accessibilityRole="button" accessibilityLabel="Hướng dẫn ảnh bằng chứng" accessibilityState={{expanded:showEvidenceHelp}} style={({pressed})=>[styles.helpToggle,pressed&&styles.refreshPressed]} onPress={()=>setShowEvidenceHelp(v=>!v)}><MaterialIcons name={showEvidenceHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></CrewPressable>:null}</View>
-          {normalMeasurement&&showEvidenceHelp?<Text style={styles.muted}>Ảnh chụp được lưu trên máy trước. Bấm “Tải ảnh này lên” dưới từng ảnh và chờ “Đã xác minh” để dùng cho đánh giá trước sửa.</Text>:null}
+          {normalMeasurement&&showEvidenceHelp?<Text style={styles.muted}>{signedMode?'Ảnh gốc được giữ trên máy. Sau khi ký hồ sơ, mở Đồng bộ để tải ảnh, xác minh và gửi lại hồ sơ đã ký.':'Ảnh chụp được lưu trên máy trước. Bấm “Tải ảnh này lên” dưới từng ảnh và chờ “Đã xác minh” để dùng cho đánh giá trước sửa.'}</Text>:null}
           {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh hiện trường.'}</Text>:null}
           <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id,transferProgress?.captureId===c.id?transferProgress.percent:undefined);return <View key={c.id} style={styles.photoTile}>
             <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
@@ -609,7 +609,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
             <Text style={typography.labelSm}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
             <CrewPhotoInfo label={`Ảnh ${index+1} · ${c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}`} coordinates={c.coordinates} capturedAt={c.capturedAt} localMetadata />
             {!evidenceModel.readOnly&&!frozen&&serverLoaded?<View style={styles.evidenceActions}>
-              {(normalMeasurement||signedMode)&&serverLoaded&&!taskReadOnly&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
+              {!signedMode&&normalMeasurement&&serverLoaded&&!taskReadOnly&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
               {c.upload?.id&&(['PENDING','UPLOADING'].includes(c.upload.status)||['REQUESTED','UNKNOWN','BLOCKED'].includes(c.cancelState??''))?<Button variant="text" title={c.cancelState?'Đối soát hủy phiên':'Hủy tải lên'} disabled={cancelling||(busy&&uploadingCaptureId!==c.id)} onPress={()=>setCancelTarget(c.id)}/>:null}
             </View>:null}
           </View>;})}</View>

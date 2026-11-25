@@ -13,7 +13,7 @@ function camera(){return load('src/components/ViewFinder.tsx',{'react-native':{S
 test('T05B GPS denied returns null without reading GPS',async()=>{let reads=0,values=[];camera().watchCaptureLocation(v=>values.push(v),{getForegroundPermissionsAsync:async()=>({status:'denied'}),requestForegroundPermissionsAsync:async()=>({status:'denied'}),getCurrentPositionAsync:async()=>reads++});await new Promise(r=>setTimeout(r,10));assert.equal(reads,0);assert.deepEqual(values,[null]);});
 test('T05B GPS timeout returns null',async()=>{let values=[];camera().watchCaptureLocation(v=>values.push(v),{getForegroundPermissionsAsync:()=>new Promise(()=>{})},2);await new Promise(r=>setTimeout(r,10));assert.deepEqual(values,[null]);});
 test('T05B GPS unmount suppresses callback and later GPS request',async()=>{let done,reads=0,values=[];const stop=camera().watchCaptureLocation(v=>values.push(v),{getForegroundPermissionsAsync:()=>new Promise(r=>done=r),getCurrentPositionAsync:async()=>reads++});stop();done({status:'granted'});await new Promise(r=>setTimeout(r,10));assert.equal(reads,0);assert.deepEqual(values,[]);});
-function fieldHarness(){
+function fieldHarness(extra={}){
  const crew=api(),calls=[];let current='sid-A',stored=null,posted=null,complete=false;
  const ctx={actor,scope:'sid-A',environment:'test',projectId:project,taskId};
  const runtime={current:()=>({...ctx,scope:current}),read:async()=>stored&&structuredClone(stored),write:async d=>{stored=structuredClone(d);calls.push('persist');},uuid:randomUUID,
@@ -26,7 +26,7 @@ function fieldHarness(){
    submitFieldTaskReal:async(p,t,b,e,k)=>{calls.push('submit');assert.equal(JSON.stringify(stored.command.body),JSON.stringify(b));posted={...b};return {data:{id:start,taskId,contentHash:'server-hash'},etag:''};},
    getFieldSubmissionDetailReal:async()=>({data:{id:start,taskId,contentHash:'server-hash',parentId:posted?.parentSubmissionId??null,measurements:posted?.measurements,evidence:posted?.evidence,readiness:'INCOMPLETE'},etag:'server-hash'}),
    getFieldEvidenceReal:async()=>({fileId:stored.captures[0].upload.fileId,state:'VERIFIED',checksum:'a'.repeat(64),mediaType:'image/jpeg',sizeBytes:3})}};
- const m=load('src/api/crewFieldDraft.ts',{'./crewApi':crew});
+ const m=load('src/api/crewFieldDraft.ts',{'./crewApi':crew,...extra});
  const draft=()=>m.newFieldDraft(ctx);
  return {m,ctx,runtime,draft,calls,stored:()=>stored,switch:()=>current='sid-B'};
 }
@@ -208,4 +208,26 @@ test('FIELD suppresses late transport progress after session switch and preserve
  assert.deepEqual(seen,[33]);
  const saved=h.stored().captures[0];assert.equal(saved.createKey,'create');assert.equal(saved.completeKey,'complete');
  assert.equal(saved.parts.length,0);assert.equal(saved.verified,false);assert.equal(h.calls.includes('submit'),false);
+});
+
+test('admission uses the shipped multipart uploader and resumes an interrupted part without normal create',async()=>{
+ const admissionModule={},h=fieldHarness({'./crewOfflineAdmission':admissionModule}),d=measured(h),c=d.captures[0];
+ Object.assign(c,{upload:undefined,verified:false,localOnly:true,createKey:randomUUID(),completeKey:randomUUID(),parts:[]});
+ const i={...h.ctx,role:'REPAIR_CREW'},origin=randomUUID(),registration=randomUUID(),source=randomUUID(),server=randomUUID();
+ const op={originId:origin,kind:'FIELD_SUBMISSION',taskId,assignmentId:assignment,snapshotId:randomUUID(),originalActorId:actor,fieldSubmission:{evidence:[{captureOriginId:c.id,fileId:null,purpose:c.purpose,mediaType:c.mediaType,checksumSha256:c.checksum,sizeBytes:c.size}]}};
+ const batch={id:randomUUID(),identity:i,projectId:project,phase:'RECEIVED',proof:{kind:'signed-field-batch',sourceBatchId:source,registrationId:registration},body:JSON.stringify({batchId:source,sourceDeviceRegistrationId:registration,operations:[op]}),receipt:{batchId:server}};
+ const a={id:randomUUID(),projectId:project,batchId:server,sourceBatchId:source,sourceDeviceRegistrationId:registration,originId:origin,taskId,assignmentId:assignment,snapshotId:op.snapshotId,originalActorId:actor,currentImporterId:actor,grantId:null,status:'WAITING_UPLOAD',captures:[{captureOriginId:c.id,fileId:null,uploadId:null,purpose:c.purpose,mediaType:c.mediaType,checksumSha256:c.checksum,declaredSizeBytes:c.size,sizeBytes:null}]};
+ const receipt={originId:origin,kind:op.kind,state:'PENDING_DEPENDENCY',code:'evidence_upload_required',durableAcknowledgment:false,admission:a};
+ c.offlineUpload={batchIntentId:batch.id,originId:origin,admissionId:a.id,createIntentId:randomUUID()};
+ let intent,creates=0,complete=false,fail=true;const upload={id:randomUUID(),fileId:randomUUID(),status:'UPLOADING',partSizeBytes:2,version:'AAAAAAAAB9E='};
+ const journal={list:async()=>[batch],prepare:async r=>intent??=(r),transition:async(r,phase)=>({...r,phase})};
+ Object.assign(admissionModule,load('src/api/crewOfflineAdmission.ts',{'./crewOfflineJournal':{openOfflineJournal:async()=>journal},'./crewSafetyWorkflow':{crewReadGuard:()=>h.m.assertFieldContext(d,h.runtime)},'../offline/upload-queue':{currentQueueIdentity:()=>i},'./crewFieldDraft':h.m,'../utils/uuid':{uuidv4:randomUUID},'./crewOfflineWorkflow':{readOfflineResource:async()=>receipt,dispatchOfflineIntent:async r=>{creates++;assert.equal(r.body,intent.body);assert.equal(r.key,c.createKey);a.captures[0].uploadId=upload.id;a.captures[0].fileId=upload.fileId;return {...r,phase:'RECEIVED',receipt:upload};}}}));
+ h.runtime.api.createCrewUploadSession=async()=>{assert.fail('normal create forbidden');};
+ h.runtime.api.getCrewUploadSession=async()=>({...upload,status:complete?'VERIFIED':'UPLOADING'});
+ h.runtime.api.completeCrewUpload=async(id,parts,hash,version,key)=>{assert.equal(id,upload.id);assert.equal(parts.length,2);assert.equal(hash,c.checksum);assert.equal(version,upload.version);assert.equal(key,c.completeKey);complete=true;};
+ h.runtime.api.putCrewUploadPartBytes=async()=>{if(fail){fail=false;throw Error('lost part');}return {etag:'real-part-etag'};};
+ const signed=batch.body;await assert.rejects(h.m.uploadFieldCapture(d,0,h.runtime),/lost part/);
+ const reopened=h.stored();assert.equal(reopened.captures[0].upload.id,upload.id);assert.equal(creates,1);
+ await h.m.uploadFieldCapture(reopened,0,h.runtime);assert.equal(creates,1);assert.equal(h.stored().captures[0].verified,true);
+ assert.equal(batch.body,signed);assert.equal(JSON.parse(signed).operations[0].fieldSubmission.evidence[0].fileId,null);
 });

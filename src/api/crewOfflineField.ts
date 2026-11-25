@@ -7,7 +7,7 @@ import { fieldCoreHash, type OfflineRecord } from './crewOfflineProtocol';
 import { prepareSignedFieldBatch } from '../offline/crewSignedSync';
 import { generateChecksum } from '../offline/checksum';
 import { uuidv4 } from '../utils/uuid';
-import { validateFieldMeasurements, type FieldDraft } from './crewFieldDraft';
+import { validateFieldMeasurements, signedCaptureReady, currentFieldContext, openFieldRuntime, loadFieldDraft, type FieldDraft } from './crewFieldDraft';
 
 /** Explicit local mode: never invoked as a fallback from a forbidden HTTP read.
  * Reconciled snapshot is a preparation source, not current server permission.
@@ -44,6 +44,11 @@ export async function readOfflineFieldTask(identity:QueueIdentity,projectId:stri
 export async function prepareOfflineFieldStart(identity:QueueIdentity,projectId:string,taskId:string) {
   const source=await readOfflineFieldTask(identity,projectId,taskId);crewReadGuard(identity);
   if(!['NewAssigned','Accepted'].includes(String(source.facts.status)))throw Error('offline_field_start_not_available');
+  const operations=await buildFieldStart(identity,taskId,source);
+  return prepareSignedFieldBatch(identity,projectId,source.registrationId,operations,generateChecksum);
+}
+
+async function buildFieldStart(identity:QueueIdentity,taskId:string,source:Awaited<ReturnType<typeof readOfflineFieldTask>>) {
   const operations:OfflineRecord[]=[];
   const base=(kind:string):OfflineRecord=>{
     const originId=uuidv4();
@@ -60,10 +65,37 @@ export async function prepareOfflineFieldStart(identity:QueueIdentity,projectId:
   start.fieldStart={originId:start.originId,claimedAt:new Date().toISOString(),deviceId:source.deviceId,
     monotonicMilliseconds:null,bootId:null,offlineProof:null};
   start.corePayloadHash=await fieldCoreHash(start,generateChecksum);crewReadGuard(identity);operations.push(start);
-  return prepareSignedFieldBatch(identity,projectId,source.registrationId,operations,generateChecksum);
+  return operations;
 }
 
-/** Bridge already VERIFIED uploads, never guess an offline admission ID.
+/** Persist the actual start tap; sign one combined packet when the draft is ready. */
+export async function recordOfflineFieldStart(identity:QueueIdentity,projectId:string,taskId:string) {
+  const source=await readOfflineFieldTask(identity,projectId,taskId);crewReadGuard(identity);
+  if(!['NewAssigned','Accepted'].includes(String(source.facts.status)))throw Error('offline_field_start_not_available');
+  const rows=await (await openOfflineJournal(identity)).list();crewReadGuard(identity);
+  if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
+    JSON.parse(r.body).operations.some((o:OfflineRecord)=>o.taskId===taskId)))throw Error('offline_field_packet_exists');
+  const context=currentFieldContext(projectId,taskId);
+  if(!context)throw Error('field_session_changed');
+  const runtime=await openFieldRuntime(context),draft=await loadFieldDraft(context,runtime);crewReadGuard(identity);
+  if(draft.command||draft.result||draft.supplement||draft.repairClaim)throw Error('field_command_pending');
+  if(draft.offlineStart){validateLocalStart(draft,source,identity);return draft;}
+  draft.offlineStart={snapshotId:source.snapshot.id,registrationId:source.registrationId,deviceId:source.deviceId,
+    operations:await buildFieldStart(identity,taskId,source)};
+  await runtime.write(draft);crewReadGuard(identity);return draft;
+}
+function validateLocalStart(draft:FieldDraft,source:Awaited<ReturnType<typeof readOfflineFieldTask>>,identity:QueueIdentity) {
+  const local=draft.offlineStart,ops=local?.operations;
+  if(!local||local.snapshotId!==source.snapshot.id||local.registrationId!==source.registrationId||local.deviceId!==source.deviceId||
+    !ops||ops.length!==(source.facts.status==='NewAssigned'?2:1)||ops.at(-1)?.kind!=='FIELD_START'||
+    (ops.length===2&&(ops[0].kind!=='FIELD_ACCEPT'||JSON.stringify(ops[1].dependencies)!==JSON.stringify([ops[0].originId])))||
+    ops.some(o=>o.taskId!==draft.taskId||o.snapshotId!==source.snapshot.id||o.assignmentId!==source.snapshot.assignmentId||
+      o.taskVersion!==source.snapshot.taskVersion||o.originalActorId!==identity.actor||o.sourceDeviceId!==source.deviceId)||
+    !Number.isFinite(Date.parse(String((ops.at(-1)?.fieldStart as OfflineRecord)?.claimedAt))))throw Error('offline_local_start_source_mismatch');
+  return ops;
+}
+
+/** Preserve original local evidence or already VERIFIED uploads.
  * The original draft remains intact; the signed journal owns immutable bytes.
  */
 export async function prepareOfflineFieldSubmission(identity:QueueIdentity,projectId:string,taskId:string,input:FieldDraft) {
@@ -77,10 +109,13 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
     draft.projectId!==projectId||draft.taskId!==taskId)throw Error('field_session_changed');
   if(draft.command||draft.result||draft.supplement||draft.repairClaim)throw Error('offline_field_submission_source_not_supported');
   validateFieldMeasurements(draft);
-  if(!draft.captures.length||draft.captures.some(c=>!c.verified||c.upload?.status!=='VERIFIED'||!c.upload.fileId||c.cancelState))
+  if(!draft.captures.length||draft.captures.some(c=>!signedCaptureReady(c)))
     throw Error('field_evidence_not_verified');
   const source=await readOfflineFieldTask(identity,projectId,taskId);crewReadGuard(identity);
-  if(source.facts.status!=='InProgress')throw Error('offline_field_submission_not_available');
+  const localOps=draft.offlineStart?validateLocalStart(draft,source,identity):[];
+  if(!localOps.length&&source.facts.status!=='InProgress')throw Error('offline_field_submission_not_available');
+  for(const o of localOps)if(o.corePayloadHash!==await fieldCoreHash(o,generateChecksum))throw Error('offline_local_start_source_mismatch');
+  crewReadGuard(identity);
   const journal=await openOfflineJournal(identity),rows=await journal.list();crewReadGuard(identity);
   const starts:string[]=[];
   for(const row of rows) {
@@ -96,16 +131,17 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
       if(receipt?.canonicalOriginId)starts.push(receipt.canonicalOriginId);
     }
   }
+  if(localOps.length)starts.push(String(localOps.at(-1)!.originId));
   if(new Set(starts).size!==1)throw Error('offline_verified_field_start_required');
   const originId=uuidv4();
   const op:OfflineRecord={schemaVersion:1,originId,effectId:originId,kind:'FIELD_SUBMISSION',originalActorId:identity.actor,
     sourceDeviceId:source.deviceId,snapshotId:source.snapshot.id,taskId,assignmentId:source.snapshot.assignmentId,
-    taskVersion:source.snapshot.taskVersion,corePayloadHash:'',dependencies:[],claimedFinishedAt:null,fieldAction:null,fieldStart:null,repair:null,
+    taskVersion:source.snapshot.taskVersion,corePayloadHash:'',dependencies:localOps.length?[localOps.at(-1)!.originId]:[],claimedFinishedAt:null,fieldAction:null,fieldStart:null,repair:null,
     fieldSubmission:{originId,startOriginId:starts[0],parentSubmissionId:null,
       measurements:draft.measurements.map(m=>({...m,value:m.value===null?null:{decimal:String(m.value)}})),
-      evidence:draft.captures.map(c=>({captureOriginId:c.id,fileId:c.upload!.fileId,purpose:c.purpose,
+      evidence:draft.captures.map(c=>({captureOriginId:c.id,fileId:c.upload?.fileId??null,purpose:c.purpose,...(c.size!=null?{sizeBytes:c.size}:{}),
         checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt,attemptChecklist:null})),
       locationProof:draft.locationProof,captureType:'MEASUREMENT',repaired:null,unrepairedReason:null,deviceId:source.deviceId}};
   op.corePayloadHash=await fieldCoreHash(op,generateChecksum);crewReadGuard(identity);
-  return prepareSignedFieldBatch(identity,projectId,source.registrationId,[op],generateChecksum);
+  return prepareSignedFieldBatch(identity,projectId,source.registrationId,[...localOps,op],generateChecksum);
 }

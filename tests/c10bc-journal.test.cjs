@@ -156,3 +156,24 @@ test('mixed REPAIR batch excludes online FIELD start using immutable body withou
  await assert.rejects(j.prepare({...base,id:randomUUID(),key:randomUUID(),proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_START',taskId:otherTask}]})}),/reconciliation/);
  h.raw.close();
 });
+
+test('signed local media cannot be removed, replaced, cancelled or routed through normal create',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID(),capture=randomUUID();
+ const e={captureOriginId:capture,fileId:null,purpose:'BEFORE',mediaType:'image/png',checksumSha256:'a'.repeat(64),sizeBytes:68};
+ const draft={actor:h.i.actor,scope:h.i.scope,environment:h.i.environment,projectId:base.projectId,taskId:task,captures:[{id:capture,uri:'sealed',vault:{id:'vault'},purpose:e.purpose,mediaType:e.mediaType,checksum:e.checksumSha256,size:68,localOnly:true}]};
+ await h.m.writeProtectedFieldDraft(h.db,'media-fixture','T05B_FIELD',draft,draft);
+ await j.prepare({...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[e]}}]})});
+ await h.m.assertSignedFieldMediaPreserved(h.db,draft);
+ for(const mutate of [d=>d.captures=[],d=>d.captures[0].checksum='b'.repeat(64),d=>d.captures[0].size++,d=>d.captures[0].cancelState='REQUESTED',d=>d.captures[0].uploadAttempt={key:'normal'}]){
+  const changed=structuredClone(draft);mutate(changed);await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'media-fixture','T05B_FIELD',changed,changed),/locked/);
+  assert.equal(JSON.parse(h.raw.prepare("SELECT payload FROM local_draft WHERE id='media-fixture'").get().payload).captures[0].checksum,e.checksumSha256);
+ }
+ const progress=structuredClone(draft);progress.captures[0].offlineUpload={batchIntentId:base.id};progress.captures[0].uploadAttempt={key:'admission'};
+ await h.m.assertSignedFieldMediaPreserved(h.db,progress);h.raw.close();
+});
+
+test('signing cannot race a previously removed local capture into the journal',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
+ await assert.rejects(j.prepare({...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[{captureOriginId:randomUUID(),fileId:null}]}}]})}),/signed_capture_locked/);
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,0);h.raw.close();
+});

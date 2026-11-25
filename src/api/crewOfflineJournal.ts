@@ -10,6 +10,40 @@ function containsSubmission(record:OfflineJournalRecord,projectId:string,taskId:
     (JSON.parse(record.body).operations??[]).some((o:{kind?:string;taskId?:string})=>o.kind==='FIELD_SUBMISSION'&&o.taskId===taskId);
 }
 
+/** A signed local capture remains available until its immutable source is retained.
+ * Transport progress may change; deletion, cancellation and replacement may not. */
+export async function assertSignedFieldMediaPreserved(db:SQLiteDatabase,draft:FieldDraft) {
+  const owner=currentQueueIdentity();
+  if(!owner||owner.actor!==draft.actor||owner.scope!==draft.scope||owner.environment!==draft.environment)throw Error('offline_session_changed');
+  const rows=await (await openOfflineJournal(owner,db)).list();
+  for(const row of rows){
+    if(row.projectId!==draft.projectId||row.proof.kind!=='signed-field-batch')continue;
+    for(const op of JSON.parse(row.body).operations??[]){
+      if(op.taskId!==draft.taskId)continue;
+      const evidence=op.fieldSubmission?.evidence??op.repair?.assessment?.evidence??[];
+      for(const e of evidence){
+        if(e.fileId!=null)continue;
+        const c=draft.captures.find(c=>c.id===e.captureOriginId);
+        if(!c||c.cancelState||!c.uri||!c.vault||(c.uploadAttempt&&!c.offlineUpload)||c.checksum!==e.checksumSha256||c.mediaType!==e.mediaType||c.purpose!==e.purpose||
+          (e.sizeBytes!=null&&c.size!==e.sizeBytes))throw Error('field_signed_capture_locked');
+      }
+    }
+  }
+  if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+}
+
+/** Serialize draft updates with signed journal insertion. */
+export async function writeProtectedFieldDraft(db:SQLiteDatabase,id:string,kind:string,payload:Record<string,unknown>,draft:FieldDraft) {
+  const owner=currentQueueIdentity();
+  if(!owner)throw Error('offline_session_changed');
+  await db.withExclusiveTransactionAsync(async tx=>{
+    if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+    await assertSignedFieldMediaPreserved(tx,draft);
+    await saveDraft(tx,id,kind,payload);
+    if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+  });
+}
+
 function fieldStartTasks(record:OfflineIntent):string[] {
   if(record.proof.kind!=='signed-field-batch')return [];
   const tasks=(JSON.parse(record.body).operations??[])
@@ -28,6 +62,7 @@ export async function writeOnlineFieldSubmissionDraft(db:SQLiteDatabase,id:strin
   await db.withExclusiveTransactionAsync(async tx=>{
     guard();const rows=await (await openOfflineJournal(owner!,tx)).list();guard();
     if(rows.some(r=>containsSubmission(r,draft.projectId,draft.taskId)))throw Error('field_submission_pending');
+    await assertSignedFieldMediaPreserved(tx,draft);
     await saveDraft(tx,id,'T05B_FIELD',{...draft});guard();
   });guard();
 }
@@ -166,6 +201,15 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
               // Do not adopt an online root/revision or an uncertain historical command.
               if(drafts.some(row=>{const d=JSON.parse(row.payload);return d.actor===owner.actor&&d.environment===owner.environment&&
                 d.projectId===copy.projectId&&d.taskId===op.taskId&&d.command;}))throw Error('field_submission_pending');
+            }
+            const localEvidence=(op.fieldSubmission?.evidence??op.repair?.assessment?.evidence??[]).filter((e:{fileId?:string|null})=>e.fileId==null);
+            if(localEvidence.length){
+              const drafts=await tx.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=?','T05B_FIELD');guard();
+              const candidates=drafts.map(row=>JSON.parse(row.payload) as FieldDraft).filter(d=>d.actor===owner.actor&&d.environment===owner.environment&&
+                d.scope===owner.scope&&d.projectId===copy.projectId&&d.taskId===op.taskId);
+              if(!candidates.some(d=>localEvidence.every((e:{captureOriginId:string;purpose:string;mediaType:string;checksumSha256:string;sizeBytes?:number})=>
+                d.captures.some(c=>c.id===e.captureOriginId&&!c.cancelState&&c.uri&&c.vault&&c.localOnly===true&&!c.upload&&!c.uploadAttempt&&
+                  c.purpose===e.purpose&&c.mediaType===e.mediaType&&c.checksum===e.checksumSha256&&(e.sizeBytes==null||c.size===e.sizeBytes)))))throw Error('field_signed_capture_locked');
             }
             const head=records.filter(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===op.taskId).at(-1);
             if(head&&(head.phase!=='RECONCILED'||!sameQueueIdentity(head.identity,owner)||(head.receipt as {id?:string})?.id!==op.snapshotId))throw Error('offline_current_snapshot_required');
