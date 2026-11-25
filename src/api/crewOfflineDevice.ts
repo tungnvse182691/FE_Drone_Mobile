@@ -2,7 +2,7 @@ import { offlineNative, offlineQaNativeFor, unavailableCapability } from '../../
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { getFieldInspectionTaskDetailReal, validateCrewTaskDetail, isCrewResourceId } from './crewApi';
 import { offlineSigningPublicKey } from './crewOfflineCrypto';
-import { openOfflineJournal } from './crewOfflineJournal';
+import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
 import { offlineProjectPath, requireOfflineNativeAcceptance, readOfflineResource, validateDevice, validateSnapshot, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
 import type { OfflineJournalRecord } from './crewOfflineJournal';
 import type { QueueIdentity } from '../offline/upload-queue';
@@ -33,8 +33,12 @@ export async function readLocalOfflineSources(identity:QueueIdentity,projectId:s
   crewReadGuard(identity);
   const owned=(r:OfflineJournalRecord)=>r.projectId===projectId&&r.identity.actor===identity.actor&&
     r.identity.role===identity.role&&r.identity.environment===identity.environment&&r.identity.scope===identity.scope&&r.identity.partition===identity.partition;
+  const sessionConfirms=rows.filter(r=>owned(r)&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm');
+  const confirmedRegistrations=new Set(sessionConfirms.map(r=>String(r.proof.registrationId)));
+  const confirmedSnapshots=new Set(sessionConfirms.flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
   if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===registrationId))throw Error('offline_device_revocation_requires_online_check');
-  const enrollment=rows.find(r=>owned(r)&&r.phase==='RECONCILED'&&r.proof.kind==='enrollment'&&r.path===base+'/devices'&&(r.receipt as DeviceRegistration)?.id===registrationId);
+  const enrollment=rows.find(r=>r.projectId===projectId&&r.phase==='RECONCILED'&&r.proof.kind==='enrollment'&&r.path===base+'/devices'&&(r.receipt as DeviceRegistration)?.id===registrationId&&
+    (owned(r)||(sameOfflinePartition(r.identity,identity)&&confirmedRegistrations.has(registrationId))));
   if(!enrollment)throw Error('offline_verified_device_not_downloaded');
   const device=enrollment.receipt as DeviceRegistration,request=JSON.parse(enrollment.body);
   validateDevice(device,identity,registrationId,deviceId);
@@ -42,7 +46,8 @@ export async function readLocalOfflineSources(identity:QueueIdentity,projectId:s
   const snapshots:SourceSnapshot[]=[];
   const heads=new Map<string,OfflineJournalRecord>();
   for(const r of rows){
-    if(!owned(r)||r.phase!=='RECONCILED'||r.proof.kind!=='snapshot'||r.path!==base+'/snapshots')continue;
+    if(r.projectId!==projectId||r.phase!=='RECONCILED'||r.proof.kind!=='snapshot'||r.path!==base+'/snapshots')continue;
+    if(!owned(r)&&!(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))continue;
     const request=JSON.parse(r.body);
     if(request.deviceRegistrationId!==registrationId)continue;
     const prior=heads.get(request.taskId);

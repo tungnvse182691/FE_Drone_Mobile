@@ -2,7 +2,7 @@ import type { QueueIdentity } from '../offline/upload-queue';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { inspectOfflineDevice, readLocalOfflineSources } from './crewOfflineDevice';
 import { requireOfflineNativeAcceptance, validateRepairSnapshot } from './crewOfflineWorkflow';
-import { openOfflineJournal } from './crewOfflineJournal';
+import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
 import { fieldCoreHash, type OfflineRecord } from './crewOfflineProtocol';
 import { prepareSignedFieldBatch } from '../offline/crewSignedSync';
 import { generateChecksum } from '../offline/checksum';
@@ -15,8 +15,10 @@ import { validateFieldMeasurements, signedCaptureReady, currentFieldContext, ope
 export async function readOfflineCrewTask(identity:QueueIdentity,projectId:string,taskId:string) {
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const j=await openOfflineJournal(identity),rows=await j.list();crewReadGuard(identity);
+  const confirmedSnapshots=new Set(rows.filter(r=>r.projectId===projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&r.identity.scope===identity.scope&&r.identity.partition===identity.partition)
+    .flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
   if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&
-    (r.phase!=='RECONCILED'||r.identity.scope!==identity.scope||r.identity.partition!==identity.partition)))throw Error('offline_snapshot_reconciliation_required');
+    (r.phase!=='RECONCILED'||((r.identity.scope!==identity.scope||r.identity.partition!==identity.partition)&&!(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id))))))throw Error('offline_snapshot_reconciliation_required');
   const registrations=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='enrollment');
   if(registrations.length!==1)throw Error('offline_registration_reconciliation_required');
   const registrationId=(registrations[0].receipt as {id?:string})?.id;

@@ -113,6 +113,11 @@ const immutableBytes=(i:OfflineIntent)=>JSON.stringify(immutable(i));
 export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord {
   const r=JSON.parse(payload) as OfflineJournalRecord;immutable(r);
   if(r.schema!==1||!['PREPARED','IN_FLIGHT','UNKNOWN_OUTCOME','RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase))throw Error('offline_journal_invalid');
+  if(r.proof.kind==='session-confirm'){
+    if(r.phase!=='RECONCILED'||!guid(String(r.proof.registrationId))||typeof r.proof.confirmedScope!=='string'||r.proof.confirmedScope!==r.identity.scope||
+      !Array.isArray(r.proof.snapshotIds)||r.proof.snapshotIds.some(id=>typeof id!=='string'||!guid(id))||
+      r.path!==`/projects/${r.projectId}/offline/devices/${r.proof.registrationId}`)throw Error('offline_journal_invalid');
+  }
   if(['RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase)&&r.receipt===undefined)throw Error('offline_receipt_missing');
   if(r.receipt!==undefined)safe(r.receipt);
   if(r.verifiedItems!==undefined){
@@ -124,6 +129,9 @@ export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord 
 }
 const decode=decodeOfflineJournalRecord;
 function partition(i:QueueIdentity):string {return 'c10bc:'+JSON.stringify([i.environment,i.actor,i.role])+':';}
+export function sameOfflinePartition(a:QueueIdentity,b:QueueIdentity):boolean {
+  return a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.partition===b.partition;
+}
 /** Additive use of existing table. Never REPLACE, migrate, delete or adopt historical queues. */
 export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLiteDatabase,current= currentQueueIdentity) {
   const owner=JSON.parse(JSON.stringify(identity)) as QueueIdentity;
@@ -167,7 +175,9 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
             JSON.parse(r.body).taskId===source.taskId&&JSON.parse(r.body).deviceRegistrationId===source.deviceRegistrationId);
           const previous=history.at(-1);
           if(previous){
-            if(history.some(r=>r.phase!=='RECONCILED'||!sameQueueIdentity(r.identity,owner))||
+            const confirmedSnapshots=new Set(records.filter(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner))
+              .flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
+            if(history.some(r=>r.phase!=='RECONCILED'||(!sameQueueIdentity(r.identity,owner)&&!(sameOfflinePartition(r.identity,owner)&&confirmedSnapshots.has(r.id))))||
               copy.proof.previousSnapshotIntentId!==previous.id||!copy.proof.taskVersion||copy.proof.taskVersion===previous.proof.taskVersion)throw Error('offline_existing_intent_reconciliation_required');
             if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='signed-field-batch'&&r.phase!=='RECONCILED'&&
               (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===source.taskId)))throw Error('offline_pending_batch_reconciliation_required');
@@ -211,8 +221,10 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
                 d.captures.some(c=>c.id===e.captureOriginId&&!c.cancelState&&c.uri&&c.vault&&c.localOnly===true&&!c.upload&&!c.uploadAttempt&&
                   c.purpose===e.purpose&&c.mediaType===e.mediaType&&c.checksum===e.checksumSha256&&(e.sizeBytes==null||c.size===e.sizeBytes)))))throw Error('field_signed_capture_locked');
             }
+            const confirmedSnapshots=new Set(records.filter(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner))
+              .flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
             const head=records.filter(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===op.taskId).at(-1);
-            if(head&&(head.phase!=='RECONCILED'||!sameQueueIdentity(head.identity,owner)||(head.receipt as {id?:string})?.id!==op.snapshotId))throw Error('offline_current_snapshot_required');
+            if(head&&(head.phase!=='RECONCILED'||(!sameQueueIdentity(head.identity,owner)&&!(sameOfflinePartition(head.identity,owner)&&confirmedSnapshots.has(head.id)))||(head.receipt as {id?:string})?.id!==op.snapshotId))throw Error('offline_current_snapshot_required');
           }
         }
         // Serialize safety writes per measure inside the durable transaction, including older sessions.
@@ -225,6 +237,29 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
         const now=new Date().toISOString();
         await tx.runAsync('INSERT INTO local_draft (id,kind,payload,created_at,updated_at) VALUES (?,?,?,?,?)',prefix+copy.id,KIND,JSON.stringify(result),now,now);guard();
       });guard();return result;
+    },
+    async confirmSession(intent:OfflineIntent,deviceReceipt:unknown):Promise<OfflineJournalRecord> {
+      guard();const copy=immutable(intent);
+      if(!sameQueueIdentity(copy.identity,owner)||copy.proof.kind!=='session-confirm')throw Error('offline_session_changed');
+      let saved!:OfflineJournalRecord;
+      await db.withExclusiveTransactionAsync(async tx=>{
+        guard();const records=await rows(tx);
+        const existing=records.find(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
+          sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===copy.proof.registrationId);
+        const mergedIds=[...new Set([...(Array.isArray(existing?.proof.snapshotIds)?existing.proof.snapshotIds.map(String):[]),...(Array.isArray(copy.proof.snapshotIds)?copy.proof.snapshotIds.map(String):[])])];
+        const nextIntent=existing?{...existing,body:JSON.stringify({registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}),
+          proof:{kind:'session-confirm',registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}}:
+          {...copy,body:JSON.stringify({registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}),
+          proof:{kind:'session-confirm',registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}};
+        saved=decode(JSON.stringify({...nextIntent,schema:1,phase:'RECONCILED',receipt:deviceReceipt}));
+        const now=new Date().toISOString();
+        if(existing){
+          const res=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(saved),now,prefix+existing.id,KIND,JSON.stringify(existing));
+          guard();if(res.changes!==1)throw Error('offline_journal_cas_failed');
+        }else{
+          await tx.runAsync('INSERT INTO local_draft (id,kind,payload,created_at,updated_at) VALUES (?,?,?,?,?)',prefix+saved.id,KIND,JSON.stringify(saved),now,now);guard();
+        }
+      });guard();return saved;
     },
     async transition(old:OfflineJournalRecord,phase:OfflinePhase,receipt?:unknown):Promise<OfflineJournalRecord> {
       guard();if(!sameQueueIdentity(old.identity,owner))throw Error('offline_session_changed');

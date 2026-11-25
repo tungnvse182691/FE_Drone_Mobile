@@ -1,22 +1,35 @@
 import type { QueueIdentity } from '../offline/upload-queue';
 import { crewReadGuard } from './crewSafetyWorkflow';
-import { openOfflineJournal, type OfflineJournalRecord } from './crewOfflineJournal';
-import { prepareDeviceEnrollment, prepareDeviceSnapshot, reconcileDeviceIntent } from './crewOfflineDevice';
-import { dispatchOfflineIntent, requireOfflineNativeAcceptance, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
+import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord } from './crewOfflineJournal';
+import { crewOfflineNative, deviceBinding, inspectOfflineDevice, prepareDeviceEnrollment, prepareDeviceSnapshot, reconcileDeviceIntent } from './crewOfflineDevice';
+import { dispatchOfflineIntent, offlineProjectPath, readOfflineResource, requireOfflineNativeAcceptance, validateDevice, validateSnapshot, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
 import { getFieldInspectionTaskDetailReal, crewTaskFromWire, validateCrewTaskDetail } from './crewApi';
 import { retainCrewEditorSource } from './crewOfflineEditorSource';
+import { uuidv4 } from '../utils/uuid';
+
+export interface OfflineTaskDownloadResult {
+  snapshot: SourceSnapshot;
+  editorReady: boolean;
+}
 
 /** Explicit task-scoped action. Persist each step before transport; resume the same
  * bytes/key after response loss. A session change never adopts an earlier command.
  */
 export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:string,taskId:string,refresh=false):Promise<SourceSnapshot> {
+  return (await downloadCrewOfflineTaskDetailed(identity,projectId,taskId,refresh)).snapshot;
+}
+
+export async function downloadCrewOfflineTaskDetailed(identity:QueueIdentity,projectId:string,taskId:string,refresh=false):Promise<OfflineTaskDownloadResult> {
   requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const journal=await openOfflineJournal(identity);
   const owned=(r:OfflineJournalRecord)=>r.identity.actor===identity.actor&&r.identity.role===identity.role&&
     r.identity.environment===identity.environment&&r.identity.scope===identity.scope&&r.identity.partition===identity.partition;
   const rows=await journal.list();crewReadGuard(identity);
+  const sessionConfirms=rows.filter(r=>r.projectId===projectId&&owned(r)&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm');
+  const confirmedRegistrations=new Set(sessionConfirms.map(r=>String(r.proof.registrationId)));
+  const confirmedSnapshots=new Set(sessionConfirms.flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
   const registrations=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='enrollment');
-  if(registrations.some(r=>!owned(r)))throw Error('offline_session_recovery_required');
+  if(registrations.some(r=>!owned(r)&&!(r.phase==='RECONCILED'&&sameOfflinePartition(r.identity,identity)&&confirmedRegistrations.has(String((r.receipt as {id?:string})?.id)))))throw Error('offline_session_recovery_required');
   if(registrations.length>1)throw Error('offline_registration_reconciliation_required');
   const finish=async(record:OfflineJournalRecord)=>{
     crewReadGuard(identity);
@@ -31,17 +44,19 @@ export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:s
   const device=registration.receipt as DeviceRegistration;
   if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===device.id))throw Error('offline_device_revocation_requires_online_check');
   const snapshots=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&JSON.parse(r.body).deviceRegistrationId===device.id);
-  if(snapshots.some(r=>!owned(r)))throw Error('offline_session_recovery_required');
+  if(snapshots.some(r=>!sameOfflinePartition(r.identity,identity)||(r.phase!=='RECONCILED'&&!owned(r))))throw Error('offline_session_recovery_required');
   if(snapshots.some((r,index)=>index===0?!!r.proof.previousSnapshotIntentId:r.proof.previousSnapshotIntentId!==snapshots[index-1].id||snapshots[index-1].phase!=='RECONCILED'))throw Error('offline_snapshot_reconciliation_required');
   const head=snapshots.at(-1);
   // A pending refresh resumes the same intent; confirmed history is immutable.
-  const next=refresh&&head?.phase==='RECONCILED'
+  const headConfirmed=!!head&&(owned(head)||confirmedSnapshots.has(head.id));
+  const next=(refresh||!headConfirmed)&&head?.phase==='RECONCILED'
     ?await prepareDeviceSnapshot(identity,projectId,taskId,device.id,head.id)
     :head??await prepareDeviceSnapshot(identity,projectId,taskId,device.id);
   const downloaded=await finish(next);
   const snapshot=downloaded.receipt as SourceSnapshot;
   // The editor needs fields absent from the signed snapshot. Keep the official
   // snapshot as signing authority and save API-080 only when both sources match.
+  let editorReady=false;
   try {
     const detail=await getFieldInspectionTaskDetailReal(projectId,taskId);
     crewReadGuard(identity);
@@ -51,8 +66,56 @@ export async function downloadCrewOfflineTask(identity:QueueIdentity,projectId:s
       const task=crewTaskFromWire({id:taskId,projectId,crewId:identity.actor,mode:detail.data.mode??'',
         status:detail.data.status??'',version:detail.data.version!,defectIds:[detail.data.defectId],policyVersionId:null},detail.data,detail.etag);
       await retainCrewEditorSource(identity,task);
+      editorReady=true;
     }
   } catch { /* Snapshot remains usable for signed commands; editor source stays unavailable. */ }
   crewReadGuard(identity);
-  return snapshot;
+  return {snapshot,editorReady};
+}
+
+/** Explicit online re-verification of an existing RECONCILED device registration after re-login. */
+export async function reconcileDeviceSessionForProject(identity:QueueIdentity,projectId:string,taskId:string):Promise<DeviceRegistration> {
+  requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
+  const native=crewOfflineNative(identity);
+  const probe=await inspectOfflineDevice(identity);crewReadGuard(identity);
+  if(!native||!probe.deviceId||!probe.capability.signingUsable||!probe.capability.agreementUsable)throw Error('BLOCKED_NATIVE');
+  const journal=await openOfflineJournal(identity),rows=await journal.list();crewReadGuard(identity);
+  const registrations=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='enrollment');
+  if(registrations.length!==1)throw Error('offline_registration_reconciliation_required');
+  const enrollment=registrations[0];
+  if(enrollment.phase!=='RECONCILED'||!sameOfflinePartition(enrollment.identity,identity))throw Error('offline_registration_reconciliation_required');
+  const oldDevice=enrollment.receipt as DeviceRegistration;
+  if(!oldDevice?.id||rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===oldDevice.id))throw Error('offline_device_revocation_requires_online_check');
+  const keys=await native.publicKeys(deviceBinding(identity,probe.deviceId));crewReadGuard(identity);
+  if(keys.signingPublicKey!==oldDevice.signingPublicKey||keys.encryptionPublicKey!==oldDevice.encryptionPublicKey)throw Error('offline_device_key_mismatch');
+  const actual=await readOfflineResource<DeviceRegistration>(identity,projectId,'devices',oldDevice.id);
+  validateDevice(actual,identity,oldDevice.id,probe.deviceId);
+  if(actual.projectId!==projectId||actual.keyFingerprint!==oldDevice.keyFingerprint||
+    actual.signingPublicKey!==keys.signingPublicKey||actual.encryptionPublicKey!==keys.encryptionPublicKey||actual.revokedAt!==null)throw Error('offline_device_key_mismatch');
+  const detail=await getFieldInspectionTaskDetailReal(projectId,taskId);crewReadGuard(identity);
+  validateCrewTaskDetail(detail.data,detail.etag,projectId,taskId,identity.actor);
+  const taskSnapshots=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&
+    (JSON.parse(r.body) as {taskId?:string;deviceRegistrationId?:string}).taskId===taskId&&
+    (JSON.parse(r.body) as {deviceRegistrationId?:string}).deviceRegistrationId===actual.id);
+  if(taskSnapshots.some(r=>!sameOfflinePartition(r.identity,identity)||r.phase!=='RECONCILED'))throw Error('offline_snapshot_reconciliation_required');
+  if(taskSnapshots.some((r,index)=>index===0?!!r.proof.previousSnapshotIntentId:r.proof.previousSnapshotIntentId!==taskSnapshots[index-1].id))throw Error('offline_snapshot_reconciliation_required');
+  const confirmedSnapshotIds:string[]=[];
+  const head=taskSnapshots.at(-1);
+  if(head&&head.identity.scope!==identity.scope){
+    const snapReceipt=head.receipt as SourceSnapshot;
+    const snapActual=await readOfflineResource<SourceSnapshot>(identity,projectId,'snapshots',snapReceipt.id);
+    validateSnapshot(snapActual,identity,{id:snapReceipt.id,taskId,assignmentId:String(head.proof.assignmentId),deviceRegistrationId:actual.id,taskVersion:String(head.proof.taskVersion)});
+    if(detail.data.version===snapActual.taskVersion&&detail.data.assignmentId===snapActual.assignmentId&&
+      detail.data.assignedToUserId===identity.actor&&['NewAssigned','Accepted','InProgress','SupplementRequired'].includes(detail.data.status??'')){
+      confirmedSnapshotIds.push(...taskSnapshots.map(s=>s.id));
+    }
+  }
+  await journal.confirmSession({
+    id:uuidv4(),identity,projectId,
+    path:offlineProjectPath(projectId)+'/devices/'+actual.id,
+    key:uuidv4(),
+    body:JSON.stringify({registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds}),
+    proof:{kind:'session-confirm',registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds},
+  },actual);
+  return actual;
 }

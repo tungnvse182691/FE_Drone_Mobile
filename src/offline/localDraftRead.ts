@@ -43,6 +43,7 @@ export async function loadLocalDraftSummaries(identity: LocalDraftReadIdentity, 
       if (identity.role === 'REPAIR_CREW') {
         if (row.kind === 'C10BC_IMMUTABLE_COMMAND_V1') {
           const command = decodeOfflineJournalRecord(row.payload);
+          if (command.proof.kind === 'session-confirm') continue;
           const i = command.identity;
           if (i.actor !== identity.actor || i.environment !== identity.environment || i.scope !== identity.scope ||
               i.role !== identity.role || i.partition !== 'h01:' + JSON.stringify([i.environment,i.actor,i.role]) ||
