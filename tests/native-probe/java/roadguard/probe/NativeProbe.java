@@ -84,6 +84,7 @@ public final class NativeProbe extends Instrumentation {
       handoverProbe(ks,result);
       sqlCipherProbe(ks,result);
       localFileProbe(ks,result);
+      mediaVaultProbe(result);
       result.putString("status", "PASS"); finish(Activity.RESULT_OK,result);
     } catch (Throwable t) {
       while (t instanceof InvocationTargetException && t.getCause()!=null) t=t.getCause();
@@ -97,6 +98,60 @@ public final class NativeProbe extends Instrumentation {
     }
   }
   private String stage="keystore";
+  private void mediaVaultProbe(Bundle result)throws Exception {
+    stage="media_vault";
+    Context context=getTargetContext();
+    Class<?> vaultClass=Class.forName("roadguard.offline.LocalMediaVault",true,loader);
+    Object vault=vaultClass.getConstructor(Context.class).newInstance(context);
+    Method prepare=vaultClass.getMethod("createKey",String.class);
+    Method seal=vaultClass.getMethod("seal",String.class,String.class,String.class);
+    Method read=vaultClass.getMethod("readRange",String.class,String.class,long.class,int.class);
+    byte[] data=new byte[131111];for(int i=0;i<data.length;i++)data[i]=(byte)(i%251);
+    File directory=new File(context.getFilesDir(),"qa-media-vault-20261125");
+    require(directory.mkdirs()||directory.isDirectory(),"vault_probe_directory");
+    File source=new File(directory,"source-v1");
+    if(!source.exists())java.nio.file.Files.write(source.toPath(),data);
+    SharedPreferences fixtures=context.getSharedPreferences("roadguard.qa.media-vault.20261125",0);
+    boolean reopened=true;
+    for(String role:new String[]{"REPAIR_CREW","DRONE_OPERATOR","REPORTER"}) {
+      String binding="[\"91919191-9191-4191-8191-919191919191\",\"http://qa.invalid/api/v1\",\""+role+"\"]";
+      Map<?,?> capability=(Map<?,?>)prepare.invoke(vault,binding);
+      require(Boolean.TRUE.equals(capability.get("available")),"vault_key_unavailable");
+      result.putString("mediaVault."+role+".level",String.valueOf(capability.get("securityLevel")));
+      String asset=fixtures.getString(role,null);
+      if(asset==null) {
+        reopened=false;asset=UUID.randomUUID().toString();
+        Map<?,?> saved=(Map<?,?>)seal.invoke(vault,binding,asset,source.toURI().toString());
+        require(((Number)saved.get("sizeBytes")).longValue()==data.length,"vault_size_changed");
+        require(fixtures.edit().putString(role,asset).commit(),"vault_fixture_persistence");
+      }
+      byte[] opened=Base64.getDecoder().decode((String)read.invoke(vault,binding,asset,65530L,65550));
+      require(MessageDigest.isEqual(Arrays.copyOfRange(data,65530,131080),opened),"vault_range_changed");
+      require(MessageDigest.isEqual(data,java.nio.file.Files.readAllBytes(source.toPath())),"vault_original_changed");
+      boolean collision=false;try {seal.invoke(vault,binding,asset,source.toURI().toString());}catch(InvocationTargetException expected){collision=true;}
+      require(collision,"vault_destination_overwritten");
+      for(String uri:new String[]{new File(context.getFilesDir(),"SQLite/roadguard.db").toURI().toString(),"file:///etc/hosts","content://qa.invalid/asset"}) {
+        boolean refused=false;try {seal.invoke(vault,binding,UUID.randomUUID().toString(),uri);}catch(InvocationTargetException expected){refused=true;}
+        require(refused,"vault_forbidden_source_accepted");
+      }
+      boolean refused=false;try {read.invoke(vault,binding,asset,-1L,1);}catch(InvocationTargetException expected){refused=true;}
+      require(refused,"vault_invalid_range_accepted");
+        String otherRole=role.equals("REPORTER")?"REPAIR_CREW":"REPORTER";
+        String otherBinding=binding.replace(role,otherRole);
+        prepare.invoke(vault,otherBinding);
+        refused=false;try {read.invoke(vault,otherBinding,asset,0L,1);}catch(InvocationTargetException expected){refused=true;}
+        require(refused,"vault_cross_role_read_accepted");
+        String otherActor=binding.replace("91919191-9191-4191-8191-919191919191","92929292-9292-4292-8292-929292929292");
+        prepare.invoke(vault,otherActor);
+        refused=false;try {read.invoke(vault,otherActor,asset,0L,1);}catch(InvocationTargetException expected){refused=true;}
+        require(refused,"vault_cross_actor_read_accepted");
+        java.nio.file.Path link=new File(directory,"link-"+UUID.randomUUID()).toPath();
+        java.nio.file.Files.createSymbolicLink(link,source.toPath());
+        refused=false;try {seal.invoke(vault,binding,UUID.randomUUID().toString(),link.toUri().toString());}catch(InvocationTargetException expected){refused=true;}
+        require(refused,"vault_symlink_source_accepted");
+    }
+    result.putString("mediaVault",reopened?"THREE_ROLE_RESTART_RANGE_PRESERVATION_PASS":"THREE_ROLE_SEAL_RANGE_PRESERVATION_PASS");
+  }
   private void localFileProbe(KeyStore ks,Bundle result)throws Exception {
     stage="local_file_crypto";
     File dir=new File(getTargetContext().getFilesDir(),"qa-native-probe-20261124");require(dir.mkdirs()||dir.isDirectory(),"probe_directory");

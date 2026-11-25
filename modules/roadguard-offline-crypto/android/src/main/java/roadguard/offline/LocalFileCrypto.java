@@ -26,6 +26,39 @@ public final class LocalFileCrypto {
   public static String open(Path source,Path destination,SecretKey key,String context)throws Exception {
     return transform(source,destination,key,context,false);
   }
+  /** Authenticate only the requested chunks, with no plaintext file or whole-video allocation.
+   * This is not a full-file checksum/VERIFIED receipt. Maximum bridge read is 1 MiB. */
+  public static byte[] readRange(Path source,SecretKey key,String context,long offset,int length)throws Exception {
+    if(key==null||!"AES".equals(key.getAlgorithm())||context==null||context.isEmpty()||context.length()>4096||
+        offset<0||length<=0||length>1024*1024)throw new GeneralSecurityException("local_file_range_invalid");
+    byte[] result=new byte[length],header=new byte[HEADER],buffer=new byte[BUFFER+TAG];
+    boolean success=false;
+    try(RandomAccessFile file=new RandomAccessFile(source.toRealPath().toFile(),"r")) {
+      file.readFully(header);
+      ByteBuffer h=ByteBuffer.wrap(header);byte[] magic=new byte[MAGIC.length];h.get(magic);h.position(MAGIC.length+12);
+      long size=h.getLong(),expected=HEADER+size+(12+TAG)*Math.max(1,(size+BUFFER-1)/BUFFER);
+      if(!MessageDigest.isEqual(magic,MAGIC)||size<0||size>MAX||file.length()!=expected||offset>size||length>size-offset)
+        throw new GeneralSecurityException("local_file_range_invalid");
+      long last=(offset+length-1)/BUFFER;int written=0;
+      for(long index=offset/BUFFER;index<=last;index++) {
+        int plainLength=(int)Math.min(BUFFER,size-index*BUFFER);
+        file.seek(HEADER+index*(BUFFER+12L+TAG));
+        byte[] nonce=new byte[12];file.readFully(nonce);file.readFully(buffer,0,plainLength+TAG);
+        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE,key,new GCMParameterSpec(128,nonce));
+        cipher.updateAAD(header);cipher.updateAAD(context.getBytes(StandardCharsets.UTF_8));
+        cipher.updateAAD(ByteBuffer.allocate(8).putLong(index).array());
+        byte[] plain=cipher.doFinal(buffer,0,plainLength+TAG);
+        try {
+          if(plain.length!=plainLength)throw new GeneralSecurityException("local_file_range_invalid");
+          int start=(int)Math.max(0,offset-index*BUFFER),count=Math.min(plainLength-start,length-written);
+          System.arraycopy(plain,start,result,written,count);written+=count;
+        } finally {Arrays.fill(plain,(byte)0);Arrays.fill(buffer,(byte)0);}
+      }
+      if(written!=length||file.length()!=expected)throw new IOException("local_file_changed");
+      success=true;return result;
+    } finally {Arrays.fill(buffer,(byte)0);if(!success)Arrays.fill(result,(byte)0);}
+  }
   private static String transform(Path source,Path destination,SecretKey key,String context,boolean encrypt)throws Exception {
     if(key==null||!"AES".equals(key.getAlgorithm())||context==null||context.isEmpty()||context.length()>4096)
       throw new GeneralSecurityException("local_file_binding_invalid");

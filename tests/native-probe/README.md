@@ -99,6 +99,26 @@ rejection. Expected injected errors emit only sanitized stage names.
 This establishes Android adapter behavior, not complete at-rest coverage:
 the retained original plaintext DB and runtime media still require separate work.
 
+## Account-bound media vault probe (2026-11-25)
+
+The same opt-in storage entry now calls the actual Expo media bridge for three
+isolated role bindings. It seals a deterministic 131111-byte synthetic file,
+stores only its generated asset ID in QA SecureStore, and reads a range spanning
+64 KiB boundaries. Open it in a second fresh app process to check key and asset
+continuity. Restore the saved normal APK with `install -r` afterward.
+
+`NativeProbe` independently checks all three roles, cross-role/cross-actor read
+rejection, source symlink rejection, no-overwrite publication and unchanged
+originals. `/data/user/0` and `/data/data` are accepted only as aliases of the
+OS-owned app root; symlinks beneath it are rejected. Keys are app-owned Android
+Keystore AES keys and are never exported or regenerated during reads.
+
+`readMediaRange` accepts at most 1 MiB. It authenticates requested chunks, not a
+whole-file checksum or a server receipt. This is a storage primitive; it does not
+migrate runtime media, authorize arbitrary file access, replace signed-sync keys,
+or satisfy the separate TEE/StrongBox acceptance gate. Emulator keys may report
+SOFTWARE. Keep the production signed-sync acceptance flag closed.
+
 ## Independent protocol checks
 
 The Android probe also exercises the strict `HandoverPackageJson` codec with isolated keys: roundtrip, wrong trusted sender/device, tampered header/ciphertext, duplicate/unknown fields and trailing JSON. Production JS exports retain the hardware policy and are not considered accepted on a SOFTWARE emulator. See `docs/worklogs/OFFLINE-HANDOVER-NATIVE-BRIDGE-20261124-review.md`.

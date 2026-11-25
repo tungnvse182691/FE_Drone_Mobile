@@ -5,6 +5,13 @@ export interface NativeCapability {
   securityLevel: { signing: string; agreement: string }; reason: string;
 }
 interface NativeCrypto {
+  /** Storage binding is [actorId, environment, role]. Separate from signed-sync keys/policy. */
+  prepareMediaKey(binding: string): Promise<{available: boolean; securityLevel: string}>;
+  sealMedia(binding: string, assetId: string, sourceUri: string): Promise<{
+    version: 1; assetId: string; checksumSha256: string; sizeBytes: number;
+  }>;
+  /** At most 1 MiB, authenticated requested chunks only; never a VERIFIED receipt. */
+  readMediaRange(binding: string, assetId: string, offset: number, length: number): Promise<string>;
   capability(binding: string): Promise<NativeCapability>;
   installationId(): Promise<string>;
   createKeys(binding: string): Promise<NativeCapability>;

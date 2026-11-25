@@ -53,6 +53,15 @@ class RoadguardOfflineCryptoModule : Module() {
   }
   override fun definition() = ModuleDefinition {
     Name("RoadguardOfflineCrypto")
+    AsyncFunction("prepareMediaKey") { binding: String ->
+      LocalMediaVault(appContext.reactContext ?: error("native_context_missing")).createKey(binding)
+    }
+    AsyncFunction("sealMedia") { binding: String, assetId: String, sourceUri: String ->
+      LocalMediaVault(appContext.reactContext ?: error("native_context_missing")).seal(binding, assetId, sourceUri)
+    }
+    AsyncFunction("readMediaRange") { binding: String, assetId: String, offset: Long, length: Int ->
+      LocalMediaVault(appContext.reactContext ?: error("native_context_missing")).readRange(binding, assetId, offset, length)
+    }
     AsyncFunction("capability") { binding: String -> capability(binding) }
     AsyncFunction("installationId") {
       val context = appContext.reactContext ?: error("native_context_missing")

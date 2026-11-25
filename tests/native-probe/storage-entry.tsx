@@ -4,9 +4,11 @@ import { Text, View } from 'react-native';
 import { registerRootComponent } from 'expo';
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
-import { File } from 'expo-file-system';
-import { getRandomBytes } from 'expo-crypto';
+import { Directory, File, Paths } from 'expo-file-system';
+import { getRandomBytes, randomUUID } from 'expo-crypto';
 import { openProtectedDatabase, type DatabaseProtectionPorts } from '../../src/offline/encryptedDatabase';
+import { offlineNative } from '../../modules/roadguard-offline-crypto';
+import { base64ToBytes } from '../../src/utils/base64';
 
 function assert(value: unknown, category: string): asserts value { if (!value) throw Error(category); }
 const base = SQLite.defaultDatabaseDirectory;
@@ -69,7 +71,36 @@ async function run() {
   let rejected = false;
   try { openProtectedDatabase({...p,read:() => JSON.stringify({...state,key:'11'.repeat(32)})}); } catch { rejected = true; }
   assert(rejected,'wrong_key_accepted');
-  return prior ? 'PASS: restart, keyed transactions, rollback, blob, recovery, wrong key' : 'PASS: migration, keyed transactions, rollback, blob, recovery, wrong key';
+  const media = await mediaBridge();
+  return (prior ? 'PASS: restart, keyed transactions, rollback, blob, recovery, wrong key' : 'PASS: migration, keyed transactions, rollback, blob, recovery, wrong key') + '; ' + media;
+}
+async function mediaBridge() {
+  assert(offlineNative,'media_native_missing');
+  const directory = new Directory(Paths.document,'qa-media-vault-20261125');
+  directory.create({intermediates:true,idempotent:true});
+  const source = new File(directory,'js-source-v1');
+  const expected = Uint8Array.from({length:131111},(_,i)=>i%251);
+  if (!source.exists) source.write(expected);
+  let restart = true;
+  for (const role of ['REPAIR_CREW','DRONE_OPERATOR','REPORTER']) {
+    const binding = JSON.stringify(['93939393-9393-4393-8393-939393939393','http://qa.invalid/api/v1',role]);
+    const capability = await offlineNative.prepareMediaKey(binding);
+    assert(capability.available,'media_key_missing');
+    const name = 'rg.qa.media.bridge.20261125.' + role;
+    let asset = SecureStore.getItem(name);
+    if (!asset) {
+      restart = false; asset = randomUUID();
+      const saved = await offlineNative.sealMedia(binding,asset,source.uri);
+      assert(saved.version===1 && saved.assetId===asset && saved.sizeBytes===expected.length && /^[a-f0-9]{64}$/.test(saved.checksumSha256),'media_metadata_invalid');
+      SecureStore.setItem(name,asset,{keychainAccessible:SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY});
+    }
+    const bytes = base64ToBytes(await offlineNative.readMediaRange(binding,asset,65530,65550));
+    assert(bytes.length===65550 && bytes.every((b,i)=>b===expected[65530+i]),'media_bridge_range_changed');
+    bytes.fill(0);
+  }
+  const original = await source.bytes();
+  assert(original.length===expected.length && original.every((b,i)=>b===expected[i]),'media_original_changed');
+  return restart ? 'three-role media bridge restart PASS' : 'three-role media bridge seal/read PASS';
 }
 function Probe() {
   const [result,setResult] = useState('Running isolated storage QA');
