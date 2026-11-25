@@ -96,6 +96,12 @@ passed migration/reopen, keyed exclusive transaction commit/rollback, full blob
 and duplicate preservation, interrupted activation recovery and wrong-key
 rejection. Expected injected errors emit only sanitized stage names.
 
+The `rg.qa.pre-attach.20261125.` fixture also interrupts immediately after
+SecureStore saves COPYING, before the encrypted file exists. Reopening must
+export using the saved key, preserve all three rows and the pending blob, and
+activate only after verification. Repeated processes reopen the same QA fixture;
+no runtime database, key or pending media is reset to inject this failure.
+
 This establishes Android adapter behavior, not complete at-rest coverage:
 the retained original plaintext DB and runtime media still require separate work.
 

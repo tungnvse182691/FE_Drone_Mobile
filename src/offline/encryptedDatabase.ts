@@ -86,6 +86,10 @@ export function openProtectedDatabase(ports: DatabaseProtectionPorts): SQLiteDat
     if (state?.phase === 'ACTIVE') return protectedConnection(keyed(ports, state), ports, state);
     stage = 'candidate-check';
     if (!state && ports.exists(ENCRYPTED)) throw Error('orphan_encrypted_database');
+    // Opening a missing SQLite path creates an empty database. A saved COPYING
+    // marker must therefore never manufacture a replacement for the source.
+    if (state && !ports.exists(LEGACY)) throw Error('legacy_database_missing');
+    const exportRequired = !ports.exists(ENCRYPTED);
     stage = 'legacy-open';
     source = ports.open(LEGACY);
     stage = 'cipher-probe';
@@ -95,7 +99,6 @@ export function openProtectedDatabase(ports: DatabaseProtectionPorts): SQLiteDat
       if (state || !ports.allowPlaintext) throw Error('cipher_missing');
       const plain = source; source = undefined; return plain;
     }
-    const fresh = state === null;
     if (!state) {
       stage = 'key-create';
       const key = ports.randomHex();
@@ -104,8 +107,9 @@ export function openProtectedDatabase(ports: DatabaseProtectionPorts): SQLiteDat
       stage = 'metadata-save';
       ports.save(JSON.stringify(state));
     }
-    // An interrupted attempt is recoverable only if its candidate is already complete.
-    if (!fresh && !ports.exists(state.name)) throw Error('copy_recovery_required');
+    // A crash immediately after SecureStore save has no candidate yet: resume
+    // export with that same key. Existing candidates are only verified, never
+    // overwritten, even if a previous export was interrupted.
     stage = 'source-header';
     const userVersion = source.getFirstSync<{user_version: number}>('PRAGMA user_version')?.user_version ?? 0;
     const applicationId = source.getFirstSync<{application_id: number}>('PRAGMA application_id')?.application_id ?? 0;
@@ -116,7 +120,7 @@ export function openProtectedDatabase(ports: DatabaseProtectionPorts): SQLiteDat
     source.execSync(`ATTACH DATABASE ${literal(candidatePath)} AS encrypted KEY "x'${state.key}'"`);
     attached = true;
     source.execSync('BEGIN IMMEDIATE'); begun = true;
-    if (fresh) {
+    if (exportRequired) {
       stage = 'candidate-export';
       source.getFirstSync("SELECT sqlcipher_export('encrypted')");
       source.execSync(`PRAGMA encrypted.user_version = ${userVersion}; PRAGMA encrypted.application_id = ${applicationId}`);

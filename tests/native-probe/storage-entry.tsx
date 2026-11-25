@@ -71,6 +71,24 @@ async function run() {
   const recovered = openProtectedDatabase(interrupted);
   assert(recovered.getFirstSync<{n:number}>('SELECT count(*) n FROM specimen')?.n === 3,'recovery_changed_rows');
   recovered.closeSync();
+  // Stop after persisting COPYING but before ATTACH creates the candidate.
+  // Dedicated QA storage only; no account data or existing probe is modified.
+  const early = ports('rg.qa.pre-attach.20261125.');
+  initialize(early);
+  if (early.read() === null) {
+    let stopped = false;
+    try { openProtectedDatabase({...early, save: value => {
+      early.save(value); throw Error('qa_before_candidate');
+    }}); } catch { stopped = true; }
+    assert(stopped && JSON.parse(early.read()!).phase === 'COPYING' &&
+      !early.exists('roadguard.encrypted.v1.db'),'early_interruption_not_preserved');
+  }
+  const earlyKey = JSON.parse(early.read()!).key;
+  const earlyRecovered = openProtectedDatabase(early);
+  assert(JSON.parse(early.read()!).key === earlyKey,'early_recovery_key_changed');
+  assert(earlyRecovered.getFirstSync<{n:number}>('SELECT count(*) n FROM specimen')?.n === 3,'early_recovery_changed_rows');
+  assert(earlyRecovered.getFirstSync<{hex:string}>("SELECT hex(value) hex FROM specimen WHERE id='pending'")?.hex === '00FF0102','early_recovery_blob_changed');
+  earlyRecovered.closeSync();
   // A wrong key must fail, without falling back to retained plaintext.
   const state = JSON.parse(p.read()!);
   let rejected = false;

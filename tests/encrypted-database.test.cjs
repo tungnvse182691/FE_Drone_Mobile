@@ -14,14 +14,14 @@ test('runtime adapter converts Android SQLite filesystem directory to a file URI
   m.exports.openDatabase();assert.equal(seen[0][0],directory.startsWith('/')?'file://'+directory:directory);
  }
 });
-function fixture({cipher=true,state=null,exists=false,invalid=false,failSave=false,allowPlaintext=false}={}){
+function fixture({cipher=true,state=null,exists=false,legacyExists=true,invalid=false,failSave=false,allowPlaintext=false}={}){
  const calls=[],secret={value:state},handles=[];let next=0;
  const connection=name=>{const id=++next;const db={name,id,databasePath:'/db/'+name,execSync(sql){calls.push([id,sql]);if(sql.startsWith('ATTACH'))exists=true;},
  getFirstSync(sql){calls.push([id,sql]);if(sql.includes('sqlcipher_export')&&invalid)throw Error('disk full');if(sql==='PRAGMA cipher_version')return cipher?{cipher_version:'4.17'}:null;if(sql.includes('user_version'))return {user_version:7};if(sql.includes('application_id'))return {application_id:123};if(sql.includes('EXCEPT'))return null;return {n:2};},
  getAllSync(sql){if(sql.includes('integrity_check'))return [{integrity_check:'ok'}];if(sql.includes('sqlite_master'))return [{type:'table',name:'local_draft',tbl_name:'local_draft',sql:'CREATE TABLE local_draft(id TEXT PRIMARY KEY,payload BLOB)'}];if(sql.includes('table_info'))return [{name:'id'},{name:'payload'}];return [];},
  closeSync(){calls.push([id,'CLOSE']);},execAsync:async sql=>{calls.push([id,sql]);},closeAsync:async()=>{calls.push([id,'CLOSE_ASYNC']);},
  withExclusiveTransactionAsync:async()=>{throw Error('unkeyed SDK transaction used');}};handles.push(db);return db;};
- const ports={allowPlaintext,open:connection,exists:()=>exists,read:()=>secret.value,save:v=>{if(failSave)throw Error('secure store unavailable');secret.value=v;},randomHex:()=> 'ab'.repeat(32)};
+ const ports={allowPlaintext,open:connection,exists:name=>name==='roadguard.db'?legacyExists:exists,read:()=>secret.value,save:v=>{if(failSave)throw Error('secure store unavailable');secret.value=v;},randomHex:()=> 'ab'.repeat(32)};
  return {ports,calls,handles,secret};
 }
 test('migration verifies candidate before activation, retains original, and every transaction keys a dedicated connection',async()=>{
@@ -47,6 +47,26 @@ test('COPYING recovery re-verifies all source data before switching; mismatch do
  load().openProtectedDatabase(h.ports);assert.equal(JSON.parse(h.secret.value).phase,'ACTIVE');assert.equal(h.calls.some(x=>x[1].includes('sqlcipher_export')),false);
  const bad=fixture({state,exists:true});const open=bad.ports.open;bad.ports.open=name=>{const db=open(name),first=db.getFirstSync;db.getFirstSync=sql=>sql.includes('EXCEPT')?{different:1}:first(sql);return db;};
  assert.throws(()=>load().openProtectedDatabase(bad.ports),/LOCAL_STORAGE/);assert.equal(JSON.parse(bad.secret.value).phase,'COPYING');
+});
+
+test('restart between secure key save and candidate creation resumes export with the same key',()=>{
+ const state=JSON.stringify({version:1,phase:'COPYING',name:'roadguard.encrypted.v1.db',key:'ef'.repeat(32)});
+ const h=fixture({state});h.ports.randomHex=()=>{throw Error('must not replace saved key');};
+ load().openProtectedDatabase(h.ports);
+ assert.equal(JSON.parse(h.secret.value).phase,'ACTIVE');assert.equal(JSON.parse(h.secret.value).key,'ef'.repeat(32));
+ assert.equal(h.calls.filter(x=>x[1].includes('sqlcipher_export')).length,1);
+ assert.equal(h.calls.some(x=>/DROP|DELETE FROM|VACUUM/.test(x[1])),false);
+ const broken=fixture({state,invalid:true});assert.throws(()=>load().openProtectedDatabase(broken.ports),/LOCAL_STORAGE/);
+ assert.equal(broken.secret.value,state);
+});
+
+test('COPYING state without the original database cannot create or promote an empty replacement',()=>{
+ const state=JSON.stringify({version:1,phase:'COPYING',name:'roadguard.encrypted.v1.db',key:'ef'.repeat(32)});
+ for(const exists of [false,true]){
+  const h=fixture({state,exists,legacyExists:false});
+  assert.throws(()=>load().openProtectedDatabase(h.ports),/LOCAL_STORAGE/);
+  assert.equal(h.handles.length,0);assert.equal(h.secret.value,state);
+ }
 });
 test('Expo Go plaintext remains usable only without a pending/active encryption state',()=>{
  const h=fixture({cipher:false,allowPlaintext:true});const db=load().openProtectedDatabase(h.ports);assert.equal(db.name,'roadguard.db');assert.equal(h.secret.value,null);
