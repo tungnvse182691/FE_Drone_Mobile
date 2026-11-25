@@ -3,7 +3,7 @@ import { crewReadGuard } from './crewSafetyWorkflow';
 import { isCrewResourceId, isRepairItemVersion } from './crewApi';
 import type { QueueIdentity } from '../offline/upload-queue';
 import { openOfflineJournal, type OfflineJournalRecord } from './crewOfflineJournal';
-import { NATIVE_ACCEPTANCE_VERIFIED } from '../../modules/roadguard-offline-crypto';
+import { NATIVE_ACCEPTANCE_VERIFIED, offlineQaNativeFor } from '../../modules/roadguard-offline-crypto';
 
 export interface DeviceRegistration {
   id:string;projectId?:string;actorId:string;deviceId:string;revision:number;role:string;
@@ -44,11 +44,13 @@ export function validateBatch(v:OfflineBatchReceipt):void {
       typeof i.kind!=='string'||typeof i.durableAcknowledgment!=='boolean'||!Number.isFinite(Date.parse(i.serverReceivedAt))))throw Error('offline_batch_receipt_invalid');
 }
 /** Production write gate. Logic tests cannot be substituted for Android custody/interop evidence. */
-export function requireOfflineNativeAcceptance():void {if(!NATIVE_ACCEPTANCE_VERIFIED)throw Error('BLOCKED_NATIVE');}
+export function requireOfflineNativeAcceptance(identity?:QueueIdentity):void {
+  if(!NATIVE_ACCEPTANCE_VERIFIED&&!(identity&&offlineQaNativeFor(identity.environment)))throw Error('BLOCKED_NATIVE');
+}
 
 /** Exact durable bytes only, no body reconstruction or automatic adoption after login. */
 export async function dispatchOfflineIntent(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
-  requireOfflineNativeAcceptance();crewReadGuard(record.identity);
+  requireOfflineNativeAcceptance(record.identity);crewReadGuard(record.identity);
   const base=offlineProjectPath(record.projectId);
   if(!['/devices','/snapshots','/sync','/starts/reconcile'].some(s=>record.path===base+s)&&
     !new RegExp('^'+base+'/devices/[a-fA-F0-9-]{36}/revoke$').test(record.path))throw Error('offline_write_not_admitted');

@@ -1,4 +1,4 @@
-import { offlineNative, unavailableCapability } from '../../modules/roadguard-offline-crypto';
+import { offlineNative, offlineQaNativeFor, unavailableCapability } from '../../modules/roadguard-offline-crypto';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { getFieldInspectionTaskDetailReal, validateCrewTaskDetail, isCrewResourceId } from './crewApi';
 import { offlineSigningPublicKey } from './crewOfflineCrypto';
@@ -12,18 +12,52 @@ export function deviceBinding(identity:QueueIdentity,deviceId:string):string {
   if(!isCrewResourceId(deviceId))throw Error('offline_device_id_invalid');
   return JSON.stringify([identity.actor,identity.environment,identity.role,deviceId]);
 }
+export function crewOfflineNative(identity:QueueIdentity) {
+  return offlineQaNativeFor(identity.environment)??offlineNative;
+}
 /** Read-only probe. Never creates keys/registration/snapshot or deletes old aliases on logout. */
 export async function inspectOfflineDevice(identity:QueueIdentity) {
+  const offlineNative=crewOfflineNative(identity);
   crewReadGuard(identity);if(!offlineNative)return {capability:unavailableCapability,deviceId:null};
   const deviceId=await offlineNative.installationId();crewReadGuard(identity);
   const capability=await offlineNative.capability(deviceBinding(identity,deviceId));crewReadGuard(identity);
   return {deviceId,capability};
 }
+/** Local preparation source, never an HTTP error fallback or permission to dispatch.
+ * Only authenticated GET receipts persisted by reconcileDeviceIntent are admitted.
+ * Session adoption and uncertain revocations require separate online recovery.
+ */
+export async function readLocalOfflineSources(identity:QueueIdentity,projectId:string,registrationId:string,deviceId:string) {
+  crewReadGuard(identity);
+  const base=offlineProjectPath(projectId),journal=await openOfflineJournal(identity),rows=await journal.list();
+  crewReadGuard(identity);
+  const owned=(r:OfflineJournalRecord)=>r.projectId===projectId&&r.identity.actor===identity.actor&&
+    r.identity.role===identity.role&&r.identity.environment===identity.environment&&r.identity.scope===identity.scope&&r.identity.partition===identity.partition;
+  if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===registrationId))throw Error('offline_device_revocation_requires_online_check');
+  const enrollment=rows.find(r=>owned(r)&&r.phase==='RECONCILED'&&r.proof.kind==='enrollment'&&r.path===base+'/devices'&&(r.receipt as DeviceRegistration)?.id===registrationId);
+  if(!enrollment)throw Error('offline_verified_device_not_downloaded');
+  const device=enrollment.receipt as DeviceRegistration,request=JSON.parse(enrollment.body);
+  validateDevice(device,identity,registrationId,deviceId);
+  if(device.projectId!==projectId||request.deviceId!==deviceId||request.signingPublicKey!==device.signingPublicKey||request.encryptionPublicKey!==device.encryptionPublicKey)throw Error('offline_device_source_mismatch');
+  const snapshots:SourceSnapshot[]=[];
+  for(const r of rows){
+    if(!owned(r)||r.phase!=='RECONCILED'||r.proof.kind!=='snapshot'||r.path!==base+'/snapshots')continue;
+    const request=JSON.parse(r.body);
+    if(request.deviceRegistrationId!==registrationId)continue;
+    const snapshot=r.receipt as SourceSnapshot;
+    validateSnapshot(snapshot,identity,{id:snapshot?.id,taskId:request.taskId,assignmentId:String(r.proof.assignmentId),deviceRegistrationId:registrationId,taskVersion:String(r.proof.taskVersion)});
+    const source=snapshot.snapshot as Record<string,unknown>;
+    if(source.id!==snapshot.taskId||source.projectId!==projectId||source.assignmentId!==snapshot.assignmentId||source.originalActorId!==identity.actor||!source.location||!Number.isFinite(Date.parse(snapshot.downloadedAt)))throw Error('offline_snapshot_source_mismatch');
+    snapshots.push(snapshot);
+  }
+  return {device,snapshots};
+}
 /** Explicit enrollment only. Existing journal (including old sessions) forbids silent regeneration after key loss. */
 export async function prepareDeviceEnrollment(identity:QueueIdentity,projectId:string,taskId:string) {
-  requireOfflineNativeAcceptance();crewReadGuard(identity);if(!offlineNative)throw Error('BLOCKED_NATIVE');
+  const offlineNative=crewOfflineNative(identity);
+  requireOfflineNativeAcceptance(identity);crewReadGuard(identity);if(!offlineNative)throw Error('BLOCKED_NATIVE');
   const j=await openOfflineJournal(identity);
-  if((await j.list()).length)throw Error('offline_existing_intent_reconciliation_required');
+  if((await j.list()).some(r=>r.projectId===projectId&&r.proof.kind==='enrollment'))throw Error('offline_existing_intent_reconciliation_required');
   const detail=await getFieldInspectionTaskDetailReal(projectId,taskId);crewReadGuard(identity);
   validateCrewTaskDetail(detail.data,detail.etag,projectId,taskId,identity.actor);
   if(!isCrewResourceId(detail.data.assignmentId))throw Error('offline_assignment_required');
@@ -36,7 +70,8 @@ export async function prepareDeviceEnrollment(identity:QueueIdentity,projectId:s
     body:JSON.stringify({deviceId,...keys}),proof:{kind:'enrollment',taskId,assignmentId:detail.data.assignmentId,taskVersion:detail.data.version}});
 }
 export async function prepareDeviceSnapshot(identity:QueueIdentity,projectId:string,taskId:string,registrationId:string) {
-  requireOfflineNativeAcceptance();crewReadGuard(identity);
+  const offlineNative=crewOfflineNative(identity);
+  requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   const probe=await inspectOfflineDevice(identity);crewReadGuard(identity);
   if(!probe.deviceId||!probe.capability.signingUsable||!probe.capability.agreementUsable||!offlineNative)throw Error('BLOCKED_NATIVE');
   const device=await readOfflineResource<DeviceRegistration>(identity,projectId,'devices',registrationId);
@@ -52,7 +87,7 @@ export async function prepareDeviceSnapshot(identity:QueueIdentity,projectId:str
 
 /** API118 is an explicit command, never called by logout. Existing receipts/keys are preserved. */
 export async function prepareDeviceRevocation(identity:QueueIdentity,projectId:string,registrationId:string,reason:string) {
-  requireOfflineNativeAcceptance();crewReadGuard(identity);
+  requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   if(typeof reason!=='string'||!reason.trim()||reason.length>2000)throw Error('offline_revocation_reason_required');
   const text=reason,device=await readOfflineResource<DeviceRegistration>(identity,projectId,'devices',registrationId);
   validateDevice(device,identity,registrationId);

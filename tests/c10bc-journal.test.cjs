@@ -60,3 +60,15 @@ test('FINAL duplicate command key with different identity/body rejects and retai
  const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),intent=h.intent();await j.prepare(intent);
  await assert.rejects(j.prepare({...intent,id:randomUUID(),body:'{"deviceId":"other"}'}),/immutable/);assert.equal((await j.list())[0].body,intent.body);h.raw.close();
 });
+
+test('Enrollment and snapshot creation serialize durable resource identities across sessions',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent();
+ const enrollment={...base,proof:{kind:'enrollment'}};await j.prepare(enrollment);
+ await assert.rejects(j.prepare({...enrollment,id:randomUUID(),key:randomUUID()}),/offline_existing_intent/);
+ const snapshot={...base,id:randomUUID(),key:randomUUID(),proof:{kind:'snapshot'},body:JSON.stringify({taskId:randomUUID(),deviceRegistrationId:randomUUID()})};await j.prepare(snapshot);
+ await assert.rejects(j.prepare({...snapshot,id:randomUUID(),key:randomUUID()}),/offline_existing_intent/);
+ h.switch();const newer=await h.m.openOfflineJournal(h.current(),h.db);
+ await assert.rejects(newer.prepare({...snapshot,identity:h.current(),id:randomUUID(),key:randomUUID()}),/offline_existing_intent/);
+ await newer.prepare({...snapshot,identity:h.current(),id:randomUUID(),key:randomUUID(),body:JSON.stringify({...JSON.parse(snapshot.body),taskId:randomUUID()})});
+ assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,3);h.raw.close();
+});

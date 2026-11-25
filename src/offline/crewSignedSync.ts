@@ -5,7 +5,7 @@ import { canonicalOfflineAttached, canonicalOfflineManifest, describeOfflineOper
 import { offlineP1363 } from '../api/crewOfflineCrypto';
 import { readOfflineResource, validateDevice, validateSnapshot, validateBatch, offlineProjectPath, requireOfflineNativeAcceptance,
   type DeviceRegistration, type SourceSnapshot, type OfflineBatchReceipt, type OfflineItemReceipt } from '../api/crewOfflineWorkflow';
-import { inspectOfflineDevice, deviceBinding } from '../api/crewOfflineDevice';
+import { inspectOfflineDevice, deviceBinding, readLocalOfflineSources, crewOfflineNative } from '../api/crewOfflineDevice';
 import { offlineNative } from '../../modules/roadguard-offline-crypto';
 import { uuidv4 } from '../utils/uuid';
 
@@ -24,20 +24,23 @@ function snapshotOperations(input:OfflineRecord[]):OfflineRecord[] {
 
 /** Only explicit FIELD intents with authoritative snapshots. No legacy queue/T06 journal conversion. */
 export async function prepareSignedFieldBatch(identity:QueueIdentity,projectId:string,registrationId:string,input:OfflineRecord[],sha:Sha256) {
-  requireOfflineNativeAcceptance();crewReadGuard(identity);
+  const offlineNative=crewOfflineNative(identity);
+  requireOfflineNativeAcceptance(identity);crewReadGuard(identity);
   if(!offlineNative||input.length<1||input.length>1000)throw Error('offline_batch_invalid');
   // Freeze caller input before the first await; lexical decimals remain strings in their wrapper.
   const operations=snapshotOperations(input);
   const probe=await inspectOfflineDevice(identity);crewReadGuard(identity);
   if(!probe.deviceId||!probe.capability.signingUsable||!probe.capability.agreementUsable)throw Error('BLOCKED_NATIVE');
-  const device=await readOfflineResource<DeviceRegistration>(identity,projectId,'devices',registrationId);
+  const local=await readLocalOfflineSources(identity,projectId,registrationId,probe.deviceId);crewReadGuard(identity);
+  const device=local.device;
   validateDevice(device,identity,registrationId,probe.deviceId);
   const binding=deviceBinding(identity,probe.deviceId),keys=await offlineNative.publicKeys(binding);crewReadGuard(identity);
   if(keys.signingPublicKey!==device.signingPublicKey||keys.encryptionPublicKey!==device.encryptionPublicKey)throw Error('offline_key_mismatch');
   const descriptors:OfflineRecord[]=[];
   for(const o of operations) {
     if(!['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION'].includes(String(o.kind))||o.originalActorId!==identity.actor||o.sourceDeviceId!==probe.deviceId)throw Error('offline_operation_source_invalid');
-    const snapshot=await readOfflineResource<SourceSnapshot>(identity,projectId,'snapshots',String(o.snapshotId));
+    const snapshot=local.snapshots.find(s=>s.id===o.snapshotId);
+    if(!snapshot)throw Error('offline_verified_snapshot_not_downloaded');
     validateSnapshot(snapshot,identity,{id:String(o.snapshotId),taskId:String(o.taskId),assignmentId:String(o.assignmentId),deviceRegistrationId:registrationId,taskVersion:String(o.taskVersion)});
     descriptors.push(await describeOfflineOperation(o,sha));crewReadGuard(identity);
   }

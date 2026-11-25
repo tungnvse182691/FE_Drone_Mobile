@@ -79,6 +79,13 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       await db.withExclusiveTransactionAsync(async tx=>{
         guard();const records=await rows(tx),old=records.find(r=>r.id===copy.id||r.key===copy.key);
         if(old){if(immutableBytes(old)!==immutableBytes(copy))throw Error('offline_immutable_conflict');result=old;return;}
+        // Resource uniqueness is checked inside the SQLite transaction, across sessions.
+        if(copy.proof.kind==='enrollment'&&records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='enrollment'))throw Error('offline_existing_intent_reconciliation_required');
+        if(copy.proof.kind==='snapshot'){
+          const source=JSON.parse(copy.body);
+          if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='snapshot'&&
+            JSON.parse(r.body).taskId===source.taskId&&JSON.parse(r.body).deviceRegistrationId===source.deviceRegistrationId))throw Error('offline_existing_intent_reconciliation_required');
+        }
         // Serialize safety writes per measure inside the durable transaction, including older sessions.
         if(copy.proof.kind==='safety'&&records.some(r=>r.proof.kind==='safety'&&
           (r.proof.resource as {measureId?:string})?.measureId===(copy.proof.resource as {measureId?:string})?.measureId&&

@@ -26,6 +26,7 @@ import { repairSupplementBlock, createFieldCommand, executeFieldCommand, fieldCo
   type FieldCommandRecord, type FieldCommandAction, type CrewTask } from '../../src/api/crewApi';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { CrewTaskFacts } from '../../src/components/crew/CrewTaskFacts';
+import { CrewOfflinePreparation } from '../../src/components/crew/CrewOfflinePreparation';
 import { CrewFastTrackEligibility } from '../../src/components/crew/CrewFastTrackEligibility';
 import { CrewContentTransition, CrewPressable } from '../../src/components/crew/CrewMotion';
 
@@ -255,6 +256,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {fresh.coordinates ? <Button variant="secondary" title="Dẫn đường" onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } })} /> : null}
       </Card>
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
+      <CrewOfflinePreparation key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id}/>
       {fresh.detail?.repairContext?<CrewRepairFacts key={JSON.stringify([scope,task.projectId,task.id,fresh.detail.repairContext.bindingId])} projectId={task.projectId} taskId={task.id}/>:null}
       <Card style={[styles.taskActionCard, styles.detailCard]}>
         <Text style={styles.detailTasteHeading}>Hồ sơ liên quan</Text>

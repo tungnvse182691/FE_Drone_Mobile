@@ -80,6 +80,7 @@ function screen(file, options = {}) {
     // CrewMotion itself is exercised with a Reanimated mock in crew-home-motion.
     if(name.endsWith('/crew/CrewMotion')||name==='./CrewMotion')return{CrewPressable:'Pressable',CrewContentTransition:'CrewContentTransition'};
     if(name.endsWith('/crew/CrewRepairFacts'))return{CrewRepairFacts:'CrewRepairFacts'};
+    if(name.endsWith('/crew/CrewOfflinePreparation'))return{CrewOfflinePreparation:'CrewOfflinePreparation'};
     // Photo metadata modal has its own behavior tests in crew-photo-gps.
     if(name.endsWith('/crew/CrewPhotoInfo'))return{CrewPhotoInfo:'CrewPhotoInfo'};
     if(name.endsWith('/components/Button')||name.endsWith('/components/reporter/Button'))return{Button:'Button'};

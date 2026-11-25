@@ -1,6 +1,7 @@
 package roadguard.offline
 
 import android.os.Build
+import android.content.pm.ApplicationInfo
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
@@ -15,14 +16,20 @@ import org.json.JSONArray
 /** Keys are never exported. Creation is explicit; missing keys never regenerate during signing. */
 class RoadguardOfflineCryptoModule : Module() {
   private fun store() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-  private fun prefix(binding: String): String {
+  private fun qaEnabled(): Boolean {
+    val context = appContext.reactContext ?: return false
+    return context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+      (Build.FINGERPRINT.startsWith("generic") || Build.FINGERPRINT.startsWith("google/sdk_gphone") || Build.MODEL.contains("Emulator") || Build.MODEL.contains("sdk_gphone"))
+  }
+  private fun prefix(binding: String, qa: Boolean = false): String {
     val a = JSONArray(binding)
     require(a.length() == 4 && a.getString(2) == "REPAIR_CREW")
     require(UUID.fromString(a.getString(0)).toString() == a.getString(0))
     require(UUID.fromString(a.getString(3)).toString() == a.getString(3))
     val uri = java.net.URI(a.getString(1))
     require(uri.scheme in listOf("http", "https") && uri.host != null && uri.userInfo == null && uri.query == null && uri.fragment == null)
-    return "roadguard.offline.v1." + MessageDigest.getInstance("SHA-256").digest(binding.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    if(qa) check(qaEnabled() && uri.scheme == "http" && uri.host in listOf("127.0.0.1", "localhost", "10.0.2.2") && uri.port == 18181 && uri.path == "/api/v1") { "QA_SANDBOX_REQUIRED" }
+    return (if(qa) "roadguard.offline.qa.v1." else "roadguard.offline.v1.") + MessageDigest.getInstance("SHA-256").digest(binding.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
   }
   private fun level(alias: String): String {
     val key = store().getKey(alias, null) as? PrivateKey ?: return "MISSING"
@@ -34,25 +41,63 @@ class RoadguardOfflineCryptoModule : Module() {
       else -> "UNKNOWN"
     } else if(info.isInsideSecureHardware) "HARDWARE_UNSPECIFIED" else "SOFTWARE"
   }
-  private fun capability(binding: String): Map<String, Any> {
-    val p = prefix(binding)
+  private fun capability(binding: String, qa: Boolean = false): Map<String, Any> {
+    val p = prefix(binding, qa)
     val signing = level("$p.sign")
     val agreement = level("$p.agree")
-    val hardware = setOf("STRONGBOX", "TRUSTED_ENVIRONMENT")
+    val hardware = if(qa) setOf("SOFTWARE", "STRONGBOX", "TRUSTED_ENVIRONMENT") else setOf("STRONGBOX", "TRUSTED_ENVIRONMENT")
     val signOk = Build.VERSION.SDK_INT >= 31 && signing in hardware
     val agreeOk = Build.VERSION.SDK_INT >= 31 && agreement in hardware
     return mapOf("available" to true, "apiLevel" to Build.VERSION.SDK_INT,
       "signingUsable" to signOk, "agreementUsable" to agreeOk,
       "securityLevel" to mapOf("signing" to signing, "agreement" to agreement),
-      "reason" to if(Build.VERSION.SDK_INT < 31) "NATIVE_UNSUPPORTED_API" else if(!signOk || !agreeOk) "BLOCKED_NATIVE_KEY_OR_HARDWARE" else "NATIVE_RUNTIME_PROOF_REQUIRED")
+      "reason" to if(Build.VERSION.SDK_INT < 31) "NATIVE_UNSUPPORTED_API" else if(!signOk || !agreeOk) "BLOCKED_NATIVE_KEY_OR_HARDWARE" else if(qa) "QA_SOFTWARE_NOT_PRODUCTION" else "NATIVE_RUNTIME_PROOF_REQUIRED")
   }
   private fun usable(binding: String): String {
     val c = capability(binding)
     check(c["signingUsable"] == true && c["agreementUsable"] == true) { "BLOCKED_NATIVE" }
     return prefix(binding)
   }
+  private fun createKeys(binding: String, qa: Boolean = false): Map<String, Any> {
+    check(Build.VERSION.SDK_INT >= 31) { "NATIVE_UNSUPPORTED_API" }
+    val p = prefix(binding, qa)
+    synchronized(this@RoadguardOfflineCryptoModule) {
+      val ks = store()
+      val signExists = ks.containsAlias("$p.sign")
+      val agreeExists = ks.containsAlias("$p.agree")
+      check(signExists == agreeExists) { "KEY_LOSS_RECOVERY_REQUIRED" }
+      val context = appContext.reactContext ?: error("native_context_missing")
+      val lifecycle = context.getSharedPreferences("roadguard.offline.key-lifecycle", 0)
+      check(signExists || !lifecycle.getBoolean(p, false)) { "KEY_LOSS_RECOVERY_REQUIRED" }
+      if(!signExists) {
+        check(lifecycle.edit().putBoolean(p, true).commit()) { "key_lifecycle_persistence_failed" }
+        for((suffix, purpose) in listOf("sign" to KeyProperties.PURPOSE_SIGN, "agree" to KeyProperties.PURPOSE_AGREE_KEY)) {
+          val g = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
+          val spec = KeyGenParameterSpec.Builder("$p.$suffix", purpose).setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
+          if(suffix == "sign") spec.setDigests(KeyProperties.DIGEST_SHA256)
+          g.initialize(spec.build()); g.generateKeyPair()
+        }
+      }
+      return capability(binding, qa)
+    }
+  }
   override fun definition() = ModuleDefinition {
     Name("RoadguardOfflineCrypto")
+    Constant("qaSoftwareEnabled") { qaEnabled() }
+    AsyncFunction("qaCapability") { binding: String -> capability(binding, true) }
+    AsyncFunction("qaCreateKeys") { binding: String -> createKeys(binding, true) }
+    AsyncFunction("qaPublicKeys") { binding: String ->
+      val p = prefix(binding, true); val c = capability(binding, true)
+      check(c["signingUsable"] == true && c["agreementUsable"] == true) { "BLOCKED_QA_NATIVE" }
+      val ks = store()
+      mapOf("signingPublicKey" to Base64.getEncoder().encodeToString(ks.getCertificate("$p.sign").publicKey.encoded),
+        "encryptionPublicKey" to Base64.getEncoder().encodeToString(ks.getCertificate("$p.agree").publicKey.encoded))
+    }
+    AsyncFunction("qaSignManifest") { binding: String, manifest: String ->
+      val p = prefix(binding, true); val c = capability(binding, true)
+      check(c["signingUsable"] == true && c["agreementUsable"] == true) { "BLOCKED_QA_NATIVE" }
+      Base64.getEncoder().encodeToString(StrictP256.sign(store().getKey("$p.sign", null) as PrivateKey, manifest))
+    }
     AsyncFunction("prepareMediaKey") { binding: String ->
       LocalMediaVault(appContext.reactContext ?: error("native_context_missing")).createKey(binding)
     }
@@ -74,28 +119,7 @@ class RoadguardOfflineCryptoModule : Module() {
       }
     }
     AsyncFunction("createKeys") { binding: String ->
-      check(Build.VERSION.SDK_INT >= 31) { "NATIVE_UNSUPPORTED_API" }
-      val p = prefix(binding)
-      synchronized(this@RoadguardOfflineCryptoModule) {
-        val ks = store()
-        val signExists = ks.containsAlias("$p.sign")
-        val agreeExists = ks.containsAlias("$p.agree")
-        check(signExists == agreeExists) { "KEY_LOSS_RECOVERY_REQUIRED" }
-        val context = appContext.reactContext ?: error("native_context_missing")
-        val lifecycle = context.getSharedPreferences("roadguard.offline.key-lifecycle", 0)
-        // A restored installation with both aliases lost must not silently replace an enrolled keypair.
-        check(signExists || !lifecycle.getBoolean(p, false)) { "KEY_LOSS_RECOVERY_REQUIRED" }
-        if(!signExists) {
-          check(lifecycle.edit().putBoolean(p, true).commit()) { "key_lifecycle_persistence_failed" }
-          for((suffix, purpose) in listOf("sign" to KeyProperties.PURPOSE_SIGN, "agree" to KeyProperties.PURPOSE_AGREE_KEY)) {
-            val g = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
-            val spec = KeyGenParameterSpec.Builder("$p.$suffix", purpose).setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-            if(suffix == "sign") spec.setDigests(KeyProperties.DIGEST_SHA256)
-            g.initialize(spec.build()); g.generateKeyPair()
-          }
-        }
-        capability(binding)
-      }
+      createKeys(binding)
     }
     AsyncFunction("publicKeys") { binding: String ->
       val p = usable(binding); val ks = store()

@@ -5,6 +5,11 @@ export interface NativeCapability {
   securityLevel: { signing: string; agreement: string }; reason: string;
 }
 interface NativeCrypto {
+  readonly qaSoftwareEnabled?: boolean;
+  qaCapability?(binding:string):Promise<NativeCapability>;
+  qaCreateKeys?(binding:string):Promise<NativeCapability>;
+  qaPublicKeys?(binding:string):Promise<{signingPublicKey:string;encryptionPublicKey:string}>;
+  qaSignManifest?(binding:string,manifest:string):Promise<string>;
   /** Storage binding is [actorId, environment, role]. Separate from signed-sync keys/policy. */
   prepareMediaKey(binding: string): Promise<{available: boolean; securityLevel: string}>;
   sealMedia(binding: string, assetId: string, sourceUri: string): Promise<{
@@ -26,6 +31,20 @@ interface NativeCrypto {
 let native: NativeCrypto | null = null;
 try { native = requireOptionalNativeModule<NativeCrypto>('RoadguardOfflineCrypto'); } catch { /* Expo Go/web: fail closed. */ }
 export const offlineNative = native;
+/** QA only: native enforces debuggable + emulator, separate aliases and loopback
+ * sandbox binding again. Never enables production, handover or media key policy.
+ */
+export function offlineQaNativeFor(environment:string) {
+  const n=native;
+  if(!n?.qaSoftwareEnabled||!n.qaCapability||!n.qaCreateKeys||!n.qaPublicKeys||!n.qaSignManifest)return null;
+  try {
+    const u=new URL(environment);
+    if(u.protocol!=='http:'||!['127.0.0.1','10.0.2.2','localhost'].includes(u.hostname)||u.port!=='18181'||u.pathname!=='/api/v1'||u.username||u.password||u.search||u.hash)return null;
+  }catch{return null;}
+  return {installationId:()=>n.installationId(),capability:(b:string)=>n.qaCapability!(b),createKeys:(b:string)=>n.qaCreateKeys!(b),
+    publicKeys:(b:string)=>n.qaPublicKeys!(b),signManifest:(b:string,m:string)=>n.qaSignManifest!(b,m),
+    verifyManifest:(p:string,m:string,s:string)=>n.verifyManifest(p,m,s)};
+}
 export const unavailableCapability: NativeCapability = { available:false,apiLevel:0,signingUsable:false,agreementUsable:false,
   securityLevel:{signing:'UNKNOWN',agreement:'UNKNOWN'},reason:'BLOCKED_NATIVE_MODULE_UNAVAILABLE' };
 /** Compile-time acceptance gate stays closed until device/.NET interop + restart/custody evidence exists. */
