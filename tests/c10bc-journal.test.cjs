@@ -254,3 +254,27 @@ test('P1-B: cross-session writeProtectedFieldDraft preserves keys/coords/binding
  await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',overwrite,overwrite),/locked/);
  h.raw.close();
 });
+
+test('P1-B: concurrent stale write CAS race rejects stale writer without overwriting verified upload',async()=>{
+ const h=fixture(),j1=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),regId=randomUUID(),task=randomUUID();
+ const e={captureOriginId:randomUUID(),purpose:'BEFORE',mediaType:'image/jpeg',checksumSha256:'b'.repeat(64),sizeBytes:2048,fileId:null};
+ const draft={actor:h.i.actor,scope:h.i.scope,environment:h.i.environment,projectId:base.projectId,taskId:task,measurements:[{code:'DEPTH',value:3.0}],
+  captures:[{id:e.captureOriginId,uri:'file:///vault2.rgc',vault:{id:randomUUID()},localOnly:true,createKey:'ck-r1',completeKey:'cm-r1',coordinates:{latitude:10.7,longitude:106.6},purpose:e.purpose,mediaType:e.mediaType,checksum:e.checksumSha256,size:e.sizeBytes,capturedAt:'2026-11-26T00:00:00Z'}]};
+ await h.m.writeProtectedFieldDraft(h.db,'p1b-race','T05B_FIELD',draft,draft);
+ await j1.prepare({...base,proof:{kind:'signed-field-batch',registrationId:regId},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[e]}}]})});
+ h.switch();
+ const j2=await h.m.openOfflineJournal(h.current(),h.db);
+ await j2.confirmSession({id:randomUUID(),identity:h.current(),projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${regId}`,key:randomUUID(),
+  body:JSON.stringify({registrationId:regId,confirmedScope:h.current().scope,snapshotIds:[],revokedSnapshotIds:[]}),
+  proof:{kind:'session-confirm',registrationId:regId,confirmedScope:h.current().scope,snapshotIds:[],revokedSnapshotIds:[]}},{id:regId});
+ const stale=structuredClone(draft);stale.captures[0].offlineUpload={batchIntentId:base.id,originId:randomUUID(),admissionId:randomUUID(),createIntentId:randomUUID()};
+ const realRun=h.db.runAsync;let raced=false;
+ h.db.runAsync=async(s,...p)=>{
+  if(!raced&&String(s).startsWith('UPDATE local_draft')){raced=true;return {changes:0};}
+  return realRun(s,...p);
+ };
+ await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'p1b-race','T05B_FIELD',stale,stale),/cas/);
+ const stored=JSON.parse(h.raw.prepare('SELECT payload FROM local_draft WHERE id=?').get('p1b-race').payload);
+ assert.equal(stored.captures[0].offlineUpload,undefined);
+ h.raw.close();
+});
