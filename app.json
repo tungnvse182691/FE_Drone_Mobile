@@ -8,9 +8,11 @@
     "scheme": "roadguard",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "com.hoanghai.roadguard",
       "supportsTablet": true,
       "requireFullScreen": true,
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
       }
     },

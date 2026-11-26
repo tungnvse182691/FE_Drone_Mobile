@@ -1,1 +1,1 @@
-{"platforms":["android"],"android":{"modules":["roadguard.offline.RoadguardOfflineCryptoModule"]}}
+{"platforms":["android","ios"],"android":{"modules":["roadguard.offline.RoadguardOfflineCryptoModule"]},"ios":{"modules":["RoadguardOfflineCryptoModule"]}}
