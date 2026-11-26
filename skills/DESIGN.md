@@ -1,323 +1,89 @@
----
-version: alpha
-name: Hoàng Hải Field (RoadGuard)
-description: Hệ thống thiết kế cho app di động quản lý bảo hành & sửa chữa hạ tầng đường bộ của Công ty TNHH Xây dựng Bê tông Hoàng Hải — Android, phong cách minimalism thực dụng, dùng bởi Repair Crew (Đội sửa chữa), Drone Operator (Phi công) và Reporter (Người dân / Đại diện Ban QLDA).
-colors:
-  primary: "#C9A227"
-  brand-gold: "#8C6D1F"
-  primary-dark: "#6B5219"
-  secondary: "#2D3748"
-  neutral: "#1A1D20"
-  surface: "#FFFFFF"
-  surface-alt: "#F8F9FA"
-  on-primary: "#FFFFFF"
-  on-surface: "#1A1D20"
-  border: "#E2E5E9"
-  success: "#2F9E44"
-  warning: "#F59E0B"
-  error: "#E5484D"
-  info: "#3B82F6"
-typography:
-  headline-lg:
-    fontFamily: Sansation
-    fontSize: 24px
-    fontWeight: 500
-    lineHeight: 1.3
-  title-lg:
-    fontFamily: Roboto
-    fontSize: 20px
-    fontWeight: 500
-    lineHeight: 1.3
-  title-md:
-    fontFamily: Roboto
-    fontSize: 16px
-    fontWeight: 500
-    lineHeight: 1.4
-  body-lg:
-    fontFamily: Roboto
-    fontSize: 16px
-    fontWeight: 400
-    lineHeight: 1.5
-  body-md:
-    fontFamily: Roboto
-    fontSize: 14px
-    fontWeight: 400
-    lineHeight: 1.5
-  label-lg:
-    fontFamily: Roboto
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: 1.2
-  label-sm:
-    fontFamily: Roboto
-    fontSize: 11px
-    fontWeight: 500
-    lineHeight: 1.2
-    letterSpacing: 0.02em
-  caption:
-    fontFamily: Roboto
-    fontSize: 12px
-    fontWeight: 400
-    lineHeight: 1.4
-rounded:
-  sm: 4px
-  md: 8px
-  lg: 12px
-  xl: 20px
-  full: 9999px
-spacing:
-  base: 8px
-  xs: 4px
-  sm: 8px
-  md: 16px
-  lg: 24px
-  xl: 32px
-  screen-margin: 16px
-  card-padding: 16px
-components:
-  button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.label-lg}"
-    rounded: "{rounded.md}"
-    padding: 12px
-  button-primary-pressed:
-    backgroundColor: "{colors.primary-dark}"
-  button-secondary:
-    backgroundColor: transparent
-    textColor: "{colors.neutral}"
-    borderColor: "{colors.secondary}"
-    typography: "{typography.label-lg}"
-    rounded: "{rounded.md}"
-    padding: 12px
-  button-text:
-    backgroundColor: transparent
-    textColor: "{colors.secondary}"
-    typography: "{typography.label-lg}"
-  card:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.lg}"
-    padding: "{spacing.card-padding}"
-  input-field:
-    backgroundColor: "{colors.surface-alt}"
-    textColor: "{colors.on-surface}"
-    borderColor: "{colors.border}"
-    typography: "{typography.body-lg}"
-    rounded: "{rounded.md}"
-    padding: 12px
-  chip-severity-high:
-    backgroundColor: "#FDECEC"
-    textColor: "{colors.error}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-severity-medium:
-    backgroundColor: "#FEF3E2"
-    textColor: "{colors.warning}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-severity-low:
-    backgroundColor: "#E9F7EC"
-    textColor: "{colors.success}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-status-pending:
-    backgroundColor: "{colors.surface-alt}"
-    textColor: "{colors.secondary}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-mode-inspect-repair:
-    backgroundColor: "#E9F7EC"
-    textColor: "{colors.success}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-mode-measure-only:
-    backgroundColor: "#F1F3F5"
-    textColor: "{colors.secondary}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-fasttrack-eligible:
-    backgroundColor: "#E9F7EC"
-    textColor: "{colors.success}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-fasttrack-exceeded:
-    backgroundColor: "#FEF3E2"
-    textColor: "{colors.warning}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  chip-fasttrack-locked:
-    backgroundColor: "#FDECEC"
-    textColor: "{colors.error}"
-    typography: "{typography.label-sm}"
-    rounded: "{rounded.full}"
-  bottom-nav:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.secondary}"
-    activeTextColor: "{colors.primary}"
----
+# RoadGuard — UI/UX rules
 
-## UI runtime và luồng thao tác — owner 2026-11-25
+Nguồn UI chính. Mọi task sửa hoặc kiểm thử/review UI đọc phần liên quan trước khi làm. Authority/business/security theo `AGENTS.md`; external skills chỉ tư vấn, không cấp quyền đổi API, package, navigation hoặc design tokens.
 
-Áp dụng cho mọi màn mới hoặc được sửa, kể cả màn nối API/offline. Authority theo `AGENTS.md`; các ví dụ màu, mã và wireframe lịch sử dưới đây không thay thế tokens, current DTO hoặc giao diện runtime đã được owner chấp nhận.
+## 1. Nhận diện và nền tảng
 
-### Chuẩn bị và tái sử dụng
+- Bê tông Hoàng Hải; Splash/Loading dùng `assets/logo_hoanghai.png` đầy đủ tên/slogan. Màn nội bộ/AppHeader/login/App Icon dùng `assets/logo_hoanghai_icon.png` chỉ biểu tượng xe bồn, không chữ.
+- Android-first, Expo Router hiện hành, shared `AppHeader`/`SafeAreaScreen`/`Card`/`Button`/`BottomNav`/badge. Tái dùng component/variant trước khi tạo mới; không đổi default toàn app để sửa riêng một màn.
+- `src/design-tokens.ts` là nguồn màu/typography/spacing/radius. Navy/secondary `#2D3748`, primary gold `#C9A227`, brandGold `#8C6D1F`, primaryDark `#6B5219`; chữ `#1A1D20`, surface trắng, nền `#F8F9FA`, border `#E2E5E9`. Giữ semantic success/warning/error/info hiện hành; không màu tím/Dynamic Color mặc định, gradient hoặc shadow đậm.
+- Roboto cho nội dung chức năng, Roboto Medium cho tiêu đề/label/KPI; Sansation chỉ thương hiệu/headline. Theo typography tokens: headline 24, title 20/16, body 16/14, label 14/11, caption 12 với line height hiện có. Không ép font scale hoặc nhồi chữ nhỏ để vừa layout.
+- Spacing nền 4/8/16/24/32dp; margin màn và padding card 16dp. Radius mặc định card 12, input/button 8, chip pill; dùng token/component thật, không sao chép một bảng token khác. Scoped owner overrides ở mục 6 có ưu tiên trong đúng màn, không thay token global.
+- Chỉ MaterialIcons, không Ionicons/emoji hoặc icon màu tự chế. Icon truyền nghĩa phải có text/accessibility label; icon trang trí không tạo focus thừa.
+- UD-06: không tiền/dự toán/chi phí/định mức vật tư; hiển thị phương án kỹ thuật, kích thước thực tế và hạn hoàn thành. Hiển thị defect bằng helper chuẩn, không raw enum.
 
-- Trước sửa UI: đọc tài liệu này, `src/design-tokens.ts`, shared components và màn cùng role đã được owner chấp nhận. Lấy runtime hiện hành làm reference, không tự lấy mock/wireframe cũ làm chuẩn.
-- Tái sử dụng khi phù hợp: `AppHeader`, `SafeAreaScreen`, `Card`, `Button`, `MaterialIcons`, `BottomNav`, badge/status presentation và color/typography/spacing/radius tokens hiện có. Không tạo design system hoặc component trùng trách nhiệm; không hardcode màu/font/spacing tùy tiện.
-- Chức năng mới phải nằm đúng vị trí/thứ tự nghiệp vụ, giữ bố cục và trải nghiệm cũ; tính năng phụ không thành CTA chính. Không tự sửa Home, Profile, Tasks, Camera, BottomNav hoặc màn đã nghiệm thu ngoài phạm vi task.
-- Không làm màn sơ sài chỉ để có caller API; không đưa debug panel vào production. Không dùng UUID dài làm tiêu đề nghiệp vụ, raw JSON/enum kỹ thuật/stack trace làm nội dung người dùng. Mã cần sao chép/đối soát được trình bày thứ cấp, không lấn át tên công việc.
-- Không tạo card quá lớn, nội dung lặp, khoảng trống vô lý, dữ liệu rỗng hoặc chỉ số không có ý nghĩa. Dùng tiếng Việt tự nhiên, hierarchy rõ và nội dung đúng role.
+## 2. Hierarchy, card và mật độ
 
-### Hành trình, nút bấm và điều hướng
+- Viewport đầu trả lời: đang xử lý việc gì, trạng thái thật, bước tiếp theo. Tách title → thông tin quyết định → metadata; không rải text ngang cấp. Nhóm theo tác vụ, dùng heading/divider và spacing có hệ thống.
+- Card cùng loại phải chung radius/padding/header/status placement; chỉ card có nội dung/hành động riêng mới tách. Không bọc mọi dòng thành card, lạm dụng border/shadow hoặc tạo khoảng trống vô ích. Dense row dành cho danh sách, card rộng dành cho quyết định/nhập liệu.
+- Ưu tiên thông tin hiện trường cần dùng: vị trí, trạng thái, kích thước, hạn, ảnh và hành động. Metadata kỹ thuật nằm trong disclosure phụ; UUID/ETag/version/JSON/journal/sid/admission/snapshot không thành nội dung chính của người dùng.
+- Không thêm KPI, priority, notification dot, progress hay bản đồ/GPS giả. Không giấu chức năng bắt buộc để làm màn gọn hơn. Tính nhất quán giữa role giữ bằng component và hành vi chung, không ép nghiệp vụ khác nhau thành cùng flow.
+- Chữ dài có wrap hoặc disclosure rõ; không truncate trạng thái/lý do khóa/lỗi quan trọng. Mã/tên có thể ellipsize nếu có cách xem đầy đủ. Tránh fixed height chứa text động và chuỗi mã đẩy vỡ hàng.
 
-- Với mỗi nút, xác định đủ: mục đích, điều kiện hiển thị, actor/quyền, trạng thái cho phép, handler thực, dữ liệu/API tác động, màn đích/kết quả, loading/lỗi và chống bấm trùng.
-- CTA theo trạng thái thực và current BE guard. Không có nút vô tác dụng, CTA chỉ để chứng minh có UI, nút thực hiện lại nghiệp vụ đã hoàn tất hoặc navigation để che lỗi nghiệp vụ.
-- Không tạo màn mới nếu màn hiện có tái sử dụng an toàn với đúng quyền và nguồn dữ liệu. Không đẩy người dùng sang màn không có bước tiếp theo hoặc bắt họ hiểu kiến trúc nội bộ.
-- Tránh vòng lặp dư thừa `Đồng bộ → Mở dữ liệu nhiệm vụ → Nhiệm vụ offline → Mở Đồng bộ` nếu màn đích không cung cấp nghiệp vụ tiếp theo. Màn nhiệm vụ phục vụ xem/thực hiện công việc; màn Đồng bộ phục vụ gửi/đối soát.
-- Kiểm safe area, font scaling, scroll, accessibility; đủ loading, empty, offline, error, disabled, success và conflict states. Disabled có lý do; lưu local không được báo như máy chủ đã nhận/hoàn tất.
-- Gate UI/Android trước commit nằm tại `skills/code-review/SKILL.md`; typecheck hoặc component tests không thay thế nghiệm thu UX.
+## 3. CTA và hành trình
 
-## Overview
+- Mỗi trạng thái có một hành động chính rõ ràng; tối đa một CTA chính màu gold mỗi màn. Tab active/KPI dùng gold theo tokens. Giữ CTA phụ khi có mục đích nghiệp vụ khác; không hai nút cùng chức năng, không nút không handler hoặc dẫn tới màn không giải quyết được.
+- Mỗi CTA phải xác định: authority/precondition → handler → trạng thái đang làm → kết quả hoặc cách phục hồi. Busy guard chặn double tap; disabled có lý do ngắn cạnh nút và bước khắc phục có thật. Không chỉ giảm opacity hay đổi text để che logic sai.
+- Giữ chuẩn bị → xác nhận gửi khi workflow yêu cầu; không tự dispatch/replay mutation đã xử lý, không thêm Undo cho mutation server đã commit. Không dùng optimistic success cho gửi/hoàn tất/phê duyệt khi chưa có evidence tương ứng.
+- Navigation dùng routes tập trung và full group prefix; back/re-entry không mất form, ảnh hoặc pending command. Tránh vòng Sync → dữ liệu nhiệm vụ → offline → Sync không tạo bước tiến. Thiếu capability phải có điểm dừng với lý do, không CTA hứa gửi được.
+- Khi task implement cho phép sửa UI, xử lý UI lỗi/rườm rà trong chính scope; root cause logic trước, rồi trình bày. Không chỉ ghi TODO, không tự redesign toàn app. Audit thực tế và có owner duyệt trước sửa bố cục lớn; triển khai phạm vi nhỏ.
 
-Hoàng Hải Field (RoadGuard) là app di động dành cho đội ngũ hiện trường và người dân phản ánh của **Công ty TNHH Xây dựng Bê tông Hoàng Hải**, phục vụ khảo sát drone, xác minh đo đạc hiện trường, sửa chữa bảo hành theo cơ chế Fast Track, và tiếp nhận phản ánh hư hại mặt đường bê tông nông thôn (TCVN 10380:2014).
+## 4. Copy, trạng thái và offline
 
-App phục vụ **3 nhóm người dùng hiện trường**:
-1. **Repair Crew (Kỹ thuật viên sửa chữa):** Tiếp nhận công việc, xem chế độ `INSPECT_AND_REPAIR` / `MEASURE_ONLY`, kiểm tra điều kiện sửa nhanh qua **API-146** (server là authority, fail closed) để sửa nhanh tại chỗ, chụp ảnh BEFORE/AFTER và đồng bộ ngoại tuyến SQLite.
-2. **Drone Operator (Phi công):** Nhận lệnh bay, dẫn đường GPS đến Điểm tiếp cận / Điểm tập kết (Access Point), tải dữ liệu ảnh/video 4K RGB từ thẻ nhớ SD.
-3. **Reporter (Người dân & Đại diện Ban QLDA):** Đăng ký **email + password** rồi xác thực OTP, gửi phản ánh kèm GPS + tối đa 3 ảnh, theo dõi trạng thái phản ánh của chính mình (17_10 **KHÔNG** có tra cứu công khai/tracking code), đánh giá chất lượng nghiệm thu 1–5 sao.
+- Tiếng Việt ngắn, động từ cụ thể, thuật ngữ người hiện trường hiểu. Label cạnh input, đơn vị cạnh giá trị (m²/cm/m), không dùng placeholder thay label. Error có text + icon, focus field lỗi đầu tiên, giữ dữ liệu đã nhập.
+- Tách loading lần đầu, refreshing có stale content, empty, no permission, offline, error và success. Skeleton chỉ lần đầu; refresh không xóa nội dung đã tải. Loading có timeout/error/retry phù hợp; không vô hạn hoặc silent failure. Retry không tự đổi immutable command.
+- Upload gộp một vùng tiến độ, không toast mỗi chunk/retry. Hiển thị nguồn ảnh, thời gian/GPS thật, trạng thái local/upload/verification/submission riêng; không tick xanh khi chỉ có local hash hoặc upload 100%.
 
-Giao diện tuân thủ triết lý **minimalism thực dụng**: mỗi màn hình chỉ hiển thị đúng thông tin cần để ra quyết định hoặc thực hiện một hành động, không có chi tiết trang trí thừa. Vàng đồng thương hiệu `#C9A227` chỉ xuất hiện ở đúng nơi cần thu hút chú ý (hành động chính, tab active, KPI).
-
-### Quy tắc phân tách Logo Thương hiệu
-- **Màn Splash / Loading:** Sử dụng `assets/logo_hoanghai.png` (có đầy đủ tên công ty và slogan).
-- **Màn hình nội bộ, AppHeader, Form Đăng nhập, App Icon:** Sử dụng `assets/logo_hoanghai_icon.png` (chỉ biểu tượng xe bồn bê tông, tuyệt đối KHÔNG có chữ).
-
-### Quy định Thư viện Icon (Icon Specification)
-- **Thư viện Icon bắt buộc:** 100% `@expo/vector-icons/MaterialIcons` (chuẩn Google Material Symbols design).
-- **NGHIÊM CẤM:** Tuyệt đối KHÔNG sử dụng `Ionicons` hoặc bất kỳ thư viện icon nào khác trong các màn hình và components của app. Mọi icon trong hệ thống phải đồng bộ 100% MaterialIcons.
-
-### Quy tắc Phi tài chính UD-06 (Zero Cost)
-- **TUYỆT ĐỐI ZERO CHI PHÍ** trên toàn bộ màn hình Mobile. Cấm hiển thị VNĐ, dự toán, kinh phí, đơn giá, định mức xi măng/cát đá.
-- Mọi thông tin thi công chỉ hiển thị: **Phương án kỹ thuật** + **Kích thước hư hại hình học** (m², cm, m) + **Thời hạn xử lý**.
-
----
-
-## Colors
-
-- **Primary (#C9A227):** Vàng đồng thương hiệu Hoàng Hải. Chỉ dùng cho nút hành động chính (CTA), tab đang chọn, icon rating sao và KPI nổi bật. Không dùng cho nền lớn.
-- **Primary Dark (#6B5219):** Trạng thái nhấn (pressed) của nút chính.
-- **Secondary (#2D3748):** Xám than dùng cho viền, icon phụ, text thứ cấp (label, caption).
-- **Neutral (#1A1D20):** Gần đen, dùng cho text chính, đảm bảo độ tương phản cao ngoài nắng gắt.
-- **Surface (#FFFFFF) / Surface Alt (#F8F9FA):** Trắng tinh cho card, trắng ngà cho nền màn hình.
-- **Border (#E2E5E9):** Viền mảnh 1px.
-- **Success (#2F9E44) / Warning (#F59E0B) / Error (#E5484D):** Màu ngữ nghĩa cho badge mức độ khuyết tật, trạng thái Fast Track, không nhầm lẫn với vàng thương hiệu.
-- **Info (#3B82F6):** Trạng thái đang xử lý, đồng bộ.
-
----
-
-## Typography
-
-Hệ thống sử dụng **Sansation** cho logo nhận diện Hoàng Hải và tiêu đề lớn (`headline-lg`), kết hợp cùng **Roboto** cho toàn bộ nội dung chức năng:
-- **Headline (24px/500, Sansation):** Logo nhận diện Hoàng Hải, tiêu đề màn hình chính, số liệu KPI.
-- **Title Large (20px/500):** Tiêu đề top bar.
-- **Title Medium (16px/500):** Tiêu đề card, mã công việc `#WO-xxx`, mã phản ánh `#REP-xxx`.
-- **Body Large (16px/400):** Nội dung chính, mô tả lỗi, phương án kỹ thuật.
-- **Body Medium (14px/400):** Nội dung phụ, kích thước đo đạc (dài, rộng, sâu).
-- **Label Large (14px/500):** Chữ trên nút bấm chính/phụ.
-- **Label Small (11px/500, letter-spacing rộng):** Badge/Chip trạng thái, viết hoa.
-- **Caption (12px/400):** Tọa độ GPS, timestamp, metadata thiết bị.
-
----
-
-## Layout & Components
-
-- **Card đơn cột:** Lề màn hình 16px, padding card 16px, spacing 8px / 16px / 24px.
-- **Mỗi màn hình tối đa 1 CTA chính** màu vàng đồng `{colors.primary}`.
-- **Chips Task Mode & Fast Track (Chữ thuần, tuyệt đối KHÔNG chứa emoji/icon màu tự chế):**
-  - `[Đo & Sửa nhanh]`: Nền `#E9F7EC`, chữ xanh lá `#2F9E44`.
-  - `[Chỉ đo đợt]`: Nền `#F1F3F5`, chữ xám `#2D3748`.
-  - `[Đạt Policy Sửa Nhanh]`: Nền xanh lá nhạt `#E9F7EC`, chữ xanh lá `#2F9E44`, chỉ xuất hiện khi API-146 + policy revision + Crew package/item/binding/itemVersion bootstrap và mọi precondition đã verified; không tự cấp mutation authority.
-  - `[Vượt Policy - Chuyển PM]`: Nền cam nhạt `#FEF3E2`, chữ cam `#F59E0B`, hướng dẫn gửi số đo về cho PM duyệt.
-- **Reporter Tracking Timeline:**
-  - Trục dọc 5 bước hiển thị rõ ràng tiến độ: `Gửi phản ánh` $\rightarrow$ `Đã tiếp nhận` $\rightarrow$ `Khảo sát/Đo đạc` $\rightarrow$ `Đang sửa chữa` $\rightarrow$ `Hoàn thành nghiệm thu`.
-- **Đánh giá chất lượng 1–5 sao:**
-  - 5 ngôi sao kích thước 32px, tô màu vàng đồng `#C9A227` khi được chọn, kèm ô góp ý ngắn gọn.
-- **Xác thực OTP 6 số:**
-  - 6 ô nhập riêng biệt kích thước 44x48px, tự động nhảy focus khi nhập, hỗ trợ gửi lại mã sau 60s.
-
----
-
-## Do's and Don'ts
-
-- Do dùng vàng đồng `{colors.primary}` cho đúng một hành động chính trên mỗi màn hình.
-- Do hiển thị rõ Task Mode (`INSPECT_AND_REPAIR` vs `MEASURE_ONLY`) trên màn hình chi tiết công việc của Crew.
-- Do ghi “Đã nhập dữ liệu” khi đủ số đo; chỉ hiển thị kết quả policy từ API-146 và bootstrap thật. Thiếu contract thì khóa kèm lý do.
-- Do giữ tương phản văn bản đạt chuẩn WCAG AA ngoài trời nắng.
-- Don't đưa bất kỳ thông tin chi phí, giá tiền hay định mức vật tư tiêu hao vào giao diện (UD-06).
-- Don't tự ý cho phép Crew sửa nhanh khi công việc đang ở chế độ `MEASURE_ONLY` (BR-09).
-- Don't dùng gradient hoặc shadow đậm.
-
----
-
-## Accessibility & Trạng thái UI (theo `docs/specs/06_Mobile-Expo/07_Mobile-Integration-Acceptance.md`)
-
-### Quy tắc bắt buộc
-- **Label tiếng Việt sát input/field:** Không dùng placeholder thay label; unit đặt cạnh ô nhập (vd: `Diện tích (m²)`).
-- **Lỗi có text + icon, KHÔNG chỉ màu:** Sau submit lỗi → focus tự động trở về field đầu tiên có lỗi.
-- **Nút bị disable phải có lý do gần nút:** Không chỉ đổi màu xám. Vd: `[Tiến hành sửa nhanh ▸]` bị disable → hiển thị text `"Cần ảnh BEFORE trước khi sửa"` ngay bên dưới.
-- **Không toast cho mỗi chunk upload / mỗi retry:** Gộp thành 1 banner trạng thái upload duy nhất.
-- **Không loading xóa nội dung đã tải:** Skeleton chỉ dùng lần load đầu tiên; sau đó hiển thị stale data + badge "Đang cập nhật...".
-- **Empty state ≠ No-permission state ≠ Offline-error state:** Ba trạng thái phải có UI và message riêng biệt.
-
-### Offline Badge (bắt buộc xuyên màn hình tác nghiệp)
-```
-┌─────────────────────────────────────────────────────────────┐
-│  📶 Offline • Cache lúc HH:mm • Transport: bị chặn      │
-└─────────────────────────────────────────────────────────────┘
-```
-- Màu nền: `#FEF3E2` (cam nhạt), chữ `#F59E0B`
-- React Native dùng device connectivity signal để mô tả mạng, không dùng `navigator.onLine` làm authority. Hiển thị riêng last API probe, cache timestamp, durable queue state và transport capability. API probe thành công không là durable ACK.
-- Nhãn “Đã tải lúc HH:mm” chỉ dùng timestamp cache thật; nếu chưa có thì ghi chưa tải, không bịa thời gian. Không ẩn metadata cache đã có sau loading.
-- Trạng thái offline KHÔNG disable capture ảnh/form nhập liệu
-
-### Thông báo Success — Dùng từ cụ thể, không dùng từ chung
-| Thay vì | Dùng |
+| Tình huống đã xác minh | Copy phù hợp |
 |---|---|
-| "Đã lưu" (generic) | "Đã lưu trên máy" / "Đang chờ đồng bộ" |
-| "Đã gửi" (generic) | "Đã gửi lên máy chủ" |
-| "Hoàn thành" (generic) | "PM đã kiểm tra" / "Máy chủ đã xác minh tệp" / "Đã nghiệm thu" |
-| "Thất bại" sau timeout | "Chưa xác nhận được kết quả, đang kiểm tra" |
+| Draft durable local | Đã lưu trên thiết bị |
+| Pending do mạng | Chờ kết nối |
+| Bytes đang gửi | Đang tải ảnh |
+| Chờ file verification | Đang xác minh |
+| Timeout chưa rõ kết quả | Chưa xác nhận được kết quả, đang kiểm tra |
+| Cần đối soát | Cần kiểm tra lại |
+| Hồ sơ được server nhận đúng contract | Đã gửi hồ sơ |
+| PM nghiệm thu có evidence | Đã nghiệm thu |
 
-### Authority và offline capability
+- Offline badge tác nghiệp hiển thị trạng thái mạng, cache timestamp thật, last API probe và khả năng gửi/queue riêng. Không dùng `navigator.onLine` làm authority, không bịa “Đã tải lúc”; chưa tải phải nói chưa có dữ liệu. API probe thành công không là durable ACK.
+- Offline không tự khóa capture/form nếu downloaded capability/policy còn cho phép; cũng không mở quyền từ cached data. Khi thực sự `BLOCKED_CONTRACT`/thiếu provider/fixture, khóa action tương ứng và giải thích; không giữ blocker lịch sử nếu capability hiện tại đã thay đổi và được verify.
+- FastTrack chip: “Đo & Sửa nhanh” xanh nhạt `#E9F7EC`/success, “Chỉ đo đợt” nền `#F1F3F5`/secondary; chữ thuần, không emoji. “Đạt Policy Sửa Nhanh” chỉ sau API-146 + bootstrap/preconditions thật; chưa đạt hiển thị lý do/chuyển PM theo workflow. Đủ số đo local chỉ là “Đã nhập dữ liệu”.
+- Reporter timeline theo trạng thái thực: gửi → tiếp nhận → khảo sát/đo → sửa → nghiệm thu; không tự đánh dấu bước. Rating 1–5 sao (32dp, vùng chạm đủ), góp ý ngắn. OTP 6 ô 44×48dp, hỗ trợ focus/paste; resend theo guard/cooldown contract (mẫu 60s không tự override server).
 
-Áp dụng `AGENTS.md` cho business/BE/evidence/mode; file này chỉ hướng dẫn UI. Khi C10 API-130 còn `BLOCKED_CONTRACT`, không hiển thị CTA “Đồng bộ ngay” có vẻ gửi được; disabled action phải kèm lý do thiếu provider/contract/fixture thực. Local save, network availability, server receipt và PM acceptance hiển thị riêng: `LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`. Native/Android chưa chạy ghi `NOT_RUN`.
+`LOCAL_SAVED ≠ SENT ≠ FILE_VERIFIED ≠ WORK_FINISHED ≠ PM_ACCEPTED ≠ PUBLISHED`.
 
-## Owner-approved Operator visual rules — 04/11/2026
+## 5. Android, accessibility và motion
 
-Áp dụng riêng Home và Requests của Operator trong OP-UI-05 / Phase 1:
+- Safe area theo thiết bị, status/navigation bar không che nội dung/CTA. Kiểm màn nhỏ, landscape/cửa sổ thay đổi và font scaling tối thiểu 1.15; layout co giãn/wrap, scroll được nội dung dài, không khóa font scaling. Không kéo dãn card trống chỉ để lấp màn.
+- Keyboard không che input/lỗi/CTA; dùng tránh bàn phím và scroll tới field focus. Giữ form khi picker chọn/cancel, blur/focus, back, unmount/restart và scope đổi theo policy. Không để kết quả picker phiên cũ ghi vào form/actor mới.
+- Touch target tối thiểu 48×48dp kể cả icon/rating, khoảng cách tránh bấm nhầm. Text contrast WCAG AA; trạng thái không chỉ dựa vào màu, có nhãn/icon. Thứ tự screen reader có nghĩa, label/role/busy/disabled phù hợp.
+- Motion chỉ giải thích thay đổi trạng thái hoặc phản hồi thao tác: ngắn, không cản đọc/chạm, không shimmer/loop trang trí. Tôn trọng Reduce Motion; giảm/tắt chuyển động không thiết yếu, giữ phản hồi bằng text/icon/state. Không kéo mutation theo thời điểm animation kết thúc; tránh animation làm render/list chậm.
+- Mọi checkpoint đổi UI: kiểm Android thực, từng CTA, loading/empty/error/offline, navigation/back, keyboard/scroll/safe area, font overflow/scaling và không mất dữ liệu; screenshot trước/sau. Không bắt buộc video. JSX/component/Node test không thay Android acceptance; chưa chạy ghi `NOT_RUN`.
 
-- Card chính: radius 20dp; dense task row: 12dp. Không đổi token hoặc default Card/Chip/Button.
-- KPI: Roboto Medium, 28sp/500, tabular; không dùng headline Sansation cho số liệu chức năng.
-- Screen margin và card padding 16dp; card gap 12dp; section gap 24dp; spacing nội bộ 4/8/16.
-- Surface trắng, nền #F8F9FA, border #E2E5E9; chữ chính #1A1D20, chữ phụ #2D3748.
-- Primary #C9A227, brand gold #8C6D1F; CTA vàng phải dùng chữ tối #1A1D20.
-- Bóng mềm tối đa opacity 0.08, radius 18, elevation 3. Không thêm tint vàng, gradient hoặc shimmer.
-- Giữ Sansation ở thương hiệu, MaterialIcons, vùng chạm tối thiểu 48dp và font scale 1.15.
-- Home và Requests dùng chung task row, trạng thái từ API; không suy ra priority/current task.
-- Header compact riêng Operator không hiển thị notification dot hoặc thông báo hệ thống giả.
+## 6. Scoped owner decisions còn hiệu lực
 
-Các quy tắc này là override có phạm vi của Owner; quy tắc mặc định của các role/màn khác giữ nguyên.
+### Operator OP-UI-05 — owner 04/11/2026
 
+Chỉ Home/Requests (Phase 1):
 
-## Operator — ngôn ngữ Crew, OP-UI-06 (Owner 05/11/2026)
+- Main card radius 20dp, dense row 12dp; margin/padding 16, gap card 12, section 24, internal 4/8/16. Không đổi token/default Card/Chip/Button.
+- KPI Roboto Medium 28sp/500 tabular; Sansation chỉ thương hiệu. Surface trắng, nền/border/text theo mục 1. Gold CTA chữ tối `#1A1D20` (override có scope cho `onPrimary` mặc định).
+- Shadow tối đa opacity .08/radius 18/elevation 3; không tint vàng/gradient/shimmer. MaterialIcons, touch 48dp, font scale 1.15.
+- Home/Requests dùng chung task row, status API thật; không suy priority/current task. Header compact Operator không notification dot/thông báo hệ thống giả.
 
-Phạm vi: Detail, Gói công việc, hàng nhiệm vụ dùng chung Home/Requests; Upload chỉ hàng bằng chứng và lý do khóa nộp. Không đổi KPI, lọc danh sách, API, quyền hoặc luồng xác nhận lệnh.
+### Operator OP-UI-06 — owner 05/11/2026
 
-- Hàng nhiệm vụ: rail trái 4dp theo trạng thái máy chủ; mới giao/giao lại/cần bổ sung/tạm hoãn dùng warning, đã nhận/đang thực hiện dùng brandGold, hoàn tất dùng success, từ chối/hủy dùng error, đã nộp hoặc chưa biết dùng secondary. Không suy ra ưu tiên hay nhiệm vụ hiện tại.
-- Chip riêng Operator: pastel của họ trạng thái, dot 6dp + icon + nhãn tiếng Việt. Chữ primaryDark trên pastel cam; chữ secondary trên pastel xanh/đỏ/xám để đạt AA. Không thay variant dùng chung. Màu không thay thế chữ.
-- Card chính radius 20dp, dense 12dp, padding/margin 16dp, gap card 12dp; header icon vàng 16dp + tiêu đề + mã 8 ký tự. Hero chỉ có rail vàng khi mới giao/giao lại/cần bổ sung.
-- Nhãn nhóm IN HOA, divider mảnh, info row có icon vàng và giá trị Roboto Medium. UUID/phiên bản thô nằm trong kỹ thuật đóng/mở; tọa độ 6 chữ số thập phân kèm hướng B/N/Đ/T theo dấu thật.
-- CTA inline, cao tối thiểu 52dp, radius 12dp, nền primary và chữ neutral; khi có hành động phụ dùng tỷ lệ 1:2. Nút khóa opacity 0.5 và hộp lý do có icon thông tin. Giữ chuẩn bị → xác nhận gửi; không tự gửi lại journal.
-- Bằng chứng: placeholder dashed cao 150dp khi chưa có preview, tag nguồn, tên, thời gian/tọa độ từ dữ liệu thật. Local chưa tính mã băm không phải máy chủ VERIFIED; không tick xanh. DTO Gói công việc hiện không chứa danh sách file/dataset nên chỉ hiện trạng thái chưa có nguồn, không dựng hàng giả hoặc gọi thêm API.
-- Gói công việc chỉ đọc, phạm vi đã ghim nằm trong viewport đầu; chỉ đếm phân đoạn của ref đang xem. Upload vẫn khóa nộp bằng DRONE_DATASET_BLOCK_REASON.
-- Không FAB, map/GPS giả, dữ liệu demo, đổi token/default component hoặc ảnh hưởng Crew/Reporter. Keyboard Android và UUID upload ở Log không nằm trong nghiệm thu thay đổi này.
+Chỉ Detail, Gói công việc, shared task row Home/Requests; Upload chỉ evidence row/lý do khóa nộp. Không đổi KPI/filter/API/quyền/flow xác nhận lệnh:
+
+- Rail trái 4dp: mới/giao lại/cần bổ sung/tạm hoãn → warning; đã nhận/đang làm → brandGold; hoàn tất → success; từ chối/hủy → error; đã nộp/unknown → secondary. Không suy ưu tiên/current task.
+- Chip riêng Operator pastel theo status, dot 6dp + MaterialIcon + nhãn Việt; chữ primaryDark trên pastel cam, secondary trên xanh/đỏ/xám, đạt AA. Không đổi shared variant.
+- Card chính 20/dense 12, padding/margin 16/gap 12; header icon vàng 16dp + title + mã 8 ký tự. Hero rail vàng chỉ mới/giao lại/cần bổ sung.
+- Nhóm IN HOA, divider mảnh, info row icon vàng + giá trị Roboto Medium. UUID/version trong kỹ thuật đóng/mở; tọa độ 6 số thập phân + B/N/Đ/T theo dấu thật.
+- CTA inline cao ≥52dp/radius 12/gold chữ neutral; khi có secondary tỷ lệ 1:2. Disabled opacity .5 + hộp lý do/icon thông tin. Giữ chuẩn bị → xác nhận; không tự gửi lại journal.
+- Evidence chưa preview: placeholder dashed cao 150dp; tag nguồn/tên/time/GPS thật. Local hash không là VERIFIED. DTO gói công việc tại quyết định này không có file/dataset: không dựng hàng giả/gọi thêm API; chỉ thay khi current contract và scope cho phép.
+- Gói công việc read-only, phạm vi đã pin nằm viewport đầu; chỉ đếm phân đoạn của ref đang xem. Upload giữ `DRONE_DATASET_BLOCK_REASON` khi capability/guard tương ứng còn thiếu; muốn mở cần verify source và authority, không tự bỏ guard.
+- Không FAB/map/GPS/demo giả/đổi token default hoặc tác động Crew/Reporter. Keyboard Android và UUID upload ở Log không nằm trong nghiệm thu OP-UI-06; vẫn áp dụng gate khi task mới chạm các phần đó.
+
+## 7. Đọc chuyên môn đúng phạm vi
+
+UI implement/review dùng `.agents/skills/mobile-design/SKILL.md`, chỉ references đúng vấn đề. Performance/list/render/animation/native dùng Vercel rule phù hợp, không compiled AGENTS/all rules mặc định. Expo `building-native-ui` và animation reference dùng khi cần. Redesign skill explicit owner only, mặc định read-only audit. Quyền nghiệp vụ/journal/draft/upload/idempotency không thay đổi chỉ để làm UI gọn.

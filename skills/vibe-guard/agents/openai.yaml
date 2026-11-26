@@ -1,0 +1,5 @@
+interface:
+  display_name: "Vibe-Guard historical reference"
+  short_description: "Historical reference; current implementation uses roadguard."
+policy:
+  allow_implicit_invocation: false

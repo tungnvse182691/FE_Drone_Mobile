@@ -1,9 +1,14 @@
 ---
 name: vibe-guard
-description: "Kỷ luật vibe-coding chống AI 'ngáo': buộc AI đọc code/spec thật trước khi viết, cấm bịa API-tên hàm-đường dẫn-config, bắt tự kiểm chứng bằng chạy code hoặc đọc lại file sau mỗi lần sửa. Dùng skill này BẤT CỨ KHI NÀO user yêu cầu viết code, sửa bug, thêm tính năng, refactor, scaffold dự án, review code, hoặc build bất cứ thứ gì bằng AI — kể cả khi user không gọi tên skill, chỉ cần task liên quan đến việc AI động vào code. Đặc biệt bắt buộc với: task đa file, task chạm file chưa từng đọc, task dùng thư viện/API lạ, và mọi task mà user nói 'làm cho chạy được' nhưng không đưa spec chi tiết."
+description: Historical reference only; use roadguard for current implementation discipline. Load this body only when the owner explicitly requests the historical Vibe-Guard reference.
+disable-model-invocation: true
 ---
 
-# Vibe-Guard: kỷ luật chống AI ngáo khi code
+# Vibe-Guard — historical reference
+
+> Không phải workflow đang hoạt động. Nội dung gốc dưới đây được giữ để tra cứu; AGENTS.md và roadguard là hướng dẫn hiện hành. Không kích hoạt đồng thời với roadguard.
+
+## Nội dung lịch sử
 
 Nguyên nhân AI "ngáo" đã được nghiên cứu rõ: **viết trước khi đọc đủ** (premature commitment), **tưởng tượng thay vì chạy thật** (mental-reality gap), và **đoán tên/API thay vì tra cứu**. Skill này biến 3 phát hiện đó thành workflow bắt buộc.
 

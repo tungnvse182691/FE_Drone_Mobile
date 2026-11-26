@@ -1,10 +1,6 @@
 ---
 name: vercel-react-native-skills
-description:
-  React Native and Expo best practices for building performant mobile apps. Use
-  when building React Native components, optimizing list performance,
-  implementing animations, or working with native modules. Triggers on tasks
-  involving React Native, Expo, mobile performance, or native platform APIs.
+description: Use when a RoadGuard task concerns React Native performance, list rendering, animation, native modules or RN patterns; read only relevant rules.
 license: MIT
 metadata:
   author: vercel
@@ -19,14 +15,7 @@ and platform-specific optimizations.
 
 ## When to Apply
 
-Reference these guidelines when:
-
-- Building React Native or Expo apps
-- Optimizing list and scroll performance
-- Implementing animations with Reanimated
-- Working with images and media
-- Configuring native modules or fonts
-- Structuring monorepo projects with native dependencies
+Use only for performance, lists, animation, rendering, native modules or RN patterns. General UI layout follows the repository DESIGN.md and mobile-design skill. Read the relevant rule, not the compiled guide.
 
 ## Rule Categories by Priority
 
@@ -116,6 +105,8 @@ Each rule file contains:
 - Correct code example with explanation
 - Additional context and references
 
-## Full Compiled Document
+## RoadGuard scoped reading
 
-For the complete guide with all rules expanded: `AGENTS.md`
+Local routing override: use only for performance, lists, animation, rendering, native or React Native patterns. Read only relevant rule files. Do not load the compiled AGENTS.md or every rule by default. AGENTS.md and skills/DESIGN.md at the repository root govern authority and product UI; package or navigation changes require owner authorization.
+
+The compiled AGENTS.md remains an optional reference for an explicitly broad review. Upstream pin is recorded in .agents/skills/SOURCES.md; this paragraph is a local routing adjustment.
