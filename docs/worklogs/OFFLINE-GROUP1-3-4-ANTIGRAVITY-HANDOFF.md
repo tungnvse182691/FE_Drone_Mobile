@@ -396,3 +396,114 @@ Docker engine is no longer the HTTP blocker. Remaining limitations in section15 
 Build once from this checkpoint plus subsequent authorized commits using section3 config; record APK SHA/source HEAD/host. Check Reporter1/2/third shutter, absent library/document controls and old route, primary-only GPS, secondary wire without location, GPS denied/timeout, delete/retake primary, double tap/close/session switch, offline restart/reconnect and exact body/key replay, historical3-photo pending preservation and media retention. Verify vi-VN GPS strings while original accuracy remains unchanged. For FT verify each required measurement, UNKNOWN+reason, method/instrument, unit/range from policy, position/evidence CTA and upload progress, unavailable policy, changed assignment/itemVersion, unsent versus server assessment, false eligibility/unknown reason and no local execution authority; NORMAL behavior stays intact. Capture before/after screenshots and actual HTTP receipt/readbacks. Include section14 Reporter-only OTP recovery and unchanged forced/password change. Execute old-origin recovery/start/finish/native fault matrix from section15 on their exact retained fixtures, without resetting or replacing them.
 
 **Code gate and HTTP read evidence are separate from Android/native/lifecycle acceptance. No group1/3/4/6 DONE claim.**
+
+
+## 17. Final prebuild closure — signed finish to AFTER (2026-11-27)
+
+Mode IMPLEMENT_AND_SELF_REVIEW; owner scope groups1/3/4/6 only. Baseline FE `5bdad1065ebd8f01c23dd9069c6d14fc578745aa`, main/ahead32/behind0; BE read-only pinned `444c6ed841d884f9a0609cf3588340d2abc63663`. Runtime revision is the commit containing this section (`git log -1 --format=%H -- src/api/crewSignedRepairClaim.ts`). This supplements sections15-16; no repeated Reporter/GPS/FastTrack/Auth work, no BE change, push, branch switch, deletion, APK build or Android action.
+
+### Contract, root cause and implementation
+
+- Business invariant: signed device custody does not verify historical UTC. Preserve actor/environment/session/device/registration/assignment/item/binding, immutable signed body/key and durable per-origin acknowledgment. Physical finish is separate from AFTER, final intake, PM review and final acceptance.
+- Canonical `docs/specs/04_API-Contracts/07_Offline-Sync-and-Crypto-Wire.md:55` preserves uncertain historical time. BE `RoadGuardSystem.Repositories/Implementations/Repairs/RepairWorkflowRepository.Offline.cs:110-150` applies signed operations through the real execution repository and returns its actual outcome. `RepairWorkflowRepository.Execution.cs:172-226,273` retains null verifiedOriginalAt and UNKNOWN outcome provenance. `Offline/OfflineWorkflowRepository.Sync.cs:235-251,382-392` persists durable signed results; receipt-level UNCERTAIN and outcome-level UNKNOWN are different wire fields.
+- BE `Repairs/RepairWorkflowRepository.Producing.cs:368-405` explicitly accepts an uncertain physical finish for formal intake when the actual current start/finish/binding/actor match and finish.serverReceivedAt <= submission.serverReceivedAt. It retains null historical timestamps. This is an existing capability, not BE_CONTRACT_GAP.
+- FE root cause: `crewFieldDraft.claimSource()` accepted only online repair journal history with SERVER_ONLINE/verifiedOriginalAt; `crewRepairWorkflow` also required an online finish predecessor. Signed custody lives in its separate journal, so it could not legally satisfy that requirement.
+- `src/api/crewSignedRepairClaim.ts` now resolves the exact durable signed START and FINISH from validated downloaded repair snapshot/current IDs, actor/environment/partition/device/registration and session-confirm/revocation checks, then authenticated GET `/projects/{project}/offline/origins/{finishOrigin}`. Require COMMITTED/REPLAYED, durableAck, exact origin/effect/canonical/kind/task/item/start/firstStart, null historical verified time and valid UNKNOWN outcome. Guards run after awaits. It does not fabricate an online journal record or timestamp.
+- AFTER draft records `signedFinishOriginId` plus explicit `timeBasis:SERVER_RECEIVED`. Its finishAt is a conservative bound for NEW AFTER capture, never verifiedOriginalAt. Existing online history path stays strict and is not bypassed when online history exists. Current itemVersion must match the refreshed snapshot at preparation. Camera attestation, verified media, current task assignment and immutable draft checks remain.
+- `crewRepairWorkflow` uses the signed proof for empty online-history final intake, rechecks real FIELD submission/hash/evidence, first-start, current version, original signed source and chronology, then dispatches the existing genuine intake API through its durable journal. Pending intake replay retains original payload/key/version; no synthetic online start/finish rows. Online paths retain their original time guards. Signed supplement verification also retains current review/parent/intake lineage.
+- `app/(crew)/wo-detail.tsx` reads the same identity-scoped proof and opens existing AFTER/final-intake handlers; no layout redesign. It can read signed provenance when the online journal contains only intake/supplement rows; this does not grant capture after intake or bypass existing pending/rejected guards.
+
+### Gates and evidence
+
+Evidence root `D:/Do_AN_Drone/FE_AppMobile/.cache/offline-final-takeover/`:
+- `prebuild-targeted-final.log`: `node --test --test-concurrency=4 tests/t06c.test.cjs tests/crew-offline-field.test.cjs tests/t05b.test.cjs tests/g02b.test.cjs`, **200/200 PASS**, no fail/cancel/skip. Covers signed uncertain finish -> AFTER -> confirmed FIELD root -> genuine final intake, timeout/exact replay, old online paths, known/unknown issuance expiry and confirmed-part retention. Added signed source negatives: actor/binding/firstStart, missing durable/verified checkpoint, wrong execution start/time, unconfirmed old session, revocation and session switch. All native boundaries in Node are isolated test harnesses.
+- `prebuild-tsc-final.log`: `npx tsc --noEmit`, exit0.
+- Final aggregate evidence and review corrections are recorded in section19.
+- Earlier targeted attempts are retained: missing strict-harness helper/dependency, then positional UI hook slots caused failures. Harness now loads the real existing fast-track validation helper; new UI state moved after existing states. Assertions were not removed. Final intermediate signed selection132/132, then expanded200/200 passed. These failures were test-integration findings, not successful HTTP/Android evidence.
+
+### Runtime fixture limits and QA continuation
+
+`prebuild-environment.json`: API `/health`200, Swagger200, MinIO live200; API image `roadguard-crew-sandbox-api:develop-444c6ed`, image ID `sha256:5b2efe788ed372f9efe9f830bf11ed56062b2d2f88bb1f522e0a1ea34c8a89e0`; API/SQL/Mailpit healthy, MinIO running. Existing containers/volumes were not changed. Docker engine is no longer blocking HTTP.
+
+Project `72f84201-c001-4000-8000-000000000001`, crew-a actor `72f84201-a001-4000-8000-000000000008`: read-only SQL finds **no REPAIR_EXECUTION_FINISH operation result for this actor**; all14 existing RepairExecutionFinishes in the actor readback are online with non-null verifiedOriginalAt. Therefore end-to-end signed-finish HTTP mutation/readback is **NOT_RUN / BE_FIXTURE_BLOCKED**, not evidence of missing capability. Existing exact repair fixture `5e1faf20-df57-4f07-af87-a7533542387f` has prior assessment (section16); no current signed finish is claimed. No shared fixture was mutated to fill the evidence gap.
+
+QA, with owner-authorized dedicated fixture and native acceptance enabled by actual proof:
+1. Verify current actor/project/task assignment/approved NORMAL plan and validated native registration. Retain exact draft and signed bytes. Read authoritative task and obtain fresh snapshot after assessment, signed START and signed FINISH individually; reconcile each exact origin/durable outcome before continuation. Cross-session requires valid session-confirm for the same registration; revoked/missing confirmation must fail closed.
+2. After FINISH COMMITTED, refresh/download snapshot containing the exact current start/finish and current itemVersion; load authenticated task. Existing Chụp ảnh sau sửa must open camera. Capture NEW AFTER at/after actual finish.serverReceivedAt with checklist POST_REPAIR_CAPTURE. Do not backdate photos, copy SQL values into local drafts or create verifiedOriginalAt. Upload and verify actual file, submit FIELD root exactly once, retain submission ID/contentHash.
+3. Gửi hồ sơ hoàn tất must prepare/dispatch actual intake with exact executionFinishId/submission/hash/itemVersion. Verify returned attemptId/linkId/reviewClockId, current repairContext.attempt.effectiveSubmissionId and BE readback. A lost response replays the original command; no new finish/batch/upload. Changed assignment/binding/source/version must stop the affected command and preserve its journal.
+4. BE `FieldInspectionWorkflowRepository.Intake.cs:183-193` can still mark AFTER readiness INCOMPLETE when original FIELD firstStart has no verifiedOriginalAt; formal AFTER binding remains unavailable until final intake. Do not relabel readiness, invent a trusted clock or claim READY/PM accepted. Prefer an authorized fixture with a real verified FIELD firstStart to isolate the signed repair-finish scenario.
+5. The signed source reader requires a currently downloaded matching repair snapshot and native custody gates. Snapshot itemVersion may advance after intake; it is not historical finish identity. Intake replay and supplement compare all stable signed source fields while retaining the claim/command original version; preparation still requires current concurrency. Targeted replay advances the reader snapshot version and verifies identical API arguments. Android successful-but-unacknowledged intake/correction still require actual QA evidence. Changed source/binding must remain blocked without rewriting the claim.
+6. Verify double tap, restart, focus/session switch, old-session confirmation, source/device/registration mismatch, rejected result, new AFTER before bound, pending intake replay and correction review lineage. Capture Android before/after screenshots. Build config/host remain section3 and section15; no new APK/hash exists. **LOGIC_TESTED; signed HTTP lifecycle/native/Android acceptance pending. No group DONE claim.**
+
+
+## 18. Legacy issuance — exact authenticated readback and bounded capability gap (2026-11-27)
+
+Docs-only finding after scoped current BE source/DTO/controller/recovery inspection and authenticated read-only execution. No renewal/replay/upload/complete/cancel, SQL write, signed body change, replacement batch/file/upload or confirmed-part transfer was performed. Existing `0c94494` behavior stays: renew only an observed expired issuance after its definitive error and validated same live upload/file. Unknown expiry remains fail closed; negative `T05B unknown-expiry` regression passes.
+
+### Exact fixtures
+
+Project `72f84201-c001-4000-8000-000000000001`; authenticated crew-a actor `72f84201-a001-4000-8000-000000000008`. These legacy captures use registration `45a5b889-4bf4-43f8-943e-af30567530bb`; the different registration a23c from other fixtures is not their custody proof.
+
+| Task | Origin / batch | Existing upload / file | Admission / capture |
+|---|---|---|---|
+| `a8ed2e80-0f94-4699-b5ed-f2684e45fe6f` | `e4b1162b-4a15-4957-850a-638457402ade` / `d0c8810e-afc2-47cb-8fd6-04e711ec0d28` | `7d2e4ffe-46d6-48cb-a4b0-29d36ed65ad7` / `1feb77f3-3fee-407f-b3f4-2b62b8d7cb1b` | `905d7e72-d000-4208-8e78-0ed9d87c0e51` / `83b24a62-f7f0-432d-a807-d6bd986a4f93` |
+| `9387a6aa-be07-4d7b-8add-27ccba32781e` | `6699657a-f3a9-46aa-be8b-25c14c311ccf` / `a72cbdcb-dc37-4550-8033-fe6bd51f1b09` | `e0998a27-fe66-4997-8e90-71dc82df352a` / `56be2184-b905-4f50-971a-223597b14a31` | `466034da-d694-4492-9468-cb3d6f143254` / `3d4ac8bc-a9a8-46c0-a613-4d862f345c8d` |
+
+`prebuild-readback.json`: both authenticated GET `/projects/{project}/offline/origins/{origin}` return200, **PENDING_DEPENDENCY/evidence_upload_required/durableAcknowledgment=false**. Admission WAITING_VERIFICATION, capture UPLOADING. Checksums/bytes correlate with retained server references: a8 `6228a83dbfb1a56f4593c61c8853756fe8e8b74d8e8113345aae64e40caa9db0`/31289;9387 `2c4a78dabc434b6fdcc03e9f976724a418a093b1792d6ada35b99dba2c4fd982`/31236.
+
+`prebuild-upload-get.json`: GET `/uploads/{uploadId}` authenticated as the same owner returns200/UPLOADING, exact upload/file, partSizeBytes8388608. Versions a8 `AAAAAAAGhBA=`,9387 `AAAAAAAGho8=`; **session** expiry a8 `2026-11-27T14:22:09.8381472+00:00`,9387 `2026-11-27T14:52:05.1254659+00:00`. These observed times are not a promise the sessions remain live later. Session expiry must never be substituted for an issuance expiry.
+
+Read-only SQL diagnostics: part1 has no ETag for either upload; URL issuance/expiry a8 `2026-11-26 14:22:11.0221161` / `14:37:11.0221161` UTC;9387 `14:52:06.1503258` / `15:07:06.1503258` UTC. This proves expired server-side part URL metadata, **not** exact old issuance-key/fingerprint authority for a runtime rotation. No local encrypted draft/key/signature was read or modified from Android this task. A missing SQL ETag does not by itself establish whether storage received bytes or a client retained an ETag.
+
+### Why current capabilities do not safely close unknown-expiry legacy intent
+
+BE pinned444c6ed, paths under `RoadGuardSystem.Repositories/Implementations/Files/`:
+- `UploadPersistenceService.cs:242-372`: part issuance is scoped by actor/project/UploadPartUrlsIssued/key/request fingerprint. The durable receipt includes storage identity, partNumbers and expiry. Expired receipt at348-349 returns the same Conflict as different fingerprint/session lifecycle/storage conflicts (271-273,303,312-313,341-343,370-372). Generic409 cannot prove that the exact retained intent was accepted and only its URL expired.
+- `UploadPersistenceService.Recovery.cs:87-133`: recover existing multipart initiation/storage state; it does not expose a GET of a prior per-key URL issuance receipt. This capability cannot establish an old part-URL key's expiry.
+- `RoadGuardSystem.API/Controllers/UploadsController.cs:70-106,154-172`: current relevant reads are session and file metadata/content; part-urls is POST. `RoadGuardSystem.DTOs/Files/UploadSessionResponseDto.cs:3-10` exposes session expiry only. Session GET200 proves scope/current upload mapping, not issuance key/fingerprint/expiry/confirmed parts. Origin/admission readback similarly lacks per-key issuance proof. No authenticated per-key issuance receipt/part-history GET was found in current controller/DTO/contract. `UploadsController.cs:239-247` maps Conflict to409/duplicate_request.
+
+**BE_CONTRACT_GAP, narrowly scoped:** safe automatic FE renewal for a retained legacy issuance lacking observed expiry needs an actor/project/upload-scoped authenticated receipt/recovery capability (or a definitive existing error contract) that distinguishes **that exact key + partNumbers + request fingerprint** being expired from all other conflicts, with authoritative multipart confirmation where needed. Current actual GETs above do not provide it. This is not a claim that normal multipart resume or all recovery is missing. SQL diagnostics cannot be injected into the FE as authorization, and an isolated generic409 is insufficient. No new POST was issued merely to reproduce a known ambiguous failure.
+
+### Valid continuation
+
+1. Preserve exact historical encrypted draft, part command/key, capture/admission/batch, media bytes, signed body/signature and local confirmed parts. QA first reopens the exact actor/environment/registration/session-confirm retained intent, verifies bytes/hash and whether the actual retained record already contains an observed issuance response. If it does, use current bounded observed-expiry path; this condition is not established here.
+2. Otherwise request the scoped BE capability above through owner. When exact receipt proves expired issuance **and the same upload session is still legitimately live**, issue only new URL issuance for unconfirmed parts of that upload; retain retired command/ETags/create/complete/signed identities. Exact original replay may recover a lost live response only within valid authority/receipt semantics; do not loop on generic409 or expiry.
+3. If the same upload session expires before recovery, stop dependent upload and obtain owner-approved server recovery semantics. Do not create another upload/batch to evade its lifecycle. Continue other independent work.
+
+Status: authenticated origin/upload reads **PASS / HTTP_VERIFIED (reads only)**; diagnosis **BE_CONTRACT_GAP** for the unknown-expiry path; exact encrypted retained-intent/native recovery **NOT_RUN**; both original origins remain unresolved, not replaced or marked sent. No legacy data deleted.
+
+
+## 19. Final prebuild quality gate and local handoff revision (2026-11-27)
+
+Runtime/test commit **`932b729c9dd2374479f931c965ccf45f6b82ebfd`**; baseline `5bdad1065ebd8f01c23dd9069c6d14fc578745aa`. Review/legacy documentation is the separate commit containing sections17-19 (`git log -1 --format=%H -- docs/worklogs/OFFLINE-GROUP1-3-4-ANTIGRAVITY-HANDOFF.md`). Review mode is self-review, not independent QA. Commit range for QA: baseline..final HEAD. The only new runtime module is `src/api/crewSignedRepairClaim.ts`, needed to share exact predecessor/source validation without importing repair mutation workflow back into FIELD. Existing producer uses the same extracted predecessor guard. Changed files and tests are enumerated by `git show --stat 932b729`.
+
+### Executed final gates
+
+All paths below are relative to evidence root `D:/Do_AN_Drone/FE_AppMobile/.cache/offline-final-takeover/`:
+
+| Gate | Executed result | Evidence |
+|---|---|---|
+| Targeted signed/legacy/repair | 200/200 PASS before final source extraction; signed+import-cycle143/143 PASS after extraction | `prebuild-targeted-final.log`, `prebuild-cycle-targeted.log` |
+| Recheck aggregate failures | 55/55 PASS | `prebuild-full-failures-targeted.log` |
+| TypeScript final | `npx tsc --noEmit`, exit0 | `prebuild-tsc-final.log` |
+| Full aggregate final | `node --test --test-concurrency=4 tests/*.test.cjs`: **2390/2390 PASS**,0 fail/cancel/skip,184140.8074ms, exit0 | `prebuild-full-final.log` |
+| Diff/staged diff | `git diff --check` and `git diff --cached --check`, exit0 | `prebuild-diff-check.log`, executed staged output |
+| Scoped added-source privacy scan | No raw logging/private key/JWT/signed URL/password literals matched in added diff/new module | `prebuild-privacy.json` |
+| Authenticated existing origin/upload reads | Both origins200/PENDING_DEPENDENCY, both existing uploads200/UPLOADING | `prebuild-readback.json`, `prebuild-upload-get.json` |
+| Docker health/read-only signed fixture discovery | API/Swagger/MinIO200; no crew-a signed finish result found | `prebuild-environment.json` |
+| Signed finish -> AFTER -> intake HTTP mutation | NOT_RUN, no established authorized signed-finish fixture for crew-a in readback | Exact QA continuation in section17 |
+| APK/build/native/Android/screenshots | NOT_RUN, delegated to QA by owner | No new APK/source installation or screenshot claimed |
+
+The first aggregate (`prebuild-full.log`) completed **2386/2390 PASS,4FAIL**,199152.7539ms. Root causes and fixes:
+1. New FIELD -> offline producer -> repair workflow import path violated the existing import-cycle gate. Extracted shared read-only signed proof module; the original graph assertions remain unchanged and pass.
+2. Crew incomplete assessment UI test expected older wording. Current shared reason messages introduced by the already accepted checkpoint are now asserted exactly, including sanitized unknown code and no automatic command/actor-switch behavior. No production text or API changed for this test correction.
+3. AST-isolated error mapper test omitted existing RepairDraftInputError class. Harness includes both real error classes; known localization/uncertain outcome assertions remain.
+4. Historical Reporter upload test expected the removed library action. It now exercises existing bounded camera navigation, asserts absence of picker, byte-for-byte preservation of all failed ledger rows, and verifies a retained VERIFIED item still opens report. No Reporter runtime source changed or policy reversed.
+
+Full was rerun because these concrete failures and source extraction required verification, not to manufacture a clean report. No test file was excluded and coverage was not reduced. The final aggregate includes every `tests/*.test.cjs` suite. `prebuild-gate-summary.json` records runtime SHA and log hashes. Targeted/VM tests isolate native boundaries and do not establish SQLCipher/device custody or real signed lifecycle HTTP success.
+
+### Final handoff state
+
+BE remains `444c6ed841d884f9a0609cf3588340d2abc63663`; API image/host unchanged (sections17-18). No BE/schema/Docker mutation, reset/seed/volume action, new dependency, APK build, push, branch switch, R: access or deletion. All existing untracked artifacts, journals, historical encrypted/plaintext legacy and media were preserved. Main had ahead32/behind0 before these two local commits; after both it is ahead34/behind0 against the fetched origin/main if remote is unchanged. Exact final HEAD/ahead count is reported in chat after the documentation commit; tracked WIP should be clean, untracked pre-existing artifacts remain.
+
+QA must build final source once with existing section3 x86_64/max-workers1/no-parallel/CMAKE_BUILD_PARALLEL_LEVEL1 recipe and emulator API `http://10.0.2.2:18181/api/v1`, storage `http://10.0.2.2:19101`; retain actual APK/source SHA. Execute section17 signed fixture/AFTER/intake/replay/correction and section18 exact legacy recovery without replacing original records, plus mandatory native/Android gates already assigned in sections15-16. Latest screenshot baseline remains historical section15, not evidence for this patch. Two legacy origins are still pending and require exact retained intent proof/scoped BE issuance capability. **Code quality gate PASS; HTTP lifecycle/native/Android acceptance pending. Groups1/3/4/6 are not marked DONE; groups2/5 untouched.**
