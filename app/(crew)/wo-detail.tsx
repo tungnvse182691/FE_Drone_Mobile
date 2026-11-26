@@ -246,13 +246,13 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         <Text style={styles.detailStateBody}>{presentation.summary}</Text>
         {!ready ? <Text style={styles.detailStateHint}>Đang kiểm tra nhật ký thao tác. Nếu chưa hoàn tất, chọn tải lại / đối soát.</Text> : null}
         {pending ? <Text accessibilityRole="alert" style={styles.detailStateBody}>Còn thao tác chưa đối soát xong. Giữ nguyên lệnh và kiểm tra kết quả trước khi thao tác tiếp.</Text> : null}
-        {presentation.commands.includes('accept') ? <Button variant="secondary" style={styles.detailPrimary} title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} /> : null}
+        {presentation.commands.includes('accept') ? <Button variant="secondary" style={styles.detailPrimary} disabledStyle={styles.detailPrimaryDisabled} disabledTextStyle={styles.detailPrimaryDisabledText} title="Nhận nhiệm vụ" disabled={blocked('accept')} loading={busy} onPress={() => void run('accept')} /> : null}
         {presentation.commands.includes('reject') ? <>
           {!blocked('reject') && <View style={styles.detailSecondarySurface}><InputField label="Lý do từ chối (1–2000 ký tự)" value={reason} onChangeText={setReason} multiline /></View>}
           <Button variant="secondary" style={styles.detailSecondary} title="Từ chối nhiệm vụ" disabled={blocked('reject') || !reason.trim() || reason.trim().length > 2000} onPress={() => void run('reject')} />
         </> : null}
-        {presentation.commands.includes('start') ? <Button variant="secondary" style={styles.detailPrimary} title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} /> : null}
-        {presentation.fieldLabel ? <Button variant="secondary" style={styles.detailPrimary} title={presentation.fieldLabel} disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} /> : null}
+        {presentation.commands.includes('start') ? <Button variant="secondary" style={styles.detailPrimary} disabledStyle={styles.detailPrimaryDisabled} disabledTextStyle={styles.detailPrimaryDisabledText} title="Bắt đầu nhiệm vụ" disabled={blocked('start')} onPress={() => void run('start')} /> : null}
+        {presentation.fieldLabel ? <Button variant="secondary" style={styles.detailPrimary} disabledStyle={styles.detailPrimaryDisabled} disabledTextStyle={styles.detailPrimaryDisabledText} title={presentation.fieldLabel} disabled={!ready||busy||pending||!!fieldBlock} onPress={() => void openField()} /> : null}
         {!presentation.commands.length && !presentation.fieldLabel && fieldBlock ? <Text style={styles.detailStateHint}>Thao tác hiện trường chưa khả dụng với trạng thái hoặc điều kiện hiện tại.</Text> : null}
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.detailStateBody}>{notice}</Text> : null}
         {record?.phase === 'pending' ? <Button variant="secondary" style={styles.detailSecondary} title="Gửi lại đúng lệnh cũ" disabled={busy || record.scope !== scope} onPress={() => void run(undefined, true)} /> : null}
@@ -619,6 +619,8 @@ const styles = StyleSheet.create({
   detailStateBody: { ...typography.bodyMd, lineHeight: 23, color: '#E0E7EC' },
   detailStateHint: { ...typography.caption, lineHeight: 19, color: '#CDD7DF' },
   detailPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
+  detailPrimaryDisabled: { backgroundColor: '#486072', borderColor: '#6B8294', opacity: 1 },
+  detailPrimaryDisabledText: { color: '#FFFFFF' },
   detailSecondary: { backgroundColor: '#F3F5F6', borderColor: '#DCE2E7' },
   detailSecondarySurface: { backgroundColor: colors.surface, padding: 12, borderRadius: radius.md },
   detailRefresh: { backgroundColor: '#243D51', borderWidth: 1, borderColor: '#486072' },
