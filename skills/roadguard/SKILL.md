@@ -10,9 +10,13 @@ Authority, business/security invariants, Git/data/tool boundaries và routing n�
 ## 1. Đọc trước, thay đổi có căn cứ
 
 1. Xác định thao tác người dùng, role, operation, phạm vi file và kết quả cần chứng minh. Roadmap không tự cấp scope implement.
-2. Đọc file định sửa + caller + type + test + config liên quan. Tìm định nghĩa thật của tên hàm/field/route/package; không dùng tên theo trí nhớ. Tra current BE tại pinned SHA cho DTO, enum, permission, guard, headers và preconditions.
-3. Tái dùng wrapper/auth/session, camera/GPS, upload, journal, cache và shared component hiện có. Không tạo flow song song hoặc fallback mock để làm có vẻ chạy được. Mock chỉ trong isolated test/dev harness.
+2. Trước triển khai/sửa chức năng, đọc source FE (file định sửa + caller + type + test + config), source BE tại pinned SHA, nghiệp vụ và API contract liên quan. Lần theo DTO/controller/service/repository/workflow/permission/guard, headers và preconditions; tìm định nghĩa thật của tên hàm/field/route/package, không dùng tên theo trí nhớ.
+3. Chủ động tận dụng API/workflow/permission, fixture và tài khoản QA hợp lệ, wrapper/auth/session, camera/GPS, upload, journal, cache, module/helper/shared component hiện có; dùng Docker/emulator/tool được cấp trong boundaries của AGENTS. Không tạo flow song song hoặc fallback mock để làm có vẻ chạy được. Mock chỉ trong isolated test/dev harness.
 4. Sửa concern nhỏ trong scope; không refactor toàn suite hoặc mở rộng module không liên quan. Sau lỗi phải xác định giả thuyết/root cause và kiểm bằng evidence, không lặp lệnh không có câu hỏi mới.
+
+Khi chức năng không hoạt động, trace **UI → FE logic → API request → BE guard → response**. Lỗi FE thì tự sửa trong scope và kiểm lại. Fixture thiếu điều kiện thì dùng workflow BE hiện có để chuẩn bị fixture đúng và tiếp tục nghiệm thu, trong quyền đã cấp; không bypass guard, sửa SQL hoặc sửa BE.
+
+Chưa tìm thấy API, một request thất bại, fixture không phù hợp, chưa hiểu workflow hoặc FE chưa tích hợp đầy đủ không chứng minh BE thiếu. Trước yêu cầu BE bổ sung phải kiểm hết source/tài liệu liên quan và các phương án hợp lệ; ghi EXPECTED/ACTUAL, pinned SHA + source:line, API/actor/preconditions/response, vì sao workflow hiện có không đáp ứng và chính xác contract/API/capability cần bổ sung. Nếu chưa đủ căn cứ, ghi phần discovery/fixture/evidence còn thiếu theo AGENTS, tiếp tục điều tra và các phần độc lập; không gán BE_CONTRACT_GAP thay cho việc chưa kiểm chứng.
 
 Nguồn chọn lọc: `docs/specs/04_API-Contracts/02_Full-API-Catalog.md`, `05_Idempotency-Concurrency-and-Errors.md`, `07_Offline-Sync-and-Crypto-Wire.md`; screen/API matrix đúng role. Catalog là declared contract, không chứng minh HTTP đã chạy. `BOOTSTRAP_PROMPT.md`/mock/scaffold không cấp production authority.
 

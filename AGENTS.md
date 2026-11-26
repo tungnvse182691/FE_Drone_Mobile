@@ -49,9 +49,13 @@ Chi tiết theo [permission matrix](docs/specs/01_Product-and-Roles/02_Actor-Cli
 
 ## 5. Hoàn thành checkpoint
 
+**Backend-first bắt buộc — owner 26/11/2026:** trước triển khai/sửa chức năng phải đọc source FE, source BE tại SHA đã pin, nghiệp vụ và API contract liên quan. Tận dụng API/workflow/permission, fixture/tài khoản QA hợp lệ, module/helper/component và Docker/emulator/tool được cấp; chi tiết thực thi tại `skills/roadguard/SKILL.md` mục 1. Không báo BE thiếu khi chưa chứng minh capability thực sự thiếu và không có phương án hợp lệ trong hệ thống hiện hành; báo cáo phải có source:line, API và chính xác phần cần bổ sung. Không tự sửa BE, bịa API, bypass bảo mật hoặc giả thành công.
+
 Tìm root cause, sửa trong scope, kiểm lại rồi tiếp tục; không chỉ đổi text che lỗi, không để TODO cho UI lỗi trong scope implement đã giao. Không hỏi lại approval hoặc thay đổi nhỏ đã được ủy quyền. Chỉ dừng bước phụ thuộc khi thiếu contract/authority/policy/quyền tool; không dùng một blocker dừng cả task. Tự review/sửa tối đa 5 vòng trong scope; vẫn chưa đạt thì báo evidence và gate còn thiếu.
 
 Gate theo `skills/code-review/SKILL.md`: typecheck, targeted và full regression tại checkpoint runtime, routes/permissions/preconditions, replay/isolation/recovery, receipt/readback, privacy/secret scan, diff check; UI phải có Android thực và screenshot trước/sau. Task Markdown thuần kiểm cấu trúc/link/invariants/diff, không chạy runtime regression/build chỉ để báo cáo. Không tự đánh dấu DONE khi còn mandatory gate thiếu.
+
+Thực hiện **Implement → Verify → Review → Commit**, rồi chủ động tiếp tục checkpoint kế tiếp đã được owner giao; không chờ nhắc lại, không tự mở rộng scope. Nếu một phần thật sự bị chặn, bảo toàn dữ liệu và hoàn thành mọi phần độc lập còn khả thi.
 
 ## 6. Skill routing (đọc theo nhu cầu)
 
