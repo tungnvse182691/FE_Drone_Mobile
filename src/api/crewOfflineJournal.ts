@@ -14,10 +14,18 @@ function containsSubmission(record:OfflineJournalRecord,projectId:string,taskId:
  * Transport progress may change; deletion, cancellation and replacement may not. */
 export async function assertSignedFieldMediaPreserved(db:SQLiteDatabase,draft:FieldDraft) {
   const owner=currentQueueIdentity();
-  if(!owner||owner.actor!==draft.actor||owner.scope!==draft.scope||owner.environment!==draft.environment)throw Error('offline_session_changed');
+  if(!owner||owner.role!=='REPAIR_CREW'||owner.actor!==draft.actor||owner.environment!==draft.environment)throw Error('offline_session_changed');
   const rows=await (await openOfflineJournal(owner,db)).list();
+  let recoveryConfirmed=owner.scope===draft.scope;
   for(const row of rows){
     if(row.projectId!==draft.projectId||row.proof.kind!=='signed-field-batch')continue;
+    if(!recoveryConfirmed&&sameOfflinePartition(row.identity,owner)&&row.identity.scope===draft.scope){
+      const regId=String(row.proof.registrationId??'');
+      const hasTask=(JSON.parse(row.body).operations??[]).some((o:{taskId?:string})=>o.taskId===draft.taskId);
+      if(hasTask&&regId&&!rows.some(r=>r.projectId===row.projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===regId)&&
+        rows.some(r=>r.projectId===row.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===regId))
+        recoveryConfirmed=true;
+    }
     for(const op of JSON.parse(row.body).operations??[]){
       if(op.taskId!==draft.taskId)continue;
       const evidence=op.fieldSubmission?.evidence??op.repair?.assessment?.evidence??[];
@@ -29,7 +37,24 @@ export async function assertSignedFieldMediaPreserved(db:SQLiteDatabase,draft:Fi
       }
     }
   }
-  if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+  if(!recoveryConfirmed||!sameQueueIdentity(owner))throw Error('offline_session_changed');
+}
+
+function sameDraftSourceForTransport(prev:FieldDraft,next:FieldDraft):boolean {
+  if(prev.actor!==next.actor||prev.scope!==next.scope||prev.environment!==next.environment||
+    prev.projectId!==next.projectId||prev.taskId!==next.taskId||
+    JSON.stringify(prev.measurements)!==JSON.stringify(next.measurements)||
+    JSON.stringify(prev.locationProof)!==JSON.stringify(next.locationProof)||
+    JSON.stringify(prev.command)!==JSON.stringify(next.command)||
+    JSON.stringify(prev.result)!==JSON.stringify(next.result)||
+    JSON.stringify(prev.supplement)!==JSON.stringify(next.supplement)||
+    JSON.stringify(prev.repairClaim)!==JSON.stringify(next.repairClaim)||
+    JSON.stringify(prev.offlineStart)!==JSON.stringify(next.offlineStart)||
+    prev.captures.length!==next.captures.length)return false;
+  return prev.captures.every((a,i)=>{const b=next.captures[i];
+    return a.id===b.id&&a.uri===b.uri&&a.checksum===b.checksum&&a.mediaType===b.mediaType&&a.purpose===b.purpose&&
+      a.size===b.size&&a.capturedAt===b.capturedAt&&JSON.stringify(a.vault)===JSON.stringify(b.vault)&&a.cancelState===b.cancelState;
+  });
 }
 
 /** Serialize draft updates with signed journal insertion. */
@@ -39,6 +64,11 @@ export async function writeProtectedFieldDraft(db:SQLiteDatabase,id:string,kind:
   await db.withExclusiveTransactionAsync(async tx=>{
     if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
     await assertSignedFieldMediaPreserved(tx,draft);
+    if(owner.scope!==draft.scope){
+      if(kind!=='T05B_FIELD')throw Error('offline_session_changed');
+      const existing=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',id,kind);
+      if(!existing||!sameDraftSourceForTransport(JSON.parse(existing.payload) as FieldDraft,draft))throw Error('field_signed_capture_locked');
+    }
     await saveDraft(tx,id,kind,payload);
     if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
   });
@@ -141,10 +171,16 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
   const prefix=partition(owner);
   const canActOnRecord=async(tx:SQLiteDatabase,old:OfflineJournalRecord):Promise<boolean>=>{
     if(sameQueueIdentity(old.identity,owner))return true;
-    if(old.proof.kind!=='signed-field-batch'||!sameOfflinePartition(old.identity,owner))return false;
-    const regId=String(old.proof.registrationId??'');
-    if(!regId)return false;
+    if(!sameOfflinePartition(old.identity,owner))return false;
     const all=await rows(tx);
+    let regId='';
+    if(old.proof.kind==='signed-field-batch')regId=String(old.proof.registrationId??'');
+    else if(old.proof.kind==='admission-upload'){
+      const parent=all.find(r=>r.id===old.proof.batchIntentId&&r.projectId===old.projectId&&
+        r.proof.kind==='signed-field-batch'&&sameOfflinePartition(r.identity,owner)&&r.identity.scope===old.identity.scope);
+      regId=String(parent?.proof.registrationId??'');
+    }else return false;
+    if(!regId)return false;
     if(all.some(r=>r.projectId===old.projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===regId))return false;
     return all.some(r=>r.projectId===old.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
       sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===regId);
@@ -178,7 +214,12 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       let result:OfflineJournalRecord={...copy,schema:1,phase:'PREPARED'};
       await db.withExclusiveTransactionAsync(async tx=>{
         guard();const records=await rows(tx),old=records.find(r=>r.id===copy.id||r.key===copy.key);
-        if(old){if(immutableBytes(old)!==immutableBytes(copy))throw Error('offline_immutable_conflict');result=old;return;}
+        if(old){
+          const crossAdmission=old.proof.kind==='admission-upload'&&copy.proof.kind==='admission-upload'&&
+            immutableBytes({...old,identity:copy.identity})===immutableBytes(copy)&&await canActOnRecord(tx,old);
+          if(!crossAdmission&&immutableBytes(old)!==immutableBytes(copy))throw Error('offline_immutable_conflict');
+          result=old;return;
+        }
         // Resource uniqueness is checked inside the SQLite transaction, across sessions.
         if(copy.proof.kind==='enrollment'&&records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='enrollment'))throw Error('offline_existing_intent_reconciliation_required');
         if(copy.proof.kind==='snapshot'){

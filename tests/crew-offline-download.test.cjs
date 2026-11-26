@@ -27,7 +27,9 @@ test('editor source survives a new module instance but rejects stale snapshot an
  const rows=new Map(),db={withExclusiveTransactionAsync:async fn=>fn({runAsync:async(_sql,key,_kind,payload)=>{rows.set(key,payload);}}),getFirstAsync:async(_sql,key)=>rows.has(key)?{payload:rows.get(key)}:null};
  let current=identity;
  const deps={'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../offline/upload-queue':{sameQueueIdentity:(a,b=current)=>a.actor===b.actor&&a.scope===b.scope&&a.environment===b.environment&&a.partition===b.partition},'./crewApi':{isCrewResourceId:()=>true,validateCrewTaskDetail:()=>{}},'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot})}};
- const load=()=>{const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewOfflineEditorSource.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,require:n=>deps[n],Date,JSON});return m.exports;};
+ const loadFile=(file,extra={})=>{const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,require:n=>extra[n]??deps[n],Date,JSON});return m.exports;};
+ const storage=loadFile('src/api/crewOfflineEditorStorage.ts');
+ const load=()=>loadFile('src/api/crewOfflineEditorSource.ts',{'./crewOfflineEditorStorage':storage});
  await load().retainCrewEditorSource(identity,task);
  assert.equal((await load().readCrewEditorSource(identity,'project','task')).detail.version,'v1');
  snapshot.taskVersion='v2';await assert.rejects(load().readCrewEditorSource(identity,'project','task'),/snapshot_changed/);

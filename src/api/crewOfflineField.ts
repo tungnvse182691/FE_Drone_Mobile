@@ -1,5 +1,5 @@
 import type { QueueIdentity } from '../offline/upload-queue';
-import { openDatabase, initDatabase } from '../offline/database';
+import { readValidatedCrewEditorTask } from './crewOfflineEditorStorage';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { inspectOfflineDevice, readLocalOfflineSources } from './crewOfflineDevice';
 import { requireOfflineNativeAcceptance, validateRepairSnapshot } from './crewOfflineWorkflow';
@@ -146,14 +146,9 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
     if(isGuid(source.facts.firstStartOriginId))starts.push(source.facts.firstStartOriginId);
     else if(!starts.length){
       try{
-        const db=openDatabase();await initDatabase(db);crewReadGuard(identity);
-        const editorKey=`crew-editor:${JSON.stringify([identity.environment,identity.actor,identity.scope,projectId,taskId])}`;
-        const row=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',editorKey,'CREW_FIELD_EDITOR_SOURCE_V1');
-        crewReadGuard(identity);
-        const detail=(row?JSON.parse(row.payload)?.task?.detail:null) as Record<string,unknown>|null;
-        if(detail&&detail.version===source.snapshot.taskVersion&&detail.assignmentId===source.snapshot.assignmentId&&
-          detail.assignedToUserId===source.snapshot.originalActorId&&detail.status==='InProgress'&&isGuid(detail.firstStartOriginId))
-          starts.push(detail.firstStartOriginId);
+        const editor=await readValidatedCrewEditorTask(identity,projectId,taskId,source.snapshot);crewReadGuard(identity);
+        if(editor.detail?.status==='InProgress'&&isGuid(editor.detail.firstStartOriginId))
+          starts.push(editor.detail.firstStartOriginId);
       }catch{/* Editor source stays optional; missing verified start still fails closed. */}
     }
   }
