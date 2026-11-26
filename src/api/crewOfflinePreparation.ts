@@ -44,7 +44,8 @@ export async function downloadCrewOfflineTaskDetailed(identity:QueueIdentity,pro
   const device=registration.receipt as DeviceRegistration;
   if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===device.id))throw Error('offline_device_revocation_requires_online_check');
   const snapshots=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&JSON.parse(r.body).deviceRegistrationId===device.id);
-  if(snapshots.some(r=>!sameOfflinePartition(r.identity,identity)||(r.phase!=='RECONCILED'&&!owned(r))))throw Error('offline_session_recovery_required');
+  if(snapshots.some(r=>!sameOfflinePartition(r.identity,identity)))throw Error('offline_session_recovery_required');
+  if(snapshots.some(r=>r.phase!=='RECONCILED'&&!owned(r)))throw Error('offline_snapshot_reconciliation_required');
   if(snapshots.some((r,index)=>index===0?!!r.proof.previousSnapshotIntentId:r.proof.previousSnapshotIntentId!==snapshots[index-1].id||snapshots[index-1].phase!=='RECONCILED'))throw Error('offline_snapshot_reconciliation_required');
   const head=snapshots.at(-1);
   // A pending refresh resumes the same intent; confirmed history is immutable.
@@ -97,25 +98,28 @@ export async function reconcileDeviceSessionForProject(identity:QueueIdentity,pr
   const taskSnapshots=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&
     (JSON.parse(r.body) as {taskId?:string;deviceRegistrationId?:string}).taskId===taskId&&
     (JSON.parse(r.body) as {deviceRegistrationId?:string}).deviceRegistrationId===actual.id);
-  if(taskSnapshots.some(r=>!sameOfflinePartition(r.identity,identity)||r.phase!=='RECONCILED'))throw Error('offline_snapshot_reconciliation_required');
-  if(taskSnapshots.some((r,index)=>index===0?!!r.proof.previousSnapshotIntentId:r.proof.previousSnapshotIntentId!==taskSnapshots[index-1].id))throw Error('offline_snapshot_reconciliation_required');
+  if(taskSnapshots.some(r=>!sameOfflinePartition(r.identity,identity)))throw Error('offline_snapshot_reconciliation_required');
+  const reconciledSnapshots=taskSnapshots.filter(r=>r.phase==='RECONCILED');
+  if(reconciledSnapshots.some((r,index)=>index===0?!!r.proof.previousSnapshotIntentId:r.proof.previousSnapshotIntentId!==reconciledSnapshots[index-1].id))throw Error('offline_snapshot_reconciliation_required');
   const confirmedSnapshotIds:string[]=[];
-  const head=taskSnapshots.at(-1);
-  if(head&&head.identity.scope!==identity.scope){
+  const revokedSnapshotIds:string[]=taskSnapshots.map(s=>s.id);
+  const head=reconciledSnapshots.at(-1);
+  if(head&&head.id===taskSnapshots.at(-1)?.id&&head.identity.scope!==identity.scope){
     const snapReceipt=head.receipt as SourceSnapshot;
     const snapActual=await readOfflineResource<SourceSnapshot>(identity,projectId,'snapshots',snapReceipt.id);
     validateSnapshot(snapActual,identity,{id:snapReceipt.id,taskId,assignmentId:String(head.proof.assignmentId),deviceRegistrationId:actual.id,taskVersion:String(head.proof.taskVersion)});
     if(detail.data.version===snapActual.taskVersion&&detail.data.assignmentId===snapActual.assignmentId&&
       detail.data.assignedToUserId===identity.actor&&['NewAssigned','Accepted','InProgress','SupplementRequired'].includes(detail.data.status??'')){
-      confirmedSnapshotIds.push(...taskSnapshots.map(s=>s.id));
+      confirmedSnapshotIds.push(head.id);
+      revokedSnapshotIds.splice(revokedSnapshotIds.indexOf(head.id),1);
     }
   }
   await journal.confirmSession({
     id:uuidv4(),identity,projectId,
     path:offlineProjectPath(projectId)+'/devices/'+actual.id,
     key:uuidv4(),
-    body:JSON.stringify({registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds}),
-    proof:{kind:'session-confirm',registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds},
+    body:JSON.stringify({registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds,revokedSnapshotIds}),
+    proof:{kind:'session-confirm',registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds,revokedSnapshotIds},
   },actual);
   return actual;
 }

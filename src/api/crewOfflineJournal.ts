@@ -97,7 +97,7 @@ function safe(value:unknown,depth=0,seen=new Set<object>()):void {
   if(value&&typeof value==='object'){if(seen.has(value))throw Error('offline_journal_invalid');seen.add(value);}
   if(Array.isArray(value)){value.forEach(v=>safe(v,depth+1,seen));seen.delete(value);return;}
   if(value&&typeof value==='object') {for(const [k,v] of Object.entries(value)) {
-    if(/password|authorization|token|private.?key|presigned|signedurl/i.test(k))throw Error('offline_secret_forbidden');safe(v,depth+1,seen);
+    if(/password|authorization(?!Id$)|token|private.?key|presigned|signedurl/i.test(k))throw Error('offline_secret_forbidden');safe(v,depth+1,seen);
   }seen.delete(value);return;}
   throw Error('offline_journal_invalid');
 }
@@ -116,6 +116,7 @@ export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord 
   if(r.proof.kind==='session-confirm'){
     if(r.phase!=='RECONCILED'||!guid(String(r.proof.registrationId))||typeof r.proof.confirmedScope!=='string'||r.proof.confirmedScope!==r.identity.scope||
       !Array.isArray(r.proof.snapshotIds)||r.proof.snapshotIds.some(id=>typeof id!=='string'||!guid(id))||
+      (r.proof.revokedSnapshotIds!==undefined&&(!Array.isArray(r.proof.revokedSnapshotIds)||r.proof.revokedSnapshotIds.some(id=>typeof id!=='string'||!guid(id))))||
       r.path!==`/projects/${r.projectId}/offline/devices/${r.proof.registrationId}`)throw Error('offline_journal_invalid');
   }
   if(['RECEIVED','RECONCILED','REJECTED','CONFLICT'].includes(r.phase)&&r.receipt===undefined)throw Error('offline_receipt_missing');
@@ -175,9 +176,9 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
             JSON.parse(r.body).taskId===source.taskId&&JSON.parse(r.body).deviceRegistrationId===source.deviceRegistrationId);
           const previous=history.at(-1);
           if(previous){
-            const confirmedSnapshots=new Set(records.filter(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner))
-              .flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
-            if(history.some(r=>r.phase!=='RECONCILED'||(!sameQueueIdentity(r.identity,owner)&&!(sameOfflinePartition(r.identity,owner)&&confirmedSnapshots.has(r.id))))||
+            const confirmedDevice=records.some(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===source.deviceRegistrationId);
+            // Historical lineage only requires RECONCILED snapshots in the same partition once the device is confirmed for this session.
+            if(history.some(r=>r.phase!=='RECONCILED'||(!sameQueueIdentity(r.identity,owner)&&!(sameOfflinePartition(r.identity,owner)&&confirmedDevice)))||
               copy.proof.previousSnapshotIntentId!==previous.id||!copy.proof.taskVersion||copy.proof.taskVersion===previous.proof.taskVersion)throw Error('offline_existing_intent_reconciliation_required');
             if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='signed-field-batch'&&r.phase!=='RECONCILED'&&
               (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===source.taskId)))throw Error('offline_pending_batch_reconciliation_required');
@@ -244,9 +245,23 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       let saved!:OfflineJournalRecord;
       await db.withExclusiveTransactionAsync(async tx=>{
         guard();const records=await rows(tx);
+        if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===copy.proof.registrationId))throw Error('offline_device_revocation_requires_online_check');
         const existing=records.find(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
           sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===copy.proof.registrationId);
-        const mergedIds=[...new Set([...(Array.isArray(existing?.proof.snapshotIds)?existing.proof.snapshotIds.map(String):[]),...(Array.isArray(copy.proof.snapshotIds)?copy.proof.snapshotIds.map(String):[])])];
+        const latestByTask=new Map<string,string>();
+        for(const r of records){
+          if(r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='snapshot'){
+            const body=JSON.parse(r.body) as {taskId?:string;deviceRegistrationId?:string};
+            if(body.deviceRegistrationId===copy.proof.registrationId&&body.taskId)latestByTask.set(body.taskId,r.id);
+          }
+        }
+        const activeHeadIds=new Set(latestByTask.values());
+        const revokedIds=new Set(Array.isArray(copy.proof.revokedSnapshotIds)?copy.proof.revokedSnapshotIds.map(String):[]);
+        const retainedIds=(Array.isArray(existing?.proof.snapshotIds)?existing.proof.snapshotIds.map(String):[])
+          .filter(id=>activeHeadIds.has(id)&&!revokedIds.has(id));
+        const copyIds=(Array.isArray(copy.proof.snapshotIds)?copy.proof.snapshotIds.map(String):[])
+          .filter(id=>activeHeadIds.has(id)&&!revokedIds.has(id));
+        const mergedIds=[...new Set([...retainedIds,...copyIds])];
         const nextIntent=existing?{...existing,body:JSON.stringify({registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}),
           proof:{kind:'session-confirm',registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}}:
           {...copy,body:JSON.stringify({registrationId:copy.proof.registrationId,confirmedScope:owner.scope,snapshotIds:mergedIds}),

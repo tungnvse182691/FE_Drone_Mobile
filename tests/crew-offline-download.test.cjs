@@ -106,3 +106,82 @@ test('reconcileDeviceSessionForProject revalidates device and current snapshot v
  const sw=makeSetup();sw.switchSession();
  await assert.rejects(sw.api.reconcileDeviceSessionForProject(newIdentity,project,task),/session_changed/);
 });
+
+test('integration: real SQLite journal + real prepareDeviceSnapshot + mocked transport handle authorizationId, stale historical snapshot, and confirmSession revocation',async()=>{
+ const {DatabaseSync}=require('node:sqlite');
+ const raw=new DatabaseSync(':memory:');
+ raw.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
+ const db={getAllAsync:async(s,...p)=>raw.prepare(s).all(...p),getFirstAsync:async(s,...p)=>raw.prepare(s).get(...p),runAsync:async(s,...p)=>raw.prepare(s).run(...p),withExclusiveTransactionAsync:async f=>{raw.exec('BEGIN IMMEDIATE');try{await f(db);raw.exec('COMMIT');}catch(e){raw.exec('ROLLBACK');throw e;}}};
+ const actor=id(),project=id(),task=id(),assignment=id(),deviceId=id(),regId=id(),authId=id();
+ const oldIdentity={actor,scope:'old-sid',environment:'http://fixture.test/api/v1',role:'REPAIR_CREW',partition:'p'};
+ const newIdentity={actor,scope:'new-sid',environment:'http://fixture.test/api/v1',role:'REPAIR_CREW',partition:'p'};
+ let current=oldIdentity,taskVersion='v1',serverRevokedAt=null;
+ const device={id:regId,projectId:project,actorId:actor,deviceId,revision:1,role:'RepairCrew',encryptionPublicKey:'pk-enc',signingPublicKey:'pk-sign',keyFingerprint:'fp1',registeredAt:new Date().toISOString(),revokedAt:null};
+ const makeSnap=(snapId,ver)=>({id:snapId,taskId:task,assignmentId:assignment,originalActorId:actor,deviceRegistrationId:regId,taskVersion:ver,assignmentHash:'a'.repeat(64),contentHash:'b'.repeat(64),downloadedAt:new Date().toISOString(),snapshot:{id:task,projectId:project,assignmentId:assignment,originalActorId:actor,location:{coordinates:[106,10]},repair:{authorizationId:authId,mode:'NORMAL'}}});
+ const snapV1=makeSnap(id(),'v1'),snapV2=makeSnap(id(),'v2');
+ const isUuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+ const sameQueue=(a,b=current)=>a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.scope===b.scope&&a.partition===b.partition;
+ const loadMod=(file,deps)=>{const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,require:n=>deps[n],Date,URL,JSON});return m.exports;};
+ const journalMod=loadMod('src/api/crewOfflineJournal.ts',{'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{},saveDraft:async()=>{}},'../offline/upload-queue':{currentQueueIdentity:()=>current,sameQueueIdentity:sameQueue}});
+ const deviceMod=loadMod('src/api/crewOfflineDevice.ts',{
+  '../utils/uuid':{uuidv4:id},
+  '../offline/upload-queue':{sameQueueIdentity:sameQueue},
+  './crewApi':{getFieldInspectionTaskDetailReal:async()=>({data:{id:task,projectId:project,assignedToUserId:actor,assignmentId:assignment,version:taskVersion,mode:'NORMAL',status:'InProgress',defectId:id()},etag:`"${taskVersion}"`}),isCrewResourceId:isUuid,validateCrewTaskDetail:()=>{}},
+  './crewSafetyWorkflow':{crewReadGuard:()=>{}},
+  './crewOfflineWorkflow':{
+   crewOfflineNative:()=>({installationId:async()=>deviceId,capability:async()=>({signingUsable:true,agreementUsable:true}),createKeys:async()=>({signingUsable:true,agreementUsable:true}),publicKeys:async()=>({signingPublicKey:'pk-sign',encryptionPublicKey:'pk-enc'})}),
+   deviceBinding:()=>'bound',
+   inspectOfflineDevice:async()=>({deviceId,capability:{signingUsable:true,agreementUsable:true}}),
+   offlineProjectPath:p=>`/projects/${p}/offline`,
+   offlineSigningPublicKey:()=>{},
+   readOfflineResource:async(_i,_p,kind,rid)=>kind==='devices'?{...device,revokedAt:serverRevokedAt}:(rid===snapV1.id?snapV1:snapV2),
+   requireOfflineNativeAcceptance:()=>{},
+   validateDevice:()=>{if(serverRevokedAt)throw Error('offline_device_invalid_or_revoked');},
+   validateSnapshot:()=>{},
+  },
+  './crewOfflineCrypto':{offlineSigningPublicKey:()=>{}},
+  './crewOfflineJournal':journalMod,
+  '../../modules/roadguard-offline-crypto':{offlineQaNativeFor:()=>null,offlineNative:{installationId:async()=>deviceId,capability:async()=>({signingUsable:true,agreementUsable:true}),createKeys:async()=>({signingUsable:true,agreementUsable:true}),publicKeys:async()=>({signingPublicKey:'pk-sign',encryptionPublicKey:'pk-enc'})}},
+ });
+ const prepMod=loadMod('src/api/crewOfflinePreparation.ts',{
+  '../utils/uuid':{uuidv4:id},
+  './crewApi':{getFieldInspectionTaskDetailReal:async()=>({data:{id:task,projectId:project,assignedToUserId:actor,assignmentId:assignment,version:taskVersion,mode:'NORMAL',status:'InProgress',defectId:id()},etag:`"${taskVersion}"`}),validateCrewTaskDetail:()=>{},crewTaskFromWire:(_a,d)=>({id:d.id,projectId:d.projectId,detail:d,etag:`"${d.version}"`})},
+  './crewOfflineDevice':deviceMod,
+  './crewOfflineEditorSource':{retainCrewEditorSource:async()=>{}},
+  './crewOfflineJournal':journalMod,
+  './crewOfflineWorkflow':{
+   dispatchOfflineIntent:async r=>{const j=await journalMod.openOfflineJournal(current,db);const p=await j.transition(r,'IN_FLIGHT');const body=JSON.parse(r.body);const rec=r.proof.kind==='enrollment'?device:(body.taskId===task&&taskVersion==='v1'?snapV1:snapV2);return j.transition(p,'RECEIVED',rec);},
+   offlineProjectPath:p=>`/projects/${p}/offline`,
+   readOfflineResource:async(_i,_p,kind,rid)=>kind==='devices'?{...device,revokedAt:serverRevokedAt}:(rid===snapV1.id?snapV1:snapV2),
+   requireOfflineNativeAcceptance:()=>{},
+   validateDevice:()=>{if(serverRevokedAt)throw Error('offline_device_invalid_or_revoked');},
+   validateSnapshot:()=>{},
+  },
+  './crewSafetyWorkflow':{crewReadGuard:()=>{}},
+ });
+ // 1. Initial download in old-sid succeeds even with repair.authorizationId in snapshot receipt, while real secrets remain forbidden
+ const first=await prepMod.downloadCrewOfflineTaskDetailed(oldIdentity,project,task);
+ assert.equal(first.snapshot.id,snapV1.id);
+ const jOld=await journalMod.openOfflineJournal(oldIdentity,db);
+ await assert.rejects(jOld.prepare({id:id(),identity:oldIdentity,projectId:project,path:'/devices',key:id(),body:'{"authorization":"Bearer secret"}',proof:{kind:'device'}}),/offline_secret_forbidden/);
+ // 2. Switch to new-sid while v1 is still current -> confirmSession confirms S1
+ current=newIdentity;
+ await prepMod.reconcileDeviceSessionForProject(newIdentity,project,task);
+ const jNew=await journalMod.openOfflineJournal(newIdentity,db);
+ const c1=(await jNew.list()).find(r=>r.proof.kind==='session-confirm');
+ assert.equal(c1.proof.snapshotIds.length,1);
+ // 3. Server advances to v2 -> reconcile strips stale S1 from session-confirm, and download prepares S2 chaining S1 without deadlock
+ taskVersion='v2';
+ await prepMod.reconcileDeviceSessionForProject(newIdentity,project,task);
+ const c2=(await jNew.list()).find(r=>r.proof.kind==='session-confirm');
+ assert.equal(c2.proof.snapshotIds.length,0);
+ const second=await prepMod.downloadCrewOfflineTaskDetailed(newIdentity,project,task);
+ assert.equal(second.snapshot.id,snapV2.id);
+ const snaps=(await jNew.list()).filter(r=>r.proof.kind==='snapshot');
+ assert.equal(snaps.length,2);
+ assert.equal(snaps[1].proof.previousSnapshotIntentId,snaps[0].id);
+ // 4. Local revocation record blocks confirmSession
+ await jNew.prepare({id:id(),identity:newIdentity,projectId:project,path:`/projects/${project}/offline/devices/${regId}/revoke`,key:id(),body:'{}',proof:{kind:'revocation',registrationId:regId}});
+ await assert.rejects(jNew.confirmSession({id:id(),identity:newIdentity,projectId:project,path:`/projects/${project}/offline/devices/${regId}`,key:id(),body:JSON.stringify({registrationId:regId,confirmedScope:newIdentity.scope,snapshotIds:[]}),proof:{kind:'session-confirm',registrationId:regId,confirmedScope:newIdentity.scope,snapshotIds:[]}},device),/revocation/);
+ raw.close();
+});
