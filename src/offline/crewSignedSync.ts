@@ -128,9 +128,18 @@ export async function reconcileSignedBatch(record:OfflineJournalRecord,authority
   for(const d of expected){
     const a=received.items.find(i=>i.originId===d.originId),b=readback.items.find(i=>i.originId===d.originId);
     if(!a||!b||a.kind!==d.kind||b.kind!==d.kind)throw Error('offline_batch_readback_mismatch');
-    // Pending/conflicted items are retained; positive facts require independent authenticated origin GET.
-    if(!durable(a,d)||!durable(b,d))continue;
-    if(a.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
+    if((a.effectId!==null&&a.effectId!==d.effectId)||(b.effectId!==null&&b.effectId!==d.effectId))throw Error('offline_batch_readback_mismatch');
+    // A POST may precede evidence verification. Its pending fact is immutable,
+    // but authenticated batch + origin GET can prove the later committed result.
+    // Retain conflicts/stale members and never replace an earlier positive fact.
+    const wasDurable=durable(a,d);
+    if((a.durableAcknowledgment||['COMMITTED','REPLAYED'].includes(a.state))&&!wasDurable)throw Error('offline_batch_readback_mismatch');
+    if(!wasDurable&&a.state!=='PENDING_DEPENDENCY')continue;
+    if(!durable(b,d)){
+      if(b.durableAcknowledgment||['COMMITTED','REPLAYED'].includes(b.state))throw Error('offline_batch_readback_mismatch');
+      continue;
+    }
+    if(a.canonicalOriginId!==null&&a.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
     const origin=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',String(d.originId));
     crewReadGuard(authority);
     if(!durable(origin,d)||origin.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');

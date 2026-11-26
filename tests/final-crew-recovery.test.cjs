@@ -75,3 +75,42 @@ for(const kind of ['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTIO
  assert.equal(recovered.body,uncertain.body);assert.equal(recovered.key,uncertain.key);
  h.setOrigin({...h.item,durableAcknowledgment:false});await assert.rejects(h.s.reconcileSignedBatch(h.record),/origin_readback/);
 });
+
+function pendingReceipt(h,change={}) {return {...h.receipt,items:[{...h.item,state:'PENDING_DEPENDENCY',code:'evidence_upload_required',durableAcknowledgment:false,effectId:null,canonicalOriginId:null,...change}]};}
+for(const kind of ['FIELD_SUBMISSION','REPAIR_ASSESSMENT'])test('FINAL pending POST advances only from matching fresh durable batch AND origin: '+kind,async()=>{
+ const h=fixture(kind);h.record.receipt=pendingReceipt(h);const original=JSON.stringify(h.record);
+ const r=await h.s.reconcileSignedBatch(h.record);
+ assert.equal(r.phase,'RECONCILED');assert.equal(r.receipt.items[0].state,'COMMITTED');assert.equal(r.verifiedItems[0].effectId,h.d.effectId);
+ assert.equal(h.reads.filter(x=>x.kind==='origins').length,1);assert.equal(JSON.stringify(h.record),original);assert.equal(r.body,h.record.body);assert.equal(r.key,h.record.key);
+});
+for(const field of ['effectId','canonicalOriginId','kind','originId'])test('FINAL stale pending receipt cannot hide mismatched independent origin '+field,async()=>{
+ const h=fixture('REPAIR_ASSESSMENT');h.record.receipt=pendingReceipt(h);h.setOrigin({...h.item,[field]:field==='kind'?'FIELD_START':id()});
+ await assert.rejects(h.s.reconcileSignedBatch(h.record),/origin_readback/);assert.equal(h.checkpoints.length,0);assert.equal(h.phases.length,0);
+});
+test('FINAL stale pending receipt cannot hide a wrong fresh batch effect',async()=>{
+ const h=fixture();h.record.receipt=pendingReceipt(h);h.setBatch({...h.receipt,items:[{...h.item,effectId:id()}]});
+ await assert.rejects(h.s.reconcileSignedBatch(h.record),/readback_mismatch/);assert.equal(h.checkpoints.length,0);
+});
+test('FINAL retained positive receipt canonical fact cannot be replaced by newer readback',async()=>{
+ const h=fixture();h.setBatch({...h.receipt,items:[{...h.item,canonicalOriginId:id()}]});
+ await assert.rejects(h.s.reconcileSignedBatch(h.record),/origin_readback/);assert.equal(h.checkpoints.length,0);
+});
+test('FINAL pending stays pending without a durable fresh batch; no origin or blanket ACK',async()=>{
+ const h=fixture();h.record.receipt=pendingReceipt(h);h.setBatch(h.record.receipt);
+ assert.equal((await h.s.reconcileSignedBatch(h.record)).phase,'RECEIVED');assert.equal(h.reads.length,1);assert.equal(h.phases.length,0);assert.equal(h.checkpoints.length,0);
+});
+for(const state of ['CONFLICT','STALE_SNAPSHOT'])test('FINAL terminal negative receipt is not silently advanced: '+state,async()=>{
+ const h=fixture();h.record.receipt=pendingReceipt(h,{state});
+ assert.equal((await h.s.reconcileSignedBatch(h.record)).phase,'RECEIVED');assert.equal(h.phases.length,0);assert.equal(h.checkpoints.length,0);
+});
+test('FINAL pending recovery preserves first verified member when second remains pending',async()=>{
+ const h=fixture(),second={...h.d,originId:id(),effectId:id()},body=JSON.parse(h.record.body);h.record.proof.descriptors.push(second);body.operations.push({...body.operations[0],...second});h.record.body=JSON.stringify(body);
+ const pending={...h.item,...second,state:'PENDING_DEPENDENCY',durableAcknowledgment:false,effectId:null,canonicalOriginId:null};
+ h.record.receipt={...h.receipt,items:[pendingReceipt(h).items[0],pending]};h.setBatch({...h.receipt,items:[h.item,pending]});
+ const r=await h.s.reconcileSignedBatch(h.record);assert.equal(r.phase,'RECEIVED');assert.equal(r.verifiedItems.length,1);assert.equal(r.verifiedItems[0].originId,h.d.originId);assert.equal(h.phases.length,0);
+});
+test('FINAL pending recovery origin transport failure never ACKs or rewrites immutable source',async()=>{
+ const h=fixture();h.record.receipt=pendingReceipt(h);const original=JSON.stringify(h.record),reader=h.deps['../api/crewOfflineWorkflow'].readOfflineResource;
+ h.deps['../api/crewOfflineWorkflow'].readOfflineResource=async(...args)=>{if(args[2]==='origins')throw {response:{status:403}};return reader(...args);};
+ await assert.rejects(h.s.reconcileSignedBatch(h.record));assert.equal(h.checkpoints.length,0);assert.equal(h.phases.length,0);assert.equal(JSON.stringify(h.record),original);
+});
