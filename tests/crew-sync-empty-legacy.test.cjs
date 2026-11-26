@@ -10,6 +10,7 @@ async function mount(rows,read=async()=>rows){
   '../../src/api/crewApi':{},'../../src/store/auth':{},
   '../../src/components/crew/CrewLocalDraftPanel':{CrewLocalDraftPanel:'CrewLocalDraftPanel'},
   '../../src/components/crew/CrewOfflinePanel':{CrewOfflinePanel:'CrewOfflinePanel'},
+  '../../src/components/crew/CrewHandoverPanel':{CrewHandoverPanel:'CrewHandoverPanel'},
   '../../src/components/StatusBadge':{StatusBadge:'StatusBadge'},
   '../../src/components/EmptyState':{EmptyState:'EmptyState'},
   '../../src/components/Toast':{Toast:'Toast'},
