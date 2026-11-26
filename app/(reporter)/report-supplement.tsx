@@ -172,16 +172,18 @@ export default function ReporterReportSupplementScreen() {
       if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
-        const saved = await preserveReporterPhoto({ uri: asset.uri, fileName: asset.name, mediaType: asset.mimeType, capturedAt: new Date().toISOString() }, isCurrent);
+        if (photos.includes(asset.uri)) return;
+        const saved = await preserveReporterPhoto({ uri: asset.uri, fileName: asset.name, mediaType: asset.mimeType, capturedAt: new Date().toISOString() }, isCurrent,
+          photos.flatMap(uri => { const hash = metadata.current.get(uri)?.checksumSha256; return hash ? [hash] : []; }));
         if (!isCurrent()) return;
-        if ([...metadata.current.values()].some(photo => photo.checksumSha256 === saved.checksumSha256)) return;
         metadata.current.set(saved.uri, saved);
         setPhotos(current => current.includes(saved.uri) ? current : [...current, saved.uri].slice(0, MAX_PHOTOS));
         if (error) {
           setError(null);
         }
       }
-    } catch {
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'photo_already_selected') return;
       if (isCurrent()) setError('Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     } finally { pickerScope.current = null; photoBusy.current = false; }
   };

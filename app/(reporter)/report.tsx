@@ -269,14 +269,16 @@ export default function ReporterReportScreen() {
       if (!isCurrent()) return;
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const asset = res.assets[0];
+        if (selectedPhotos.current.includes(asset.uri)) return;
         const saved = await preserveReporterPhoto({ uri: asset.uri, fileName: asset.name,
-          mediaType: asset.mimeType, capturedAt }, isCurrent);
+          mediaType: asset.mimeType, capturedAt }, isCurrent,
+          selectedPhotos.current.flatMap(uri => { const hash = photoMeta.current.get(uri)?.checksumSha256; return hash ? [hash] : []; }));
         if (!isCurrent()) return;
-        if (selectedPhotos.current.some(uri => uri === asset.uri || photoMeta.current.get(uri)?.checksumSha256 === saved.checksumSha256)) return;
         photoMeta.current.set(saved.uri, saved);
         updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
       }
     } catch (error) {
+      if ((error as { code?: string })?.code === 'photo_already_selected') return;
       if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     } finally {
       pickerScope.current = null;

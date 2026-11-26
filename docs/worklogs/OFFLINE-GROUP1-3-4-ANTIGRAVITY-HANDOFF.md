@@ -89,7 +89,7 @@ Source/test: `src/api/crewOfflineRepair.ts`, `src/components/crew/CrewOfflineFie
 
 - RED: earlier-session finish initially failed (`.cache/offline-final-takeover/repair-red.log`).
 - `npx tsc --noEmit`: PASS exit 0 (`repair-typecheck.log`).
-- `node --test tests/crew-offline-field.test.cjs tests/crew-offline-workflow.test.cjs tests/crew-flow-recovery.test.cjs`: PASS 58/58 (`repair-targeted.log`).
+- `node --test tests/crew-offline-field.test.cjs`: PASS 58/58 (`repair-targeted.log`).
 - `node --test --test-concurrency=4 tests/*.test.cjs`: PASS 2265/2265, exit 0, 157577.6919 ms (`repair-regression.log`), final source including initial-load fix.
 - Self-review: lineage, immutable predecessor, confirmed authority, foreign partitions, revocation, pending old commands, changed measurements, session switch during historical read; diff/privacy review and `git diff --check` PASS.
 
@@ -98,3 +98,68 @@ BE source/readback remains pinned `b8f718dd372b9aa8b2923045fdcd82dd0e5e0583`. Fe
 Antigravity: build source including this commit; on dedicated task `4755fa5d-72d6-488e-8896-2c40e4ca1c59`, confirm session and use existing assessment `9278b439-74f6-4a3e-b5d2-5db6ca5ff590` (do not recreate). Sign start offline, reconnect, reconcile durable per-item receipt/readback, refresh snapshot, then finish as a separate physical event, reconcile/read back again. Verify start/finish IDs and item versions from server, not task ETag. Repeat lost response/restart with original body/key, no duplicate. Negative cases: missing confirmation, revoked device, foreign actor/environment, changed original measurements, pending old packet. NORMAL fixture is already approved; no approval/auth blocker is claimed.
 
 Status: LOGIC_TESTED; signed start/finish native/Android acceptance and mutation receipt/readback NOT_RUN under owner workflow. Current APK predates source. Build config remains section 3. Retain `repair-{red,typecheck,targeted,regression}.log` in existing cache; no artifacts deleted/staged.
+
+## 5. Codex takeover — checkpoint 3 (2026-11-26, acceptance pending)
+
+Parent `73fe3cb`. Source: `src/api/reporterLocalMedia.ts`, `app/(reporter)/report.tsx`, `app/(reporter)/report-supplement.tsx`; tests: `tests/reporter-b2-media.test.cjs`, `tests/reporter-rpt-fix01.test.cjs`.
+
+Root cause: picker previously wrote a stable plaintext copy and sealed a new vault container before checking duplicate checksum. Supplement also compared metadata of removed images, preventing valid re-selection. Fix: snapshot checksums of currently selected images, hash actual selected bytes, reject duplicates before directory/write/move/seal. Same selected URI returns before preservation. Removed images no longer participate in active duplicate checks; all their files remain preserved. Camera/GPS, upload IDs, historical draft/journal, API and permissions unchanged. No layout changes or new visual baseline; native screenshot/Android gate NOT_RUN by owner decision.
+
+RED `media-red.log`: 16 PASS / 1 FAIL (missing expected duplicate rejection). New tests verify duplicate content under another URI causes no new files, writes, moves or seal calls; original bytes remain; both screen handlers allow remove/re-add and never submit a report implicitly. Self-review checks scope guards, busy lock, retained originals and fail-closed vault behavior. Gate results recorded below after final source verification.
+
+### Encryption/media lifecycle inventory and cleanup eligibility
+
+All paths below are relative to Android app data `/data/user/0/com.hoanghai.roadguard/`; inventory is read-only and date-specific, not a current deletion manifest.
+
+| Data/path | Current use and evidence | Cleanup eligibility |
+|---|---|---|
+| `files/SQLite/roadguard.encrypted.v1.db` | Latest takeover inventory 512000 B; active offline journal/draft/cache database. `src/offline/encryptedDatabase.ts` verifies schema and two-way row equality before activation. | KEEP; includes pending state. No extraction/decryption in this takeover. |
+| `files/SQLite/roadguard.db` | Legacy 143360 B; migration preserves original, COPYING restart retains same key and re-verifies. | NOT APPROVED; cannot infer obsolete merely from encrypted DB presence. |
+| `files/roadguard-media-v1/` | Latest takeover inventory 16 buckets; older section 2 records 18 at a different observation. Do not infer deletion or reconcile these counts without native inspection. | KEEP until reference/receipt/recovery inventory on same device is complete. |
+| `files/reporter-photos-v1/` | Reporter private stable preview + legacy source; new selections seal via reporterMediaVault. The old 8-image count in section 2 is historical. Duplicate picker copies now prevented before allocation. | KEEP; `<Image uri>` and legacy references still depend on plaintext. Exact old two photos preserved. |
+| `files/crew-field/` | Crew capture temp -> hash -> rename -> seal -> persisted reference; retained preview/provenance. Old section 2 inventory 4 images. | KEEP pending/legacy; no blanket deletion. |
+| `files/drone-sources-v1/` | Operator import preserves private source, hashes/seals, saves reference; bounded vault upload and restart reuse. Old section 2: 3 MP4, including 51449564 B. | KEEP pending source/upload; no blanket deletion. |
+| `cache/Camera/`, `.partial` files | Camera/provider source and potentially interrupted copy. Old section 2: 9 camera images; no current exhaustive reference map. | REVIEW ONLY after proven unreferenced and owner-approved exact paths. No automatic dispose/delete added. |
+
+Source review: `src/api/reporterLocalMedia.ts`, `reporterMediaVault.ts`, `crewFieldDraft.ts`, `crewMediaVault.ts`, `droneLocalFiles.ts`, `src/offline/mediaVaultAccess.ts`, `encryptedDatabase.ts`, native `modules/roadguard-offline-crypto/android/src/main/java/roadguard/offline/LocalMediaVault.kt:87-100`. Native seal source requires canonical app cache/private allowlist; arbitrary `content://` cannot replace the stable private copy. Existing previews still read plaintext URI. Removing every plaintext original requires an approved encrypted preview/lifecycle design and native proof; this checkpoint prevents proved unnecessary duplicate allocations, not a claim of zero plaintext. Vault references never fall back to plaintext when key/tamper/access checks fail. Guest/provider-absent legacy path remains explicitly unencrypted. No cold-start policy, provider, dependency, signing key storage or native config changes.
+
+LOGIC_TESTED coverage includes migration verification-before-activation, failed storage/key activation, COPYING crash/restart, wrong/missing key, transaction rollback, three-role owner/environment/session switch after await, tamper/truncation/changed source and bounded reads. JVM crypto core probe is not Android provider acceptance. Native wrong-key/tamper/storage fault injection on final source: NOT_RUN, delegated.
+
+### Three-role fault matrix (logic versus physical acceptance)
+
+| Role / fault | Executed logic coverage in existing full suite | Physical acceptance still required |
+|---|---|---|
+| Operator interrupted multipart | `tests/package6-drone-journal.test.cjs:347-398`: HTTP 401/403/409/412 retains parts; resume 403 same upload/ETags; complete timeout GET before exact retry without rePUT; already VERIFIED uses GET only. | Interrupt after acknowledged part, restart/relogin, verify same upload/parts/file and no duplicate dataset on final APK. |
+| Operator lost dataset response | `tests/package6-drone-dataset-replay.test.cjs:61+`: exact body/key/original If-Match; changed body 409; new stale mutation 412; late session bounce ignored. | Lose real response after commit, reconcile same dataset ID/version; preserve old command. |
+| Reporter verification / unknown POST | `tests/reporter-upload-progress.test.cjs:10-43+`, `reporter-rpt-fix01.test.cjs:114+`: byte progress != VERIFIED; explicit retry reuses uploads; unknown POST survives store recreation with same body/key and no auto replay; duplicate selections allocate nothing. | Inspect exact old pending record, two original uploads, VERIFYING->VERIFIED/readback; lost response/restart and duplicate prevention. Historical completed 3ec0b71f is not a substitute. |
+| Crew admission / lost response | `tests/c10bc-workflow.test.cjs:111+`, `c10bc-journal.test.cjs`, `crew-media-vault.test.cjs`: mapping before lost-create replay, frozen complete, actual SQLite stale writers, parts/ETags retained across sessions/runtime instances. | Native restart/session-confirm, server commit before local ACK, exact replay with same receipt/file mappings. |
+| Crew signed REPAIR | `tests/crew-offline-field.test.cjs`: confirmed older-session start/finish lineage, pending packet prevents duplicate, revocation/foreign identity/session switch fail closed. | Existing READY assessment -> start -> receipt/readback -> fresh snapshot -> finish -> receipt/readback; no recreation of assessment/approval. |
+
+All listed fault tests use isolated fixtures/transport/native boundaries unless explicitly described as real SQLite/JVM. PASS here means LOGIC_TESTED, not HTTP fault injection or ANDROID_E2E_VERIFIED. Prior Android evidence in section 2 applies only to its old APK/revision.
+
+### Outstanding operations and exact continuation
+
+1. Signed REPAIR start/finish: implementation and tests available; final source Android and mutation evidence NOT_RUN. Antigravity must execute dedicated fixture through actual signed upload VERIFIED, durable per-item receipt and readback. Expected: currentExecutionStartId becomes canonical start ID; after finish currentExecutionFinishId becomes canonical finish ID, server item versions change appropriately. Do not infer PM acceptance/defect closure from finish.
+2. Reporter `QA offline reporter draft 20261126`: no canonical Reports row matches exact description in read-only source; local encrypted draft/upload identity not yet inspected. Native access is needed to identify exact two upload IDs/parts/file status. Do not invent IDs or submit a replacement. No Metro target was available; encrypted DB deliberately retained/unextracted. NOT_RUN / native evidence access pending, not BE_CONTRACT_GAP.
+3. Legacy cleanup: inventory/eligibility only; zero deletion. Preview-compatible plaintext and pending sources remain. Need same-device reference map, validated encrypted recovery/preview and exact owner-approved paths before cleanup.
+4. Independent QA: Antigravity has not reviewed these commits or built final source. Acceptance pending for all takeover checkpoints; groups 1/3/4/6 are not marked DONE.
+
+### Antigravity delivery / environment
+
+Repo root `D:\Do_AN_Drone\FE_AppMobile`; takeover range starts after `d5897053faf517016db3d8eab8810f69bd3bace1`. Checkpoint 1 `553dcd6`, checkpoint 2 `73fe3cb`; checkpoint 3 is the commit containing this section (resolve `git log -1` / HEAD). Full source/test list is each commit's `git show --stat`. No push or branch switch. Remote tracking reference observed `092edda86cd6336163ff224b3b5e298a68711bb7`; no assertion about live remote after that fetch.
+
+BE repo `D:\Do_AN_Drone\RoadGuardSystem-develop`; deployed/readback pin `b8f718dd372b9aa8b2923045fdcd82dd0e5e0583`, fetched remote `e86255caa724d375329744817321ed220264c729`. Sandbox API `http://127.0.0.1:18181/api/v1`. No BE/Web source changes, no DB reset/seed/new migration/deployment in takeover. Readback JSON under `.cache/offline-final-takeover/` as section 3; no new mutation receipt claimed.
+
+Last disk observation C:7.55 GiB, D:7.27 GiB. R: is subst FE alias; untouched. No APK/build/cache/DB/media deleted. Existing APK `android/app/build/outputs/apk/release/app-release.apk`, historical SHA256 `D5DB216F00474312961BE99A8F5B918E145E2059075486F33AA36457AEB05774`, predates takeover. Do not assign its native evidence to new commits. Build config/command remains section 3 and `GROUP1-OFFLINE-HANDOFF-20261125.md:360+`; Antigravity checks host/free disk first. No new APK, native build failure or C++/RAM troubleshooting attempt in takeover. Keep existing cache, QA init file, screenshots, original pending data and old rollback for review. Temporary logs remain untracked; no APK/cache staged.
+
+### Final checkpoint 3 gates
+
+| Executed command / check | Result | Evidence under `.cache/offline-final-takeover/` |
+|---|---|---|
+| `npx tsc --noEmit` | PASS exit 0, final runtime source | `media-typecheck.log` |
+| `node --test tests/reporter-b2-media.test.cjs tests/reporter-rpt-fix01.test.cjs tests/offline-media-access.test.cjs tests/encrypted-database.test.cjs tests/offline-local-file-crypto.test.cjs` | PASS 62/62 | `media-targeted.log` |
+| `node --test --test-concurrency=4 tests/*.test.cjs` | PASS 2268/2268, 0 failures, exit 0, 166056.984 ms | `media-final-regression.log` |
+| Diff/secret/privacy review, `git diff --check` | PASS; no added diagnostics, credentials, signed URLs, Ionicons or cost UI | affected diff self-review |
+| APK build / native / Android acceptance / new HTTP mutation | NOT_RUN | owner delegates to Antigravity; acceptance pending |
+
+`media-regression.log` is superseded by `media-final-regression.log`: a selected-URI preflight guard was retained during self-review, so the suite was rerun after final runtime changes. Checkpoint 2 targeted command is corrected in section 4 to the actually executed single suite (58/58, rechecked); no nonexistent test filename is evidence. Keep RED/final targeted/typecheck/full logs and sanitized readbacks; the superseded run is optional review material, not deleted. No additional tracked WIP in BE/Web at final check. After this commit, takeover contains three local commits after `d589705`; prior ahead 15 becomes ahead 18 against the fetched origin/main, behind 0. Runtime source changes are committed with acceptance pending; no push.

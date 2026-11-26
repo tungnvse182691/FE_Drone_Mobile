@@ -38,3 +38,13 @@ for(const step of ['read','hash']) test('B2 late '+step+' after scope invalidati
  let current=true;const r=mediaRuntime({[step]:async()=>{current=false;}});r.files.set(asset.uri,jpeg);
  await assert.rejects(r.load().preserveReporterPhoto(asset,()=>current),e=>e.code==='photo_context_changed');assert.ok(!r.events.includes('write'));
 });
+
+test('takeover duplicate bytes are rejected before private copy or vault allocation',async()=>{
+ const r=mediaRuntime();r.files.set(asset.uri,jpeg);const m=r.load(),first=await m.preserveReporterPhoto(asset,()=>true);
+ const before=[...r.files.keys()],writes=r.events.filter(e=>['directory','write','move'].includes(e)).length;
+ const alias={...asset,uri:'content://provider/another.jpg'};r.files.set(alias.uri,jpeg);
+ await assert.rejects(m.preserveReporterPhoto(alias,()=>true,[first.checksumSha256]),e=>e.code==='photo_already_selected');
+ assert.deepEqual([...r.files.keys()], [...before,alias.uri]);
+ assert.equal(r.events.filter(e=>['directory','write','move'].includes(e)).length,writes);
+ assert.deepEqual(r.files.get(first.uri),jpeg);assert.deepEqual(r.files.get(asset.uri),jpeg);
+});

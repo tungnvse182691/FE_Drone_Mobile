@@ -15,7 +15,8 @@ const failure = (code: string) => ({ code, stage: 'local_admission' });
 
 /** New selections only. Never migrates/rebinds historical drafts, upload IDs or commands.
  * The caller must bind isCurrent to its initiating actor/environment/session/render. */
-export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurrent: () => boolean): Promise<PreservedReporterPhoto> {
+export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurrent: () => boolean, selectedChecksums: readonly string[] = []): Promise<PreservedReporterPhoto> {
+  const existingChecksums = new Set(selectedChecksums);
   const guard = () => { if (!isCurrent()) throw failure('photo_context_changed'); };
   let phase = 'read';
   try {
@@ -37,6 +38,7 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     if (!mediaType || !extension || (extension === 'png') !== png || (declared && declared !== mediaType))
       throw failure('photo_type_invalid');
     const checksumSha256 = await sha256HexOfBytes(bytes); guard();
+    if (existingChecksums.has(checksumSha256)) throw failure('photo_already_selected');
     phase = 'write';
     const directory = new Directory(Paths.document, 'reporter-photos-v1');
     directory.create({ intermediates: true, idempotent: true }); guard();

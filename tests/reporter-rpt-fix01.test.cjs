@@ -129,3 +129,16 @@ for(const page of ['report','report-supplement'])test(`RPT ${page} camera permis
  const s=screen(`app/(reporter)/${page}.tsx`,{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},modules:{'expo-camera':{CameraView:'CameraView',useCameraPermissions:()=>[{granted:false},async()=>{throw Error('private native error');}]}}});
  s.h.login();s.render();await s.flush();if(page==='report')await s.press('Cấp quyền');else await s.tap('add-photo');await s.flush();assert.match(text(s),/Không mở được camera/);assert.doesNotMatch(text(s),/private native error/);
 });
+
+for(const page of ['report','report-supplement'])test(`takeover ${page} duplicate selection allocates no extra media and removed photo can be selected again`,async()=>{
+ const {mediaRuntime}=require('./helpers/reporter-media.cjs');let sealed=0;
+ const r=mediaRuntime({autoSources:true});r.modules['./reporterMediaVault']={sealReporterPhoto:async()=>{sealed++;return undefined;}};
+ const s=screen(`app/(reporter)/${page}.tsx`,{api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]}),modules:{'../../src/api/reporterLocalMedia':r.load()}});
+ s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();
+ assert.equal(sealed,1);const before=[...r.files.keys()];
+ await s.tap('pick-photo');await s.flush();assert.equal(sealed,1);assert.deepEqual([...r.files.keys()],before);
+ assert.equal(s.nodes().filter(n=>n.type==='Image'&&n.props.source?.uri).length,1);assert.doesNotMatch(text(s),/Không mở được thư viện/);
+ await s.tap('remove-photo-0');await s.flush();await s.tap('pick-photo');await s.flush();
+ assert.equal(sealed,2);assert.equal(s.nodes().filter(n=>n.type==='Image'&&n.props.source?.uri).length,1);
+ for(const uri of before)assert.ok(r.files.has(uri));assert.equal(s.h.calls.filter(c=>c[0]==='report').length,0);s.unmount();
+});
