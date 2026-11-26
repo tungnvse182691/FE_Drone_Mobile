@@ -1,4 +1,5 @@
 import type { QueueIdentity } from '../offline/upload-queue';
+import { isCrewResourceId } from './crewApi';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { inspectOfflineDevice, readLocalOfflineSources } from './crewOfflineDevice';
 import { requireOfflineNativeAcceptance, validateRepairSnapshot } from './crewOfflineWorkflow';
@@ -136,6 +137,7 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
     }
   }
   if(localOps.length)starts.push(String(localOps.at(-1)!.originId));
+  else if(source.facts.status==='InProgress'&&isCrewResourceId(source.facts.firstStartOriginId))starts.push(source.facts.firstStartOriginId);
   if(new Set(starts).size!==1)throw Error('offline_verified_field_start_required');
   const originId=uuidv4();
   const op:OfflineRecord={schemaVersion:1,originId,effectId:originId,kind:'FIELD_SUBMISSION',originalActorId:identity.actor,
