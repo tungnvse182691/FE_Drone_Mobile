@@ -139,6 +139,16 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
   const guard=()=>{if(owner.role!=='REPAIR_CREW'||!sameQueueIdentity(owner,current()))throw Error('offline_session_changed');};
   guard();const db=connection??openDatabase();if(!connection)await initDatabase(db);guard();
   const prefix=partition(owner);
+  const canActOnRecord=async(tx:SQLiteDatabase,old:OfflineJournalRecord):Promise<boolean>=>{
+    if(sameQueueIdentity(old.identity,owner))return true;
+    if(old.proof.kind!=='signed-field-batch'||!sameOfflinePartition(old.identity,owner))return false;
+    const regId=String(old.proof.registrationId??'');
+    if(!regId)return false;
+    const all=await rows(tx);
+    if(all.some(r=>r.projectId===old.projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===regId))return false;
+    return all.some(r=>r.projectId===old.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
+      sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===regId);
+  };
   const rows=async(tx:SQLiteDatabase)=>{
     const r=await tx.getAllAsync<{id:string;payload:string}>('SELECT id,payload FROM local_draft WHERE kind=? AND substr(id,1,?)=? ORDER BY rowid',KIND,prefix.length,prefix);
     guard();return r.map(x=>{const r=decode(x.payload);if(partition(r.identity)!==prefix||x.id!==prefix+r.id)throw Error('offline_owner_invalid');return r;});
@@ -147,7 +157,7 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
     async list(){guard();return rows(db);},
     /** Append authenticated per-origin observations without ACKing the batch or changing its immutable bytes. */
     async checkpoint(old:OfflineJournalRecord,items:VerifiedOfflineItem[]):Promise<OfflineJournalRecord>{
-      guard();if(!sameQueueIdentity(old.identity,owner))throw Error('offline_session_changed');
+      guard();if(!sameOfflinePartition(old.identity,owner))throw Error('offline_session_changed');
       if(!['IN_FLIGHT','UNKNOWN_OUTCOME','RECEIVED'].includes(old.phase))throw Error('offline_checkpoint_phase');
       const merged=new Map((old.verifiedItems??[]).map(i=>[i.originId,i]));
       for(const item of items){const prior=merged.get(item.originId);
@@ -157,7 +167,8 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       }
       const next=decode(JSON.stringify({...old,verifiedItems:[...merged.values()]}));
       await db.withExclusiveTransactionAsync(async tx=>{
-        guard();const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,JSON.stringify(old));
+        guard();if(!await canActOnRecord(tx,old))throw Error('offline_session_changed');
+        const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,JSON.stringify(old));
         guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');
       });guard();return next;
     },
@@ -277,13 +288,14 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       });guard();return saved;
     },
     async transition(old:OfflineJournalRecord,phase:OfflinePhase,receipt?:unknown):Promise<OfflineJournalRecord> {
-      guard();if(!sameQueueIdentity(old.identity,owner))throw Error('offline_session_changed');
+      guard();if(!sameOfflinePartition(old.identity,owner))throw Error('offline_session_changed');
       const transitions:Record<OfflinePhase,OfflinePhase[]>={PREPARED:['IN_FLIGHT'],IN_FLIGHT:['UNKNOWN_OUTCOME','RECEIVED','REJECTED','CONFLICT'],
         UNKNOWN_OUTCOME:['IN_FLIGHT','RECEIVED','CONFLICT'],RECEIVED:['RECONCILED','IN_FLIGHT'],RECONCILED:[],REJECTED:[],CONFLICT:[]};
       if(!transitions[old.phase]?.includes(phase))throw Error('offline_transition_invalid');
       const next=decode(JSON.stringify({...old,phase,...(receipt===undefined?{}:{receipt})}));
       await db.withExclusiveTransactionAsync(async tx=>{
-        guard();const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+old.id,KIND);guard();
+        guard();if(!await canActOnRecord(tx,old))throw Error('offline_session_changed');
+        const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+old.id,KIND);guard();
         if(!row||row.payload!==JSON.stringify(old))throw Error('offline_journal_cas_failed');
         const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,row.payload);
         guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');

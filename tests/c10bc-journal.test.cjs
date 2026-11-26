@@ -177,3 +177,21 @@ test('signing cannot race a previously removed local capture into the journal',a
  await assert.rejects(j.prepare({...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[{captureOriginId:randomUUID(),fileId:null}]}}]})}),/signed_capture_locked/);
  assert.equal(h.raw.prepare('SELECT count(*) n FROM local_draft').get().n,0);h.raw.close();
 });
+
+test('cross-session signed-field-batch requires session-confirm for same registration and preserves old identity',async()=>{
+ const h=fixture(),j1=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),regId=randomUUID(),task=randomUUID();
+ const batch=await j1.prepare({...base,proof:{kind:'signed-field-batch',registrationId:regId},body:JSON.stringify({operations:[{kind:'FIELD_ACCEPT',taskId:task}]})});
+ const received=await j1.transition(await j1.transition(batch,'IN_FLIGHT'),'RECEIVED',{batchId:randomUUID(),items:[],localQueueInstruction:'KEEP_UNACKNOWLEDGED_OR_CONFLICTED_ITEMS'});
+ const nextIdentity={...h.i,scope:JSON.stringify([h.i.actor,'sid-2'])};
+ const j2=await h.m.openOfflineJournal(nextIdentity,h.db,()=>nextIdentity);
+ await assert.rejects(j2.transition(received,'IN_FLIGHT'),/offline_session_changed/);
+ await j2.confirmSession({id:randomUUID(),identity:nextIdentity,projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${regId}`,key:randomUUID(),
+  body:JSON.stringify({registrationId:regId,confirmedScope:nextIdentity.scope,snapshotIds:[],revokedSnapshotIds:[]}),
+  proof:{kind:'session-confirm',registrationId:regId,confirmedScope:nextIdentity.scope,snapshotIds:[],revokedSnapshotIds:[]}},{id:regId});
+ const replayed=await j2.transition(received,'IN_FLIGHT');
+ assert.equal(replayed.identity.scope,h.i.scope);
+ const received2=await j2.transition(replayed,'RECEIVED',received.receipt);
+ const reconciled=await j2.transition(received2,'RECONCILED',received.receipt);
+ assert.equal(reconciled.identity.scope,h.i.scope);
+ h.raw.close();
+});

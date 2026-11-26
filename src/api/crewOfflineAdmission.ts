@@ -1,7 +1,7 @@
 import type { OfflineJournalRecord } from './crewOfflineJournal';
-import { openOfflineJournal } from './crewOfflineJournal';
+import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
 import { crewReadGuard } from './crewSafetyWorkflow';
-import { currentQueueIdentity } from '../offline/upload-queue';
+import { currentQueueIdentity, type QueueIdentity } from '../offline/upload-queue';
 import { dispatchOfflineIntent, readOfflineResource, type OfflineItemReceipt } from './crewOfflineWorkflow';
 import { openFieldRuntime, uploadFieldCapture, assertFieldContext, type FieldDraft, type FieldCapture, type FieldRuntime } from './crewFieldDraft';
 import type { OfflineRecord } from './crewOfflineProtocol';
@@ -44,12 +44,20 @@ export function validateAdmissionSource(record:OfflineJournalRecord,item:Offline
  * A cached admission alone never permits upload continuation. */
 export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCapture,runtime:FieldRuntime) {
   assertFieldContext(draft,runtime);
-  const identity=currentQueueIdentity(),mapping=capture.offlineUpload;
-  if(!identity||!mapping||identity.actor!==draft.actor||identity.scope!==draft.scope||identity.environment!==draft.environment) return fail();
+  const identity=runtime.authority??currentQueueIdentity(),mapping=capture.offlineUpload;
+  if(!identity||!mapping||identity.actor!==draft.actor||identity.environment!==draft.environment) return fail();
   crewReadGuard(identity);
   const journal=await openOfflineJournal(identity),rows=await journal.list();crewReadGuard(identity);
   const batch=rows.find(r=>r.id===mapping.batchIntentId);
   if(!batch||batch.projectId!==draft.projectId||batch.proof.kind!=='signed-field-batch'||batch.phase!=='RECEIVED')return fail();
+  if(identity.scope!==draft.scope){
+    if(!sameOfflinePartition(batch.identity,identity))return fail();
+    const regId=String(batch.proof.registrationId??'');
+    const confirmed=rows.some(r=>r.projectId===batch.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
+      r.identity.scope===identity.scope&&r.proof.registrationId===regId);
+    const revoked=rows.some(r=>r.projectId===batch.projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===regId);
+    if(!confirmed||revoked)return fail();
+  }
   const fresh=await readOfflineResource<OfflineItemReceipt>(identity,batch.projectId,'origins',mapping.originId);crewReadGuard(identity);
   const {operation,admission,evidence}=validateAdmissionSource(batch,fresh);
   const declaration=evidence.find(e=>e.captureOriginId===capture.id),remote=admission.captures.find(c=>c.captureOriginId===capture.id);
@@ -76,7 +84,7 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
     if(capture.upload)return capture.upload;
     // RECEIVED contains the original create receipt; uncertain dispatch reuses its exact body/key.
     const replay=intent.phase==='IN_FLIGHT'?await journal.transition(intent,'UNKNOWN_OUTCOME'):intent;
-    const received=replay.phase==='RECEIVED'?replay:await dispatchOfflineIntent(replay);crewReadGuard(identity);
+    const received=replay.phase==='RECEIVED'?replay:await dispatchOfflineIntent(replay,identity);crewReadGuard(identity);
     const upload=received.receipt as CrewUploadSessionDto;
     if(!upload||!guid(upload.id)||!guid(upload.fileId))return fail();
     const after=await readOfflineResource<OfflineItemReceipt>(identity,batch.projectId,'origins',mapping.originId);crewReadGuard(identity);
@@ -88,17 +96,18 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
 
 /** Serial continuation of only the pending evidence members. Uses the original
  * encrypted draft/vault, immutable journal and existing multipart uploader. */
-export async function resumeSignedEvidence(record:OfflineJournalRecord):Promise<void> {
-  crewReadGuard(record.identity);
+export async function resumeSignedEvidence(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<void> {
+  if(!sameOfflinePartition(record.identity,authority))return fail();
+  crewReadGuard(authority);
   if(record.phase!=='RECEIVED'||record.proof.kind!=='signed-field-batch')return fail();
   const receipt=record.receipt as {items:OfflineItemReceipt[]};
   for(const item of receipt.items){
     if(item.durableAcknowledgment||item.state!=='PENDING_DEPENDENCY'||!['evidence_upload_required','evidence_verification_pending'].includes(item.code??''))continue;
-    const fresh=await readOfflineResource<OfflineItemReceipt>(record.identity,record.projectId,'origins',item.originId);crewReadGuard(record.identity);
+    const fresh=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',item.originId);crewReadGuard(authority);
     if(fresh.durableAcknowledgment)continue;
     const {operation,admission,evidence}=validateAdmissionSource(record,fresh);
     const context={actor:record.identity.actor,scope:record.identity.scope,environment:record.identity.environment,projectId:record.projectId,taskId:String(operation.taskId)};
-    const runtime=await openFieldRuntime(context),draft=await runtime.read();crewReadGuard(record.identity);
+    const runtime=await openFieldRuntime(context,authority),draft=await runtime.read();crewReadGuard(authority);
     if(!draft)return fail();assertFieldContext(draft,runtime);
     for(const e of evidence){
       if(e.fileId!==null)continue;
@@ -108,10 +117,10 @@ export async function resumeSignedEvidence(record:OfflineJournalRecord):Promise<
       if(!c.offlineUpload){
         if(c.upload||c.uploadAttempt||c.localOnly!==true)return fail();
         c.offlineUpload={batchIntentId:record.id,originId:item.originId,admissionId:admission.id,createIntentId:uuidv4()};
-        await runtime.write(draft);crewReadGuard(record.identity);
+        await runtime.write(draft);crewReadGuard(authority);
       }
       if(c.offlineUpload.batchIntentId!==record.id||c.offlineUpload.originId!==item.originId||c.offlineUpload.admissionId!==admission.id)return fail();
-      await uploadFieldCapture(draft,index,runtime);crewReadGuard(record.identity);
+      await uploadFieldCapture(draft,index,runtime);crewReadGuard(authority);
     }
   }
 }

@@ -74,6 +74,7 @@ export interface FieldRuntime {
   recoveryRead?: () => Promise<FieldDraft|null>;
   historicalRead?: (scope:string) => Promise<FieldDraft|null>;
   sealPhoto?: (photo: Pick<FieldCapture,'uri'|'size'|'checksum'>) => Promise<MediaVaultReference | undefined>;
+  authority?: import('../offline/upload-queue').QueueIdentity;
 }
 export function newFieldDraft(context: FieldContext): FieldDraft {
   return { ...context, captures: [], measurements: [], locationProof: null };
@@ -116,9 +117,13 @@ export function currentFieldContext(projectId: string, taskId: string): FieldCon
   return { actor: s.user.id, scope, environment: apiClient.defaults.baseURL ?? '', projectId, taskId };
 }
 /** Separate session keys preserve every legacy FIELD row and its media/command. */
-export async function openFieldRuntime(context: FieldContext): Promise<FieldRuntime> {
+export async function openFieldRuntime(context: FieldContext, authority?: import('../offline/upload-queue').QueueIdentity): Promise<FieldRuntime> {
+  const authContext: FieldContext = authority ? { actor: authority.actor, scope: authority.scope, environment: authority.environment, projectId: context.projectId, taskId: context.taskId } : context;
+  if (!['actor', 'environment', 'projectId', 'taskId'].every(k => authContext[k as keyof FieldContext] === context[k as keyof FieldContext])) {
+    throw Error('field_session_changed');
+  }
   const current=()=>currentFieldContext(context.projectId,context.taskId);
-  const check=()=>{if(!sameContext(context,current()))throw Error('field_session_changed');};
+  const check=()=>{if(!sameContext(authContext,current()))throw Error('field_session_changed');};
   check();const db = openDatabase(); await initDatabase(db);check();
   const key = `t05b:${JSON.stringify([context.environment,context.actor,context.projectId,context.taskId])}`;
   const scoped=(scope:string)=>key+':'+JSON.stringify(scope);
@@ -178,8 +183,9 @@ export async function openFieldRuntime(context: FieldContext): Promise<FieldRunt
       if(draft.command){const {writeOnlineFieldSubmissionDraft}=await import('./crewOfflineJournal');check();await writeOnlineFieldSubmissionDraft(db,target,draft);}
       else await writeProtectedFieldDraft(db,target,'T05B_FIELD',{...draft},draft);check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
-    sealPhoto: photo => sealCrewPhoto(context,photo,()=>sameContext(context,current())),
+    sealPhoto: photo => sealCrewPhoto(context,photo,()=>sameContext(authContext,current())),
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,
+    ...(authority ? { current: () => { check(); return context; }, authority } : {}),
   };
 }
 /** Old sid is provenance, never current mutation authority. */

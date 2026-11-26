@@ -2,7 +2,7 @@ import { apiClient } from './client';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { isCrewResourceId, isRepairItemVersion } from './crewApi';
 import type { QueueIdentity } from '../offline/upload-queue';
-import { openOfflineJournal, type OfflineJournalRecord } from './crewOfflineJournal';
+import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord } from './crewOfflineJournal';
 import { NATIVE_ACCEPTANCE_VERIFIED, offlineQaNativeFor } from '../../modules/roadguard-offline-crypto';
 
 export interface DeviceRegistration {
@@ -67,23 +67,24 @@ export function requireOfflineNativeAcceptance(identity?:QueueIdentity):void {
 }
 
 /** Exact durable bytes only, no body reconstruction or automatic adoption after login. */
-export async function dispatchOfflineIntent(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
-  requireOfflineNativeAcceptance(record.identity);crewReadGuard(record.identity);
+export async function dispatchOfflineIntent(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord> {
+  if(authority!==record.identity&&!sameOfflinePartition(record.identity,authority))throw Error('offline_session_changed');
+  requireOfflineNativeAcceptance(authority);crewReadGuard(authority);
   const base=offlineProjectPath(record.projectId);
   if(!(record.path==='/offline/uploads'&&record.proof.kind==='admission-upload')&&
     !['/devices','/snapshots','/sync','/starts/reconcile'].some(s=>record.path===base+s)&&
     !new RegExp('^'+base+'/devices/[a-fA-F0-9-]{36}/revoke$').test(record.path))throw Error('offline_write_not_admitted');
-  const journal=await openOfflineJournal(record.identity);
+  const journal=await openOfflineJournal(authority);
   // CAS before transport makes concurrent taps fail closed; IN_FLIGHT after crash requires explicit reconciliation.
   const pending=await journal.transition(record,'IN_FLIGHT');
   try {
-    crewReadGuard(record.identity);
+    crewReadGuard(authority);
     const r=await apiClient.post(record.path,record.body,{headers:{'Content-Type':'application/json','Idempotency-Key':record.key},transformRequest:[data=>data]});
-    crewReadGuard(record.identity);
+    crewReadGuard(authority);
     return await journal.transition(pending,'RECEIVED',r.data);
   } catch(e) {
     // Even 4xx may be after a previous uncertain attempt. Never invent rejection or discard bytes.
-    try {crewReadGuard(record.identity);await journal.transition(pending,'UNKNOWN_OUTCOME');}catch{/* Old owner retains IN_FLIGHT for read-only reconciliation. */}
+    try {crewReadGuard(authority);await journal.transition(pending,'UNKNOWN_OUTCOME');}catch{/* Old owner retains IN_FLIGHT for read-only reconciliation. */}
     throw e;
   }
 }

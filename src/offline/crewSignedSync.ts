@@ -1,6 +1,6 @@
 import type { QueueIdentity } from './upload-queue';
 import { crewReadGuard } from '../api/crewSafetyWorkflow';
-import { openOfflineJournal, type OfflineJournalRecord, type VerifiedOfflineItem } from '../api/crewOfflineJournal';
+import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord, type VerifiedOfflineItem } from '../api/crewOfflineJournal';
 import { canonicalOfflineAttached, canonicalOfflineManifest, describeOfflineOperation, type OfflineRecord, type Sha256 } from '../api/crewOfflineProtocol';
 import { offlineP1363 } from '../api/crewOfflineCrypto';
 import { dispatchOfflineIntent, readOfflineResource, validateDevice, validateSnapshot, validateRepairSnapshot, validateBatch, offlineProjectPath, requireOfflineNativeAcceptance,
@@ -12,37 +12,38 @@ import { uuidv4 } from '../utils/uuid';
 /** Explicit Sync action. Reload durable state; stale screen data never supplies
  * new bytes/key. After process death, inspect origins before exact replay.
  */
-export async function sendSignedFieldIntent(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
-  crewReadGuard(record.identity);
+export async function sendSignedFieldIntent(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord> {
+  if(authority!==record.identity&&!sameOfflinePartition(record.identity,authority))throw Error('offline_session_changed');
+  crewReadGuard(authority);
   if(record.proof.kind!=='signed-field-batch'||record.path!==offlineProjectPath(record.projectId)+'/sync')throw Error('offline_batch_source_required');
-  const journal=await openOfflineJournal(record.identity),rows=await journal.list();crewReadGuard(record.identity);
+  const journal=await openOfflineJournal(authority),rows=await journal.list();crewReadGuard(authority);
   let current=rows.find(r=>r.id===record.id);
   if(!current||current.body!==record.body||current.key!==record.key||current.path!==record.path||
     JSON.stringify(current.proof)!==JSON.stringify(record.proof))throw Error('offline_batch_source_changed');
-  crewReadGuard(current.identity);
+  crewReadGuard(authority);
   if(current.phase==='RECONCILED')return current;
-  if(current.phase==='RECEIVED')return continueReceivedBatch(current);
+  if(current.phase==='RECEIVED')return continueReceivedBatch(current,authority);
   if(['IN_FLIGHT','UNKNOWN_OUTCOME'].includes(current.phase)){
-    current=await recoverSignedOrigins(current);crewReadGuard(record.identity);
+    current=await recoverSignedOrigins(current,authority);crewReadGuard(authority);
     if(current.phase==='IN_FLIGHT')current=await journal.transition(current,'UNKNOWN_OUTCOME');
   }
   if(!['PREPARED','UNKNOWN_OUTCOME'].includes(current.phase))throw Error('offline_batch_source_phase_invalid');
-  const received=await dispatchOfflineIntent(current);crewReadGuard(record.identity);
-  return continueReceivedBatch(received);
+  const received=await dispatchOfflineIntent(current,authority);crewReadGuard(authority);
+  return continueReceivedBatch(received,authority);
 }
 
-async function continueReceivedBatch(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
-  const reconciled=await reconcileSignedBatch(record);crewReadGuard(record.identity);
+async function continueReceivedBatch(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord> {
+  const reconciled=await reconcileSignedBatch(record,authority);crewReadGuard(authority);
   if(reconciled.phase==='RECONCILED')return reconciled;
   const items=(reconciled.receipt as OfflineBatchReceipt).items;
   // Conflicts, stale snapshots and rejected members are never blindly replayed.
   if(items.some(i=>!i.durableAcknowledgment&&i.state!=='PENDING_DEPENDENCY'))return reconciled;
   if(!items.some(i=>!i.durableAcknowledgment&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??'')))return reconciled;
-  await (await import('../api/crewOfflineAdmission')).resumeSignedEvidence(reconciled);crewReadGuard(record.identity);
+  await (await import('../api/crewOfflineAdmission')).resumeSignedEvidence(reconciled,authority);crewReadGuard(authority);
   // The original journal row still owns body/signature/key. Transport only changed
   // capture mapping and upload state, so dispatch exactly these persisted bytes.
-  const received=await dispatchOfflineIntent(reconciled);crewReadGuard(record.identity);
-  return reconcileSignedBatch(received);
+  const received=await dispatchOfflineIntent(reconciled,authority);crewReadGuard(authority);
+  return reconcileSignedBatch(received,authority);
 }
 
 function snapshotOperations(input:OfflineRecord[]):OfflineRecord[] {
@@ -112,16 +113,17 @@ export function matchBatchReadback(record:OfflineJournalRecord,readback:OfflineB
       a.effectId===d.effectId&&b.effectId===d.effectId&&resourceId(a.canonicalOriginId)&&a.canonicalOriginId===b.canonicalOriginId;
   });
 }
-export async function reconcileSignedBatch(record:OfflineJournalRecord):Promise<OfflineJournalRecord> {
-  crewReadGuard(record.identity);
+export async function reconcileSignedBatch(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord> {
+  if(authority!==record.identity&&!sameOfflinePartition(record.identity,authority))throw Error('offline_session_changed');
+  crewReadGuard(authority);
   if(record.phase!=='RECEIVED'||record.path!==offlineProjectPath(record.projectId)+'/sync'||record.proof.kind!=='signed-field-batch')throw Error('offline_batch_receipt_required');
   const received=record.receipt as OfflineBatchReceipt;validateBatch(received);
-  const readback=await readOfflineResource<OfflineBatchReceipt>(record.identity,record.projectId,'batches',received.batchId);
+  const readback=await readOfflineResource<OfflineBatchReceipt>(authority,record.projectId,'batches',received.batchId);
   validateBatch(readback);
   if(readback.batchId!==received.batchId)throw Error('offline_batch_readback_mismatch');
   const expected=sourceDescriptors(record);
   if(readback.items.length!==expected.length||received.items.length!==expected.length)throw Error('offline_batch_readback_mismatch');
-  const journal=await openOfflineJournal(record.identity);
+  const journal=await openOfflineJournal(authority);
   let next=record,verifiedCount=0;
   for(const d of expected){
     const a=received.items.find(i=>i.originId===d.originId),b=readback.items.find(i=>i.originId===d.originId);
@@ -129,8 +131,8 @@ export async function reconcileSignedBatch(record:OfflineJournalRecord):Promise<
     // Pending/conflicted items are retained; positive facts require independent authenticated origin GET.
     if(!durable(a,d)||!durable(b,d))continue;
     if(a.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
-    const origin=await readOfflineResource<OfflineItemReceipt>(record.identity,record.projectId,'origins',String(d.originId));
-    crewReadGuard(record.identity);
+    const origin=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',String(d.originId));
+    crewReadGuard(authority);
     if(!durable(origin,d)||origin.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
     next=await journal.checkpoint(next,[observation(origin,received.batchId)]);verifiedCount++;
   }
@@ -158,23 +160,24 @@ function sourceDescriptors(r:OfflineJournalRecord):OfflineRecord[]{
   return expected;
 }
 /** API123 cannot supply a server batch ID. Preserve UNKNOWN_OUTCOME until exact POST replay yields a receipt. */
-export async function recoverSignedOrigins(record:OfflineJournalRecord):Promise<OfflineJournalRecord>{
-  crewReadGuard(record.identity);
+export async function recoverSignedOrigins(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord>{
+  if(authority!==record.identity&&!sameOfflinePartition(record.identity,authority))throw Error('offline_session_changed');
+  crewReadGuard(authority);
   if(!['IN_FLIGHT','UNKNOWN_OUTCOME'].includes(record.phase)||record.proof.kind!=='signed-field-batch'||
     record.path!==offlineProjectPath(record.projectId)+'/sync')throw Error('offline_recovery_source_required');
-  const expected=sourceDescriptors(record),journal=await openOfflineJournal(record.identity);let next=record;
+  const expected=sourceDescriptors(record),journal=await openOfflineJournal(authority);let next=record;
   for(const d of expected){
     let actual:OfflineItemReceipt;
-    try {actual=await readOfflineResource<OfflineItemReceipt>(record.identity,record.projectId,'origins',String(d.originId));}
+    try {actual=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',String(d.originId));}
     catch(error){
-      crewReadGuard(record.identity);
+      crewReadGuard(authority);
       const response=(error as {response?:{status?:number;data?:{code?:string}}})?.response;
       // Pinned API123: binding absent is 404/not_found; ownership denial is 403.
       // Absence is not an ACK. Keep the exact intent for idempotent POST replay.
       if(response?.status===404&&response.data?.code==='not_found')continue;
       throw error;
     }
-    crewReadGuard(record.identity);
+    crewReadGuard(authority);
     if(actual.originId!==d.originId||actual.kind!==d.kind||(actual.effectId!==null&&actual.effectId!==d.effectId))throw Error('offline_origin_readback_mismatch');
     if(durable(actual,d))next=await journal.checkpoint(next,[observation(actual,null)]);
   }
