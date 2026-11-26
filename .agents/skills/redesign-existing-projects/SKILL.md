@@ -25,7 +25,7 @@ Invoking this skill means READ-ONLY design review. It DOES NOT authorize impleme
 - Do not disturb the existing uncommitted Safe Area patch, emulator state, untracked data, or other agent's work.
 
 ## Review output
-Identify screen and actual evidence; separate confirmed issues from impressions; propose A/B options when material; explain tradeoffs and scope; recommend to owner. For authorized changes, Codex must use narrow file allowlist, Android before/after, TypeScript, targeted/full tests, git diff --check and local checkpoint commits, no push or branch changes unless owner says so.
+Identify screen and actual evidence; separate confirmed issues from impressions; propose A/B options when material; explain tradeoffs and scope; recommend to owner. For authorized changes, the implementing agent must use narrow file allowlist, Android before/after, TypeScript, targeted/full tests, git diff --check and local checkpoint commits, no push or branch changes unless owner says so.
 
 ## Provenance
 Reviewed original Taste Skill redesign-existing-projects from Leonxlnx/taste-skill, commit e04409a461022e1b9d0e898eac6b9224e2b9dc4e, MIT. Upstream source preserved intact as references/upstream-redesign.md. Later upstream renamed/retired this individual skill, hence the pinned historical version.

@@ -103,7 +103,7 @@ Trước khi sửa bất kỳ file nào thuộc RoadGuard, phải đọc authori
 
 ## Mode và fail closed
 
-- Independent reviewer/Muse: `AUDIT_READ_ONLY`, chỉ read/search/git show/report chat. Không sửa file/worklog/fixture/index/commit/BE, kể cả deadline gấp hoặc được gọi “tự vả”. Báo sớm P0/P1 có active reachability + source:line.
-- Codex implement có allowlist: `IMPLEMENT_AND_SELF_REVIEW`, được self-fix tối đa 5 vòng trong scope; worklog khi task cho phép. Ngoài scope báo trước, không tự sửa.
+- Independent reviewer: `AUDIT_READ_ONLY`, chỉ read/search/git show/report chat. Không sửa file/worklog/fixture/index/commit/BE, kể cả deadline gấp hoặc được gọi “tự vả”. Báo sớm P0/P1 có active reachability + source:line.
+- Agent được giao implement có allowlist: `IMPLEMENT_AND_SELF_REVIEW`, được self-fix tối đa 5 vòng trong scope; worklog khi task cho phép. Ngoài scope báo trước, không tự sửa.
 - `BE_CONTRACT_GAP`: không mock/adapter giả làm production fallback. Thiếu nguồn thì khóa capability; tests/dev harness cô lập được dùng fixture có nhãn.
 - Evidence labels, FastTrack API-146 + bootstrap thật và exact durable replay theo `AGENTS.md`. Tests xanh không cấp `HTTP_VERIFIED`, `NATIVE_VERIFIED` hoặc `ANDROID_E2E_VERIFIED`.

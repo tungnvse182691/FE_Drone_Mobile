@@ -22,7 +22,7 @@ description: Use when reviewing RoadGuard source or diffs, self-reviewing an aut
 | UI/navigation | Các check runtime trên + đọc DESIGN, kiểm caller/route mount | Android thực, từng CTA/states/back/keyboard/scroll/safe area/persistence, screenshot trước/sau |
 | Native/provider/build config | Kiểm cấu hình/source, targeted interoperability | Native build/device/key lifecycle và Android liên quan; Node không thay proof native |
 
-Chạy lệnh full regression đã được repo/checkpoint chốt (hiện có `node --test --test-concurrency=4 tests/*.test.cjs`), ghi exact command/output/SHA/env. Kiểm script/config trước khi dùng, không mặc định lệnh cũ đúng mọi môi trường. Tái dùng evidence chỉ khi source liên quan và điều kiện không đổi; không suy PASS cho source sửa sau APK. Thiếu mandatory evidence ghi `NOT_RUN`/blocker, không commit runtime như checkpoint đạt gate hoặc tự đánh dấu DONE. Task review bị cấm test/build thì chỉ đọc và phân biệt reported evidence với evidence tự chạy.
+Chạy lệnh full regression đã được repo/checkpoint chốt (hiện có `node --test --test-concurrency=4 tests/*.test.cjs`), ghi exact command/output/SHA/env. Kiểm script/config trước khi dùng, không mặc định lệnh cũ đúng mọi môi trường. Tái dùng evidence chỉ khi source liên quan và điều kiện không đổi; không suy PASS cho source sửa sau APK. Thiếu mandatory evidence ghi `NOT_RUN`/blocker. Khi prompt owner giao verification cho agent khác, checkpoint code đã qua gate trong phạm vi được giao được commit local với acceptance pending; ghi riêng gate Android/native/HTTP còn thiếu, không coi là nghiệm thu đầy đủ hoặc tự đánh dấu DONE. Task review bị cấm test/build thì chỉ đọc và phân biệt reported evidence với evidence tự chạy.
 
 ## 3. Checklist theo đường đi rủi ro
 

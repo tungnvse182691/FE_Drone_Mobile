@@ -17,7 +17,7 @@ Canonical 17_10 đè tài liệu lịch sử (`14-9/`, `22_9/`, `27_9_V3`, `28_9
 
 Catalog 241 operations / 223 paths / 357 schemas / 47 controllers là snapshot Phase2C 15/10/2026 tại `36c3a1d273f17dd29b816136ae0182a821fd79e4`, không phải số lượng hiện hành. Inventory mới phải có method/path/actor/status/SHA/delta; không tự đổi thành 260.
 
-Chỉ làm scope owner giao. Codex implement theo allowlist ở chế độ `IMPLEMENT_AND_SELF_REVIEW`; independent reviewer/Muse mặc định `AUDIT_READ_ONLY` (chỉ đọc/search/git show/báo trong chat; không sửa source, worklog, fixture, index hay commit). Ngoài scope: báo file/lý do/tác động trước khi sửa. Worklog chỉ ghi khi task cho phép, attribution đúng mode/reviewer/SHA/evidence.
+Agent thực hiện đúng nhiệm vụ, phạm vi, quyền hạn và chế độ owner cấp trong prompt, gồm quyền sửa code/UI, build APK, kiểm thử Android và điều kiện bàn giao. `IMPLEMENT_AND_SELF_REVIEW` chỉ sửa trong allowlist được giao; review độc lập mặc định `AUDIT_READ_ONLY` (chỉ đọc/search/git show/báo trong chat; không sửa source, worklog, fixture, index hay commit). Ngoài scope: báo file/lý do/tác động trước khi sửa. Worklog chỉ ghi khi task cho phép, attribution đúng mode/reviewer/SHA/evidence.
 
 ## 2. Invariants sản phẩm
 
@@ -53,7 +53,7 @@ Chi tiết theo [permission matrix](docs/specs/01_Product-and-Roles/02_Actor-Cli
 
 Tìm root cause, sửa trong scope, kiểm lại rồi tiếp tục; không chỉ đổi text che lỗi, không để TODO cho UI lỗi trong scope implement đã giao. Không hỏi lại approval hoặc thay đổi nhỏ đã được ủy quyền. Chỉ dừng bước phụ thuộc khi thiếu contract/authority/policy/quyền tool; không dùng một blocker dừng cả task. Tự review/sửa tối đa 5 vòng trong scope; vẫn chưa đạt thì báo evidence và gate còn thiếu.
 
-Gate theo `skills/code-review/SKILL.md`: typecheck, targeted và full regression tại checkpoint runtime, routes/permissions/preconditions, replay/isolation/recovery, receipt/readback, privacy/secret scan, diff check; UI phải có Android thực và screenshot trước/sau. Task Markdown thuần kiểm cấu trúc/link/invariants/diff, không chạy runtime regression/build chỉ để báo cáo. Không tự đánh dấu DONE khi còn mandatory gate thiếu.
+Gate theo `skills/code-review/SKILL.md`: typecheck, targeted và full regression tại checkpoint runtime, routes/permissions/preconditions, replay/isolation/recovery, receipt/readback, privacy/secret scan, diff check; UI phải có Android thực và screenshot trước/sau. Task Markdown thuần kiểm cấu trúc/link/invariants/diff, không chạy runtime regression/build chỉ để báo cáo. Khi owner giao verification cho agent khác, có thể commit local checkpoint code đã qua gate trong phạm vi được giao, ghi riêng Android/native/HTTP còn `NOT_RUN` hoặc acceptance pending; không coi đó là nghiệm thu đầy đủ. Không tự đánh dấu DONE khi còn mandatory gate thiếu.
 
 Thực hiện **Implement → Verify → Review → Commit**, rồi chủ động tiếp tục checkpoint kế tiếp đã được owner giao; không chờ nhắc lại, không tự mở rộng scope. Nếu một phần thật sự bị chặn, bảo toàn dữ liệu và hoàn thành mọi phần độc lập còn khả thi.
 
