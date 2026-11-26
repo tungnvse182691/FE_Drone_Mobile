@@ -54,6 +54,37 @@ test('T05A storage failure prevents network',async()=>{
 test('T05A actor B cannot reconcile actor A record',async()=>{
  const h=harness(),c=command(h);await h.port.write(c);h.setScope('B/s2');await assert.rejects(h.api.executeFieldCommand(c,h.port,false));assert.equal(h.calls.length,0);
 });
+
+for(const phase of ['pending','confirmed'])test('T05A old-session readback never writes through the current-session mutation port: '+phase,async()=>{
+ const h=harness(),c={...command(h),phase};await h.port.write(c);const original=JSON.stringify(h.row);h.setScope('A/s2');
+ h.port.write=async()=>{throw Error('offline_session_changed')};
+ h.client.get=async()=>({data:detail('Accepted'),headers:{etag}});
+ const r=await h.api.executeFieldCommand(c,h.port,false);
+ assert.equal(r.phase,'confirmed');assert.equal(r.readbackStatus,200);assert.equal(r.task.status,'Accepted');
+ assert.equal(JSON.stringify(h.row),original);assert.equal(h.calls.filter(x=>x[0]==='POST').length,0);
+ await assert.rejects(h.api.executeFieldCommand(c,h.port,true),/field_session_changed/);
+});
+
+test('T05A terminal readback is independent of signed FIELD_START write exclusion',async()=>{
+ const h=harness(),c={...command(h),phase:'confirmed'};await h.port.write(c);
+ h.port.write=async()=>{throw Error('field_command_pending')};
+ const r=await h.api.executeFieldCommand(c,h.port,false);
+ assert.equal(r.readbackStatus,200);assert.equal(h.row.phase,'confirmed');
+});
+
+test('T05A current unresolved readback must durably reconcile before allowing another command',async()=>{
+ const h=harness(),c=command(h);await h.port.write(c);h.client.get=async()=>({data:detail('Accepted'),headers:{etag}});
+ const r=await h.api.executeFieldCommand(c,h.port,false);assert.equal(r.phase,'confirmed');assert.equal(h.row.phase,'confirmed');
+ h.port.write=async()=>{throw Error('disk')};await assert.rejects(h.api.executeFieldCommand(c,{...h.port,read:async()=>c},false),/disk/);
+});
+
+test('T05A old-session GET failure cannot revive retained fresh task and session switch still fails closed',async()=>{
+ const h=harness(),c={...command(h),phase:'confirmed',task:detail('Accepted'),etag};await h.port.write(c);h.setScope('A/s2');
+ h.port.write=async()=>{throw Error('unexpected historical write')};h.client.get=async()=>{throw {response:{status:403}}};
+ const r=await h.api.executeFieldCommand(c,h.port,false);assert.equal(r.task,undefined);assert.equal(r.etag,undefined);assert.equal(r.readbackStatus,403);
+ h.client.get=async()=>{h.setScope('A/s3');return {data:detail('Accepted'),headers:{etag}}};
+ await assert.rejects(h.api.executeFieldCommand(c,h.port,false),/field_session_changed/);
+});
 test('T05A a different assignment cannot confirm an old accept',async()=>{
  const h=harness(),c=command(h);await h.port.write(c);h.client.get=async()=>({data:{...detail('Accepted'),assignmentId:id},headers:{etag}});
  const r=await h.api.executeFieldCommand(c,h.port,false);assert.equal(r.phase,'pending');assert.equal(r.task,undefined);
@@ -84,10 +115,11 @@ test('T05A definitively rejected command allows current reassignment readback',a
 });
 
 // Execute the real screen function/hooks and click real handlers. Native rendering remains NOT RUN.
-function uiHarness(){
+function uiHarness(options={}){
  const h=harness(),slots=[],effects=[],deps=[],journal=new Map();let cursor=0,ec=0;
  const auth={user:{id:actor,role_code:'REPAIR_CREW'},token:'token',status:'AUTHENTICATED'};
  const scope=()=>auth.token?JSON.stringify([auth.user.id,'sid']):null;
+ if(options.saved)journal.set(`t05a-field:${actor}:${project}:${id}`,JSON.stringify(options.saved));
  const useAuthStore=selector=>selector(auth);useAuthStore.getState=()=>auth;
  const react={createElement:(type,props,...children)=>({type,props:{...props,children:children.length===1?children[0]:children}}),
   useState:initial=>{const i=cursor++;if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial;return [slots[i],v=>slots[i]=typeof v==='function'?v(slots[i]):v]},
@@ -99,7 +131,7 @@ function uiHarness(){
   if(n==='react')return react;
   if(n==='expo-router')return {useLocalSearchParams:()=>({}),useRouter:()=>({push(){throw Error('unexpected navigation');},replace(){throw Error('unexpected navigation');},back(){throw Error('unexpected navigation');}})};
   if(n.endsWith('/offline/upload-queue'))return {currentQueueIdentity:()=>({actor,role:'REPAIR_CREW',scope:scope()})};
-  if(n.endsWith('/api/crewOfflineJournal'))return {openOfflineJournal:async()=>({list:async()=>[]}),writeOnlineFieldJournal:async(_db,r)=>journal.set(`t05a-field:${r.actorId}:${r.projectId}:${r.taskId}`,JSON.stringify(r))};
+  if(n.endsWith('/api/crewOfflineJournal'))return {openOfflineJournal:async()=>({list:async()=>[]}),writeOnlineFieldJournal:async(_db,r)=>{if(options.writeFailure)throw Error(options.writeFailure);journal.set(`t05a-field:${r.actorId}:${r.projectId}:${r.taskId}`,JSON.stringify(r));}};
   if(n==='react-native')return {StyleSheet:{create:o=>o},View:'View',Text:'Text',Platform:{select:o=>o.default}};
   if(n==='./tasks')return {...require('./helpers/crew-ui-labels.cjs'),CrewTaskBoundary:'Boundary',useCrewIdentity:()=>({scope:scope(),user:auth.user})};
   if(n.endsWith('/store/auth'))return {useAuthStore};
@@ -129,4 +161,14 @@ test('T05A UI reload without journal performs real detail GET',async()=>{
 });
 test('T05A UI session change before click sends no command',async()=>{
  const h=uiHarness();h.render();await h.settle();const press=h.button(h.render(),'Nhận nhiệm vụ').onPress;h.auth.token=null;await press();await h.settle();assert.equal(h.calls.length,0);
+});
+
+test('T05A real detail effect opens FIELD after validated historical start GET without rewriting journal',async()=>{
+ const c={...command(harness(),'start'),phase:'confirmed'},origin={id,taskId:id,originId:assignment};
+ const h=uiHarness({saved:c,writeFailure:'offline_session_changed'});
+ h.client.get=async url=>url.endsWith('/start-origin')?{data:origin}:{data:{...detail('InProgress'),firstStartOriginId:id},headers:{etag}};
+ h.render();await h.settle();const tree=h.render();
+ assert.equal(h.button(tree,'Tác nghiệp hiện trường').disabled,false);
+ assert.equal(h.nodes(tree).some(n=>String(n.props?.children).includes('Không đọc/đối soát được nhật ký')),false);
+ assert.equal(h.calls.filter(x=>x[0]==='POST').length,0);
 });

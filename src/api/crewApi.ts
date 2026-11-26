@@ -258,6 +258,11 @@ export async function executeFieldCommand(command: FieldCommandRecord, port: Fie
     if (saved && commandIdentity(saved) !== commandIdentity(command) &&
       (!replay || command.phase !== 'pending' || !['confirmed','rejected'].includes(saved.phase) || saved.key === command.key)) throw new Error('field_command_pending');
     let record = saved && commandIdentity(saved) === commandIdentity(command) ? saved : command;
+    // Historical/terminal GET reconciliation is a read projection. The mutation
+    // writer requires the original current session and excludes pending signed
+    // FIELD_START; neither restriction should make a validated GET unreadable.
+    // Keep the durable historical intent untouched, including unresolved state.
+    const persistReadback = replay || (record.scope === scope && !['confirmed','rejected'].includes(record.phase));
     const firstSend = !saved || commandIdentity(saved) !== commandIdentity(command);
     let postFailure: unknown;
     if (replay && record.phase === 'pending') {
@@ -309,7 +314,7 @@ export async function executeFieldCommand(command: FieldCommandRecord, port: Fie
       record = { ...record, readbackStatus: status };
       // A reject ACK can revoke Crew access. Keep receipt without claiming GET confirmation.
     }
-    await port.write(record); guard();
+    if (persistReadback) { await port.write(record); guard(); }
     if (postFailure && record.phase !== 'confirmed') throw postFailure;
     return record;
   } finally { fieldCommandsInFlight.delete(lock); }
