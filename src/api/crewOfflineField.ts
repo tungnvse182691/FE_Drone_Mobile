@@ -17,8 +17,10 @@ export async function readOfflineCrewTask(identity:QueueIdentity,projectId:strin
   const j=await openOfflineJournal(identity),rows=await j.list();crewReadGuard(identity);
   const confirmedSnapshots=new Set(rows.filter(r=>r.projectId===projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&r.identity.scope===identity.scope&&r.identity.partition===identity.partition)
     .flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[]));
-  if(rows.some(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId&&
-    (r.phase!=='RECONCILED'||((r.identity.scope!==identity.scope||r.identity.partition!==identity.partition)&&!(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id))))))throw Error('offline_snapshot_reconciliation_required');
+  const taskSnapshots=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='snapshot'&&JSON.parse(r.body).taskId===taskId);
+  const headSnapshot=taskSnapshots.at(-1);
+  if(taskSnapshots.some(r=>r.phase!=='RECONCILED'||!sameOfflinePartition(r.identity,identity))||
+    (headSnapshot&&(headSnapshot.identity.scope!==identity.scope||headSnapshot.identity.partition!==identity.partition)&&!confirmedSnapshots.has(headSnapshot.id)))throw Error('offline_snapshot_reconciliation_required');
   const registrations=rows.filter(r=>r.projectId===projectId&&r.proof.kind==='enrollment');
   if(registrations.length!==1)throw Error('offline_registration_reconciliation_required');
   const registrationId=(registrations[0].receipt as {id?:string})?.id;

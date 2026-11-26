@@ -267,7 +267,7 @@ function CrewFieldActions({ task }: { task: CrewTask }) {
         {fresh.coordinates ? <Button variant="secondary" title="Dẫn đường" onPress={() => router.push({ pathname: '/(crew)/navigation', params: { id: fresh.id, projectId: fresh.projectId } })} /> : null}
       </Card>
       <CrewTaskFacts key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} />
-      <CrewOfflinePreparation key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id}/>
+      <CrewOfflinePreparation key={JSON.stringify([scope,task.projectId,task.id])} projectId={task.projectId} taskId={task.id} serverVersion={fresh.detail?.version ?? undefined}/>
       {fresh.detail?.repairContext?<CrewRepairFacts key={JSON.stringify([scope,task.projectId,task.id,fresh.detail.repairContext.bindingId])} projectId={task.projectId} taskId={task.id}/>:null}
       <Card style={[styles.taskActionCard, styles.detailCard]}>
         <Text style={styles.detailTasteHeading}>Hồ sơ liên quan</Text>

@@ -4,8 +4,22 @@ import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord } f
 import { crewOfflineNative, deviceBinding, inspectOfflineDevice, prepareDeviceEnrollment, prepareDeviceSnapshot, reconcileDeviceIntent } from './crewOfflineDevice';
 import { dispatchOfflineIntent, offlineProjectPath, readOfflineResource, requireOfflineNativeAcceptance, validateDevice, validateSnapshot, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
 import { getFieldInspectionTaskDetailReal, crewTaskFromWire, validateCrewTaskDetail } from './crewApi';
-import { retainCrewEditorSource } from './crewOfflineEditorSource';
+import { retainCrewEditorSource, readCrewEditorSource } from './crewOfflineEditorSource';
 import { uuidv4 } from '../utils/uuid';
+
+export type CrewOfflinePreparationStatus =
+  | 'UNAVAILABLE'
+  | 'NOT_DOWNLOADED'
+  | 'NEEDS_CONFIRMATION'
+  | 'NEEDS_UPDATE'
+  | 'PARTIAL'
+  | 'READY';
+
+export interface CrewOfflinePreparationState {
+  status: CrewOfflinePreparationStatus;
+  snapshot: SourceSnapshot | null;
+  editorReady: boolean;
+}
 
 export interface OfflineTaskDownloadResult {
   snapshot: SourceSnapshot;
@@ -122,4 +136,151 @@ export async function reconcileDeviceSessionForProject(identity:QueueIdentity,pr
     proof:{kind:'session-confirm',registrationId:actual.id,confirmedScope:identity.scope,snapshotIds:confirmedSnapshotIds,revokedSnapshotIds},
   },actual);
   return actual;
+}
+
+/** Read-only persisted state inspection for CrewOfflinePreparation. Never mutates or dispatches. */
+export async function inspectCrewOfflinePreparationState(
+  identity: QueueIdentity,
+  projectId: string,
+  taskId: string,
+  serverVersion?: string,
+): Promise<CrewOfflinePreparationState> {
+  try {
+    requireOfflineNativeAcceptance(identity);
+    crewReadGuard(identity);
+  } catch {
+    return { status: 'UNAVAILABLE', snapshot: null, editorReady: false };
+  }
+  const owned = (r: OfflineJournalRecord) =>
+    r.identity.actor === identity.actor && r.identity.role === identity.role &&
+    r.identity.environment === identity.environment && r.identity.scope === identity.scope && r.identity.partition === identity.partition;
+  const journal = await openOfflineJournal(identity);
+  const rows = await journal.list();
+  crewReadGuard(identity);
+
+  const sessionConfirms = rows.filter(r => r.projectId === projectId && owned(r) && r.phase === 'RECONCILED' && r.proof.kind === 'session-confirm');
+  const confirmedRegistrations = new Set(sessionConfirms.map(r => String(r.proof.registrationId)));
+  const confirmedSnapshots = new Set(sessionConfirms.flatMap(r => Array.isArray(r.proof.snapshotIds) ? r.proof.snapshotIds.map(String) : []));
+
+  const registrations = rows.filter(r => r.projectId === projectId && r.proof.kind === 'enrollment');
+  if (registrations.some(r => !sameOfflinePartition(r.identity, identity))) {
+    return { status: 'NEEDS_CONFIRMATION', snapshot: null, editorReady: false };
+  }
+  const reg = registrations[0];
+  if (reg) {
+    if (reg.phase !== 'RECONCILED') {
+      return { status: 'NEEDS_CONFIRMATION', snapshot: null, editorReady: false };
+    }
+    const regId = String((reg.receipt as { id?: string } | undefined)?.id ?? '');
+    if (rows.some(r => r.projectId === projectId && r.proof.kind === 'revocation' && r.proof.registrationId === regId)) {
+      return { status: 'UNAVAILABLE', snapshot: null, editorReady: false };
+    }
+    if (!owned(reg) && !confirmedRegistrations.has(regId)) {
+      return { status: 'NEEDS_CONFIRMATION', snapshot: null, editorReady: false };
+    }
+  }
+
+  const snapshots = rows.filter(
+    r => r.projectId === projectId && r.proof.kind === 'snapshot' && (JSON.parse(r.body) as { taskId?: string }).taskId === taskId,
+  );
+  if (snapshots.some(r => !sameOfflinePartition(r.identity, identity))) {
+    return { status: 'NEEDS_CONFIRMATION', snapshot: null, editorReady: false };
+  }
+  if (snapshots.some(r => r.phase !== 'RECONCILED')) {
+    return { status: 'NEEDS_CONFIRMATION', snapshot: null, editorReady: false };
+  }
+  const head = snapshots.at(-1);
+  if (!head) {
+    return { status: 'NOT_DOWNLOADED', snapshot: null, editorReady: false };
+  }
+  const snapshot = head.receipt as SourceSnapshot;
+  const headAuthorized = owned(head) || confirmedSnapshots.has(head.id);
+  if (!headAuthorized) {
+    if (serverVersion && snapshot?.taskVersion && snapshot.taskVersion !== serverVersion) {
+      return { status: 'NEEDS_UPDATE', snapshot, editorReady: false };
+    }
+    return { status: 'NEEDS_CONFIRMATION', snapshot, editorReady: false };
+  }
+  if (serverVersion && snapshot?.taskVersion && snapshot.taskVersion !== serverVersion) {
+    return { status: 'NEEDS_UPDATE', snapshot, editorReady: false };
+  }
+  let editorReady = false;
+  try {
+    const editor = await readCrewEditorSource(identity, projectId, taskId);
+    editorReady = !!editor.detail &&
+      editor.detail.version === snapshot.taskVersion &&
+      editor.detail.assignmentId === snapshot.assignmentId &&
+      editor.detail.assignedToUserId === snapshot.originalActorId;
+  } catch {
+    editorReady = false;
+  }
+  return {
+    status: editorReady ? 'READY' : 'PARTIAL',
+    snapshot,
+    editorReady,
+  };
+}
+
+/** Single user-initiated flow: recovers current-session interrupted intents, revalidates cross-session device authority if needed, and downloads/refreshes snapshot + editor source. */
+export async function recoverAndDownloadCrewOfflineTask(
+  identity: QueueIdentity,
+  projectId: string,
+  taskId: string,
+  serverVersion?: string,
+): Promise<OfflineTaskDownloadResult> {
+  requireOfflineNativeAcceptance(identity);
+  crewReadGuard(identity);
+  const owned = (r: OfflineJournalRecord) =>
+    r.identity.actor === identity.actor && r.identity.role === identity.role &&
+    r.identity.environment === identity.environment && r.identity.scope === identity.scope && r.identity.partition === identity.partition;
+
+  const journal = await openOfflineJournal(identity);
+  const rows = await journal.list();
+  crewReadGuard(identity);
+
+  // 1. Recover any interrupted enrollment/snapshot in the CURRENT session with its exact key/body.
+  for (const r of rows) {
+    if (r.projectId !== projectId || !owned(r) || !['enrollment', 'snapshot'].includes(String(r.proof.kind))) continue;
+    if (r.proof.kind === 'snapshot' && (JSON.parse(r.body) as { taskId?: string }).taskId !== taskId) continue;
+    if (r.phase === 'IN_FLIGHT') {
+      const next = r.receipt && typeof (r.receipt as { id?: string }).id === 'string'
+        ? await journal.transition(r, 'RECEIVED', r.receipt)
+        : await journal.transition(r, 'UNKNOWN_OUTCOME');
+      if (next.phase === 'UNKNOWN_OUTCOME') {
+        const received = await dispatchOfflineIntent(next);
+        await reconcileDeviceIntent(received);
+      } else if (next.phase === 'RECEIVED') {
+        await reconcileDeviceIntent(next);
+      }
+    } else if (r.phase === 'UNKNOWN_OUTCOME') {
+      const received = await dispatchOfflineIntent(r);
+      await reconcileDeviceIntent(received);
+    } else if (r.phase === 'RECEIVED') {
+      await reconcileDeviceIntent(r);
+    }
+  }
+
+  // 2. Re-check if cross-session device/snapshot confirmation is needed.
+  const latestRows = await journal.list();
+  crewReadGuard(identity);
+  const confirms = latestRows.filter(r => r.projectId === projectId && owned(r) && r.phase === 'RECONCILED' && r.proof.kind === 'session-confirm');
+  const confirmedRegs = new Set(confirms.map(r => String(r.proof.registrationId)));
+  const confirmedSnaps = new Set(confirms.flatMap(r => Array.isArray(r.proof.snapshotIds) ? r.proof.snapshotIds.map(String) : []));
+  const reg = latestRows.find(r => r.projectId === projectId && r.proof.kind === 'enrollment');
+  const taskSnapshots = latestRows.filter(
+    r => r.projectId === projectId && r.proof.kind === 'snapshot' && (JSON.parse(r.body) as { taskId?: string }).taskId === taskId,
+  );
+  const head = taskSnapshots.at(-1);
+  const regNeedsConfirm = !!reg && reg.phase === 'RECONCILED' && sameOfflinePartition(reg.identity, identity) &&
+    !owned(reg) && !confirmedRegs.has(String((reg.receipt as { id?: string } | undefined)?.id ?? ''));
+  const headNeedsConfirm = !!head && head.phase === 'RECONCILED' && sameOfflinePartition(head.identity, identity) &&
+    !owned(head) && !confirmedSnaps.has(head.id);
+
+  if (regNeedsConfirm || headNeedsConfirm) {
+    await reconcileDeviceSessionForProject(identity, projectId, taskId);
+  }
+
+  const headReceipt = head?.receipt as SourceSnapshot | undefined;
+  const shouldRefresh = !!head && head.phase === 'RECONCILED' && !!serverVersion && !!headReceipt?.taskVersion && headReceipt.taskVersion !== serverVersion;
+  return downloadCrewOfflineTaskDetailed(identity, projectId, taskId, shouldRefresh);
 }

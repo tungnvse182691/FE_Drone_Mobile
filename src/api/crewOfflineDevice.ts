@@ -47,12 +47,13 @@ export async function readLocalOfflineSources(identity:QueueIdentity,projectId:s
   const heads=new Map<string,OfflineJournalRecord>();
   for(const r of rows){
     if(r.projectId!==projectId||r.phase!=='RECONCILED'||r.proof.kind!=='snapshot'||r.path!==base+'/snapshots')continue;
-    if(!owned(r)&&!(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))continue;
+    if(!owned(r)&&!sameOfflinePartition(r.identity,identity))continue;
     const request=JSON.parse(r.body);
     if(request.deviceRegistrationId!==registrationId)continue;
     const prior=heads.get(request.taskId);
     if((prior&&r.proof.previousSnapshotIntentId!==prior.id)||(!prior&&r.proof.previousSnapshotIntentId))throw Error('offline_snapshot_lineage_invalid');
     heads.set(request.taskId,r);
+    if(!owned(r)&&!confirmedSnapshots.has(r.id))continue;
     const snapshot=r.receipt as SourceSnapshot;
     validateSnapshot(snapshot,identity,{id:snapshot?.id,taskId:request.taskId,assignmentId:String(r.proof.assignmentId),deviceRegistrationId:registrationId,taskVersion:String(r.proof.taskVersion)});
     const source=snapshot.snapshot as Record<string,unknown>;

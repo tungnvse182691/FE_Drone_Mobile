@@ -7,6 +7,7 @@ import { colors, radius, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
 import { Button } from '../Button';
 import { inspectOfflineDevice, reconcileDeviceIntent } from '../../api/crewOfflineDevice';
+import { dispatchOfflineIntent } from '../../api/crewOfflineWorkflow';
 import { reconcileSignedBatch, recoverSignedOrigins, reconcileStartIntent } from '../../offline/crewSignedSync';
 import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord } from '../../api/crewOfflineJournal';
 import { NATIVE_ACCEPTANCE_VERIFIED } from '../../../modules/roadguard-offline-crypto';
@@ -63,7 +64,16 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       if(record.proof.kind==='signed-field-batch'){
         if(record.phase==='RECEIVED')await reconcileSignedBatch(record);else await recoverSignedOrigins(record);
       }else if(record.proof.kind==='start-reconciliation')await reconcileStartIntent(record);
-      else await reconcileDeviceIntent(record);
+      else if(record.phase==='IN_FLIGHT'){
+        const j0=await openOfflineJournal(identity);
+        const next=record.receipt&&typeof (record.receipt as {id?:string}).id==='string'
+          ?await j0.transition(record,'RECEIVED',record.receipt)
+          :await dispatchOfflineIntent(await j0.transition(record,'UNKNOWN_OUTCOME'));
+        await reconcileDeviceIntent(next);
+      }else if(record.phase==='UNKNOWN_OUTCOME'){
+        const received=await dispatchOfflineIntent(record);
+        await reconcileDeviceIntent(received);
+      }else await reconcileDeviceIntent(record);
       const j=await openOfflineJournal(identity),rows=await j.list();
       if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
     }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả. Lệnh, khóa và dữ liệu chờ vẫn được giữ nguyên.');}
@@ -100,7 +110,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>
       {(sameQueueIdentity(r.identity,identity)||(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
       {sameQueueIdentity(r.identity,identity)&&r.proof.kind==='signed-field-batch'&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?'Tiếp tục tải ảnh và đồng bộ':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
-      {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
+      {sameQueueIdentity(r.identity,identity)&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation','enrollment','snapshot'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
     </View>)}
     <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
     {showDiagnostics?<View style={styles.diagnostics}><Text style={styles.description}>Thiết bị: {probe?.capability.apiLevel || 'Chưa đọc'}</Text><Text style={styles.description}>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng native trong phạm vi đã kiểm.':'Chưa có bằng chứng native đủ để mở gửi offline.'}</Text><Pressable accessibilityRole="button" style={styles.readButton} onPress={()=>void refresh()} disabled={busy}><Text style={styles.readLabel}>{busy?'Đang đọc…':'Đọc lại nhật ký'}</Text></Pressable></View>:null}

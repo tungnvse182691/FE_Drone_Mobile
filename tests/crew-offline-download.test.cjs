@@ -180,7 +180,11 @@ test('integration: real SQLite journal + real prepareDeviceSnapshot + mocked tra
  const snaps=(await jNew.list()).filter(r=>r.proof.kind==='snapshot');
  assert.equal(snaps.length,2);
  assert.equal(snaps[1].proof.previousSnapshotIntentId,snaps[0].id);
- // 4. Local revocation record blocks confirmSession
+ // 4. readLocalOfflineSources preserves lineage across stale S1 -> S2 without offline_snapshot_lineage_invalid
+ const localSources=await deviceMod.readLocalOfflineSources(newIdentity,project,regId,deviceId);
+ assert.equal(localSources.snapshots.length,1);
+ assert.equal(localSources.snapshots[0].id,snapV2.id);
+ // 5. Local revocation record blocks confirmSession
  await jNew.prepare({id:id(),identity:newIdentity,projectId:project,path:`/projects/${project}/offline/devices/${regId}/revoke`,key:id(),body:'{}',proof:{kind:'revocation',registrationId:regId}});
  await assert.rejects(jNew.confirmSession({id:id(),identity:newIdentity,projectId:project,path:`/projects/${project}/offline/devices/${regId}`,key:id(),body:JSON.stringify({registrationId:regId,confirmedScope:newIdentity.scope,snapshotIds:[]}),proof:{kind:'session-confirm',registrationId:regId,confirmedScope:newIdentity.scope,snapshotIds:[]}},device),/revocation/);
  raw.close();
