@@ -21,7 +21,7 @@ export interface FieldCapture {
   createKey: string; completeKey: string; parts: crew.CrewCompletedPartDto[];
   upload?: crew.CrewUploadSessionDto; complete?: { version: string; parts: crew.CrewCompletedPartDto[] };
   completed?: boolean; verified?: boolean;
-  partCommands?: Record<number, { key: string; partNumbers: number[] }>;
+  partCommands?: Record<number, { key: string; partNumbers: number[]; expiresAt?: string }>;
   retiredPartCommands?: { key: string; partNumbers: number[]; status: number }[];
   postRepairCapture?: boolean;
   /** Explicit proof that no upload intent has ever been issued for this capture. */
@@ -461,7 +461,8 @@ async function freshTask(draft: FieldDraft,runtime: FieldRuntime,capability: 'ca
   if (origin.id !== response.data.firstStartOriginId || origin.taskId !== draft.taskId || !runtime.api.isCrewResourceId(origin.id)) throw new Error('field_start_origin_invalid');
   return response;
 }
-async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,controller: AbortController,onSession?: (draft: FieldDraft, transferPercent?: number) => void): Promise<FieldDraft> {
+export type FieldUploadStage='upload_urls'|'upload_put'|'upload_complete'|'upload_verify';
+async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,controller: AbortController,onSession?: (draft: FieldDraft, transferPercent?: number) => void,onStage?: (stage:FieldUploadStage)=>void): Promise<FieldDraft> {
   assertFieldContext(draft,runtime);
   const c = draft.captures[index]; if (!c) throw new Error('field_capture_missing');
   const key = captureKey(draft,c.id);
@@ -513,26 +514,37 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       c.partCommands ??= {};
       c.partCommands[part] ??= { key: runtime.uuid(), partNumbers: [part] };
       await persist(draft,runtime);
-      const issuance = c.partCommands[part];
-      let urls: Awaited<ReturnType<typeof crew.requestCrewUploadPartUrls>>;
-      try {
-        urls = await guarded(draft,runtime,() => runtime.api.requestCrewUploadPartUrls(session.id,issuance.partNumbers,issuance.key));
-      } catch(error) {
-        // URL issuance is a renewable capability, not a submission or completion.
-        // Only a definitive 409 retires this intent; ambiguous transport errors retain it.
-        if ((error as {response?:{status?:number}})?.response?.status===409) {
-          const latest=await guarded(draft,runtime,()=>runtime.api.getCrewUploadSession(session.id));
-          if(latest.id===session.id && latest.fileId===c.upload.fileId && latest.status==='UPLOADING') {
-            c.retiredPartCommands??=[];c.retiredPartCommands.push({...issuance,status:409});
-            c.partCommands[part]={key:runtime.uuid(),partNumbers:[part]};await persist(draft,runtime);
-          }
+      let urls: Awaited<ReturnType<typeof crew.requestCrewUploadPartUrls>> | undefined;
+      onStage?.('upload_urls');
+      for(let attempt=0;attempt<2;attempt++){
+        const issuance=c.partCommands[part];
+        try{
+          urls=await guarded(draft,runtime,()=>runtime.api.requestCrewUploadPartUrls(session.id,issuance.partNumbers,issuance.key));
+          break;
+        }catch(error){
+          const problem=error as {response?:{status?:number;data?:{code?:string}}};
+          // A generic 409 cannot prove expiry. Legacy intents without an observed
+          // expiry retain their key until the exact cause can be established.
+          if(attempt!==0||problem.response?.status!==409||problem.response.data?.code!=='duplicate_request'||
+            !issuance.expiresAt||!Number.isFinite(Date.parse(issuance.expiresAt))||Date.parse(issuance.expiresAt)>Date.now())throw error;
+          const latest=await guarded(draft,runtime,()=>runtime.api.getCrewUploadSession(session.id));checkCancel();
+          if(latest.id!==session.id||latest.fileId!==c.upload.fileId||latest.status!=='UPLOADING'||
+            !Number.isFinite(Date.parse(latest.expiresAt))||Date.parse(latest.expiresAt)<=Date.now()||c.complete)throw error;
+          c.retiredPartCommands??=[];c.retiredPartCommands.push({...issuance,status:409});
+          c.partCommands[part]={key:runtime.uuid(),partNumbers:[part]};await persist(draft,runtime);
         }
-        throw error;
+      }
+      if(!urls)throw Error('field_part_url_missing');
+      const expiry=urls.parts.find(p=>p.partNumber===part)?.expiresAt;
+      if(expiry){
+        if(!Number.isFinite(Date.parse(expiry))||Date.parse(expiry)<=Date.now())throw Error('field_part_url_expired');
+        c.partCommands[part].expiresAt=expiry;await persist(draft,runtime);
       }
       const url = urls.parts.find(p=>p.partNumber===part)?.url;
       if (!url) throw new Error('field_part_url_missing');
       checkCancel();
       let result: Awaited<ReturnType<typeof runtime.api.putCrewUploadPartBytes>>;
+      onStage?.('upload_put');
       try {
         result = await guarded(draft,runtime,() => runtime.api.putCrewUploadPartBytes(url,bytes.slice((part-1)*session.partSizeBytes,part*session.partSizeBytes),c.mediaType,controller.signal,loaded => {
           // Transport progress is presentation only: never write it into the durable ledger.
@@ -560,6 +572,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
     }
     // On timeout, replay retains this original version/body/key, never a newly assembled command.
     checkCancel();
+    onStage?.('upload_complete');
     await guarded(draft,runtime,() => runtime.api.completeCrewUpload(session.id,c.complete!.parts,c.checksum,c.complete!.version,c.completeKey));
     checkCancel();
     c.completed = true; await persist(draft,runtime);
@@ -569,6 +582,7 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   // Allow three rounds at the runtime's one-second cadence before leaving the
   // durable session pending. Completed bytes and command keys stay unchanged.
   const verificationPolls = 91;
+  onStage?.('upload_verify');
   for (let poll=0;poll<verificationPolls;poll++) {
     checkCancel();
     session = await guarded(draft,runtime,() => runtime.api.getCrewUploadSession(c.upload!.id));
@@ -586,14 +600,16 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
   c.upload = session; c.verified = true; await persist(draft,runtime);
   onSession?.(JSON.parse(JSON.stringify(draft)) as FieldDraft); return draft;
 }
-export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,onSession?: (draft: FieldDraft, transferPercent?: number) => void): Promise<FieldDraft> {
+export async function uploadFieldCapture(draft: FieldDraft,index: number,runtime: FieldRuntime,onSession?: (draft: FieldDraft, transferPercent?: number) => void,onStage?: (stage:FieldUploadStage)=>void): Promise<FieldDraft> {
   const capture = draft.captures[index]; if (!capture) throw Error('field_capture_missing');
   const key = captureKey(draft,capture.id),controller = new AbortController();
   if (cancelGates.has(key) || capture.cancelState) throw Error('field_upload_cancel_pending');
   if (activeUploads.has(key)) throw Error('field_busy');
-  const done = exclusive(draft,()=>uploadCapture(draft,index,runtime,controller,onSession));
+  let stage:FieldUploadStage|undefined;
+  const done = exclusive(draft,()=>uploadCapture(draft,index,runtime,controller,onSession,value=>{stage=value;onStage?.(value);}));
   activeUploads.set(key,{controller,done});
   try { return await done; }
+  catch(error){if(stage&&error&&typeof error==='object'&&Object.isExtensible(error))Object.assign(error,{uploadStage:stage});throw error;}
   finally { if (activeUploads.get(key)?.done === done) activeUploads.delete(key); }
 }
 
@@ -847,6 +863,8 @@ export function fieldErrorMessage(error: unknown): string {
   if (status === 401) return 'Phiên đăng nhập hết hiệu lực. Lệnh cũ được giữ để đối soát.';
   if (status === 403) return 'Không còn quyền trên nhiệm vụ hoặc bằng chứng này.';
   if (status === 409 || status === 412) return 'Dữ liệu hoặc phiên bản đã thay đổi. Tải lại và đối soát lệnh cũ.';
+  if (uploadStage === 'upload_urls') return 'Chưa cấp lại được đường tải ảnh. Phiên tải và ảnh cũ được giữ; cần kiểm tra thời hạn và đối soát trước khi thử lại.';
+  if (uploadStage === 'upload_complete') return 'Chưa xác nhận hoàn tất tải ảnh. Các phần đã tải và lệnh hoàn tất được giữ để đối soát.';
   if (uploadStage === 'upload_put' && (code === 'ERR_NETWORK' || code === 'ECONNABORTED')) {
     return 'Không kết nối được dịch vụ lưu ảnh. Ảnh chưa xác minh; nháp vẫn được giữ. Kiểm tra mạng rồi đối soát trước khi thử lại.';
   }

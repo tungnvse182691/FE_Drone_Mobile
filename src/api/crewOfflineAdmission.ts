@@ -96,7 +96,7 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
 
 /** Serial continuation of only the pending evidence members. Uses the original
  * encrypted draft/vault, immutable journal and existing multipart uploader. */
-export async function resumeSignedEvidence(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<void> {
+export async function resumeSignedEvidence(record:OfflineJournalRecord,authority:QueueIdentity=record.identity,onStage?:(stage:import('./crewFieldDraft').FieldUploadStage)=>void):Promise<void> {
   if(!sameOfflinePartition(record.identity,authority))return fail();
   crewReadGuard(authority);
   if(record.phase!=='RECEIVED'||record.proof.kind!=='signed-field-batch')return fail();
@@ -121,7 +121,7 @@ export async function resumeSignedEvidence(record:OfflineJournalRecord,authority
         await runtime.write(draft);crewReadGuard(authority);
       }
       if(c.offlineUpload.batchIntentId!==record.id||c.offlineUpload.originId!==item.originId||c.offlineUpload.admissionId!==admission.id)return fail();
-      await uploadFieldCapture(draft,index,runtime);crewReadGuard(authority);
+      await uploadFieldCapture(draft,index,runtime,undefined,onStage);crewReadGuard(authority);
     }
   }
 }

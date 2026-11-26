@@ -270,3 +270,12 @@ test('takeover REPAIR screen reaches start without adopting an old FIELD draft a
  const pending=ui.press('Ký bắt đầu sửa chữa');ui.press('Ký bắt đầu sửa chữa');assert.equal(starts,1);assert.equal(args.length,3);
  wait.resolve({phase:'PREPARED',body:'{}'});await pending;await ui.flush();assert.match(JSON.stringify(ui.nodes()),/Đã lưu gói ký/);ui.unmount();
 });
+
+for(const fault of ['approval','already-signed','finished'])test('REPAIR screen explains locked lifecycle: '+fault,async()=>{
+ const {screen}=require('./helpers/roadfe-screen.cjs'),f=repairFixture();f.ctx.currentAssessmentId=id();let rows=[];
+ if(fault==='approval')f.ctx.approvedBy=null;
+ if(fault==='finished'){f.ctx.state='InProgress';f.ctx.currentExecutionStartId=id();f.ctx.currentExecutionFinishId=id();}
+ if(fault==='already-signed')rows=[{id:id(),projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{taskId:f.h.task,snapshotId:f.h.snapshot.id,kind:'REPAIR_EXECUTION_START'}]})}];
+ const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:f.h.project,taskId:f.h.task},modules:{'../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../offline/upload-queue':{currentQueueIdentity:()=>f.h.identity,sameQueueIdentity:()=>true},'../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...f.h.snapshot,downloadedAt:'2026-11-26T00:00:00Z'},facts:{status:'InProgress',repair:f.ctx}})},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows})},'../../api/crewOfflinePreparation':{},'../../api/crewFieldDraft':{currentFieldContext:()=>null},'../../api/crewOfflineRepair':{}}});
+ ui.render();await ui.flush();assert.equal(ui.nodes().some(n=>['Ký bắt đầu sửa chữa','Ký kết thúc sửa chữa'].includes(n.props?.title)),false);assert.match(JSON.stringify(ui.nodes()),fault==='approval'?/phê duyệt/:fault==='finished'?/không phải nghiệm thu/:/Tải phiên bản mới/);ui.unmount();
+});

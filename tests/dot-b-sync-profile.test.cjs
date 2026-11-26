@@ -3,6 +3,14 @@ const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 function functions(file,names,context={}){const source=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const code=names.map(name=>source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name).getText().replace(/^export /,'')).join('\n');return vm.runInNewContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+';({'+names.join(',')+'})',context);}
 const text=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).filter(v=>typeof v==='string'||typeof v==='number').join('')).join('\n');
 const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Toast':{Toast:'Toast'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'}};
+
+test('Crew reconcile reloads partial checkpoints after failure and gives unchanged-result feedback',async()=>{
+ for(const fail of [true,false]){
+ const identity={actor:'A',scope:'S',environment:'E'},record={id:'partial',identity,phase:'RECEIVED',proof:{kind:'signed-field-batch'},receipt:{items:[]}};let rows=[record],reads=0;
+ const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>({})},'../../offline/crewSignedSync':{reconcileSignedBatch:async()=>{if(fail){rows=[{...record,terminalItems:[{originId:'x',state:'REJECTED'}]}];throw Error('private');}return record;}},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return rows;}})},'../../../modules/roadguard-offline-crypto':{},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
+ s.render();await s.flush();s.press('Đối soát kết quả');await s.flush();assert.ok(reads>=2);assert.match(text(s),fail?/Cần xử lý/:/Chưa có kết quả mới/);assert.doesNotMatch(text(s),/private/);assert.equal(s.nodes().find(n=>n.props.title==='Đối soát kết quả').props.disabled,false);s.unmount();
+ }
+});
 test('mixed terminal batch is actionable without a replay CTA; independent pending evidence remains visible',async()=>{
  const identity={actor:'A',scope:'S',environment:'E'},terminal={originId:'rejected',state:'REJECTED',code:'concurrency_conflict'};
  const record={id:'mixed',identity,phase:'RECEIVED',proof:{kind:'signed-field-batch'},terminalItems:[terminal],verifiedItems:[{originId:'committed'}],receipt:{items:[

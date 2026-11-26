@@ -1233,13 +1233,17 @@ export async function requestCrewUploadPartUrls(
   uploadId: string,
   partNumbers: number[],
   idempotencyKey: string = newIdempotencyKey(),
-): Promise<{ parts: { partNumber: number; url: string }[] }> {
-  const response = await apiClient.post<{ parts: { partNumber: number; url: string }[] }>(
+): Promise<{ parts: { partNumber: number; url: string; expiresAt: string }[] }> {
+  const response = await apiClient.post<{ parts: { partNumber: number; url: string; expiresAt: string }[] }>(
     `/uploads/${uploadId}/part-urls`,
     { partNumbers },
     { headers: { 'Idempotency-Key': idempotencyKey } },
   );
-  return response.data;
+  const data=response.data;
+  if(!Array.isArray(data?.parts)||data.parts.length!==partNumbers.length||new Set(data.parts.map(p=>p.partNumber)).size!==partNumbers.length||
+    data.parts.some(p=>!partNumbers.includes(p.partNumber)||typeof p.url!=='string'||!/^https?:\/\//.test(p.url)||
+      typeof p.expiresAt!=='string'||!Number.isFinite(Date.parse(p.expiresAt))))throw Error('field_part_url_invalid');
+  return data;
 }
 
 /** Tải dữ liệu part trực tiếp lên MinIO/S3 (không inject bearer của app). */

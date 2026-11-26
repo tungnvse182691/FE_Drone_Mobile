@@ -15,6 +15,7 @@ import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord } f
 import { NATIVE_ACCEPTANCE_VERIFIED } from '../../../modules/roadguard-offline-crypto';
 import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queue';
 import { sendSignedFieldIntent } from '../../offline/crewSignedSync';
+import { fieldErrorMessage } from '../../api/crewFieldDraft';
 
 function pendingEvidence(r:OfflineJournalRecord):boolean {
   return ((r.receipt as {items?:{originId?:string;durableAcknowledgment?:boolean;state?:string;code?:string}[]})?.items??[])
@@ -37,6 +38,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
   const [records,setRecords]=useState<OfflineJournalRecord[]>([]),[confirmedSnapshots,setConfirmedSnapshots]=useState<Set<string>>(new Set()),[confirmedRegistrations,setConfirmedRegistrations]=useState<Set<string>>(new Set()),[revokedRegistrations,setRevokedRegistrations]=useState<Set<string>>(new Set()),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showDiagnostics,setShowDiagnostics]=useState(false);
   const [showHistory,setShowHistory]=useState(false);
+  const [progress,setProgress]=useState('');
   const sequence=useRef(0),running=useRef(false);
   useEffect(()=>()=>{sequence.current++;},[]);
   const refresh=useCallback(async()=>{
@@ -103,6 +105,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     if(running.current||!sameQueueIdentity(identity)||(!sameQueueIdentity(record.identity,identity)&&!canRecoverSignedBatch(record)))return;
     running.current=true;setBusy(true);setError('');const n=++sequence.current;
     try {
+      setProgress('Đang đối soát kết quả…');
       if(record.proof.kind==='signed-field-batch'){
         if(record.phase==='RECEIVED')await reconcileSignedBatch(record,identity);else await recoverSignedOrigins(record,identity);
       }else if(record.proof.kind==='start-reconciliation')await reconcileStartIntent(record);
@@ -117,19 +120,29 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
         await reconcileDeviceIntent(received);
       }else await reconcileDeviceIntent(record);
       const j=await openOfflineJournal(identity),rows=await j.list();
-      if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
+      if(n===sequence.current&&sameQueueIdentity(identity)){
+        setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
+        const latest=rows.find(r=>r.id===record.id);
+        setProgress(JSON.stringify(latest)===JSON.stringify(record)?'Chưa có kết quả mới. Dữ liệu và lệnh cũ được giữ để đối soát.':latest?.phase==='RECONCILED'?'Máy chủ đã xác nhận đầy đủ gói đã gửi.':'Đã cập nhật kết quả từng thao tác; phần chưa xác nhận vẫn được giữ.');
+      }
     }catch(error){console.warn('[CrewOfflinePanel:reconcile] failed');if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả. Lệnh, khóa và dữ liệu chờ vẫn được giữ nguyên.');}
-    finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
+    finally {
+      try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));}catch{/* Keep last view; partial checkpoints remain durable. */}
+      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
+    }
   };
   if(!sameQueueIdentity(identity))return null;
   const send=async(record:OfflineJournalRecord)=>{
     if(running.current||!sameQueueIdentity(identity)||(!sameQueueIdentity(record.identity,identity)&&!canRecoverSignedBatch(record)))return;
     running.current=true;setBusy(true);setError('');const n=++sequence.current;
     try{
-      await sendSignedFieldIntent(record,identity);
+      const result=await sendSignedFieldIntent(record,identity,stage=>{
+        if(n===sequence.current&&sameQueueIdentity(identity))setProgress(({upload_urls:'Đang cấp đường tải ảnh…',upload_put:'Đang tải ảnh…',upload_complete:'Đang xác nhận hoàn tất tải ảnh…',upload_verify:'Đang chờ máy chủ xác minh ảnh…',batch_receipt:'Đang gửi đúng gói đã ký…',reconcile:'Đang đối soát kết quả…'})[stage]);
+      });
+      if(n===sequence.current&&sameQueueIdentity(identity))setProgress(result.phase==='RECONCILED'?'Máy chủ đã xác nhận đầy đủ gói đã gửi.':JSON.stringify(result)===JSON.stringify(record)?'Chưa có kết quả mới. Dữ liệu và lệnh cũ được giữ để đối soát.':'Đã cập nhật tiến độ; còn thao tác chờ xác nhận hoặc cần xử lý.');
       const rows=await (await openOfflineJournal(identity)).list();
       if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
-    }catch(error){console.warn('[CrewOfflinePanel:send] failed');if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả gửi. Gói ký và khóa gửi lại được giữ nguyên; đối soát trước khi thử lại.');}
+    }catch(error){console.warn('[CrewOfflinePanel:send] failed');if(n===sequence.current&&sameQueueIdentity(identity)){setProgress('');const e=error as {response?:{status?:number};code?:string;uploadStage?:string;message?:string};setError(fieldErrorMessage({response:{status:e?.response?.status},code:e?.code,uploadStage:e?.uploadStage,message:['field_verification_pending','field_upload_failed'].includes(e?.message??'')?e.message:undefined}));}}
     finally{
       try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));}catch{/* Keep last view; durable journal remains authoritative. */}
       running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
@@ -147,6 +160,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     <View style={styles.stateRow}><View style={styles.stateCell}><Text style={styles.value}>{waiting}</Text><Text style={styles.label}>Chờ gửi</Text></View><View style={styles.stateCell}><Text style={styles.value}>{reconciling}</Text><Text style={styles.label}>Cần đối soát</Text></View><View style={styles.stateCell}><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View><View style={styles.stateCell}><Text style={styles.value}>{attention}</Text><Text style={styles.label}>Cần xử lý</Text></View></View>
     <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
     {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
+    {progress&&!error?<Text accessibilityLiveRegion="polite" style={styles.description}>{progress}</Text>:null}
     {activeRecords.length===0?<Text style={styles.description}>Không có lệnh đang chờ gửi hoặc đối soát.</Text>:null}
     {historyRecords.length>0?<Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Lịch sử đã xác nhận ({historyRecords.length})</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>:null}
     {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>

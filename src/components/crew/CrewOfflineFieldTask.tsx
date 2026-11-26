@@ -107,6 +107,8 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
   if(!identity||!sameQueueIdentity(identity))return null;
   const state=String(source?.facts.status??'');
   const repair=source?.facts.repair as Record<string,unknown>|null|undefined;
+  const usedSnapshot=!!source&&record?.phase==='RECONCILED'&&(JSON.parse(record.body).operations??[]).some((o:{snapshotId?:string})=>o.snapshotId===source.snapshot.id);
+  const approved=!!repair&&typeof repair.approvedBy==='string'&&typeof repair.approvedPlanHash==='string'&&repair.approvedPlanHash===repair.proposalPlanHash;
   const submission=!!record&&(JSON.parse(record.body).operations??[]).some((o:{kind?:string})=>o.kind==='FIELD_SUBMISSION');
   return <SafeAreaScreen scroll header={<AppHeader subtitle="Nhiệm vụ offline" showBack fallbackRoute="/(crew)/sync"/>}>
     <Card style={styles.card}>
@@ -123,9 +125,12 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
         <Text style={styles.caption}>Trạng thái hạng mục: {repair.state==='Assigned'?'Đã phân công':repair.state==='InProgress'?'Đang thi công':'Chưa xác định'}. Quyền và phiên bản sẽ được máy chủ kiểm tra lại khi đồng bộ.</Text>
         {state==='InProgress'&&repair.state==='Assigned'?<Button title="Mở số đo và ảnh" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/field-review',params:{id:taskId,projectId,signed:'1'}})}/>:null}
         {record&&record.phase!=='RECONCILED'?<Text style={styles.body}>Gói ký đang chờ gửi hoặc đối soát tại Đồng bộ.</Text>:null}
-        {source&&(!record||record.phase==='RECONCILED')&&state==='InProgress'&&repair.state==='Assigned'&&repair.currentAssessmentId==null?<Button title="Ký đánh giá hiện trường" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareRepair('assessment')}/>:null}
-        {source&&(!record||record.phase==='RECONCILED')&&state==='InProgress'&&repair.state==='Assigned'&&repair.currentAssessmentId!=null&&repair.currentExecutionStartId==null&&repair.mode==='Normal'?<Button title="Ký bắt đầu sửa chữa" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareRepair('start')}/>:null}
-        {source&&(!record||record.phase==='RECONCILED')&&state==='InProgress'&&repair.state==='InProgress'&&repair.currentExecutionStartId!=null&&repair.currentExecutionFinishId==null?<Button title="Ký kết thúc sửa chữa" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareRepair('finish')}/>:null}
+        {usedSnapshot?<Text style={styles.body}>Thao tác trên bản dữ liệu này đã được xác nhận. Chọn Tải phiên bản mới để đọc trạng thái tiếp theo.</Text>:null}
+        {repair.currentAssessmentId!=null&&repair.currentExecutionStartId==null&&!approved?<Text style={styles.body}>Chưa có phê duyệt phương án khớp bản dữ liệu. Tải phiên bản mới sau khi người phụ trách phê duyệt.</Text>:null}
+        {repair.currentExecutionFinishId!=null?<Text style={styles.body}>Đã ghi nhận kết thúc thi công; đây không phải nghiệm thu. Hồ sơ ảnh sau sửa và số đo thuộc bước nộp hồ sơ riêng khi có nguồn hợp lệ.</Text>:null}
+        {source&&!usedSnapshot&&(!record||record.phase==='RECONCILED')&&state==='InProgress'&&repair.state==='Assigned'&&repair.currentAssessmentId==null?<Button title="Ký đánh giá hiện trường" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareRepair('assessment')}/>:null}
+        {source&&!usedSnapshot&&approved&&(!record||record.phase==='RECONCILED')&&state==='InProgress'&&repair.state==='Assigned'&&repair.currentAssessmentId!=null&&repair.currentExecutionStartId==null&&repair.mode==='Normal'?<Button title="Ký bắt đầu sửa chữa" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareRepair('start')}/>:null}
+        {source&&!usedSnapshot&&(!record||record.phase==='RECONCILED')&&state==='InProgress'&&repair.state==='InProgress'&&repair.currentExecutionStartId!=null&&repair.currentExecutionFinishId==null?<Button title="Ký kết thúc sửa chữa" variant="secondary" loading={busy} disabled={busy} onPress={()=>void prepareRepair('finish')}/>:null}
       </>:record?<>
         <Text accessibilityLiveRegion="polite" style={styles.body}>{submission
           ?record.phase==='RECONCILED'?'Máy chủ đã xác nhận hồ sơ đo kiểm. Chưa phải kết quả nghiệm thu.':'Hồ sơ đã ký được giữ trên thiết bị. Gửi và kiểm tra biên nhận tại Đồng bộ.'

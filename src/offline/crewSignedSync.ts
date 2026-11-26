@@ -12,7 +12,8 @@ import { uuidv4 } from '../utils/uuid';
 /** Explicit Sync action. Reload durable state; stale screen data never supplies
  * new bytes/key. After process death, inspect origins before exact replay.
  */
-export async function sendSignedFieldIntent(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord> {
+export type SignedSyncStage=import('../api/crewFieldDraft').FieldUploadStage|'batch_receipt'|'reconcile';
+export async function sendSignedFieldIntent(record:OfflineJournalRecord,authority:QueueIdentity=record.identity,onStage?:(stage:SignedSyncStage)=>void):Promise<OfflineJournalRecord> {
   if(authority!==record.identity&&!sameOfflinePartition(record.identity,authority))throw Error('offline_session_changed');
   crewReadGuard(authority);
   if(record.proof.kind!=='signed-field-batch'||record.path!==offlineProjectPath(record.projectId)+'/sync')throw Error('offline_batch_source_required');
@@ -22,17 +23,18 @@ export async function sendSignedFieldIntent(record:OfflineJournalRecord,authorit
     JSON.stringify(current.proof)!==JSON.stringify(record.proof))throw Error('offline_batch_source_changed');
   crewReadGuard(authority);
   if(current.phase==='RECONCILED')return current;
-  if(current.phase==='RECEIVED')return continueReceivedBatch(current,authority);
+  if(current.phase==='RECEIVED')return continueReceivedBatch(current,authority,onStage);
   if(['IN_FLIGHT','UNKNOWN_OUTCOME'].includes(current.phase)){
-    current=await recoverSignedOrigins(current,authority);crewReadGuard(authority);
+    onStage?.('reconcile');current=await recoverSignedOrigins(current,authority);crewReadGuard(authority);
     if(current.phase==='IN_FLIGHT')current=await journal.transition(current,'UNKNOWN_OUTCOME');
   }
   if(!['PREPARED','UNKNOWN_OUTCOME'].includes(current.phase))throw Error('offline_batch_source_phase_invalid');
-  const received=await dispatchOfflineIntent(current,authority);crewReadGuard(authority);
-  return continueReceivedBatch(received,authority);
+  onStage?.('batch_receipt');const received=await dispatchOfflineIntent(current,authority);crewReadGuard(authority);
+  return continueReceivedBatch(received,authority,onStage);
 }
 
-async function continueReceivedBatch(record:OfflineJournalRecord,authority:QueueIdentity=record.identity):Promise<OfflineJournalRecord> {
+async function continueReceivedBatch(record:OfflineJournalRecord,authority:QueueIdentity=record.identity,onStage?:(stage:SignedSyncStage)=>void):Promise<OfflineJournalRecord> {
+  onStage?.('reconcile');
   const reconciled=await reconcileSignedBatch(record,authority);crewReadGuard(authority);
   if(reconciled.phase==='RECONCILED')return reconciled;
   const items=(reconciled.receipt as OfflineBatchReceipt).items;
@@ -40,13 +42,13 @@ async function continueReceivedBatch(record:OfflineJournalRecord,authority:Queue
   const pending=items.filter(i=>!reconciled.terminalItems?.some(t=>t.originId===i.originId)&&!reconciled.verifiedItems?.some(v=>v.originId===i.originId)&&
     !i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
   if(!pending.length)return reconciled;
-  await (await import('../api/crewOfflineAdmission')).resumeSignedEvidence(reconciled,authority);crewReadGuard(authority);
+  await (await import('../api/crewOfflineAdmission')).resumeSignedEvidence(reconciled,authority,onStage);crewReadGuard(authority);
   // Independent pending media may progress, but a mixed terminal packet is never POSTed blindly.
   if(reconciled.terminalItems?.length||items.some(i=>!i.durableAcknowledgment&&i.state!=='PENDING_DEPENDENCY'))return reconciled;
   // The original journal row still owns body/signature/key. Transport only changed
   // capture mapping and upload state, so dispatch exactly these persisted bytes.
-  const received=await dispatchOfflineIntent(reconciled,authority);crewReadGuard(authority);
-  return reconcileSignedBatch(received,authority);
+  onStage?.('batch_receipt');const received=await dispatchOfflineIntent(reconciled,authority);crewReadGuard(authority);
+  onStage?.('reconcile');return reconcileSignedBatch(received,authority);
 }
 
 function snapshotOperations(input:OfflineRecord[]):OfflineRecord[] {
