@@ -2,6 +2,7 @@ import type { QueueIdentity } from '../offline/upload-queue';
 import { signedCaptureReady, currentFieldContext, readHistoricalFieldDraft, type FieldDraft } from './crewFieldDraft';
 import { readOfflineCrewTask } from './crewOfflineField';
 import { validateRepairSnapshot } from './crewOfflineWorkflow';
+import { readSignedRepairPredecessor as previous } from './crewSignedRepairClaim';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { isCrewResourceId } from './crewApi';
 import { validateRepairInput, validateSignedRepairAssessment } from './crewRepairWorkflow';
@@ -26,28 +27,6 @@ function freezeDraft(identity:QueueIdentity,projectId:string,taskId:string,input
   const draft=JSON.parse(JSON.stringify(input,(_k,v)=>{if(typeof v==='number'&&!Number.isFinite(v))throw Error('repair_measurements_required');return v;})) as FieldDraft;
   if(draft.actor!==identity.actor||(!historical&&draft.scope!==identity.scope)||draft.environment!==identity.environment||draft.projectId!==projectId||draft.taskId!==taskId||draft.command||draft.result||draft.supplement||draft.repairClaim)throw Error('repair_field_source_invalid');
   return draft;
-}
-async function previous(identity:QueueIdentity,projectId:string,s:Source,kind:string,effectId:unknown) {
-  if(!isCrewResourceId(effectId))throw Error('offline_repair_predecessor_required');
-  const rows=await (await openOfflineJournal(identity)).list();crewReadGuard(identity);
-  if(rows.some(row=>row.projectId===projectId&&row.proof.kind==='revocation'&&row.proof.registrationId===s.registrationId))throw Error('offline_device_revocation_requires_online_check');
-  const confirmed=rows.some(row=>row.projectId===projectId&&row.phase==='RECONCILED'&&row.proof.kind==='session-confirm'&&
-    sameOfflinePartition(row.identity,identity)&&row.identity.scope===identity.scope&&row.proof.confirmedScope===identity.scope&&row.proof.registrationId===s.registrationId);
-  const matches=[];
-  for(const row of rows){
-    if(row.projectId!==projectId||row.phase!=='RECONCILED'||row.proof.kind!=='signed-field-batch'||row.proof.registrationId!==s.registrationId||row.proof.deviceId!==s.deviceId||
-      !sameOfflinePartition(row.identity,identity)||(row.identity.scope!==identity.scope&&!confirmed))continue;
-    const ops=JSON.parse(row.body).operations as OfflineRecord[];
-    for(const op of ops){
-      if(op.kind!==kind||op.effectId!==effectId||op.taskId!==s.snapshot.taskId||op.assignmentId!==s.snapshot.assignmentId||op.originalActorId!==identity.actor||op.sourceDeviceId!==s.deviceId||(op.repair as OfflineRecord)?.resourceId!==s.repair.itemId)continue;
-      const verified=row.verifiedItems?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&['COMMITTED','REPLAYED'].includes(v.state));
-      const receipt=(row.receipt as {items?:OfflineRecord[]})?.items?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&v.durableAcknowledgment===true);
-      const outcome=receipt?.outcome as OfflineRecord|undefined;
-      if(verified&&outcome?.id===effectId&&outcome.itemId===s.repair.itemId&&outcome.taskId===s.snapshot.taskId)matches.push({op,outcome,scope:row.identity.scope});
-    }
-  }
-  if(matches.length!==1)throw Error('offline_repair_predecessor_required');
-  return matches[0];
 }
 async function prepare(identity:QueueIdentity,projectId:string,s:Source,kind:string,action:string,key:string,input:OfflineRecord) {
   const rows=await (await openOfflineJournal(identity)).list();crewReadGuard(identity);

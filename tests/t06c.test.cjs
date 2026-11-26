@@ -271,3 +271,38 @@ test('T06C attempt claim received before finish is never journaled or sent',asyn
  h.runtime.api.getFieldSubmissionDetailReal=async()=>{const r=await read();r.data.serverReceivedAt='2000-01-01T00:00:00Z';return r;};
  await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime));assert.equal(h.attemptCalls.length,0);
 });
+
+test('signed finish opens AFTER through its own source without manufacturing online history',async()=>{
+ const h=claimHarness();const online=structuredClone(h.rows[1]);h.rows.length=0;
+ const signed={finishId:online.receipt.data.id,executionStartId:online.payload.executionStartId,firstStartId:h.task.firstStartOriginId,
+ finishAt:h.at,packageId:h.task.repairContext.packageId,itemId:h.task.repairContext.itemId,bindingId:h.task.repairContext.bindingId,
+ assignmentId:h.task.assignmentId,itemVersion:next,signedFinishOriginId:online.receipt.data.id,timeBasis:'SERVER_RECEIVED'};
+ h.runtime.signedRepairClaim=async()=>structuredClone(signed);await h.runtime.write(h.d);
+ const d=await h.m.prepareFieldRepairClaim(h.ctx,h.runtime);assert.equal(d.repairClaim.timeBasis,'SERVER_RECEIVED');
+ assert.equal((await h.m.submitFieldDraft(d,h.runtime)).command.phase,'confirmed');assert.equal(h.rows.length,0);
+});
+for(const fault of ['version','before-bound','changed-origin'])test('signed AFTER refuses '+fault,async()=>{
+ const h=claimHarness(),finish=h.rows[1];h.rows.length=0;
+ const signed={finishId:finish.receipt.data.id,executionStartId:finish.payload.executionStartId,firstStartId:h.task.firstStartOriginId,finishAt:h.at,
+ packageId:h.task.repairContext.packageId,itemId:h.task.repairContext.itemId,bindingId:h.task.repairContext.bindingId,assignmentId:h.task.assignmentId,itemVersion:next,signedFinishOriginId:finish.receipt.data.id,timeBasis:'SERVER_RECEIVED'};
+ h.runtime.signedRepairClaim=async()=>structuredClone(signed);await h.runtime.write(h.d);
+ if(fault==='version'){signed.itemVersion=version;await assert.rejects(h.m.prepareFieldRepairClaim(h.ctx,h.runtime));return;}
+ const d=await h.m.prepareFieldRepairClaim(h.ctx,h.runtime);
+ if(fault==='before-bound')d.captures[0].capturedAt='2026-10-28T00:00:00Z';else signed.signedFinishOriginId=ids.first;
+ await assert.rejects(h.m.submitFieldDraft(d,h.runtime));assert.equal(h.posted(),undefined);
+});
+test('signed finish root can prepare and dispatch genuine final intake with exact replay after timeout',async()=>{
+ const h=await finishedForIntake(),open=h.runtime.journal;
+ // Keep the online harness rows out of this independent signed-source scenario.
+ h.runtime.journal=async()=>{const j=await open();return {...j,history:async()=> (await j.history()).filter(r=>r.operation==='attempt')};};
+ h.claim.repairClaim.signedFinishOriginId=h.claim.repairClaim.finishId;h.claim.repairClaim.timeBasis='SERVER_RECEIVED';
+ h.runtime.signedRepairClaim=async()=>structuredClone(h.claim.repairClaim);
+ const c=await h.workflow.prepareRepairAttempt(h.identity,h.runtime);const send=h.runtime.api.submitRepairAttemptReal;let original;
+ h.runtime.api.submitRepairAttemptReal=async(...args)=>{original=JSON.stringify(args);throw Error('timeout');};
+ await assert.rejects(h.workflow.dispatchRepair(h.identity,c.key,h.runtime),/timeout/);
+ // A newly downloaded post-intake snapshot can advance concurrency without
+ // changing the original signed finish or the immutable pending intake.
+ h.runtime.signedRepairClaim=async()=>({...structuredClone(h.claim.repairClaim),itemVersion:'AAAAAAAACAA='});
+ h.runtime.api.submitRepairAttemptReal=async(...args)=>{assert.equal(JSON.stringify(args),original);return send(...args);};
+ assert.equal((await h.workflow.dispatchRepair(h.identity,c.key,h.runtime)).phase,'CONFIRMED');assert.equal(h.attemptCalls.length,1);
+});

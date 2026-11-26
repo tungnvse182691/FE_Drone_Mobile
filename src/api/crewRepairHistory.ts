@@ -11,6 +11,7 @@ export interface RepairRuntime {
   api: typeof api;
   journal: (identity: RepairIdentity) => ReturnType<typeof openRepairJournal>;
   fieldDraft?: () => Promise<FieldDraft>;
+  signedRepairClaim?: (task:api.FieldTaskViewFact) => Promise<NonNullable<FieldDraft['repairClaim']>>;
 }
 export function repairRuntime(identity: RepairIdentity): RepairRuntime {
   return { current: () => currentRepairIdentity(identity.projectId,identity.taskId), uuid: randomUUID,

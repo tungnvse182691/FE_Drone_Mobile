@@ -78,8 +78,8 @@ test('Error mappers localize known codes and keep unknown outcomes uncertain',()
   ]) {
     const ast=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true);
     const n=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name);
-    const denial=ast.statements.find(n=>ts.isClassDeclaration(n)&&n.name?.text==='FastTrackStartBlockedError');
-    const source=(denial?denial.getText()+'\n':'')+n.getText().replace(/^export /,'');
+    const denial=ast.statements.filter(n=>ts.isClassDeclaration(n)&&['FastTrackStartBlockedError','RepairDraftInputError'].includes(n.name?.text));
+    const source=denial.map(n=>n.getText()).join('\n')+'\n'+n.getText().replace(/^export /,'');
     const fn=vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+';'+name,{Error});
     for(const code of codes)assert.match(fn(Error(code)),/[À-ỹ]/);
     assert.doesNotMatch(fn(Error('unknown_code')),/thành công|hoàn thành|đã xác nhận/);

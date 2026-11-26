@@ -56,7 +56,7 @@ test('upload progress measures acknowledged bytes including partial last part', 
   assert.equal(mod.uploadedRatio({ ...q.getState().items[0], partSizeBytes: 2, partETags: { 1: 'etag' } }), 2 / 3);
 });
 const { screen } = require('./helpers/roadfe-screen.cjs');
-test('retained failed ledger does not prevent adding replacement or selecting verified evidence', async () => {
+test('retained failed ledger opens bounded camera flow and preserves verified evidence', async () => {
   const s = screen('app/(reporter)/capture.tsx', { library: async () => ({ canceled: false, assets: [{ uri: 'file:///cache/new.jpg', fileName: 'new.jpg', mimeType: 'image/jpeg' }] }) });
   s.h.login();
   for (let i = 0; i < 3; i++) {
@@ -65,8 +65,16 @@ test('retained failed ledger does not prevent adding replacement or selecting ve
   }
   const before = JSON.stringify([...s.h.rows]);
   s.render(); await s.flush();
-  assert.ok(s.nodes().some(n => n.props?.testID === 'capture-pick-photo'));
-  await s.tap('capture-pick-photo'); await s.flush();
-  assert.equal(s.uploads.useUploadsStore.getState().items.length, 4);
-  assert.equal(JSON.stringify([...s.h.rows].slice(0, 3)), before);
+  assert.ok(s.nodes().some(n => n.props?.testID === 'capture-take-photo'));
+  assert.equal(s.nodes().some(n => n.props?.testID === 'capture-pick-photo'), false);
+  await s.tap('capture-take-photo'); await s.flush();
+  assert.ok(s.nav.includes('/(reporter)/report'));
+  assert.equal(s.uploads.useUploadsStore.getState().items.length, 3);
+  assert.equal(JSON.stringify([...s.h.rows]), before);
+  const verified = await s.uploads.useUploadsStore.getState().enqueuePhoto({uriLocal:'kept-verified.jpg',fileName:'kept.jpg',mediaType:'image/jpeg',sizeBytes:3,checksumSha256:'b'.repeat(64)});
+  s.uploads.useUploadsStore.setState({items:s.uploads.useUploadsStore.getState().items.map(i=>i.id===verified?{...i,mediaState:'VERIFIED'}:i)});
+  s.render();await s.flush();
+  assert.equal(s.nodes().find(n=>n.props?.title==='Mở phản ánh').props.disabled,false);
+  await s.press('Mở phản ánh');assert.equal(s.nav.at(-1),'/(reporter)/report');
+  assert.equal(JSON.stringify([...s.h.rows].slice(0,3)),before);s.unmount();
 });

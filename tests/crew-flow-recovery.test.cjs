@@ -211,9 +211,9 @@ test('Crew incomplete assessment shows server reasons without technical disclosu
  const f=normalScreen('progress',[{key:'assessment',operation:'assessment',phase:'CONFIRMED',receipt:{data:{readiness:'INCOMPLETE',missingReasons:['LOCATION_UNKNOWN','REQUIRED_MEASUREMENT_MISSING','NEW_SERVER_REASON']}}}]);
  f.s.render();await f.s.flush();
  const text=JSON.stringify(f.s.nodes());
- assert.ok(text.includes('Chưa bổ sung vị trí quan sát.'));
- assert.ok(text.includes('Thiếu loại số đo nhiệm vụ yêu cầu.'));
- assert.ok(text.includes('Còn yêu cầu bổ sung. Xem chi tiết trong lịch sử.'));
+ assert.ok(text.includes('Bổ sung vị trí quan sát.'));
+ assert.ok(text.includes('Bổ sung loại đo nhiệm vụ yêu cầu.'));
+ assert.ok(text.includes('Điều kiện chưa có diễn giải: NEW_SERVER_REASON. Gửi mã này cho quản lý để đối chiếu.'));
  assert.ok(f.s.nodes().some(n=>n.props.title==='Mở hồ sơ để bổ sung'));
  assert.ok(!text.includes('Ảnh và số đo đã lưu được giữ nguyên. Sửa phần còn thiếu'));
  assert.ok(text.includes('Cần bổ sung đánh giá'));
@@ -221,7 +221,7 @@ test('Crew incomplete assessment shows server reasons without technical disclosu
  assert.ok(!f.s.nodes().some(n=>n.props.title==='Bắt đầu thi công'));
  assert.equal(f.posts(),0);
  f.switch();f.s.render();await f.s.flush();
- assert.ok(!JSON.stringify(f.s.nodes()).includes('Thiếu loại số đo nhiệm vụ yêu cầu.'));
+ assert.ok(!JSON.stringify(f.s.nodes()).includes('Bổ sung loại đo nhiệm vụ yêu cầu.'));
  f.s.unmount();
 });
 test('Crew mounted definitive recovery requires explicit confirmation and cannot POST or survive actor switch',async()=>{

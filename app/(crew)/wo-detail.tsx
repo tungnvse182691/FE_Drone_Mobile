@@ -1,3 +1,4 @@
+import { readCurrentSignedRepairClaim } from '../../src/api/crewSignedRepairClaim';
 import { fastTrackReason } from '../../src/api/crewFastTrackFeedback';
 import { useRepairBootstrap } from '../../src/hooks/useRepairBootstrap';
 import { CrewRepairFacts } from '../../src/components/crew/CrewRepairFacts';
@@ -352,17 +353,24 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
   const [showRepairSteps,setShowRepairSteps]=useState(false);
   const [showCloseoutEvidence,setShowCloseoutEvidence]=useState(false);
   const [showBeforeEvidence,setShowBeforeEvidence]=useState(false);
+  const [signedFinished,setSignedFinished]=useState(false);
   const live=currentRepairIdentity(task.projectId,task.id);
   const history=sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)?storedHistory:[];
   const draft=sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)?storedDraft:null;
   const active=useRef(false),lock=useRef(false);
   const load=useCallback(async()=>{
     const i=currentRepairIdentity(task.projectId,task.id);if(!i)return;
-    setLoaded(false);setBusy(false);setHistory([]);setHistoryIdentity(null);setConfirmation(null);setDraft(null);setNotice('');
+    setLoaded(false);setBusy(false);setSignedFinished(false);setHistory([]);setHistoryIdentity(null);setConfirmation(null);setDraft(null);setNotice('');
     try {
       const rows=await readRepairHistory(i,undefined,true);
       if(!active.current||!sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))return;
       setHistoryIdentity(i);setHistory(rows);setLoaded(true);
+      if(rows.every(row=>row.operation==='attempt'||row.operation==='supplement')&&task.detail) {
+        try {
+          const claim=await readCurrentSignedRepairClaim(i,task.detail);
+          if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setSignedFinished(rows.length>0||claim.itemVersion===task.detail.repairContext?.itemVersion);
+        }catch{/* No signed proof: existing online guards remain closed. */}
+      }
       try {
         const field=await readRepairFieldDraft(i);
         if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setDraft(field);
@@ -370,12 +378,12 @@ export function NormalRepairBootstrap({ task, stage='all' }: { task: CrewTask; s
         if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice('Nháp đo kiểm cũ được giữ riêng để đối soát. Lịch sử sửa chữa không bị xóa; không tự nhận nháp phiên cũ.');
       }
     }catch(e){if(active.current&&sameRepairIdentity(i,currentRepairIdentity(task.projectId,task.id)))setNotice(repairErrorMessage(e));}
-  },[task.id,task.projectId,identity.scope,identity.user?.id,live?.environment]);
+  },[task.id,task.projectId,task.detail,identity.scope,identity.user?.id,live?.environment]);
   useFocusEffect(useCallback(()=>{active.current=true;void load();return()=>{active.current=false;};},[load]));
   const pending=history.find(c=>!['CONFIRMED','REJECTED'].includes(c.phase));
   const assessment=history.filter(c=>c.operation==='assessment'&&c.phase==='CONFIRMED').at(-1);
   const started=history.find(c=>c.operation==='start'&&c.phase==='CONFIRMED');
-  const finished=history.find(c=>c.operation==='finish'&&c.phase==='CONFIRMED');
+  const finished=history.find(c=>c.operation==='finish'&&c.phase==='CONFIRMED')||(sameRepairIdentity(historyIdentity??{actor:'',scope:'',environment:'',projectId:'',taskId:''},live)&&signedFinished);
   const intake=history.find(c=>c.operation==='attempt'&&c.phase==='CONFIRMED');
   // Current API-080 decision takes precedence over historical intake readiness.
   const currentContext=result.status==='ready'?result.repairContext:null;

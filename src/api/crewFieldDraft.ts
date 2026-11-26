@@ -54,7 +54,7 @@ export interface FieldDraft extends FieldContext {
   result?: crew.FieldSubmissionViewFact;
   supplement?: { parentId: string; rootId: string; revision: number; contentHash: string;
     reviewId: string; attemptId: string };
-  repairClaim?: { finishId: string; executionStartId: string; firstStartId: string; finishAt: string;
+  repairClaim?: { signedFinishOriginId?: string; timeBasis?: 'SERVER_RECEIVED'; finishId: string; executionStartId: string; firstStartId: string; finishAt: string;
     packageId: string; itemId: string; bindingId: string; assignmentId: string; itemVersion: string };
 }
 /** Editing permission only. Never changes the server DTO or permits dispatch. */
@@ -71,6 +71,7 @@ export interface FieldRuntime {
   uuid: () => string; bytes: (uri: string) => Promise<Uint8Array>; hash: (bytes: Uint8Array) => Promise<string>;
   wait: () => Promise<void>; api: typeof crew;
   repairHistory?: () => Promise<RepairJournalRecord[]>;
+  signedRepairClaim?: (task:crew.FieldTaskViewFact) => Promise<NonNullable<FieldDraft['repairClaim']>>;
   recoveryRead?: () => Promise<FieldDraft|null>;
   historicalRead?: (scope:string) => Promise<FieldDraft|null>;
   sealPhoto?: (photo: Pick<FieldCapture,'uri'|'size'|'checksum'>) => Promise<MediaVaultReference | undefined>;
@@ -361,6 +362,12 @@ export async function captureFieldPhoto(context: FieldContext, uri: string, purp
 }
 async function claimSource(context: FieldContext,task: crew.FieldTaskViewFact,runtime: FieldRuntime) {
   const history=await guarded(context,runtime,async()=>runtime.repairHistory ? runtime.repairHistory() : readRepairHistory(context));
+  if(!history.length) {
+    const signed=await guarded(context,runtime,()=>runtime.signedRepairClaim?runtime.signedRepairClaim(task):
+      import('./crewSignedRepairClaim').then(m=>m.readCurrentSignedRepairClaim(context,task)));
+    if(signed.itemVersion!==task.repairContext?.itemVersion||signed.timeBasis!=='SERVER_RECEIVED'||!crew.isCrewResourceId(signed.signedFinishOriginId))throw Error('repair_finish_required');
+    return signed;
+  }
   const finish=history.at(-1),start=history.find(row=>row.operation==='start');
   const ctx=task.repairContext;
   const repairMode=task.mode==='NORMAL'?'NORMAL':task.mode==='CONDITIONAL_FT'?'FAST_TRACK':null;
@@ -406,6 +413,15 @@ async function verifyFieldRepairSupplement(draft: FieldDraft,task: crew.FieldTas
   if(history.some(row=>row.phase!=='CONFIRMED'))throw Error('repair_unresolved_command');
   const finish=history.find(row=>row.operation==='finish'&&row.receipt?.data.id===claim.finishId);
   const intake=history.filter(row=>['attempt','supplement'].includes(row.operation)).at(-1);
+  if(claim.signedFinishOriginId) {
+    if(finish)throw Error('repair_claim_source_changed');
+    const signed=await guarded(draft,runtime,()=>runtime.signedRepairClaim?runtime.signedRepairClaim(task):
+      import('./crewSignedRepairClaim').then(m=>m.readCurrentSignedRepairClaim(draft,task)));
+    if(Object.entries(signed).some(([k,v])=>k!=='itemVersion'&&claim[k as keyof typeof claim]!==v)||!intake?.receipt||
+      intake.receipt.data.attemptId!==s.attemptId||intake.payload.fieldSubmissionId!==s.parentId||!sameResource(intake.identity,draft)||
+      intake.identity.bindingId!==claim.bindingId||intake.identity.assignmentId!==claim.assignmentId||intake.identity.itemId!==claim.itemId||intake.identity.packageId!==claim.packageId)throw Error('repair_finish_required');
+    return claim;
+  }
   if(!finish?.receipt||!intake?.receipt||intake.receipt.data.attemptId!==s.attemptId||
     intake.payload.fieldSubmissionId!==s.parentId||finish.payload.executionStartId!==claim.executionStartId||
     finish.receipt.data.verifiedOriginalAt!==claim.finishAt||!sameResource(finish.identity,draft)||

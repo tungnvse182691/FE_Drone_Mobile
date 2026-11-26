@@ -5,8 +5,9 @@ const sha=async s=>crypto.createHash('sha256').update(s).digest('hex'),id=crypto
 function repairFixture(){
  const h=submissionFixture(),ctx={schemaVersion:1,packageId:id(),itemId:id(),bindingId:id(),itemVersion:'AAAAAAAAB9E=',taskId:h.h.task,assignmentId:h.h.snapshot.assignmentId,crewId:h.h.identity.actor,mode:'Normal',state:'Assigned',approvedBy:id(),approvedPlanHash:'a'.repeat(64),proposalPlanHash:'a'.repeat(64),originalCrewFirstStartId:h.origin,currentAssessmentId:null,currentExecutionStartId:null,currentExecutionFinishId:null,executeAuthority:'REVALIDATE_CURRENT_SOURCE_AT_ADMISSION'};
  h.draft.measurements[0].sampleId=id();let saved,active=true,onList,onHistory;
- const validator=load('src/api/crewRepairWorkflow.ts',new Proxy({'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairHistory':{timestamp:v=>typeof v==='string'&&Number.isFinite(Date.parse(v))}},{has:()=>true,get:(o,k)=>o[k]??{}}));
- const m=load('src/api/crewOfflineRepair.ts',{'./crewFieldDraft':{...load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),currentFieldContext:()=>({...h.h.identity,projectId:h.h.project,taskId:h.h.task}),readHistoricalFieldDraft:async(_context,scope)=>{onHistory?.();if(h.draft.scope!==scope)throw Error('field_draft_invalid');return h.draft;}},'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx},'./crewSafetyWorkflow':{crewReadGuard:()=>{if(!active)throw Error('session_changed');}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':load('src/api/crewRepairDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewOfflineJournal':{sameOfflinePartition:(a,b)=>a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.partition===b.partition,openOfflineJournal:async()=>({list:async()=>{onList?.();return h.h.rows;}})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
+ const validator=load('src/api/crewRepairWorkflow.ts',new Proxy({'./crewFastTrackFeedback':load('src/api/crewFastTrackFeedback.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairHistory':{timestamp:v=>typeof v==='string'&&Number.isFinite(Date.parse(v))}},{has:()=>true,get:(o,k)=>o[k]??{}}));
+ const deps={'./crewFieldDraft':{...load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),currentFieldContext:()=>({...h.h.identity,projectId:h.h.project,taskId:h.h.task}),readHistoricalFieldDraft:async(_context,scope)=>{onHistory?.();if(h.draft.scope!==scope)throw Error('field_draft_invalid');return h.draft;}},'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx,readOfflineResource:async(_i,_p,_k,origin)=>{const r=h.h.rows.find(r=>r.receipt?.items?.some(i=>i.originId===origin));return structuredClone(r?.receipt.items.find(i=>i.originId===origin));}},'./crewSafetyWorkflow':{crewReadGuard:()=>{if(!active)throw Error('session_changed');}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':load('src/api/crewRepairDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewOfflineJournal':{sameOfflinePartition:(a,b)=>a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.partition===b.partition,openOfflineJournal:async()=>({list:async()=>{onList?.();return h.h.rows;}})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}};
+ const claims=load('src/api/crewSignedRepairClaim.ts',deps);const m={...load('src/api/crewOfflineRepair.ts',{...deps,'./crewSignedRepairClaim':claims}),...claims};
  return {...h,ctx,m,switch:()=>active=false,onList:f=>onList=f,onHistory:f=>onHistory=f,get saved(){return saved;}};
 }
 test('signed REPAIR assessment freezes VERIFIED draft and preserves item identity',async()=>{
@@ -41,7 +42,7 @@ for(const operation of ['start','finish'])test('signed REPAIR '+operation+' refu
 });
 function addReconciledRepair(f,kind,effectId,body,outcome){
  const origin=id(),op={schemaVersion:1,originId:origin,effectId,kind,taskId:f.h.task,assignmentId:f.h.snapshot.assignmentId,originalActorId:f.h.identity.actor,sourceDeviceId:f.h.device,repair:{resourceId:f.ctx.itemId,...body}};
- f.h.rows.push({identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch',registrationId:f.h.registration,deviceId:f.h.device},body:JSON.stringify({operations:[op]}),verifiedItems:[{originId:origin,effectId,canonicalOriginId:origin,kind,state:'COMMITTED'}],receipt:{items:[{originId:origin,effectId,canonicalOriginId:origin,kind,durableAcknowledgment:true,outcome:{id:effectId,itemId:f.ctx.itemId,taskId:f.h.task,...outcome}}]}});
+ f.h.rows.push({identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch',registrationId:f.h.registration,deviceId:f.h.device},body:JSON.stringify({operations:[op]}),verifiedItems:[{originId:origin,effectId,canonicalOriginId:origin,kind,state:'COMMITTED'}],receipt:{items:[{originId:origin,effectId,canonicalOriginId:origin,kind,state:'COMMITTED',durableAcknowledgment:true,outcome:{id:effectId,itemId:f.ctx.itemId,taskId:f.h.task,...outcome}}]}});
 }
 test('signed REPAIR start uses reconciled assessment and current approved source',async()=>{
  const f=repairFixture(),assessmentId=id();f.ctx.currentAssessmentId=assessmentId;
@@ -278,4 +279,33 @@ for(const fault of ['approval','already-signed','finished'])test('REPAIR screen 
  if(fault==='already-signed')rows=[{id:id(),projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{taskId:f.h.task,snapshotId:f.h.snapshot.id,kind:'REPAIR_EXECUTION_START'}]})}];
  const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:f.h.project,taskId:f.h.task},modules:{'../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../offline/upload-queue':{currentQueueIdentity:()=>f.h.identity,sameQueueIdentity:()=>true},'../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...f.h.snapshot,downloadedAt:'2026-11-26T00:00:00Z'},facts:{status:'InProgress',repair:f.ctx}})},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows})},'../../api/crewOfflinePreparation':{},'../../api/crewFieldDraft':{currentFieldContext:()=>null},'../../api/crewOfflineRepair':{}}});
  ui.render();await ui.flush();assert.equal(ui.nodes().some(n=>['Ký bắt đầu sửa chữa','Ký kết thúc sửa chữa'].includes(n.props?.title)),false);assert.match(JSON.stringify(ui.nodes()),fault==='approval'?/phê duyệt/:fault==='finished'?/không phải nghiệm thu/:/Tải phiên bản mới/);ui.unmount();
+});
+
+test('signed finish continuation retains uncertain time and requires exact durable start/finish',async()=>{
+ const f=repairFixture(),startId=id(),finishId=id();f.ctx.state='InProgress';f.ctx.currentExecutionStartId=startId;f.ctx.currentExecutionFinishId=finishId;
+ addReconciledRepair(f,'REPAIR_EXECUTION_START',startId,{start:{fieldFirstStartId:f.origin}},{firstStartId:f.origin});
+ addReconciledRepair(f,'REPAIR_EXECUTION_FINISH',finishId,{finish:{executionStartId:startId}},{executionStartId:startId,serverReceivedAt:'2026-11-26T10:00:00Z',verifiedOriginalAt:null,timeProvenance:'UNKNOWN'});
+ const task={id:f.h.task,projectId:f.h.project,assignmentId:f.h.snapshot.assignmentId,assignedToUserId:f.h.identity.actor,firstStartOriginId:f.origin,purpose:'PostRepair',mode:'NORMAL',repairContext:{...f.ctx,mode:'NORMAL',status:'InProgress'}};
+ const claim=await f.m.readSignedRepairClaim(f.h.identity,f.h.project,f.h.task,task);
+ assert.equal(claim.finishId,finishId);assert.equal(claim.finishAt,'2026-11-26T10:00:00Z');assert.equal(claim.timeBasis,'SERVER_RECEIVED');assert.equal(claim.verifiedOriginalAt,undefined);
+ f.h.rows.at(-1).verifiedItems=[];
+ await assert.rejects(f.m.readSignedRepairClaim(f.h.identity,f.h.project,f.h.task,task));assert.equal(f.saved,undefined);
+});
+
+for(const fault of ['actor','binding','first-start','unacknowledged','wrong-start','wrong-time','old-session','revoked','session-switch'])test('signed AFTER source fails closed: '+fault,async()=>{
+ const f=repairFixture(),startId=id(),finishId=id();f.ctx.state='InProgress';f.ctx.currentExecutionStartId=startId;f.ctx.currentExecutionFinishId=finishId;
+ addReconciledRepair(f,'REPAIR_EXECUTION_START',startId,{start:{fieldFirstStartId:f.origin}},{firstStartId:f.origin});
+ addReconciledRepair(f,'REPAIR_EXECUTION_FINISH',finishId,{finish:{executionStartId:startId}},{executionStartId:startId,serverReceivedAt:'2026-11-26T10:00:00Z',verifiedOriginalAt:null,timeProvenance:'UNKNOWN'});
+ const task={id:f.h.task,projectId:f.h.project,assignmentId:f.h.snapshot.assignmentId,assignedToUserId:f.h.identity.actor,firstStartOriginId:f.origin,purpose:'PostRepair',mode:'NORMAL',repairContext:{...f.ctx,mode:'NORMAL',status:'InProgress'}};
+ const finish=f.h.rows.at(-1),outcome=finish.receipt.items[0].outcome;
+ if(fault==='actor')task.assignedToUserId=id();
+ if(fault==='binding')task.repairContext.bindingId=id();
+ if(fault==='first-start')task.firstStartOriginId=id();
+ if(fault==='unacknowledged')finish.receipt.items[0].durableAcknowledgment=false;
+ if(fault==='wrong-start')outcome.executionStartId=id();
+ if(fault==='wrong-time')outcome.timeProvenance='SERVER_ONLINE';
+ if(fault==='old-session')finish.identity={...finish.identity,scope:'sid:old'};
+ if(fault==='revoked')f.h.rows.push({projectId:f.h.project,proof:{kind:'revocation',registrationId:f.h.registration}});
+ if(fault==='session-switch')f.onList(()=>f.switch());
+ await assert.rejects(f.m.readSignedRepairClaim(f.h.identity,f.h.project,f.h.task,task));assert.equal(f.saved,undefined);
 });
