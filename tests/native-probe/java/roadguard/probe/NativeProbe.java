@@ -171,6 +171,14 @@ public final class NativeProbe extends Instrumentation {
     java.nio.file.Path rejected=new File(dir,"file-rejected-"+UUID.randomUUID()).toPath();
     boolean refused=false;try{file.getMethod("open",types).invoke(null,sealed,rejected,key,"other-account");}catch(InvocationTargetException expected){refused=true;}
     require(refused&&!java.nio.file.Files.exists(rejected),"native_file_binding_accepted");
+    // Tamper only a fresh isolated ciphertext copy, never the original vault/DB.
+    java.nio.file.Path tampered=new File(dir,"file-tampered-"+UUID.randomUUID()).toPath();
+    java.nio.file.Path tamperedOutput=new File(dir,"file-tampered-output-"+UUID.randomUUID()).toPath();
+    byte[] corrupted=java.nio.file.Files.readAllBytes(sealed);corrupted[corrupted.length-1]^=1;
+    java.nio.file.Files.write(tampered,corrupted);Arrays.fill(corrupted,(byte)0);
+    refused=false;try{file.getMethod("open",types).invoke(null,tampered,tamperedOutput,key,binding);}catch(InvocationTargetException expected){refused=true;}
+    require(refused&&!java.nio.file.Files.exists(tamperedOutput),"native_file_tamper_accepted");
+    require(MessageDigest.isEqual(data,java.nio.file.Files.readAllBytes(source)),"native_tamper_original_changed");
     // Exercise the actual kernel NOREPLACE branch, not only Java's early existence check.
     java.nio.file.Path collisionSource=new File(dir,"publication-source-"+UUID.randomUUID()).toPath();
     java.nio.file.Path collisionTarget=new File(dir,"publication-target-"+UUID.randomUUID()).toPath();
@@ -178,7 +186,7 @@ public final class NativeProbe extends Instrumentation {
     Method publish=file.getDeclaredMethod("publishAndroid",String.class,String.class,String.class);publish.setAccessible(true);
     boolean collision=false;try{publish.invoke(null,dir.getCanonicalPath(),collisionSource.getFileName().toString(),collisionTarget.getFileName().toString());}catch(InvocationTargetException expected){collision=true;}
     require(collision&&java.nio.file.Files.readAllBytes(collisionSource)[0]==1&&java.nio.file.Files.readAllBytes(collisionTarget)[0]==2,"native_publication_clobbered");
-    result.putString("localFile","KEYSTORE_FILE_ROUNDTRIP_AND_WRONG_CONTEXT_PASS");
+    result.putString("localFile","KEYSTORE_FILE_ROUNDTRIP_WRONG_CONTEXT_TAMPER_PASS");
   }
   private void handoverProbe(KeyStore ks,Bundle result)throws Exception {
     stage="handover_native";

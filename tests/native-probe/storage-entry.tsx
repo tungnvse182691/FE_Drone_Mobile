@@ -38,6 +38,14 @@ async function run() {
   initialize(p);
   const prior = p.read() !== null;
   const db = openProtectedDatabase(p);
+  const version = Object.values(db.getFirstSync<Record<string,unknown>>('PRAGMA cipher_version') ?? {})[0];
+  assert(typeof version === 'string' && /^4\./.test(version),'cipher_runtime_missing');
+  const integrity = db.getAllSync<Record<string,unknown>>('PRAGMA integrity_check');
+  assert(integrity.length === 1 && Object.values(integrity[0])[0] === 'ok','database_integrity_failed');
+  // Bundled expo-sqlite/vendor/sqlcipher/sqlite3.c implements this PRAGMA in 4.17.
+  // Do not interpret an unknown PRAGMA's empty result as an integrity proof.
+  assert(version.startsWith('4.17.'),'cipher_integrity_runtime_unrecognized');
+  assert(db.getAllSync('PRAGMA cipher_integrity_check').length === 0,'cipher_integrity_failed');
   assert(db.getFirstSync<{n:number}>("SELECT count(*) n FROM specimen WHERE id='pending'")?.n === 1,'pending_missing');
   assert(db.getFirstSync<{n:number}>("SELECT count(*) n FROM specimen WHERE id='duplicate'")?.n === 2,'duplicate_multiset');
   await db.withExclusiveTransactionAsync(async tx => {
@@ -95,7 +103,7 @@ async function run() {
   try { openProtectedDatabase({...p,read:() => JSON.stringify({...state,key:'11'.repeat(32)})}); } catch { rejected = true; }
   assert(rejected,'wrong_key_accepted');
   const media = await mediaBridge();
-  return (prior ? 'PASS: restart, keyed transactions, rollback, blob, recovery, wrong key' : 'PASS: migration, keyed transactions, rollback, blob, recovery, wrong key') + '; ' + media;
+  return (prior ? 'PASS: restart, keyed transactions, integrity, rollback, blob, recovery, wrong key' : 'PASS: migration, keyed transactions, integrity, rollback, blob, recovery, wrong key') + '; ' + media;
 }
 async function mediaBridge() {
   assert(offlineNative,'media_native_missing');
@@ -138,6 +146,17 @@ async function mediaAccess(sourceUri: string, expected: Uint8Array) {
     const saved = SecureStore.getItem(key);
     const ref: MediaVaultReference = saved ? JSON.parse(saved) : await first.seal(sourceUri,{sizeBytes:expected.length,checksumSha256});
     if (!saved) SecureStore.setItem(key,JSON.stringify(ref),{keychainAccessible:SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY});
+    for (const changed of [{actor:'97979797-9797-4797-8797-979797979797'}, {environment:'http://other-qa.invalid/api/v1'}, {role:role==='REPORTER'?'DRONE_OPERATOR' as const:'REPORTER' as const}]) {
+      let denied = false;
+      try { await first.readRange({...ref,...changed},0,10); } catch { denied = true; }
+      assert(denied,'media_access_foreign_reference_accepted');
+      // Independently exercise the native account/environment/role binding.
+      const foreign = {...live,...changed};
+      const binding = JSON.stringify([foreign.actor,foreign.environment,foreign.role]);
+      denied = false;
+      try { await native.readMediaRange(binding,ref.assetId,0,10); } catch { denied = true; }
+      assert(denied,'media_native_foreign_binding_accepted');
+    }
     const bytes = await first.readAll(ref,1024*1024);
     assert(bytes.length===expected.length && bytes.every((b,i)=>b===expected[i]),'media_access_bytes_changed');bytes.fill(0);
     live = {...live,session:'isolated-session-2'};
