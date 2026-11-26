@@ -27,7 +27,7 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
         const loaded=await readOfflineCrewTask(identity,projectId,taskId);
         const rows=await (await openOfflineJournal(identity)).list();
         const context=currentFieldContext(projectId,taskId);
-        const draft=context?await loadFieldDraft(context,await openFieldRuntime(context)):null;
+        const draft=context&&loaded.facts.repair==null?await loadFieldDraft(context,await openFieldRuntime(context)):null;
         if(live.current&&sameQueueIdentity(identity)){
           setSource(loaded);setLocalStarted(!!draft?.offlineStart);setRecord(rows.filter(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
             (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===taskId)).at(-1)??null);
@@ -78,14 +78,13 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
     try{
       let saved:OfflineJournalRecord;
       if(kind==='finish')saved=await prepareOfflineRepairFinish(identity,projectId,taskId);
+      else if(kind==='start')saved=await prepareOfflineRepairStart(identity,projectId,taskId);
       else {
         const context=currentFieldContext(projectId,taskId);
         if(!context)throw Error('field_session_changed');
         const runtime=await openFieldRuntime(context),draft=await loadFieldDraft(context,runtime);
         if(!sameQueueIdentity(identity))return;
-        saved=kind==='assessment'
-          ?await prepareOfflineRepairAssessment(identity,projectId,taskId,draft)
-          :await prepareOfflineRepairStart(identity,projectId,taskId,draft);
+        saved=await prepareOfflineRepairAssessment(identity,projectId,taskId,draft);
       }
       if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã lưu gói ký trên thiết bị. Mở Đồng bộ để gửi và kiểm tra biên nhận máy chủ.');}
     }catch(error){

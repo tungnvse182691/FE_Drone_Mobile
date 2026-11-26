@@ -80,3 +80,21 @@ Exact Reporter description `QA offline reporter draft 20261126` has no matching 
 - Build recipe remains `docs/worklogs/GROUP1-OFFLINE-HANDOFF-20261125.md:360` with existing `.cache/offline-session-20261124/crew-qa-debuggable.gradle`, x86_64, max-workers=1, no-parallel, CMAKE_BUILD_PARALLEL_LEVEL=1, API 10.0.2.2:18181. Check disk and current host before building; no build executed by Codex.
 
 Artifacts to retain: existing pending media/DB/journal, current APK/rollback and `.cache/offline-final-takeover/{typecheck.log,targeted.log,regression.log,repair-readback.json,repair-current-source.json,canonical-readback.json}`. No artifact deleted; no APK/cache committed.
+
+## 4. Codex takeover — checkpoint 2 (2026-11-26, acceptance pending)
+
+Parent `553dcd6`; main, IMPLEMENT_AND_SELF_REVIEW. REPAIR start/finish now accepts a reconciled predecessor from an older session only with current session-confirm, identical actor/role/environment/partition/device registration, durable verified receipt and exact task/assignment/item/effect lineage. Revocation and session changes fail closed. Old signed records are not rewritten. Pending commands across sessions prevent new duplicate commands.
+
+Source/test: `src/api/crewOfflineRepair.ts`, `src/components/crew/CrewOfflineFieldTask.tsx`, `tests/crew-offline-field.test.cjs`. Start reads the exact assessment draft at its original scope and compares measurements/evidence; no adoption. REPAIR screen no longer attempts to adopt a historical FIELD draft during initial load; the start handler uses the validated historical reader. Double tap remains guarded. No layout/text/navigation changes; no new screenshots (Android delegated).
+
+- RED: earlier-session finish initially failed (`.cache/offline-final-takeover/repair-red.log`).
+- `npx tsc --noEmit`: PASS exit 0 (`repair-typecheck.log`).
+- `node --test tests/crew-offline-field.test.cjs tests/crew-offline-workflow.test.cjs tests/crew-flow-recovery.test.cjs`: PASS 58/58 (`repair-targeted.log`).
+- `node --test --test-concurrency=4 tests/*.test.cjs`: PASS 2265/2265, exit 0, 157577.6919 ms (`repair-regression.log`), final source including initial-load fix.
+- Self-review: lineage, immutable predecessor, confirmed authority, foreign partitions, revocation, pending old commands, changed measurements, session switch during historical read; diff/privacy review and `git diff --check` PASS.
+
+BE source/readback remains pinned `b8f718dd372b9aa8b2923045fdcd82dd0e5e0583`. Fetched remote develop `e86255caa724d375329744817321ed220264c729`; relevant Offline DTO delta adds parameterless MVC constructor/JsonConstructor, not a signed wire change. No BE checkout, edit, migration or deployment. Existing READY assessment/approved plan remains source; execution IDs still null in latest readback from checkpoint 1. No new HTTP mutation.
+
+Antigravity: build source including this commit; on dedicated task `4755fa5d-72d6-488e-8896-2c40e4ca1c59`, confirm session and use existing assessment `9278b439-74f6-4a3e-b5d2-5db6ca5ff590` (do not recreate). Sign start offline, reconnect, reconcile durable per-item receipt/readback, refresh snapshot, then finish as a separate physical event, reconcile/read back again. Verify start/finish IDs and item versions from server, not task ETag. Repeat lost response/restart with original body/key, no duplicate. Negative cases: missing confirmation, revoked device, foreign actor/environment, changed original measurements, pending old packet. NORMAL fixture is already approved; no approval/auth blocker is claimed.
+
+Status: LOGIC_TESTED; signed start/finish native/Android acceptance and mutation receipt/readback NOT_RUN under owner workflow. Current APK predates source. Build config remains section 3. Retain `repair-{red,typecheck,targeted,regression}.log` in existing cache; no artifacts deleted/staged.

@@ -1,12 +1,12 @@
 import type { QueueIdentity } from '../offline/upload-queue';
-import { signedCaptureReady, type FieldDraft } from './crewFieldDraft';
+import { signedCaptureReady, currentFieldContext, readHistoricalFieldDraft, type FieldDraft } from './crewFieldDraft';
 import { readOfflineCrewTask } from './crewOfflineField';
 import { validateRepairSnapshot } from './crewOfflineWorkflow';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { isCrewResourceId } from './crewApi';
 import { validateRepairInput, validateSignedRepairAssessment } from './crewRepairWorkflow';
 import { repairAssessmentMatchesDraft } from './crewRepairDraft';
-import { openOfflineJournal } from './crewOfflineJournal';
+import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
 import { repairCoreHash, type OfflineRecord } from './crewOfflineProtocol';
 import { prepareSignedRepairBatch } from '../offline/crewSignedSync';
 import { generateChecksum } from '../offline/checksum';
@@ -22,25 +22,28 @@ async function source(identity:QueueIdentity,projectId:string,taskId:string) {
   return {...s,repair};
 }
 type Source=Awaited<ReturnType<typeof source>>;
-function freezeDraft(identity:QueueIdentity,projectId:string,taskId:string,input:FieldDraft):FieldDraft {
+function freezeDraft(identity:QueueIdentity,projectId:string,taskId:string,input:FieldDraft,historical=false):FieldDraft {
   const draft=JSON.parse(JSON.stringify(input,(_k,v)=>{if(typeof v==='number'&&!Number.isFinite(v))throw Error('repair_measurements_required');return v;})) as FieldDraft;
-  if(draft.actor!==identity.actor||draft.scope!==identity.scope||draft.environment!==identity.environment||draft.projectId!==projectId||draft.taskId!==taskId||draft.command||draft.result||draft.supplement||draft.repairClaim)throw Error('repair_field_source_invalid');
+  if(draft.actor!==identity.actor||(!historical&&draft.scope!==identity.scope)||draft.environment!==identity.environment||draft.projectId!==projectId||draft.taskId!==taskId||draft.command||draft.result||draft.supplement||draft.repairClaim)throw Error('repair_field_source_invalid');
   return draft;
 }
 async function previous(identity:QueueIdentity,projectId:string,s:Source,kind:string,effectId:unknown) {
   if(!isCrewResourceId(effectId))throw Error('offline_repair_predecessor_required');
   const rows=await (await openOfflineJournal(identity)).list();crewReadGuard(identity);
+  if(rows.some(row=>row.projectId===projectId&&row.proof.kind==='revocation'&&row.proof.registrationId===s.registrationId))throw Error('offline_device_revocation_requires_online_check');
+  const confirmed=rows.some(row=>row.projectId===projectId&&row.phase==='RECONCILED'&&row.proof.kind==='session-confirm'&&
+    sameOfflinePartition(row.identity,identity)&&row.identity.scope===identity.scope&&row.proof.confirmedScope===identity.scope&&row.proof.registrationId===s.registrationId);
   const matches=[];
   for(const row of rows){
     if(row.projectId!==projectId||row.phase!=='RECONCILED'||row.proof.kind!=='signed-field-batch'||row.proof.registrationId!==s.registrationId||row.proof.deviceId!==s.deviceId||
-      (['actor','scope','environment','partition','role'] as const).some(k=>row.identity?.[k]!==identity[k]))continue;
+      !sameOfflinePartition(row.identity,identity)||(row.identity.scope!==identity.scope&&!confirmed))continue;
     const ops=JSON.parse(row.body).operations as OfflineRecord[];
     for(const op of ops){
       if(op.kind!==kind||op.effectId!==effectId||op.taskId!==s.snapshot.taskId||op.assignmentId!==s.snapshot.assignmentId||op.originalActorId!==identity.actor||op.sourceDeviceId!==s.deviceId||(op.repair as OfflineRecord)?.resourceId!==s.repair.itemId)continue;
       const verified=row.verifiedItems?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&['COMMITTED','REPLAYED'].includes(v.state));
       const receipt=(row.receipt as {items?:OfflineRecord[]})?.items?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&v.durableAcknowledgment===true);
       const outcome=receipt?.outcome as OfflineRecord|undefined;
-      if(verified&&outcome?.id===effectId&&outcome.itemId===s.repair.itemId&&outcome.taskId===s.snapshot.taskId)matches.push({op,outcome});
+      if(verified&&outcome?.id===effectId&&outcome.itemId===s.repair.itemId&&outcome.taskId===s.snapshot.taskId)matches.push({op,outcome,scope:row.identity.scope});
     }
   }
   if(matches.length!==1)throw Error('offline_repair_predecessor_required');
@@ -49,12 +52,12 @@ async function previous(identity:QueueIdentity,projectId:string,s:Source,kind:st
 async function prepare(identity:QueueIdentity,projectId:string,s:Source,kind:string,action:string,key:string,input:OfflineRecord) {
   const rows=await (await openOfflineJournal(identity)).list();crewReadGuard(identity);
   if(rows.some(row=>row.projectId===projectId&&row.phase==='RECONCILED'&&row.proof.kind==='signed-field-batch'&&
-    (['actor','scope','environment','partition','role'] as const).every(k=>row.identity?.[k]===identity[k])&&
+    sameOfflinePartition(row.identity,identity)&&
     (JSON.parse(row.body).operations as OfflineRecord[]).some(op=>op.kind===kind&&op.snapshotId===s.snapshot.id&&
       op.taskId===s.snapshot.taskId&&op.assignmentId===s.snapshot.assignmentId&&
       (op.repair as OfflineRecord|null)?.resourceId===s.repair.itemId)))throw Error('offline_repair_snapshot_refresh_required');
   if(rows.some(row=>row.projectId===projectId&&row.proof.kind==='signed-field-batch'&&row.phase!=='RECONCILED'&&
-    (['actor','scope','environment','partition','role'] as const).every(k=>row.identity?.[k]===identity[k])&&
+    sameOfflinePartition(row.identity,identity)&&
     (JSON.parse(row.body).operations as OfflineRecord[]).some(op=>String(op.kind).startsWith('REPAIR_')&&
       op.taskId===s.snapshot.taskId&&op.assignmentId===s.snapshot.assignmentId&&
       (op.repair as OfflineRecord|null)?.resourceId===s.repair.itemId)))throw Error('offline_repair_pending_reconciliation');
@@ -78,12 +81,16 @@ export async function prepareOfflineRepairAssessment(identity:QueueIdentity,proj
   payload.measurements=draft.measurements.map(m=>({...m,value:m.value===null?null:{decimal:String(m.value)}}));
   return prepare(identity,projectId,s,'REPAIR_ASSESSMENT','assessment','assessment',payload);
 }
-export async function prepareOfflineRepairStart(identity:QueueIdentity,projectId:string,taskId:string,input:FieldDraft) {
-  const draft=freezeDraft(identity,projectId,taskId,input),s=await source(identity,projectId,taskId);crewReadGuard(identity);
+export async function prepareOfflineRepairStart(identity:QueueIdentity,projectId:string,taskId:string,input?:FieldDraft) {
+  const supplied=input?freezeDraft(identity,projectId,taskId,input,true):null,s=await source(identity,projectId,taskId);crewReadGuard(identity);
   if(s.repair.mode!=='Normal')throw Error('offline_fasttrack_authority_source_required');
   if(s.repair.state!=='Assigned'||s.repair.currentExecutionStartId!=null||!isCrewResourceId(s.repair.approvedBy)||
     typeof s.repair.approvedPlanHash!=='string'||s.repair.approvedPlanHash!==s.repair.proposalPlanHash)throw Error('offline_repair_not_available');
   const a=await previous(identity,projectId,s,'REPAIR_ASSESSMENT',s.repair.currentAssessmentId);crewReadGuard(identity);
+  const context=supplied?null:currentFieldContext(projectId,taskId);
+  if(!supplied&&!context)throw Error('field_session_changed');
+  const draft=supplied??freezeDraft(identity,projectId,taskId,await readHistoricalFieldDraft(context!,a.scope),true);crewReadGuard(identity);
+  if(draft.scope!==identity.scope&&draft.scope!==a.scope)throw Error('repair_field_source_invalid');
   const assessment=(a.op.repair as OfflineRecord).assessment as OfflineRecord;
   // Typed decimals are wire wrappers; comparison uses the original finite draft domain.
   const evidence=(assessment.evidence as OfflineRecord[]).map(e=>{

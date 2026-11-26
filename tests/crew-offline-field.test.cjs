@@ -4,10 +4,10 @@ const sha=async s=>crypto.createHash('sha256').update(s).digest('hex'),id=crypto
 
 function repairFixture(){
  const h=submissionFixture(),ctx={schemaVersion:1,packageId:id(),itemId:id(),bindingId:id(),itemVersion:'AAAAAAAAB9E=',taskId:h.h.task,assignmentId:h.h.snapshot.assignmentId,crewId:h.h.identity.actor,mode:'Normal',state:'Assigned',approvedBy:id(),approvedPlanHash:'a'.repeat(64),proposalPlanHash:'a'.repeat(64),originalCrewFirstStartId:h.origin,currentAssessmentId:null,currentExecutionStartId:null,currentExecutionFinishId:null,executeAuthority:'REVALIDATE_CURRENT_SOURCE_AT_ADMISSION'};
- h.draft.measurements[0].sampleId=id();let saved;
+ h.draft.measurements[0].sampleId=id();let saved,active=true,onList,onHistory;
  const validator=load('src/api/crewRepairWorkflow.ts',new Proxy({'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairHistory':{timestamp:v=>typeof v==='string'&&Number.isFinite(Date.parse(v))}},{has:()=>true,get:(o,k)=>o[k]??{}}));
- const m=load('src/api/crewOfflineRepair.ts',{'./crewFieldDraft':load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx},'./crewSafetyWorkflow':{crewReadGuard:()=>{}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':{repairAssessmentMatchesDraft:()=>true},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>h.h.rows})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
- return {...h,ctx,m,get saved(){return saved;}};
+ const m=load('src/api/crewOfflineRepair.ts',{'./crewFieldDraft':{...load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),currentFieldContext:()=>({...h.h.identity,projectId:h.h.project,taskId:h.h.task}),readHistoricalFieldDraft:async(_context,scope)=>{onHistory?.();if(h.draft.scope!==scope)throw Error('field_draft_invalid');return h.draft;}},'./crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:h.h.snapshot,facts:{status:'InProgress',repair:ctx},registrationId:h.h.registration,deviceId:h.h.device})},'./crewOfflineWorkflow':{validateRepairSnapshot:()=>ctx},'./crewSafetyWorkflow':{crewReadGuard:()=>{if(!active)throw Error('session_changed');}},'./crewApi':{isCrewResourceId:v=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v)},'./crewRepairWorkflow':validator,'./crewRepairDraft':load('src/api/crewRepairDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewOfflineJournal':{sameOfflinePartition:(a,b)=>a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.partition===b.partition,openOfflineJournal:async()=>({list:async()=>{onList?.();return h.h.rows;}})},'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/crewSignedSync':{prepareSignedRepairBatch:async(...args)=>{saved=args[3];return {phase:'PREPARED'};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
+ return {...h,ctx,m,switch:()=>active=false,onList:f=>onList=f,onHistory:f=>onHistory=f,get saved(){return saved;}};
 }
 test('signed REPAIR assessment freezes VERIFIED draft and preserves item identity',async()=>{
  const f=repairFixture();assert.equal(typeof f.m.prepareOfflineRepairAssessment,'function');
@@ -55,6 +55,51 @@ test('signed REPAIR finish uses reconciled execution start',async()=>{
  await f.m.prepareOfflineRepairFinish(f.h.identity,f.h.project,f.h.task);
  assert.equal(f.saved[0].kind,'REPAIR_EXECUTION_FINISH');assert.equal(f.saved[0].repair.finish.executionStartId,startId);
 });
+
+function previousSessionStart(f){
+ const startId=id();f.ctx.state='InProgress';f.ctx.currentExecutionStartId=startId;
+ addReconciledRepair(f,'REPAIR_EXECUTION_START',startId,{start:{originId:id(),fieldFirstStartId:f.origin,assessmentId:id(),claimedAt:'2026-11-25T00:00:00Z',deviceId:f.h.device}},{firstStartId:f.origin});
+ const old=f.h.rows.at(-1);old.identity={...f.h.identity,scope:'previous-session'};
+ const confirm={identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'session-confirm',registrationId:f.h.registration,confirmedScope:f.h.identity.scope,snapshotIds:[]}};
+ f.h.rows.push(confirm);return {old,confirm,startId};
+}
+test('takeover REPAIR finish accepts a confirmed predecessor from an earlier session without rewriting it',async()=>{
+ const f=repairFixture(),{old,startId}=previousSessionStart(f),before=JSON.stringify(old);
+ await f.m.prepareOfflineRepairFinish(f.h.identity,f.h.project,f.h.task);
+ assert.equal(f.saved[0].repair.finish.executionStartId,startId);assert.equal(JSON.stringify(old),before);
+});
+for(const fault of ['confirmation','revocation','actor','environment','partition','role','registration','receipt','session-switch'])test('takeover REPAIR cross-session predecessor rejects '+fault,async()=>{
+ const f=repairFixture(),{old}=previousSessionStart(f);
+ if(fault==='confirmation')f.h.rows.pop();
+ if(fault==='revocation')f.h.rows.push({projectId:f.h.project,proof:{kind:'revocation',registrationId:f.h.registration}});
+ if(['actor','environment','partition','role'].includes(fault))old.identity[fault]='foreign';
+ if(fault==='registration')old.proof.registrationId=id();
+ if(fault==='receipt')old.receipt.items[0].durableAcknowledgment=false;
+ if(fault==='session-switch')f.onList(()=>f.switch());
+ await assert.rejects(f.m.prepareOfflineRepairFinish(f.h.identity,f.h.project,f.h.task));assert.equal(f.saved,undefined);
+});
+
+
+for(const fault of ['none','changed-measurement','unrelated-scope','missing-confirmation','session-during-read'])test('takeover REPAIR start reads original assessment draft without adopting it: '+fault,async()=>{
+ const f=repairFixture(),assessmentId=id();f.ctx.currentAssessmentId=assessmentId;
+ addReconciledRepair(f,'REPAIR_ASSESSMENT',assessmentId,{assessment:{originId:id(),fieldFirstStartId:f.origin,measurements:f.draft.measurements.map(m=>({...m,value:{decimal:String(m.value)}})),evidence:f.draft.captures.map(c=>({captureOriginId:c.id,fileId:c.upload.fileId,purpose:c.purpose,checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),locationProof:f.draft.locationProof,deviceId:f.h.device}},{readiness:'READY',stage:'PRE_EXECUTION',firstStartId:f.origin});
+ const old=f.h.rows.at(-1);old.identity={...f.h.identity,scope:'previous-session'};f.draft.scope=old.identity.scope;
+ f.h.rows.push({identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'session-confirm',registrationId:f.h.registration,confirmedScope:f.h.identity.scope}});
+ if(fault==='changed-measurement')f.draft.measurements[0].value++;
+ if(fault==='unrelated-scope')f.draft.scope='unrelated-session';
+ if(fault==='missing-confirmation')f.h.rows.pop();
+ if(fault==='session-during-read')f.onHistory(()=>f.switch());
+ const before=JSON.stringify({old,draft:f.draft});
+ const pending=f.m.prepareOfflineRepairStart(f.h.identity,f.h.project,f.h.task);
+ if(fault==='none'){await pending;assert.equal(f.saved[0].repair.start.assessmentId,assessmentId);}
+ else {await assert.rejects(pending);assert.equal(f.saved,undefined);}
+ assert.equal(JSON.stringify({old,draft:f.draft}),before);
+});
+for(const phase of ['RECEIVED','UNKNOWN_OUTCOME'])test('takeover REPAIR prevents a new command while earlier session is '+phase,async()=>{
+ const f=repairFixture();f.h.rows.push({identity:{...f.h.identity,scope:'previous-session'},projectId:f.h.project,phase,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId:f.h.task,assignmentId:f.h.snapshot.assignmentId,repair:{resourceId:f.ctx.itemId}}]})});
+ await assert.rejects(f.m.prepareOfflineRepairAssessment(f.h.identity,f.h.project,f.h.task,f.draft),/pending_reconciliation/);assert.equal(f.saved,undefined);
+});
+
 function fixture(status='NewAssigned'){
  const identity={actor:id(),role:'REPAIR_CREW',environment:'http://fixture/api/v1',scope:'A',partition:'fixture'},project=id(),task=id(),device=id(),registration=id();
  const snapshot={id:id(),taskId:task,assignmentId:id(),originalActorId:identity.actor,deviceRegistrationId:registration,taskVersion:'AAAAAAAAB9E=',snapshot:{id:task,projectId:project,originalActorId:identity.actor,status,repair:null,location:{}}};snapshot.snapshot.assignmentId=snapshot.assignmentId;
@@ -207,4 +252,21 @@ test('InProgress FIELD signs from matching retained editor firstStartOriginId wh
  h.setEditor({detail:{version:h.snapshot.taskVersion,assignmentId:h.snapshot.assignmentId,assignedToUserId:h.identity.actor,status:'InProgress',firstStartOriginId:editorStart}});
  await h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft);
  assert.equal(h.saved[3].at(-1).fieldSubmission.startOriginId,editorStart);
+});
+
+
+test('takeover REPAIR screen reaches start without adopting an old FIELD draft and ignores double tap',async()=>{
+ const {screen,deferred}=require('./helpers/roadfe-screen.cjs'),f=repairFixture(),wait=deferred();let starts=0,draftReads=0,args;
+ f.ctx.currentAssessmentId=id();
+ const ui=screen('src/components/crew/CrewOfflineFieldTask.tsx',{exportName:'CrewOfflineFieldTask',props:{projectId:f.h.project,taskId:f.h.task},modules:{
+  '../AppHeader':{AppHeader:'AppHeader'},'../SafeAreaScreen':{SafeAreaScreen:'SafeAreaScreen'},'../Card':{Card:'Card'},'../Button':{Button:'Button'},
+  '../../offline/upload-queue':{currentQueueIdentity:()=>f.h.identity,sameQueueIdentity:()=>true},
+  '../../api/crewOfflineField':{readOfflineCrewTask:async()=>({snapshot:{...f.h.snapshot,downloadedAt:'2026-11-26T00:00:00Z'},facts:{status:'InProgress',repair:f.ctx}})},
+  '../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})},
+  '../../api/crewOfflinePreparation':{},'../../api/crewFieldDraft':{currentFieldContext:()=>({}),openFieldRuntime:async()=>({}),loadFieldDraft:async()=>{draftReads++;throw Error('field_previous_session_requires_reconciliation');}},
+  '../../api/crewOfflineRepair':{prepareOfflineRepairStart:async(...input)=>{starts++;args=input;return wait.promise;}}
+ }});
+ ui.render();await ui.flush();assert.equal(draftReads,0);
+ const pending=ui.press('Ký bắt đầu sửa chữa');ui.press('Ký bắt đầu sửa chữa');assert.equal(starts,1);assert.equal(args.length,3);
+ wait.resolve({phase:'PREPARED',body:'{}'});await pending;await ui.flush();assert.match(JSON.stringify(ui.nodes()),/Đã lưu gói ký/);ui.unmount();
 });
