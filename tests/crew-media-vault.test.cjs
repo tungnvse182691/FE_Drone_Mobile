@@ -7,7 +7,7 @@ const checksum=createHash('sha256').update(bytes).digest('hex');
 function fixture(){
  const state={failSeal:false,failRead:false,onRead:null,plainReads:0},vaults=new Map(),files=new Map([['file:///camera.jpg',bytes]]),rows=new Map();
  class File{constructor(parent,name){this.uri=name===undefined?parent:`${parent.uri}/${name}`;}async arrayBuffer(){state.plainReads++;return files.get(this.uri).slice().buffer;}write(value){files.set(this.uri,value.slice());}bytesSync(){return files.get(this.uri);}move(target){files.set(target.uri,files.get(this.uri));files.delete(this.uri);this.uri=target.uri;}}
- const h=harness({rows,db:{async withExclusiveTransactionAsync(f){await f(this);},getAllAsync:async(sql,kind)=>[...rows.entries()].filter(([id,r])=>!kind||(kind==='T05B_FIELD'?id.startsWith('t05b:'):r.kind===kind)).map(([id,r])=>({id,...r})),getFirstAsync:async()=>null},modules:{
+ const h=harness({rows,db:{async withExclusiveTransactionAsync(f){await f(this);},getAllAsync:async(sql,kind)=>[...rows.entries()].filter(([id,r])=>!kind||(kind==='T05B_FIELD'?id.startsWith('t05b:'):r.kind===kind)).map(([id,r])=>({id,...r})),getFirstAsync:async(sql,id)=>rows.get(id)??null},modules:{
   'expo-crypto':{randomUUID,CryptoDigestAlgorithm:{SHA256:'sha256'},digest:async(_,input)=>Uint8Array.from(createHash('sha256').update(input).digest()).buffer},
   'expo-file-system':{File,Directory:class{constructor(parent,name){this.uri=`${parent.uri}/${name}`;}create(){}},Paths:{document:{uri:'file:///documents'}}},
   '../../modules/roadguard-offline-crypto':{offlineNative:{prepareMediaKey:async()=>({available:true,securityLevel:'SOFTWARE'}),sealMedia:async(binding,id,uri)=>{if(state.failSeal)throw Error('seal_failed');vaults.set(id,files.get(uri).slice());return{version:1,assetId:id,sizeBytes:bytes.length,checksumSha256:checksum};},readMediaRange:async(binding,id,offset,length)=>{state.onRead?.();if(state.failRead)throw Error('read_failed');return Buffer.from(vaults.get(id).subarray(offset,offset+length)).toString('base64');}}}
@@ -15,6 +15,19 @@ function fixture(){
  const context={actor,scope:JSON.stringify([actor,'fixture-session']),environment:h.client.defaults.baseURL,projectId:randomUUID(),taskId:randomUUID()};
  return {h,state,files,context,api:()=>h.load('src/api/crewMediaVault.ts')};
 }
+test('Crew draft runtime carries the caller revision across runtime instances',async()=>{
+ const f=fixture(),field=f.h.load('src/api/crewFieldDraft.ts');
+ const initialRuntime=await field.openFieldRuntime(f.context);
+ const initial=await field.loadFieldDraft(f.context,initialRuntime);await initialRuntime.write(initial);
+ const a=await field.loadFieldDraft(f.context,await field.openFieldRuntime(f.context));
+ const b=await field.loadFieldDraft(f.context,await field.openFieldRuntime(f.context));
+ a.locationProof={kind:'GPS',latitude:10.5,longitude:106.25};
+ await (await field.openFieldRuntime(f.context)).write(a);
+ await assert.rejects((await field.openFieldRuntime(f.context)).write(b),/offline_journal_cas_failed/);
+ const saved=await field.loadFieldDraft(f.context,await field.openFieldRuntime(f.context));
+ assert.deepEqual(saved.locationProof,a.locationProof);
+});
+
 test('Crew sealed capture reopens for the same account after login without plaintext fallback',async()=>{
  const f=fixture(),api=f.api(),photo={uri:'file:///camera.jpg',size:bytes.length,checksum};
  const vault=await api.sealCrewPhoto(f.context,photo,()=>true);assert.equal(vault.role,'REPAIR_CREW');

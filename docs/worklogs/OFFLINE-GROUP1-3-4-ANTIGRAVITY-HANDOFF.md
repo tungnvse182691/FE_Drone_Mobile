@@ -36,3 +36,47 @@
 | **Crew REPAIR (`4755fa5d` `REPAIR_ASSESSMENT`, `a8ed2e80`)** | `4755fa5d` `REPAIR_ASSESSMENT` `ANDROID_E2E_VERIFIED` + `HTTP_VERIFIED`; `REPAIR_EXECUTION_START/FINISH` `BLOCKED_BY_BE` / `BLOCKED_POLICY` | Trên `emulator-5554` (APK `D5DB216F...5774`), `4755fa5d-72d6-488e-8896-2c40e4ca1c59` (`InProgress`, `firstStartOriginId=5376cd8a-df37-4281-b1ce-880ff1f47a53`, `itemId=57145baa-69c9-4f40-9371-397110a183bb`) đã nhập `3.5 cm` (`RULER`, `QA_repair_ruler`), `Lý trình 50 m`, chụp 1 ảnh `BEFORE` -> ký `REPAIR_ASSESSMENT` -> gửi qua `Đồng bộ` -> upload MinIO -> `VERIFIED` -> `RECONCILED` (`Lịch sử đã xác nhận (7)`). BE readback `GET /projects/72f84201-c001-4000-8000-000000000001/field-inspection-tasks/4755fa5d-72d6-488e-8896-2c40e4ca1c59` xác nhận `repairContext.itemVersion` chuyển từ `AAAAAAACe5g=` sang `AAAAAAAGbWA=`. Bước kế tiếp `REPAIR_EXECUTION_START` ở mode `NORMAL` bị BE chặn hợp lệ (`RepairWorkflowRepository.Execution.cs:127`: `normal_plan_not_approved`, cần PM/Supervisor phê duyệt `ApprovedBy`/`ApprovedPlanHash` và không có tài khoản PM/Supervisor trong QA sandbox; toàn bộ fixture `FAST_TRACK` trên BE đã `EXECUTION_EXPIRED` từ 2026-11-16). `a8ed2e80` fail-closed `offline_repair_first_start_required` do `originalVerifiedStart: null`. |
 | **Nhóm 3 — Mã hóa DB, Media & Cache** | `LOGIC_TESTED` & `NATIVE_VERIFIED` (`emulator-5554`) | Kiểm tra `run-as com.hoanghai.roadguard` trên `emulator-5554`: `files/SQLite/roadguard.encrypted.v1.db` (`471,040` B, cập nhật `2026-11-26 13:43`), `files/roadguard-media-v1/` (**18** bucket dirs chứa `.rgc` encrypted containers). Dữ liệu plaintext cũ được giữ nguyên để chờ duyệt xóa riêng (`REMAINING_CLEANUP_APPROVAL`): `files/SQLite/roadguard.db` (`143,360` B), `files/crew-field/` (`4` ảnh `.jpg`), `files/drone-sources-v1/` (`3` `.mp4`, gồm `51,449,564` B), `files/reporter-photos-v1/` (`8` ảnh), `cache/Camera/` (`9` ảnh). |
 | **Nhóm 4 — Cô lập & Phục hồi** | `ANDROID_E2E_VERIFIED` + `LOGIC_TESTED` (`2241/2241`) | Xác minh `cross-session` có `session-confirm` không adopt nhầm lệnh cũ, giữ nguyên `old.identity`/`body`/`key`, không tạo import cycle (`crew-flow-recovery.test.cjs` PASS), cold-start fail-closed và cô lập 3 vai trò không `pm clear`. |
+
+
+## 3. Codex takeover — checkpoint 1 (2026-11-26, acceptance pending)
+
+**Current authority:** owner workflow update delegates APK build/Android acceptance to Antigravity. Codex implements, self-reviews, runs TypeScript/targeted/full regression and commits locally. No build, Android E2E, push, branch change, BE/Web edit or deletion in this checkpoint. Earlier gates/APK evidence above are historical; they do not cover these source changes. Groups are not DONE.
+
+Baseline `d5897053faf517016db3d8eab8810f69bd3bace1`, branch `main`; fetched `origin/main` remains `092edda86cd6336163ff224b3b5e298a68711bb7` (ahead 15 before this commit). Mode IMPLEMENT_AND_SELF_REVIEW, no independent review claimed.
+
+### Source and proof
+
+- `src/api/crewOfflineJournal.ts`: writer accepts the caller-observed payload revision and compares inside the exclusive SQLite transaction. Cross-session transport preserves confirmed part numbers/ETags and frozen complete payload.
+- `src/api/crewFieldDraft.ts`: retain observed revisions per draft object across runtime instances; do not replace them with the revision freshly read during save.
+- `src/components/crew/CrewOfflineFieldTask.tsx`, `CrewOfflinePanel.tsx`: diagnostics contain fixed stage markers only; no raw exception message/object. No layout, CTA, navigation or business permission changes.
+- `tests/c10bc-journal.test.cjs`: real SQLite sequential stale writers and confirmed multipart regression tests. Both initially failed with missing expected rejection, then passed after implementation.
+- `tests/crew-media-vault.test.cjs`: runtime-to-runtime revision propagation; fixture now reads its saved row instead of always returning null. This fixture mismatch caused the first full run to fail (2245 PASS / 1 FAIL); it was investigated and corrected, not suppressed.
+
+Executed after final runtime changes:
+
+| Gate | Result | Evidence |
+|---|---|---|
+| `npx tsc --noEmit` | PASS, exit 0 | `.cache/offline-final-takeover/typecheck.log` |
+| `node --test tests/crew-media-vault.test.cjs tests/c10bc-journal.test.cjs tests/c10bc-workflow.test.cjs` | PASS 61/61 | `.cache/offline-final-takeover/targeted.log` |
+| `node --test --test-concurrency=4 tests/*.test.cjs` | PASS 2247/2247, exit 0, 180022.6278 ms | `.cache/offline-final-takeover/regression.log` |
+| `git diff --check`, affected diff privacy review, runtime Ionicons/UD-06 scan | PASS; scan no matches | executed locally |
+| Native / Android / new HTTP mutation | NOT_RUN | owner delegates Android acceptance; no server mutation made |
+
+### Corrected REPAIR discovery (supersedes old blocker in section 2)
+
+BE pinned `b8f718dd372b9aa8b2923045fdcd82dd0e5e0583`. Manifest has 11 QA accounts including Supervisor/PM. Approval is Supervisor for NORMAL AwaitingApproval (`RepairPackagesController.cs:38-40`, `RepairProducerService.cs:46+`, `RepairWorkflowRepository.Producing.cs:529+`). Do not reapprove an already Assigned item. Existing bearer login and authorized GETs succeeded; Web CSRF over HTTP fails due to SecurePolicy Always (no config change/bypass).
+
+Read-only current source confirms item `57145baa-69c9-4f40-9371-397110a183bb`: assessment `9278b439-74f6-4a3e-b5d2-5db6ca5ff590`, stage PRE_EXECUTION, readiness READY, firstStart `5376cd8a-df37-4281-b1ce-880ff1f47a53`; canonical result COMMITTED, DurableAck=1. ApprovedBy is `72f84201-a001-4000-8000-000000000001`, approvedPlanHash equals proposal hash `aaddbf36ba0e286c707482b61d16d0593a25c518f6fa98a8ca3dfef159c340c3`. Item version `AAAAAAAGbWA=`. Current execution start/finish are null. No assessment/approval was recreated. This is NOT a missing BE approval endpoint or missing QA role.
+
+Evidence: `.cache/offline-final-takeover/repair-readback.json` (authenticated HTTP reads), `repair-current-source.json`, `canonical-readback.json` (read-only SQL source/receipt discovery; not client HTTP receipt acceptance). No password/token recorded.
+
+Exact Reporter description `QA offline reporter draft 20261126` has no matching canonical Reports row in read-only discovery. This does not prove local upload IDs/state. Preserve encrypted pending draft and two old images; do not replace with completed report `3ec0b71f`. Current encrypted DB inventory observed 512000 bytes; legacy DB 143360 bytes; no extraction/decryption/deletion. Metro has no connected target. Recovery of this exact local pending record needs native acceptance access; NOT_RUN, not BE_CONTRACT_GAP.
+
+### Antigravity acceptance required
+
+- On source including this checkpoint: two reads of one FIELD draft, first saves confirmed progress, stale second must be rejected without changing parts/ETags/complete payload; repeat after runtime recreation and session confirmation.
+- Reconcile old admission uploads; lost create/complete response must preserve command/key/binding. Revoked or foreign actor/session/environment must fail closed.
+- Existing APK D5DB216F...5774 predates these edits. No new APK/provenance claimed. Baseline screenshots/evidence remain under `.cache/offline-session-20261124/`.
+- Build recipe remains `docs/worklogs/GROUP1-OFFLINE-HANDOFF-20261125.md:360` with existing `.cache/offline-session-20261124/crew-qa-debuggable.gradle`, x86_64, max-workers=1, no-parallel, CMAKE_BUILD_PARALLEL_LEVEL=1, API 10.0.2.2:18181. Check disk and current host before building; no build executed by Codex.
+
+Artifacts to retain: existing pending media/DB/journal, current APK/rollback and `.cache/offline-final-takeover/{typecheck.log,targeted.log,regression.log,repair-readback.json,repair-current-source.json,canonical-readback.json}`. No artifact deleted; no APK/cache committed.

@@ -86,7 +86,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       }else await reconcileDeviceIntent(record);
       const j=await openOfflineJournal(identity),rows=await j.list();
       if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
-    }catch(error){console.warn('[CrewOfflinePanel:reconcile]',(error as Error)?.message??error);if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả. Lệnh, khóa và dữ liệu chờ vẫn được giữ nguyên.');}
+    }catch(error){console.warn('[CrewOfflinePanel:reconcile] failed');if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả. Lệnh, khóa và dữ liệu chờ vẫn được giữ nguyên.');}
     finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   if(!sameQueueIdentity(identity))return null;
@@ -97,7 +97,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       await sendSignedFieldIntent(record,identity);
       const rows=await (await openOfflineJournal(identity)).list();
       if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
-    }catch(error){console.warn('[CrewOfflinePanel:send]',(error as Error)?.message??error);if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả gửi. Gói ký và khóa gửi lại được giữ nguyên; đối soát trước khi thử lại.');}
+    }catch(error){console.warn('[CrewOfflinePanel:send] failed');if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả gửi. Gói ký và khóa gửi lại được giữ nguyên; đối soát trước khi thử lại.');}
     finally{
       try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));}catch{/* Keep last view; durable journal remains authoritative. */}
       running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);

@@ -117,6 +117,8 @@ export function currentFieldContext(projectId: string, taskId: string): FieldCon
   return { actor: s.user.id, scope, environment: apiClient.defaults.baseURL ?? '', projectId, taskId };
 }
 /** Separate session keys preserve every legacy FIELD row and its media/command. */
+// Preserve the caller's observed revision even when it opens another runtime.
+const revisions=new WeakMap<FieldDraft,string>();
 export async function openFieldRuntime(context: FieldContext, authority?: import('../offline/upload-queue').QueueIdentity): Promise<FieldRuntime> {
   const authContext: FieldContext = authority ? { actor: authority.actor, scope: authority.scope, environment: authority.environment, projectId: context.projectId, taskId: context.taskId } : context;
   if (!['actor', 'environment', 'projectId', 'taskId'].every(k => authContext[k as keyof FieldContext] === context[k as keyof FieldContext])) {
@@ -134,6 +136,7 @@ export async function openFieldRuntime(context: FieldContext, authority?: import
     const drafts=rows.map(row=>{
       const draft=decodeFieldDraft(row.payload);
       if(!sameResource(draft,context)||row.id!==key&&row.id!==scoped(draft.scope)&&!row.id.startsWith(scoped(draft.scope)+':'))throw Error('field_draft_invalid');
+      revisions.set(draft,row.payload);
       return draft;
     });
     const recovered:FieldDraft[]=[];
@@ -141,7 +144,11 @@ export async function openFieldRuntime(context: FieldContext, authority?: import
       const overlay=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id = ? AND kind = ?',recoveryKey(original),'CREW_FIELD_RECOVERY');check();
       if(overlay){const record=JSON.parse(overlay.payload);if(record.source!==JSON.stringify(original))throw Error('field_draft_invalid');
         const result=decodeFieldDraft(JSON.stringify(record.draft));validateRecovery(original,result);recovered.push(result);
-      }else recovered.push(normalizeFieldOutcome(original));
+      }else {
+        const result=normalizeFieldOutcome(original);
+        revisions.set(result,revisions.get(original)!);
+        recovered.push(result);
+      }
     }
     return recovered;
   };
@@ -181,7 +188,10 @@ export async function openFieldRuntime(context: FieldContext, authority?: import
         target=scoped(context.scope)+':'+randomUUID();
       }
       if(draft.command){const {writeOnlineFieldSubmissionDraft}=await import('./crewOfflineJournal');check();await writeOnlineFieldSubmissionDraft(db,target,draft);}
-      else await writeProtectedFieldDraft(db,target,'T05B_FIELD',{...draft},draft);check();}, uuid: randomUUID,
+      else {
+        await writeProtectedFieldDraft(db,target,'T05B_FIELD',{...draft},draft,revisions.get(draft));
+        revisions.set(draft,JSON.stringify(draft));
+      }check();}, uuid: randomUUID,
     bytes: async uri => new Uint8Array(await new File(uri).arrayBuffer()), hash: sha256HexOfBytes,
     sealPhoto: photo => sealCrewPhoto(context,photo,()=>sameContext(authContext,current())),
     wait: () => new Promise(resolve => setTimeout(resolve,1000)), api: crew,

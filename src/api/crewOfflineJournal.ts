@@ -60,16 +60,22 @@ function sameDraftSourceForTransport(prev:FieldDraft,next:FieldDraft):boolean {
     if((a.verified||a.upload?.status==='VERIFIED')&&(!b.verified||JSON.stringify(a.upload)!==JSON.stringify(b.upload)||a.completed!==b.completed))return false;
     if(a.completed&&!b.completed)return false;
     if(a.upload&&(!b.upload||b.upload.id!==a.upload.id||b.upload.fileId!==a.upload.fileId))return false;
+    if((a.parts??[]).some(part=>!(b.parts??[]).some(next=>next.partNumber===part.partNumber&&next.etag===part.etag)))return false;
+    if(a.complete&&JSON.stringify(a.complete)!==JSON.stringify(b.complete))return false;
     return true;
   });
 }
 
 /** Serialize draft updates with signed journal insertion. */
-export async function writeProtectedFieldDraft(db:SQLiteDatabase,id:string,kind:string,payload:Record<string,unknown>,draft:FieldDraft) {
+export async function writeProtectedFieldDraft(db:SQLiteDatabase,id:string,kind:string,payload:Record<string,unknown>,draft:FieldDraft,expectedPayload?:string) {
   const owner=currentQueueIdentity();
   if(!owner)throw Error('offline_session_changed');
   await db.withExclusiveTransactionAsync(async tx=>{
     if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+    if(expectedPayload!==undefined){
+      const previous=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',id,kind);
+      if(previous?.payload!==expectedPayload)throw Error('offline_journal_cas_failed');
+    }
     await assertSignedFieldMediaPreserved(tx,draft);
     if(owner.scope!==draft.scope){
       if(kind!=='T05B_FIELD')throw Error('offline_session_changed');

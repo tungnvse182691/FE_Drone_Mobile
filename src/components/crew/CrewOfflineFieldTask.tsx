@@ -90,7 +90,7 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
       if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã lưu gói ký trên thiết bị. Mở Đồng bộ để gửi và kiểm tra biên nhận máy chủ.');}
     }catch(error){
       const msg=(error as Error)?.message;
-      console.warn('[CrewOfflineRepairSign]',msg);
+      console.warn('[CrewOfflineRepairSign] failed');
       if(live.current&&sameQueueIdentity(identity))setNotice(
         msg==='offline_repair_first_start_required'
           ?'Chưa có mốc bắt đầu sửa chữa hợp lệ từ máy chủ nên chưa thể ký đánh giá; dữ liệu cũ được giữ nguyên.'

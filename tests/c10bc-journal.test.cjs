@@ -7,6 +7,39 @@ function fixture(filename=':memory:'){let raw=new DatabaseSync(filename);raw.exe
  const intent=()=>({id:randomUUID(),identity:i,projectId:randomUUID(),path:'/devices',key:randomUUID(),body:'{"deviceId":"synthetic"}',proof:{kind:'device'}});
  return {m,db,get raw(){return raw;},i,intent,restart:()=>{raw.close();raw=new DatabaseSync(filename);},current:()=>current,setCurrent:v=>current=v,switch:()=>current={...i,scope:'session-B'}};}
 
+async function transportWriters(){
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),reg=randomUUID(),task=randomUUID();
+ const draft={actor:h.i.actor,scope:h.i.scope,environment:h.i.environment,projectId:base.projectId,taskId:task,measurements:[],captures:[{id:randomUUID(),createKey:'create',completeKey:'complete',parts:[]}]};
+ await h.m.writeProtectedFieldDraft(h.db,'transport','T05B_FIELD',draft,draft);
+ await j.prepare({...base,proof:{kind:'signed-field-batch',registrationId:reg},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[]}}]})});
+ h.switch();const current=h.current(),next=await h.m.openOfflineJournal(current,h.db);
+ await next.confirmSession({id:randomUUID(),identity:current,projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${reg}`,key:randomUUID(),body:JSON.stringify({registrationId:reg,confirmedScope:current.scope,snapshotIds:[],revokedSnapshotIds:[]}),proof:{kind:'session-confirm',registrationId:reg,confirmedScope:current.scope,snapshotIds:[],revokedSnapshotIds:[]}},{id:reg});
+ return h;
+}
+
+test('takeover real SQLite rejects a stale caller even when writers save sequentially',async()=>{
+ const h=await transportWriters();
+ const original=h.raw.prepare('SELECT payload FROM local_draft WHERE id=?').get('transport').payload;
+ const writerA=JSON.parse(original),writerB=JSON.parse(original);
+ writerA.captures[0].parts.push({partNumber:1,etag:'confirmed-etag'});
+ await h.m.writeProtectedFieldDraft(h.db,'transport','T05B_FIELD',writerA,writerA,original);
+ const next=JSON.stringify(writerA);
+ await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'transport','T05B_FIELD',writerB,writerB,original),/cas/);
+ assert.equal(h.raw.prepare('SELECT payload FROM local_draft WHERE id=?').get('transport').payload,next);h.raw.close();
+});
+
+test('takeover real SQLite preserves confirmed multipart ETags and completion body against stale saves',async()=>{
+ const h=await transportWriters();
+ const base=JSON.parse(h.raw.prepare('SELECT payload FROM local_draft WHERE id=?').get('transport').payload);
+ base.captures=[{id:randomUUID(),createKey:'create',completeKey:'complete',parts:[{partNumber:1,etag:'confirmed-etag'}],complete:{version:'original-version',parts:[{partNumber:1,etag:'confirmed-etag'}]}}];
+ h.raw.prepare('UPDATE local_draft SET payload=? WHERE id=?').run(JSON.stringify(base),'transport');
+ for(const change of [d=>d.captures[0].parts=[],d=>d.captures[0].parts[0].etag='changed',d=>delete d.captures[0].complete]){
+  const stale=structuredClone(base);change(stale);
+  await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'transport','T05B_FIELD',stale,stale),/locked/);
+ }
+ assert.equal(h.raw.prepare('SELECT payload FROM local_draft WHERE id=?').get('transport').payload,JSON.stringify(base));h.raw.close();
+});
+
 test('FIELD submission serializes online draft and signed intent in both directions across sessions',async()=>{
  for(const onlineFirst of [true,false]){
   const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
