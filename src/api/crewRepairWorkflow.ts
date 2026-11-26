@@ -1,3 +1,4 @@
+import { measurementDraftIssues, fastTrackReason } from './crewFastTrackFeedback';
 import * as api from './crewApi';
 import { sameRepairIdentity, repairAssessmentMatchesDraft,
   type RepairIdentity, type RepairCommandIdentity, type RepairJournalRecord } from './crewRepairDraft';
@@ -51,6 +52,7 @@ export function validateSignedRepairAssessment(body:Record<string,unknown>):void
 export function validateRepairInput(operation: 'assessment'|'start'|'finish'|'attempt'|'supplement',body: Record<string,unknown>): void {
   validateRepairInputCore(operation,body,false);
 }
+class RepairDraftInputError extends Error {}
 function validateRepairInputCore(operation: 'assessment'|'start'|'finish'|'attempt'|'supplement',body: Record<string,unknown>,signed:boolean):void {
   if(operation==='attempt' || operation==='supplement') {
     if(!api.isCrewResourceId(body.fieldSubmissionId)||
@@ -68,6 +70,7 @@ function validateRepairInputCore(operation: 'assessment'|'start'|'finish'|'attem
   }
   const measurements=body.measurements as api.FieldMeasurementInput[];
   const evidence=body.evidence as api.FieldEvidenceDeclaration[];
+  if(Array.isArray(measurements)){const issues=measurementDraftIssues(measurements).filter(issue=>issue.invalid);if(issues.length)throw new RepairDraftInputError(issues.map(issue=>issue.message).join('\n')+'\nMở hồ sơ số đo để bổ sung.');}
   if(!Array.isArray(measurements)||!measurements.length||measurements.length>200 || measurements.some(m=>
     !api.isCrewResourceId(m.sampleId)||!m.type||!m.dimension||!m.unit||!m.instrument?.trim()||!m.method?.trim()||
     (m.value===null?m.state!=='UNKNOWN'||!m.unknownReason?.trim():m.state!=='KNOWN'||!Number.isFinite(m.value)||m.value<0)||
@@ -349,6 +352,7 @@ export async function readRepairFieldDraft(i: RepairIdentity) {
   const runtime=await openFieldRuntime(i);return loadFieldDraft(i,runtime);
 }
 export function repairErrorMessage(e: unknown): string {
+  if(e instanceof RepairDraftInputError)return e.message;
   if(e instanceof FastTrackStartBlockedError) {
     const handover=e.missingReasons.some(reason=>['ROAD_HANDOVER_MAPPING_UNKNOWN','EXECUTION_ROADNOTHANDEDOVER'].includes(reason));
     const coverage=e.missingReasons.includes('COVERAGE_MAPPING_UNKNOWN');
@@ -356,6 +360,7 @@ export function repairErrorMessage(e: unknown): string {
       const missing=[handover?'bàn giao tuyến':null,coverage?'phạm vi bảo hành hoặc bảo trì':null].filter(Boolean).join(' và ');
       return `Chưa thể bắt đầu: máy chủ chưa xác nhận ${missing}. Cần Giám sát xác nhận nguồn và phạm vi áp dụng; ảnh và số đo đã gửi được giữ nguyên.`;
     }
+    return 'Chưa thể bắt đầu: '+e.missingReasons.map(reason=>fastTrackReason(reason).message).join('\n');
   }
   const status=(e as {response?:{status?:number}})?.response?.status;
   if(status===401||status===403)return 'Phiên hoặc quyền đội sửa chữa không còn hợp lệ. Lệnh được giữ để đối soát.';

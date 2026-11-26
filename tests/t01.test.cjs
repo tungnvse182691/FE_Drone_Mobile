@@ -138,12 +138,14 @@ test('OTP 1 is invalid and never transformed', () => {
   assert.equal(isValidReporterOtp('abcdef'), false);
 });
 
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
+
 module.exports = { harness };
 
 test('pending draft, URIs and command survive store restart; wrong account cannot submit', async () => {
   const h = harness();
   const store = h.load('src/store/reporter.ts').useReporterStore;
-  await store.getState().savePendingDraft({ description: 'Broken concrete slab', photos: [{ uri: 'cache://photo.jpg', fileName: 'photo.jpg', mediaType: 'image/jpeg', capturedAt: '2026-10-27T00:00:00Z' }], coords: null });
+  await store.getState().savePendingDraft(cameraDraftFixture({ description: 'Broken concrete slab', photos: [{ uri: 'cache://photo.jpg', fileName: 'photo.jpg', mediaType: 'image/jpeg', capturedAt: '2026-10-27T00:00:00Z' }], coords: null }));
   const original = structuredClone(store.getState().pendingDraft);
   store.setState({ pendingDraft: null });
   await store.getState().restorePendingDraft();
@@ -165,7 +167,7 @@ test('production OTP screen rejects shortcut and auth screens do not directly cr
 
 async function pending(h) {
   h.login(); const store = h.load('src/store/reporter.ts').useReporterStore;
-  await store.getState().savePendingDraft({description:'Concrete slab damaged',photos:[{uri:'cache://photo.jpg',fileName:'photo.jpg',mediaType:'image/jpeg',capturedAt:'2026-10-27T00:00:00Z'}],coords:null});
+  await store.getState().savePendingDraft(cameraDraftFixture({description:'Concrete slab damaged',photos:[{uri:'cache://photo.jpg',fileName:'photo.jpg',mediaType:'image/jpeg',capturedAt:'2026-10-27T00:00:00Z'}],coords:null}));
   return store;
 }
 for (const status of ['VERIFYING','FAILED']) test(status + ' metadata never creates report', async () => {
@@ -206,23 +208,23 @@ test('account switch during upload cannot issue next request as new actor',async
 test('frozen report cannot change content or be adopted by a different actor',async()=>{
   const h=harness();const store=await pending(h);h.api.submitReportReal=async()=>{throw {status:503};};
   await assert.rejects(store.getState().submitPendingDraft());const draft=store.getState().pendingDraft;
-  await assert.rejects(store.getState().savePendingDraft({...draft,description:'different'}));
+  await assert.rejects(store.getState().savePendingDraft(cameraDraftFixture({...draft,description:'different'})));
   h.logout();h.login('REPORTER','other');assert.equal(await store.getState().restorePendingDraft(),null);
 });
 
 test('concurrent autosaves retain one draft identity and command key',async()=>{
   const h=harness();const store=h.load('src/store/reporter.ts').useReporterStore;
   const input={description:'one',photos:[],coords:null};
-  const [first,second]=await Promise.all([store.getState().savePendingDraft(input),store.getState().savePendingDraft({...input,description:'two'})]);
+  const [first,second]=await Promise.all([store.getState().savePendingDraft(cameraDraftFixture(input)),store.getState().savePendingDraft(cameraDraftFixture({...input,description:'two'}))]);
   assert.equal(first.id,second.id);assert.equal(first.commandKey,second.commandKey);
 });
 
 test('empty create draft does not block supplement while meaningful draft stays protected',async()=>{
   const h=harness();h.login();const store=h.load('src/store/reporter.ts').useReporterStore;
-  await store.getState().savePendingDraft({description:'',photos:[],coords:{latitude:10,longitude:106,accuracyMeters:null}});
+  await store.getState().savePendingDraft(cameraDraftFixture({description:'',photos:[],coords:{latitude:10,longitude:106,accuracyMeters:null}}));
   store.setState({pendingDraft:null});
   assert.equal(await store.getState().restorePendingDraft(),null);
-  const supplement=await store.getState().savePendingDraft({description:'Additional evidence',photos:[],coords:null,targetReportId:'existing',ifMatch:'v1'});
-  await assert.rejects(store.getState().savePendingDraft({...supplement,targetReportId:'other'}));
+  const supplement=await store.getState().savePendingDraft(cameraDraftFixture({description:'Additional evidence',photos:[],coords:null,targetReportId:'existing',ifMatch:'v1'}));
+  await assert.rejects(store.getState().savePendingDraft(cameraDraftFixture({...supplement,targetReportId:'other'})));
   assert.equal(store.getState().pendingDraft.targetReportId,'existing');
 });

@@ -1,3 +1,4 @@
+const {capturePhoto}=require('./helpers/roadfe-screen.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {screen}=require('./helpers/roadfe-screen.cjs');
 const flatten=s=>Array.isArray(s)?Object.assign({},...s.filter(Boolean).map(flatten)):s??{};
@@ -11,7 +12,7 @@ test('Reporter header keeps the logo and uses the compact typography of other sc
 });
 
 test('photo remove has a small white badge inside the image with a separate 48dp touch target',async()=>{
- const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/photo.png',name:'photo.png',mimeType:'image/png'}]})});s.render();await s.flush();await s.tap('pick-photo');await s.flush();
+ const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/photo.png',name:'photo.png',mimeType:'image/png'}]})});s.render();await s.flush();await capturePhoto(s);await s.flush();
  const button=s.nodes().find(n=>n.props.testID==='remove-photo-0');const target=flatten(button.props.style);
  assert.equal(target.width,48);assert.equal(target.height,48);assert.equal(target.top,0);assert.equal(target.right,0);assert.ok(!target.backgroundColor||target.backgroundColor==='transparent');
  const badge=button.props.children.find(n=>n?.type==='View');assert.ok(badge,'visible badge must be separate from the touch area');
@@ -27,17 +28,13 @@ for(const file of ['uploads','capture'])test(`Reporter ${file} displays an image
  assert.doesNotMatch(text,/private-uuid/);assert.match(text,/Ảnh 1/);s.unmount();
 });
 
-test('UX01 verified evidence chooser is opt-in, hides filenames and keeps session filtering',async()=>{
+test('UX01 new camera round cannot choose verified uploads from another capture or session; ledger retained',async()=>{
  const s=screen('app/(reporter)/report.tsx');s.h.login();s.render();await s.flush();
  const partition=s.uploads.reporterContext().partition;
  const row={id:'qa-image',partitionId:partition,mediaState:'VERIFIED',fileId:'f',verifiedVersion:'v',uriLocal:'file://safe.png',fileName:'private-uuid.png'};
  s.uploads.useUploadsStore.setState({items:[row,{...row,id:'other',partitionId:'other-session',uriLocal:'file://other.png'}]});s.render();
- assert.ok(!s.nodes().some(n=>n.props.testID==='verified-photo-0'));
- await s.tap('toggle-verified-photos');await s.flush();
- assert.ok(s.nodes().some(n=>n.props.testID==='verified-photo-0'));
- assert.doesNotMatch(JSON.stringify(s.nodes()),/private-uuid|file:\/\/other/);
- await s.press('Chọn ảnh đã xác minh 1');await s.flush();
- assert.ok(s.nodes().some(n=>n.props.testID==='remove-photo-0'));assert.equal(s.h.calls.filter(c=>c[0]==='create').length,0);s.unmount();
+ assert.ok(!s.nodes().some(n=>['verified-photo-0','toggle-verified-photos','pick-photo'].includes(n.props.testID)));
+ assert.doesNotMatch(JSON.stringify(s.nodes()),/private-uuid|file:\/\/other/);assert.equal(s.uploads.useUploadsStore.getState().items.length,2);assert.equal(s.h.calls.length,0);s.unmount();
 });
 
 test('UX03 four navigation labels retain readable case and grow beyond the minimum height',()=>{
@@ -66,7 +63,7 @@ test('UX01/02 description scrolls into the resized viewport on focus and resize;
  s.unmount();
 });
 test('UX01 photo remove has 48dp target and the form presents a concise optional location',async()=>{
- const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/image.jpg',name:'image.jpg',mimeType:'image/jpeg'}]})});s.render();await s.flush();await s.tap('pick-photo');await s.flush();
+ const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/image.jpg',name:'image.jpg',mimeType:'image/jpeg'}]})});s.render();await s.flush();await capturePhoto(s);await s.flush();
  const style=flatten(s.nodes().find(n=>n.props.testID==='remove-photo-0').props.style);assert.ok(style.width>=48&&style.height>=48);
  const text=JSON.stringify(s.nodes());assert.match(text,/Vị trí \(không bắt buộc\)/);assert.match(text,/1.000/);
  await s.tap('remove-photo-0');await s.flush();assert.ok(!s.nodes().some(n=>n.props.testID==='remove-photo-0'));assert.equal(s.h.calls.length,0);s.unmount();
@@ -100,7 +97,7 @@ for(const publication of [undefined,{id:'p',report:{id:'r'}}])test('UX04 preview
 
 test('UX01 pending verification shows one actionable status and never success',async()=>{
  const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/image.jpg',name:'image.jpg',mimeType:'image/jpeg'}]})});
- s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();s.input('Mô tả hiện trạng','QA road');
+ s.h.login();s.render();await s.flush();await capturePhoto(s);await s.flush();s.input('Mô tả hiện trạng','QA road');
  s.reporter.useReporterStore.getState().submitPendingDraft=async()=>{throw {code:'source_not_ready'};};
  await s.press('Gửi phản ánh');await s.flush();const text=JSON.stringify(s.nodes());
  assert.match(text,/Ảnh đang chờ xác minh/);assert.doesNotMatch(text,/Ảnh cần được xác minh trước/);assert.doesNotMatch(text,/Bấm gửi lại để kiểm tra kết quả/);
@@ -110,7 +107,7 @@ test('UX01 pending verification shows one actionable status and never success',a
 
 test('D02 pending send keeps progress compact without a growing header',async()=>{
  const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/progress.png',name:'progress.png',mimeType:'image/png'}]})});
- s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();s.input('Mô tả hiện trạng','QA progress');
+ s.h.login();s.render();await s.flush();await capturePhoto(s);await s.flush();s.input('Mô tả hiện trạng','QA progress');
  let release;s.reporter.useReporterStore.getState().submitPendingDraft=async options=>{options.onProgress({phase:'verifying',index:1,total:1,elapsedMs:1000});await new Promise(r=>release=r);throw {code:'verification_timeout'};};
  const send=s.press('Gửi phản ánh');await s.flush();
  assert.equal(s.nodes().some(n=>n.props?.testID==='submission-progress'),false,'progress must not grow the header');

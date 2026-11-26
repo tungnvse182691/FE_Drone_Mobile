@@ -7,6 +7,7 @@ import { sealReporterPhoto } from './reporterMediaVault';
 import type { MediaVaultReference } from '../offline/mediaVaultAccess';
 
 export type ReporterPhotoSource = { uri: string; fileName: string; mediaType?: string | null; capturedAt: string;
+  captureRole?: 'PRIMARY' | 'SECONDARY';
   photoLocation?: PhotoGps | null; locationSource?: ReportLocationSource };
 export type PreservedReporterPhoto = ReporterPhotoSource & {
   mediaType: 'image/jpeg' | 'image/png'; sizeBytes: number; checksumSha256: string; vault?: MediaVaultReference;
@@ -61,11 +62,13 @@ export async function preserveReporterPhoto(source: ReporterPhotoSource, isCurre
     const vault = await sealReporterPhoto({uri:final.uri,sizeBytes:size,checksumSha256},isCurrent); guard();
     // No input path/name is used in the destination. Leftover partials are retained
     // on failure; no cleanup may infer that an old file is unreferenced.
-    const embeddedGps = source.locationSource === 'CAPTURE' ? null : readPhotoGps(bytes);
+    const cameraOnly = source.captureRole !== undefined || source.locationSource === 'CAPTURE';
+    const embeddedGps = cameraOnly ? null : readPhotoGps(bytes);
     return { uri: final.uri, fileName: key + (jpeg ? '.jpg' : '.png'), mediaType,
       capturedAt: source.capturedAt, sizeBytes: size, checksumSha256, ...(vault ? {vault} : {}),
-      ...(source.locationSource === 'CAPTURE'
-        ? { photoLocation: source.photoLocation ?? null, locationSource: source.photoLocation ? 'CAPTURE' as const : 'UNKNOWN' as const }
+      ...(source.captureRole ? {captureRole: source.captureRole} : {}),
+      ...(cameraOnly
+        ? { photoLocation: source.captureRole === 'SECONDARY' ? null : source.photoLocation ?? null, locationSource: source.captureRole !== 'SECONDARY' && source.photoLocation ? 'CAPTURE' as const : 'UNKNOWN' as const }
         : { photoLocation: embeddedGps, locationSource: embeddedGps ? 'EXIF' as const : 'UNKNOWN' as const }) };
   } catch (error) {
     guard();

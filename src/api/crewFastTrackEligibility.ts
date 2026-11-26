@@ -28,5 +28,5 @@ export async function readAssignedFastTrackEligibility(identity: QueueIdentity, 
       (['packageId','itemId','bindingId','itemVersion'] as const).some(key=>after.data.repairContext![key]!==context[key])) {
     throw Error('crew_task_changed');
   }
-  return {eligibility:view,itemVersion:context.itemVersion};
+  return {eligibility:view,itemVersion:context.itemVersion,task:after.data};
 }

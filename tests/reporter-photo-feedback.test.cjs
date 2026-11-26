@@ -1,3 +1,4 @@
+const {capturePhoto}=require('./helpers/roadfe-screen.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 const flatten=s=>Array.isArray(s)?Object.assign({},...s.filter(Boolean).map(flatten)):s??{};
@@ -26,7 +27,7 @@ test('photo status link has breathing room and a trailing chevron',async()=>{
 test('submitting hides the status link until the operation settles',async()=>{
  const gate=deferred();
  const s=screen('app/(reporter)/report.tsx',{pick:async()=>({canceled:false,assets:[{uri:'content://qa/image.jpg',name:'image.jpg',mimeType:'image/jpeg'}]})});
- s.h.login();s.render();await s.flush();await s.tap('pick-photo');await s.flush();s.input('Mô tả hiện trạng','QA nứt tấm bê tông');
+ s.h.login();s.render();await s.flush();await capturePhoto(s);await s.flush();s.input('Mô tả hiện trạng','QA nứt tấm bê tông');
  s.reporter.useReporterStore.getState().submitPendingDraft=()=>gate.promise;
  const pending=s.press('Gửi phản ánh');await s.flush();
  assert.ok(!s.nodes().some(n=>n.props.testID==='open-photo-status'));
@@ -65,8 +66,9 @@ test('100 percent bytes and cancellation never show verification success',()=>{
 
 
 test('Reporter location displays only the native fix and supplied accuracy',async()=>{
- const s=screen('app/(reporter)/report.tsx',{gps:{Accuracy:{High:1},getForegroundPermissionsAsync:async()=>({status:'granted'}),getCurrentPositionAsync:async()=>({coords:{latitude:37.421998,longitude:-122.084,accuracy:5}})}});
+ const s=screen('app/(reporter)/report.tsx',{gps:{Accuracy:{High:1},getForegroundPermissionsAsync:async()=>({status:'granted'}),watchPositionAsync:async(_,callback)=>{callback({coords:{latitude:37.421998,longitude:-122.084,accuracy:5},timestamp:Date.now()});return {remove(){}};}}});
  s.h.login();s.render();await s.flush();
+ await capturePhoto(s);await s.flush();
  const coordinate=s.nodes().find(n=>n.props.testID==='reporter-coordinate');assert.ok(coordinate);
  assert.match(JSON.stringify(coordinate),/37.421998/);assert.match(JSON.stringify(coordinate),/-122.084000/);assert.match(JSON.stringify(coordinate),/5/);
  assert.equal(s.h.calls.length,0);s.unmount();

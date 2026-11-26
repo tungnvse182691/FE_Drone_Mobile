@@ -1,3 +1,4 @@
+const {seedLegacyDraft}=require('./helpers/roadfe-screen.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {screen,harness,deferred}=require('./helpers/roadfe-screen.cjs');
 const {mediaRuntime,jpeg}=require('./helpers/reporter-media.cjs');
@@ -30,7 +31,7 @@ for(const close of [false,true])test('supplement capture retains own GPS or canc
 for(const location of [null,fix])test('enqueue uses per-photo GPS instead of shared coordinates: '+Boolean(location),async()=>{
  const h=harness();h.login();const st=h.load('src/store/reporter.ts').useReporterStore.getState();let input;
  h.load('src/store/uploads.ts').useUploadsStore.getState().enqueuePhoto=async value=>{input=value;throw {code:'fixture_stop'};};
- await st.savePendingDraft({description:'test',coords:{latitude:1,longitude:2,accuracyMeters:9},photos:[{uri:'file://a.jpg',fileName:'a.jpg',mediaType:'image/jpeg',capturedAt:'2026-11-23T00:00:00Z',photoLocation:location,locationSource:location?'EXIF':'UNKNOWN'}],submitRequested:true});
+ await seedLegacyDraft(h,{description:'test',coords:{latitude:1,longitude:2,accuracyMeters:9},photos:[{uri:'file://a.jpg',fileName:'a.jpg',mediaType:'image/jpeg',capturedAt:'2026-11-23T00:00:00Z',photoLocation:location,locationSource:location?'EXIF':'UNKNOWN'}],submitRequested:true});
  await assert.rejects(st.submitPendingDraft());assert.ok(input);assert.equal(input.latitude,location?.latitude);assert.equal(input.longitude,location?.longitude);assert.equal(input.locationSource,location?'EXIF':'UNKNOWN');
 });
 test('GPS ignores stale fixes and cleans subscription on success/timeout',async()=>{

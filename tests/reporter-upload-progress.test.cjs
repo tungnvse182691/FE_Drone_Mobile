@@ -1,3 +1,4 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {harness,screen,deferred}=require('./helpers/roadfe-screen.cjs');
@@ -29,7 +30,7 @@ test('Reporter aggregates concurrent photo bytes and keeps verification separate
  const h=harness();h.login();const store=h.load('src/store/reporter.ts').useReporterStore;
  const mod=h.load('src/store/uploads.ts');const values=[];
  mod.uploadTransport.putPart=async(p,b,t,s,fn)=>{fn(b.length/2);return {eTag:'part'};};
- await store.getState().savePendingDraft({description:'QA byte progress',photos:[0,1].map(n=>({uri:`cache://${n}.jpg`,fileName:`${n}.jpg`,mediaType:'image/jpeg',capturedAt:'2026-11-15T00:00:00Z'})),coords:null,submitRequested:true});
+ await store.getState().savePendingDraft(cameraDraftFixture({description:'QA byte progress',photos:[0,1].map(n=>({uri:`cache://${n}.jpg`,fileName:`${n}.jpg`,mediaType:'image/jpeg',capturedAt:'2026-11-15T00:00:00Z'})),coords:null,submitRequested:true}));
  await store.getState().submitPendingDraft({onProgress:p=>values.push(p)});
  assert.ok(values.some(p=>p.phase==='uploading'&&p.uploadPercent>0&&p.uploadPercent<100));
  assert.ok(values.some(p=>p.phase==='uploading'&&p.uploadPercent===100));
@@ -46,7 +47,7 @@ for(const code of ['ERR_NETWORK','submission_paused'])test('one explicit retry r
  h.login();const store=h.load('src/store/reporter.ts').useReporterStore;
  const mod=h.load('src/store/uploads.ts');const original=mod.uploadTransport.putPart;let fail=true;
  mod.uploadTransport.putPart=async(...args)=>{if(fail){fail=false;throw {code};}return original(...args);};
- await store.getState().savePendingDraft({description:'QA reconnect',photos:[{uri:'cache://reconnect.jpg',fileName:'reconnect.jpg',mediaType:'image/jpeg',capturedAt:'2026-11-15T00:00:00Z'}],coords:null,submitRequested:true});
+ await store.getState().savePendingDraft(cameraDraftFixture({description:'QA reconnect',photos:[{uri:'cache://reconnect.jpg',fileName:'reconnect.jpg',mediaType:'image/jpeg',capturedAt:'2026-11-15T00:00:00Z'}],coords:null,submitRequested:true}));
  await assert.rejects(store.getState().submitPendingDraft(),e=>e.code===code);
  const retained=store.getState().pendingDraft;const item=mod.useUploadsStore.getState().items[0];
  const metadata=mod.uploadTransport.getFileMetadata;let reads=0;

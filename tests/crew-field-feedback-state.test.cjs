@@ -4,11 +4,11 @@ async function mounted(options={}){
  const context={actor:'crew',scope:'session',environment:'test',projectId:'project',taskId:'task'};
  const navigation=[];
  let focus,cleanup,failSave=false,waitSave=null,submitted=false,detailReads=0,readError=null,uploads=0;
- let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN'}],captures:options.emptyCaptures?[]:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
+ let draft={measurements:[{sampleId:'sample',type:'DepressionDepth',dimension:'LENGTH',unit:'cm',value:5,state:'KNOWN',instrument:'Thước',method:'Đo trực tiếp',locationReason:'Chưa lấy được GPS'}],captures:options.emptyCaptures?[]:[{id:'photo',parts:[],size:3,uri:'file://photo'}],command:null};
  const s=screen('app/(crew)/field-review.tsx',{
  expose:'CrewFieldReviewScreenContent,fieldNoticeModel,safeFieldErrorDetail',exportName:'CrewFieldReviewScreenContent',
  props:{task:{id:'task',projectId:'project',task_mode:'MEASURE_ONLY',detail:{status:'InProgress',mode:'MEASURE_ONLY',requiredMeasurementType:1},etag:'version'}},
- moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>options.signed?{signed:'1'}:{},useRouter:()=>({push:p=>{navigation.push(p);cleanup?.();}}),useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
+ moduleFactories:{'expo-router':({react})=>({useLocalSearchParams:()=>options.signed?{signed:'1'}:options.section?{section:options.section}:{},useRouter:()=>({push:p=>{navigation.push(p);cleanup?.();}}),useFocusEffect:fn=>{focus=fn;react.useEffect(()=>{cleanup=fn();return()=>cleanup?.();},[fn]);}})},
  modules:{
  'expo-crypto':{randomUUID:()=> 'sample'},
  '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/Toast':{Toast:'Toast'},
@@ -193,3 +193,11 @@ test('FIELD signed editor retains local evidence for admission without ordinary 
  h.s.press('Chụp / chọn ảnh');await h.s.flush();assert.equal(h.navigation.at(-1).params.signed,'1');
  h.s.unmount();
 });
+
+ test('FIELD checklist evidence route opens existing evidence controls without acquiring a new photo',async()=>{
+ const h=await mounted({normal:true,section:'evidence'});
+ const modal=h.s.nodes().find(n=>n.type==='Modal'&&n.props.visible);
+ assert.ok(modal);assert.ok(h.s.nodes().some(n=>n.type==='Button'&&n.props.title==='Tải ảnh này lên'));
+ assert.equal(h.navigation.length,0);assert.equal(h.uploads(),0);
+ modal.props.onRequestClose();h.s.render();assert.equal(h.s.nodes().some(n=>n.type==='Modal'&&n.props.visible),false);h.s.unmount();
+ });

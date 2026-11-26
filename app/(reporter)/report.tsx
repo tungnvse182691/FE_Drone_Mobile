@@ -1,5 +1,5 @@
 import { ReporterHeader } from '../../src/components/ReporterHeader';
-import { reportDescriptionError } from '../../src/api/reporterValidation';
+import { reportDescriptionError, reporterCaptureError, REPORTER_CAPTURE_POLICY, REPORTER_MAX_PHOTOS } from '../../src/api/reporterValidation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,10 +16,8 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { CameraCapturedPicture, CameraView, useCameraPermissions } from 'expo-camera';
-import * as Location from 'expo-location';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
 import { Button } from '../../src/components/reporter/Button';
 import { useReporterKeyboard } from '../../src/components/reporter/keyboardVisibility';
 import { PhotoUploadStatus } from '../../src/components/reporter/PhotoUploadStatus';
@@ -43,7 +41,7 @@ const softShadow = Platform.select({
   default: {},
 });
 
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = REPORTER_MAX_PHOTOS;
 interface Coords {
   latitude: number;
   longitude: number;
@@ -79,8 +77,8 @@ export default function ReporterReportScreen() {
 
   const [description, setDescription] = useState('');
   const [coords, setCoords] = useState<Coords | null>(null);
-  const [gpsStatus, setGpsStatus] = useState('Đang lấy vị trí...');
-  const [gpsLoading, setGpsLoading] = useState(true);
+  const [gpsStatus, setGpsStatus] = useState('GPS sẽ được lấy khi chụp ảnh chính.');
+  const [gpsLoading, setGpsLoading] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -138,7 +136,7 @@ export default function ReporterReportScreen() {
       setCoords(validCoords);
       if (validCoords || draft?.request) {
         setGpsStatus(validCoords ? 'Đã khôi phục vị trí của lệnh đang gửi' : 'Lệnh chưa có tọa độ'); setGpsLoading(false);
-      } else void requestLocation();
+      } else { setGpsStatus('GPS sẽ được lấy khi chụp ảnh chính.'); setGpsLoading(false); }
       setRestored(true);
       setDataScope(scope.key);
     }).catch(() => { if (active && isCurrent()) setRestoreFailed(true); });
@@ -157,57 +155,6 @@ export default function ReporterReportScreen() {
 
 
 
-  const requestLocation = async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    setGpsLoading(true);
-    setGpsStatus('Đang lấy vị trí...');
-    try {
-      const permissionStatus = await Location.getForegroundPermissionsAsync();
-      if (!isCurrent()) return;
-      let granted = permissionStatus.status === 'granted';
-      if (!granted) {
-        const requested = await Location.requestForegroundPermissionsAsync();
-        if (!isCurrent()) return;
-        granted = requested.status === 'granted';
-      }
-      if (!granted) {
-        setCoords(null);
-        setGpsStatus('Chưa có tọa độ');
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      if (!isCurrent()) return;
-      if (!hasUsableCoordinate(location.coords.latitude, location.coords.longitude)) {
-        // Không có fix hợp lệ: tiếp tục với UNKNOWN, không tạo tọa độ.
-        setCoords(null);
-        setGpsStatus('Chưa có tọa độ (thiết bị chưa bắt được GPS)');
-        return;
-      }
-      setCoords({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracyMeters:
-          typeof location.coords.accuracy === 'number' && Number.isFinite(location.coords.accuracy)
-            ? location.coords.accuracy
-            : null,
-      });
-      setGpsStatus(
-        `${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}`,
-      );
-      setErrors((current) => ({ ...current, coords: '' }));
-    } catch {
-      if (!isCurrent()) return;
-      setCoords(null);
-      setGpsStatus('Chưa có tọa độ');
-    } finally {
-      if (isCurrent()) setGpsLoading(false);
-    }
-  };
-
-
   const handleCameraPermission = async () => {
     const isCurrent = scope.capture();
     if (!isCurrent() || submitting || draftLocked) return;
@@ -215,7 +162,7 @@ export default function ReporterReportScreen() {
       const result = await requestPermission();
       if (isCurrent() && !result.granted) setSubmitError('Cần cấp quyền camera để chụp ảnh hiện trường.');
     } catch {
-      if (isCurrent()) setSubmitError('Không mở được camera. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
+      if (isCurrent()) setSubmitError('Không mở được camera. Ảnh đã lưu vẫn được giữ; vui lòng thử lại.');
     }
   };
 
@@ -230,60 +177,47 @@ export default function ReporterReportScreen() {
     captureInFlight.current = true;
     setGpsBusy(true);
     try {
-    const photoLocation = await acquireReporterPhotoGps(isCurrent);
+    const captureRole = [...photoMeta.current.values()].some(p => selectedPhotos.current.includes(p.uri) && p.captureRole === 'PRIMARY') ? 'SECONDARY' as const : 'PRIMARY' as const;
+    const photoLocation = captureRole === 'PRIMARY' ? await acquireReporterPhotoGps(isCurrent) : null;
     if (!isCurrent()) return;
     const capturedAt = new Date().toISOString();
     const photo: CameraCapturedPicture | undefined = await cameraRef.current?.takePictureAsync();
     if (!isCurrent()) return;
     if (photo?.uri) {
       const saved = await preserveReporterPhoto({ uri: photo.uri, fileName: photo.uri.split('/').pop() ?? '',
-        mediaType: 'image/jpeg', capturedAt, photoLocation, locationSource: 'CAPTURE' }, isCurrent);
+        mediaType: 'image/jpeg', capturedAt, photoLocation, captureRole, locationSource: photoLocation ? 'CAPTURE' : 'UNKNOWN' }, isCurrent);
+      if (!isCurrent()) return;
+      const next = captureRole === 'PRIMARY' ? [saved, ...photoInputs()] : [...photoInputs(), saved];
+      const nextCoords = captureRole === 'PRIMARY' ? saved.photoLocation ?? null : coords;
+      await useReporterStore.getState().savePendingDraft({description, photos: next, coords: nextCoords, capturePolicy: REPORTER_CAPTURE_POLICY});
       if (!isCurrent()) return;
       photoMeta.current.set(saved.uri, saved);
-      updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
+      updatePhotos(() => next.map(p => p.uri));
+      setCoords(nextCoords); setGpsStatus(nextCoords ? 'Vị trí ảnh chính' : 'Ảnh chính chưa có GPS; vẫn có thể gửi.');
       setCameraOpen(false);
     }
     } catch (error) {
-      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không chụp được ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
+      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không chụp được ảnh. Ảnh đã lưu vẫn được giữ; vui lòng thử lại.');
     } finally {
       captureInFlight.current = false;
       setGpsBusy(false);
     }
   };
 
-  const handlePickImage = async () => {
+  const removePhoto = async (index: number) => {
     const isCurrent = scope.capture();
-    if (!isCurrent() || submitting || submitted.current || draftLocked || !restored || dataScope !== scope.key ||
-        captureInFlight.current || selectedPhotos.current.length >= MAX_PHOTOS) return;
+    if (!isCurrent() || draftLocked || submitting || captureInFlight.current) return;
     captureInFlight.current = true;
-    pickerScope.current = scope.key;
-    const capturedAt = new Date().toISOString();
     try {
-      const res = await DocumentPicker.getDocumentAsync({
-        type: ['image/*', 'image/jpeg', 'image/png'],
-        // Android grants access to the selected content URI. In Expo Go the
-        // picker's host-global cache copy can fall outside FileSystem's scope.
-        // Admission below reads and verifies it into our private storage now.
-        copyToCacheDirectory: false,
-      });
+      const removed = photoMeta.current.get(photos[index]);
+      const next = photoInputs().filter((_, i) => i !== index);
+      const nextCoords = removed?.captureRole === 'PRIMARY' ? null : coords;
+      await useReporterStore.getState().savePendingDraft({description, photos: next, coords: nextCoords, capturePolicy: REPORTER_CAPTURE_POLICY});
       if (!isCurrent()) return;
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const asset = res.assets[0];
-        if (selectedPhotos.current.includes(asset.uri)) return;
-        const saved = await preserveReporterPhoto({ uri: asset.uri, fileName: asset.name,
-          mediaType: asset.mimeType, capturedAt }, isCurrent,
-          selectedPhotos.current.flatMap(uri => { const hash = photoMeta.current.get(uri)?.checksumSha256; return hash ? [hash] : []; }));
-        if (!isCurrent()) return;
-        photoMeta.current.set(saved.uri, saved);
-        updatePhotos(current => [...current, saved.uri].slice(0, MAX_PHOTOS));
-      }
-    } catch (error) {
-      if ((error as { code?: string })?.code === 'photo_already_selected') return;
-      if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
-    } finally {
-      pickerScope.current = null;
-      captureInFlight.current = false;
-    }
+      updatePhotos(() => next.map(p => p.uri)); setCoords(nextCoords);
+      if (removed?.captureRole === 'PRIMARY') setGpsStatus('Chụp lại ảnh chính để lấy GPS mới; ảnh phụ không nhận GPS cũ.');
+    } catch (error) { if (isCurrent()) setSubmitError(reporterFailureMessage(error)); }
+    finally { captureInFlight.current = false; }
   };
 
   const validate = () => {
@@ -291,8 +225,9 @@ export default function ReporterReportScreen() {
     const descriptionError = reportDescriptionError(description);
     if (descriptionError) next.description = descriptionError;
     if (photos.length === 0) {
-      next.photos = 'Vui lòng chụp hoặc chọn ít nhất một ảnh hiện trường.';
+      next.photos = 'Vui lòng chụp ít nhất một ảnh hiện trường.';
     }
+    if (!draftLocked) { const message = reporterCaptureError(photoInputs(), true); if (message) next.photos = message; }
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -309,7 +244,7 @@ export default function ReporterReportScreen() {
     setSubmitting(true); setSubmitError(null); setSubmitProgress(null);
     try {
       if (!isCurrent()) return;
-      await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, submitRequested: true });
+      await useReporterStore.getState().savePendingDraft({ description: description.trim(), photos: photoInputs(), coords, capturePolicy: REPORTER_CAPTURE_POLICY, submitRequested: true });
       if (!isCurrent()) return;
       const reportId = await useReporterStore.getState().submitPendingDraft({ isCurrent,
         onProgress: progress => { if (isCurrent()) setSubmitProgress(progress); } });
@@ -379,9 +314,6 @@ export default function ReporterReportScreen() {
     );
   }
 
-  const candidates = queueItems.filter(item => item.partitionId === reporterContext().partition &&
-    item.mediaState === 'VERIFIED' && item.fileId && item.verifiedVersion && !item.lastErrorCode && !photos.includes(item.uriLocal));
-
   const photoItem = (uri: string) => {
     const item = queueItems.find(row => row.partitionId === reporterContext().partition &&
       (row.id === photoMeta.current.get(uri)?.itemId || row.uriLocal === uri));
@@ -413,7 +345,7 @@ export default function ReporterReportScreen() {
                 <Image source={{ uri }} style={styles.photo} accessibilityLabel={`Ảnh hiện trường ${index + 1}`} />
                 <PhotoUploadStatus progressPercent={submitting && submitProgress?.phase === 'uploading' ? submitProgress.photoPercentages?.[photoItem(uri)?.id ?? ''] : undefined} item={photoItem(uri)} index={index} active={busyPhotoIds.includes(photoItem(uri)?.id ?? '')} />
                 <Pressable
-                  onPress={() => updatePhotos((current) => current.filter((_, i) => i !== index))}
+                  onPress={() => void removePhoto(index)}
                   style={styles.photoRemove}
                   accessibilityRole="button"
                   accessibilityLabel={`Xoá ảnh ${index + 1}`}
@@ -443,37 +375,7 @@ export default function ReporterReportScreen() {
                 <Text style={[typography.caption, styles.photoAddText]}>Chụp ảnh</Text>
               </Pressable>
             ) : null}
-            {photos.length < MAX_PHOTOS ? (
-              <Pressable
-                onPress={handlePickImage}
-                style={({ pressed }) => [styles.photoAdd, pressed && styles.photoAddPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Chọn ảnh từ thư viện"
-                testID="pick-photo"
-              >
-                <MaterialIcons name="photo-library" size={24} color={colors.secondary} />
-                <Text style={[typography.caption, styles.photoAddText]}>Chọn ảnh</Text>
-              </Pressable>
-            ) : null}
           </View>
-          {!draftLocked && candidates.length > 0 ? <View style={styles.reuseSection}>
-            <Pressable testID="toggle-verified-photos" accessibilityRole="button" accessibilityState={{ expanded: showVerifiedPhotos }}
-              disabled={submitting} style={styles.reuseToggle} onPress={() => setShowVerifiedPhotos(value => !value)}>
-              <Text style={[typography.caption, styles.muted]}>Dùng ảnh đã xác minh</Text>
-              <MaterialIcons name={showVerifiedPhotos ? 'expand-less' : 'chevron-right'} size={20} color={colors.secondary} />
-            </Pressable>
-            {showVerifiedPhotos ? candidates.map((item, index) => <View testID={`verified-photo-${index}`} key={item.id} style={styles.candidateRow}>
-              <Image source={{ uri: item.uriLocal }} style={styles.candidatePhoto} accessibilityLabel={`Ảnh đã xác minh ${index + 1}`} />
-              <View style={styles.candidateAction}><Button variant="secondary" title={`Chọn ảnh đã xác minh ${index + 1}`}
-                disabled={submitting || photos.length >= MAX_PHOTOS}
-                onPress={() => {
-                  if (!scope.capture()() || submitting || draftLocked || photos.length >= MAX_PHOTOS) return;
-                  photoMeta.current.set(item.uriLocal, { uri: item.uriLocal, fileName: item.fileName, mediaType: item.mediaType, capturedAt: item.capturedAt, itemId: item.id,
-                    sizeBytes: item.sizeBytes, checksumSha256: item.checksumSha256, ...(item.vault===undefined?{}:{vault:item.vault}) });
-                  updatePhotos(current => current.includes(item.uriLocal) ? current : [...current, item.uriLocal].slice(0, MAX_PHOTOS));
-                }} /></View>
-            </View>) : null}
-          </View> : null}
           {errors.photos ? (
             <Text style={[typography.caption, styles.error]}>{errors.photos}</Text>
           ) : null}
@@ -517,12 +419,7 @@ export default function ReporterReportScreen() {
             <Text style={typography.labelLg}>Vị trí (không bắt buộc)</Text>
             <View style={styles.gpsRow}>
               <MaterialIcons name={coords ? 'my-location' : 'location-off'} size={20} color={colors.secondary} />
-              <Text style={[typography.caption, styles.gpsText]}>{gpsLoading ? 'Đang lấy vị trí…' : coords ? 'Vị trí thiết bị' : gpsStatus}</Text>
-              <Pressable onPress={requestLocation} disabled={gpsLoading || submitting || draftLocked}
-                style={styles.gpsRetry} accessibilityRole="button" accessibilityLabel="Lấy lại vị trí" testID="retry-location">
-                <MaterialIcons name="refresh" size={20} color={colors.secondary} />
-                <Text style={typography.caption}>{gpsLoading ? 'Đang lấy' : 'Lấy lại'}</Text>
-              </Pressable>
+              <Text style={[typography.caption, styles.gpsText]}>{gpsLoading ? 'Đang lấy vị trí…' : coords ? 'Vị trí ảnh chính' : gpsStatus}</Text>
             </View>
             {coords ? <Text testID="reporter-coordinate" style={[typography.caption, styles.fieldHint]}>{coords.latitude.toFixed(6)}, {coords.longitude.toFixed(6)}{coords.accuracyMeters !== null ? ` · Sai số khoảng ${Math.round(coords.accuracyMeters)} m` : ' · Chưa có sai số'}</Text> : null}
             {!coords && !gpsLoading ? <Text style={typography.caption}>Bạn vẫn có thể gửi khi chưa có vị trí.</Text> : null}

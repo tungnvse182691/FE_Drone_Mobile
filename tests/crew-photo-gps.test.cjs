@@ -4,7 +4,7 @@ const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 function load(file,deps={}) {
   const module={exports:{}};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,
-    {module,exports:module.exports,require:name=>deps[name]??{},setTimeout,clearTimeout});
+    {module,exports:module.exports,require:name=>deps[name]??(name==='../../utils/gpsAccuracy'?load('src/utils/gpsAccuracy.ts'):{}),setTimeout,clearTimeout});
   return module.exports;
 }
 const tokens={colors:{},spacing:{},radius:{},typography:{}};

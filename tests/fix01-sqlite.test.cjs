@@ -1,3 +1,4 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {DatabaseSync}=require('node:sqlite');
@@ -29,7 +30,7 @@ const row=(s,id)=>s.sqlite.prepare('SELECT * FROM upload_ledger WHERE id=?').get
 test('SQLite crash/reopen preserves linked draft and every unresolved upload receipt; exact replay after timeout',async()=>{
   const file=path.join(folder,'timeout-restart.db');let s=runtime(file);s.h.login();
   await s.queue.getState().hydrate();const id=await s.queue.getState().enqueuePhoto(photo);
-  const saved=await s.store.getState().savePendingDraft({...input,photos:[{...input.photos[0],itemId:id}]});
+  const saved=await s.store.getState().savePendingDraft(cameraDraftFixture({...input,photos:[{...input.photos[0],itemId:id}]}));
   const originalComplete=s.transport.completeUpload;
   s.transport.completeUpload=async(...args)=>{await originalComplete(...args);throw {code:'ECONNABORTED'};};
   await s.queue.getState().advanceItem(id);
@@ -58,7 +59,7 @@ test('SQLite crash/reopen preserves linked draft and every unresolved upload rec
 for(const state of ['VERIFYING','COMPLETE_REQUESTED','VERIFIED','FAILED','UNKNOWN_OUTCOME'])test('SQLite '+state+' survives missing memory row, deletion, and reopen with draft reference',async()=>{
   const file=path.join(folder,state+'.db');let s=runtime(file);s.h.login();await s.queue.getState().hydrate();
   const id=await s.queue.getState().enqueuePhoto(photo);
-  await s.store.getState().savePendingDraft({...input,photos:[{...input.photos[0],itemId:id}]});
+  await s.store.getState().savePendingDraft(cameraDraftFixture({...input,photos:[{...input.photos[0],itemId:id}]}));
   s.sqlite.prepare('UPDATE upload_ledger SET media_state=?,upload_id=?,file_id=?,session_version=?,part_etags=?,verified_version=? WHERE id=?')
     .run(state,'fixture-upload','fixture-file','fixture-version','{"1":"fixture-etag"}','fixture-file-version',id);
   const original=row(s,id);s.queue.setState({items:[]});
@@ -80,7 +81,7 @@ test('SQLite late upload-complete response after actor switch cannot update B or
 
 test('SQLite guest bytes and command survive reopen and unrelated login/OTP account restoration',async()=>{
   const file=path.join(folder,'guest.db');let s=runtime(file);
-  await s.store.getState().savePendingDraft(input);
+  await s.store.getState().savePendingDraft(cameraDraftFixture(input));
   const original=s.sqlite.prepare('SELECT * FROM local_draft').all();s.sqlite.close();
   s=runtime(file);s.h.login('REPORTER','B');
   assert.equal(await s.store.getState().bindPendingDraft(),null);assert.equal(await s.store.getState().restorePendingDraft(),null);

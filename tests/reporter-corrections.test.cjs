@@ -1,5 +1,7 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
+const {capturePhoto}=require('./helpers/roadfe-screen.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-const {screen,harness,deferred}=require('./helpers/roadfe-screen.cjs');
+const {screen,harness,deferred,seedLegacyDraft}=require('./helpers/roadfe-screen.cjs');
 test('A entering and leaving create form never writes a form draft',async()=>{
  const s=screen('app/(reporter)/report.tsx');s.render();await s.flush();
  s.input('Mô tả hiện trạng','unsent form');await s.flush();
@@ -7,7 +9,7 @@ test('A entering and leaving create form never writes a form draft',async()=>{
 });
 test('A legacy unstarted form is not restored or overwritten',async()=>{
  const s=screen('app/(reporter)/report.tsx');s.h.login();const store=s.reporter.useReporterStore.getState();
- await store.savePendingDraft({description:'legacy unsent',photos:[],coords:null});const before=JSON.stringify([...s.h.rows]);
+ await seedLegacyDraft(s.h,{description:'legacy unsent',photos:[],coords:null});const before=JSON.stringify([...s.h.rows]);
  s.render();await s.flush();assert.equal(s.nodes().find(n=>n.props?.label==='Mô tả hiện trạng').props.value,'');
  assert.equal(JSON.stringify([...s.h.rows]),before);s.unmount();
 });
@@ -62,24 +64,24 @@ const reportPage='app/(reporter)/report.tsx',supplementPage='app/(reporter)/repo
 const fixtureOptions={api:{getOwnReportReal:async()=>({report:{id:'fixture-report',evidence:[]},etag:'"v1"'})},pick:async()=>({canceled:false,assets:[{uri:'content://test-provider/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]})};
 for(const [page,label,button] of [[reportPage,'Mô tả hiện trạng','Gửi phản ánh'],[supplementPage,'Nội dung bổ sung','Gửi bổ sung']]){
  for(const count of [1,9,10,1000,1001])test(`B ${page} ${count} chars validates before Send intent/upload`,async()=>{
-  const s=screen(page,fixtureOptions);s.h.login();s.render();await s.flush();s.input(label,'x'.repeat(count));await s.tap('pick-photo');await s.flush();
-  assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
+  const s=screen(page,fixtureOptions);s.h.login();s.render();await s.flush();s.input(label,'x'.repeat(count));await capturePhoto(s);await s.flush();
+  assert.equal(s.reporter.useReporterStore.getState().pendingDraft.photos.length,1);
   let sends=0;s.reporter.useReporterStore.getState().submitPendingDraft=async()=>{sends++;throw {code:'ERR_NETWORK'};};
   await s.press(button);await s.flush();assert.equal(sends,count<=1000?1:0);
   const command=s.reporter.useReporterStore.getState().pendingDraft;
   if(count<=1000){assert.ok(command.submitRequested);assert.equal(command.description.length,count);const before=JSON.stringify(command);s.unmount();assert.equal(JSON.stringify(command),before);}
-  else {assert.equal(command,null);assert.equal(s.h.rows.size,0);}
+  else {assert.equal(command.submitRequested,false);assert.equal(command.description.length,count);assert.equal(s.h.calls.length,0);}
  });
- test(`A ${page} blur/return and cold mount discard only unstarted form`,async()=>{
-  const s=screen(page,fixtureOptions);s.h.login();s.render();await s.flush();s.input(label,'UNSENT');await s.tap('pick-photo');await s.flush();s.blur();s.unmount();
-  assert.equal(s.h.rows.size,0);const next=screen(page,{...fixtureOptions,rows:s.h.rows});next.h.login();next.render();await next.flush();assert.equal(next.nodes().find(n=>n.props?.label===label).props.value,'');next.unmount();
+ test(`A ${page} blur/return and cold mount restore camera draft without dispatch`,async()=>{
+  const s=screen(page,fixtureOptions);s.h.login();s.render();await s.flush();s.input(label,'UNSENT');await capturePhoto(s);await s.flush();s.blur();s.unmount();
+  assert.ok(s.h.rows.size>0);const next=screen(page,{...fixtureOptions,rows:s.h.rows});next.h.login();next.render();await next.flush();assert.equal(next.nodes().find(n=>n.props?.label===label).props.value,'UNSENT');assert.equal(next.reporter.useReporterStore.getState().pendingDraft.photos.length,1);assert.equal(next.h.calls.length,0);next.unmount();
  });
 }
 test('A SEND intent freezes text/key/photos before upload failure and restart, no automatic dispatch',async()=>{
  const h=harness();h.transport.createSession=async()=>{throw Error('network');};h.login();const st=h.load('src/store/reporter.ts').useReporterStore;
- const command=await st.getState().savePendingDraft({description:'x',photos:[{uri:'a.jpg',fileName:'a.jpg',mediaType:'image/jpeg',capturedAt:'fixture'}],coords:null,submitRequested:true});
+ const command=await st.getState().savePendingDraft(cameraDraftFixture({description:'x',photos:[{uri:'a.jpg',fileName:'a.jpg',mediaType:'image/jpeg',capturedAt:'fixture'}],coords:null,submitRequested:true}));
  await assert.rejects(st.getState().submitPendingDraft());
- await assert.rejects(st.getState().savePendingDraft({description:'changed',photos:command.photos,coords:null,submitRequested:true}),e=>e.code==='draft_locked');
+ await assert.rejects(st.getState().savePendingDraft(cameraDraftFixture({description:'changed',photos:command.photos,coords:null,submitRequested:true})),e=>e.code==='draft_locked');
  const other=harness({rows:h.rows});other.login();const restored=await other.load('src/store/reporter.ts').useReporterStore.getState().restoreStartedCommand();assert.equal(restored.commandKey,command.commandKey);assert.equal(restored.description,'x');assert.equal(other.calls.length,0);
 });
 for(const change of ['unmount','logout','environment'])test('C late Reporter recovery response cannot populate UI after '+change,async()=>{

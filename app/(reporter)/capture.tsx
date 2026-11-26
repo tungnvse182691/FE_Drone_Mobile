@@ -74,145 +74,8 @@ export default function ReporterCaptureScreen() {
     return () => { active = false; };
   }, [hydrate, partitionId, scope.key, hydrateAttempt]);
 
-  const requestLocation = async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    setLocationStatus('Đang lấy vị trí...');
-    try {
-      const current = await Location.getForegroundPermissionsAsync();
-      if (!isCurrent()) return;
-      let granted = current.status === 'granted';
-      if (!granted) {
-        const requested = await Location.requestForegroundPermissionsAsync();
-        if (!isCurrent()) return;
-        granted = requested.status === 'granted';
-      }
-      if (!granted) {
-        setCoordinates(null);
-        setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
-        return;
-      }
-      const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      if (!isCurrent()) return;
-      if (!hasUsableCoordinate(position.coords.latitude, position.coords.longitude)) {
-        // Thiết bị trả (0,0) = chưa có fix GPS → không bịa toạ độ.
-        setCoordinates(null);
-        setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
-        return;
-      }
-      setCoordinates({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracyMeters:
-          typeof position.coords.accuracy === 'number' && Number.isFinite(position.coords.accuracy)
-            ? position.coords.accuracy
-            : null,
-      });
-      setLocationStatus(
-        `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`,
-      );
-    } catch {
-      if (!isCurrent()) return;
-      setCoordinates(null);
-      setLocationStatus('Không có tọa độ — ảnh này sẽ không có thông tin vị trí.');
-    }
-  };
-
-  useEffect(() => {
-    void requestLocation();
-  }, [scope.key]);
-
-  const ingestAsset = async (asset: ImagePicker.ImagePickerAsset) => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    setError(null);
-    const fallbackExtension = (asset.mimeType ?? '').includes('png') ? 'png' : 'jpg';
-    const fileName = asset.fileName?.trim() || `hien-truong-${Date.now()}.${fallbackExtension}`;
-    const mediaType = normalizePhotoMediaType(fileName, asset.mimeType);
-    if (!mediaType) {
-      setError('Chỉ hỗ trợ ảnh JPEG hoặc PNG.');
-      return;
-    }
-
-    setBusy(true);
-    try {
-      const saved = await preserveReporterPhoto({uri:asset.uri,fileName,mediaType,capturedAt:new Date().toISOString()},isCurrent);
-      if (!isCurrent()) return;
-      const usable = hasUsableCoordinate(coordinates?.latitude, coordinates?.longitude);
-      const itemId = await enqueuePhoto({
-        uriLocal: saved.uri,
-        fileName: saved.fileName,
-        mediaType: saved.mediaType,
-        sizeBytes: saved.sizeBytes,
-        checksumSha256: saved.checksumSha256,
-        capturedAt: saved.capturedAt,
-        ...(saved.vault===undefined?{}:{vault:saved.vault}),
-        locationSource: locationSourceFor(usable),
-        latitude: usable ? coordinates?.latitude ?? null : null,
-        longitude: usable ? coordinates?.longitude ?? null : null,
-        accuracyMeters: usable ? coordinates?.accuracyMeters ?? null : null,
-        partitionId,
-      });
-      if (!isCurrent()) return;
-      await advanceItem(itemId);
-    } catch (error) {
-      if (!isCurrent()) return;
-      setError(reporterPhotoFailureMessage(error) ?? 'Không xử lý được ảnh đã chọn. Vui lòng thử lại.');
-    } finally {
-      if (isCurrent()) setBusy(false);
-    }
-  };
-
-  const takePhoto = async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    setError(null);
-    try {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!isCurrent()) return;
-    if (!permission.granted) {
-      setError('Cần cấp quyền camera để chụp ảnh hiện trường.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      exif: false,
-    });
-    if (!isCurrent()) return;
-    if (!result.canceled && result.assets.length > 0) {
-      await ingestAsset(result.assets[0]);
-    }
-    } catch {
-      if (isCurrent()) setError('Không mở được camera. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
-    }
-  };
-
-  const pickFromLibrary = async () => {
-    const isCurrent = scope.capture();
-    if (!isCurrent()) return;
-    setError(null);
-    try {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!isCurrent()) return;
-    if (!permission.granted) {
-      setError('Cần cấp quyền truy cập thư viện ảnh để chọn ảnh.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.85,
-      exif: false,
-      allowsMultipleSelection: false,
-    });
-    if (!isCurrent()) return;
-    if (!result.canceled && result.assets.length > 0) {
-      await ingestAsset(result.assets[0]);
-    }
-    } catch {
-      if (isCurrent()) setError('Không mở được thư viện ảnh. Nháp và ảnh cũ vẫn được giữ; vui lòng thử lại.');
-    }
-  };
+  // This legacy route retains the queue; all new captures enter the bounded report form.
+  const takePhoto = () => router.push(REPORTER_REPORT);
 
   const verifiedCount = items.filter((item) => item.mediaState === 'VERIFIED').length;
   const canSubmit = verifiedCount > 0;
@@ -257,29 +120,8 @@ export default function ReporterCaptureScreen() {
   return (
     <SafeAreaScreen scroll header={<ReporterHeader title="Ảnh hiện trường" onBack={() => router.canGoBack() ? router.back() : router.replace(REPORTER_REPORT)} />}>
       <Text style={[typography.caption, styles.subtitle]}>
-        Thêm ảnh riêng tư để xác minh. Mỗi phản ánh chọn tối đa 3 ảnh; ảnh cũ vẫn được giữ.
+        Chụp tối đa 2 ảnh trong từng phản ánh. Ảnh và lượt tải cũ vẫn được giữ trong hàng đợi.
       </Text>
-
-      <View style={styles.locationCard}>
-        <View style={styles.locationRow}>
-          <MaterialIcons
-            name={coordinates ? 'my-location' : 'location-off'}
-            size={16}
-            color={coordinates ? colors.success : colors.secondary}
-          />
-          <Text style={[typography.caption, styles.locationText]}>{locationStatus}</Text>
-          <Pressable
-            onPress={requestLocation}
-            style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Lấy lại vị trí"
-            testID="capture-retry-location"
-          >
-            <MaterialIcons name="refresh" size={16} color={colors.brandGold} />
-            <Text style={[typography.caption, styles.retryText]}>Thử lại</Text>
-          </Pressable>
-        </View>
-      </View>
 
       <Text style={[typography.labelLg, styles.label]}>
         Ảnh được lưu trong phiên ({items.length})
@@ -303,19 +145,6 @@ export default function ReporterCaptureScreen() {
             <Text style={[typography.caption, styles.addText]}>Chụp ảnh</Text>
           </Pressable>
         )}
-        {(
-          <Pressable
-            onPress={() => void pickFromLibrary()}
-            disabled={busy}
-            style={({ pressed }) => [styles.addTile, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Chọn ảnh từ thư viện"
-            testID="capture-pick-photo"
-          >
-            <MaterialIcons name="photo-library" size={24} color={colors.primary} />
-            <Text style={[typography.caption, styles.addText]}>Thư viện</Text>
-          </Pressable>
-        )}
       </View>
       <Text style={typography.caption} testID="capture-retention-notice">{UPLOAD_RETENTION_NOTICE}</Text>
 
@@ -337,7 +166,7 @@ export default function ReporterCaptureScreen() {
         ))}
         {items.length === 0 ? (
           <Text style={[typography.caption, styles.emptyText]}>
-            Chưa có ảnh nào. Chụp hoặc chọn ảnh hiện trường để bắt đầu.
+            Chưa có ảnh nào. Mở phản ánh để chụp ảnh hiện trường.
           </Text>
         ) : null}
       </View>
@@ -354,7 +183,7 @@ export default function ReporterCaptureScreen() {
           variant="primary"
           title={
             canSubmit
-              ? 'Chọn ảnh để lập phản ánh'
+              ? 'Mở phản ánh'
               : items.length === 0
                 ? 'Chưa chọn ảnh nào'
                 : `Đã xác minh ${verifiedCount}/${items.length} ảnh`

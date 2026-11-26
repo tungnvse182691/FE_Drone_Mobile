@@ -1,3 +1,4 @@
+import { formatGpsAccuracy } from '../../src/utils/gpsAccuracy';
 import { ReporterHeader } from '../../src/components/ReporterHeader';
 import React, { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -206,7 +207,7 @@ function EvidenceMetadata({ item, index }: { item: OwnReportDto['evidence'][numb
       <Text style={[typography.caption, styles.metaText]}>{item.capturedAt ? formatDate(item.capturedAt) : 'Chưa có thời gian chụp'}</Text>
       {item.location ? <Text selectable style={[typography.caption, styles.metaText]}>
         {item.location.latitude}, {item.location.longitude}
-        {item.location.accuracyMeters != null ? ` · Sai số vị trí ước tính: ${item.location.accuracyMeters} m` : ''}
+        {item.location.accuracyMeters != null ? ` · Sai số vị trí ước tính: ${formatGpsAccuracy(item.location.accuracyMeters)}` : ''}
       </Text> : null}
     </View> : null}
   </View>;

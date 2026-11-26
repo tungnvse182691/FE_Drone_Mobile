@@ -1,3 +1,4 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {harness,screen,deferred}=require('./helpers/roadfe-screen.cjs');
@@ -22,7 +23,7 @@ function relogin(h,id='actor',sid='new-session'){
 
 test('explicit historical recovery opens original draft and resumes same upload, parts and command key',async()=>{
  const {h,uploads,store,recovery}=fixture();
- const original=await store.getState().savePendingDraft(input);
+ const original=await store.getState().savePendingDraft(cameraDraftFixture(input));
  const put=uploads.uploadTransport.putPart;let fail=true;
  uploads.uploadTransport.putPart=async(...args)=>{if(args[0].partNumber===2&&fail){fail=false;throw {code:'ERR_NETWORK'};}return put(...args);};
  await assert.rejects(store.getState().submitPendingDraft());
@@ -44,7 +45,7 @@ test('explicit historical recovery opens original draft and resumes same upload,
 });
 
 test('unknown report response is replayed unchanged after explicit same-account recovery',async()=>{
- const {h,store,recovery}=fixture();await store.getState().savePendingDraft(input);
+ const {h,store,recovery}=fixture();await store.getState().savePendingDraft(cameraDraftFixture(input));
  const post=h.api.submitReportReal;let first=true;
  h.api.submitReportReal=async(...args)=>{const r=await post(...args);if(first){first=false;throw {code:'ERR_NETWORK'};}return r;};
  await assert.rejects(store.getState().submitPendingDraft());relogin(h);
@@ -55,7 +56,7 @@ test('unknown report response is replayed unchanged after explicit same-account 
 });
 
 test('recovery requires live same owner and cannot authorize a late result after session switch',async()=>{
- const {h,store,recovery,uploads}=fixture();const draft=await store.getState().savePendingDraft(input);relogin(h);
+ const {h,store,recovery,uploads}=fixture();const draft=await store.getState().savePendingDraft(cameraDraftFixture(input));relogin(h);
  const pending=deferred();h.load('src/api/authApi.ts').fetchMe=()=>pending.promise;
  const opening=recovery.openHistoricalReporterCommand(draft.id);relogin(h,'other');pending.resolve({id:'actor',role:'REPORTER'});
  await assert.rejects(opening);assert.equal(uploads.reporterContext().ownerId,'other');
@@ -63,7 +64,7 @@ test('recovery requires live same owner and cannot authorize a late result after
 });
 
 test('recovery access is revoked after logout and account ABA; disk remains unchanged',async()=>{
- const {h,store,recovery,uploads}=fixture();const d=await store.getState().savePendingDraft(input);relogin(h);
+ const {h,store,recovery,uploads}=fixture();const d=await store.getState().savePendingDraft(cameraDraftFixture(input));relogin(h);
  await recovery.openHistoricalReporterCommand(d.id);const captured=uploads.reporterContext();const before=JSON.stringify([...h.rows]);
  relogin(h,'other');relogin(h);
  assert.throws(()=>uploads.assertReporterContext(captured));assert.equal(await store.getState().restoreStartedCommand(),null);
@@ -72,13 +73,13 @@ test('recovery access is revoked after logout and account ABA; disk remains unch
 
 test('a fresh form never restores or overwrites a historical or current pending command',async()=>{
  const {h,store,recovery,uploads}=fixture();
- const old=await store.getState().savePendingDraft(input);relogin(h);
+ const old=await store.getState().savePendingDraft(cameraDraftFixture(input));relogin(h);
  await recovery.openHistoricalReporterCommand(old.id);
  const before=JSON.stringify([...h.rows]);
  uploads.startNewReporterForm();
  assert.equal(await store.getState().restoreStartedCommand(),null);
  assert.equal(JSON.stringify([...h.rows]),before);
- const next=await store.getState().savePendingDraft({...input,description:'New report'});
+ const next=await store.getState().savePendingDraft(cameraDraftFixture({...input,description:'New report'}));
  assert.notEqual(next.commandKey,old.commandKey);
  const nextBytes=JSON.stringify([...h.rows]);uploads.startNewReporterForm();
  assert.equal(await store.getState().restoreStartedCommand(),null);
@@ -92,7 +93,7 @@ test('a fresh form never restores or overwrites a historical or current pending 
 });
 
 test('fresh-form pending selections survive cold restart and require explicit opening',async()=>{
- const f=fixture();f.uploads.startNewReporterForm();const draft=await f.store.getState().savePendingDraft(input);
+ const f=fixture();f.uploads.startNewReporterForm();const draft=await f.store.getState().savePendingDraft(cameraDraftFixture(input));
  const next=fixture();for(const [key,value] of f.h.rows)next.h.rows.set(key,value);
  assert.equal(await next.store.getState().restoreStartedCommand(),null);
  const entries=await next.recovery.listHistoricalReporterCommands();assert.equal(entries.length,1);
@@ -104,7 +105,7 @@ test('bottom Send tab selects a fresh form, preserving the old pending entry on 
  const nav=[];const s=screen('app/(reporter)/_layout.tsx',{modules:{
   'expo-router':{Stack:'Stack',usePathname:()=>'/home',useRouter:()=>({push:r=>nav.push(r)})},
   '../../src/components/BottomNav':{BottomNav:'BottomNav'}
- }});s.h.login();await s.reporter.useReporterStore.getState().savePendingDraft(input);
+ }});s.h.login();await s.reporter.useReporterStore.getState().savePendingDraft(cameraDraftFixture(input));
  const before=JSON.stringify([...s.h.rows]);s.render();
  s.nodes().find(n=>n.type==='BottomNav').props.onNavigate('/(reporter)/report');
  assert.equal(await s.reporter.useReporterStore.getState().restoreStartedCommand(),null);

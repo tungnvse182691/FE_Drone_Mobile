@@ -1,3 +1,4 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createHash,randomUUID}=require('node:crypto');
@@ -51,7 +52,7 @@ test('Reporter draft restores its sealed photo and submits the same authenticate
  const f=fixture(),photo={uri:'file:///private/documents/reporter-photos-v1/a.jpg',fileName:'a.jpg',mediaType:'image/jpeg',capturedAt:'2026-11-25T00:00:00Z',sizeBytes:bytes.length,checksumSha256};
  photo.vault=await f.api().sealReporterPhoto(photo,()=>true);
  const store=f.h.load('src/store/reporter.ts').useReporterStore;
- await store.getState().savePendingDraft({description:'Test concrete slab damage',photos:[photo],coords:null});
+ await store.getState().savePendingDraft(cameraDraftFixture({description:'Test concrete slab damage',photos:[photo],coords:null}));
  store.setState({pendingDraft:null});await store.getState().restorePendingDraft();
  assert.deepEqual(store.getState().pendingDraft.photos[0].vault,photo.vault);
  await store.getState().submitPendingDraft();

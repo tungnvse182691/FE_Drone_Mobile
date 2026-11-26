@@ -1,13 +1,14 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
 const vm = require('node:vm'), ts = require('typescript');
 const { DatabaseSync } = require('node:sqlite');
-const { harness, screen } = require('./helpers/roadfe-screen.cjs');
+const { harness, screen, capturePhoto } = require('./helpers/roadfe-screen.cjs');
 const input = { description: 'Supplement fixture', photos: [{ uri: 'a.jpg', fileName: 'a.jpg', mediaType: 'image/jpeg', capturedAt: '2026-10-30' }], coords: null, targetReportId: 'report', ifMatch: '"v1"' };
 async function fixture(h = harness()) {
   h.login(); const st = h.load('src/store/reporter.ts').useReporterStore;
-  await st.getState().savePendingDraft(input); return { h, st };
+  await st.getState().savePendingDraft(cameraDraftFixture(input)); return { h, st };
 }
 for (const [status, code, outcome] of [
   [409, 'idempotency_key_reused', 'UNKNOWN_OUTCOME'], [409, 'source_not_ready', 'UNKNOWN_OUTCOME'],
@@ -36,7 +37,7 @@ test(`A3 restored unknown and ${failure.code} UI never claim definitive rejectio
   const s = screen('app/(reporter)/report-supplement.tsx', { api: { getOwnReportReal: read }, pick: async () => ({ canceled: false, assets: [{ uri: 'content://test-provider/a.jpg', name: 'a.jpg', mimeType: 'image/jpeg' }] }) });
   s.h.login(); let sends = 0;
   s.h.api.submitReportSupplementReal = async () => { sends++; throw { code: 'ERR_NETWORK' }; };
-  s.render(); await s.flush(); s.input('Nội dung bổ sung', 'Supplement fixture'); await s.tap('pick-photo'); await s.flush();
+  s.render(); await s.flush(); s.input('Nội dung bổ sung', 'Supplement fixture'); await capturePhoto(s); await s.flush();
   await s.press('Gửi bổ sung'); await s.flush();
   const old = structuredClone(s.reporter.useReporterStore.getState().pendingDraft);
   assert.match(JSON.stringify(s.nodes()), /Kết quả gửi chưa được xác nhận/);

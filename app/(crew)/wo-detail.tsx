@@ -1,3 +1,4 @@
+import { fastTrackReason } from '../../src/api/crewFastTrackFeedback';
 import { useRepairBootstrap } from '../../src/hooks/useRepairBootstrap';
 import { CrewRepairFacts } from '../../src/components/crew/CrewRepairFacts';
 import { currentRepairIdentity, sameRepairIdentity, repairAssessmentMatchesDraft, type RepairJournalRecord } from '../../src/api/crewRepairDraft';
@@ -332,19 +333,7 @@ export function FastTrackRepairSummary({ task }: { task: CrewTask }) {
 // PRE_EXECUTION uses FieldInspectionWorkflowRepository.ReadinessAsync on BE.
 // These labels explain the receipt; they never grant execution authority.
 function repairAssessmentReasonLabel(reason: string): string {
-  const labels: Record<string,string> = {
-    MEASUREMENT_MISSING: 'Chưa có số đo hiện trường.',
-    REQUIRED_MEASUREMENT_MISSING: 'Thiếu loại số đo nhiệm vụ yêu cầu.',
-    MEASUREMENT_VALUE_UNKNOWN: 'Có số đo chưa xác định giá trị.',
-    LOCATION_UNKNOWN: 'Chưa bổ sung vị trí quan sát.',
-    LOCATION_PROOF_CONTRADICTORY: 'Thông tin vị trí đang mâu thuẫn.',
-    GPS_SOURCE_BINDING_UNAVAILABLE: 'GPS chưa đủ xác nhận. Cần đối chiếu dấu mốc hiện trường.',
-    POSITION_CHECKLIST_INSUFFICIENT: 'Vị trí đối chiếu chưa khớp nhiệm vụ.',
-    EVIDENCE_MISSING: 'Chưa có ảnh trước sửa.',
-    EVIDENCE_UPLOAD_NOT_CREATED: 'Có ảnh chưa tải lên.',
-    EVIDENCE_PENDING: 'Ảnh đang chờ xác minh.',
-  };
-  return labels[reason] ?? 'Còn yêu cầu bổ sung. Xem chi tiết trong lịch sử.';
+  return fastTrackReason(reason).message;
 }
 
 /** Explicit online repair commands. Legacy repair content remains unmounted. */

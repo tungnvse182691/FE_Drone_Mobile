@@ -27,3 +27,8 @@ test('FT rejects unsupported eligibility version',async()=>{const h=harness();h.
 test('FT actor change during eligibility read discards result',async()=>{const h=harness(),get=h.api.getRepairEligibilityReal;h.api.getRepairEligibilityReal=async(...args)=>{const r=await get(...args);h.switch();return r;};await assert.rejects(h.read,/crew_session_changed/);});
 test('FT binding change during eligibility read discards result',async()=>{const h=harness(),get=h.api.getRepairEligibilityReal;h.api.getRepairEligibilityReal=async(...args)=>{const r=await get(...args);h.detail.repairContext={...h.ctx,bindingId:'changed'};return r;};await assert.rejects(h.read,/crew_task_changed/);});
 test('FT missing bootstrap never requests eligibility',async()=>{const h=harness();h.api.validateFastTrackRepairContext=()=>{throw Error('fasttrack_context_missing');};await assert.rejects(h.read,/fasttrack_context_missing/);assert.ok(!h.calls.some(x=>Array.isArray(x)));});
+
+for(const field of ['itemVersion','assignmentId'])test('FT '+field+' change after API146 discards result without granting execution',async()=>{
+ const h=harness(),get=h.api.getRepairEligibilityReal;h.api.getRepairEligibilityReal=async(...args)=>{const r=await get(...args);if(field==='itemVersion')h.detail.repairContext={...h.ctx,itemVersion:'changed'};else h.detail.assignmentId='changed';return r;};
+ await assert.rejects(h.read,/crew_task_changed/);assert.ok(h.calls.filter(Array.isArray).every(c=>c[0]==='eligibility'));
+});

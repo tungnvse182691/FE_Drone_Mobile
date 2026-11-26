@@ -1,22 +1,16 @@
+const {capturePhoto}=require('./helpers/roadfe-screen.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {screen, deferred} = require('./helpers/roadfe-screen.cjs');
 const {mediaRuntime, png, jpeg} = require('./helpers/reporter-media.cjs');
 const source = {uri:'content://test-provider/document/photo',fileName:'photo.png',mediaType:'image/png',capturedAt:'2026-10-31T00:00:00Z'};
 
-test('B2.1 actual library handler reads granted content URI rather than inaccessible Expo Go global cache', async () => {
-  const r = mediaRuntime(); r.files.set(source.uri, png);
-  let options;
-  const s = screen('app/(reporter)/report.tsx', {pick:async o => {
-    options=o;
-    return {canceled:false,assets:[{uri:o.copyToCacheDirectory?'file://host-global-cache/photo.png':source.uri,name:'photo.png',mimeType:'image/png',size:png.length}]};
-  }, modules:{'../../src/api/reporterLocalMedia':r.load()}});
-  s.render(); await s.flush(); await s.tap('pick-photo'); await s.flush();
-  assert.equal(options.copyToCacheDirectory,false);
-  const photo=s.slots.filter(slot=>slot?.current?.values).flatMap(slot=>[...slot.current.values()]).find(p=>p?.uri?.includes('/documents/reporter-photos-v1/'));
-  assert.equal(s.reporter.useReporterStore.getState().pendingDraft,null);
-  assert.ok(photo?.uri.includes('/documents/reporter-photos-v1/'));
-  assert.deepEqual(r.files.get(photo.uri),png); assert.equal(s.h.calls.length,0); s.unmount();
+test('B2.1 camera handler preserves native camera bytes without document or library access',async()=>{
+ const r=mediaRuntime();r.files.set('file://camera/native.jpg',jpeg);let picks=0;
+ const s=screen('app/(reporter)/report.tsx',{pick:async()=>{picks++;},modules:{'../../src/api/reporterLocalMedia':r.load()}});
+ s.render();await s.flush();await capturePhoto(s,'file://camera/native.jpg');await s.flush();
+ const photo=s.reporter.useReporterStore.getState().pendingDraft.photos[0];
+ assert.ok(photo.uri.includes('/documents/reporter-photos-v1/'));assert.deepEqual(r.files.get(photo.uri),jpeg);assert.equal(picks,0);assert.equal(s.h.calls.length,0);s.unmount();
 });
 
 test('B2.1 admission awaits asynchronous native move before checking private final and returning', async () => {

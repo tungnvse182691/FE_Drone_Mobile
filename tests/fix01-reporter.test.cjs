@@ -1,3 +1,4 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -10,7 +11,7 @@ const settle = async () => { for (let n = 0; n < 5; n++) await new Promise(r => 
 
 test('RPT-01 unrelated Reporter cannot restore, bind or submit guest content; original bytes/key retained', async () => {
   const h = harness(), store = h.load('src/store/reporter.ts').useReporterStore;
-  await store.getState().savePendingDraft(input);
+  await store.getState().savePendingDraft(cameraDraftFixture(input));
   const durable = JSON.stringify([...h.rows]);
   h.login('REPORTER', 'unrelated');
   assert.equal(await store.getState().restorePendingDraft(), null);

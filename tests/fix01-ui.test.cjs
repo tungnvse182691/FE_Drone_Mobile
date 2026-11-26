@@ -1,6 +1,7 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {screen,deferred} = require('./helpers/roadfe-screen.cjs');
+const {screen,deferred,capturePhoto} = require('./helpers/roadfe-screen.cjs');
 const input={description:'Private fixture from guest A',photos:[{uri:'cache://guest-a.jpg',fileName:'fixture.jpg',mediaType:'image/jpeg',capturedAt:'2026-10-28T00:00:00Z'}],coords:{latitude:10,longitude:106,accuracyMeters:5}};
 const token = h => ({user:{id:'B',role_code:'REPORTER'},accessToken:h.jwt('B')});
 
@@ -9,7 +10,7 @@ for(const method of ['login','otp'])test('RPT-01 real '+method+' screen restores
   s=screen(method==='login'?'app/(auth)/index.tsx':'app/(auth)/otp-verify.tsx',{
     login:async()=>token(s.h),api:{verifyReporterOtpReal:async()=>({email:'fixture@example.test',tokens:token(s.h)})},
   });
-  await s.reporter.useReporterStore.getState().savePendingDraft(input);
+  await s.reporter.useReporterStore.getState().savePendingDraft(cameraDraftFixture(input));
   const before=JSON.stringify([...s.h.rows]);s.render();
   if(method==='login'){s.input('Email hoặc Số điện thoại','fixture@example.test');s.input('Mật khẩu','synthetic-only');}
   else{s.nodes().find(n=>n.type==='TextInput').props.onChangeText('123456');s.render();}
@@ -53,7 +54,7 @@ for(const change of ['actor','logout','session','environment','aba','unmount'])t
 for(const file of ['report','report-supplement'])for(const change of ['actor','logout','session','environment','aba','unmount'])test(file+' queued autosave cannot cross '+change,async()=>{
   const s=screen(`app/(reporter)/${file}.tsx`);
   s.h.login();
-  await s.reporter.useReporterStore.getState().savePendingDraft({...input,...(file==='report-supplement'?{targetReportId:'fixture-report',ifMatch:'v1'}:{})});
+  await s.reporter.useReporterStore.getState().savePendingDraft(cameraDraftFixture({...input,...(file==='report-supplement'?{targetReportId:'fixture-report',ifMatch:'v1'}:{})}));
   s.render();await s.flush();
   const before=JSON.stringify([...s.h.rows]);
   s.input(file==='report'?'Mô tả hiện trạng':'Nội dung bổ sung','late private edit');
@@ -80,13 +81,15 @@ for(const change of ['actor','environment','unmount'])test('supplement late GET 
   else await new Promise(r=>setImmediate(r));
 });
 
-for(const file of ['report','report-supplement'])for(const change of ['actor','environment','unmount'])test(file+' late photo picker is ignored after '+change,async()=>{
-  const pending=deferred(),s=screen(`app/(reporter)/${file}.tsx`,{pick:()=>pending.promise});s.h.login();
+for(const file of ['report','report-supplement'])for(const change of ['actor','environment','unmount'])test(file+' late camera capture is ignored after '+change,async()=>{
+  const pending=deferred(),s=screen(`app/(reporter)/${file}.tsx`);s.h.login();
   s.render();await s.flush();
-  const button=s.nodes().find(n=>n.props?.accessibilityLabel==='Chọn ảnh từ thư viện');
-  assert.ok(button);const request=button.props.onPress();
+  const request=capturePhoto(s,'file://late-private.jpg',()=>pending.promise);
+  await new Promise(r=>setImmediate(r));
   if(change==='actor')s.h.login('REPORTER','B');else if(change==='environment')s.h.client.defaults.baseURL='other-env';else s.unmount();
-  pending.resolve({canceled:false,assets:[{uri:'cache://late-private.jpg',name:'private.jpg',mimeType:'image/jpeg'}]});await request;
+  const before=JSON.stringify([...s.h.rows]);
+  pending.resolve({uri:'file://late-private.jpg'});await request;if(change!=='unmount')await s.flush();
+  assert.equal(JSON.stringify([...s.h.rows]),before);
   if(change!=='unmount'){s.render();await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes()),/late-private/);s.unmount();}
 });
 
@@ -101,7 +104,7 @@ test('RPT-02 queue omits delete control with explanation and store retains row',
   s.unmount();
 });
 
-for(const source of ['camera','library'])for(const change of ['actor','session','environment','unmount'])test('capture '+source+' late result cannot enqueue after '+change,async()=>{
+for(const source of ['camera'])for(const change of ['actor','session','environment','unmount'])test('legacy capture route redirects without acquiring media after '+change,async()=>{
   const pending=deferred(),s=screen('app/(reporter)/capture.tsx',{[source]:()=>pending.promise});
   s.h.login();s.render();await s.flush();
   const operation=s.tap(source==='camera'?'capture-take-photo':'capture-pick-photo');
@@ -112,6 +115,7 @@ for(const source of ['camera','library'])for(const change of ['actor','session',
   else s.h.login('REPORTER','B');
   pending.resolve({canceled:false,assets:[{uri:'cache://late-native.jpg',fileName:'private.jpg',mimeType:'image/jpeg'}]});await operation;
   assert.equal(s.h.rows.size,0);assert.equal(s.h.calls.length,0);
+  assert.ok(s.nav.some(p=>p==='/(reporter)/report'));assert.equal(s.nodes().some(n=>n.props?.testID==='capture-pick-photo'),false);
   if(change!=='unmount'){s.render();await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes()),/late-native|private.jpg/);s.unmount();}
 });
 

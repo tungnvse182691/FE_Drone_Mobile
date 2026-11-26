@@ -1,4 +1,4 @@
-import { reportDescriptionError } from '../api/reporterValidation';
+import { reportDescriptionError, reporterCaptureError, REPORTER_CAPTURE_POLICY } from '../api/reporterValidation';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
@@ -18,6 +18,7 @@ import { isTemporaryVerificationFailure, waitForReporterVerification } from './r
 import { buildReportEvidenceLocation, locationSourceFor as sourceFor } from '../types/position';
 
 export interface DraftPhoto {
+  captureRole?: 'PRIMARY' | 'SECONDARY';
   vault?: MediaVaultReference;
   uri: string;
   fileName: string;
@@ -32,6 +33,7 @@ export interface DraftPhoto {
 }
 
 export interface ReporterDraft {
+  capturePolicy?: typeof REPORTER_CAPTURE_POLICY;
   id: string;
   ownerId: string | null;
   provenance: { environment: string; session: string | null };
@@ -49,7 +51,7 @@ export interface ReporterDraft {
   submitRequested: boolean;
 }
 
-type DraftInput = Pick<ReporterDraft, 'description' | 'photos' | 'coords'> &
+type DraftInput = Pick<ReporterDraft, 'description' | 'photos' | 'coords'> & { capturePolicy: typeof REPORTER_CAPTURE_POLICY } &
   Pick<Partial<ReporterDraft>, 'targetReportId' | 'ifMatch' | 'submitRequested'>;
 
 type ReporterContext = ReturnType<typeof reporterContext>;
@@ -143,6 +145,7 @@ export function reporterFailureMessage(error: unknown): string {
   const e = error as { code?: string; stage?: string; status?: number; response?: { status?: number; data?: { code?: string } } };
   const status = e.response?.status ?? e.status;
   const code = e.response?.data?.code ?? e.code;
+  if (code === 'reporter_capture_invalid') return 'Chỉ dùng tối đa 2 ảnh chụp trong lượt này; chụp lại ảnh chính nếu đã xóa. Ảnh phụ không dùng GPS của ảnh khác.';
   if (code === 'verification_timeout') return 'Máy chủ chưa xác minh xong ảnh trong thời gian theo dõi. Chưa gửi phản ánh; ảnh và lệnh vẫn được giữ. Bạn có thể kiểm tra lại sau.';
   if (code === 'submission_paused') return 'Lần gửi đã tạm dừng khi ứng dụng bị gián đoạn. Ảnh và nội dung đã được giữ. Khi có mạng, bấm nút gửi để tiếp tục kiểm tra và gửi.';
   if (e.stage === 'upload_put' && status === 403) return 'Đường tải ảnh bị từ chối hoặc đã hết hạn. Ảnh vẫn được giữ; thử lại để kiểm tra đường tải mới.';
@@ -229,7 +232,7 @@ export const useReporterStore = create<ReporterSessionState>()(
       },
       restoreStartedCommand: async () => {
         const draft = await get().restorePendingDraft();
-        if (draft && !isStartedReporterCommand(draft)) {
+        if (draft && !isStartedReporterCommand(draft) && draft.capturePolicy !== REPORTER_CAPTURE_POLICY) {
           set({ pendingDraft: null, pendingDraftId: null });
           return null;
         }
@@ -261,8 +264,21 @@ export const useReporterStore = create<ReporterSessionState>()(
           if (!same) throw { code: 'draft_locked' };
           return previous;
         }
+        if (input.capturePolicy !== REPORTER_CAPTURE_POLICY) throw {code:'reporter_capture_invalid'};
+        const capturePolicy = input.capturePolicy;
+        if (capturePolicy === REPORTER_CAPTURE_POLICY) {
+          const message = reporterCaptureError(input.photos, input.submitRequested);
+          if (message) throw {code:'reporter_capture_invalid', message};
+          // Retain removed/retaken media provenance; no file or historical row is deleted.
+          if (previous?.capturePolicy && JSON.stringify(previous.photos) !== JSON.stringify(input.photos)) {
+            const db = await draftDb(); assertReporterContext(context);
+            await saveDraft(db, `reporter-capture-history-v1:${context.partition}:${previous.id}:${uuidv4()}`, 'reporter_capture_history_v1', previous as unknown as Record<string,unknown>);
+            assertReporterContext(context);
+          }
+        }
         if (previous && previous.targetReportId !== input.targetReportId) throw { code: 'draft_locked' };
         const draft: ReporterDraft = {
+          ...(capturePolicy ? {capturePolicy} : {}),
           id: previous?.id ?? uuidv4(), commandKey: previous?.commandKey ?? uuidv4(), ownerId: previous?.ownerId ?? ownerId,
           provenance: { environment: context.environment, session: context.storageSession },
           description: input.description, photos: input.photos.map(photo => ({ ...photo,
@@ -345,6 +361,10 @@ export const useReporterStore = create<ReporterSessionState>()(
           if (!isReporterSession(auth)) throw { code: 'auth_unauthorized', status: 401 };
           let draft = await get().bindPendingDraft();
           if (!draft || draft.photos.length === 0) throw { code: 'validation_error', status: 400 };
+          if (draft.capturePolicy === REPORTER_CAPTURE_POLICY && !draft.request && !draft.photos.some(p => p.itemId)) {
+            const message = reporterCaptureError(draft.photos, true);
+            if (message) throw {code:'reporter_capture_invalid',message};
+          }
           if (reportDescriptionError(draft.request?.description ?? draft.description)) throw { code: 'validation_error', status: 400 };
           if (draft.commandOutcome === 'REJECTED') throw { status: 412, code: 'concurrency_conflict' };
           const assertOwner = () => assertReporterContext(context);

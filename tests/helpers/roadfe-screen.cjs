@@ -23,7 +23,7 @@ function screen(file, options = {}) {
       const old=slots[i]; slots[i]={deps,cleanup:old?.cleanup}; effects.push(()=>{old?.cleanup?.(); slots[i].cleanup=fn();}); } },
   };
   let mediaRuntime;
-  const h = harness({rows:options.rows, modules:{react, 'expo-file-system':{File:class{constructor(uri){this.uri=uri;}async arrayBuffer(){return (mediaRuntime?.files.get(this.uri)??Uint8Array.from([1,2,3])).buffer;}}}}});
+  const h = harness({rows:options.rows, modules:{react, 'expo-location':options.gps??{getForegroundPermissionsAsync:async()=>({status:'denied'}),requestForegroundPermissionsAsync:async()=>({status:'denied'})}, 'expo-file-system':{File:class{constructor(uri){this.uri=uri;}async arrayBuffer(){return (mediaRuntime?.files.get(this.uri)??Uint8Array.from([1,2,3])).buffer;}}}}});
   h.transport.getFileMetadata=async()=>{h.calls.push(['metadata']);const row=[...h.rows.values()].find(r=>r.uri_local&&mediaRuntime?.files.has(r.uri_local));const bytes=row?mediaRuntime.files.get(row.uri_local):Uint8Array.from([1,2,3]);return {id:'file',status:'VERIFIED',version:'fv',checksumSha256:require('node:crypto').createHash('sha256').update(bytes).digest('hex'),sizeBytes:bytes.length};};
   const authMethods = {
     login: (user,pair) => h.changeAuth({status:'AUTHENTICATED',user,token:pair.accessToken}),
@@ -74,7 +74,7 @@ function screen(file, options = {}) {
     if(name.endsWith('/components/CrewTaskStatus'))return{CrewTaskStatus:'CrewTaskStatus',crewTaskStatusStyle:()=>({foreground:'#1D4ED8'})};
     if(name.endsWith('/drone/DroneUploadRecoveryList'))return{DroneUploadRecoveryList:'DroneUploadRecoveryList'};
     if(name.endsWith('/drone/OperatorLocalFiles'))return{OperatorLocalFiles:'OperatorLocalFiles'};
-    if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility'};
+    if(name.endsWith('/crew/CrewFastTrackEligibility'))return{CrewFastTrackEligibility:'CrewFastTrackEligibility',FastTrackDraftChecklist:'FastTrackDraftChecklist'};
     if(name.endsWith('/crew/CrewFastTrackMeasurementGuide'))return{CrewFastTrackMeasurementGuide:'CrewFastTrackMeasurementGuide'};
     // Screen handler tests keep motion as a transparent native-control boundary.
     // CrewMotion itself is exercised with a Reanimated mock in crew-home-motion.
@@ -102,3 +102,20 @@ function screen(file, options = {}) {
   return {h,reporter,uploads,render,flush,nodes,input,press,tap,nav,blur:()=>focus.forEach(fn=>fn?.()),unmount,slots};
 }
 module.exports={screen,harness,deferred};
+
+// New Reporter acquisition policy: exercise the shipped camera handler, not a picker.
+async function capturePhoto(s,uri='file://cache/a.jpg',takePicture){
+ s.render();const camera=s.nodes().find(n=>n.type==='CameraView');
+ if(!camera)throw Error('camera control missing');
+ camera.props.ref.current={takePictureAsync:takePicture??(async()=>({uri}))};camera.props.onCameraReady();s.render();
+ return s.tap('camera-shutter');
+}
+module.exports.capturePhoto=capturePhoto;
+
+async function seedLegacyDraft(h,input){
+ const context=h.load('src/store/uploads.ts').reporterContext();
+ const draft={id:'legacy-fixture',commandKey:'legacy-fixture-key',ownerId:context.ownerId,provenance:{environment:context.environment,session:context.storageSession},submitRequested:false,...input};
+ h.rows.set(context.draftStorageKey??`reporter-pending-v3:${context.partition}`,{payload:JSON.stringify(draft)});
+ return h.load('src/store/reporter.ts').useReporterStore.getState().restorePendingDraft();
+}
+module.exports.seedLegacyDraft=seedLegacyDraft;

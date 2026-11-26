@@ -11,6 +11,8 @@ import { Button } from '../../src/components/Button';
 import { Chip } from '../../src/components/Chip';
 import { CrewTaskStatus } from '../../src/components/CrewTaskStatus';
 import { CrewPressable, CrewContentTransition } from '../../src/components/crew/CrewMotion';
+import { FastTrackDraftChecklist } from '../../src/components/crew/CrewFastTrackEligibility';
+import { fastTrackDraftIssues, measurementDraftIssues } from '../../src/api/crewFastTrackFeedback';
 import { CrewFastTrackMeasurementGuide } from '../../src/components/crew/CrewFastTrackMeasurementGuide';
 import { CrewPhotoInfo } from '../../src/components/crew/CrewPhotoInfo';
 import { InputField } from '../../src/components/InputField';
@@ -168,18 +170,19 @@ export default function CrewFieldReviewScreen() {
 }
 function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
   const router = useRouter();
-  const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string;signed?:string}>():{};
+  const params=typeof useLocalSearchParams==='function'?useLocalSearchParams<{supplement?:string;signed?:string;section?:string;sampleId?:string}>():{};
   const supplementMode=params.supplement==='1';
   const signedMode=params.signed==='1';
   const identity=useCrewIdentity();
   const [draft,setDraft]=useState<FieldDraft|null>(null);
   const [measurements,setMeasurements]=useState<FieldMeasurementInput[]>([]);
   const [showMeasurementChoices,setShowMeasurementChoices]=useState(false);
-  const [showMeasurements,setShowMeasurements]=useState(false);
-  const [showPosition,setShowPosition]=useState(false);
+  const [showMeasurements,setShowMeasurements]=useState(params.section==='measurements');
+  const [showPosition,setShowPosition]=useState(params.section==='position');
   const [showEvidenceHelp,setShowEvidenceHelp]=useState(false);
+  const [showEvidenceSection,setShowEvidenceSection]=useState(params.section==='evidence');
   const [showAssessmentHelp,setShowAssessmentHelp]=useState(false);
-  const [editingSampleId,setEditingSampleId]=useState<string|null>(null);
+  const [editingSampleId,setEditingSampleId]=useState<string|null>(params.sampleId??null);
   const [showRecoveryDetail,setShowRecoveryDetail]=useState(false);
   const [rawValues,setRawValues]=useState<Record<string,string>>({});
   const [locationProof,setLocationProof]=useState<FieldPositionProofInput|null>(null);
@@ -345,6 +348,10 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       else if(action==='download')saved=draft??await loadFieldDraft(c,runtime);
       else saved=await loadFieldDraft(c,runtime);
       if(action==='download') {const uri=await downloadFieldPhoto(c,fileId!);if(current(c))setPreview(uri);return;}
+      if(action==='submit'){
+        const invalid=measurementDraftIssues(measurements).filter(issue=>issue.invalid);
+        if(invalid.length){setShowMeasurements(true);setEditingSampleId(invalid[0].sampleId??null);setNotice(invalid.map(issue=>issue.message).join('\n'));setNoticeDetail('Bổ sung các mục đã liệt kê trong Số đo hiện trường.');return;}
+      }
       if(action==='save'||action==='submit'||action==='camera') {
         if(saved.command)throw Error('field_command_pending');
         if(Object.values(rawValues).some(v=>v.trim()!==''&&(!Number.isFinite(Number(v.replace(',','.')))||Number(v.replace(',','.'))<0)))throw Error('field_measurements_required');
@@ -443,6 +450,29 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
     summary:linkedReview==='SUPPLEMENT'?'Quản lý yêu cầu bổ sung':linkedReview?'Xem kết quả đánh giá':'Chờ quản lý đánh giá',
     detail:'Máy chủ đã liên kết hồ sơ ảnh với lượt sửa chữa. Không cần gửi lại ảnh. Kết quả kiểm tra lúc nộp được giữ trong lịch sử; chưa phải xác nhận nghiệm thu.',
   }:historicalNotice;
+  const evidenceCard=draft?<Card style={styles.card}><View style={styles.helpHeading}><MaterialIcons name="photo-library" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Ảnh bằng chứng</Text>{normalMeasurement?<CrewPressable accessibilityRole="button" accessibilityLabel="Hướng dẫn ảnh bằng chứng" accessibilityState={{expanded:showEvidenceHelp}} style={({pressed})=>[styles.helpToggle,pressed&&styles.refreshPressed]} onPress={()=>setShowEvidenceHelp(v=>!v)}><MaterialIcons name={showEvidenceHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></CrewPressable>:null}</View>
+          {normalMeasurement&&showEvidenceHelp?<Text style={styles.muted}>{signedMode?'Ảnh gốc được giữ trên máy. Sau khi ký hồ sơ, mở Đồng bộ để tải ảnh, xác minh và gửi lại hồ sơ đã ký.':'Ảnh chụp được lưu trên máy trước. Bấm “Tải ảnh này lên” dưới từng ảnh và chờ “Đã xác minh” để dùng cho đánh giá trước sửa.'}</Text>:null}
+          {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh hiện trường.'}</Text>:null}
+          <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id,transferProgress?.captureId===c.id?transferProgress.percent:undefined);return <View key={c.id} style={styles.photoTile}>
+            <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
+              <View pointerEvents="none" style={[styles.photoOverlay,feedback.busy&&styles.photoOverlayBusy]} accessible accessibilityLabel={`Ảnh ${index+1}: ${feedback.label}${feedback.percent===null?'':` ${feedback.percent}%`}`} accessibilityState={{busy:feedback.busy}} accessibilityLiveRegion="polite">
+                {feedback.busy?(feedback.percent===null?<ActivityIndicator size="large" color={colors.surface}/>:<View style={styles.photoProgressRing} accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:feedback.percent}}><View style={[styles.ringHalf,styles.ringRight]}><View style={[styles.ringArc,styles.arcRight,{transform:[{rotate:`${Math.min(feedback.percent,50)*3.6-135}deg`}]}]}/></View><View style={[styles.ringHalf,styles.ringLeft]}><View style={[styles.ringArc,styles.arcLeft,{transform:[{rotate:`${Math.max(0,feedback.percent-50)*3.6+45}deg`}]}]}/></View><Text style={styles.ringText}>{feedback.percent}%</Text></View>):feedback.verified?<View style={styles.verifiedBadge}><MaterialIcons name="check-circle" size={24} color={colors.success}/></View>:null}
+                <View style={styles.photoCaption}><Text style={styles.photoStatus}>{feedback.label}{feedback.percent===null?'':` · ${feedback.percent}%`}</Text></View>
+                {feedback.percent!==null?<View style={styles.progressTrack} accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:feedback.percent}}><View style={[styles.progressFill,{width:`${feedback.percent}%`}]}/></View>:null}
+              </View>
+              {!c.upload&&!c.uploadAttempt&&!c.completed&&!c.verified&&!frozen&&!busy&&!cancelling?<Pressable accessibilityRole="button" accessibilityLabel="Xóa ảnh cục bộ" style={styles.removePhoto} onPress={()=>removeLocalCapture(c.id)}><MaterialIcons name="close" size={20} color={colors.neutral}/></Pressable>:null}
+            </View>
+            <Text style={typography.labelSm}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
+            <CrewPhotoInfo label={`Ảnh ${index+1} · ${c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}`} coordinates={c.coordinates} capturedAt={c.capturedAt} localMetadata />
+            {!evidenceModel.readOnly&&!frozen&&serverLoaded?<View style={styles.evidenceActions}>
+              {!signedMode&&normalMeasurement&&serverLoaded&&!taskReadOnly&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
+              {c.upload?.id&&(['PENDING','UPLOADING'].includes(c.upload.status)||['REQUESTED','UNKNOWN','BLOCKED'].includes(c.cancelState??''))?<Button variant="text" title={c.cancelState?'Đối soát hủy phiên':'Hủy tải lên'} disabled={cancelling||(busy&&uploadingCaptureId!==c.id)} onPress={()=>setCancelTarget(c.id)}/>:null}
+            </View>:null}
+          </View>;})}</View>
+          {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
+          {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
+          {evidenceModel.canCapture&&!frozen?<Button variant="secondary" style={styles.compactAction} title="Chụp / chọn ảnh" disabled={busy||cancelling} onPress={()=>void run('camera')}/>:null}
+        </Card>:null;
   return <SafeAreaScreen scroll header={<><AppHeader subtitle="Hồ sơ hiện trường" showBack onBack={()=>router.back()} />
     {showNotice||showRepairDecision||showLinkedSubmission?<FieldNotice model={noticeModel} expanded={showErrorDetail} onToggle={()=>setShowErrorDetail(v=>!v)}/>:null}
   </>}>
@@ -517,6 +547,7 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
       {localOnly?<Card style={styles.card}><Text style={styles.sectionTitle}>Đang làm việc với dữ liệu đã tải</Text><Text style={styles.muted}>Chỉ lưu nháp trên máy. Kết nối mạng để xác minh trạng thái và gửi hồ sơ.</Text></Card>:null}
       {draft&&(serverLoaded||localOnly)&&!localRecoveryBlocked?<>
         {!taskReadOnly&&!frozen?<>
+        {verifiedTask?.mode==='CONDITIONAL_FT'?<Card style={styles.card}><FastTrackDraftChecklist issues={fastTrackDraftIssues({...draft,measurements,locationProof:locationProof?{...locationProof,observedChainageMeters:chainage.trim()?Number(chainage.replace(',','.')):null}:null},verifiedTask)} onOpen={issue=>{if(busy||cancelling)return;if(issue.section==='measurements'){setShowMeasurements(true);setEditingSampleId(issue.sampleId??null);}else if(issue.section==='position')setShowPosition(true);else setShowEvidenceSection(true);}}/></Card>:null}
         <Card style={styles.card}>
           <View style={styles.summaryHeader}><Text style={styles.sectionTitle}>Số đo hiện trường</Text><MaterialIcons name="straighten" size={24} color={colors.primaryDark}/></View>
           {measurements.map(m=><View key={m.sampleId} style={styles.resultHeading}><Text style={[typography.bodyMd,styles.flex]}>{fieldMeasurementTitle(m.type)}</Text><Text style={styles.resultValue}>{m.value===null?'Chưa đo':`${m.value} ${m.unit}`}</Text></View>)}
@@ -594,29 +625,12 @@ function CrewFieldReviewScreenContent({ task }: { task: CrewTask }) {
           </SafeAreaScreen>
           </SafeAreaProvider>
         </Modal>
-        <Card style={styles.card}><View style={styles.helpHeading}><MaterialIcons name="photo-library" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Ảnh bằng chứng</Text>{normalMeasurement?<CrewPressable accessibilityRole="button" accessibilityLabel="Hướng dẫn ảnh bằng chứng" accessibilityState={{expanded:showEvidenceHelp}} style={({pressed})=>[styles.helpToggle,pressed&&styles.refreshPressed]} onPress={()=>setShowEvidenceHelp(v=>!v)}><MaterialIcons name={showEvidenceHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></CrewPressable>:null}</View>
-          {normalMeasurement&&showEvidenceHelp?<Text style={styles.muted}>{signedMode?'Ảnh gốc được giữ trên máy. Sau khi ký hồ sơ, mở Đồng bộ để tải ảnh, xác minh và gửi lại hồ sơ đã ký.':'Ảnh chụp được lưu trên máy trước. Bấm “Tải ảnh này lên” dưới từng ảnh và chờ “Đã xác minh” để dùng cho đánh giá trước sửa.'}</Text>:null}
-          {!draft.captures.length?<Text style={styles.muted}>{latest?.evidence?.some(e=>e.fileId)?'Ảnh đã gửi sẽ được giữ trong bản bổ sung. Có thể thêm ảnh mới nếu cần.':'Chưa có ảnh hiện trường.'}</Text>:null}
-          <View style={styles.photoGrid}>{draft.captures.map((c,index)=>{const feedback=fieldPhotoFeedback(c,uploadingCaptureId===c.id,transferProgress?.captureId===c.id?transferProgress.percent:undefined);return <View key={c.id} style={styles.photoTile}>
-            <View style={styles.photoFrame}><Image source={{uri:c.uri}} style={styles.photoImage} resizeMode="cover"/>
-              <View pointerEvents="none" style={[styles.photoOverlay,feedback.busy&&styles.photoOverlayBusy]} accessible accessibilityLabel={`Ảnh ${index+1}: ${feedback.label}${feedback.percent===null?'':` ${feedback.percent}%`}`} accessibilityState={{busy:feedback.busy}} accessibilityLiveRegion="polite">
-                {feedback.busy?(feedback.percent===null?<ActivityIndicator size="large" color={colors.surface}/>:<View style={styles.photoProgressRing} accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:feedback.percent}}><View style={[styles.ringHalf,styles.ringRight]}><View style={[styles.ringArc,styles.arcRight,{transform:[{rotate:`${Math.min(feedback.percent,50)*3.6-135}deg`}]}]}/></View><View style={[styles.ringHalf,styles.ringLeft]}><View style={[styles.ringArc,styles.arcLeft,{transform:[{rotate:`${Math.max(0,feedback.percent-50)*3.6+45}deg`}]}]}/></View><Text style={styles.ringText}>{feedback.percent}%</Text></View>):feedback.verified?<View style={styles.verifiedBadge}><MaterialIcons name="check-circle" size={24} color={colors.success}/></View>:null}
-                <View style={styles.photoCaption}><Text style={styles.photoStatus}>{feedback.label}{feedback.percent===null?'':` · ${feedback.percent}%`}</Text></View>
-                {feedback.percent!==null?<View style={styles.progressTrack} accessibilityRole="progressbar" accessibilityValue={{min:0,max:100,now:feedback.percent}}><View style={[styles.progressFill,{width:`${feedback.percent}%`}]}/></View>:null}
-              </View>
-              {!c.upload&&!c.uploadAttempt&&!c.completed&&!c.verified&&!frozen&&!busy&&!cancelling?<Pressable accessibilityRole="button" accessibilityLabel="Xóa ảnh cục bộ" style={styles.removePhoto} onPress={()=>removeLocalCapture(c.id)}><MaterialIcons name="close" size={20} color={colors.neutral}/></Pressable>:null}
-            </View>
-            <Text style={typography.labelSm}>{c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}</Text>
-            <CrewPhotoInfo label={`Ảnh ${index+1} · ${c.purpose==='AFTER'?'Sau sửa chữa':c.purpose==='BEFORE'?'Hiện trạng trước sửa':'Đo kiểm'}`} coordinates={c.coordinates} capturedAt={c.capturedAt} localMetadata />
-            {!evidenceModel.readOnly&&!frozen&&serverLoaded?<View style={styles.evidenceActions}>
-              {!signedMode&&normalMeasurement&&serverLoaded&&!taskReadOnly&&!c.verified&&!c.cancelState&&(!c.upload||['PENDING','UPLOADING','VERIFYING'].includes(c.upload.status))?<Button variant="secondary" title={uploadingCaptureId===c.id?'Đang tải ảnh':'Tải ảnh này lên'} disabled={busy||cancelling||!!captureBlock} onPress={()=>void run('upload',c.id)}/>:null}
-              {c.upload?.id&&(['PENDING','UPLOADING'].includes(c.upload.status)||['REQUESTED','UNKNOWN','BLOCKED'].includes(c.cancelState??''))?<Button variant="text" title={c.cancelState?'Đối soát hủy phiên':'Hủy tải lên'} disabled={cancelling||(busy&&uploadingCaptureId!==c.id)} onPress={()=>setCancelTarget(c.id)}/>:null}
-            </View>:null}
-          </View>;})}</View>
-          {evidenceModel.readOnly?<Text style={styles.muted}>Trạng thái {evidenceModel.statusLabel}: chỉ xem ảnh và kết quả đọc lại từ máy chủ.</Text>:null}
-          {!evidenceModel.readOnly&&captureBlock?<Text>{captureBlock}</Text>:null}
-          {evidenceModel.canCapture&&!frozen?<Button variant="secondary" style={styles.compactAction} title="Chụp / chọn ảnh" disabled={busy||cancelling} onPress={()=>void run('camera')}/>:null}
-        </Card>
+        {!showEvidenceSection?evidenceCard:null}
+        {showEvidenceSection?<Modal visible animationType="slide" onRequestClose={()=>{if(!busy&&!cancelling)setShowEvidenceSection(false);}}>
+          <SafeAreaProvider><SafeAreaScreen scroll header={<AppHeader subtitle="Ảnh bằng chứng" showBack onBack={()=>{if(!busy&&!cancelling)setShowEvidenceSection(false);}}/>}>
+            {evidenceCard}
+          </SafeAreaScreen></SafeAreaProvider>
+        </Modal>:null}
         {block?<Text>{block}</Text>:null}
         {normalMeasurement?<Card style={styles.card}>
           <View style={styles.helpHeading}><MaterialIcons name="fact-check" size={22} color={colors.primaryDark}/><Text style={styles.helpTitle}>Đánh giá trước sửa</Text><CrewPressable accessibilityRole="button" accessibilityLabel="Hướng dẫn đánh giá trước sửa" accessibilityState={{expanded:showAssessmentHelp}} style={({pressed})=>[styles.helpToggle,pressed&&styles.refreshPressed]} onPress={()=>setShowAssessmentHelp(v=>!v)}><MaterialIcons name={showAssessmentHelp?"expand-less":"help-outline"} size={22} color={colors.secondary}/></CrewPressable></View>

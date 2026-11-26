@@ -1,9 +1,10 @@
+const {cameraDraftFixture}=require('./helpers/reporter-capture-fixture.cjs');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { harness, screen } = require('./helpers/roadfe-screen.cjs');
+const { harness, screen, capturePhoto } = require('./helpers/roadfe-screen.cjs');
 async function fixture() {
   const h = harness(); h.login(); const st = h.load('src/store/reporter.ts').useReporterStore;
-  await st.getState().savePendingDraft({ description: 'Additional damage', photos: [{ uri: 'a.jpg', fileName: 'a.jpg', mediaType: 'image/jpeg', capturedAt: '2026-10-29' }], coords: null, targetReportId: 'report', ifMatch: 'v1' });
+  await st.getState().savePendingDraft(cameraDraftFixture({ description: 'Additional damage', photos: [{ uri: 'a.jpg', fileName: 'a.jpg', mediaType: 'image/jpeg', capturedAt: '2026-10-29' }], coords: null, targetReportId: 'report', ifMatch: 'v1' }));
   return { h, st };
 }
 test('supplement definitive first 412 supports explicit new command after fresh absent-evidence readback; old key/body remain archived', async () => {
@@ -58,7 +59,7 @@ test('supplement UI explicitly renews a proven rejection without sending the new
   s.h.login(); let posts = 0;
   s.h.api.submitReportSupplementReal = async () => { posts++; throw { status: 412, code: 'concurrency_conflict' }; };
   s.h.api.getOwnReportReal = async () => ({ ...await read(), etag: '"v3"' });
-  s.render(); await s.flush(); s.input('Nội dung bổ sung', 'Additional damage'); await s.tap('pick-photo'); await s.flush();
+  s.render(); await s.flush(); s.input('Nội dung bổ sung', 'Additional damage'); await capturePhoto(s); await s.flush();
   await s.press('Gửi bổ sung'); await s.flush();
   const old = s.reporter.useReporterStore.getState().pendingDraft.commandKey;
   await s.press('Tạo bản bổ sung mới để xem lại'); await s.flush();

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Coords } from '../ViewFinder';
 import { Button } from '../Button';
 import { colors, radius, spacing, typography } from '../../design-tokens';
+import { formatGpsAccuracy } from '../../utils/gpsAccuracy';
 
 interface Props {
   label: string;
@@ -21,7 +22,7 @@ export function photoInfoRows({ coordinates, capturedAt, localMetadata }: Omit<P
   return [
     { label: 'Vĩ độ', value: valid ? coordinates.latitude.toFixed(6) : 'Chưa có GPS của ảnh' },
     { label: 'Kinh độ', value: valid ? coordinates.longitude.toFixed(6) : 'Chưa có GPS của ảnh' },
-    { label: 'Độ chính xác thiết bị báo', value: valid && typeof accuracy === 'number' && Number.isFinite(accuracy) && accuracy >= 0 ? `Khoảng ${accuracy} m` : 'Chưa có thông tin' },
+    { label: 'Độ chính xác thiết bị báo', value: formatGpsAccuracy(valid ? accuracy : null) },
     { label: 'Thời gian chụp', value: capturedAt && Number.isFinite(Date.parse(capturedAt)) ? new Date(capturedAt).toLocaleString('vi-VN') : 'Chưa có thông tin' },
     { label: 'Nguồn thông tin', value: localMetadata ? 'Thông tin lưu cùng ảnh trên điện thoại này.' : 'Máy chủ chưa trả tọa độ riêng của ảnh; điện thoại không có nháp tương ứng.' },
   ];
