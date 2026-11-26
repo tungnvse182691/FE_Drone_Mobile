@@ -2,20 +2,24 @@
 
 ## 0. Tóm tắt điều hành
 
-- **FE Mobile:** `D:\Do_AN_Drone\FE_AppMobile`, branch `main`, ahead 6 local commits trên `origin/main` (`092edda86cd6336163ff224b3b5e298a68711bb7`, chưa push):
+- **FE Mobile:** `D:\Do_AN_Drone\FE_AppMobile`, branch `main`, ahead 11 local commits trên `origin/main` (`092edda86cd6336163ff224b3b5e298a68711bb7`, chưa push):
   1. `a1247ca` — `fix(reporter): preserve document picker state across Android focus cycle`
   2. `6a5aaaa` — `fix(offline): allow controlled cross-session signed batch recovery`
   3. `ea28498` — `fix(offline): use verified InProgress firstStartOriginId for offline FIELD signing`
   4. `f780a18` — `fix(offline): resolve verified cross-session FIELD_START after session-confirm`
   5. `ae50691` — `fix(offline): resolve verified InProgress firstStartOriginId from matching editor source`
   6. `1bfcb12` — `fix(offline): break import cycle by reading retained editor source directly`
+  7. `cabb4d1` — `docs(worklogs): update offline Group 1-3-4-6 completion handoff`
+  8. `91dff9f` — `docs(agents): consolidate project guidance and strengthen UI quality gates`
+  9. `9851e48` — `fix(offline): resolve P1-A/B cross-session admission recovery and P1-C shared editor reader`
+  10. `5d9c8af` — `fix(ui): surface explicit stop reason for missing repair first-start`
 - **BE & Web (read-only):** `RoadGuardSystem-develop` branch `develop`, HEAD `b8f718dd372b9aa8b2923045fdcd82dd0e5e0583` (`roadguard-crew-sandbox-{api-1,mailpit-1,sql-1,minio-1}`).
-- **APK QA trên `emulator-5554`:** `D:\Do_AN_Drone\FE_AppMobile\android\app\build\outputs\apk\release\app-release.apk` (SHA256 `C271B593F62E27DD53E4BE33696A49ECCCC3F171253CFD304ECC77D6AB3AC349`, build từ `ae50691`; `1bfcb12` chỉ thay đổi cách đọc nội bộ `CREW_FIELD_EDITOR_SOURCE_V1` để phá import cycle với logic tương đương).
-- **Quality Gates sau chỉnh sửa cuối (`1bfcb12`):**
+- **APK QA trên `emulator-5554`:** `D:\Do_AN_Drone\FE_AppMobile\android\app\build\outputs\apk\release\app-release.apk` (SHA256 `C271B593F62E27DD53E4BE33696A49ECCCC3F171253CFD304ECC77D6AB3AC349`, build từ `ae50691`; `1bfcb12`, `9851e48`, `5d9c8af` đã qua full regression 2243/2243).
+- **Quality Gates sau chỉnh sửa cuối (`5d9c8af`):**
   - `npx tsc --noEmit`: **PASS** (`0`).
   - `git diff --check`: **PASS** (`0`).
-  - Targeted Group 1/3/4 tests (`crew-flow-recovery.test.cjs`, `crew-offline-field.test.cjs`): **82/82 PASS**.
-  - Full regression (`node --test --test-concurrency=4 tests/*.test.cjs`): **2241/2241 PASS** (`0 fail, 0 cancelled, 0 skipped`, `288,904.9 ms`).
+  - Targeted P1-A/B/C & Crew tests (`c10bc-journal.test.cjs`, `c10bc-workflow.test.cjs`, `crew-offline-download.test.cjs`, `crew-offline-field.test.cjs`, `crew-flow-recovery.test.cjs`, `t05b.test.cjs`): **195/195 PASS**.
+  - Full regression (`node --test --test-concurrency=4 tests/*.test.cjs`): **2243/2243 PASS** (`0 fail, 0 cancelled, 0 skipped`, `289,154.2 ms`).
 
 ---
 
