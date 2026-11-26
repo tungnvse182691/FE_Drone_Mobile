@@ -31,6 +31,7 @@ Nguồn UI chính. Mọi task sửa hoặc kiểm thử/review UI đọc phần 
 ## 4. Copy, trạng thái và offline
 
 - Tiếng Việt ngắn, động từ cụ thể, thuật ngữ người hiện trường hiểu. Label cạnh input, đơn vị cạnh giá trị (m²/cm/m), không dùng placeholder thay label. Error có text + icon, focus field lỗi đầu tiên, giữ dữ liệu đã nhập.
+- Giữ dấu tiếng Việt và chuỗi dài; định dạng ngày/giờ/số/đơn vị theo locale được hỗ trợ, timezone rõ; không suy ngôn ngữ từ GPS. Số thập phân nhập theo locale phải chuẩn hóa đúng contract, không đổi wire. Form dùng keyboard/autofill phù hợp, cho paste password/OTP; validation không chặn gõ hoặc bỏ dữ liệu, giữ helper/error khi font lớn.
 - Tách loading lần đầu, refreshing có stale content, empty, no permission, offline, error và success. Skeleton chỉ lần đầu; refresh không xóa nội dung đã tải. Loading có timeout/error/retry phù hợp; không vô hạn hoặc silent failure. Retry không tự đổi immutable command.
 - Upload gộp một vùng tiến độ, không toast mỗi chunk/retry. Hiển thị nguồn ảnh, thời gian/GPS thật, trạng thái local/upload/verification/submission riêng; không tick xanh khi chỉ có local hash hoặc upload 100%.
 
@@ -57,6 +58,8 @@ Nguồn UI chính. Mọi task sửa hoặc kiểm thử/review UI đọc phần 
 - Safe area theo thiết bị, status/navigation bar không che nội dung/CTA. Kiểm màn nhỏ, landscape/cửa sổ thay đổi và font scaling tối thiểu 1.15; layout co giãn/wrap, scroll được nội dung dài, không khóa font scaling. Không kéo dãn card trống chỉ để lấp màn.
 - Keyboard không che input/lỗi/CTA; dùng tránh bàn phím và scroll tới field focus. Giữ form khi picker chọn/cancel, blur/focus, back, unmount/restart và scope đổi theo policy. Không để kết quả picker phiên cũ ghi vào form/actor mới.
 - Touch target tối thiểu 48×48dp kể cả icon/rating, khoảng cách tránh bấm nhầm. Text contrast WCAG AA; trạng thái không chỉ dựa vào màu, có nhãn/icon. Thứ tự screen reader có nghĩa, label/role/busy/disabled phù hợp.
+- Vùng chạm không chồng nhau; gesture có nút thay thế, không tranh system back. Modal chuyển focus vào/ra đúng chỗ, kết quả async được đọc mà không cướp focus; thông tin quan trọng không chỉ ở toast. Contrast chữ thường ≥4.5:1, chữ lớn/icon/control ≥3:1.
+- Tác nghiệp một tay, ngoài nắng, máy yếu và mạng chập chờn: ưu tiên CTA dễ với, chữ/ảnh rõ, không polling/motion tốn pin vô ích. Interruption/background/rotation không làm mất nháp hoặc tự gửi; quyền camera/GPS bị từ chối phải có hướng phục hồi hợp lệ, không bịa tọa độ/ảnh/trạng thái.
 - Motion chỉ giải thích thay đổi trạng thái hoặc phản hồi thao tác: ngắn, không cản đọc/chạm, không shimmer/loop trang trí. Tôn trọng Reduce Motion; giảm/tắt chuyển động không thiết yếu, giữ phản hồi bằng text/icon/state. Không kéo mutation theo thời điểm animation kết thúc; tránh animation làm render/list chậm.
 - Mọi checkpoint đổi UI: kiểm Android thực, từng CTA, loading/empty/error/offline, navigation/back, keyboard/scroll/safe area, font overflow/scaling và không mất dữ liệu; screenshot trước/sau. Không bắt buộc video. JSX/component/Node test không thay Android acceptance; chưa chạy ghi `NOT_RUN`.
 
@@ -86,4 +89,6 @@ Chỉ Detail, Gói công việc, shared task row Home/Requests; Upload chỉ evi
 
 ## 7. Đọc chuyên môn đúng phạm vi
 
-UI implement/review dùng `.agents/skills/mobile-design/SKILL.md`, chỉ references đúng vấn đề. Performance/list/render/animation/native dùng Vercel rule phù hợp, không compiled AGENTS/all rules mặc định. Expo `building-native-ui` và animation reference dùng khi cần. Redesign skill explicit owner only, mặc định read-only audit. Quyền nghiệp vụ/journal/draft/upload/idempotency không thay đổi chỉ để làm UI gọn.
+Chọn theo vấn đề, không đọc cả bộ: `.agents/skills/ui-ux-pro-max/SKILL.md` cho visual direction/hierarchy/UX; `.agents/skills/expo-design-system/SKILL.md` cho tokens/shared components/consistency; `.agents/skills/expo-native-ui/SKILL.md` cho Android layout/controls/safe area/keyboard/accessibility. Chỉ mở references liên quan. Performance/list/render/animation/native dùng Vercel rule phù hợp, không compiled AGENTS/all rules mặc định. Expo plugin marketplace vẫn dùng `building-native-ui` và animation reference khi cần, tách biệt skill local.
+
+External output là gợi ý: không áp màu/font/hero marketing/CSS/Tailwind/GSAP, Dynamic Color/Liquid Glass/native tabs hoặc package mới vào RoadGuard. Không tạo theme cạnh `src/design-tokens.ts`. Pro Max RN catalog 0.86.x phải đối chiếu source/dependency hiện tại (baseline 0.88.1); Python chỉ query chung, không dữ liệu nhạy cảm, `--persist`/`--force`/`--preview` hay installer. Redesign cần owner scope/duyệt riêng, audit mặc định read-only. Quyền nghiệp vụ/journal/draft/upload/encryption/recovery/idempotency không thay đổi chỉ để làm UI gọn.

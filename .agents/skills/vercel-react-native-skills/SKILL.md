@@ -15,7 +15,7 @@ and platform-specific optimizations.
 
 ## When to Apply
 
-Use only for performance, lists, animation, rendering, native modules or RN patterns. General UI layout follows the repository DESIGN.md and mobile-design skill. Read the relevant rule, not the compiled guide.
+Use only for performance, lists, animation, rendering, native modules or RN patterns. General UI follows the repository DESIGN.md; select expo-native-ui for layout/controls, expo-design-system for consistency, or ui-ux-pro-max for visual/UX guidance. Read the relevant rule, not the compiled guide.
 
 ## Rule Categories by Priority
 

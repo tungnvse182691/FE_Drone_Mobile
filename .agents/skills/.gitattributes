@@ -1,0 +1,7 @@
+# Preserve pinned upstream bytes across Windows checkouts (manifest blob hashes).
+ui-ux-pro-max/** -text
+expo-design-system/** -text
+expo-native-ui/** -text
+UI-SOURCES-MANIFEST.json -text
+# Pinned upstream contains 46 space-only lines; do not rewrite original bytes.
+ui-ux-pro-max/scripts/design_system.py whitespace=-blank-at-eol

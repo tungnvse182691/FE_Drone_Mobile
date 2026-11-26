@@ -50,7 +50,7 @@ Chạy lệnh full regression đã được repo/checkpoint chốt (hiện có `
 
 ### UI/Android
 
-- Đọc DESIGN và mobile-design đúng phần, xem Android thực trước/sau. Hierarchy/card/spacing/CTA nhất quán; sửa root cause trong scope, không chỉ text che sai state. Redesign lớn cần owner scope riêng.
+- Đọc DESIGN và chọn skill đúng vấn đề: ui-ux-pro-max (visual/UX), expo-design-system (tokens/components/drift), expo-native-ui (native layout/controls/accessibility); không nạp cả bộ mặc định. Xem Android thực trước/sau. Hierarchy/card/spacing/CTA nhất quán; sửa root cause trong scope, không chỉ text che sai state. Redesign lớn cần owner scope riêng.
 - Mỗi CTA có mục đích riêng, handler, authority/precondition, busy/double-tap guard và kết quả xác minh. Disabled có lý do. Không duplicate action, navigation loop, dead end, raw UUID/enum/JSON hoặc fake success.
 - Loading có kết thúc/recovery; phân biệt empty/no-permission/offline/error/stale. Kiểm picker chọn/cancel/focus/blur/unmount, session đổi, draft cũ/pending/supplement, back/re-entry và persistence.
 - Keyboard không che input/CTA, scroll/safe area/responsive/font scaling/overflow, touch targets, screen reader/contrast và Reduce Motion. Screenshot trước/sau bắt buộc cho UI đổi; video không bắt buộc. Không kết luận UI đẹp từ JSX hay Android E2E từ Node tests.

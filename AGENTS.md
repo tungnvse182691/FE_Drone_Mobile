@@ -62,10 +62,13 @@ Thực hiện **Implement → Verify → Review → Commit**, rồi chủ độn
 | Task | Nguồn cần đọc |
 |---|---|
 | API/logic/nghiệp vụ | AGENTS + `skills/roadguard/SKILL.md` + contract/source đúng operation |
-| Sửa hoặc kiểm thử/review UI | AGENTS + phần liên quan `skills/DESIGN.md` + `.agents/skills/mobile-design/SKILL.md`; thêm roadguard nếu chạm nghiệp vụ |
+| Sửa hoặc kiểm thử/review UI | AGENTS + phần liên quan `skills/DESIGN.md`; chọn một skill đúng nhu cầu bên dưới, thêm roadguard nếu chạm nghiệp vụ |
+| Visual direction/hierarchy/targeted UX | `.agents/skills/ui-ux-pro-max/SKILL.md`; lọc kết quả theo mobile và nhận diện RoadGuard |
+| Tokens/shared components/consistency audit | `.agents/skills/expo-design-system/SKILL.md`; giữ `src/design-tokens.ts` là nguồn duy nhất |
+| Native layout/controls/safe area/keyboard/accessibility | `.agents/skills/expo-native-ui/SKILL.md`; Android-first, component/package hiện có |
 | Performance/list/animation/render/native/RN patterns | AGENTS + `.agents/skills/vercel-react-native-skills/SKILL.md` và rule đúng vấn đề; không mặc định đọc compiled AGENTS/all rules |
 | Review/commit gate | AGENTS + `skills/code-review/SKILL.md` + diff/source đúng scope |
-| Redesign | `.agents/skills/redesign-existing-projects/` chỉ khi owner gọi rõ; mặc định read-only audit |
+| Redesign | Chỉ khi owner giao rõ scope; audit mặc định read-only, Pro Max cho hướng hình ảnh + Expo Design System cho consistency; duyệt trước sửa bố cục lớn |
 | Build | Build instructions và evidence đúng môi trường; không chạy build nếu task cấm |
 
-Expo plugin dùng theo nhu cầu (UI: `building-native-ui`, motion: `references/animations.md`); không giả định tên skill chưa cài, không copy plugin vào repo hay sửa global skill/IDE. External skill không đè owner/canonical/BE/design tokens. `vibe-guard` chỉ historical reference, đã tích hợp vào roadguard, không kích hoạt đồng thời. `skills/BOOTSTRAP_PROMPT.md` là historical scaffold, không mandatory reading. Giữ specs/worklogs/references; chỉ đọc đúng role/operation/checkpoint.
+Ba skill UI mới ở `.agents/skills/` là bản local đã pin, khác Expo plugin marketplace hiện có. Plugin dùng theo nhu cầu (`building-native-ui`, motion: `references/animations.md`); không giả định skill local đã cài trong plugin, không copy plugin vào repo hay sửa global skill/IDE. Không nạp cả bộ skill cho mọi task UI. External skill không đè owner/canonical/BE/design tokens; nguồn/hash tại `.agents/skills/SOURCES.md`. `vibe-guard` chỉ historical reference, đã tích hợp vào roadguard, không kích hoạt đồng thời. `skills/BOOTSTRAP_PROMPT.md` là historical scaffold, không mandatory reading. Giữ specs/worklogs/references; chỉ đọc đúng role/operation/checkpoint.
