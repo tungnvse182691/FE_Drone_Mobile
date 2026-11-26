@@ -1,5 +1,6 @@
 import type { QueueIdentity } from '../offline/upload-queue';
 import { crewReadGuard } from './crewSafetyWorkflow';
+import { readCrewEditorSource } from './crewOfflineEditorSource';
 import { inspectOfflineDevice, readLocalOfflineSources } from './crewOfflineDevice';
 import { requireOfflineNativeAcceptance, validateRepairSnapshot } from './crewOfflineWorkflow';
 import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
@@ -140,7 +141,18 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
     }
   }
   if(localOps.length)starts.push(String(localOps.at(-1)!.originId));
-  else if(source.facts.status==='InProgress'&&typeof source.facts.firstStartOriginId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(source.facts.firstStartOriginId))starts.push(source.facts.firstStartOriginId);
+  else if(source.facts.status==='InProgress'){
+    const isGuid=(v:unknown):v is string=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+    if(isGuid(source.facts.firstStartOriginId))starts.push(source.facts.firstStartOriginId);
+    else if(!starts.length){
+      try{
+        const editor=await readCrewEditorSource(identity,projectId,taskId);crewReadGuard(identity);
+        if(editor?.detail&&editor.detail.version===source.snapshot.taskVersion&&editor.detail.assignmentId===source.snapshot.assignmentId&&
+          editor.detail.assignedToUserId===source.snapshot.originalActorId&&editor.detail.status==='InProgress'&&isGuid(editor.detail.firstStartOriginId))
+          starts.push(editor.detail.firstStartOriginId);
+      }catch{/* Editor source stays optional; missing verified start still fails closed. */}
+    }
+  }
   if(new Set(starts).size!==1)throw Error('offline_verified_field_start_required');
   const originId=uuidv4();
   const op:OfflineRecord={schemaVersion:1,originId,effectId:originId,kind:'FIELD_SUBMISSION',originalActorId:identity.actor,

@@ -61,8 +61,9 @@ function fixture(status='NewAssigned'){
  const protocol=load('src/api/crewOfflineProtocol.ts');let active=true,saved=null,calls=0;
  const rows=[{projectId:project,proof:{kind:'enrollment'},receipt:{id:registration}}];
  const guard=()=>{if(!active)throw Error('session_changed');};
- const module=load('src/api/crewOfflineField.ts',{'./crewFieldDraft':load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewOfflineDevice':{inspectOfflineDevice:async()=>({deviceId:device}),readLocalOfflineSources:async()=>({device:{id:registration},snapshots:[snapshot]})},'./crewOfflineWorkflow':{requireOfflineNativeAcceptance:guard},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows}),sameOfflinePartition:(a,b)=>!!(a&&b&&a.actor===b.actor&&a.environment===b.environment&&a.partition===b.partition&&a.role===b.role)},'./crewOfflineProtocol':protocol,'../offline/crewSignedSync':{prepareSignedFieldBatch:async(...args)=>{guard();calls++;saved=args;return {phase:'PREPARED',body:await protocol.canonicalOfflineAttached(id(),registration,args[3],'test-only',sha)};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
- return {module,identity,project,task,snapshot,device,registration,rows,get saved(){return saved;},get calls(){return calls;},switch:()=>active=false};
+let editorSource=null;
+ const module=load('src/api/crewOfflineField.ts',{'./crewFieldDraft':load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewOfflineEditorSource':{readCrewEditorSource:async()=>editorSource},'./crewOfflineDevice':{inspectOfflineDevice:async()=>({deviceId:device}),readLocalOfflineSources:async()=>({device:{id:registration},snapshots:[snapshot]})},'./crewOfflineWorkflow':{requireOfflineNativeAcceptance:guard},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows}),sameOfflinePartition:(a,b)=>!!(a&&b&&a.actor===b.actor&&a.environment===b.environment&&a.partition===b.partition&&a.role===b.role)},'./crewOfflineProtocol':protocol,'../offline/crewSignedSync':{prepareSignedFieldBatch:async(...args)=>{guard();calls++;saved=args;return {phase:'PREPARED',body:await protocol.canonicalOfflineAttached(id(),registration,args[3],'test-only',sha)};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
+ return {module,identity,project,task,snapshot,device,registration,rows,setEditor:v=>{editorSource=v;},get saved(){return saved;},get calls(){return calls;},switch:()=>active=false};
 }
 
 function submissionFixture(){
@@ -195,4 +196,15 @@ test('cross-session RECONCILED FIELD_START requires session-confirm for same reg
   proof:{kind:'session-confirm',registrationId:h.registration,confirmedScope:h.identity.scope,snapshotIds:[h.snapshot.id]}});
  await h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft);
  assert.equal(h.saved[3].at(-1).fieldSubmission.startOriginId,f.origin);
+});
+
+test('InProgress FIELD signs from matching retained editor firstStartOriginId when journal lacks FIELD_START',async()=>{
+ const f=submissionFixture(),h=f.h,editorStart=id();
+ h.rows.pop();
+ await assert.rejects(h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft),/offline_verified_field_start_required/);
+ h.setEditor({detail:{version:'stale',assignmentId:h.snapshot.assignmentId,assignedToUserId:h.identity.actor,status:'InProgress',firstStartOriginId:editorStart}});
+ await assert.rejects(h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft),/offline_verified_field_start_required/);
+ h.setEditor({detail:{version:h.snapshot.taskVersion,assignmentId:h.snapshot.assignmentId,assignedToUserId:h.identity.actor,status:'InProgress',firstStartOriginId:editorStart}});
+ await h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft);
+ assert.equal(h.saved[3].at(-1).fieldSubmission.startOriginId,editorStart);
 });
