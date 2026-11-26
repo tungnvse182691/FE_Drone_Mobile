@@ -52,7 +52,7 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
     {!loading&&!error&&!rows.length?<Text style={[typography.bodyMd,{color:colors.secondary}]}>Chưa có hồ sơ lưu trên thiết bị.</Text>:null}
     {visible.map(({latest:row,versions,hasCommand})=><View key={JSON.stringify([row.projectId,row.taskId])} style={styles.draftRow}>
       <Text style={[typography.labelLg,styles.taskId]}>Nhiệm vụ · {row.taskId.slice(0,8)}</Text>
-      <Text selectable style={[typography.caption,styles.secondaryText]}>Mã nhiệm vụ: {row.taskCode??(row.taskCode===null?'Chưa tải được':'Đang tải…')}</Text>
+      <Text selectable numberOfLines={1} ellipsizeMode="middle" accessibilityLabel={row.taskCode?`Mã nhiệm vụ: ${row.taskCode}`:undefined} style={[typography.caption,styles.secondaryText]}>Mã nhiệm vụ: {row.taskCode??(row.taskCode===null?'Chưa tải được':'Đang tải…')}</Text>
       <View style={styles.snapshot}>
         <Text style={[typography.caption,styles.secondaryText]}>Bản lưu gần nhất</Text>
         <View style={styles.evidenceRow}>
@@ -69,8 +69,9 @@ export function CrewLocalDraftPanel({identity,refreshSignal=0}:{identity:QueueId
       </View>:null}
       <View style={styles.draftState}>
         <MaterialIcons name="info-outline" size={18} color={colors.secondary}/>
-        <Text style={[typography.bodyMd,styles.stateText]}>{hasCommand?'Có lịch sử gửi · mở hồ sơ để xem kết quả':row.currentSession?'Nháp chưa gửi':'Nháp từ lần đăng nhập trước'}</Text>
+        <Text style={[typography.bodyMd,styles.stateText]}>{row.assessmentConfirmed?'Đánh giá trước sửa đã xác nhận':row.hasCommand?'Có lịch sử gửi · mở hồ sơ để xem kết quả':row.currentSession?'Nháp chưa gửi':'Nháp từ lần đăng nhập trước'}</Text>
       </View>
+      {hasCommand&&!row.hasCommand?<Text style={typography.caption}>Bản lưu cũ có lịch sử gửi</Text>:null}
       {versions>1?<Text style={typography.caption}>{versions} bản lưu được giữ trên máy</Text>:null}
       <Button style={styles.openButton} variant="text" title="Mở hồ sơ" onPress={()=>{if(sameQueueIdentity(identity))router.push({pathname:'/(crew)/field-review',params:{id:row.taskId,projectId:row.projectId}});}}/>
     </View>)}
