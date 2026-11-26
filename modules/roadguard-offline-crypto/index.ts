@@ -10,6 +10,8 @@ interface NativeCrypto {
   qaCreateKeys?(binding:string):Promise<NativeCapability>;
   qaPublicKeys?(binding:string):Promise<{signingPublicKey:string;encryptionPublicKey:string}>;
   qaSignManifest?(binding:string,manifest:string):Promise<string>;
+  qaSealPackage?(binding:string,request:string):Promise<string>;
+  qaOpenPackage?(binding:string,envelope:string,trustedSender:string):Promise<string>;
   /** Storage binding is [actorId, environment, role]. Separate from signed-sync keys/policy. */
   prepareMediaKey(binding: string): Promise<{available: boolean; securityLevel: string}>;
   sealMedia(binding: string, assetId: string, sourceUri: string): Promise<{
@@ -43,7 +45,9 @@ export function offlineQaNativeFor(environment:string) {
   }catch{return null;}
   return {installationId:()=>n.installationId(),capability:(b:string)=>n.qaCapability!(b),createKeys:(b:string)=>n.qaCreateKeys!(b),
     publicKeys:(b:string)=>n.qaPublicKeys!(b),signManifest:(b:string,m:string)=>n.qaSignManifest!(b,m),
-    verifyManifest:(p:string,m:string,s:string)=>n.verifyManifest(p,m,s)};
+    verifyManifest:(p:string,m:string,s:string)=>n.verifyManifest(p,m,s),
+    sealPackage:(b:string,r:string)=>n.qaSealPackage?n.qaSealPackage(b,r):Promise.reject(Error('BLOCKED_NATIVE')),
+    openPackage:(b:string,e:string,t:string)=>n.qaOpenPackage?n.qaOpenPackage(b,e,t):Promise.reject(Error('BLOCKED_NATIVE'))};
 }
 export const unavailableCapability: NativeCapability = { available:false,apiLevel:0,signingUsable:false,agreementUsable:false,
   securityLevel:{signing:'UNKNOWN',agreement:'UNKNOWN'},reason:'BLOCKED_NATIVE_MODULE_UNAVAILABLE' };

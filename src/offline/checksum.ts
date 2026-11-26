@@ -17,9 +17,7 @@ function rotr(n: number, x: number): number {
   return (x >>> n) | (x << (32 - n));
 }
 
-function sha256Hex(msg: string): string {
-  const bytes = utf8ToBytes(msg);
-
+export function sha256HexBytesSync(bytes: Uint8Array): string {
   const bitLen = bytes.length * 8;
   const padded = new Uint8Array(bytes.length + 1);
   padded.set(bytes);
@@ -28,7 +26,7 @@ function sha256Hex(msg: string): string {
   const rem = (padded.length + 8) % 64;
   const extra = rem === 0 ? 0 : 64 - rem;
   const blockCount = (padded.length + 8 + extra) / 64;
-  let buffer = new Uint8Array(padded.length + extra + 8);
+  const buffer = new Uint8Array(padded.length + extra + 8);
   buffer.set(padded);
   const dv = new DataView(buffer.buffer);
   const high = Math.floor(bitLen / 0x100000000);
@@ -75,6 +73,14 @@ function sha256Hex(msg: string): string {
   }
 
   return h.map((v) => v.toString(16).padStart(8, '0')).join('');
+}
+
+function sha256Hex(msg: string): string {
+  return sha256HexBytesSync(utf8ToBytes(msg));
+}
+
+export function generateChecksumBytes(bytes: Uint8Array): Promise<string> {
+  return Promise.resolve(sha256HexBytesSync(bytes));
 }
 
 export function generateChecksum(data: string): Promise<string> {

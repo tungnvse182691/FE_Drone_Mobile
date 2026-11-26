@@ -18,6 +18,7 @@ import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { LocalState, SyncStatus } from '../../src/types/enums';
 import { CrewOfflinePanel } from '../../src/components/crew/CrewOfflinePanel';
 import { CrewLocalDraftPanel } from '../../src/components/crew/CrewLocalDraftPanel';
+import { CrewHandoverPanel } from '../../src/components/crew/CrewHandoverPanel';
 
 type SyncSegment = 'pending' | 'done';
 
@@ -246,6 +247,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
       <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
       <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
+      <CrewHandoverPanel identity={identity} refreshSignal={panelRefreshSignal} />
       {outboxRows.length === 0 ? null : segment === 'pending' ? (
         <>
           {visibleItems.length > 0 ? (

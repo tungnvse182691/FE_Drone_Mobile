@@ -181,7 +181,7 @@ export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord 
   }
   if(r.terminalItems!==undefined){
     const descriptors=r.proof.descriptors as {originId:string;kind:string}[];
-    if(r.proof.kind!=='signed-field-batch'||!Array.isArray(descriptors)||!Array.isArray(r.terminalItems)||
+    if(!['signed-field-batch','handover-import'].includes(String(r.proof.kind))||!Array.isArray(descriptors)||!Array.isArray(r.terminalItems)||
       new Set(r.terminalItems.map(i=>i.originId)).size!==r.terminalItems.length||r.terminalItems.some(i=>
         !guid(i.originId)||!guid(i.serverBatchId)||!['REJECTED','CONFLICT','STALE_SNAPSHOT'].includes(i.state)||
         !(i.code===null||typeof i.code==='string')||!Number.isFinite(Date.parse(i.serverReceivedAt))||
@@ -205,7 +205,7 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
     if(!sameOfflinePartition(old.identity,owner))return false;
     const all=await rows(tx);
     let regId='';
-    if(old.proof.kind==='signed-field-batch')regId=String(old.proof.registrationId??'');
+    if(old.proof.kind==='signed-field-batch'||old.proof.kind==='handover-export'||old.proof.kind==='handover-import')regId=String(old.proof.registrationId??'');
     else if(old.proof.kind==='admission-upload'){
       const parent=all.find(r=>r.id===old.proof.batchIntentId&&r.projectId===old.projectId&&
         r.proof.kind==='signed-field-batch'&&sameOfflinePartition(r.identity,owner));
@@ -261,7 +261,7 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
     async list(){guard();return rows(db);},
     /** Only the signed-batch reconciler supplies authenticated batch + origin GET facts. */
     async checkpointTerminal(old:OfflineJournalRecord,item:TerminalOfflineItem):Promise<OfflineJournalRecord>{
-      guard();if(old.phase!=='RECEIVED'||old.proof.kind!=='signed-field-batch'||!sameOfflinePartition(old.identity,owner))throw Error('offline_checkpoint_phase');
+      guard();if(old.phase!=='RECEIVED'||!['signed-field-batch','handover-import'].includes(String(old.proof.kind))||!sameOfflinePartition(old.identity,owner))throw Error('offline_checkpoint_phase');
       if((old.receipt as {batchId?:string})?.batchId!==item.serverBatchId)throw Error('offline_terminal_checkpoint_invalid');
       const merged=new Map((old.terminalItems??[]).map(i=>[i.originId,i])),prior=merged.get(item.originId);
       if(prior&&JSON.stringify(prior)!==JSON.stringify(item))throw Error('offline_checkpoint_conflict');

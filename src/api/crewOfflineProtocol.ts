@@ -92,6 +92,30 @@ function snapshotRecord(input:OfflineRecord):OfflineRecord {
  return record(copy(input,0));
 }
 export function serializeOfflineOperation(operation:OfflineRecord):string {return value('operation',operation);}
+/** Parse canonical attached JSON while wrapping measurement `value` lexemes as DecimalToken so non-integer and trailing-zero decimals survive JS roundtrips. */
+export function parseOfflineAttachedPreservingDecimals(raw:string):OfflineRecord {
+ if(typeof raw!=='string'||raw.length>24*1024*1024)return fail();
+ let i=0;const numRe=/-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
+ const skip=()=>{while(i<raw.length&&/\s/.test(raw[i]))i++;};
+ const str=():string=>{const start=i++;while(i<raw.length){const c=raw[i++];if(c==='\\'){i++;continue;}if(c==='"')return JSON.parse(raw.slice(start,i)) as string;}return fail();};
+ const parseVal=(key?:string):unknown=>{
+  skip();if(i>=raw.length)return fail();const c=raw[i];
+  if(c==='"')return str();
+  if(c==='{'){i++;skip();const obj:OfflineRecord=Object.create(null);if(raw[i]==='}'){i++;return obj;}
+   while(true){skip();if(raw[i]!=='"')return fail();const k=str();skip();if(raw[i++]!==':')return fail();obj[k]=parseVal(k);skip();if(raw[i]==='}'){i++;return obj;}if(raw[i++]!==',')return fail();}
+  }
+  if(c==='['){i++;skip();const arr:unknown[]=[];if(raw[i]===']'){i++;return arr;}
+   while(true){arr.push(parseVal());skip();if(raw[i]===']'){i++;return arr;}if(raw[i++]!==',')return fail();}
+  }
+  if(raw.startsWith('true',i)){i+=4;return true;}
+  if(raw.startsWith('false',i)){i+=5;return false;}
+  if(raw.startsWith('null',i)){i+=4;return null;}
+  numRe.lastIndex=i;const m=numRe.exec(raw);if(!m)return fail();const tok=m[0];i+=tok.length;
+  if(key==='value')return {decimal:tok};
+  const n=Number(tok);if(!Number.isFinite(n))return fail();return n;
+ };
+ const root=parseVal();skip();if(i!==raw.length)return fail();return record(root);
+}
 async function hash(bytes:string,sha:Sha256):Promise<string> {const h=await sha(bytes);if(!/^[a-f0-9]{64}$/.test(h))return fail();return h;}
 export async function fieldCoreHash(operation:OfflineRecord,sha:Sha256):Promise<string> {
  const kind=operation.kind,key=kind==='FIELD_ACCEPT'?'fieldAction':kind==='FIELD_START'?'fieldStart':kind==='FIELD_SUBMISSION'?'fieldSubmission':fail();

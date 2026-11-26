@@ -27,11 +27,53 @@ export interface OfflineAdmissionReadback {
   grantId:string|null;status:string;captures:OfflineCaptureReadback[];
 }
 export interface OfflineBatchReceipt {batchId:string;items:OfflineItemReceipt[];localQueueInstruction:string}
+export interface OfflineCollectionPage<T> {items:T[];nextCursor:string|null}
+export interface OfflineDeviceSummary {
+  id:string;projectId:string;actorId:string;deviceId:string;revision:number;role:string;registeredAt:string;revokedAt:string|null;
+}
+export interface OfflinePackageSummary {
+  id:string;projectId:string;originalActorId:string;sourceDeviceRegistrationId:string;sourceBatchId:string;
+}
+export interface OfflineGrantSummary {
+  id:string;projectId:string;packageId:string;issuedAt:string;expiresAt:string;revokedAt:string|null;
+}
+export interface OfflinePackageDetail {
+  id:string;projectId:string;originalActorId:string;sourceDeviceRegistrationId:string;sourceBatchId:string;
+  manifestHash:string;payloadHash:string;cipherPackageJson:string;signedManifestJson:string;sourceSignature:string;
+}
+export interface OfflineGrantItemScope {
+  originId:string;kind:string;corePayloadHash:string;envelopeHash:string;
+  taskId:string;assignmentId:string;snapshotId:string;repairResourceId?:string|null;
+}
+export interface OfflineGrantDetail {
+  id:string;projectId:string;packageId:string;sourceActorId:string;sourceDeviceRegistrationId:string;
+  recipientActorId:string;recipientDeviceRegistrationId:string;role:string;issuedBy:string;
+  issuedAt:string;expiresAt:string;manifestHash:string;scopeJson:string;revokedAt:string|null;
+}
 export type OfflineReadKind='artifacts'|'batches'|'devices'|'grants'|'origins'|'packages'|'snapshots';
+export type OfflineDiscoveryKind='devices'|'packages'|'grants';
 const reads:OfflineReadKind[]=['artifacts','batches','devices','grants','origins','packages','snapshots'];
+const discoveryKinds:OfflineDiscoveryKind[]=['devices','packages','grants'];
 export function offlineProjectPath(projectId:string):string {
   if(!isCrewResourceId(projectId))throw Error('offline_project_source_required');
   return `/projects/${projectId}/offline`;
+}
+/** Scoped collection discovery for Group 2 handover (devices, packages, grants). */
+export async function listOfflineCollection<T=unknown>(
+  identity:QueueIdentity,
+  projectId:string,
+  kind:OfflineDiscoveryKind,
+  options?:{limit?:number;cursor?:string|null},
+):Promise<OfflineCollectionPage<T>> {
+  crewReadGuard(identity);
+  if(!discoveryKinds.includes(kind))throw Error('offline_resource_source_required');
+  const params:Record<string,string|number>={};
+  if(options?.limit!==undefined)params.limit=Math.min(100,Math.max(1,Math.trunc(options.limit)));
+  if(options?.cursor)params.cursor=options.cursor;
+  const r=await apiClient.get<OfflineCollectionPage<T>>(`${offlineProjectPath(projectId)}/${kind}`,{params});
+  crewReadGuard(identity);
+  if(!r.data||!Array.isArray(r.data.items))throw Error('offline_discovery_response_invalid');
+  return r.data;
 }
 /** API-114/115/117/120/123/124/128. No public URLs and no privileged discovery fallback. */
 export async function readOfflineResource<T=unknown>(identity:QueueIdentity,projectId:string,kind:OfflineReadKind,id:string):Promise<T> {
@@ -89,4 +131,4 @@ export async function dispatchOfflineIntent(record:OfflineJournalRecord,authorit
   }
 }
 
-export const HANDOVER_GATE='BLOCKED_HANDOVER_WORKFLOW: primitive mã hóa đã có; quyền bàn giao, nguồn khóa tin cậy và nghiệm thu native chưa đủ; không phát lệnh bàn giao.';
+export const HANDOVER_WORKFLOW_SUPPORTED = true;

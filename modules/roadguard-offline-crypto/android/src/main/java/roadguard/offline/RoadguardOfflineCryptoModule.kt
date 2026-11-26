@@ -58,6 +58,21 @@ class RoadguardOfflineCryptoModule : Module() {
     check(c["signingUsable"] == true && c["agreementUsable"] == true) { "BLOCKED_NATIVE" }
     return prefix(binding)
   }
+  private fun qaUsable(binding: String): String {
+    val p = prefix(binding, true); val c = capability(binding, true)
+    check(c["signingUsable"] == true && c["agreementUsable"] == true) { "BLOCKED_QA_NATIVE" }
+    return p
+  }
+  private fun sealWithPrefix(p: String, binding: String, request: String): String {
+    val ks = store(); val identity = JSONArray(binding)
+    return HandoverPackageJson.seal(request, ks.getKey("$p.sign", null) as PrivateKey,
+      Base64.getEncoder().encodeToString(ks.getCertificate("$p.sign").publicKey.encoded), identity.getString(0), identity.getString(3))
+  }
+  private fun openWithPrefix(p: String, binding: String, envelope: String, trustedSender: String): String {
+    val ks = store(); val identity = JSONArray(binding)
+    return HandoverPackageJson.open(envelope, ks.getKey("$p.agree", null) as PrivateKey,
+      Base64.getEncoder().encodeToString(ks.getCertificate("$p.agree").publicKey.encoded), identity.getString(0), identity.getString(3), trustedSender)
+  }
   private fun createKeys(binding: String, qa: Boolean = false): Map<String, Any> {
     check(Build.VERSION.SDK_INT >= 31) { "NATIVE_UNSUPPORTED_API" }
     val p = prefix(binding, qa)
@@ -94,9 +109,14 @@ class RoadguardOfflineCryptoModule : Module() {
         "encryptionPublicKey" to Base64.getEncoder().encodeToString(ks.getCertificate("$p.agree").publicKey.encoded))
     }
     AsyncFunction("qaSignManifest") { binding: String, manifest: String ->
-      val p = prefix(binding, true); val c = capability(binding, true)
-      check(c["signingUsable"] == true && c["agreementUsable"] == true) { "BLOCKED_QA_NATIVE" }
+      val p = qaUsable(binding)
       Base64.getEncoder().encodeToString(StrictP256.sign(store().getKey("$p.sign", null) as PrivateKey, manifest))
+    }
+    AsyncFunction("qaSealPackage") { binding: String, request: String ->
+      sealWithPrefix(qaUsable(binding), binding, request)
+    }
+    AsyncFunction("qaOpenPackage") { binding: String, envelope: String, trustedSender: String ->
+      openWithPrefix(qaUsable(binding), binding, envelope, trustedSender)
     }
     AsyncFunction("prepareMediaKey") { binding: String ->
       LocalMediaVault(appContext.reactContext ?: error("native_context_missing")).createKey(binding)
@@ -132,13 +152,10 @@ class RoadguardOfflineCryptoModule : Module() {
     }
     AsyncFunction("verifyManifest") { publicKey: String, manifest: String, signature: String -> StrictP256.verify(publicKey, manifest, signature) }
     AsyncFunction("sealPackage") { binding: String, request: String ->
-      val p = usable(binding); val ks = store(); val identity = JSONArray(binding)
-      HandoverPackageJson.seal(request, ks.getKey("$p.sign", null) as PrivateKey,
-        Base64.getEncoder().encodeToString(ks.getCertificate("$p.sign").publicKey.encoded), identity.getString(0), identity.getString(3))
+      sealWithPrefix(usable(binding), binding, request)
     }
     AsyncFunction("openPackage") { binding: String, envelope: String, trustedSender: String ->
-      val p = usable(binding); val ks = store(); val identity = JSONArray(binding)
-      HandoverPackageJson.open(envelope, ks.getKey("$p.agree", null) as PrivateKey, Base64.getEncoder().encodeToString(ks.getCertificate("$p.agree").publicKey.encoded), identity.getString(0), identity.getString(3), trustedSender)
+      openWithPrefix(usable(binding), binding, envelope, trustedSender)
     }
   }
 }

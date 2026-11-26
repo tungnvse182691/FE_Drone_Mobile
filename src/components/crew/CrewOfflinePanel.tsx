@@ -32,7 +32,7 @@ function phaseLabel(r:OfflineJournalRecord):string {
   return ({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase]??'Chưa xác nhận';
 }
 function recordHeading(r:OfflineJournalRecord):string {
-  const base=({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu';
+  const base=({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại','handover-export':'Xuất gói bàn giao','handover-import':'Nhập gói bàn giao'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu';
   if(r.proof.kind!=='snapshot')return base;
   try {
     const taskId=String((JSON.parse(r.body) as {taskId?:string})?.taskId??'');

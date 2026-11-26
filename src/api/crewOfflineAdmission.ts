@@ -15,15 +15,28 @@ const evidenceOf=(o:OfflineRecord):OfflineRecord[]=>((o.fieldSubmission??(o.repa
 /** Direct-sync only. Authenticated readback must match the immutable source in full.
  * Admission/mapping never supplies an effect ID, signature, or new signed payload. */
 export function validateAdmissionSource(record:OfflineJournalRecord,item:OfflineItemReceipt) {
+  return validateAdmissionRecord(record, item, false);
+}
+
+/** Imported handover admission: preserves originalActorId and requires exact non-null grantId. */
+export function validateImportedAdmissionSource(record:OfflineJournalRecord,item:OfflineItemReceipt) {
+  return validateAdmissionRecord(record, item, true);
+}
+
+function validateAdmissionRecord(record:OfflineJournalRecord,item:OfflineItemReceipt,imported:boolean) {
   const body=JSON.parse(record.body),operation=(body.operations as OfflineRecord[])?.find(o=>o.originId===item.originId);
   const a=item.admission;
+  const expectedBatchId = imported ? body.batchId : (record.receipt as {batchId?:string})?.batchId;
+  const expectedSourceBatchId = imported ? String(record.proof.sourceBatchId ?? '') : body.batchId;
+  const expectedSourceRegId = imported ? String(record.proof.sourceDeviceRegistrationId ?? '') : body.sourceDeviceRegistrationId;
+  const expectedGrantId = imported ? String(body.grantId ?? '') : null;
   if(!operation||!a||!guid(a.id)||item.kind!==operation.kind||a.projectId!==record.projectId||
-    a.batchId!==(record.receipt as {batchId?:string})?.batchId||a.sourceBatchId!==body.batchId||
-    a.sourceBatchId!==record.proof.sourceBatchId||a.sourceDeviceRegistrationId!==body.sourceDeviceRegistrationId||
-    a.sourceDeviceRegistrationId!==record.proof.registrationId||a.originId!==operation.originId||
+    a.batchId!==expectedBatchId||a.sourceBatchId!==expectedSourceBatchId||
+    a.sourceBatchId!==record.proof.sourceBatchId||a.sourceDeviceRegistrationId!==expectedSourceRegId||
+    (!imported && a.sourceDeviceRegistrationId!==record.proof.registrationId)||a.originId!==operation.originId||
     a.taskId!==operation.taskId||a.assignmentId!==operation.assignmentId||a.snapshotId!==operation.snapshotId||
-    a.originalActorId!==operation.originalActorId||a.originalActorId!==record.identity.actor||
-    a.currentImporterId!==record.identity.actor||a.grantId!==null||
+    a.originalActorId!==operation.originalActorId||(!imported && a.originalActorId!==record.identity.actor)||
+    a.currentImporterId!==record.identity.actor||(imported ? (!guid(a.grantId) || a.grantId!==expectedGrantId) : a.grantId!==null)||
     !['WAITING_UPLOAD','WAITING_VERIFICATION','WAITING_DEPENDENCY','READY','UPLOAD_FAILED','COMMITTED'].includes(a.status))return fail();
   const evidence=evidenceOf(operation);
   if(!Array.isArray(evidence)||!Array.isArray(a.captures)||evidence.length!==a.captures.length||

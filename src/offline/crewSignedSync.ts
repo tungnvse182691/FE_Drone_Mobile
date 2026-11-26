@@ -161,6 +161,12 @@ export async function reconcileSignedBatch(record:OfflineJournalRecord,authority
   // Never ACK the whole batch merely because HTTP200 or one member is durable.
   return verifiedCount===expected.length?journal.transition(next,'RECONCILED',readback):next;
 }
+export {
+  resourceId as isOfflineResourceId,
+  durable as isDurableOfflineItem,
+  terminal as isTerminalOfflineItem,
+  observation as toVerifiedOfflineObservation,
+};
 const resourceId=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 function terminal(i:OfflineItemReceipt,d:OfflineRecord):boolean {
   return !!i&&i.originId===d.originId&&i.kind===d.kind&&i.durableAcknowledgment===false&&i.effectId===null&&i.canonicalOriginId===null&&
