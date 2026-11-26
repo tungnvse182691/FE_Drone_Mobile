@@ -1,5 +1,4 @@
 import type { QueueIdentity } from '../offline/upload-queue';
-import { isCrewResourceId } from './crewApi';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { inspectOfflineDevice, readLocalOfflineSources } from './crewOfflineDevice';
 import { requireOfflineNativeAcceptance, validateRepairSnapshot } from './crewOfflineWorkflow';
@@ -122,11 +121,15 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
   for(const o of localOps)if(o.corePayloadHash!==await fieldCoreHash(o,generateChecksum))throw Error('offline_local_start_source_mismatch');
   crewReadGuard(identity);
   const journal=await openOfflineJournal(identity),rows=await journal.list();crewReadGuard(identity);
+  const confirmedReg=rows.some(r=>r.projectId===projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
+    String(r.proof.registrationId??'')===source.registrationId&&r.identity.scope===identity.scope&&r.identity.partition===identity.partition)&&
+    !rows.some(r=>r.projectId===projectId&&r.proof.kind==='revocation'&&String(r.proof.registrationId??'')===source.registrationId&&sameOfflinePartition(r.identity,identity));
   const starts:string[]=[];
   for(const row of rows) {
     if(row.projectId!==projectId||row.phase!=='RECONCILED'||row.proof.kind!=='signed-field-batch'||
       row.proof.registrationId!==source.registrationId||row.proof.deviceId!==source.deviceId||
-      !row.identity||(['actor','scope','environment','partition','role'] as const).some(k=>row.identity[k]!==identity[k]))continue;
+      !row.identity||!sameOfflinePartition(row.identity,identity)||
+      (row.identity.scope!==identity.scope&&!confirmedReg))continue;
     const ops=JSON.parse(row.body).operations as OfflineRecord[];
     for(const op of ops) {
       if(op.kind!=='FIELD_START'||op.taskId!==taskId||op.assignmentId!==source.snapshot.assignmentId||
@@ -137,7 +140,7 @@ export async function prepareOfflineFieldSubmission(identity:QueueIdentity,proje
     }
   }
   if(localOps.length)starts.push(String(localOps.at(-1)!.originId));
-  else if(source.facts.status==='InProgress'&&isCrewResourceId(source.facts.firstStartOriginId))starts.push(source.facts.firstStartOriginId);
+  else if(source.facts.status==='InProgress'&&typeof source.facts.firstStartOriginId==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(source.facts.firstStartOriginId))starts.push(source.facts.firstStartOriginId);
   if(new Set(starts).size!==1)throw Error('offline_verified_field_start_required');
   const originId=uuidv4();
   const op:OfflineRecord={schemaVersion:1,originId,effectId:originId,kind:'FIELD_SUBMISSION',originalActorId:identity.actor,

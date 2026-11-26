@@ -61,7 +61,7 @@ function fixture(status='NewAssigned'){
  const protocol=load('src/api/crewOfflineProtocol.ts');let active=true,saved=null,calls=0;
  const rows=[{projectId:project,proof:{kind:'enrollment'},receipt:{id:registration}}];
  const guard=()=>{if(!active)throw Error('session_changed');};
- const module=load('src/api/crewOfflineField.ts',{'./crewFieldDraft':load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewOfflineDevice':{inspectOfflineDevice:async()=>({deviceId:device}),readLocalOfflineSources:async()=>({device:{id:registration},snapshots:[snapshot]})},'./crewOfflineWorkflow':{requireOfflineNativeAcceptance:guard},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows})},'./crewOfflineProtocol':protocol,'../offline/crewSignedSync':{prepareSignedFieldBatch:async(...args)=>{guard();calls++;saved=args;return {phase:'PREPARED',body:await protocol.canonicalOfflineAttached(id(),registration,args[3],'test-only',sha)};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
+ const module=load('src/api/crewOfflineField.ts',{'./crewFieldDraft':load('src/api/crewFieldDraft.ts',new Proxy({},{has:()=>true,get:()=>({})})),'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewOfflineDevice':{inspectOfflineDevice:async()=>({deviceId:device}),readLocalOfflineSources:async()=>({device:{id:registration},snapshots:[snapshot]})},'./crewOfflineWorkflow':{requireOfflineNativeAcceptance:guard},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows}),sameOfflinePartition:(a,b)=>!!(a&&b&&a.actor===b.actor&&a.environment===b.environment&&a.partition===b.partition&&a.role===b.role)},'./crewOfflineProtocol':protocol,'../offline/crewSignedSync':{prepareSignedFieldBatch:async(...args)=>{guard();calls++;saved=args;return {phase:'PREPARED',body:await protocol.canonicalOfflineAttached(id(),registration,args[3],'test-only',sha)};}},'../offline/checksum':{generateChecksum:sha},'../utils/uuid':{uuidv4:id}});
  return {module,identity,project,task,snapshot,device,registration,rows,get saved(){return saved;},get calls(){return calls;},switch:()=>active=false};
 }
 
@@ -185,4 +185,14 @@ for(const status of ['NewAssigned','Accepted'])test('same outage FIELD signs dep
  assert.equal(submission.fieldSubmission.startOriginId,all.at(-2).originId);
  f.draft.offlineStart.operations.at(-1).taskVersion='changed';
  await assert.rejects(h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft),/source_mismatch/);
+});
+
+test('cross-session RECONCILED FIELD_START requires session-confirm for same registration',async()=>{
+ const f=submissionFixture(),h=f.h,oldStart=h.rows.at(-1);
+ oldStart.identity={...h.identity,scope:'sid:previous'};
+ await assert.rejects(h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft),/offline_verified_field_start_required/);
+ h.rows.push({id:id(),projectId:h.project,phase:'RECONCILED',identity:h.identity,path:`/projects/${h.project}/offline/devices/${h.registration}`,
+  proof:{kind:'session-confirm',registrationId:h.registration,confirmedScope:h.identity.scope,snapshotIds:[h.snapshot.id]}});
+ await h.module.prepareOfflineFieldSubmission(h.identity,h.project,h.task,f.draft);
+ assert.equal(h.saved[3].at(-1).fieldSubmission.startOriginId,f.origin);
 });
