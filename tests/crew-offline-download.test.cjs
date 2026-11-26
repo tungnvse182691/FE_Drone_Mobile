@@ -191,3 +191,84 @@ test('integration: real SQLite journal + real prepareDeviceSnapshot + mocked tra
  await assert.rejects(jNew.confirmSession({id:id(),identity:newIdentity,projectId:project,path:`/projects/${project}/offline/devices/${regId}`,key:id(),body:JSON.stringify({registrationId:regId,confirmedScope:newIdentity.scope,snapshotIds:[]}),proof:{kind:'session-confirm',registrationId:regId,confirmedScope:newIdentity.scope,snapshotIds:[]}},device),/revocation/);
  raw.close();
 });
+
+function interruptedDeviceFixture(){
+ const {DatabaseSync}=require('node:sqlite'),raw=new DatabaseSync(':memory:');
+ raw.exec('CREATE TABLE local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
+ const db={getAllAsync:async(s,...p)=>raw.prepare(s).all(...p),getFirstAsync:async(s,...p)=>raw.prepare(s).get(...p),runAsync:async(s,...p)=>raw.prepare(s).run(...p),withExclusiveTransactionAsync:async f=>{raw.exec('BEGIN IMMEDIATE');try{await f(db);raw.exec('COMMIT');}catch(e){raw.exec('ROLLBACK');throw e;}}};
+ const old={actor:id(),role:'REPAIR_CREW',environment:'http://fixture/api/v1',scope:'old',partition:'p'},owner={...old,scope:'current'},project=id(),task=id(),assignment=id(),deviceId=id(),regId=id(),snapshotId=id();
+ let current=old,keys={signingPublicKey:'sign',encryptionPublicKey:'enc'},onPost=null,onRead=null;
+ const calls=[],device={id:regId,projectId:project,actorId:old.actor,deviceId,role:'RepairCrew',revokedAt:null,...keys};
+ const snapshot={id:snapshotId,taskId:task,assignmentId:assignment,originalActorId:old.actor,deviceRegistrationId:regId,taskVersion:'AAAAAAAAB9E=',assignmentHash:'a'.repeat(64),contentHash:'b'.repeat(64),snapshot:{id:task},downloadedAt:new Date().toISOString()};
+ const same=(a,b=current)=>a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.scope===b.scope&&a.partition===b.partition;
+ const guard=i=>{if(!same(i))throw Error('offline_session_changed');};
+ const load=(file,deps)=>{const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,require:n=>deps[n],Date,JSON});return m.exports;};
+ const journal=load('src/api/crewOfflineJournal.ts',{'../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},'../offline/upload-queue':{currentQueueIdentity:()=>current,sameQueueIdentity:same}});
+ const client={get:async path=>{calls.push({method:'GET',path});if(onRead)await onRead();return {data:path.includes('/devices/')?device:snapshot};},post:async(path,body,config)=>{calls.push({method:'POST',path,body,config});if(onPost)await onPost();return {data:path.endsWith('/devices')?device:snapshot};}};
+ const workflow=load('src/api/crewOfflineWorkflow.ts',{'./client':{apiClient:client},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x),isRepairItemVersion:x=>x===snapshot.taskVersion},'./crewOfflineJournal':journal,'../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:true}});
+ const taskApi={getFieldInspectionTaskDetailReal:async()=>({data:{id:task,projectId:project,assignedToUserId:old.actor,assignmentId:assignment,version:snapshot.taskVersion,status:'InProgress',mode:'INSPECT_AND_REPAIR',defectId:id()},etag:'etag'}),validateCrewTaskDetail:()=>{},crewTaskFromWire:(_r,d)=>({id:task,projectId:project,detail:d}),isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x)};
+ const api=load('src/api/crewOfflineDevice.ts',{'./client':{apiClient:client},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':taskApi,'./crewOfflineCrypto':{offlineSigningPublicKey:()=>{}},'./crewOfflineJournal':journal,'./crewOfflineWorkflow':workflow,'../../modules/roadguard-offline-crypto':{offlineNative:{installationId:async()=>deviceId,capability:async()=>({signingUsable:true,agreementUsable:true}),publicKeys:async()=>keys},offlineQaNativeFor:()=>null}});
+ const preparation=load('src/api/crewOfflinePreparation.ts',{'./crewOfflineDevice':api,'./crewOfflineWorkflow':workflow,'./crewOfflineJournal':journal,'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':taskApi,'./crewOfflineEditorSource':{retainCrewEditorSource:async()=>{}},'../utils/uuid':{uuidv4:id}});
+ const prepare=async(kind)=>{const j=await journal.openOfflineJournal(old);return j.prepare({id:id(),identity:old,projectId:project,path:`/projects/${project}/offline/${kind==='enrollment'?'devices':'snapshots'}`,key:id(),body:JSON.stringify(kind==='enrollment'?{deviceId,...keys}:{deviceRegistrationId:regId,taskId:task}),proof:{kind,taskId:task,assignmentId:assignment,taskVersion:snapshot.taskVersion}});};
+ return {api,preparation,journal,workflow,old,owner,project,task,device,snapshot,prepare,calls,close:()=>raw.close(),set current(v){current=v;},set keys(v){keys=v;},set onPost(v){onPost=v;},set onRead(v){onRead=v;}};
+}
+
+test('device recovery: old enrollment exact replay, lost response, same receipt readback; generic dispatch still rejects',async()=>{
+ const h=interruptedDeviceFixture();try{
+  const j=await h.journal.openOfflineJournal(h.old),original=await h.prepare('enrollment');
+  let pending=await j.transition(original,'IN_FLIGHT');h.current=h.owner;
+  await assert.rejects(h.workflow.dispatchOfflineIntent(pending,h.owner),/session_changed|transition_invalid/);
+  h.onPost=()=>{throw Error('response_lost');};
+  await assert.rejects(h.api.recoverInterruptedDeviceIntent(pending,h.owner),/response_lost/);
+  const current=await h.journal.openOfflineJournal(h.owner);pending=(await current.list())[0];
+  assert.equal(pending.phase,'UNKNOWN_OUTCOME');h.onPost=null;
+  const done=await h.api.recoverInterruptedDeviceIntent(pending,h.owner);
+  assert.equal(done.phase,'RECONCILED');assert.equal(done.identity.scope,h.old.scope);
+  assert.equal(done.body,original.body);assert.equal(done.key,original.key);
+  const posts=h.calls.filter(c=>c.method==='POST');assert.equal(posts.length,2);
+  for(const post of posts){assert.equal(post.path,original.path);assert.equal(post.body,original.body);assert.equal(post.config.headers['Idempotency-Key'],original.key);assert.equal(post.config.transformRequest[0](original.body),original.body);}
+  assert.equal((await current.list()).length,1);
+ }finally{h.close();}
+});
+
+for(const mode of ['received','receipt-in-flight','keys','session-post','session-read','revoked','no-confirm','snapshot'])test(`device recovery fail-closed/readback ${mode}`,async()=>{
+ const h=interruptedDeviceFixture();try{
+  const j=await h.journal.openOfflineJournal(h.old);let enrollment=await h.prepare('enrollment');
+  enrollment=await j.transition(enrollment,'IN_FLIGHT');
+  if(mode!=='receipt-in-flight')enrollment=await j.transition(enrollment,'RECEIVED',h.device);
+  else enrollment=await j.transition(enrollment,'UNKNOWN_OUTCOME',h.device),enrollment=await j.transition(enrollment,'IN_FLIGHT');
+  let record=enrollment;
+  if(['revoked','no-confirm','snapshot'].includes(mode)){
+   enrollment=await j.transition(enrollment,'RECONCILED',h.device);record=await h.prepare('snapshot');record=await j.transition(record,'IN_FLIGHT');
+  }
+  h.current=h.owner;
+  const current=await h.journal.openOfflineJournal(h.owner);
+  if(mode==='snapshot'||mode==='revoked')await current.confirmSession({id:id(),identity:h.owner,projectId:h.project,path:`/projects/${h.project}/offline/devices/${h.device.id}`,key:id(),body:'{}',proof:{kind:'session-confirm',registrationId:h.device.id,snapshotIds:[]}},h.device);
+  if(mode==='keys')h.keys={signingPublicKey:'changed',encryptionPublicKey:'enc'};
+  if(mode==='revoked')h.device.revokedAt=new Date().toISOString();
+  if(mode==='session-post'){
+   // UNKNOWN with no receipt must POST, then session change must prevent acknowledgment.
+   h.current=h.old;record=await j.transition(enrollment,'IN_FLIGHT');record=await j.transition(record,'UNKNOWN_OUTCOME');h.current=h.owner;
+   h.onPost=()=>{h.current={...h.owner,scope:'other'};};
+  }
+  if(mode==='session-read')h.onRead=()=>{h.current={...h.owner,scope:'other'};};
+  if(['keys','session-post','session-read','revoked','no-confirm'].includes(mode))await assert.rejects(h.api.recoverInterruptedDeviceIntent(record,h.owner));
+  else {const done=await h.api.recoverInterruptedDeviceIntent(record,h.owner);assert.equal(done.phase,'RECONCILED');assert.equal(done.identity.scope,'old');}
+  assert.equal(h.calls.filter(c=>c.method==='POST').length,['snapshot','session-post'].includes(mode)?1:0);
+ }finally{h.close();}
+});
+
+test('recovery download flow confirms device before old pending snapshot, then confirms recovered snapshot without duplicate',async()=>{
+ const h=interruptedDeviceFixture();try{
+  const j=await h.journal.openOfflineJournal(h.old);
+  let enrollment=await h.prepare('enrollment');enrollment=await j.transition(enrollment,'IN_FLIGHT');enrollment=await j.transition(enrollment,'RECEIVED',h.device);await j.transition(enrollment,'RECONCILED',h.device);
+  const snapshot=await h.prepare('snapshot');await j.transition(snapshot,'IN_FLIGHT');h.current=h.owner;
+  const result=await h.preparation.recoverAndDownloadCrewOfflineTask(h.owner,h.project,h.task);
+  assert.equal(result.snapshot.id,h.snapshot.id);assert.equal(result.editorReady,true);
+  const rows=await (await h.journal.openOfflineJournal(h.owner)).list();
+  assert.equal(rows.filter(r=>r.proof.kind==='snapshot').length,1);
+  assert.equal(rows.find(r=>r.id===snapshot.id).identity.scope,'old');
+  assert.ok(rows.find(r=>r.proof.kind==='session-confirm').proof.snapshotIds.includes(snapshot.id));
+  assert.equal(h.calls.filter(c=>c.method==='POST').length,1);
+ }finally{h.close();}
+});

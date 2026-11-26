@@ -6,6 +6,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing, typography } from '../../design-tokens';
 import { Card } from '../Card';
 import { Button } from '../Button';
+import { isCrewResourceId } from '../../api/crewApi';
+import { recoverAndDownloadCrewOfflineTask } from '../../api/crewOfflinePreparation';
 import { inspectOfflineDevice, reconcileDeviceIntent } from '../../api/crewOfflineDevice';
 import { dispatchOfflineIntent } from '../../api/crewOfflineWorkflow';
 import { reconcileSignedBatch, recoverSignedOrigins, reconcileStartIntent } from '../../offline/crewSignedSync';
@@ -67,6 +69,34 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       !revokedRegistrations.has(String(record.proof.registrationId??''))
     )
   );
+  const recoveryTask=(r:OfflineJournalRecord):string|null=>{
+    if(sameQueueIdentity(r.identity,identity)||!sameOfflinePartition(r.identity,identity)||
+      !['enrollment','snapshot'].includes(String(r.proof.kind))||!['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase))return null;
+    const taskId=r.proof.kind==='snapshot'?JSON.parse(r.body).taskId:r.proof.taskId;
+    return isCrewResourceId(taskId)?taskId:null;
+  };
+  const recoverDevice=async(record:OfflineJournalRecord)=>{
+    const taskId=recoveryTask(record);
+    if(!taskId||running.current||!sameQueueIdentity(identity))return;
+    running.current=true;setBusy(true);setError('');const n=++sequence.current;
+    try{await recoverAndDownloadCrewOfflineTask(identity,record.projectId,taskId);}
+    catch{if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa khôi phục được dữ liệu nhiệm vụ. Cần kết nối mạng, đúng tài khoản và khóa thiết bị đã đăng ký; nhật ký gốc vẫn được giữ nguyên.');}
+    finally{
+      if(n===sequence.current&&sameQueueIdentity(identity)){
+        // Reload confirmations as well as rows after explicit session recovery.
+        try{
+          const rows=await (await openOfflineJournal(identity)).list();
+          if(n===sequence.current&&sameQueueIdentity(identity)){
+            setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));
+            const confirmed=rows.filter(r=>r.proof.kind==='session-confirm'&&r.phase==='RECONCILED'&&sameQueueIdentity(r.identity,identity));
+            setConfirmedSnapshots(new Set(confirmed.flatMap(r=>Array.isArray(r.proof.snapshotIds)?r.proof.snapshotIds.map(String):[])));
+            setConfirmedRegistrations(new Set(confirmed.map(r=>String(r.proof.registrationId??'')).filter(Boolean)));
+          }
+        }catch{/* Keep durable data and the last view. */}
+      }
+      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
+    }
+  };
   const reconcile=async(record:OfflineJournalRecord)=>{
     if(running.current||!sameQueueIdentity(identity)||(!sameQueueIdentity(record.identity,identity)&&!canRecoverSignedBatch(record)))return;
     running.current=true;setBusy(true);setError('');const n=++sequence.current;
@@ -119,6 +149,8 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     {historyRecords.length>0?<Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Lịch sử đã xác nhận ({historyRecords.length})</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>:null}
     {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>
       {(sameQueueIdentity(r.identity,identity)||(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
+      {recoveryTask(r)?<Button title="Khôi phục dữ liệu từ lần đăng nhập trước" variant="secondary" disabled={busy} onPress={()=>void recoverDevice(r)}/>:null}
+      {!sameQueueIdentity(r.identity,identity)&&sameOfflinePartition(r.identity,identity)&&['enrollment','snapshot'].includes(String(r.proof.kind))&&r.phase!=='RECONCILED'&&!recoveryTask(r)?<Text style={styles.description}>Mở nhiệm vụ gốc để xác nhận lại dữ liệu khi có mạng. Giữ nguyên nhật ký và khóa thiết bị; không đăng ký thay thế.</Text>:null}
       {canRecoverSignedBatch(r)&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?'Tiếp tục tải ảnh và đồng bộ':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
       {(sameQueueIdentity(r.identity,identity)||canRecoverSignedBatch(r))&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation','enrollment','snapshot'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
     </View>)}

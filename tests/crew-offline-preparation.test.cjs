@@ -9,7 +9,7 @@ function fixture(){
  let active=true,reads=0;
  const guard=()=>{if(!active)throw Error('session_changed');};
  const w=load('src/api/crewOfflineWorkflow.ts',{'./client':{},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x),isRepairItemVersion:x=>x===snapshot.taskVersion},'./crewOfflineJournal':{},'../../modules/roadguard-offline-crypto':{}});
- const module=load('src/api/crewOfflineDevice.ts',{'../../modules/roadguard-offline-crypto':{},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x)},'./crewOfflineCrypto':{},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return rows;}})},'./crewOfflineWorkflow':w,'../utils/uuid':{}});
+ const module=load('src/api/crewOfflineDevice.ts',{'./client':{},'../../modules/roadguard-offline-crypto':{},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x)},'./crewOfflineCrypto':{},'./crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return rows;}})},'./crewOfflineWorkflow':w,'../utils/uuid':{}});
  return {module,identity,project,task,deviceId,registration,snapshotId,rows,device,snapshot,get reads(){return reads;},switch:()=>active=false};
 }
 test('local source uses only reconciled device/snapshot receipts, without HTTP',async()=>{const h=fixture();const source=await h.module.readLocalOfflineSources(h.identity,h.project,h.registration,h.deviceId);assert.equal(source.device.id,h.registration);assert.equal(source.snapshots[0].id,h.snapshotId);assert.equal(h.reads,1);});

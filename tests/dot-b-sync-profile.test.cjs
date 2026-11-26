@@ -18,7 +18,7 @@ for(const state of ['loading','empty','error','pages'])test('B5 profile prioriti
 });
 test('B4 sync keeps unavailable capabilities out of the overview and diagnostics remain functional',async()=>{
  let reads=0;const identity={actor:'A',scope:'S',environment:'E'};
- const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{reads++;throw Error('private');}},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
+ const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflinePreparation':{},'../../api/crewApi':{},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{reads++;throw Error('private');}},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[]})},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
  s.render();await s.flush();assert.equal(reads,1);for(const title of ['Đăng ký thiết bị','Tạo bản dữ liệu nhiệm vụ','Gửi dữ liệu đã ký'])assert.doesNotMatch(text(s),new RegExp(title));
  const diagnostics=s.nodes().find(n=>n.props?.accessibilityLabel==='Chi tiết kỹ thuật');assert.ok(diagnostics);diagnostics.props.onPress();s.render();
  const reread=s.nodes().find(n=>n.type==='Pressable'&&n.props?.onPress&&JSON.stringify(n.props.children).includes('Đọc lại nhật ký'));assert.ok(reread);reread.props.onPress();await s.flush();assert.equal(reads,2);assert.doesNotMatch(text(s),/Không đọc được/);assert.doesNotMatch(text(s),/private/);s.unmount();
@@ -27,7 +27,7 @@ test('B4 sync keeps unavailable capabilities out of the overview and diagnostics
 test('Crew sync reads durable commands even when native inspection is unavailable',async()=>{
  let reads=0;const identity={actor:'A',scope:'S',environment:'E'};
  const records=[{id:'review',phase:'RECONCILED',proof:{kind:'review-request'}},{id:'safety',phase:'RECEIVED',proof:{kind:'safety',operation:'check'}}];
- const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{throw Error('native unavailable');}},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return records;}})},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
+ const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflinePreparation':{},'../../api/crewApi':{},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{throw Error('native unavailable');}},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>{reads++;return records;}})},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
  s.render();await s.flush();assert.equal(reads,1);assert.doesNotMatch(text(s),/Yêu cầu xem xét lại/);assert.match(text(s),/An toàn hiện trường/);
  s.nodes().find(n=>n.props?.accessibilityLabel==='Lịch sử đã xác nhận').props.onPress();s.render();
  assert.match(text(s),/Yêu cầu xem xét lại/);assert.doesNotMatch(text(s),/native unavailable|Thao tác thiết bị/);assert.ok(!s.nodes().some(n=>n.props?.title==='Gửi dữ liệu đã ký'));s.unmount();
@@ -36,6 +36,21 @@ test('Crew sync reads durable commands even when native inspection is unavailabl
 
 test('Crew sync preserves local journal failure guidance without leaking provider details',async()=>{
  const identity={actor:'A',scope:'S',environment:'E'};let probes=0;
- const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{probes++;return {}; }},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>{throw Error('private sqlite failure');}},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
+ const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflinePreparation':{},'../../api/crewApi':{},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>{probes++;return {}; }},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>{throw Error('private sqlite failure');}},'../../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:false},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
  s.render();await s.flush();assert.equal(probes,0);assert.match(text(s),/Không đọc được.*nhật ký.*dữ liệu được giữ nguyên/);assert.doesNotMatch(text(s),/private sqlite failure/);s.unmount();
+});
+
+test('old-session device recovery CTA calls task flow once and reloads confirmations, errors preserve guidance',async()=>{
+ const {randomUUID:id}=require('node:crypto');
+ for(const failing of [false,true]){
+  const identity={actor:id(),scope:'new',environment:'E',role:'REPAIR_CREW',partition:'p'},old={...identity,scope:'old'},project=id(),task=id();
+  let calls=0;const pending=deferred();let rows=[{id:id(),identity:old,projectId:project,phase:'UNKNOWN_OUTCOME',body:JSON.stringify({taskId:task}),proof:{kind:'snapshot'}}];
+  const same=(a,b=identity)=>a.scope===b.scope&&a.actor===b.actor;
+  const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewApi':{isCrewResourceId:x=>typeof x==='string'&&x.length===36},'../../api/crewOfflinePreparation':{recoverAndDownloadCrewOfflineTask:async(i,p,t)=>{calls++;assert.equal(i,identity);assert.equal(p,project);assert.equal(t,task);await pending.promise;if(failing)throw Error('private response');rows=[{...rows[0],phase:'RECONCILED'}];}},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>({capability:{}})},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>rows}),sameOfflinePartition:(a,b)=>a.actor===b.actor&&a.environment===b.environment},'../../../modules/roadguard-offline-crypto':{},'../../offline/upload-queue':{sameQueueIdentity:same}}});
+  s.render();await s.flush();const button=s.nodes().find(n=>n.props.title==='Khôi phục dữ liệu từ lần đăng nhập trước');assert.ok(button);
+  button.props.onPress();button.props.onPress();assert.equal(calls,1);pending.resolve();await s.flush();
+  if(failing){assert.match(text(s),/Chưa khôi phục.*nhật ký gốc vẫn được giữ nguyên/);assert.doesNotMatch(text(s),/private response/);}
+  else assert.ok(!s.nodes().some(n=>n.props.title==='Khôi phục dữ liệu từ lần đăng nhập trước'));
+  s.unmount();
+ }
 });

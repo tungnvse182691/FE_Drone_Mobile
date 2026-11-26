@@ -130,6 +130,8 @@ export async function writeOnlineFieldJournal(db:SQLiteDatabase,record:FieldComm
   });
 }
 
+export interface DeviceRecoveryBinding {deviceId:string;signingPublicKey:string;encryptionPublicKey:string}
+
 export type OfflinePhase='PREPARED'|'IN_FLIGHT'|'UNKNOWN_OUTCOME'|'RECEIVED'|'RECONCILED'|'REJECTED'|'CONFLICT';
 export interface OfflineIntent {
   id:string;identity:QueueIdentity;projectId:string;path:string;key:string;body:string;proof:Record<string,unknown>;
@@ -206,6 +208,42 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
   const rows=async(tx:SQLiteDatabase)=>{
     const r=await tx.getAllAsync<{id:string;payload:string}>('SELECT id,payload FROM local_draft WHERE kind=? AND substr(id,1,?)=? ORDER BY rowid',KIND,prefix.length,prefix);
     guard();return r.map(x=>{const r=decode(x.payload);if(partition(r.identity)!==prefix||x.id!==prefix+r.id)throw Error('offline_owner_invalid');return r;});
+  };
+  const validateDeviceRecovery=async(tx:SQLiteDatabase,old:OfflineJournalRecord,binding:DeviceRecoveryBinding)=>{
+    if(!sameOfflinePartition(old.identity,owner)||!['enrollment','snapshot'].includes(String(old.proof.kind))||
+      !guid(binding.deviceId)||typeof binding.signingPublicKey!=='string'||!binding.signingPublicKey||typeof binding.encryptionPublicKey!=='string'||!binding.encryptionPublicKey)throw Error('offline_device_recovery_source_invalid');
+    const records=await rows(tx),base=`/projects/${old.projectId}/offline`;
+    const enrollments=records.filter(r=>r.projectId===old.projectId&&r.proof.kind==='enrollment');
+    if(enrollments.length!==1)throw Error('offline_registration_reconciliation_required');
+    const enrollment=enrollments[0],request=JSON.parse(enrollment.body);
+    if(!sameOfflinePartition(enrollment.identity,owner)||enrollment.path!==base+'/devices'||
+      Object.entries(binding).some(([k,v])=>request[k]!==v))throw Error('offline_device_key_mismatch');
+    const regId=String((enrollment.receipt as {id?:string})?.id??'');
+    // An uncertain revocation must be resolved separately; recovery never undoes it.
+    if(records.some(r=>r.projectId===old.projectId&&r.proof.kind==='revocation'&&(!regId||r.proof.registrationId===regId)))throw Error('offline_device_revocation_requires_online_check');
+    if(old.proof.kind==='enrollment'){
+      if(old.id!==enrollment.id||old.path!==base+'/devices')throw Error('offline_device_recovery_source_invalid');
+    }else{
+      const body=JSON.parse(old.body),device=enrollment.receipt as DeviceRecoveryBinding;
+      if(old.path!==base+'/snapshots'||!guid(body.taskId)||!guid(regId)||body.deviceRegistrationId!==regId||
+        enrollment.phase!=='RECONCILED'||Object.entries(binding).some(([k,v])=>device[k as keyof DeviceRecoveryBinding]!==v)||
+        (!sameQueueIdentity(old.identity,owner)&&!records.some(r=>r.projectId===old.projectId&&r.proof.kind==='session-confirm'&&r.phase==='RECONCILED'&&sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===regId)))throw Error('offline_session_recovery_required');
+    }
+  };
+  const transitionRecord=async(old:OfflineJournalRecord,phase:OfflinePhase,receipt?:unknown,binding?:DeviceRecoveryBinding):Promise<OfflineJournalRecord>=>{
+      guard();if(!sameOfflinePartition(old.identity,owner))throw Error('offline_session_changed');
+      const transitions:Record<OfflinePhase,OfflinePhase[]>={PREPARED:['IN_FLIGHT'],IN_FLIGHT:['UNKNOWN_OUTCOME','RECEIVED','REJECTED','CONFLICT'],
+        UNKNOWN_OUTCOME:['IN_FLIGHT','RECEIVED','CONFLICT'],RECEIVED:['RECONCILED','IN_FLIGHT'],RECONCILED:[],REJECTED:[],CONFLICT:[]};
+      if(!transitions[old.phase]?.includes(phase))throw Error('offline_transition_invalid');
+      const next=decode(JSON.stringify({...old,phase,...(receipt===undefined?{}:{receipt})}));
+      await db.withExclusiveTransactionAsync(async tx=>{
+        guard();if(binding)await validateDeviceRecovery(tx,old,binding);
+        else if(!await canActOnRecord(tx,old))throw Error('offline_session_changed');
+        const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+old.id,KIND);guard();
+        if(!row||row.payload!==JSON.stringify(old))throw Error('offline_journal_cas_failed');
+        const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,row.payload);
+        guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');
+      });guard();return next;
   };
   return {
     async list(){guard();return rows(db);},
@@ -346,19 +384,8 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
         }
       });guard();return saved;
     },
-    async transition(old:OfflineJournalRecord,phase:OfflinePhase,receipt?:unknown):Promise<OfflineJournalRecord> {
-      guard();if(!sameOfflinePartition(old.identity,owner))throw Error('offline_session_changed');
-      const transitions:Record<OfflinePhase,OfflinePhase[]>={PREPARED:['IN_FLIGHT'],IN_FLIGHT:['UNKNOWN_OUTCOME','RECEIVED','REJECTED','CONFLICT'],
-        UNKNOWN_OUTCOME:['IN_FLIGHT','RECEIVED','CONFLICT'],RECEIVED:['RECONCILED','IN_FLIGHT'],RECONCILED:[],REJECTED:[],CONFLICT:[]};
-      if(!transitions[old.phase]?.includes(phase))throw Error('offline_transition_invalid');
-      const next=decode(JSON.stringify({...old,phase,...(receipt===undefined?{}:{receipt})}));
-      await db.withExclusiveTransactionAsync(async tx=>{
-        guard();if(!await canActOnRecord(tx,old))throw Error('offline_session_changed');
-        const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+old.id,KIND);guard();
-        if(!row||row.payload!==JSON.stringify(old))throw Error('offline_journal_cas_failed');
-        const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,row.payload);
-        guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');
-      });guard();return next;
-    },
+    transition:(old:OfflineJournalRecord,phase:OfflinePhase,receipt?:unknown)=>transitionRecord(old,phase,receipt),
+    // Dedicated recovery only; ordinary dispatch authority remains unchanged.
+    transitionDeviceRecovery:(old:OfflineJournalRecord,phase:OfflinePhase,binding:DeviceRecoveryBinding,receipt?:unknown)=>transitionRecord(old,phase,receipt,binding),
   };
 }

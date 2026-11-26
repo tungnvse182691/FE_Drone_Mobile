@@ -311,3 +311,39 @@ test('P1-B: concurrent stale write CAS race rejects stale writer without overwri
  assert.equal(stored.captures[0].offlineUpload,undefined);
  h.raw.close();
 });
+
+
+test('interrupted old enrollment recovery uses native binding and CAS without opening ordinary transition',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),deviceId=randomUUID();
+ const binding={deviceId,signingPublicKey:'sign-public',encryptionPublicKey:'enc-public'};
+ let r=await j.prepare({...base,path:`/projects/${base.projectId}/offline/devices`,body:JSON.stringify(binding),proof:{kind:'enrollment'}});
+ r=await j.transition(r,'IN_FLIGHT');h.switch();const next=await h.m.openOfflineJournal(h.current(),h.db);
+ await assert.rejects(next.transition(r,'UNKNOWN_OUTCOME'),/session/);
+ assert.equal(typeof next.transitionDeviceRecovery,'function');
+ const bytes=JSON.stringify({body:r.body,key:r.key,identity:r.identity,proof:r.proof});
+ for(const bad of [{...binding,deviceId:randomUUID()},{...binding,signingPublicKey:'other'},{...binding,encryptionPublicKey:'other'}])
+  await assert.rejects(next.transitionDeviceRecovery(r,'UNKNOWN_OUTCOME',bad));
+ const unknown=await next.transitionDeviceRecovery(r,'UNKNOWN_OUTCOME',binding);
+ await assert.rejects(next.transitionDeviceRecovery(r,'UNKNOWN_OUTCOME',binding),/cas/);
+ assert.equal(JSON.stringify({body:unknown.body,key:unknown.key,identity:unknown.identity,proof:unknown.proof}),bytes);
+ assert.equal((await next.list()).length,1);h.raw.close();
+});
+for(const change of ['no-confirm','revoked','other-registration','other-actor','other-environment','other-partition','valid'])test('old snapshot recovery is bound to current confirmed registration: '+change,async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),reg=randomUUID(),task=randomUUID();
+ const binding={deviceId:randomUUID(),signingPublicKey:'sign-public',encryptionPublicKey:'enc-public'};
+ let enrollment=await j.prepare({...base,path:`/projects/${base.projectId}/offline/devices`,body:JSON.stringify(binding),proof:{kind:'enrollment'}});
+ enrollment=await j.transition(enrollment,'IN_FLIGHT');enrollment=await j.transition(enrollment,'RECEIVED',{...binding,id:reg});await j.transition(enrollment,'RECONCILED');
+ let r=await j.prepare({...base,id:randomUUID(),key:randomUUID(),path:`/projects/${base.projectId}/offline/snapshots`,body:JSON.stringify({deviceRegistrationId:reg,taskId:task}),proof:{kind:'snapshot'}});
+ r=await j.transition(r,'IN_FLIGHT');h.switch();
+ if(change==='other-actor')h.setCurrent({...h.current(),actor:randomUUID()});
+ if(change==='other-environment')h.setCurrent({...h.current(),environment:'https://foreign/api/v1'});
+ if(change==='other-partition')h.setCurrent({...h.current(),partition:'foreign'});
+ const next=await h.m.openOfflineJournal(h.current(),h.db);
+ if(!['no-confirm','other-actor','other-environment','other-partition'].includes(change))await next.confirmSession({id:randomUUID(),key:randomUUID(),identity:h.current(),projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${reg}`,body:'{}',proof:{kind:'session-confirm',registrationId:reg,confirmedScope:h.current().scope,snapshotIds:[]}},{id:reg});
+ if(change==='other-registration') { const records=await next.list(); const c=records.find(x=>x.proof.kind==='session-confirm'); const fake=randomUUID(); h.raw.prepare('UPDATE local_draft SET payload=? WHERE kind=? AND payload=?').run(JSON.stringify({...c,path:`/projects/${base.projectId}/offline/devices/${fake}`,proof:{...c.proof,registrationId:fake}}),'C10BC_IMMUTABLE_COMMAND_V1',JSON.stringify(c)); }
+ if(change==='revoked')await next.prepare({...base,id:randomUUID(),identity:h.current(),key:randomUUID(),proof:{kind:'revocation',registrationId:reg}});
+ assert.equal(typeof next.transitionDeviceRecovery,'function');
+ if(change==='valid'){const n=await next.transitionDeviceRecovery(r,'UNKNOWN_OUTCOME',binding);assert.equal(n.body,r.body);assert.equal(n.identity.scope,'session-A');}
+ else await assert.rejects(next.transitionDeviceRecovery(r,'UNKNOWN_OUTCOME',binding));
+ h.raw.close();
+});

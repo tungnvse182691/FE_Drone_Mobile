@@ -1,10 +1,11 @@
+import { apiClient } from './client';
 import { offlineNative, offlineQaNativeFor, unavailableCapability } from '../../modules/roadguard-offline-crypto';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { getFieldInspectionTaskDetailReal, validateCrewTaskDetail, isCrewResourceId } from './crewApi';
 import { offlineSigningPublicKey } from './crewOfflineCrypto';
 import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
 import { offlineProjectPath, requireOfflineNativeAcceptance, readOfflineResource, validateDevice, validateSnapshot, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
-import type { OfflineJournalRecord } from './crewOfflineJournal';
+import type { DeviceRecoveryBinding, OfflineJournalRecord } from './crewOfflineJournal';
 import type { QueueIdentity } from '../offline/upload-queue';
 import { uuidv4 } from '../utils/uuid';
 
@@ -116,24 +117,31 @@ export async function prepareDeviceRevocation(identity:QueueIdentity,projectId:s
 }
 /** Device/snapshot POST views are provisional until the own GET returns the same server source. */
 export async function reconcileDeviceIntent(record:OfflineJournalRecord) {
-  crewReadGuard(record.identity);
+  return reconcileDeviceReceipt(record,record.identity);
+}
+async function reconcileDeviceReceipt(record:OfflineJournalRecord,authority:QueueIdentity,binding?:DeviceRecoveryBinding) {
+  crewReadGuard(authority);
+  const finish=async(actual:unknown)=>{
+    crewReadGuard(authority);const j=await openOfflineJournal(authority);
+    return binding?j.transitionDeviceRecovery(record,'RECONCILED',binding,actual):j.transition(record,'RECONCILED',actual);
+  };
   if(record.phase!=='RECEIVED')throw Error('offline_receipt_required');
   const kind=record.proof.kind,body=JSON.parse(record.body),receipt=record.receipt as {id?:string};
   if(!isCrewResourceId(receipt?.id))throw Error('offline_server_receipt_required');
   if(kind==='enrollment'&&record.path===offlineProjectPath(record.projectId)+'/devices') {
-    const actual=await readOfflineResource<DeviceRegistration>(record.identity,record.projectId,'devices',receipt.id);
+    const actual=await readOfflineResource<DeviceRegistration>(authority,record.projectId,'devices',receipt.id);
     validateDevice(actual,record.identity,receipt.id,body.deviceId);
     if(actual.signingPublicKey!==body.signingPublicKey||actual.encryptionPublicKey!==body.encryptionPublicKey)throw Error('offline_device_key_mismatch');
-    const j=await openOfflineJournal(record.identity);return j.transition(record,'RECONCILED',actual);
+    return finish(actual);
   }
   if(kind==='snapshot'&&record.path===offlineProjectPath(record.projectId)+'/snapshots') {
-    const actual=await readOfflineResource<SourceSnapshot>(record.identity,record.projectId,'snapshots',receipt.id);
+    const actual=await readOfflineResource<SourceSnapshot>(authority,record.projectId,'snapshots',receipt.id);
     validateSnapshot(actual,record.identity,{id:receipt.id,taskId:body.taskId,deviceRegistrationId:body.deviceRegistrationId,
       assignmentId:String(record.proof.assignmentId),taskVersion:String(record.proof.taskVersion)});
-    const j=await openOfflineJournal(record.identity);return j.transition(record,'RECONCILED',actual);
+    return finish(actual);
   }
   if(kind==='revocation'&&record.path===offlineProjectPath(record.projectId)+`/devices/${record.proof.registrationId}/revoke`){
-    const actual=await readOfflineResource<DeviceRegistration>(record.identity,record.projectId,'devices',receipt.id);crewReadGuard(record.identity);
+    const actual=await readOfflineResource<DeviceRegistration>(authority,record.projectId,'devices',receipt.id);crewReadGuard(record.identity);
     const matches=(v:DeviceRegistration)=>v.id===record.proof.registrationId&&v.projectId===record.projectId&&v.actorId===record.identity.actor&&
       v.role==='RepairCrew'&&v.deviceId===record.proof.deviceId&&isCrewResourceId(v.deviceId)&&
       typeof record.proof.signingPublicKey==='string'&&!!record.proof.signingPublicKey&&v.signingPublicKey===record.proof.signingPublicKey&&
@@ -141,7 +149,49 @@ export async function reconcileDeviceIntent(record:OfflineJournalRecord) {
       typeof v.revokedAt==='string'&&Number.isFinite(Date.parse(v.revokedAt));
     // A pre-existing revoked GET alone does not attribute this command. Require its POST receipt too.
     if(!matches(record.receipt as DeviceRegistration)||!matches(actual)||actual.revokedAt!==(record.receipt as DeviceRegistration).revokedAt)throw Error('offline_revocation_readback_mismatch');
-    const j=await openOfflineJournal(record.identity);return j.transition(record,'RECONCILED',actual);
+    return finish(actual);
   }
   throw Error('offline_reconciliation_source_not_supported');
+}
+
+/** Explicit recovery keeps the old command identity and bytes. Current native keys
+ * prove installation continuity; snapshot recovery additionally needs a confirmed
+ * registration in this session. The generic dispatcher cannot adopt these rows. */
+export async function recoverInterruptedDeviceIntent(record:OfflineJournalRecord,authority:QueueIdentity) {
+  requireOfflineNativeAcceptance(authority);crewReadGuard(authority);
+  if(!sameOfflinePartition(record.identity,authority)||!['enrollment','snapshot'].includes(String(record.proof.kind)))throw Error('offline_session_recovery_required');
+  const native=crewOfflineNative(authority),probe=await inspectOfflineDevice(authority);crewReadGuard(authority);
+  if(!native||!probe.deviceId||!probe.capability.signingUsable||!probe.capability.agreementUsable)throw Error('BLOCKED_NATIVE');
+  const keys=await native.publicKeys(deviceBinding(authority,probe.deviceId));crewReadGuard(authority);
+  offlineSigningPublicKey(keys.signingPublicKey);offlineSigningPublicKey(keys.encryptionPublicKey);
+  const binding:DeviceRecoveryBinding={deviceId:probe.deviceId,signingPublicKey:keys.signingPublicKey,encryptionPublicKey:keys.encryptionPublicKey};
+  const journal=await openOfflineJournal(authority),rows=await journal.list();crewReadGuard(authority);
+  const enrollments=rows.filter(r=>r.projectId===record.projectId&&r.proof.kind==='enrollment');
+  if(enrollments.length!==1)throw Error('offline_registration_reconciliation_required');
+  const enrollment=enrollments[0],request=JSON.parse(enrollment.body);
+  if(!sameOfflinePartition(enrollment.identity,authority)||Object.entries(binding).some(([k,v])=>request[k]!==v))throw Error('offline_device_key_mismatch');
+  const regId=(enrollment.receipt as DeviceRegistration)?.id;
+  if(rows.some(r=>r.projectId===record.projectId&&r.proof.kind==='revocation'&&(!regId||r.proof.registrationId===regId)))throw Error('offline_device_revocation_requires_online_check');
+  if(record.proof.kind==='snapshot'){
+    if(enrollment.phase!=='RECONCILED'||!isCrewResourceId(regId))throw Error('offline_registration_reconciliation_required');
+    const device=await readOfflineResource<DeviceRegistration>(authority,record.projectId,'devices',regId);crewReadGuard(authority);
+    validateDevice(device,authority,regId,probe.deviceId);
+    if(device.projectId!==record.projectId||Object.entries(binding).some(([k,v])=>(device as unknown as Record<string,unknown>)[k]!==v))throw Error('offline_device_key_mismatch');
+  }
+  let next=record;
+  const transition=(phase:Parameters<typeof journal.transitionDeviceRecovery>[1],receipt?:unknown)=>journal.transitionDeviceRecovery(next,phase,binding,receipt);
+  if(next.phase==='IN_FLIGHT')next=await transition(isCrewResourceId((next.receipt as {id?:string})?.id)?'RECEIVED':'UNKNOWN_OUTCOME');
+  if(['PREPARED','UNKNOWN_OUTCOME'].includes(next.phase)){
+    next=await transition('IN_FLIGHT');
+    try {
+      crewReadGuard(authority);
+      const result=await apiClient.post(next.path,next.body,{headers:{'Content-Type':'application/json','Idempotency-Key':next.key},transformRequest:[data=>data]});
+      crewReadGuard(authority);next=await transition('RECEIVED',result.data);
+    }catch(error){
+      try{crewReadGuard(authority);await transition('UNKNOWN_OUTCOME');}catch{/* Preserve IN_FLIGHT when authority changes. */}
+      throw error;
+    }
+  }
+  if(next.phase!=='RECEIVED')throw Error('offline_receipt_required');
+  return reconcileDeviceReceipt(next,authority,binding);
 }

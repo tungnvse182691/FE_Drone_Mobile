@@ -1,7 +1,7 @@
 import type { QueueIdentity } from '../offline/upload-queue';
 import { crewReadGuard } from './crewSafetyWorkflow';
 import { openOfflineJournal, sameOfflinePartition, type OfflineJournalRecord } from './crewOfflineJournal';
-import { crewOfflineNative, deviceBinding, inspectOfflineDevice, prepareDeviceEnrollment, prepareDeviceSnapshot, reconcileDeviceIntent } from './crewOfflineDevice';
+import { crewOfflineNative, deviceBinding, inspectOfflineDevice, prepareDeviceEnrollment, prepareDeviceSnapshot, reconcileDeviceIntent, recoverInterruptedDeviceIntent } from './crewOfflineDevice';
 import { dispatchOfflineIntent, offlineProjectPath, readOfflineResource, requireOfflineNativeAcceptance, validateDevice, validateSnapshot, type DeviceRegistration, type SourceSnapshot } from './crewOfflineWorkflow';
 import { getFieldInspectionTaskDetailReal, crewTaskFromWire, validateCrewTaskDetail } from './crewApi';
 import { retainCrewEditorSource, readCrewEditorSource } from './crewOfflineEditorSource';
@@ -221,7 +221,7 @@ export async function inspectCrewOfflinePreparationState(
   };
 }
 
-/** Single user-initiated flow: recovers current-session interrupted intents, revalidates cross-session device authority if needed, and downloads/refreshes snapshot + editor source. */
+/** Single user-initiated flow: recovers interrupted intents with current device authority, revalidates cross-session device authority if needed, and downloads/refreshes snapshot + editor source. */
 export async function recoverAndDownloadCrewOfflineTask(
   identity: QueueIdentity,
   projectId: string,
@@ -238,10 +238,15 @@ export async function recoverAndDownloadCrewOfflineTask(
   const rows = await journal.list();
   crewReadGuard(identity);
 
-  // 1. Recover any interrupted enrollment/snapshot in the CURRENT session with its exact key/body.
-  for (const r of rows) {
-    if (r.projectId !== projectId || !owned(r) || !['enrollment', 'snapshot'].includes(String(r.proof.kind))) continue;
+  // 1. Recover enrollment first, then task snapshots, retaining exact identity/key/body.
+  for (const r of [...rows].sort((a,b)=>Number(a.proof.kind==='snapshot')-Number(b.proof.kind==='snapshot'))) {
+    if (r.projectId !== projectId || !sameOfflinePartition(r.identity,identity) || !['enrollment', 'snapshot'].includes(String(r.proof.kind))) continue;
     if (r.proof.kind === 'snapshot' && (JSON.parse(r.body) as { taskId?: string }).taskId !== taskId) continue;
+    if (!owned(r)&&['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)) {
+      if(r.proof.kind==='snapshot')await reconcileDeviceSessionForProject(identity,projectId,taskId);
+      await recoverInterruptedDeviceIntent(r,identity);
+      continue;
+    }
     if (r.phase === 'IN_FLIGHT') {
       const next = r.receipt && typeof (r.receipt as { id?: string }).id === 'string'
         ? await journal.transition(r, 'RECEIVED', r.receipt)
