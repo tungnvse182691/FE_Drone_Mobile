@@ -72,16 +72,22 @@ export async function prepareOfflineRepairStart(identity:QueueIdentity,projectId
   if(draft.scope!==identity.scope&&draft.scope!==a.scope)throw Error('repair_field_source_invalid');
   const assessment=(a.op.repair as OfflineRecord).assessment as OfflineRecord;
   // Typed decimals are wire wrappers; comparison uses the original finite draft domain.
+  const failSource=(stage:string)=>Object.assign(Error('repair_assessment_source_changed'),{repairDiagStage:stage});
   const evidence=(assessment.evidence as OfflineRecord[]).map(e=>{
     const c=draft.captures.find(c=>c.id===e.captureOriginId);
-    if(e.fileId===null&&(!c?.verified||c.upload?.status!=='VERIFIED'||!c.upload.fileId||
-      c.offlineUpload?.originId!==a.op.originId||(e.sizeBytes!=null&&e.sizeBytes!==c.size)))throw Error('repair_assessment_source_changed');
+    if(e.fileId===null){
+      if(!c)throw failSource('evidence_missing');
+      if(!c.verified||c.upload?.status!=='VERIFIED'||!c.upload.fileId)throw failSource('evidence_unverified');
+      if(c.offlineUpload?.originId!==a.op.originId)throw failSource('evidence_origin_mismatch');
+      if(e.sizeBytes!=null&&e.sizeBytes!==c.size)throw failSource('evidence_size_mismatch');
+    }
     const {sizeBytes,...original}=e;
     return {...original,fileId:e.fileId===null?c!.upload!.fileId:e.fileId};
   });
   const comparable={...assessment,evidence,measurements:(assessment.measurements as OfflineRecord[]).map(m=>({...m,value:m.value===null?null:Number((m.value as {decimal?:string})?.decimal??m.value)}))};
-  if(a.outcome.readiness!=='READY'||a.outcome.stage!=='PRE_EXECUTION'||a.outcome.firstStartId!==s.repair.originalCrewFirstStartId||
-    assessment.fieldFirstStartId!==s.repair.originalCrewFirstStartId||!repairAssessmentMatchesDraft(comparable,draft))throw Error('repair_assessment_source_changed');
+  if(a.outcome.readiness!=='READY'||a.outcome.stage!=='PRE_EXECUTION')throw failSource('readiness_mismatch');
+  if(a.outcome.firstStartId!==s.repair.originalCrewFirstStartId||assessment.fieldFirstStartId!==s.repair.originalCrewFirstStartId)throw failSource('first_start_mismatch');
+  if(!repairAssessmentMatchesDraft(comparable,draft))throw failSource('draft_source_mismatch');
   const payload={originId:uuidv4(),fieldFirstStartId:s.repair.originalCrewFirstStartId,assessmentId:s.repair.currentAssessmentId,claimedAt:new Date().toISOString(),deviceId:s.deviceId,monotonicMilliseconds:null,bootId:null};
   validateRepairInput('start',payload);return prepare(identity,projectId,s,'REPAIR_EXECUTION_START','execution-start','start',payload);
 }

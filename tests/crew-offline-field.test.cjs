@@ -50,6 +50,29 @@ test('signed REPAIR start uses reconciled assessment and current approved source
  await f.m.prepareOfflineRepairStart(f.h.identity,f.h.project,f.h.task,f.draft);
  assert.equal(f.saved[0].kind,'REPAIR_EXECUTION_START');assert.equal(f.saved[0].repair.start.assessmentId,assessmentId);
 });
+test('signed REPAIR start matches actual serialized offline assessment with null optional fields, normalized UTC offset and admission fileId mapping',async()=>{
+ const proto={exports:{}};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewOfflineProtocol.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:proto,exports:proto.exports,require:()=>({})});
+ const f=repairFixture(),assessmentId=id();f.ctx.currentAssessmentId=assessmentId;
+ f.draft.measurements=[{sampleId:id(),type:'DepressionDepth',value:14,state:'KNOWN',dimension:'DEPTH',unit:'cm',instrument:'RULER',method:'DIRECT'}];
+ f.draft.locationProof={kind:'ROUTE_CHAINAGE',observedChainageMeters:150};
+ f.draft.captures[0].capturedAt='2026-11-26T14:56:40.120Z';
+ f.draft.captures[0].size=31300;
+ f.draft.captures[0].offlineUpload={originId:assessmentId};
+ const rawOp={schemaVersion:1,originId:assessmentId,effectId:assessmentId,kind:'REPAIR_ASSESSMENT',originalActorId:f.h.identity.actor,sourceDeviceId:f.h.device,
+  snapshotId:f.h.snapshot.id,taskId:f.h.task,assignmentId:f.h.snapshot.assignmentId,taskVersion:f.h.snapshot.taskVersion,corePayloadHash:'b'.repeat(64),dependencies:[],claimedFinishedAt:null,
+  fieldAction:null,fieldStart:null,fieldSubmission:null,
+  repair:{resourceId:f.ctx.itemId,action:'assessment',start:null,finish:null,assessment:{originId:assessmentId,fieldFirstStartId:f.origin,deviceId:f.h.device,
+   measurements:f.draft.measurements.map(m=>({...m,value:{decimal:String(m.value)}})),
+   evidence:f.draft.captures.map(c=>({captureOriginId:c.id,fileId:null,purpose:c.purpose,sizeBytes:c.size,checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),
+   locationProof:f.draft.locationProof}}};
+ const serializedOp=JSON.parse(proto.exports.serializeOfflineOperation(rawOp));
+ f.h.rows.push({identity:f.h.identity,projectId:f.h.project,phase:'RECONCILED',proof:{kind:'signed-field-batch',registrationId:f.h.registration,deviceId:f.h.device},body:JSON.stringify({operations:[serializedOp]}),verifiedItems:[{originId:assessmentId,effectId:assessmentId,canonicalOriginId:assessmentId,kind:'REPAIR_ASSESSMENT',state:'COMMITTED'}],receipt:{items:[{originId:assessmentId,effectId:assessmentId,canonicalOriginId:assessmentId,kind:'REPAIR_ASSESSMENT',state:'COMMITTED',durableAcknowledgment:true,outcome:{id:assessmentId,itemId:f.ctx.itemId,taskId:f.h.task,readiness:'READY',stage:'PRE_EXECUTION',firstStartId:f.origin}}]}});
+ await f.m.prepareOfflineRepairStart(f.h.identity,f.h.project,f.h.task,f.draft);
+ assert.equal(f.saved[0].kind,'REPAIR_EXECUTION_START');assert.equal(f.saved[0].repair.start.assessmentId,assessmentId);
+ f.saved=undefined;
+ await assert.rejects(f.m.prepareOfflineRepairStart(f.h.identity,f.h.project,f.h.task,{...f.draft,measurements:[{...f.draft.measurements[0],value:15}]}),/repair_assessment_source_changed/);
+});
 test('signed REPAIR finish uses reconciled execution start',async()=>{
  const f=repairFixture(),startId=id();f.ctx.state='InProgress';f.ctx.currentExecutionStartId=startId;
  addReconciledRepair(f,'REPAIR_EXECUTION_START',startId,{start:{originId:id(),fieldFirstStartId:f.origin,assessmentId:id(),claimedAt:'2026-11-25T00:00:00Z',deviceId:f.h.device}},{firstStartId:f.origin});

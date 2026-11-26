@@ -26,6 +26,7 @@ export async function assertSignedFieldMediaPreserved(db:SQLiteDatabase,draft:Fi
         rows.some(r=>r.projectId===row.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===regId))
         recoveryConfirmed=true;
     }
+    if(row.identity.scope!==draft.scope)continue;
     for(const op of JSON.parse(row.body).operations??[]){
       if(op.taskId!==draft.taskId)continue;
       const evidence=op.fieldSubmission?.evidence??op.repair?.assessment?.evidence??[];

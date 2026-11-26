@@ -7,26 +7,39 @@ import { isCrewResourceId, type FieldTaskViewFact } from './crewApi';
 import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
 import type { OfflineRecord } from './crewOfflineProtocol';
 
+function failPredecessor(stage:string):never {
+  const err=Error('offline_repair_predecessor_required');
+  Object.assign(err,{repairDiagStage:stage});
+  throw err;
+}
 export async function readSignedRepairPredecessor(identity:QueueIdentity,projectId:string,s:Awaited<ReturnType<typeof readOfflineCrewTask>>&{repair:ReturnType<typeof validateRepairSnapshot>},kind:string,effectId:unknown) {
-  if(!isCrewResourceId(effectId))throw Error('offline_repair_predecessor_required');
+  if(!isCrewResourceId(effectId))failPredecessor('invalid_effect_id');
   const rows=await (await openOfflineJournal(identity)).list();crewReadGuard(identity);
   if(rows.some(row=>row.projectId===projectId&&row.proof.kind==='revocation'&&row.proof.registrationId===s.registrationId))throw Error('offline_device_revocation_requires_online_check');
   const confirmed=rows.some(row=>row.projectId===projectId&&row.phase==='RECONCILED'&&row.proof.kind==='session-confirm'&&
     sameOfflinePartition(row.identity,identity)&&row.identity.scope===identity.scope&&row.proof.confirmedScope===identity.scope&&row.proof.registrationId===s.registrationId);
   const matches=[];
+  let reason='no_reconciled_batch';
   for(const row of rows){
-    if(row.projectId!==projectId||row.phase!=='RECONCILED'||row.proof.kind!=='signed-field-batch'||row.proof.registrationId!==s.registrationId||row.proof.deviceId!==s.deviceId||
-      !sameOfflinePartition(row.identity,identity)||(row.identity.scope!==identity.scope&&!confirmed))continue;
+    if(row.projectId!==projectId||row.phase!=='RECONCILED'||row.proof.kind!=='signed-field-batch')continue;
+    if(row.proof.registrationId!==s.registrationId||row.proof.deviceId!==s.deviceId||!sameOfflinePartition(row.identity,identity)){if(reason==='no_reconciled_batch')reason='reg_or_device_mismatch';continue;}
+    if(row.identity.scope!==identity.scope&&!confirmed){reason='scope_unconfirmed';continue;}
     const ops=JSON.parse(row.body).operations as OfflineRecord[];
     for(const op of ops){
-      if(op.kind!==kind||op.effectId!==effectId||op.taskId!==s.snapshot.taskId||op.assignmentId!==s.snapshot.assignmentId||op.originalActorId!==identity.actor||op.sourceDeviceId!==s.deviceId||(op.repair as OfflineRecord)?.resourceId!==s.repair.itemId)continue;
+      if(op.kind!==kind||op.effectId!==effectId||op.taskId!==s.snapshot.taskId||op.assignmentId!==s.snapshot.assignmentId||op.originalActorId!==identity.actor||op.sourceDeviceId!==s.deviceId||(op.repair as OfflineRecord)?.resourceId!==s.repair.itemId){
+        if(op.kind===kind&&op.taskId===s.snapshot.taskId)reason='op_mismatch';
+        continue;
+      }
       const verified=row.verifiedItems?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&['COMMITTED','REPLAYED'].includes(v.state));
+      if(!verified){reason='verified_missing';continue;}
       const receipt=(row.receipt as {items?:OfflineRecord[]})?.items?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&v.durableAcknowledgment===true);
-      const outcome=receipt?.outcome as OfflineRecord|undefined;
-      if(verified&&outcome?.id===effectId&&outcome.itemId===s.repair.itemId&&outcome.taskId===s.snapshot.taskId)matches.push({op,outcome,scope:row.identity.scope});
+      if(!receipt){reason='receipt_missing';continue;}
+      const outcome=receipt.outcome as OfflineRecord|undefined;
+      if(outcome?.id===effectId&&outcome.itemId===s.repair.itemId&&outcome.taskId===s.snapshot.taskId)matches.push({op,outcome,scope:row.identity.scope});
+      else reason='outcome_mismatch';
     }
   }
-  if(matches.length!==1)throw Error('offline_repair_predecessor_required');
+  if(matches.length!==1)failPredecessor(matches.length>1?'multiple_matches':reason);
   return matches[0];
 }
 /** Signed custody stays in its own journal. SERVER_RECEIVED is a conservative

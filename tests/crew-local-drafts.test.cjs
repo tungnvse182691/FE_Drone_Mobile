@@ -89,6 +89,44 @@ test('local assessment status supports original local-media origin binding after
  assert.equal((await wrong.api.m.readCrewLocalDrafts(wrong.api.identity))[0].assessmentConfirmed,false);
 });
 
+test('local assessment status matches actual serialized offline protocol operation with null optional fields and normalized UTC offset',async()=>{
+ const proto={exports:{}};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewOfflineProtocol.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:proto,exports:proto.exports,require:()=>({})});
+ const gid=(n)=>`00000000-0000-4000-8000-00000000000${n}`;
+ const d={actor:gid(1),environment:'https://sandbox',scope:'session',projectId:gid(2),taskId:gid(3),
+  measurements:[{sampleId:gid(4),type:'DepressionDepth',value:14,state:'KNOWN',dimension:'DEPTH',unit:'cm',instrument:'RULER',method:'DIRECT'}],
+  captures:[{id:gid(5),uri:'private',verified:true,size:31300,upload:{fileId:gid(6),status:'VERIFIED'},offlineUpload:{originId:gid(7)},purpose:'BEFORE',checksum:'a'.repeat(64),mediaType:'image/jpeg',capturedAt:'2026-11-26T14:56:40.120Z'}],
+  locationProof:{kind:'ROUTE_CHAINAGE',observedChainageMeters:150}};
+ const i={actor:d.actor,environment:d.environment,scope:d.scope,role:'REPAIR_CREW',partition:'partition'};
+ const rawOp={schemaVersion:1,originId:gid(7),effectId:gid(7),kind:'REPAIR_ASSESSMENT',originalActorId:d.actor,sourceDeviceId:gid(8),
+  snapshotId:gid(9),taskId:d.taskId,assignmentId:gid(2),taskVersion:'AAAAAAACfKE=',corePayloadHash:'b'.repeat(64),dependencies:[],claimedFinishedAt:null,
+  fieldAction:null,fieldStart:null,fieldSubmission:null,
+  repair:{resourceId:gid(3),action:'assessment',start:null,finish:null,assessment:{originId:gid(7),fieldFirstStartId:gid(4),deviceId:gid(8),
+   measurements:d.measurements.map(m=>({...m,value:{decimal:String(m.value)}})),
+   evidence:d.captures.map(c=>({captureOriginId:c.id,fileId:null,purpose:c.purpose,sizeBytes:c.size,checksumSha256:c.checksum,mediaType:c.mediaType,capturedAt:c.capturedAt})),
+   locationProof:d.locationProof}}};
+ const serializedOp=JSON.parse(proto.exports.serializeOfflineOperation(rawOp));
+ const item={originId:gid(7),effectId:gid(7),canonicalOriginId:gid(7),kind:'REPAIR_ASSESSMENT',state:'COMMITTED',durableAcknowledgment:true,outcome:{id:gid(7),taskId:d.taskId,itemId:gid(3),stage:'PRE_EXECUTION',readiness:'READY',firstStartId:gid(4)}};
+ const batch={id:'batch',identity:i,projectId:d.projectId,phase:'RECONCILED',proof:{kind:'signed-field-batch',registrationId:gid(5),deviceId:gid(8)},body:JSON.stringify({operations:[serializedOp]}),verifiedItems:[{...item}],receipt:{items:[item]}};
+ const snapshot={identity:i,projectId:d.projectId,phase:'RECONCILED',proof:{kind:'snapshot',assignmentId:gid(2)},body:JSON.stringify({taskId:d.taskId,deviceRegistrationId:gid(5)}),receipt:{id:gid(9),taskVersion:'AAAAAAACfKE=',taskId:d.taskId,assignmentId:gid(2),originalActorId:d.actor,deviceRegistrationId:gid(5),snapshot:{originalActorId:d.actor,repair:{itemId:gid(3)}}}};
+ const module={exports:{}};
+ const comparator={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewRepairDraft.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:comparator,exports:comparator.exports,require:()=>({})});
+ const db={getAllAsync:async()=>[{id:'exact',payload:JSON.stringify(d)}],runAsync:async()=>{}};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/crewLocalDrafts.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module,exports:module.exports,require:n=>({
+  '../offline/database':{openDatabase:()=>db,initDatabase:async()=>{}},
+  '../offline/upload-queue':{sameQueueIdentity:x=>x===i},
+  './crewRepairDraft':comparator.exports,
+  './crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[batch,snapshot]}),sameOfflinePartition:(a,b)=>a.actor===b.actor&&a.role===b.role&&a.environment===b.environment&&a.partition===b.partition},
+  './crewApi':{isCrewResourceId:v=>/^[0-9a-f-]{36}$/i.test(v),searchCrewTaskIdentityPage:async()=>{throw Error('offline');}},
+ }[n]),AbortController});
+ const rows=await module.exports.readCrewLocalDrafts(i);
+ assert.equal(rows[0].assessmentConfirmed,true);
+ // Mutating capturedAt by 1ms must reject
+ const drifted={...d,captures:[{...d.captures[0],capturedAt:'2026-11-26T14:56:40.121Z'}]};
+ db.getAllAsync=async()=>[{id:'exact',payload:JSON.stringify(drifted)}];
+ assert.equal((await module.exports.readCrewLocalDrafts(i))[0].assessmentConfirmed,false);
+});
+
 test('local panel labels exact assessment, keeps newer unsent draft separate from old command history and full navigation ID',async()=>{
  const {screen}=require('./helpers/roadfe-screen.cjs');
  const identity={actor:'actor',scope:'session',environment:'api'};

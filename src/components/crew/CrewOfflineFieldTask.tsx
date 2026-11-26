@@ -95,7 +95,22 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
       if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã lưu gói ký trên thiết bị. Mở Đồng bộ để gửi và kiểm tra biên nhận máy chủ.');}
     }catch(error){
       const msg=(error as Error)?.message;
-      console.warn('[CrewOfflineRepairSign] failed');
+      const rawStage=(error as {repairDiagStage?:string})?.repairDiagStage;
+      const safeCode=msg&&[
+        'offline_repair_not_available','offline_fasttrack_authority_source_required','offline_repair_predecessor_required',
+        'offline_device_revocation_requires_online_check','offline_repair_first_start_required','offline_repair_snapshot_refresh_required',
+        'offline_repair_pending_reconciliation','repair_verified_evidence_required','repair_measurements_required',
+        'repair_field_source_invalid','repair_assessment_source_changed','field_session_changed','field_draft_invalid',
+        'repair_online_history_reconciliation_required','repair_signed_command_pending','offline_current_snapshot_required',
+        'offline_session_changed','BLOCKED_NATIVE',
+      ].includes(msg)?msg:'unknown';
+      const safeStage=rawStage&&[
+        'invalid_effect_id','no_reconciled_batch','reg_or_device_mismatch','scope_unconfirmed','op_mismatch',
+        'verified_missing','receipt_missing','outcome_mismatch','multiple_matches','evidence_missing',
+        'evidence_unverified','evidence_origin_mismatch','evidence_size_mismatch','readiness_mismatch',
+        'first_start_mismatch','draft_source_mismatch',
+      ].includes(rawStage)?rawStage:'none';
+      console.warn(`[CrewOfflineRepairSign] failed:${safeCode}:${safeStage}`);
       if(live.current&&sameQueueIdentity(identity))setNotice(
         msg==='offline_repair_first_start_required'
           ?'Chưa có mốc bắt đầu sửa chữa hợp lệ từ máy chủ nên chưa thể ký đánh giá; dữ liệu cũ được giữ nguyên.'

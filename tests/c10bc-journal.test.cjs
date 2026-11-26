@@ -235,6 +235,21 @@ test('signed local media cannot be removed, replaced, cancelled or routed throug
  await h.m.assertSignedFieldMediaPreserved(h.db,progress);h.raw.close();
 });
 
+test('new-session draft write for AFTER repair claim is allowed while earlier-session signed local media row stays preserved',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID(),capture=randomUUID(),item=randomUUID();
+ const e={captureOriginId:capture,fileId:null,purpose:'BEFORE',mediaType:'image/jpeg',checksumSha256:'a'.repeat(64),sizeBytes:68};
+ const oldDraft={actor:h.i.actor,scope:h.i.scope,environment:h.i.environment,projectId:base.projectId,taskId:task,captures:[{id:capture,uri:'sealed',vault:{id:'vault'},purpose:e.purpose,mediaType:e.mediaType,checksum:e.checksumSha256,size:68,localOnly:true}],measurements:[]};
+ await h.m.writeProtectedFieldDraft(h.db,'old-session-draft','T05B_FIELD',oldDraft,oldDraft);
+ await j.prepare({...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'REPAIR_ASSESSMENT',taskId:task,repair:{resourceId:item,assessment:{evidence:[e]}}}]})});
+ const oldBefore=h.raw.prepare("SELECT payload FROM local_draft WHERE id='old-session-draft'").get().payload;
+ h.switch();
+ const newDraft={actor:h.current().actor,scope:h.current().scope,environment:h.current().environment,projectId:base.projectId,taskId:task,captures:[],measurements:[],repairClaim:{finishId:randomUUID()}};
+ await h.m.writeProtectedFieldDraft(h.db,'new-session-draft','T05B_FIELD',newDraft,newDraft);
+ assert.equal(h.raw.prepare("SELECT payload FROM local_draft WHERE id='old-session-draft'").get().payload,oldBefore);
+ assert.equal(JSON.parse(h.raw.prepare("SELECT payload FROM local_draft WHERE id='new-session-draft'").get().payload).scope,h.current().scope);
+ h.raw.close();
+});
+
 test('signing cannot race a previously removed local capture into the journal',async()=>{
  const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
  await assert.rejects(j.prepare({...base,proof:{kind:'signed-field-batch'},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[{captureOriginId:randomUUID(),fileId:null}]}}]})}),/signed_capture_locked/);

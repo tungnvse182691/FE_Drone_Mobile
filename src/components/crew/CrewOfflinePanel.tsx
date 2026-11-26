@@ -31,6 +31,18 @@ function phaseLabel(r:OfflineJournalRecord):string {
   if(r.phase==='RECEIVED'&&pendingEvidence(r))return evidenceLabel(r);
   return ({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase]??'Chưa xác nhận';
 }
+function recordHeading(r:OfflineJournalRecord):string {
+  const base=({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu';
+  if(r.proof.kind!=='snapshot')return base;
+  try {
+    const taskId=String((JSON.parse(r.body) as {taskId?:string})?.taskId??'');
+    const shortId=isCrewResourceId(taskId)?taskId.slice(0,8):'';
+    const instr=String(((r.receipt as {snapshot?:{instructions?:string}})?.snapshot?.instructions)??'').trim();
+    const codeMatch=instr.match(/^([A-Z0-9][A-Z0-9_-]{2,24}):/);
+    const tag=codeMatch?.[1]||shortId;
+    return tag?`${base} · ${tag}${codeMatch?.[1]&&shortId?` (${shortId})`:''}`:base;
+  } catch { return base; }
+}
 /** Real Crew sync route, actor/session keyed by parent. Read never changes pending/legacy state. */
 export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIdentity; refreshSignal?: number}) {
   const router=useRouter();
@@ -163,7 +175,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     {progress&&!error?<Text accessibilityLiveRegion="polite" style={styles.description}>{progress}</Text>:null}
     {activeRecords.length===0?<Text style={styles.description}>Không có lệnh đang chờ gửi hoặc đối soát.</Text>:null}
     {historyRecords.length>0?<Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Lịch sử đã xác nhận ({historyRecords.length})</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>:null}
-    {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu'}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>
+    {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{recordHeading(r)}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>
       {(sameQueueIdentity(r.identity,identity)||(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
       {recoveryTask(r)?<Button title="Khôi phục dữ liệu từ lần đăng nhập trước" variant="secondary" disabled={busy} onPress={()=>void recoverDevice(r)}/>:null}
       {!sameQueueIdentity(r.identity,identity)&&sameOfflinePartition(r.identity,identity)&&['enrollment','snapshot'].includes(String(r.proof.kind))&&r.phase!=='RECONCILED'&&!recoveryTask(r)?<Text style={styles.description}>Mở nhiệm vụ gốc để xác nhận lại dữ liệu khi có mạng. Giữ nguyên nhật ký và khóa thiết bị; không đăng ký thay thế.</Text>:null}

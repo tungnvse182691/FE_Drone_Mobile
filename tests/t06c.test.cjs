@@ -306,3 +306,34 @@ test('signed finish root can prepare and dispatch genuine final intake with exac
  h.runtime.api.submitRepairAttemptReal=async(...args)=>{assert.equal(JSON.stringify(args),original);return send(...args);};
  assert.equal((await h.workflow.dispatchRepair(h.identity,c.key,h.runtime)).phase,'CONFIRMED');assert.equal(h.attemptCalls.length,1);
 });
+test('signed finish root in real SQLite journal prepares and dispatches attempt while still blocking pending signed batches and online start',async()=>{
+ const h=await finishedForIntake();
+ // Remove online T06A_REPAIR_COMMAND rows so SQLite matches a real signed offline REPAIR lifecycle.
+ await h.port.runAsync('DELETE FROM local_draft WHERE kind = ?','T06A_REPAIR_COMMAND');
+ const finishId=h.claim.repairClaim.finishId,originId=require('node:crypto').randomUUID();
+ const signedKey='c10bc:'+JSON.stringify([h.identity.environment,h.identity.actor,'REPAIR_CREW'])+':signed-finish-1';
+ const signedRow=(phase,effectId=finishId)=>JSON.stringify({
+  projectId:h.identity.projectId,phase,proof:{kind:'signed-field-batch'},
+  body:JSON.stringify({operations:[{kind:'REPAIR_EXECUTION_FINISH',originId,effectId,taskId:h.identity.taskId,repair:{resourceId:ids.itemId}}]}),
+  verifiedItems:[{originId,effectId,canonicalOriginId:originId,kind:'REPAIR_EXECUTION_FINISH',state:'COMMITTED'}],
+  receipt:{items:[{originId,effectId,canonicalOriginId:originId,kind:'REPAIR_EXECUTION_FINISH',durableAcknowledgment:true,outcome:{id:effectId,itemId:ids.itemId,taskId:h.identity.taskId}}]},
+ });
+ const now=new Date().toISOString();
+ // 1. Pending signed batch still blocks attempt fail-closed.
+ await h.port.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',signedKey,'C10BC_IMMUTABLE_COMMAND_V1',signedRow('PENDING'),now,now);
+ h.claim.repairClaim.signedFinishOriginId=originId;h.claim.repairClaim.timeBasis='SERVER_RECEIVED';
+ h.runtime.signedRepairClaim=async()=>structuredClone(h.claim.repairClaim);
+ await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime),/repair_signed_command_pending/);
+ // 2. Reconciled signed batch with mismatched finishId still fails closed.
+ await h.port.runAsync('UPDATE local_draft SET payload = ? WHERE id = ?',signedRow('RECONCILED',require('node:crypto').randomUUID()),signedKey);
+ await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime),/repair_history_requires_reconciliation/);
+ // 3. Reconciled signed batch with matching finishId allows online API-157 attempt & dispatch.
+ await h.port.runAsync('UPDATE local_draft SET payload = ? WHERE id = ?',signedRow('RECONCILED',finishId),signedKey);
+ const c=await h.workflow.prepareRepairAttempt(h.identity,h.runtime);
+ assert.equal(c.phase,'PREPARED');assert.equal(c.operation,'attempt');
+ const done=await h.workflow.dispatchRepair(h.identity,c.key,h.runtime);
+ assert.equal(done.phase,'CONFIRMED');assert.equal(h.attemptCalls.length,1);
+ // 4. Online assessment/start/finish remain blocked on signed repair items.
+ const j=await h.runtime.journal();
+ await assert.rejects(j.prepare(h.command()),/repair_signed_command_pending/);
+});
