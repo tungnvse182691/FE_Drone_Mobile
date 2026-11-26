@@ -103,3 +103,29 @@ test('FE3 panel opens exact assessment without playback and clears results on bl
  for(const value of ['Need resurvey','method-real','Thất bại: 1','UNKNOWN'])assert.ok(text.includes(value));
  assert.ok(!text.includes('COMPLETED'));ui.blur();ui.render();assert.ok(!JSON.stringify(ui.nodes()).includes('Need resurvey'));ui.unmount();
 });
+
+
+test('Forgot password opens Reporter reset directly without employee choices or support request',async()=>{
+ let support=0;
+ const ui=screen('app/(auth)/index.tsx',{modules:{'../../src/components/ReporterPasswordReset':{ReporterPasswordReset:'ReporterPasswordReset'},'../../src/api/authApi':{requestPasswordRecoveryReal:async()=>support++}}});
+ ui.render();await ui.press('Quên mật khẩu?');ui.render();
+ assert.ok(ui.nodes().some(n=>n.type==='ReporterPasswordReset'));
+ assert.equal(ui.nodes().some(n=>['Người phản ánh','Nhân viên','Gửi yêu cầu khôi phục'].includes(n.props.title)),false);
+ const form=resetFixture();assert.match(JSON.stringify(form.nodes()),/nhân viên.*quản trị viên/i);form.unmount();
+ const reset=ui.nodes().find(n=>n.type==='ReporterPasswordReset');reset.props.onComplete();ui.render();
+ assert.equal(ui.nodes().find(n=>n.type==='Modal').props.visible,false);assert.equal(ui.nav.at(-1).params.passwordChanged,'1');
+ assert.equal(support,0);ui.unmount();
+});
+test('Reporter Account keeps authenticated change password without redundant recovery form',async()=>{
+ const ui=screen('app/(reporter)/account.tsx');ui.h.login();ui.render();
+ assert.equal(ui.nodes().some(n=>n.props.title==='Gửi yêu cầu khôi phục'),false);
+ assert.equal(ui.nodes().some(n=>n.props.testID==='account-recovery-email'),false);
+ await ui.press('Đổi mật khẩu');assert.equal(ui.nav.at(-1),'/(auth)/force-change-password');ui.unmount();
+});
+
+test('Reporter recovery invalid email stays local with autocorrect disabled',async()=>{
+ let calls=0;const ui=resetFixture({requestReporterReset:async()=>calls++});
+ ui.input('Email người phản ánh','invalid');await ui.press('Gửi mã OTP');await ui.flush();
+ assert.equal(calls,0);assert.match(JSON.stringify(ui.nodes()),/Vui lòng nhập email hợp lệ/);
+ assert.equal(ui.nodes().find(n=>n.props.label==='Email người phản ánh').props.autoCorrect,false);ui.unmount();
+});

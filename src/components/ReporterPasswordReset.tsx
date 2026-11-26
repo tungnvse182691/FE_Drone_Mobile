@@ -47,7 +47,7 @@ export function ReporterPasswordReset({ onComplete }: { onComplete: () => void }
     finally { lock.current = false; if (alive.current) setBusy(false); }
   };
   return <View style={{ gap: spacing.md }}>
-    <Text style={typography.caption}>Dành cho người phản ánh. Tài khoản nhân viên dùng mục Nhân viên.</Text>
+    <Text style={typography.caption}>Chỉ người phản ánh được tự khôi phục mật khẩu. Nhân viên vui lòng liên hệ quản trị viên.</Text>
     <InputField label="Email người phản ánh" value={email} keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
       onChangeText={value => { if (!busy && !invalid && !requested) setEmail(value); }} />
     {requested ? <>

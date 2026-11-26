@@ -21,13 +21,17 @@ test('B create invalid long text never persists intent or calls upload',async()=
  s.input('Mô tả hiện trạng','a'.repeat(1001));await s.press('Gửi phản ánh');await s.flush();
  assert.equal(s.h.calls.length,0);assert.equal(s.h.rows.size,0);assert.match(JSON.stringify(s.nodes()),/1.000/);s.unmount();
 });
-test('C Login has public recovery entry and only sends normalized email once',async()=>{
- const d=deferred(),calls=[];const s=screen('app/(auth)/index.tsx',{modules:{'../../src/api/authApi':{requestPasswordRecoveryReal:e=>{calls.push(e);return d.promise;}}}});
- s.render();await s.press('Quên mật khẩu?');s.render();s.input('Email khôi phục',' TEST@example.test ');
- const first=s.press('Gửi yêu cầu khôi phục'),second=s.press('Gửi yêu cầu khôi phục');
- assert.deepEqual(calls,['test@example.test']);d.resolve();await Promise.all([first,second]);await s.flush();
- assert.match(JSON.stringify(s.nodes()),/tiếp nhận/);assert.doesNotMatch(JSON.stringify(s.nodes()),/đã gửi.*link/i);s.unmount();
+function resetScreen(request){
+ const s=screen('src/components/ReporterPasswordReset.tsx',{exportName:'ReporterPasswordReset',props:{onComplete:()=>{}},modules:{'./Button':{Button:'Button'},'./InputField':{InputField:'InputField'},'../api/reporterPasswordReset':{requestReporterReset:request,REPORTER_RESET_ACK:'Nếu tài khoản đủ điều kiện, mã sẽ được gửi về email đã đăng ký.',reporterResetError:()=> 'Chưa xác nhận được kết quả.'}}});
+ s.render();s.input('Email người phản ánh','fixture@example.test');return s;
+}
+test('C Reporter recovery double tap only sends one explicit OTP request',async()=>{
+ const d=deferred(),calls=[];const s=resetScreen(e=>{calls.push(e);return d.promise;});
+ const first=s.press('Gửi mã OTP'),second=s.press('Gửi mã OTP');
+ assert.equal(calls.length,1);d.resolve();await Promise.all([first,second]);await s.flush();
+ assert.match(JSON.stringify(s.nodes()),/Nếu tài khoản đủ điều kiện/);assert.doesNotMatch(JSON.stringify(s.nodes()),/đã gửi.*link/i);s.unmount();
 });
+
 test('E private attachment label changes without changing protected API',()=>{
  const src=fs.readFileSync('app/(reporter)/report-detail.tsx','utf8');assert.ok(src.includes("'Xem ảnh đính kèm'"));assert.ok(!src.includes('Xem ảnh riêng tư'));
  assert.ok(src.includes('downloadReportEvidenceReal'));assert.ok(src.includes('Xem ảnh được chia sẻ'));
@@ -78,10 +82,12 @@ test('A SEND intent freezes text/key/photos before upload failure and restart, n
  await assert.rejects(st.getState().savePendingDraft({description:'changed',photos:command.photos,coords:null,submitRequested:true}),e=>e.code==='draft_locked');
  const other=harness({rows:h.rows});other.login();const restored=await other.load('src/store/reporter.ts').useReporterStore.getState().restoreStartedCommand();assert.equal(restored.commandKey,command.commandKey);assert.equal(restored.description,'x');assert.equal(other.calls.length,0);
 });
-for(const change of ['blur','logout','environment'])test('C late recovery response cannot populate UI after '+change,async()=>{
- const d=deferred();const s=screen('app/(auth)/index.tsx',{modules:{'../../src/api/authApi':{requestPasswordRecoveryReal:()=>d.promise}}});s.render();await s.press('Quên mật khẩu?');s.render();s.input('Email khôi phục','fixture@example.test');const work=s.press('Gửi yêu cầu khôi phục');
- if(change==='blur')s.blur();if(change==='logout')s.h.login();if(change==='environment')s.h.client.defaults.baseURL='other';d.resolve();await work;await s.flush();assert.doesNotMatch(JSON.stringify(s.nodes()),/Đã tiếp nhận/);s.unmount();
+for(const change of ['unmount','logout','environment'])test('C late Reporter recovery response cannot populate UI after '+change,async()=>{
+ const d=deferred();const s=resetScreen(()=>d.promise);const work=s.press('Gửi mã OTP');
+ if(change==='unmount')s.unmount();if(change==='logout')s.h.login();if(change==='environment')s.h.client.defaults.baseURL='other';d.resolve();await work;if(change!=='unmount')await s.flush();
+ assert.doesNotMatch(JSON.stringify(s.nodes()),/Nếu tài khoản đủ điều kiện/);s.unmount();
 });
-test('C unknown recovery never automatically retries even on repeated tap',async()=>{
- let calls=0;const s=screen('app/(auth)/index.tsx',{modules:{'../../src/api/authApi':{requestPasswordRecoveryReal:async()=>{calls++;throw Error('network');}}}});s.render();await s.press('Quên mật khẩu?');s.render();s.input('Email khôi phục','fixture@example.test');await s.press('Gửi yêu cầu khôi phục');await s.flush();await s.press('Gửi yêu cầu khôi phục');assert.equal(calls,1);assert.match(JSON.stringify(s.nodes()),/Chưa xác nhận/);s.unmount();
+test('C unknown Reporter recovery never automatically retries even on repeated tap',async()=>{
+ let calls=0;const s=resetScreen(async()=>{calls++;throw Error('network');});await s.press('Gửi mã OTP');await s.flush();
+ await s.press('Gửi lại sau 60s');assert.equal(calls,1);assert.match(JSON.stringify(s.nodes()),/Chưa xác nhận/);s.unmount();
 });

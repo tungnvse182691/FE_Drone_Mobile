@@ -1,16 +1,14 @@
 import { reporterAppearance } from '../../src/components/reporter/appearance';
 import { ReporterHeader } from '../../src/components/ReporterHeader';
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { Button } from '../../src/components/reporter/Button';
-import { InputField } from '../../src/components/InputField';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
 import { useAuthStore } from '../../src/store/auth';
 import { RoleCode } from '../../src/types/enums';
-import { requestPasswordRecoveryReal } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import {
   AUTH_REGISTER,
@@ -34,41 +32,7 @@ export default function ReporterAccountScreen() {
   const logout = useAuthStore((state) => state.logout);
   const reporterSession = isReporterSession({ user, token, status });
 
-  const [recoveryEmail, setRecoveryEmail] = useState(user?.phone_or_email ?? '');
-  const [recoveryBusy, setRecoveryBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const recoveryLock = useRef(false);
-  const [recoveryUncertain, setRecoveryUncertain] = useState(false);
-
   const roleLabel = user ? ROLE_LABELS[user.role_code] ?? 'Người dùng' : 'Khách';
-
-  const sendRecovery = async () => {
-    const live = useAuthStore.getState();
-    if (!reporterSession || !isReporterSession(live) || live.token !== token || live.user?.id !== user?.id) return;
-    if (recoveryLock.current || recoveryUncertain) return;
-    setNotice(null);
-    setError(null);
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail.trim()) || recoveryEmail.trim().length > 254) {
-      setError('Vui lòng nhập địa chỉ email hợp lệ.');
-      return;
-    }
-    setRecoveryBusy(true);
-    recoveryLock.current = true;
-    try {
-      await requestPasswordRecoveryReal(recoveryEmail);
-      setNotice('Đã ghi nhận yêu cầu khôi phục mật khẩu. Yêu cầu sẽ được xử lý theo quy trình hỗ trợ.');
-    } catch (caught) {
-      const status = (caught as { response?: { status?: number } })?.response?.status;
-      if (!status || status >= 500 || status === 408) {
-        setRecoveryUncertain(true);
-        setError('Chưa xác nhận được yêu cầu khôi phục. Không gửi lại tự động; vui lòng liên hệ hỗ trợ trước khi gửi thêm.');
-      } else setError('Thông tin chưa hợp lệ hoặc yêu cầu chưa được chấp nhận. Vui lòng kiểm tra lại.');
-    } finally {
-      recoveryLock.current = false;
-      setRecoveryBusy(false);
-    }
-  };
 
   const signOut = () => {
     logout();
@@ -121,43 +85,6 @@ export default function ReporterAccountScreen() {
         />
       </View>
 
-      <Text style={[typography.labelLg, styles.sectionTitle]}>Khôi phục tài khoản</Text>
-      <View style={styles.card}>
-        <InputField
-          label="Khôi phục mật khẩu qua email"
-          value={recoveryEmail}
-          onChangeText={setRecoveryEmail}
-          placeholder="email@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          testID="account-recovery-email"
-        />
-        <Text style={[typography.caption, styles.sectionText]}>
-          Ứng dụng chỉ gửi yêu cầu khôi phục, không tự đặt lại mật khẩu.
-        </Text>
-        <Button
-          variant="secondary"
-          title="Gửi yêu cầu khôi phục"
-          onPress={() => void sendRecovery()}
-          loading={recoveryBusy}
-          disabled={recoveryUncertain}
-        />
-      </View>
-
-      {notice ? (
-        <View style={styles.noticeRow}>
-          <MaterialIcons name="info-outline" size={16} color={colors.info} />
-          <Text style={[typography.caption, styles.noticeText]}>{notice}</Text>
-        </View>
-      ) : null}
-
-      {error ? (
-        <View style={styles.errorRow}>
-          <MaterialIcons name="error-outline" size={16} color={colors.error} />
-          <Text style={[typography.caption, styles.errorText]}>{error}</Text>
-        </View>
-      ) : null}
-
       <Text style={[typography.labelLg, styles.sectionTitle]}>Khác</Text>
       <View style={styles.footer}>
         <Button
@@ -198,9 +125,5 @@ const styles = StyleSheet.create({
   infoValue: { color: colors.neutral },
   sectionTitle: { color: colors.neutral, marginBottom: spacing.sm },
   sectionText: { color: colors.secondary },
-  noticeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
-  noticeText: { color: colors.info, flex: 1 },
-  errorRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.md },
-  errorText: { color: colors.error, flex: 1 },
   footer: { gap: spacing.sm },
 });

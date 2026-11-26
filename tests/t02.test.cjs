@@ -100,16 +100,19 @@ test('password completion from A never logs out newly signed in B',async()=>{
   let resolve;const pending=new Promise(r=>resolve=r);const h=screenHarness('app/(auth)/force-change-password.tsx',{}, {changePasswordReal:()=>pending});fill(h);
   const request=h.press('Đổi mật khẩu');h.auth.token='b-token';h.auth.user={id:'b'};resolve();await request;assert.ok(!h.calls.includes('logout'));assert.equal(h.navigations.length,0);
 });
-test('recovery 202 message acknowledges request without promise of reset/email',async()=>{
-  const h=screenHarness('app/(reporter)/account.tsx');await h.press('Gửi yêu cầu khôi phục');await new Promise(r=>setImmediate(r));h.render();assert.equal(h.calls[0][0],'008');
-  const text=JSON.stringify(h.nodes());assert.match(text,/Đã ghi nhận/);assert.doesNotMatch(text,/Vui lòng kiểm tra email để tiếp tục/);
+test('authenticated account exposes change password without obsolete recovery request',async()=>{
+ const h=screenHarness('app/(reporter)/account.tsx');
+ assert.ok(h.nodes().some(n=>n.props.title==='Đổi mật khẩu'));
+ assert.ok(!h.nodes().some(n=>n.props.title==='Gửi yêu cầu khôi phục'));assert.equal(h.calls.length,0);
 });
-test('recovery timeout blocks repeated writes instead of reporting failure or success',async()=>{
-  let count=0;const h=screenHarness('app/(reporter)/account.tsx',{}, {requestPasswordRecoveryReal:async()=>{count++;throw {code:'ECONNABORTED'};}});
-  await h.press('Gửi yêu cầu khôi phục');await new Promise(r=>setImmediate(r));h.render();await h.press('Gửi yêu cầu khôi phục');assert.equal(count,1);
-  assert.equal(h.nodes().find(n=>n.type==='Button'&&n.props.title==='Gửi yêu cầu khôi phục').props.disabled,true);
-  assert.match(JSON.stringify(h.nodes()),/Chưa xác nhận/);
+
+test('login recovery uses only Reporter reset component without employee request controls',async()=>{
+ const h=screenHarness('app/(auth)/index.tsx',{user:null,token:null,status:'SIGNED_OUT'});await h.press('Quên mật khẩu?');h.render();
+ assert.ok(h.nodes().some(n=>n.type==='ReporterPasswordReset'));
+ assert.ok(!h.nodes().some(n=>['Nhân viên','Người phản ánh','Gửi yêu cầu khôi phục'].includes(n.props.title)));
+ assert.equal(h.calls.length,0);
 });
+
 test('login 200 mustChangePassword uses issued session then forced screen',async()=>{
   const h=screenHarness('app/(auth)/index.tsx',{user:null,token:null,status:'SIGNED_OUT'}, {loginReal:async()=>({user:{id:'a'},accessToken:jwt('a','s1'),mustChangePassword:true})});
   h.input('Email hoặc Số điện thoại','fixture@example.test');h.input('Mật khẩu','oldpass');await h.press('Đăng nhập');

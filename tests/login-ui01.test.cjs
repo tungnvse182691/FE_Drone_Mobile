@@ -47,12 +47,12 @@ test('LOGIN-UI-01 retains the card and passive decoration with LOGIN-BRAND-02 pr
  s.unmount();
 });
 
-test('LOGIN-UI-01 invalid recovery remains local and can close without an auth request',async()=>{
+test('LOGIN-UI-01 Reporter recovery opens and closes without an auth request',async()=>{
  let writes=0;const s=screen('app/(auth)/index.tsx',{modules:{'../../src/api/authApi':{requestPasswordRecoveryReal:async()=>writes++}}});s.render();
- await s.press('Quên mật khẩu?');s.render();s.input('Email khôi phục','not-an-email');await s.press('Gửi yêu cầu khôi phục');await s.flush();
- assert.equal(writes,0);assert.match(JSON.stringify(s.nodes()),/Vui lòng nhập email hợp lệ/);
- const recovery=s.nodes().find(n=>n.type==='InputField'&&n.props.label==='Email khôi phục');assert.equal(recovery.props.autoCorrect,false);
- await s.press('Đóng');s.render();assert.equal(s.nodes().find(n=>n.type==='Modal').props.visible,false);s.unmount();
+ await s.press('Quên mật khẩu?');s.render();assert.ok(s.nodes().some(n=>n.type==='ReporterPasswordReset'));
+ assert.equal(writes,0);assert.ok(!s.nodes().some(n=>n.props.label==='Email khôi phục'));
+ await s.press('Đóng');s.render();assert.equal(s.nodes().find(n=>n.type==='Modal').props.visible,false);
+ assert.ok(!s.nodes().some(n=>n.type==='ReporterPasswordReset'));s.unmount();
 });
 
 test('LOGIN-UI-01 recovery owns an opaque screen and avoids double Android keyboard resizing',async()=>{

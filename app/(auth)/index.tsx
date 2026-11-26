@@ -17,7 +17,7 @@ import { Button } from '../../src/components/Button';
 import { InputField } from '../../src/components/InputField';
 import { ReporterPasswordReset } from '../../src/components/ReporterPasswordReset';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { loginReal, requestPasswordRecoveryReal, extractProblemCode } from '../../src/api/authApi';
+import { loginReal, extractProblemCode } from '../../src/api/authApi';
 import { isReporterSession } from '../../src/api/uploads';
 import { buildUserFromActor, useAuthStore } from '../../src/store/auth';
 import { useReporterStore } from '../../src/store/reporter';
@@ -44,7 +44,7 @@ export default function LoginScreen() {
     active.current = true;
     generation.current++;
     const unsubscribe = useAuthStore.subscribe?.(() => { generation.current++; });
-    return () => { active.current = false; generation.current++; unsubscribe?.(); setShowPassword(false); setRecoveryOpen(false); setRecoveryEmail(''); setRecoveryMessage(''); };
+    return () => { active.current = false; generation.current++; unsubscribe?.(); setShowPassword(false); setRecoveryOpen(false); };
   }, []));
   const captureAttempt = () => {
     const attempt = generation.current;
@@ -58,27 +58,6 @@ export default function LoginScreen() {
   };
 
   const [recoveryOpen, setRecoveryOpen] = useState(false);
-  const [recoveryRole, setRecoveryRole] = useState<'employee' | 'reporter'>('employee');
-  const [recoveryEmail, setRecoveryEmail] = useState('');
-  const [recoveryMessage, setRecoveryMessage] = useState('');
-  const [recoveryLocked, setRecoveryLocked] = useState(false);
-  const recoveryBusy = useRef(false);
-  const requestRecovery = async () => {
-    if (recoveryBusy.current || recoveryLocked) return;
-    const email = recoveryEmail.trim().toLowerCase();
-    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setRecoveryMessage('Vui lòng nhập email hợp lệ.'); return;
-    }
-    const isCurrent = captureAttempt();
-    recoveryBusy.current = true; setRecoveryLocked(true); setRecoveryMessage('Đang gửi yêu cầu…');
-    try {
-      await requestPasswordRecoveryReal(email);
-      if (isCurrent()) setRecoveryMessage('Đã tiếp nhận yêu cầu khôi phục mật khẩu.');
-    } catch {
-      if (isCurrent()) setRecoveryMessage('Chưa xác nhận được kết quả. Không tự gửi lại yêu cầu; bạn có thể chủ động chọn gửi yêu cầu khác.');
-    } finally { recoveryBusy.current = false; }
-  };
-
   const isSubmitDisabled = !phoneOrEmail.trim() || !password.trim();
 
   const handleLogin = async () => {
@@ -285,22 +264,10 @@ export default function LoginScreen() {
           <ScrollView contentContainerStyle={styles.recoveryContent} keyboardShouldPersistTaps="handled">
           <View style={[styles.loginCard, styles.recoveryCard]}>
             <Text style={typography.titleMd}>Quên mật khẩu</Text>
-            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Button variant="secondary" title="Người phản ánh" disabled={recoveryBusy.current} onPress={() => setRecoveryRole('reporter')} />
-              <Button variant="secondary" title="Nhân viên" onPress={() => setRecoveryRole('employee')} />
-            </View>
-            {recoveryOpen && recoveryRole === 'reporter' ? <ReporterPasswordReset onComplete={() => {
+            {recoveryOpen ? <ReporterPasswordReset onComplete={() => {
               setPassword(''); setRecoveryOpen(false); setError(null);
               router.replace({ pathname: '/(auth)', params: { passwordChanged: '1' } });
-            }} /> : <>
-            <InputField label="Email khôi phục" value={recoveryEmail} onChangeText={text => { if (!recoveryLocked) setRecoveryEmail(text); }} autoCapitalize="none" autoCorrect={false} keyboardType="email-address" />
-            <Text style={typography.bodyMd}>{recoveryMessage}</Text>
-            <Button variant="primary" title="Gửi yêu cầu khôi phục" onPress={requestRecovery} disabled={recoveryLocked} />
-            {recoveryLocked ? <Button variant="secondary" title="Chủ động gửi yêu cầu khác" onPress={() => {
-              if (recoveryBusy.current) return;
-              setRecoveryLocked(false); setRecoveryMessage('');
             }} /> : null}
-            </>}
             <Button variant="secondary" title="Đóng" onPress={() => setRecoveryOpen(false)} />
           </View>
           </ScrollView>

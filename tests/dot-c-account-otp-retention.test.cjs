@@ -12,12 +12,11 @@ for(const state of ['guest','restored','expired','crew','forced'])test('C2 accou
  await s.press('Đăng nhập');await s.press('Đăng ký');assert.deepEqual(s.nav,['/(auth)','/(auth)/register']);
  assert.equal(f.requests,0);assert.equal(s.h.calls.length,0);s.unmount();
 });
-test('C2 Reporter keeps security actions and stale recovery handler cannot run after logout',async()=>{
+test('C2 Reporter keeps change password; obsolete recovery never writes before or after logout',async()=>{
  const f=account(),s=f.s;s.h.login();s.render();
- s.input('Khôi phục mật khẩu qua email','fixture@example.test');
- const recover=s.nodes().find(n=>n.props.title==='Gửi yêu cầu khôi phục').props.onPress;
- assert.ok(s.nodes().some(n=>n.props.title==='Đăng xuất'));await recover();await s.flush();assert.equal(f.requests,1);
- s.h.logout();await recover();s.render();assert.equal(f.requests,1);assert.ok(!s.nodes().some(n=>n.props.title==='Đổi mật khẩu'));s.unmount();
+ assert.ok(s.nodes().some(n=>n.props.title==='Đăng xuất'));assert.ok(s.nodes().some(n=>n.props.title==='Đổi mật khẩu'));
+ assert.ok(!s.nodes().some(n=>n.props.title==='Gửi yêu cầu khôi phục'));
+ s.h.logout();s.render();assert.equal(f.requests,0);assert.ok(!s.nodes().some(n=>n.props.title==='Đổi mật khẩu'));s.unmount();
 });
 // No safe guest-only boolean metadata reader exists. C3 uses the explicitly
 // permitted fallback: omit the notice, never restore/read draft payload on OTP.
