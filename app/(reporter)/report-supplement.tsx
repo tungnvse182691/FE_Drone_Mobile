@@ -104,6 +104,7 @@ export default function ReporterReportSupplementScreen() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const scope = useReporterDraftScope();
+  const pickerScope = useRef<string | null>(null);
   const [dataScope, setDataScope] = useState('');
 
   useEffect(() => {
@@ -146,14 +147,23 @@ export default function ReporterReportSupplementScreen() {
   }, [reportId, activeEmail, scope.key]);
 
   useFocusEffect(useCallback(() => {
+    if (pickerScope.current === scope.key) {
+      return () => {
+        if (pickerScope.current !== scope.key) scope.invalidate();
+      };
+    }
+    pickerScope.current = null;
     void loadReport();
-    return () => scope.invalidate();
-  }, [loadReport]));
+    return () => {
+      if (pickerScope.current !== scope.key) scope.invalidate();
+    };
+  }, [loadReport, scope.key]));
 
   const handlePickImage = async () => {
     const isCurrent = scope.capture();
     if (!isCurrent() || photoBusy.current || draftLocked || submittingRef.current || photos.length >= MAX_PHOTOS) return;
     photoBusy.current = true;
+    pickerScope.current = scope.key;
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'image/jpeg', 'image/png'],
@@ -173,7 +183,7 @@ export default function ReporterReportSupplementScreen() {
       }
     } catch {
       if (isCurrent()) setError('Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
-    } finally { photoBusy.current = false; }
+    } finally { pickerScope.current = null; photoBusy.current = false; }
   };
 
   const handleOpenCam = async () => {

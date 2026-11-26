@@ -30,6 +30,15 @@ test('B2 durable image bytes survive while unstarted form is not restored or ado
  again.login('REPORTER','other');assert.equal(await st.useReporterStore.getState().restorePendingDraft(),null);assert.equal(again.calls.length,0);s.unmount();
 });
 
+test('B2 system document picker blur/focus in same scope preserves picked photo',async()=>{
+ const d=deferred();const {s}=setup({pick:()=>d.promise});s.h.login();s.render();await s.flush();
+ const work=s.tap('pick-photo');await Promise.resolve();
+ s.blur();s.render();await s.flush();
+ d.resolve({canceled:false,assets:[{uri:'file://cache/a.jpg',name:'a.jpg',mimeType:'image/jpeg'}]});
+ await work;await s.flush();
+ assert.equal(selected(s).length,1);s.unmount();
+});
+
 test('B2 max three existing photos never opens picker or changes old selections',async()=>{
  let calls=0;const {s}=setup({pick:async()=>{calls++;return {canceled:true};}});
  const photos=[1,2,3].map(i=>({uri:'old-'+i+'.jpg',fileName:i+'.jpg',mediaType:'image/jpeg',capturedAt:'old'}));

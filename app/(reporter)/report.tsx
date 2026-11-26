@@ -62,6 +62,7 @@ export default function ReporterReportScreen() {
     if (descriptionFocused.current) scrollRef.current?.scrollTo({ y: Math.max(0, descriptionTop.current - spacing.md), animated: true });
   };
   const captureInFlight = useRef(false);
+  const pickerScope = useRef<string | null>(null);
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const cameraGeneration = useRef(0);
@@ -108,6 +109,15 @@ export default function ReporterReportScreen() {
   });
 
   useFocusEffect(useCallback(() => {
+    if (pickerScope.current === scope.key) {
+      return () => {
+        if (pickerScope.current !== scope.key) {
+          scope.invalidate();
+          useReporterKeyboard.getState().setOpening(false);
+        }
+      };
+    }
+    pickerScope.current = null;
     let active = true;
     const isCurrent = scope.capture();
     setRestored(false);
@@ -136,7 +146,13 @@ export default function ReporterReportScreen() {
     void useUploadsStore.getState().hydrate().catch(() => {
       if (active && isCurrent()) setSubmitError('Chưa đọc được ảnh trong hàng đợi. Lệnh đã bắt đầu gửi và ảnh vẫn được giữ; mở hàng đợi để thử tải lại.');
     });
-    return () => { active = false; scope.invalidate(); useReporterKeyboard.getState().setOpening(false); };
+    return () => {
+      active = false;
+      if (pickerScope.current !== scope.key) {
+        scope.invalidate();
+        useReporterKeyboard.getState().setOpening(false);
+      }
+    };
   }, [scope.key, restoreAttempt]));
 
 
@@ -240,6 +256,7 @@ export default function ReporterReportScreen() {
     if (!isCurrent() || submitting || submitted.current || draftLocked || !restored || dataScope !== scope.key ||
         captureInFlight.current || selectedPhotos.current.length >= MAX_PHOTOS) return;
     captureInFlight.current = true;
+    pickerScope.current = scope.key;
     const capturedAt = new Date().toISOString();
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -262,6 +279,7 @@ export default function ReporterReportScreen() {
     } catch (error) {
       if (isCurrent()) setSubmitError(reporterPhotoFailureMessage(error) ?? 'Không mở được thư viện ảnh. Ảnh cũ vẫn được giữ; nội dung chưa gửi không được lưu; vui lòng thử lại.');
     } finally {
+      pickerScope.current = null;
       captureInFlight.current = false;
     }
   };
