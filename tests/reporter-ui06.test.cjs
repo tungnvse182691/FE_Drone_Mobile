@@ -6,7 +6,9 @@ test('UI06 account keeps security actions and profile route without employee-onl
  assert.doesNotMatch(text(s),/Mã nhân sự|Không áp dụng|Tài khoản người dân phản ánh/);
  assert.match(text(s),/Người dân phản ánh/);
  assert.ok(s.nodes().some(n=>n.props.title==='Đổi mật khẩu'));
- assert.ok(s.nodes().some(n=>n.props.title==='Gửi yêu cầu khôi phục'));
+ assert.ok(!s.nodes().some(n=>n.props.title==='Gửi yêu cầu khôi phục'));
+ assert.ok(!s.nodes().some(n=>n.props.testID==='account-recovery-email'));
+ s.press('Đổi mật khẩu');assert.equal(s.nav.at(-1),'/(auth)/force-change-password');
  s.press('Xem hồ sơ phản ánh');assert.equal(s.nav.at(-1),'/(reporter)/profile');
  assert.equal(s.h.calls.length,0);s.unmount();
 });

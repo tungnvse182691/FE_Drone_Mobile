@@ -1,5 +1,7 @@
 # OFFLINE GROUP 1-3-4-6 — ANTIGRAVITY HANDOFF (2026-11-26)
 
+> Latest closure baseline and gates: sections 11–15. Sections 0–10 retain historical evidence; their APK, Docker health and acceptance labels do not establish acceptance of the current runtime.
+
 ## 0. Tóm tắt điều hành
 
 - **FE Mobile:** `D:\Do_AN_Drone\FE_AppMobile`, branch `main`, ahead on `origin/main` (`092edda86cd6336163ff224b3b5e298a68711bb7`, chưa push), gồm các commit bổ sung sau `5d9c8af`:
@@ -305,3 +307,42 @@ FE root cause: login defaulted to employee recovery branch and required a role s
 RED: two new mounted entry/account tests failed against prior source (`reporter-reset-red.log`); GREEN targeted six files exit0 (`reporter-reset-targeted.log`): a54c806-reset, a54c806-lifecycle, t02, login-ui01, reporter-corrections, dot-c-account-otp-retention. Obsolete employee form tests now target Reporter form/direct entry or assert removed controls; API-008 wrapper contract test retained. Coverage includes direct open/close/completion, authenticated change-password and forced flow, malformed email, six-digit leading-zero OTP, 202 neutral ACK, 422 retaining OTP, anonymous real Axios credentials omission, duplicate request/cooldown/no automatic retry, late session/environment/unmount response suppression and account role isolation. `npx tsc --noEmit` exit0 (`reporter-reset-tsc.log`), `git diff --check` PASS. Diff/caller/privacy scan: no new secret/raw logging; only UD-06 scan match is existing negative mock comment. LOGIC_TESTED; HTTP/native/Android NOT_RUN, acceptance pending.
 
 Final APK checklist addition: guest Forgot password opens Reporter form immediately, no role selectors/employee request; invalid email/OTP, resend cooldown and double tap; eligible Reporter receives OTP, unknown/employee/inactive account receives same neutral202 and cannot reset via confirm; wrong/expired/consumed OTP rejected, password policy422 can correct password;204 returns login, old sessions revoked, new password authenticates. Employee sees admin guidance. Reporter Account only authenticated change password; verify current-password and forced-password flows remain. Capture login/modal/account before-after screenshots against final source; use dedicated authorized QA accounts, never reset original reporter-a fixture to bypass its401. No APK build or auth mutation executed here.
+
+## 15. Final aggregate handoff — acceptance pending (2026-11-26)
+
+Mode IMPLEMENT_AND_SELF_REVIEW, main. FE baseline `056a4ce368ded821851f9c1907b57f2433c8cf22`; runtime HEAD `21b318b002726b7351a3bef5cbc26d13b889ce4d`. Local checkpoint range `056a4ce..21b318b`:
+
+- A: `6624a6f9fc7aaf4282ecec015f1af28a6b7ebb3b` — fresh snapshots and authenticated per-item terminal readbacks.
+- B: `0c94494f17030902ba35b159f0e3ebb599627b00` — bounded proven-expired issuance renewal, retained identities and behavioral progress/CTA.
+- C: `ebdc18d24c6985d934c60e7d262e249902fd96ca` — isolated native storage/media fault harness.
+- Reporter recovery: `21b318b002726b7351a3bef5cbc26d13b889ce4d` — direct Reporter OTP, employee-admin guidance, redundant Account recovery removed.
+
+The following local `test(auth): align account regression with Reporter-only recovery` commit contains only this handoff and `tests/reporter-ui06.test.cjs`; it does not change runtime source. Resolve its full HEAD with `git rev-parse HEAD`. Before that commit, tracking comparison was 30 commits ahead of `origin/main`; after it, 31. Remote has not been pushed; this is a comparison with the fetched tracking ref, not a fresh claim about GitHub. No tracked WIP existed before this final test/docs follow-up; all preexisting untracked artifacts remain untouched. BE HEAD rechecked: `444c6ed841d884f9a0609cf3588340d2abc63663`, unchanged. Source/test files, root causes and exact targeted commands are listed in sections 11–14; obtain complete changed-path inventory with `git diff --name-only 056a4ce..HEAD`.
+
+### Executed gates and limits
+
+| Gate | Actual result | Evidence |
+|---|---|---|
+| TypeScript, `npx tsc --noEmit` at runtime HEAD | PASS, exit 0 | `.cache/offline-final-takeover/reporter-reset-tsc.log` (also covers storage harness) |
+| Checkpoint targeted tests | PASS | Sections 11–14 and their RED/GREEN/targeted logs |
+| One aggregate `node --test --test-concurrency=4 tests/*.test.cjs` at runtime HEAD | **FAIL: 2358 PASS / 1 FAIL**, 0 cancelled/skipped, exit 1, 178814.7909 ms | `.cache/offline-final-takeover/closure-full.log` |
+| Affected suite after test correction, `node --test tests/reporter-ui06.test.cjs` | **PASS 2/2**, exit 0, 862.2748 ms | `.cache/offline-final-takeover/reporter-ui06-followup.log` |
+| Diff/caller/privacy review and `git diff --check` | PASS; final follow-up changes test/docs only | Checkpoint reviews plus final staged diff review |
+| Fresh HTTP/SQL/fixture verification | BLOCKED by environment | Docker Linux engine pipe `//./pipe/dockerDesktopLinuxEngine` unavailable at closure checks; historical authenticated readbacks remain section 10/13 evidence |
+| Final APK build, Android UI/E2E, native SQLCipher/media probe | NOT_RUN | Owner delegates build/acceptance to QA; no final APK/hash or after-fix screenshots exist |
+
+The single full-run failure was the obsolete UI06 expectation that Account still renders `Gửi yêu cầu khôi phục`, contrary to the latest owner addendum. Replaced it with assertions that recovery button/input are absent and that pressing retained `Đổi mật khẩu` navigates to `/(auth)/force-change-password`; profile navigation and zero HTTP mutation assertions remain. Both UI06 cases then passed. No runtime modification or assertion suppression was used. Full regression was not rerun, per owner's instruction to rerun the affected gate after a failure. Do not describe the original full execution as all-green; combined evidence is 2358 passing full-run cases plus the corrected affected suite.
+
+### Remaining work and exact continuation
+
+1. **Old upload recovery:** B supports proven expired issuance, but legacy intents lacking observed `expiresAt` cannot infer safe renewal from generic409. QA must recover exact encrypted intent + authenticated upload/file/response for IDs in section12, preserving capture/admission/create/complete/batch identities and ETags. Resolve full `9387a6aa` task ID from authorized readback. No blanket409 key rotation or replacement fixture.
+2. **REPAIR:** verify assessment → fresh snapshot → NORMAL start → durable per-origin readback → fresh snapshot → finish → durable readback on `5e1faf20`, using exact historical draft and approved plan. Preserve historical `4755fa5d` and its reconciled predecessor; no replay. Signed finish → AFTER editor/submission remains an FE integration limitation: `src/api/crewFieldDraft.ts:363-411` accepts SERVER_ONLINE history with verifiedOriginalAt. BE `RepairWorkflowRepository.Producing.cs:368-405` supports its separate AFTER/submission chronology; do not call this missing BE capability or manufacture trusted UTC/online receipts. Finish alone is not AFTER submission or PM acceptance.
+3. **Reporter/Operator:** same-actor valid authentication and exact original encrypted Reporter draft/image/report correlation remain unverified; retain original401 evidence and do not reset/guess credentials or substitute actor. Operator final dataset/file/upload/two ETags correlate (section13), but pre-interruption same-ID/ETag continuity is not proved by final SQL alone. Do not resubmit completed records.
+4. **Native encryption/legacy:** QA runs isolated existing harness with section3 build recipe and `tests/native-probe/README.md`, verifies actual SQLCipher version/integrity, wrong-key/tamper rejection, actor/environment isolation and interrupted migration/restart. Retain all plaintext originals/legacy and pending references; no exclusive encrypted-custody claim. `NATIVE_ACCEPTANCE_VERIFIED=false` remains.
+5. **Reporter password recovery:** final APK checklist is section14, including employee/unknown neutral behavior enforced by real BE, OTP/rate limits/double tap and authenticated/forced change-password regressions. Source authorization was verified; fresh HTTP/auth mutations and Android acceptance remain NOT_RUN.
+
+QA order: check Docker/host, build the final source once using existing memory/C++ settings, install with `-r` and matching signature, record installed APK SHA and source HEAD; then old uploads → mixed terminal batch → fresh repair snapshot/start/finish → historical FIELD → Reporter/Operator evidence → isolated native probes → Reporter OTP. Emulator API stays `http://10.0.2.2:18181/api/v1`, public storage `http://10.0.2.2:19101`, internal MinIO `http://minio:9000`; no URL rewriting or cleartext expansion. Existing build settings: x86_64, max-workers=1, no-parallel, CMAKE_BUILD_PARALLEL_LEVEL=1; command/config references in section3 remain reusable. No new build attempt or build failure in this closure.
+
+Owner manual checklist: Crew offline save/sign → reconnect upload/verify/readback → restart preserves exact draft and progress; mixed rejected member shows Cần xử lý without replay, fresh snapshot unlocks only valid lifecycle steps. Reporter choose/cancel photo → offline draft → reconnect submission exactly once → restart retains outcome; Forgot opens Reporter OTP directly. Operator resume interrupted multipart retaining confirmed parts → one canonical dataset → restart; completed historical task must not resubmit. Each role must reject foreign actor/environment/session data. QA captures before/after UI screenshots, sanitized receipt/origin readbacks and APK provenance; historical screenshots under `C:/Users/ACER/.gemini/antigravity/brain/35c16d70-d284-4a1f-9fe3-ad895316c0c7/scratch/qa/` are baseline only.
+
+No APK/build/cache/log/DB/media/legacy file was deleted, no R: change, no BE/Web/schema/Docker mutation, dependency change, push or branch switch. Groups 2/5 untouched. **LOGIC_TESTED with explicit aggregate-run correction above; HTTP/native/Android closure and independent review remain pending. Groups 1/3/4/6 are not marked DONE.**
