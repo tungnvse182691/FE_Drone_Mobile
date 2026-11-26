@@ -118,4 +118,6 @@ test('admission cached source cannot bypass fresh actor or stale mapping checks'
  await assert.rejects(t.create(),/session/);assert.equal(h.sent.length,0);
  const stale=admissionHarness();stale.c.upload={...stale.upload};
  await assert.rejects(stale.module.admissionCaptureTransport(stale.draft,stale.c,stale.runtime),/admission/);assert.equal(stale.sent.length,0);
+ const wrongBinding=admissionHarness();wrongBinding.c.offlineUpload.admissionId=crypto.randomUUID();
+ await assert.rejects(wrongBinding.module.admissionCaptureTransport(wrongBinding.draft,wrongBinding.c,wrongBinding.runtime),/admission/);assert.equal(wrongBinding.sent.length,0);
 });

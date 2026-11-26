@@ -196,32 +196,37 @@ test('cross-session signed-field-batch requires session-confirm for same registr
  h.raw.close();
 });
 
-test('P1-A: cross-session admission-upload prepare and transition require session-confirm and preserve old identity',async()=>{
+test('P1-A: 3-session A->B->C admission-upload prepare and transition require session-confirm and deny revoked device',async()=>{
  const h=fixture(),j1=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),regId=randomUUID(),task=randomUUID();
  const batch=await j1.prepare({...base,proof:{kind:'signed-field-batch',registrationId:regId},body:JSON.stringify({operations:[{kind:'FIELD_ACCEPT',taskId:task}]})});
+ const sB={...h.i,scope:'session-B'},sC={...h.i,scope:'session-C'};
+ h.setCurrent(sB);
+ const jB=await h.m.openOfflineJournal(sB,h.db);
  const createId=randomUUID(),createKey=randomUUID(),createBody=JSON.stringify({admissionId:randomUUID(),captureOriginId:randomUUID()});
  const admProof={kind:'admission-upload',batchIntentId:batch.id,originId:randomUUID(),captureOriginId:randomUUID(),admissionId:randomUUID()};
- const adm1=await j1.prepare({id:createId,identity:h.i,projectId:base.projectId,path:'/offline/uploads',key:createKey,body:createBody,proof:admProof});
- h.switch();
- const j2=await h.m.openOfflineJournal(h.current(),h.db);
- await assert.rejects(j2.prepare({id:createId,identity:h.current(),projectId:base.projectId,path:'/offline/uploads',key:createKey,body:createBody,proof:admProof}),/immutable/);
- await assert.rejects(j2.transition(adm1,'IN_FLIGHT'),/offline_session_changed/);
- await j2.confirmSession({id:randomUUID(),identity:h.current(),projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${regId}`,key:randomUUID(),
-  body:JSON.stringify({registrationId:regId,confirmedScope:h.current().scope,snapshotIds:[],revokedSnapshotIds:[]}),
-  proof:{kind:'session-confirm',registrationId:regId,confirmedScope:h.current().scope,snapshotIds:[],revokedSnapshotIds:[]}},{id:regId});
- const reused=await j2.prepare({id:createId,identity:h.current(),projectId:base.projectId,path:'/offline/uploads',key:createKey,body:createBody,proof:admProof});
- assert.equal(reused.identity.scope,h.i.scope);
- await assert.rejects(j2.prepare({id:createId,identity:h.current(),projectId:base.projectId,path:'/offline/uploads',key:createKey,body:'{"tampered":true}',proof:admProof}),/immutable/);
- const sent=await j2.transition(reused,'IN_FLIGHT');
- assert.equal(sent.identity.scope,h.i.scope);
+ const admB=await jB.prepare({id:createId,identity:sB,projectId:base.projectId,path:'/offline/uploads',key:createKey,body:createBody,proof:admProof});
+ h.setCurrent(sC);
+ const jC=await h.m.openOfflineJournal(sC,h.db);
+ await assert.rejects(jC.prepare({id:createId,identity:sC,projectId:base.projectId,path:'/offline/uploads',key:createKey,body:createBody,proof:admProof}),/immutable/);
+ await assert.rejects(jC.transition(admB,'IN_FLIGHT'),/offline_session_changed/);
+ await jC.confirmSession({id:randomUUID(),identity:sC,projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${regId}`,key:randomUUID(),
+  body:JSON.stringify({registrationId:regId,confirmedScope:sC.scope,snapshotIds:[],revokedSnapshotIds:[]}),
+  proof:{kind:'session-confirm',registrationId:regId,confirmedScope:sC.scope,snapshotIds:[],revokedSnapshotIds:[]}},{id:regId});
+ const reused=await jC.prepare({id:createId,identity:sC,projectId:base.projectId,path:'/offline/uploads',key:createKey,body:createBody,proof:admProof});
+ assert.equal(reused.identity.scope,sB.scope);
+ await assert.rejects(jC.prepare({id:createId,identity:sC,projectId:base.projectId,path:'/offline/uploads',key:createKey,body:'{"tampered":true}',proof:admProof}),/immutable/);
+ const sent=await jC.transition(reused,'IN_FLIGHT');
+ assert.equal(sent.identity.scope,sB.scope);
+ await jC.prepare({id:randomUUID(),identity:sC,projectId:base.projectId,path:`/projects/${base.projectId}/offline/devices/${regId}/revoke`,key:randomUUID(),body:'{}',proof:{kind:'revocation',registrationId:regId}});
+ await assert.rejects(jC.transition(sent,'UNKNOWN_OUTCOME'),/offline_session_changed/);
  h.raw.close();
 });
 
-test('P1-B: cross-session writeProtectedFieldDraft allows transport progress after session-confirm and rejects source mutation',async()=>{
+test('P1-B: cross-session writeProtectedFieldDraft preserves keys/coords/binding/verified-upload and enforces CAS',async()=>{
  const h=fixture(),j1=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),regId=randomUUID(),task=randomUUID();
  const e={captureOriginId:randomUUID(),purpose:'BEFORE',mediaType:'image/jpeg',checksumSha256:'a'.repeat(64),sizeBytes:1024,fileId:null};
  const draft={actor:h.i.actor,scope:h.i.scope,environment:h.i.environment,projectId:base.projectId,taskId:task,measurements:[{code:'DEPTH',value:2.5}],
-  captures:[{id:e.captureOriginId,uri:'file:///vault.rgc',vault:{id:randomUUID()},localOnly:true,purpose:e.purpose,mediaType:e.mediaType,checksum:e.checksumSha256,size:e.sizeBytes,capturedAt:'2026-11-26T00:00:00Z'}]};
+  captures:[{id:e.captureOriginId,uri:'file:///vault.rgc',vault:{id:randomUUID()},localOnly:true,createKey:'ck-1',completeKey:'cm-1',coordinates:{latitude:10.7,longitude:106.6},purpose:e.purpose,mediaType:e.mediaType,checksum:e.checksumSha256,size:e.sizeBytes,capturedAt:'2026-11-26T00:00:00Z'}]};
  await h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',draft,draft);
  await j1.prepare({...base,proof:{kind:'signed-field-batch',registrationId:regId},body:JSON.stringify({operations:[{kind:'FIELD_SUBMISSION',taskId:task,fieldSubmission:{evidence:[e]}}]})});
  h.switch();
@@ -232,7 +237,20 @@ test('P1-B: cross-session writeProtectedFieldDraft allows transport progress aft
   body:JSON.stringify({registrationId:regId,confirmedScope:h.current().scope,snapshotIds:[],revokedSnapshotIds:[]}),
   proof:{kind:'session-confirm',registrationId:regId,confirmedScope:h.current().scope,snapshotIds:[],revokedSnapshotIds:[]}},{id:regId});
  await h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',progress,progress);
- const mutated=structuredClone(progress);mutated.measurements[0].value=9.9;
- await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',mutated,mutated),/locked/);
+ for(const tamper of [
+  d=>{d.measurements[0].value=9.9;},
+  d=>{d.captures[0].createKey='ck-2';},
+  d=>{d.captures[0].completeKey='cm-2';},
+  d=>{d.captures[0].coordinates={latitude:0,longitude:0};},
+  d=>{d.captures[0].offlineUpload.admissionId=randomUUID();},
+ ]){
+  const bad=structuredClone(progress);tamper(bad);
+  await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',bad,bad),/locked/);
+ }
+ const verified=structuredClone(progress);verified.captures[0].completed=true;verified.captures[0].verified=true;
+ verified.captures[0].upload={id:randomUUID(),fileId:randomUUID(),status:'VERIFIED',partSizeBytes:100,version:'v1'};
+ await h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',verified,verified);
+ const overwrite=structuredClone(verified);overwrite.captures[0].verified=false;overwrite.captures[0].upload={...verified.captures[0].upload,status:'PENDING'};
+ await assert.rejects(h.m.writeProtectedFieldDraft(h.db,'p1b-draft','T05B_FIELD',overwrite,overwrite),/locked/);
  h.raw.close();
 });

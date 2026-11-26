@@ -52,8 +52,15 @@ function sameDraftSourceForTransport(prev:FieldDraft,next:FieldDraft):boolean {
     JSON.stringify(prev.offlineStart)!==JSON.stringify(next.offlineStart)||
     prev.captures.length!==next.captures.length)return false;
   return prev.captures.every((a,i)=>{const b=next.captures[i];
-    return a.id===b.id&&a.uri===b.uri&&a.checksum===b.checksum&&a.mediaType===b.mediaType&&a.purpose===b.purpose&&
-      a.size===b.size&&a.capturedAt===b.capturedAt&&JSON.stringify(a.vault)===JSON.stringify(b.vault)&&a.cancelState===b.cancelState;
+    if(a.id!==b.id||a.uri!==b.uri||a.checksum!==b.checksum||a.mediaType!==b.mediaType||a.purpose!==b.purpose||
+      a.size!==b.size||a.capturedAt!==b.capturedAt||JSON.stringify(a.coordinates)!==JSON.stringify(b.coordinates)||
+      JSON.stringify(a.vault)!==JSON.stringify(b.vault)||a.createKey!==b.createKey||a.completeKey!==b.completeKey||
+      a.postRepairCapture!==b.postRepairCapture||a.cancelState!==b.cancelState)return false;
+    if(a.offlineUpload&&JSON.stringify(a.offlineUpload)!==JSON.stringify(b.offlineUpload))return false;
+    if((a.verified||a.upload?.status==='VERIFIED')&&(!b.verified||JSON.stringify(a.upload)!==JSON.stringify(b.upload)||a.completed!==b.completed))return false;
+    if(a.completed&&!b.completed)return false;
+    if(a.upload&&(!b.upload||b.upload.id!==a.upload.id||b.upload.fileId!==a.upload.fileId))return false;
+    return true;
   });
 }
 
@@ -68,6 +75,11 @@ export async function writeProtectedFieldDraft(db:SQLiteDatabase,id:string,kind:
       if(kind!=='T05B_FIELD')throw Error('offline_session_changed');
       const existing=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',id,kind);
       if(!existing||!sameDraftSourceForTransport(JSON.parse(existing.payload) as FieldDraft,draft))throw Error('field_signed_capture_locked');
+      const res=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',
+        JSON.stringify(payload),new Date().toISOString(),id,kind,existing.payload);
+      if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
+      if(res.changes!==1)throw Error('offline_journal_cas_failed');
+      return;
     }
     await saveDraft(tx,id,kind,payload);
     if(!sameQueueIdentity(owner))throw Error('offline_session_changed');
@@ -177,7 +189,7 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
     if(old.proof.kind==='signed-field-batch')regId=String(old.proof.registrationId??'');
     else if(old.proof.kind==='admission-upload'){
       const parent=all.find(r=>r.id===old.proof.batchIntentId&&r.projectId===old.projectId&&
-        r.proof.kind==='signed-field-batch'&&sameOfflinePartition(r.identity,owner)&&r.identity.scope===old.identity.scope);
+        r.proof.kind==='signed-field-batch'&&sameOfflinePartition(r.identity,owner));
       regId=String(parent?.proof.registrationId??'');
     }else return false;
     if(!regId)return false;
