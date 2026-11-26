@@ -88,8 +88,14 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
           :await prepareOfflineRepairStart(identity,projectId,taskId,draft);
       }
       if(live.current&&sameQueueIdentity(identity)){setRecord(saved);setNotice('Đã lưu gói ký trên thiết bị. Mở Đồng bộ để gửi và kiểm tra biên nhận máy chủ.');}
-    }catch{
-      if(live.current&&sameQueueIdentity(identity))setNotice('Chưa tạo được lệnh sửa chữa. Kiểm tra nháp, ảnh gốc đã lưu, bản dữ liệu mới và biên nhận ở Đồng bộ; dữ liệu cũ được giữ nguyên.');
+    }catch(error){
+      const msg=(error as Error)?.message;
+      if(live.current&&sameQueueIdentity(identity))setNotice(
+        msg==='offline_repair_first_start_required'
+          ?'Chưa có mốc bắt đầu sửa chữa hợp lệ từ máy chủ nên chưa thể ký đánh giá; dữ liệu cũ được giữ nguyên.'
+          :msg==='repair_verified_evidence_required'||msg==='repair_measurements_required'
+            ?'Nháp chưa đủ số đo hoặc ảnh gốc hợp lệ để ký đánh giá sửa chữa; dữ liệu cũ được giữ nguyên.'
+            :'Chưa tạo được lệnh sửa chữa. Kiểm tra nháp, ảnh gốc đã lưu, bản dữ liệu mới và biên nhận ở Đồng bộ; dữ liệu cũ được giữ nguyên.');
     }finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
   };
   if(!identity||!sameQueueIdentity(identity))return null;
