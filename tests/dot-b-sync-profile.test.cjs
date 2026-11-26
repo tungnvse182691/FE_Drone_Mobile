@@ -3,6 +3,20 @@ const {screen,deferred}=require('./helpers/roadfe-screen.cjs');
 function functions(file,names,context={}){const source=ts.createSourceFile(file,fs.readFileSync(file,'utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const code=names.map(name=>source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name).getText().replace(/^export /,'')).join('\n');return vm.runInNewContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+';({'+names.join(',')+'})',context);}
 const text=s=>s.nodes().filter(n=>n.type==='Text').map(n=>n.props.children.flat(Infinity).filter(v=>typeof v==='string'||typeof v==='number').join('')).join('\n');
 const common={'../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},'../../src/components/Toast':{Toast:'Toast'},'../../src/components/Chip':{Chip:'Chip'},'../../src/components/crew/CrewTaskFacts':{CrewTaskFacts:'CrewTaskFacts'}};
+test('mixed terminal batch is actionable without a replay CTA; independent pending evidence remains visible',async()=>{
+ const identity={actor:'A',scope:'S',environment:'E'},terminal={originId:'rejected',state:'REJECTED',code:'concurrency_conflict'};
+ const record={id:'mixed',identity,phase:'RECEIVED',proof:{kind:'signed-field-batch'},terminalItems:[terminal],verifiedItems:[{originId:'committed'}],receipt:{items:[
+  {originId:'committed',state:'COMMITTED',durableAcknowledgment:true},
+  {originId:'rejected',state:'PENDING_DEPENDENCY',code:'evidence_upload_required',durableAcknowledgment:false}]}};
+ const f=functions('src/components/crew/CrewOfflinePanel.tsx',['pendingEvidence','phaseLabel','evidenceLabel']);
+ assert.equal(f.phaseLabel(record),'Cần xử lý');assert.equal(f.pendingEvidence(record),false);
+ record.receipt.items.push({originId:'independent',state:'PENDING_DEPENDENCY',code:'evidence_verification_pending',durableAcknowledgment:false});
+ assert.equal(f.pendingEvidence(record),true);record.receipt.items.pop();
+ const s=screen('src/components/crew/CrewOfflinePanel.tsx',{exportName:'CrewOfflinePanel',props:{identity},modules:{'../Card':{Card:'Card'},'../Button':{Button:'Button'},'../../api/crewOfflineDevice':{inspectOfflineDevice:async()=>({})},'../../offline/crewSignedSync':{},'../../api/crewOfflineJournal':{openOfflineJournal:async()=>({list:async()=>[record]})},'../../../modules/roadguard-offline-crypto':{},'../../offline/upload-queue':{sameQueueIdentity:()=>true}}});
+ s.render();await s.flush();assert.match(text(s),/Dữ liệu nguồn đã thay đổi/);
+ const titles=s.nodes().filter(n=>n.type==='Button').map(n=>n.props.title);
+ assert.ok(titles.includes('Đối soát kết quả'));assert.ok(!titles.some(t=>/Gửi|Tiếp tục/.test(t)));s.unmount();
+});
 for(const state of ['loading','empty','error','pages'])test('B5 profile prioritizes identity and retains scoped stats '+state,()=>{
  let reads=0;const inbox={enabled:true,tasks:state==='pages'?[{done:true},{done:false}]:[],error:state==='error'?'Không tải được thống kê':null,query:{isPending:state==='loading',isFetching:false,hasNextPage:state==='pages',refetch:()=>reads++}};
  const s=screen('app/(crew)/profile.tsx',{modules:{...common,'./tasks':{useCrewInbox:()=>inbox},'../../src/api/crewApi':{crewTaskIsComplete:t=>t.done},'expo-router':{useRouter:()=>({push(){},replace(){}})}}});

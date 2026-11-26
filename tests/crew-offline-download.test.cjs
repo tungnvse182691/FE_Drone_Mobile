@@ -192,6 +192,22 @@ test('integration: real SQLite journal + real prepareDeviceSnapshot + mocked tra
  raw.close();
 });
 
+test('real device preparation creates a fresh snapshot at the same taskVersion and preserves the old command',async()=>{
+ const h=interruptedDeviceFixture();
+ try{
+  const j=await h.journal.openOfflineJournal(h.old);
+  for(const kind of ['enrollment','snapshot']){
+   let r=await h.prepare(kind);r=await j.transition(r,'IN_FLIGHT');r=await j.transition(r,'RECEIVED',kind==='enrollment'?h.device:h.snapshot);await j.transition(r,'RECONCILED');
+  }
+  const old=(await j.list()).at(-1),bytes=JSON.stringify(old);
+  const fresh=await h.api.prepareDeviceSnapshot(h.old,h.project,h.task,h.device.id,old.id);
+  assert.notEqual(fresh.id,old.id);assert.notEqual(fresh.key,old.key);assert.equal(fresh.phase,'PREPARED');
+  assert.equal(fresh.proof.taskVersion,old.proof.taskVersion);assert.equal(fresh.proof.previousSnapshotIntentId,old.id);
+  assert.equal(JSON.stringify((await j.list()).find(r=>r.id===old.id)),bytes);
+  await assert.rejects(h.api.prepareDeviceSnapshot(h.old,h.project,h.task,h.device.id,old.id),/reconciliation/);
+ }finally{h.close();}
+});
+
 function interruptedDeviceFixture(){
  const {DatabaseSync}=require('node:sqlite'),raw=new DatabaseSync(':memory:');
  raw.exec('CREATE TABLE local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
@@ -207,7 +223,7 @@ function interruptedDeviceFixture(){
  const client={get:async path=>{calls.push({method:'GET',path});if(onRead)await onRead();return {data:path.includes('/devices/')?device:snapshot};},post:async(path,body,config)=>{calls.push({method:'POST',path,body,config});if(onPost)await onPost();return {data:path.endsWith('/devices')?device:snapshot};}};
  const workflow=load('src/api/crewOfflineWorkflow.ts',{'./client':{apiClient:client},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':{isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x),isRepairItemVersion:x=>x===snapshot.taskVersion},'./crewOfflineJournal':journal,'../../modules/roadguard-offline-crypto':{NATIVE_ACCEPTANCE_VERIFIED:true}});
  const taskApi={getFieldInspectionTaskDetailReal:async()=>({data:{id:task,projectId:project,assignedToUserId:old.actor,assignmentId:assignment,version:snapshot.taskVersion,status:'InProgress',mode:'INSPECT_AND_REPAIR',defectId:id()},etag:'etag'}),validateCrewTaskDetail:()=>{},crewTaskFromWire:(_r,d)=>({id:task,projectId:project,detail:d}),isCrewResourceId:x=>typeof x==='string'&&/^[a-f0-9-]{36}$/i.test(x)};
- const api=load('src/api/crewOfflineDevice.ts',{'./client':{apiClient:client},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':taskApi,'./crewOfflineCrypto':{offlineSigningPublicKey:()=>{}},'./crewOfflineJournal':journal,'./crewOfflineWorkflow':workflow,'../../modules/roadguard-offline-crypto':{offlineNative:{installationId:async()=>deviceId,capability:async()=>({signingUsable:true,agreementUsable:true}),publicKeys:async()=>keys},offlineQaNativeFor:()=>null}});
+ const api=load('src/api/crewOfflineDevice.ts',{'../utils/uuid':{uuidv4:id},'./client':{apiClient:client},'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':taskApi,'./crewOfflineCrypto':{offlineSigningPublicKey:()=>{}},'./crewOfflineJournal':journal,'./crewOfflineWorkflow':workflow,'../../modules/roadguard-offline-crypto':{offlineNative:{installationId:async()=>deviceId,capability:async()=>({signingUsable:true,agreementUsable:true}),publicKeys:async()=>keys},offlineQaNativeFor:()=>null}});
  const preparation=load('src/api/crewOfflinePreparation.ts',{'./crewOfflineDevice':api,'./crewOfflineWorkflow':workflow,'./crewOfflineJournal':journal,'./crewSafetyWorkflow':{crewReadGuard:guard},'./crewApi':taskApi,'./crewOfflineEditorSource':{retainCrewEditorSource:async()=>{}},'../utils/uuid':{uuidv4:id}});
  const prepare=async(kind)=>{const j=await journal.openOfflineJournal(old);return j.prepare({id:id(),identity:old,projectId:project,path:`/projects/${project}/offline/${kind==='enrollment'?'devices':'snapshots'}`,key:id(),body:JSON.stringify(kind==='enrollment'?{deviceId,...keys}:{deviceRegistrationId:regId,taskId:task}),proof:{kind,taskId:task,assignmentId:assignment,taskVersion:snapshot.taskVersion}});};
  return {api,preparation,journal,workflow,old,owner,project,task,device,snapshot,prepare,calls,close:()=>raw.close(),set current(v){current=v;},set keys(v){keys=v;},set onPost(v){onPost=v;},set onRead(v){onRead=v;}};

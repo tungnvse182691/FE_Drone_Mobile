@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { AppHeader } from '../AppHeader';
 import { SafeAreaScreen } from '../SafeAreaScreen';
 import { Card } from '../Card';
@@ -20,7 +20,8 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
   const [localStarted,setLocalStarted]=useState(false);
   const [record,setRecord]=useState<OfflineJournalRecord|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
   const live=useRef(true),running=useRef(false);
-  useEffect(()=>{
+  useFocusEffect(useCallback(()=>{
+    let active=true;
     live.current=true;
     if(identity)void (async()=>{
       try {
@@ -28,14 +29,14 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
         const rows=await (await openOfflineJournal(identity)).list();
         const context=currentFieldContext(projectId,taskId);
         const draft=context&&loaded.facts.repair==null?await loadFieldDraft(context,await openFieldRuntime(context)):null;
-        if(live.current&&sameQueueIdentity(identity)){
+        if(active&&live.current&&sameQueueIdentity(identity)){
           setSource(loaded);setLocalStarted(!!draft?.offlineStart);setRecord(rows.filter(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
             (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===taskId)).at(-1)??null);
         }
-      }catch {if(live.current&&identity&&sameQueueIdentity(identity))setNotice('Chưa đọc được dữ liệu offline hợp lệ. Dữ liệu hiện có được giữ nguyên.');}
+      }catch {if(active&&live.current&&identity&&sameQueueIdentity(identity))setNotice('Chưa đọc được dữ liệu offline hợp lệ. Dữ liệu hiện có được giữ nguyên.');}
     })();
-    return()=>{live.current=false;};
-  },[identity,projectId,taskId]);
+    return()=>{active=false;live.current=false;};
+  },[identity,projectId,taskId]));
   const prepare=async()=>{
     if(!identity||running.current||!sameQueueIdentity(identity))return;
     running.current=true;setBusy(true);setNotice('');
@@ -51,7 +52,12 @@ export function CrewOfflineFieldTask({projectId,taskId}:{projectId:string;taskId
     try{
       await downloadCrewOfflineTask(identity,projectId,taskId,true);
       const loaded=await readOfflineCrewTask(identity,projectId,taskId);
-      if(live.current&&sameQueueIdentity(identity)){setSource(loaded);setNotice('Đã tải và đối soát bản dữ liệu mới. Lịch sử và gói ký cũ vẫn được giữ nguyên.');}
+      const rows=await (await openOfflineJournal(identity)).list();
+      if(live.current&&sameQueueIdentity(identity)){
+        setSource(loaded);setRecord(rows.filter(r=>r.projectId===projectId&&r.proof.kind==='signed-field-batch'&&
+          (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===taskId)).at(-1)??null);
+        setNotice('Đã tải và đối soát bản dữ liệu mới. Lịch sử và gói ký cũ vẫn được giữ nguyên.');
+      }
     }catch{if(live.current&&sameQueueIdentity(identity))setNotice('Chưa tải được phiên bản mới. Kiểm tra kết nối và Đồng bộ; bản đã lưu được giữ nguyên.');}
     finally{running.current=false;if(live.current&&sameQueueIdentity(identity))setBusy(false);}
   };

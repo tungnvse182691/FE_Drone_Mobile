@@ -102,6 +102,7 @@ export async function resumeSignedEvidence(record:OfflineJournalRecord,authority
   if(record.phase!=='RECEIVED'||record.proof.kind!=='signed-field-batch')return fail();
   const receipt=record.receipt as {items:OfflineItemReceipt[]};
   for(const item of receipt.items){
+    if(record.terminalItems?.some(t=>t.originId===item.originId)||record.verifiedItems?.some(v=>v.originId===item.originId))continue;
     if(item.durableAcknowledgment||item.state!=='PENDING_DEPENDENCY'||!['evidence_upload_required','evidence_verification_pending'].includes(item.code??''))continue;
     const fresh=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',item.originId);crewReadGuard(authority);
     if(fresh.durableAcknowledgment)continue;

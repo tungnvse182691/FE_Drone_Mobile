@@ -7,7 +7,7 @@ function fixture(kind='FIELD_START'){const actor=id(),project=id(),origin=id(),e
  const receipt={batchId:batch,items:[item],localQueueInstruction:'KEEP_UNACKNOWLEDGED_OR_CONFLICTED_ITEMS'};
  const record={id:id(),identity:i,projectId:project,phase:'RECEIVED',path:`/projects/${project}/offline/sync`,key:id(),body:JSON.stringify({batchId:id(),sourceDeviceRegistrationId:registration,operations:[{...d,originalActorId:actor,sourceDeviceId:id(),taskVersion:'AAAAAAAAB9E='}]}),proof:{kind:'signed-field-batch',descriptors:[d]},receipt};
  const phases=[],checkpoints=[],reads=[];let result=receipt,originResult=item;
- const journal={checkpoint:async(r,items)=>{checkpoints.push(items);return {...r,verifiedItems:items};},transition:async(r,phase,v)=>{phases.push(phase);return {...r,phase,receipt:v??r.receipt};}};
+ const journal={checkpoint:async(r,items)=>{checkpoints.push(items);return {...r,verifiedItems:[...(r.verifiedItems??[]),...items]};},checkpointTerminal:async(r,item)=>({...r,terminalItems:[...(r.terminalItems??[]),item]}),transition:async(r,phase,v)=>{phases.push(phase);return {...r,phase,receipt:v??r.receipt};}};
  const w=load('src/api/crewOfflineWorkflow.ts',{'./crewApi':{isCrewResourceId:guid,isRepairItemVersion:()=>true}});
  const deps={'../api/crewOfflineWorkflow':{...w,requireOfflineNativeAcceptance:()=>{},readOfflineResource:async(_i,_p,kind,resource)=>{reads.push({kind,resource});return kind==='batches'?result:originResult;}},'../api/crewSafetyWorkflow':{crewReadGuard:()=>{}},'../api/crewOfflineJournal':{openOfflineJournal:async()=>journal},'../utils/uuid':{uuidv4:id}};
  const s=load('src/offline/crewSignedSync.ts',deps);
@@ -77,6 +77,18 @@ for(const kind of ['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTIO
 });
 
 function pendingReceipt(h,change={}) {return {...h.receipt,items:[{...h.item,state:'PENDING_DEPENDENCY',code:'evidence_upload_required',durableAcknowledgment:false,effectId:null,canonicalOriginId:null,...change}]};}
+for(const state of ['REJECTED','CONFLICT','STALE_SNAPSHOT'])for(const initial of ['PENDING_DEPENDENCY',state])test(`mixed batch persists independent durable and terminal facts: ${initial} -> ${state}`,async()=>{
+ const h=fixture(),second={...h.d,originId:id(),effectId:id()},body=JSON.parse(h.record.body);
+ h.record.proof.descriptors.push(second);body.operations.push({...body.operations[0],...second});h.record.body=JSON.stringify(body);
+ const terminal={...h.item,originId:second.originId,effectId:null,canonicalOriginId:null,state,code:'concurrency_conflict',durableAcknowledgment:false};
+ h.record.receipt={...h.receipt,items:[h.item,{...terminal,state:initial}]};h.setBatch({...h.receipt,items:[h.item,terminal]});
+ const reader=h.deps['../api/crewOfflineWorkflow'].readOfflineResource;
+ h.deps['../api/crewOfflineWorkflow'].readOfflineResource=async(...args)=>args[2]==='origins'&&args[3]===second.originId?terminal:reader(...args);
+ const original=JSON.stringify(h.record),r=await h.s.reconcileSignedBatch(h.record);
+ assert.equal(r.phase,'RECEIVED');assert.equal(r.verifiedItems.length,1);assert.equal(r.terminalItems.length,1);
+ assert.equal(r.terminalItems[0].originId,second.originId);assert.equal(r.terminalItems[0].state,state);assert.equal(r.terminalItems[0].code,'concurrency_conflict');
+ assert.equal(r.body,h.record.body);assert.equal(r.key,h.record.key);assert.equal(JSON.stringify(h.record),original);assert.equal(h.phases.length,0);
+});
 for(const kind of ['FIELD_SUBMISSION','REPAIR_ASSESSMENT'])test('FINAL pending POST advances only from matching fresh durable batch AND origin: '+kind,async()=>{
  const h=fixture(kind);h.record.receipt=pendingReceipt(h);const original=JSON.stringify(h.record);
  const r=await h.s.reconcileSignedBatch(h.record);

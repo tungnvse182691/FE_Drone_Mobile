@@ -137,7 +137,8 @@ export interface OfflineIntent {
   id:string;identity:QueueIdentity;projectId:string;path:string;key:string;body:string;proof:Record<string,unknown>;
 }
 export interface VerifiedOfflineItem {originId:string;effectId:string;canonicalOriginId:string;kind:string;serverBatchId:string|null;state:string;serverReceivedAt:string}
-export interface OfflineJournalRecord extends OfflineIntent {schema:1;phase:OfflinePhase;receipt?:unknown;verifiedItems?:VerifiedOfflineItem[]}
+export interface TerminalOfflineItem {originId:string;kind:string;serverBatchId:string;state:'REJECTED'|'CONFLICT'|'STALE_SNAPSHOT';code:string|null;serverReceivedAt:string}
+export interface OfflineJournalRecord extends OfflineIntent {schema:1;phase:OfflinePhase;receipt?:unknown;verifiedItems?:VerifiedOfflineItem[];terminalItems?:TerminalOfflineItem[]}
 const KIND='C10BC_IMMUTABLE_COMMAND_V1';
 const guid=(v:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 function safe(value:unknown,depth=0,seen=new Set<object>()):void {
@@ -176,6 +177,15 @@ export function decodeOfflineJournalRecord(payload:string):OfflineJournalRecord 
       !guid(i.originId)||!guid(i.effectId)||!guid(i.canonicalOriginId)||(i.serverBatchId!==null&&!guid(i.serverBatchId))||
       !['COMMITTED','REPLAYED'].includes(i.state)||!['FIELD_ACCEPT','FIELD_START','FIELD_SUBMISSION','REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'].includes(i.kind)||!Number.isFinite(Date.parse(i.serverReceivedAt))))throw Error('offline_checkpoint_invalid');
     safe(r.verifiedItems);
+  }
+  if(r.terminalItems!==undefined){
+    const descriptors=r.proof.descriptors as {originId:string;kind:string}[];
+    if(r.proof.kind!=='signed-field-batch'||!Array.isArray(descriptors)||!Array.isArray(r.terminalItems)||
+      new Set(r.terminalItems.map(i=>i.originId)).size!==r.terminalItems.length||r.terminalItems.some(i=>
+        !guid(i.originId)||!guid(i.serverBatchId)||!['REJECTED','CONFLICT','STALE_SNAPSHOT'].includes(i.state)||
+        !(i.code===null||typeof i.code==='string')||!Number.isFinite(Date.parse(i.serverReceivedAt))||
+        !descriptors.some(d=>d.originId===i.originId&&d.kind===i.kind)||(r.verifiedItems??[]).some(v=>v.originId===i.originId)))throw Error('offline_terminal_checkpoint_invalid');
+    safe(r.terminalItems);
   }return r;
 }
 const decode=decodeOfflineJournalRecord;
@@ -235,6 +245,7 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       const transitions:Record<OfflinePhase,OfflinePhase[]>={PREPARED:['IN_FLIGHT'],IN_FLIGHT:['UNKNOWN_OUTCOME','RECEIVED','REJECTED','CONFLICT'],
         UNKNOWN_OUTCOME:['IN_FLIGHT','RECEIVED','CONFLICT'],RECEIVED:['RECONCILED','IN_FLIGHT'],RECONCILED:[],REJECTED:[],CONFLICT:[]};
       if(!transitions[old.phase]?.includes(phase))throw Error('offline_transition_invalid');
+      if(old.proof.kind==='signed-field-batch'&&old.terminalItems?.length)throw Error('offline_terminal_batch_retained');
       const next=decode(JSON.stringify({...old,phase,...(receipt===undefined?{}:{receipt})}));
       await db.withExclusiveTransactionAsync(async tx=>{
         guard();if(binding)await validateDeviceRecovery(tx,old,binding);
@@ -247,6 +258,20 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
   };
   return {
     async list(){guard();return rows(db);},
+    /** Only the signed-batch reconciler supplies authenticated batch + origin GET facts. */
+    async checkpointTerminal(old:OfflineJournalRecord,item:TerminalOfflineItem):Promise<OfflineJournalRecord>{
+      guard();if(old.phase!=='RECEIVED'||old.proof.kind!=='signed-field-batch'||!sameOfflinePartition(old.identity,owner))throw Error('offline_checkpoint_phase');
+      if((old.receipt as {batchId?:string})?.batchId!==item.serverBatchId)throw Error('offline_terminal_checkpoint_invalid');
+      const merged=new Map((old.terminalItems??[]).map(i=>[i.originId,i])),prior=merged.get(item.originId);
+      if(prior&&JSON.stringify(prior)!==JSON.stringify(item))throw Error('offline_checkpoint_conflict');
+      merged.set(item.originId,item);
+      const next=decode(JSON.stringify({...old,terminalItems:[...merged.values()]}));
+      await db.withExclusiveTransactionAsync(async tx=>{
+        guard();if(!await canActOnRecord(tx,old))throw Error('offline_session_changed');
+        const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,JSON.stringify(old));
+        guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');
+      });guard();return next;
+    },
     /** Append authenticated per-origin observations without ACKing the batch or changing its immutable bytes. */
     async checkpoint(old:OfflineJournalRecord,items:VerifiedOfflineItem[]):Promise<OfflineJournalRecord>{
       guard();if(!sameOfflinePartition(old.identity,owner))throw Error('offline_session_changed');
@@ -287,7 +312,7 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
             const confirmedDevice=records.some(r=>r.projectId===copy.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&sameQueueIdentity(r.identity,owner)&&r.proof.registrationId===source.deviceRegistrationId);
             // Historical lineage only requires RECONCILED snapshots in the same partition once the device is confirmed for this session.
             if(history.some(r=>r.phase!=='RECONCILED'||(!sameQueueIdentity(r.identity,owner)&&!(sameOfflinePartition(r.identity,owner)&&confirmedDevice)))||
-              copy.proof.previousSnapshotIntentId!==previous.id||!copy.proof.taskVersion||copy.proof.taskVersion===previous.proof.taskVersion)throw Error('offline_existing_intent_reconciliation_required');
+              copy.proof.previousSnapshotIntentId!==previous.id||!copy.proof.taskVersion)throw Error('offline_existing_intent_reconciliation_required');
             if(records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='signed-field-batch'&&r.phase!=='RECONCILED'&&
               (JSON.parse(r.body).operations??[]).some((o:{taskId?:string})=>o.taskId===source.taskId)))throw Error('offline_pending_batch_reconciliation_required');
             const online=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=?',`t05a-field:${owner.actor}:${copy.projectId}:${source.taskId}`);guard();

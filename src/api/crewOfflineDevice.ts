@@ -93,12 +93,9 @@ export async function prepareDeviceSnapshot(identity:QueueIdentity,projectId:str
   validateCrewTaskDetail(t.data,t.etag,projectId,taskId,identity.actor);
   if(!isCrewResourceId(t.data.assignmentId)||!['NewAssigned','Accepted','InProgress','SupplementRequired'].includes(t.data.status??''))throw Error('offline_assignment_not_active');
   const j=await openOfflineJournal(identity);
-  if(previousSnapshotIntentId){
-    const previous=(await j.list()).find(r=>r.id===previousSnapshotIntentId);crewReadGuard(identity);
-    if(previous?.phase==='RECONCILED'&&previous.identity.scope===identity.scope&&previous.identity.partition===identity.partition&&
-      previous.projectId===projectId&&previous.proof.kind==='snapshot'&&previous.proof.assignmentId===t.data.assignmentId&&previous.proof.taskVersion===t.data.version&&
-      JSON.parse(previous.body).taskId===taskId&&JSON.parse(previous.body).deviceRegistrationId===registrationId)return previous;
-  }
+  // A predecessor requests a fresh server snapshot. RepairItem has its own
+  // rowversion; an unchanged task version cannot prove repair facts are fresh.
+  // Journal uniqueness serializes successors and refuses unresolved history.
   return j.prepare({id:uuidv4(),identity,projectId,path:offlineProjectPath(projectId)+'/snapshots',key:uuidv4(),
     body:JSON.stringify({deviceRegistrationId:registrationId,taskId}),proof:{kind:'snapshot',assignmentId:t.data.assignmentId,taskVersion:t.data.version,
       ...(previousSnapshotIntentId?{previousSnapshotIntentId}:{})}});

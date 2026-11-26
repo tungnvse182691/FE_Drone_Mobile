@@ -37,9 +37,12 @@ async function continueReceivedBatch(record:OfflineJournalRecord,authority:Queue
   if(reconciled.phase==='RECONCILED')return reconciled;
   const items=(reconciled.receipt as OfflineBatchReceipt).items;
   // Conflicts, stale snapshots and rejected members are never blindly replayed.
-  if(items.some(i=>!i.durableAcknowledgment&&i.state!=='PENDING_DEPENDENCY'))return reconciled;
-  if(!items.some(i=>!i.durableAcknowledgment&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??'')))return reconciled;
+  const pending=items.filter(i=>!reconciled.terminalItems?.some(t=>t.originId===i.originId)&&!reconciled.verifiedItems?.some(v=>v.originId===i.originId)&&
+    !i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
+  if(!pending.length)return reconciled;
   await (await import('../api/crewOfflineAdmission')).resumeSignedEvidence(reconciled,authority);crewReadGuard(authority);
+  // Independent pending media may progress, but a mixed terminal packet is never POSTed blindly.
+  if(reconciled.terminalItems?.length||items.some(i=>!i.durableAcknowledgment&&i.state!=='PENDING_DEPENDENCY'))return reconciled;
   // The original journal row still owns body/signature/key. Transport only changed
   // capture mapping and upload state, so dispatch exactly these persisted bytes.
   const received=await dispatchOfflineIntent(reconciled,authority);crewReadGuard(authority);
@@ -134,6 +137,14 @@ export async function reconcileSignedBatch(record:OfflineJournalRecord,authority
     // Retain conflicts/stale members and never replace an earlier positive fact.
     const wasDurable=durable(a,d);
     if((a.durableAcknowledgment||['COMMITTED','REPLAYED'].includes(a.state))&&!wasDurable)throw Error('offline_batch_readback_mismatch');
+    if(!wasDurable&&['PENDING_DEPENDENCY','REJECTED','CONFLICT','STALE_SNAPSHOT'].includes(a.state)&&terminal(b,d)){
+      if(a.state!=='PENDING_DEPENDENCY'&&(a.state!==b.state||a.code!==b.code))throw Error('offline_batch_readback_mismatch');
+      const origin=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',String(d.originId));crewReadGuard(authority);
+      if(!terminal(origin,d)||origin.state!==b.state||origin.code!==b.code||origin.serverReceivedAt!==b.serverReceivedAt)throw Error('offline_origin_readback_mismatch');
+      next=await journal.checkpointTerminal(next,{originId:origin.originId,kind:origin.kind,serverBatchId:received.batchId,
+        state:origin.state as 'REJECTED'|'CONFLICT'|'STALE_SNAPSHOT',code:origin.code,serverReceivedAt:origin.serverReceivedAt});
+      continue;
+    }
     if(!wasDurable&&a.state!=='PENDING_DEPENDENCY')continue;
     if(!durable(b,d)){
       if(b.durableAcknowledgment||['COMMITTED','REPLAYED'].includes(b.state))throw Error('offline_batch_readback_mismatch');
@@ -149,6 +160,10 @@ export async function reconcileSignedBatch(record:OfflineJournalRecord,authority
   return verifiedCount===expected.length?journal.transition(next,'RECONCILED',readback):next;
 }
 const resourceId=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
+function terminal(i:OfflineItemReceipt,d:OfflineRecord):boolean {
+  return !!i&&i.originId===d.originId&&i.kind===d.kind&&i.durableAcknowledgment===false&&i.effectId===null&&i.canonicalOriginId===null&&
+    ['REJECTED','CONFLICT','STALE_SNAPSHOT'].includes(i.state)&&(i.code===null||typeof i.code==='string')&&Number.isFinite(Date.parse(i.serverReceivedAt));
+}
 function durable(i:OfflineItemReceipt,d:OfflineRecord):boolean {
   return !!i&&i.originId===d.originId&&i.kind===d.kind&&i.effectId===d.effectId&&resourceId(i.canonicalOriginId)&&
     i.durableAcknowledgment===true&&['COMMITTED','REPLAYED'].includes(i.state)&&Number.isFinite(Date.parse(i.serverReceivedAt));

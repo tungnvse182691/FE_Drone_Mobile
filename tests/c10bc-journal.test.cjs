@@ -143,6 +143,25 @@ test('online FIELD journal cannot bypass an offline intent in the shared SQLite 
  h.raw.close();
 });
 
+test('terminal signed observation survives reload, preserves positives and enforces CAS/session/source',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),origin=randomUUID(),other=randomUUID(),batch=randomUUID();
+ let r=await j.prepare({...base,proof:{kind:'signed-field-batch',descriptors:[{originId:origin,kind:'FIELD_ACCEPT'},{originId:other,kind:'FIELD_START'}]},body:JSON.stringify({operations:[]})});
+ r=await j.transition(r,'IN_FLIGHT');r=await j.transition(r,'RECEIVED',{batchId:batch});
+ r=await j.checkpoint(r,[{originId:origin,kind:'FIELD_ACCEPT',state:'COMMITTED',effectId:randomUUID(),canonicalOriginId:randomUUID(),serverBatchId:batch,serverReceivedAt:new Date().toISOString()}]);
+ const old=r,item={originId:other,kind:'FIELD_START',serverBatchId:batch,state:'REJECTED',code:'concurrency_conflict',serverReceivedAt:new Date().toISOString()};
+ r=await j.checkpointTerminal(r,item);
+ const reloaded=(await (await h.m.openOfflineJournal(h.i,h.db)).list())[0];assert.equal(JSON.stringify(reloaded),JSON.stringify(r));
+ assert.equal(r.phase,'RECEIVED');assert.equal(r.verifiedItems.length,1);assert.equal(r.body,old.body);assert.equal(r.key,old.key);
+ await assert.rejects(j.transition(r,'IN_FLIGHT'),/terminal/);
+ await assert.rejects(j.transition(r,'RECONCILED'),/terminal/);
+ await assert.rejects(j.checkpointTerminal(old,item),/cas/);
+ await assert.rejects(j.checkpointTerminal(r,{...item,originId:origin}),/terminal/);
+ await assert.rejects(j.checkpointTerminal(r,{...item,serverBatchId:randomUUID()}),/terminal/);
+ await assert.rejects(j.checkpointTerminal(r,{...item,state:'CONFLICT'}),/conflict/);
+ await assert.rejects(j.checkpointTerminal({...r,proof:{kind:'snapshot'}},item),/phase/);
+ h.switch();await assert.rejects(j.checkpointTerminal(r,item),/session/);h.raw.close();
+});
+
 test('snapshot refresh appends a verified version lineage without rewriting historical bytes',async()=>{
  const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
  let old=await j.prepare({...base,body:JSON.stringify({taskId:task,deviceRegistrationId:randomUUID()}),proof:{kind:'snapshot',taskVersion:'v1'}});
@@ -153,14 +172,25 @@ test('snapshot refresh appends a verified version lineage without rewriting hist
  h.raw.close();
 });
 
-for(const mode of ['pending-snapshot','same-version','wrong-parent','pending-batch','other-session'])test('snapshot refresh refuses '+mode,async()=>{
+test('explicit snapshot refresh with unchanged task version retains history and rejects a concurrent successor',async()=>{
+ const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent();
+ let old=await j.prepare({...base,body:JSON.stringify({taskId:randomUUID(),deviceRegistrationId:randomUUID()}),proof:{kind:'snapshot',taskVersion:'v1'}});
+ old=await j.transition(old,'IN_FLIGHT');old=await j.transition(old,'RECEIVED',{id:randomUUID()});old=await j.transition(old,'RECONCILED');
+ const bytes=JSON.stringify(old),intent={...base,id:randomUUID(),key:randomUUID(),body:old.body,proof:{kind:'snapshot',taskVersion:'v1',previousSnapshotIntentId:old.id}};
+ const fresh=await j.prepare(intent);assert.notEqual(fresh.id,old.id);assert.equal(fresh.phase,'PREPARED');
+ assert.equal(JSON.stringify((await j.list())[0]),bytes);
+ assert.equal((await j.prepare(intent)).key,fresh.key);
+ await assert.rejects(j.prepare({...intent,id:randomUUID(),key:randomUUID()}),/reconciliation/);h.raw.close();
+});
+
+for(const mode of ['pending-snapshot','missing-version','wrong-parent','pending-batch','other-session'])test('snapshot refresh refuses '+mode,async()=>{
  const h=fixture(),j=await h.m.openOfflineJournal(h.i,h.db),base=h.intent(),task=randomUUID();
  let old=await j.prepare({...base,body:JSON.stringify({taskId:task,deviceRegistrationId:randomUUID()}),proof:{kind:'snapshot',taskVersion:'v1'}});
  if(mode!=='pending-snapshot'){old=await j.transition(old,'IN_FLIGHT');old=await j.transition(old,'RECEIVED',{id:randomUUID()});old=await j.transition(old,'RECONCILED');}
  if(mode==='pending-batch')await j.prepare({...base,id:randomUUID(),key:randomUUID(),body:JSON.stringify({operations:[{taskId:task,snapshotId:old.receipt.id}]}),proof:{kind:'signed-field-batch'}});
  if(mode==='other-session')h.switch();
  const current=await h.m.openOfflineJournal(h.current(),h.db);
- await assert.rejects(current.prepare({...base,identity:h.current(),id:randomUUID(),key:randomUUID(),body:old.body,proof:{kind:'snapshot',taskVersion:mode==='same-version'?'v1':'v2',previousSnapshotIntentId:mode==='wrong-parent'?randomUUID():old.id}}));
+ await assert.rejects(current.prepare({...base,identity:h.current(),id:randomUUID(),key:randomUUID(),body:old.body,proof:{kind:'snapshot',taskVersion:mode==='missing-version'?'':'v2',previousSnapshotIntentId:mode==='wrong-parent'?randomUUID():old.id}}));
  assert.equal(JSON.stringify((await current.list())[0]),JSON.stringify(old));h.raw.close();
 });
 

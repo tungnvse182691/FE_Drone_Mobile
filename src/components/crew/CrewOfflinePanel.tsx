@@ -17,14 +17,16 @@ import { sameQueueIdentity, type QueueIdentity } from '../../offline/upload-queu
 import { sendSignedFieldIntent } from '../../offline/crewSignedSync';
 
 function pendingEvidence(r:OfflineJournalRecord):boolean {
-  return ((r.receipt as {items?:{durableAcknowledgment?:boolean;state?:string;code?:string}[]})?.items??[])
-    .some(i=>!i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
+  return ((r.receipt as {items?:{originId?:string;durableAcknowledgment?:boolean;state?:string;code?:string}[]})?.items??[])
+    .some(i=>!r.terminalItems?.some(t=>t.originId===i.originId)&&!r.verifiedItems?.some(v=>v.originId===i.originId)&&
+      !i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
 }
 function evidenceLabel(r:OfflineJournalRecord):string {
   const items=(r.receipt as {items?:{code?:string}[]})?.items??[];
   return items.some(i=>i.code==='evidence_upload_required')?'Chờ tải ảnh':'Chờ xác minh ảnh';
 }
 function phaseLabel(r:OfflineJournalRecord):string {
+  if(r.terminalItems?.length)return 'Cần xử lý';
   if(r.phase==='RECEIVED'&&pendingEvidence(r))return evidenceLabel(r);
   return ({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase]??'Chưa xác nhận';
 }
@@ -134,9 +136,9 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     }
   };
   const waiting=records.filter(r=>r.phase==='PREPARED').length;
-  const reconciling=records.filter(r=>['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
+  const reconciling=records.filter(r=>!r.terminalItems?.length&&['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
   const confirmed=records.filter(r=>r.phase==='RECONCILED').length;
-  const attention=records.filter(r=>['CONFLICT','REJECTED'].includes(r.phase)).length;
+  const attention=records.filter(r=>r.terminalItems?.length||['CONFLICT','REJECTED'].includes(r.phase)).length;
   const activeRecords=records.filter(r=>r.phase!=='RECONCILED');
   const historyRecords=records.filter(r=>r.phase==='RECONCILED');
   return <Card style={styles.panel}>
@@ -151,7 +153,8 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
       {(sameQueueIdentity(r.identity,identity)||(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
       {recoveryTask(r)?<Button title="Khôi phục dữ liệu từ lần đăng nhập trước" variant="secondary" disabled={busy} onPress={()=>void recoverDevice(r)}/>:null}
       {!sameQueueIdentity(r.identity,identity)&&sameOfflinePartition(r.identity,identity)&&['enrollment','snapshot'].includes(String(r.proof.kind))&&r.phase!=='RECONCILED'&&!recoveryTask(r)?<Text style={styles.description}>Mở nhiệm vụ gốc để xác nhận lại dữ liệu khi có mạng. Giữ nguyên nhật ký và khóa thiết bị; không đăng ký thay thế.</Text>:null}
-      {canRecoverSignedBatch(r)&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?'Tiếp tục tải ảnh và đồng bộ':'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
+      {r.terminalItems?.length?<Text style={styles.description}>{r.terminalItems.some(i=>i.state==='STALE_SNAPSHOT'||i.code==='concurrency_conflict')?'Dữ liệu nguồn đã thay đổi. Giữ hồ sơ để kiểm tra với người phụ trách; không gửi lại thao tác bị từ chối.':'Có thao tác bị máy chủ từ chối. Kết quả đã xác nhận và dữ liệu chờ độc lập được giữ nguyên để xử lý.'}</Text>:null}
+      {canRecoverSignedBatch(r)&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?(r.terminalItems?.length?'Tiếp tục tải ảnh còn chờ':'Tiếp tục tải ảnh và đồng bộ'):'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
       {(sameQueueIdentity(r.identity,identity)||canRecoverSignedBatch(r))&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation','enrollment','snapshot'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
     </View>)}
     <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
