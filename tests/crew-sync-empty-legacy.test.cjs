@@ -46,3 +46,19 @@ test('refresh labels follow the real pending read, retain content and prevent du
  assert.equal(button().props.disabled,false);assert.match(text(),/Tải lại/);
  s.unmount();
 });
+
+test('handover journal changes refresh the queue and child panels only for the active session', async()=>{
+ let reads=0;
+ const s=await mount([],async()=>{reads++;return [];});
+ const panel=type=>s.nodes().find(n=>n.type===type).props;
+ const start=panel('CrewOfflinePanel').refreshSignal;
+ panel('CrewHandoverPanel').onJournalChanged();
+ await s.flush();
+ assert.equal(reads,2);
+ assert.equal(panel('CrewOfflinePanel').refreshSignal,start+1);
+ assert.equal(panel('CrewLocalDraftPanel').refreshSignal,start+1);
+ const notify=panel('CrewHandoverPanel').onJournalChanged;
+ s.unmount();
+ notify();
+ assert.equal(reads,2);
+});

@@ -42,7 +42,7 @@ import {
 } from '../offline/crewSignedSync';
 import { generateChecksum, sha256HexBytesSync } from '../offline/checksum';
 import { bytesToBase64, bytesToUtf8, utf8ToBytes } from '../utils/base64';
-import type { QueueIdentity } from '../offline/upload-queue';
+import { sameQueueIdentity, type QueueIdentity } from '../offline/upload-queue';
 import { uuidv4 } from '../utils/uuid';
 
 const HASH64 = /^[a-f0-9]{64}$/;
@@ -342,6 +342,53 @@ async function readActiveHandoverGrant(identity:QueueIdentity,projectId:string,p
   if(grant.revokedAt)throw Error('handover_grant_revoked');
   if(!Number.isFinite(Date.parse(grant.expiresAt))||Date.now()>=Date.parse(grant.expiresAt))throw Error('handover_grant_expired');
   return grant;
+}
+
+/** Display candidates only. Export independently verifies the signed source and its custody. */
+export async function listHandoverSourceBatches(identity: QueueIdentity, rows: OfflineJournalRecord[]) {
+  crewReadGuard(identity);
+  const candidates = rows.filter(record => {
+    const { registrationId } = record.proof;
+    if (record.proof.kind !== 'signed-field-batch' || !sameOfflinePartition(record.identity, identity) ||
+        !isCrewResourceId(record.projectId) || !isCrewResourceId(registrationId) ||
+        record.path !== `${offlineProjectPath(record.projectId)}/sync`) return false;
+    const registrationRows = rows.filter(row => row.projectId === record.projectId &&
+      row.proof.registrationId === registrationId && sameOfflinePartition(row.identity, identity));
+    return !registrationRows.some(row => row.proof.kind === 'revocation') &&
+      (sameQueueIdentity(record.identity, identity) || registrationRows.some(row =>
+        row.phase === 'RECONCILED' && row.proof.kind === 'session-confirm' && sameQueueIdentity(row.identity, identity)));
+  });
+  if (!candidates.length) return [];
+
+  const native = crewOfflineNative(identity);
+  const probe = await inspectOfflineDevice(identity);
+  crewReadGuard(identity);
+  if (!native || !probe.deviceId || !probe.capability.signingUsable || !probe.capability.agreementUsable) return [];
+
+  const deviceId = probe.deviceId;
+  const keys = await native.publicKeys(deviceBinding(identity, deviceId));
+  crewReadGuard(identity);
+  const checked = new Map<string, boolean>();
+  const visible: OfflineJournalRecord[] = [];
+  for (const record of candidates) {
+    if (record.proof.deviceId !== deviceId) continue;
+    const registrationId = String(record.proof.registrationId);
+    const key = `${record.projectId}/${registrationId}`;
+    if (!checked.has(key)) {
+      try {
+        const { device } = await readLocalOfflineSources(identity, record.projectId, registrationId, deviceId);
+        crewReadGuard(identity);
+        checked.set(key, device.id === registrationId && device.projectId === record.projectId &&
+          device.deviceId === deviceId && keys.signingPublicKey === device.signingPublicKey &&
+          keys.encryptionPublicKey === device.encryptionPublicKey);
+      } catch {
+        crewReadGuard(identity);
+        checked.set(key, false);
+      }
+    }
+    if (checked.get(key)) visible.push(record);
+  }
+  return visible;
 }
 
 /** Seals an existing signed batch into an encrypted handover package for 1..32 recipients and journals export intent. */

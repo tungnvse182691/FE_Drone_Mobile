@@ -17,6 +17,7 @@ import {
   exportPublicRecipientCard,
   handoverErrorMessage,
   inspectAndOpenHandoverPackage,
+  listHandoverSourceBatches,
   parsePublicRecipientCard,
   prepareHandoverImport,
   prepareHandoverPackageExport,
@@ -38,7 +39,9 @@ function batchTitle(record: OfflineJournalRecord): string {
   }
 }
 
-export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: QueueIdentity; refreshSignal?: number }) {
+export function CrewHandoverPanel({ identity, refreshSignal = 0, onJournalChanged }: {
+  identity: QueueIdentity; refreshSignal?: number; onJournalChanged?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [projects, setProjects] = useState<{ id: string; label: string }[]>([]);
@@ -68,16 +71,12 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
     try {
       const rows = await (await openOfflineJournal(identity)).list();
       if (!mounted.current || seq !== sequence.current || !sameQueueIdentity(identity)) return;
-      const batchRows = rows.filter(
-        (r) =>
-          r.proof.kind === 'signed-field-batch' &&
-          r.identity.actor === identity.actor &&
-          sameQueueIdentity(r.identity, identity),
-      );
+      const batchRows = rows.some(r => r.proof.kind === 'signed-field-batch')
+        ? await listHandoverSourceBatches(identity, rows)
+        : [];
+      if (!mounted.current || seq !== sequence.current || !sameQueueIdentity(identity)) return;
       setBatches(batchRows);
-      if (batchRows.length > 0 && !batchRows.some((b) => b.id === selectedBatchId)) {
-        setSelectedBatchId(batchRows[batchRows.length - 1].id);
-      }
+      setSelectedBatchId(previous => batchRows.some(b => b.id === previous) ? previous : batchRows.at(-1)?.id ?? '');
 
       const knownIds = new Set<string>(rows.map((r) => r.projectId).filter((id) => isCrewResourceId(id)));
       const list = Array.from(knownIds).map((id) => ({ id, label: `Dự án ${id.slice(0, 8)}` }));
@@ -97,13 +96,11 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
       }
       if (!mounted.current || seq !== sequence.current || !sameQueueIdentity(identity)) return;
       setProjects(list);
-      if (!projectId && list.length > 0) {
-        setProjectId(list[0].id);
-      }
+      setProjectId(previous => previous || list[0]?.id || '');
     } catch {
       /* Preserve existing view on transient read failure. */
     }
-  }, [identity, projectId, selectedBatchId]);
+  }, [identity]);
 
   useEffect(() => {
     mounted.current = true;
@@ -113,7 +110,7 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
   }, []);
 
   useEffect(() => {
-    if (refreshSignal > 0) void loadLocal();
+    if (refreshSignal > 0 && !running.current) void loadLocal();
   }, [loadLocal, refreshSignal]);
 
   useFocusEffect(
@@ -219,9 +216,10 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
       const prepared = await prepareHandoverImport(identity, openedPackage.projectId, openedPackage);
       const result = await sendHandoverImportIntent(prepared, identity);
       if (!mounted.current || !sameQueueIdentity(identity)) return;
+      onJournalChanged?.();
       if (result.phase === 'RECONCILED') {
         setStatusMessage(
-          `Đã nhập bàn giao thành công (${result.verifiedItems?.length ?? openedPackage.operations.length} thao tác đã đối soát).`,
+          `Máy chủ đã xác nhận ${result.verifiedItems?.length ?? 0} thao tác trong gói bàn giao.`,
         );
       } else if (result.terminalItems?.length) {
         setStatusMessage('Có thao tác bị từ chối khi đối soát nhập bàn giao; dữ liệu được giữ để kiểm tra.');

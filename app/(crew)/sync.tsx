@@ -178,6 +178,11 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
     setRefreshing(true);setPanelRefreshSignal(value=>value+1);
     try{await reload();}finally{if(active())setRefreshing(false);}
   };
+  const refreshAfterHandover=()=>{
+    if(!active())return;
+    setPanelRefreshSignal(value=>value+1);
+    void reload();
+  };
   const retry=()=>{if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');};
 
 
@@ -247,7 +252,7 @@ function CrewSyncContent({identity}:{identity:QueueIdentity}) {
 
       <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
       <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
-      <CrewHandoverPanel identity={identity} refreshSignal={panelRefreshSignal} />
+      <CrewHandoverPanel identity={identity} refreshSignal={panelRefreshSignal} onJournalChanged={refreshAfterHandover} />
       {outboxRows.length === 0 ? null : segment === 'pending' ? (
         <>
           {visibleItems.length > 0 ? (

@@ -838,3 +838,44 @@ test('Handover export/open/import preserves non-integer and trailing-zero measur
   assert.deepEqual(roundtripDesc, desc);
   assert.equal(protocol.serializeOfflineOperation(reparsed.operations[0]), attached.slice(attached.indexOf('"operations":[') + 14, attached.indexOf(',"signature":') - 1));
 });
+
+test('Handover source list requires current historical confirmation and matching registration and device', async () => {
+  const identity = { actor: 'crew', role: 'REPAIR_CREW', environment: 'sandbox', partition: 'crew', scope: 'new' };
+  const projectId = crypto.randomUUID();
+  const registrationId = crypto.randomUUID();
+  const deviceId = crypto.randomUUID();
+  const old = { ...identity, scope: 'old' };
+  const source = { id: 'old-batch', identity: old, projectId, path: `/projects/${projectId}/offline/sync`,
+    proof: { kind: 'signed-field-batch', registrationId, deviceId } };
+  const confirmation = { identity, projectId, phase: 'RECONCILED', proof: { kind: 'session-confirm', registrationId } };
+  const keys = { signingPublicKey: 'sign', encryptionPublicKey: 'encrypt' };
+  let actualKeys = keys;
+  let actualRegistration = { id: registrationId, projectId, deviceId, ...keys };
+  let active = true;
+  const { listHandoverSourceBatches } = loadTs('src/api/crewOfflineHandover.ts', {
+    './client': {}, './crewSafetyWorkflow': { crewReadGuard: () => { if (!active) throw Error('crew_session_changed'); } },
+    './crewApi': { isCrewResourceId: x => /^[a-f0-9-]{36}$/i.test(x) }, './crewOfflineCrypto': {},
+    './crewOfflineProtocol': {}, './crewOfflineWorkflow': { offlineProjectPath: p => `/projects/${p}/offline` },
+    './crewOfflineDevice': { inspectOfflineDevice: async () => ({ deviceId, capability: { signingUsable: true, agreementUsable: true } }),
+      crewOfflineNative: () => ({ publicKeys: async () => actualKeys }), deviceBinding: () => 'binding',
+      readLocalOfflineSources: async () => ({ device: actualRegistration }) },
+    './crewOfflineJournal': { sameOfflinePartition: (a,b) => ['actor','role','environment','partition'].every(k => a[k] === b[k]) },
+    '../offline/crewSignedSync': {}, '../offline/checksum': {}, '../utils/base64': {}, '../utils/uuid': {},
+    '../offline/upload-queue': { sameQueueIdentity: (a,b) => Object.keys(b).every(k => a[k] === b[k]) },
+  });
+  const ids = async rows => Array.from(await listHandoverSourceBatches(identity, rows), row => row.id);
+  assert.deepEqual(await ids([source, confirmation]), ['old-batch']);
+  assert.deepEqual(await ids([source]), []);
+  const foreign = ['actor','role','environment','partition'].map(k => ({ ...source, identity: { ...old, [k]: 'foreign' } }));
+  assert.deepEqual(await ids([...foreign, { ...source, proof: { ...source.proof, deviceId: 'other' } }, confirmation]), []);
+  assert.deepEqual(await ids([source, { ...confirmation, projectId: crypto.randomUUID() }]), []);
+  assert.deepEqual(await ids([source, { ...confirmation, identity: old }]), []);
+  assert.deepEqual(await ids([source, confirmation, { ...confirmation, proof: { kind: 'revocation', registrationId } }]), []);
+  actualRegistration = { ...actualRegistration, id: crypto.randomUUID() };
+  assert.deepEqual(await ids([source, confirmation]), []);
+  actualRegistration = { ...actualRegistration, id: registrationId };
+  actualKeys = { ...keys, signingPublicKey: 'another-device' };
+  assert.deepEqual(await ids([source, confirmation]), []);
+  active = false;
+  await assert.rejects(listHandoverSourceBatches(identity, [source, confirmation]), /crew_session_changed/);
+});
