@@ -22,27 +22,45 @@ function pendingEvidence(r:OfflineJournalRecord):boolean {
     .some(i=>!r.terminalItems?.some(t=>t.originId===i.originId)&&!r.verifiedItems?.some(v=>v.originId===i.originId)&&
       !i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
 }
-function evidenceLabel(r:OfflineJournalRecord):string {
-  const items=(r.receipt as {items?:{code?:string}[]})?.items??[];
-  return items.some(i=>i.code==='evidence_upload_required')?'Chờ tải ảnh':'Chờ xác minh ảnh';
+function evidenceLabel(r: OfflineJournalRecord): string {
+  const items = (r.receipt as { items?: { originId?: string; code?: string; state?: string; durableAcknowledgment?: boolean }[] })?.items ?? [];
+  return items.some(item => item.code === 'evidence_upload_required' && item.state === 'PENDING_DEPENDENCY' && !item.durableAcknowledgment &&
+    !r.terminalItems?.some(value => value.originId === item.originId) && !r.verifiedItems?.some(value => value.originId === item.originId)) ? 'Chờ tải ảnh' : 'Chờ xác minh ảnh';
 }
 function phaseLabel(r:OfflineJournalRecord):string {
   if(r.terminalItems?.length)return 'Cần xử lý';
   if(r.phase==='RECEIVED'&&pendingEvidence(r))return evidenceLabel(r);
   return ({RECONCILED:'Đã xác nhận',RECEIVED:'Cần đối soát',UNKNOWN_OUTCOME:'Chưa rõ kết quả',IN_FLIGHT:'Đang xử lý',PREPARED:'Chờ gửi',CONFLICT:'Dữ liệu đã thay đổi',REJECTED:'Chưa được chấp nhận'} as Record<string,string>)[r.phase]??'Chưa xác nhận';
 }
-function recordHeading(r:OfflineJournalRecord):string {
-  const base=({'signed-field-batch':'Hồ sơ hiện trường','start-reconciliation':'Bắt đầu nhiệm vụ',enrollment:'Đăng ký thiết bị',snapshot:'Dữ liệu nhiệm vụ',revocation:'Thu hồi thiết bị',safety:'An toàn hiện trường','review-request':'Yêu cầu xem xét lại','handover-export':'Xuất gói bàn giao','handover-import':'Nhập gói bàn giao'} as Record<string,string>)[String(r.proof.kind)] ?? 'Thao tác đã lưu';
-  if(r.proof.kind!=='snapshot')return base;
+function snapshotCode(record: OfflineJournalRecord) {
+  const snapshot = (record.receipt as { snapshot?: { taskCode?: string; instructions?: string } })?.snapshot;
+  return snapshot?.taskCode?.trim() || snapshot?.instructions?.trim().match(/^([A-Z0-9][A-Z0-9_-]{2,24}):/)?.[1];
+}
+function recordHeading(record: OfflineJournalRecord, sources: OfflineJournalRecord[]): string {
+  const kind = String(record.proof.kind);
+  const base = ({
+    'signed-field-batch': 'Hồ sơ hiện trường', 'start-reconciliation': 'Bắt đầu nhiệm vụ', enrollment: 'Đăng ký thiết bị',
+    snapshot: 'Dữ liệu nhiệm vụ', revocation: 'Thu hồi thiết bị', safety: 'An toàn hiện trường',
+    'review-request': 'Yêu cầu xem xét lại', 'handover-export': 'Gói bàn giao đã tạo', 'handover-import': 'Hồ sơ nhận bàn giao',
+  } as Record<string, string>)[kind] ?? 'Thao tác đã lưu';
+  if (kind === 'snapshot') return snapshotCode(record) || base;
   try {
-    const taskId=String((JSON.parse(r.body) as {taskId?:string})?.taskId??'');
-    const shortId=isCrewResourceId(taskId)?taskId.slice(0,8):'';
-    const instr=String(((r.receipt as {snapshot?:{instructions?:string}})?.snapshot?.instructions)??'').trim();
-    const codeMatch=instr.match(/^([A-Z0-9][A-Z0-9_-]{2,24}):/);
-    const tag=codeMatch?.[1]||shortId;
-    return tag?`${base} · ${tag}${codeMatch?.[1]&&shortId?` (${shortId})`:''}`:base;
+    type SourceReference = { snapshotId?: string; taskId?: string };
+    const body = JSON.parse(record.body) as SourceReference & { operations?: SourceReference[] };
+    const codes = new Set<string>();
+    for (const operation of body.operations ?? [body]) {
+      const source = sources.find(row => {
+        if (row.projectId !== record.projectId || row.proof.kind !== 'snapshot') return false;
+        const receipt = row.receipt as { id?: string; taskId?: string } | undefined;
+        return operation.snapshotId ? receipt?.id === operation.snapshotId : !!operation.taskId && receipt?.taskId === operation.taskId;
+      });
+      const code = source && snapshotCode(source);
+      if (code) codes.add(code);
+    }
+    return codes.size ? `${base} · ${[...codes].join(', ')}` : base;
   } catch { return base; }
 }
+const preparationKinds = new Set(['snapshot', 'enrollment', 'revocation']);
 /** Real Crew sync route, actor/session keyed by parent. Read never changes pending/legacy state. */
 export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIdentity; refreshSignal?: number}) {
   const router=useRouter();
@@ -50,11 +68,15 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
   const [records,setRecords]=useState<OfflineJournalRecord[]>([]),[confirmedSnapshots,setConfirmedSnapshots]=useState<Set<string>>(new Set()),[confirmedRegistrations,setConfirmedRegistrations]=useState<Set<string>>(new Set()),[revokedRegistrations,setRevokedRegistrations]=useState<Set<string>>(new Set()),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   const [showDiagnostics,setShowDiagnostics]=useState(false);
   const [showHistory,setShowHistory]=useState(false);
+  const [showPreparation, setShowPreparation] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [progress,setProgress]=useState('');
-  const sequence=useRef(0),running=useRef(false);
+  const sequence=useRef(0),running=useRef(false),refreshQueued=useRef(false);
   useEffect(()=>()=>{sequence.current++;},[]);
-  const refresh=useCallback(async()=>{
-    if(running.current||!sameQueueIdentity(identity))return;running.current=true;setBusy(true);setError('');const n=++sequence.current;
+  const refresh=useCallback(async function readJournal(){
+    if(!sameQueueIdentity(identity))return;
+    if(running.current){refreshQueued.current=true;return;}
+    running.current=true;setBusy(true);setError('');const n=++sequence.current;
     try {
       const j=await openOfflineJournal(identity),rows=await j.list();
       if(n!==sequence.current||!sameQueueIdentity(identity))return;
@@ -70,7 +92,13 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
         if(n===sequence.current&&sameQueueIdentity(identity))setProbe(p);
       }catch {if(n===sequence.current&&sameQueueIdentity(identity))setProbe(null);}
     }catch {if(n===sequence.current&&sameQueueIdentity(identity))setError('Không đọc được thông tin thiết bị hoặc nhật ký; dữ liệu được giữ nguyên.');}
-    finally {running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);}
+    finally {
+      running.current=false;
+      if(n===sequence.current&&sameQueueIdentity(identity)){
+        setBusy(false);setLoaded(true);
+        if(refreshQueued.current){refreshQueued.current=false;void readJournal();}
+      }
+    }
   },[identity]);
   // Focus is the authoritative initial load. A positive signal is emitted by
   // the parent screen's refresh action and should refresh this panel once.
@@ -110,7 +138,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
           }
         }catch{/* Keep durable data and the last view. */}
       }
-      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
+      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity)){setBusy(false);if(refreshQueued.current){refreshQueued.current=false;void refresh();}}
     }
   };
   const reconcile=async(record:OfflineJournalRecord)=>{
@@ -140,7 +168,7 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     }catch(error){console.warn('[CrewOfflinePanel:reconcile] failed');if(n===sequence.current&&sameQueueIdentity(identity))setError('Chưa xác nhận đầy đủ kết quả. Lệnh, khóa và dữ liệu chờ vẫn được giữ nguyên.');}
     finally {
       try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));}catch{/* Keep last view; partial checkpoints remain durable. */}
-      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
+      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity)){setBusy(false);if(refreshQueued.current){refreshQueued.current=false;void refresh();}}
     }
   };
   if(!sameQueueIdentity(identity))return null;
@@ -157,44 +185,85 @@ export function CrewOfflinePanel({identity, refreshSignal=0}:{identity:QueueIden
     }catch(error){console.warn('[CrewOfflinePanel:send] failed');if(n===sequence.current&&sameQueueIdentity(identity)){setProgress('');const e=error as {response?:{status?:number;data?:{code?:unknown}};code?:string;uploadStage?:string;message?:string};setError(fieldErrorMessage({response:{status:e?.response?.status,data:{code:e?.response?.data?.code}},code:e?.code,uploadStage:e?.uploadStage,message:['field_verification_pending','field_upload_failed'].includes(e?.message??'')?e.message:undefined}));}}
     finally{
       try{const rows=await (await openOfflineJournal(identity)).list();if(n===sequence.current&&sameQueueIdentity(identity))setRecords(rows.filter(r=>r.proof.kind!=='admission-upload'&&r.proof.kind!=='session-confirm'));}catch{/* Keep last view; durable journal remains authoritative. */}
-      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity))setBusy(false);
+      running.current=false;if(n===sequence.current&&sameQueueIdentity(identity)){setBusy(false);if(refreshQueued.current){refreshQueued.current=false;void refresh();}}
     }
   };
-  const waiting=records.filter(r=>r.phase==='PREPARED').length;
-  const reconciling=records.filter(r=>!r.terminalItems?.length&&['UNKNOWN_OUTCOME','IN_FLIGHT','RECEIVED'].includes(r.phase)).length;
-  const confirmed=records.filter(r=>r.phase==='RECONCILED').length;
-  const attention=records.filter(r=>r.terminalItems?.length||['CONFLICT','REJECTED'].includes(r.phase)).length;
-  const activeRecords=records.filter(r=>r.phase!=='RECONCILED');
-  const historyRecords=records.filter(r=>r.phase==='RECONCILED');
-  return <Card style={styles.panel}>
-    <View style={styles.heading}><Text style={[typography.titleMd,{color:'#192D40',fontSize:16,lineHeight:24}]}>Hàng đợi trên thiết bị</Text></View>
-    <Text style={styles.description}>{records.length} bản ghi được lưu trong nhật ký thiết bị.</Text>
-    <View style={styles.stateRow}><View style={styles.stateCell}><Text style={styles.value}>{waiting}</Text><Text style={styles.label}>Chờ gửi</Text></View><View style={styles.stateCell}><Text style={styles.value}>{reconciling}</Text><Text style={styles.label}>Cần đối soát</Text></View><View style={styles.stateCell}><Text style={styles.value}>{confirmed}</Text><Text style={styles.label}>Đã xác nhận</Text></View><View style={styles.stateCell}><Text style={styles.value}>{attention}</Text><Text style={styles.label}>Cần xử lý</Text></View></View>
-    <Text style={styles.description}>Chỉ biên nhận hợp lệ từ máy chủ mới được tính là đã đồng bộ.</Text>
-    {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
-    {progress&&!error?<Text accessibilityLiveRegion="polite" style={styles.description}>{progress}</Text>:null}
-    {activeRecords.length===0?<Text style={styles.description}>Không có lệnh đang chờ gửi hoặc đối soát.</Text>:null}
-    {historyRecords.length>0?<Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Lịch sử đã xác nhận ({historyRecords.length})</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>:null}
-    {(showHistory?records:activeRecords).map(r=><View key={r.id} style={styles.record}><View style={styles.recordTitle}><Text style={typography.labelLg}>{recordHeading(r)}</Text><Text style={styles.phase}>{phaseLabel(r)}</Text></View>
-      {(sameQueueIdentity(r.identity,identity)||(sameOfflinePartition(r.identity,identity)&&confirmedSnapshots.has(r.id)))&&r.proof.kind==='snapshot'&&r.phase==='RECONCILED'?<Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={()=>router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}})}/>:null}
-      {recoveryTask(r)?<Button title="Khôi phục dữ liệu từ lần đăng nhập trước" variant="secondary" disabled={busy} onPress={()=>void recoverDevice(r)}/>:null}
-      {!sameQueueIdentity(r.identity,identity)&&sameOfflinePartition(r.identity,identity)&&['enrollment','snapshot'].includes(String(r.proof.kind))&&r.phase!=='RECONCILED'&&!recoveryTask(r)?<Text style={styles.description}>Mở nhiệm vụ gốc để xác nhận lại dữ liệu khi có mạng. Giữ nguyên nhật ký và khóa thiết bị; không đăng ký thay thế.</Text>:null}
-      {r.terminalItems?.length?<Text style={styles.description}>{r.terminalItems.some(i=>i.state==='STALE_SNAPSHOT'||i.code==='concurrency_conflict')?'Dữ liệu nguồn đã thay đổi. Giữ hồ sơ để kiểm tra với người phụ trách; không gửi lại thao tác bị từ chối.':'Có thao tác bị máy chủ từ chối. Kết quả đã xác nhận và dữ liệu chờ độc lập được giữ nguyên để xử lý.'}</Text>:null}
-      {canRecoverSignedBatch(r)&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?(r.terminalItems?.length?'Tiếp tục tải ảnh còn chờ':'Tiếp tục tải ảnh và đồng bộ'):'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
-      {(sameQueueIdentity(r.identity,identity)||canRecoverSignedBatch(r))&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation','enrollment','snapshot'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
-    </View>)}
-    <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={typography.labelLg}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
-    {showDiagnostics?<View style={styles.diagnostics}><Text style={styles.description}>Thiết bị: {probe?.capability.apiLevel || 'Chưa đọc'}</Text><Text style={styles.description}>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng native trong phạm vi đã kiểm.':'Chưa có bằng chứng native đủ để mở gửi offline.'}</Text><Pressable accessibilityRole="button" style={styles.readButton} onPress={()=>void refresh()} disabled={busy}><Text style={styles.readLabel}>{busy?'Đang đọc…':'Đọc lại nhật ký'}</Text></Pressable></View>:null}
-  </Card>;
+  const preparation = records.filter(record => preparationKinds.has(String(record.proof.kind))).reverse();
+  const operational = records.filter(record => !preparationKinds.has(String(record.proof.kind)));
+  const needsAttention = (record: OfflineJournalRecord) => record.terminalItems?.length || ['CONFLICT', 'REJECTED'].includes(record.phase);
+  const historyRecords = operational.filter(record => record.phase === 'RECONCILED' && !needsAttention(record)).reverse();
+  const activeRecords = operational.filter(record => record.phase !== 'RECONCILED' || needsAttention(record)).reverse();
+  const confirmedCount = historyRecords.filter(record => record.proof.kind !== 'handover-export').length;
+  const attention = activeRecords.filter(needsAttention).length;
+  const waiting = activeRecords.length - attention;
+  const canOpenSnapshot = (record: OfflineJournalRecord) => record.proof.kind === 'snapshot' && record.phase === 'RECONCILED' &&
+    !revokedRegistrations.has(String(record.proof.registrationId ?? (record.receipt as { deviceRegistrationId?: string })?.deviceRegistrationId ?? '')) &&
+    (sameQueueIdentity(record.identity, identity) || (sameOfflinePartition(record.identity, identity) && confirmedSnapshots.has(record.id)));
+  const downloaded = preparation.filter(record => record.proof.kind === 'snapshot' && record.phase === 'RECONCILED');
+  const taskCount = (snapshots: OfflineJournalRecord[]) => new Set(snapshots.map(record => JSON.stringify([record.projectId, (record.receipt as {taskId?: string})?.taskId ?? record.id]))).size;
+  const renderRecord = (r: OfflineJournalRecord) => <View key={r.id} style={styles.record}>
+    <View style={styles.recordTitle}>
+      <Text style={styles.recordName}>{recordHeading(r, preparation)}</Text>
+      <Text style={styles.phase}>{r.proof.kind === 'snapshot' && r.phase === 'RECONCILED'
+        ? canOpenSnapshot(r) ? 'Đã tải' : 'Cần xác nhận lại'
+        : r.proof.kind === 'handover-export' && r.phase === 'RECONCILED' ? 'Đã lưu gói' : phaseLabel(r)}</Text>
+    </View>
+    {r.proof.kind === 'snapshot' && r.phase === 'RECONCILED' ? <>
+      {typeof (r.receipt as { downloadedAt?: string })?.downloadedAt === 'string' ? <Text style={styles.description}>Tải lúc {new Date((r.receipt as { downloadedAt: string }).downloadedAt).toLocaleString('vi-VN')}</Text> : null}
+      {canOpenSnapshot(r) ? <Button title="Mở dữ liệu nhiệm vụ" variant="secondary" disabled={busy} onPress={() => {
+        if (sameQueueIdentity(identity)) router.push({pathname:'/(crew)/wo-detail',params:{id:JSON.parse(r.body).taskId,projectId:r.projectId,offline:'1'}});
+      }} /> : <Text style={styles.description}>Mở nhiệm vụ gốc khi có mạng để xác nhận lại phiên hoặc cập nhật dữ liệu.</Text>}
+    </> : null}
+    {recoveryTask(r)?<Button title="Khôi phục dữ liệu từ lần đăng nhập trước" variant="secondary" disabled={busy} onPress={()=>void recoverDevice(r)}/>:null}
+    {!sameQueueIdentity(r.identity,identity)&&sameOfflinePartition(r.identity,identity)&&['enrollment','snapshot'].includes(String(r.proof.kind))&&r.phase!=='RECONCILED'&&!recoveryTask(r)?<Text style={styles.description}>Mở nhiệm vụ gốc khi có mạng để xác nhận lại dữ liệu.</Text>:null}
+    {r.terminalItems?.length?<Text style={styles.description}>{r.terminalItems.some(i=>i.state==='STALE_SNAPSHOT'||i.code==='concurrency_conflict')?'Dữ liệu nguồn đã thay đổi. Kiểm tra hồ sơ với người phụ trách.':'Có thao tác bị máy chủ từ chối. Kết quả đã xác nhận và dữ liệu đang chờ vẫn được giữ.'}</Text>:null}
+    {r.phase === 'RECEIVED' && pendingEvidence(r) ? <Text style={styles.description}>{evidenceLabel(r) === 'Chờ tải ảnh'
+      ? 'Máy chủ còn chờ ảnh của hồ sơ.' : 'Máy chủ đang kiểm tra ảnh đã tải.'}</Text> : null}
+    {r.proof.kind === 'handover-import' && r.phase !== 'RECONCILED' && !needsAttention(r) ? <Text style={styles.description}>Để tiếp tục, kiểm tra ủy quyền nhận trong mục Bàn giao hồ sơ.</Text> : null}
+    {canRecoverSignedBatch(r)&&(['PREPARED','UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)||(r.phase==='RECEIVED'&&pendingEvidence(r)))?<Button title={r.phase==='PREPARED'?'Gửi gói đã ký':r.phase==='RECEIVED'?(r.terminalItems?.length?'Tiếp tục tải ảnh còn chờ':'Tiếp tục tải ảnh và đồng bộ'):'Đối soát và gửi lại đúng gói'} variant="secondary" disabled={busy} onPress={()=>void send(r)}/>:null}
+    {(sameQueueIdentity(r.identity,identity)||canRecoverSignedBatch(r))&&((r.phase==='RECEIVED'&&['signed-field-batch','start-reconciliation','enrollment','snapshot','revocation'].includes(String(r.proof.kind)))||(['UNKNOWN_OUTCOME','IN_FLIGHT'].includes(r.phase)&&['signed-field-batch','start-reconciliation','enrollment','snapshot'].includes(String(r.proof.kind))))?<Button title="Đối soát kết quả" variant="secondary" disabled={busy} onPress={()=>void reconcile(r)}/>:null}
+  </View>;
+  return <>
+    <Card style={styles.panel}>
+      <Text style={styles.title}>Hàng đợi hồ sơ</Text>
+      <View style={styles.stateRow}>
+        <View style={styles.stateCell}><Text style={styles.value}>{loaded ? waiting : '–'}</Text><Text style={styles.label}>Đang chờ</Text></View>
+        <View style={styles.stateCell}><Text style={styles.value}>{loaded ? confirmedCount : '–'}</Text><Text style={styles.label}>Đã xác nhận</Text></View>
+        <View style={styles.stateCell}><Text style={styles.value}>{loaded ? attention : '–'}</Text><Text style={styles.label}>Cần xử lý</Text></View>
+      </View>
+      {error?<Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text>:null}
+      {progress&&!error?<Text accessibilityLiveRegion="polite" style={styles.description}>{progress}</Text>:null}
+      {!loaded && busy ? <Text accessibilityLiveRegion="polite" style={styles.description}>Đang đọc hàng đợi…</Text> : null}
+      {loaded && !error && activeRecords.length === 0 ? <Text style={styles.description}>Không có hồ sơ đang chờ hoặc cần xử lý.</Text> : null}
+      {activeRecords.map(renderRecord)}
+      {historyRecords.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel="Lịch sử đã xác nhận" accessibilityState={{expanded:showHistory}} onPress={()=>setShowHistory(v=>!v)} style={styles.diagnosticToggle}><Text style={styles.toggleLabel}>Lịch sử đã xác nhận</Text><MaterialIcons name={showHistory?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable> : null}
+      {showHistory ? historyRecords.map(renderRecord) : null}
+    </Card>
+    <Card style={styles.panel}>
+      <Text style={styles.title}>Chuẩn bị làm việc ngoại tuyến</Text>
+      {error && !downloaded.length ? <Text style={styles.description}>Chưa đọc được bản tải trên thiết bị.</Text> : !loaded ? <Text style={styles.description}>Đang đọc bản tải trên thiết bị…</Text> : downloaded.length ?
+        <Text style={styles.description}>{taskCount(downloaded)} nhiệm vụ đã tải · {taskCount(downloaded.filter(canOpenSnapshot))} có bản tải cho phiên này</Text> :
+        <Text style={styles.description}>Chưa có bản tải. Mở nhiệm vụ khi có mạng để tải dữ liệu.</Text>}
+      {preparation.length ? <Pressable accessibilityRole="button" accessibilityLabel="Dữ liệu nhiệm vụ đã tải" accessibilityState={{ expanded: showPreparation }} onPress={() => setShowPreparation(value => !value)} style={styles.diagnosticToggle}>
+        <Text style={styles.toggleLabel}>Xem bản tải và khôi phục</Text><MaterialIcons name={showPreparation ? 'expand-less' : 'expand-more'} size={20} color={colors.secondary} />
+      </Pressable> : null}
+      {showPreparation || preparation.some(record => record.phase !== 'RECONCILED')
+        ? preparation.filter(record => showPreparation || record.phase !== 'RECONCILED').map(renderRecord) : null}
+      <Pressable accessibilityRole="button" accessibilityLabel="Chi tiết kỹ thuật" accessibilityState={{expanded:showDiagnostics}} onPress={()=>setShowDiagnostics(v=>!v)} style={styles.diagnosticToggle}><Text style={styles.toggleLabel}>Chi tiết kỹ thuật</Text><MaterialIcons name={showDiagnostics?'expand-less':'expand-more'} size={20} color={colors.secondary}/></Pressable>
+      {showDiagnostics?<View style={styles.diagnostics}><Text style={styles.description}>Thiết bị: {probe?.capability.apiLevel || 'Chưa đọc'}</Text><Text style={styles.description}>{NATIVE_ACCEPTANCE_VERIFIED?'Đã có bằng chứng native trong phạm vi đã kiểm.':'Chưa có bằng chứng native đủ để mở gửi offline.'}</Text><Pressable accessibilityRole="button" style={styles.readButton} onPress={()=>void refresh()} disabled={busy}><Text style={styles.readLabel}>{busy?'Đang đọc…':'Đọc lại nhật ký'}</Text></Pressable></View>:null}
+    </Card>
+  </>;
 }
 
 const styles = StyleSheet.create({
-  panel: { borderWidth: 1, borderColor: '#DCE2E7', borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
+  panel: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, gap: spacing.sm, marginBottom: spacing.md },
   description: { ...typography.caption, color: colors.secondary },
-  heading: { flexDirection:'row', alignItems:'center', gap: spacing.sm },
+  title: { ...typography.titleMd, color: colors.neutral },
+  recordName: { ...typography.labelLg, color: colors.neutral, flexGrow: 1, flexShrink: 1 },
+  toggleLabel: { ...typography.labelLg, color: colors.neutral, flexShrink: 1 },
   stateRow: { flexDirection:'row', flexWrap:'wrap', gap:spacing.sm },
-  stateCell: { flexBasis:'47%', flexGrow:1, backgroundColor:colors.surfaceAlt, borderRadius:radius.lg, padding:spacing.sm },
-  value: { ...typography.titleMd, fontSize:28, lineHeight:36, fontVariant:['tabular-nums'], color: '#192D40', textAlign:'center' },
+  stateCell: { flexBasis:'28%', flexGrow:1, backgroundColor:colors.surfaceAlt, borderRadius:radius.lg, padding:spacing.sm },
+  value: { ...typography.titleMd, fontSize:28, lineHeight:36, fontVariant:['tabular-nums'], color: colors.neutral, textAlign:'center' },
   label: { ...typography.caption, color: colors.secondary, textAlign:'center' },
   record: { gap: spacing.xs, borderBottomWidth:1, borderColor:colors.border, paddingVertical:spacing.sm },
   recordTitle: { flexDirection:'row', flexWrap:'wrap', justifyContent:'space-between', gap: spacing.sm },

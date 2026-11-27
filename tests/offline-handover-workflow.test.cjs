@@ -758,11 +758,12 @@ test('CrewHandoverPanel UI isolates stale sessions and surfaces safe Vietnamese 
   });
   s.render();
   await s.flush();
-  s.nodes().find((n) => n.props?.accessibilityLabel === 'Bàn giao dữ liệu mã hóa').props.onPress();
+  s.nodes().find((n) => n.props?.label === 'Nhận hồ sơ').props.onPress();
   s.render();
   const txtBefore = JSON.stringify(s.nodes());
-  assert.match(txtBefore, /Tạo thẻ thiết bị công khai/);
-  s.press('Tạo thẻ thiết bị công khai');
+  assert.match(txtBefore, /Tạo thẻ thiết bị của tôi/);
+  assert.doesNotMatch(txtBefore, /Mã ủy quyền|Mã gói hồ sơ|Khóa công khai|Bản gói mã hóa/);
+  s.press('Tạo thẻ thiết bị của tôi');
   await s.flush();
   const txtAfter = JSON.stringify(s.nodes());
   assert.match(txtAfter, /thu hồi/);
@@ -879,3 +880,53 @@ test('Handover source list requires current historical confirmation and matching
   active = false;
   await assert.rejects(listHandoverSourceBatches(identity, [source, confirmation]), /crew_session_changed/);
 });
+
+for (const phase of ['RECONCILED', 'RECEIVED']) {
+  test(`dedicated Handover verifies discovery and signals Sync for ${phase} after navigation`, async () => {
+    const { screen, deferred } = require('./helpers/roadfe-screen.cjs');
+    const id = crypto.randomUUID;
+    const identity = { actor: id(), environment: 'test', role: 'REPAIR_CREW', scope: 's', partition: 'p' };
+    const projectId = id(), packageId = id(), grantId = id(), registrationId = id();
+    const activeGrant = { id: grantId, packageId, projectId, issuedAt: '2026-11-20T12:00:00Z', expiresAt: '2099-11-27T12:00:00Z', revokedAt: null };
+    const revoked = { ...activeGrant, id: id(), revokedAt: '2026-11-22T12:00:00Z' };
+    const opened = { projectId, localRegistrationId: registrationId, grantDetail: activeGrant,
+      packageDetail: { id: packageId, payloadHash: 'hash' }, operations: [{}, {}] };
+    const retained = deferred();
+    const signals = [], inspect = [];
+    let sends = 0;
+    const s = screen('src/components/crew/CrewHandoverPanel.tsx', {
+      exportName: 'CrewHandoverPanel', props: { identity }, modules: {
+        '../Card': { Card: 'Card' }, '../Button': { Button: 'Button' },
+        '../../api/crewApi': { isCrewResourceId: value => typeof value === 'string' && value.length === 36, listCrewProjectsReal: async () => ({ items: [{ projectId, name: 'Đường huyện' }] }) },
+        '../../api/crewOfflineJournal': { openOfflineJournal: async () => ({ list: async () => [] }) },
+        '../../api/crewOfflineWorkflow': { listOfflineCollection: async () => ({ items: [revoked, activeGrant], nextCursor: null }) },
+        '../../api/crewOfflineHandover': {
+          exportPublicRecipientCard: async () => 'unused',
+          inspectAndOpenHandoverPackage: async (...args) => { inspect.push(args); return opened; },
+          prepareHandoverImport: async () => ({ id: 'retained' }),
+          sendHandoverImportIntent: async () => { sends++; return retained.promise; },
+        },
+        '../../offline/upload-queue': { sameQueueIdentity: () => true },
+        '../../store/crewHandoverRefresh': { publishCrewHandoverChange: value => signals.push(value) },
+      },
+    });
+    const choice = label => s.nodes().find(node => node.props.label === label);
+    const title = label => s.nodes().find(node => node.props.title === label);
+    s.render(); await s.flush();
+    choice('Nhận hồ sơ').props.onPress(); s.render();
+    s.press('Tìm hồ sơ được ủy quyền'); await s.flush();
+    assert.equal(choice('Ủy quyền đã thu hồi').props.disabled, true);
+    assert.equal(title('Ký xác nhận và nhập'), undefined);
+    choice('Ủy quyền còn hiệu lực').props.onPress(); s.render();
+    s.press('Kiểm tra gói hồ sơ'); await s.flush();
+    assert.deepEqual(inspect, [[identity, projectId, packageId, grantId, '']]);
+    assert.ok(title('Ký xác nhận và nhập'));
+    assert.doesNotMatch(s.nodes().filter(node => node.type === 'Text').map(node => JSON.stringify(node.props.children)).join(' '), new RegExp(`${projectId}|${packageId}|${grantId}`));
+    s.press('Ký xác nhận và nhập'); s.press('Ký xác nhận và nhập'); await s.flush();
+    assert.equal(sends, 1);
+    s.unmount();
+    retained.resolve({ phase, verifiedItems: phase === 'RECONCILED' ? [{ originId: id() }] : [] });
+    await s.flush();
+    assert.deepEqual(signals, [identity]);
+  });
+}

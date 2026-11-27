@@ -9,8 +9,8 @@ function styles(name,binding='styles'){
 function flat(s){return Object.assign({},...[s].flat(Infinity).filter(Boolean));}
 test('Crew tabs grow with font size; filter and refresh controls retain 48dp targets',()=>{
  const task=styles('tasks','v2');assert.equal(task.tabs.height,undefined);assert.ok(task.tab.minHeight>=48);assert.equal(task.tab.height,undefined);assert.equal(task.tab.flexShrink,1);assert.ok(task.chip.minHeight>=48);assert.ok(task.iconButton.width>=48);assert.ok(task.iconButton.height>=48);assert.ok(task.searchInput.minHeight>=48);
- const s=styles('sync');assert.equal(s.segments.height,undefined);assert.ok(s.segment.minHeight>=48);assert.equal(s.segment.height,undefined);assert.equal(s.segmentLabel.flexShrink,1);
- assert.ok(s.iconBtn.minWidth>=48);assert.ok(s.iconBtn.minHeight>=48);assert.equal(s.iconBtn.height,undefined);assert.equal(s.titleRow.flexWrap,'wrap');assert.ok(styles('navigation').floatingBack.width>=48);
+ const s=styles('sync');assert.ok(s.supportRow.minHeight>=48);assert.equal(s.supportRow.height,undefined);assert.equal(s.rowBody.flex,1);
+ assert.ok(s.refresh.minWidth>=48);assert.ok(s.refresh.minHeight>=48);assert.equal(s.refresh.height,undefined);assert.equal(s.titleRow.flexWrap,'wrap');assert.ok(styles('navigation').floatingBack.width>=48);
 });
 
 test('Tasks retain gold segmented selection without duplicate KPI surfaces',()=>{

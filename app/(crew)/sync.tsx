@@ -1,40 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { CrewContentTransition, CrewPressable as Pressable } from '../../src/components/crew/CrewMotion';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as SQLite from 'expo-sqlite';
 import { SafeAreaScreen } from '../../src/components/SafeAreaScreen';
 import { AppHeader } from '../../src/components/AppHeader';
 import { Card } from '../../src/components/Card';
-import { Button } from '../../src/components/Button';
-import { StatusBadge } from '../../src/components/StatusBadge';
-import { EmptyState } from '../../src/components/EmptyState';
 import { Toast } from '../../src/components/Toast';
 import { initDatabase, openDatabase } from '../../src/offline/database';
 import { decodeOutboxPayload, currentQueueIdentity, sameQueueIdentity, createQueueReader, type QueueIdentity, type OutboxItem } from '../../src/offline/upload-queue';
 import { isLegacyRepairQueueEntry } from '../../src/api/crewApi';
 import { useAuthStore } from '../../src/store/auth';
 import { colors, radius, spacing, typography } from '../../src/design-tokens';
-import { LocalState, SyncStatus } from '../../src/types/enums';
 import { CrewOfflinePanel } from '../../src/components/crew/CrewOfflinePanel';
 import { CrewLocalDraftPanel } from '../../src/components/crew/CrewLocalDraftPanel';
-import { CrewHandoverPanel } from '../../src/components/crew/CrewHandoverPanel';
-
-type SyncSegment = 'pending' | 'done';
-
-interface QueueItem {
-  id?: string;
-  name: string;
-  meta: string;
-  size: string;
-  status: SyncStatus;
-  progress?: number;
-}
-
-const SEGMENT_LABELS: Record<SyncSegment, string> = {
-  pending: 'Đang chờ',
-  done: 'Đã xác nhận',
-};
+import { CREW_HANDOVER } from '../../src/constants/routes';
+import { subscribeToCrewHandoverChange } from '../../src/store/crewHandoverRefresh';
 
 const OUTBOX_KIND_LABELS: Record<string, string> = {
   // Canonical — Phần 5.3 (bộ 6 OfflineOperationKind)
@@ -56,20 +38,6 @@ export function crewQueueStateLabel(state: string): string {
   return labels[state] ?? 'Chưa xác nhận kết quả';
 }
 
-const LOCAL_STATE_TO_SYNC_STATUS: Record<string, SyncStatus> = {
-  [LocalState.DRAFT]: SyncStatus.QUEUED,
-  [LocalState.WAITING_DEPENDENCIES]: SyncStatus.QUEUED,
-  [LocalState.READY]: SyncStatus.QUEUED,
-  [LocalState.IN_FLIGHT]: SyncStatus.UPLOADING,
-  [LocalState.PAUSED_RETRY]: SyncStatus.QUEUED,
-  [LocalState.UNKNOWN_OUTCOME]: SyncStatus.QUEUED,
-  [LocalState.AUTH_REQUIRED]: SyncStatus.QUEUED,
-  [LocalState.BLOCKED_CONTRACT]: SyncStatus.INVALID,
-  [LocalState.CONFLICT]: SyncStatus.INVALID,
-  [LocalState.REJECTED]: SyncStatus.INVALID,
-  [LocalState.ACKED]: SyncStatus.QUEUED, // Legacy ACK alone is not a verified receipt.
-};
-
 /** Compatibility guard: classification never mutates durable history. No dispatch capability. */
 export async function quarantineLegacyRepairQueue(_db: SQLite.SQLiteDatabase, identity = currentQueueIdentity()): Promise<void> {
   if(!identity || !sameQueueIdentity(identity))throw Error('queue_session_required');
@@ -90,463 +58,132 @@ export default function CrewSyncScreen() {
   if(!identity||identity.role!=='REPAIR_CREW')return <SafeAreaScreen header={<AppHeader subtitle="Đồng bộ" />}><Text>Cần phiên đội sửa chữa hợp lệ.</Text></SafeAreaScreen>;
   return <CrewSyncContent key={JSON.stringify(identity)} identity={identity} />;
 }
-function CrewSyncContent({identity}:{identity:QueueIdentity}) {
-  const [segment, setSegment] = useState<SyncSegment>('pending');
+function CrewSyncContent({ identity }: { identity: QueueIdentity }) {
+  const router = useRouter();
   const [toast, setToast] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [outboxRows, setOutboxRows] = useState<OutboxItem[]>([]);
+  const [showLegacy, setShowLegacy] = useState(false);
   const [panelRefreshSignal, setPanelRefreshSignal] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const reader=useMemo(()=>createQueueReader(identity),[identity]),mounted=useRef(true);
-  useEffect(()=>{mounted.current=true;return ()=>{mounted.current=false;reader.cancel();};},[reader]);
-  const active=()=>mounted.current&&sameQueueIdentity(identity);
+  const refreshInFlight = useRef(false);
+  const reader = useMemo(() => createQueueReader(identity), [identity]);
+  const mounted = useRef(true);
+  const active = useCallback(() => mounted.current && sameQueueIdentity(identity), [identity]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; reader.cancel(); };
+  }, [reader]);
 
   useEffect(() => {
     let cancelled = false;
-    let database: SQLite.SQLiteDatabase;
-    try {
-      database = openDatabase();
-    } catch {
-      setToast('Không mở được cơ sở dữ liệu cục bộ để đọc hàng đợi.');
-      return;
-    }
-
-    void initDatabase(database)
-      .then(() => {
-        if (!cancelled) {
-          setDb(database);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setToast('Không mở được cơ sở dữ liệu cục bộ để đọc hàng đợi.');
-        }
-      });
-    return () => {
-      cancelled = true;
+    const open = async () => {
+      try {
+        const database = openDatabase();
+        await initDatabase(database);
+        if (!cancelled && active()) setDb(database);
+      } catch {
+        if (!cancelled && active()) setToast('Không đọc được hồ sơ cũ trên thiết bị.');
+      }
     };
-  }, []);
+    void open();
+    return () => { cancelled = true; };
+  }, [active]);
 
   const reload = useCallback(async () => {
-    if(!db)return;
-    try{const rows=await reader.read(db);if(rows&&active())setOutboxRows(rows);}
-    catch{if(active())setToast('Không đọc được hàng đợi; dữ liệu vẫn được giữ.');}
-  },[db,reader]);
-  useEffect(()=>{void reload();},[reload]);
-  const syncNow=useCallback(async()=>{
-    if(!db||!active())return;setSyncing(true);
-    try{await reload();if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');}
-    finally{if(active())setSyncing(false);}
-  },[db,reload,identity]);
-
-  const queueItems = useMemo<QueueItem[]>(() => {
-    if (outboxRows.length > 0) {
-      return outboxRows.map((row) => ({
-        id: row.id,
-        name: OUTBOX_KIND_LABELS[row.kind] ?? 'Thao tác đang lưu trên thiết bị',
-        meta: `${crewQueueStateLabel(row.stored_status ?? row.status)}. ${row.last_error ? 'Lần xử lý trước chưa hoàn tất; dữ liệu được giữ để kiểm tra.' : 'Chưa xác nhận hoàn tất trên máy chủ.'} ${typeof row.checksum_sha256 === 'string' && /^[a-f0-9]{64}$/i.test(row.checksum_sha256) ? 'Đã có mã kiểm tra dữ liệu.' : 'Mã kiểm tra dữ liệu chưa hợp lệ.'}`,
-        size: `Lần thử ${row.attempt}/${row.max_attempts}`,
-        status: row.status === LocalState.ACKED ? SyncStatus.QUEUED : LOCAL_STATE_TO_SYNC_STATUS[row.status] ?? SyncStatus.QUEUED,
-      }));
+    if (!db || !active()) return;
+    try {
+      const rows = await reader.read(db);
+      if (rows && active()) setOutboxRows(rows);
+    } catch {
+      if (active()) setToast('Không đọc được hồ sơ cũ. Dữ liệu vẫn được giữ trên máy.');
     }
-    return [];
-  }, [outboxRows]);
+  }, [db, reader, active]);
 
-  const visibleItems = useMemo<QueueItem[]>(() => {
-    if (outboxRows.length === 0) {
-      return [];
-    }
-    const doneStatus = SyncStatus.SERVER_CONFIRMED;
-    const matches = (item: QueueItem) =>
-      segment === 'done' ? item.status === doneStatus : item.status !== doneStatus;
-    return queueItems.filter(matches);
-  }, [queueItems, segment, outboxRows.length]);
-
-  const counts = useMemo(() => {
-    const doneCount = queueItems.filter((item) => item.status === SyncStatus.SERVER_CONFIRMED).length;
-    return {
-      pending: queueItems.length - doneCount,
-      done: doneCount,
-    } as Record<SyncSegment, number>;
-  }, [queueItems]);
-
-  
-
-  const refresh=async()=>{
-    if(refreshing||!active())return;
-    setRefreshing(true);setPanelRefreshSignal(value=>value+1);
-    try{await reload();}finally{if(active())setRefreshing(false);}
-  };
-  const refreshAfterHandover=()=>{
-    if(!active())return;
-    setPanelRefreshSignal(value=>value+1);
+  useFocusEffect(useCallback(() => { void reload(); }, [reload]));
+  useFocusEffect(useCallback(() => subscribeToCrewHandoverChange(changedIdentity => {
+    if (!active() || !sameQueueIdentity(changedIdentity, identity)) return;
+    setPanelRefreshSignal(value => value + 1);
     void reload();
-  };
-  const retry=()=>{if(active())setToast('Chưa mở gửi hàng đợi này. Dữ liệu vẫn được giữ trên thiết bị để đối soát.');};
+  }), [active, identity, reload]));
 
+  const refresh = async () => {
+    if (refreshInFlight.current || !active()) return;
+    refreshInFlight.current = true;
+    setRefreshing(true);
+    setPanelRefreshSignal(value => value + 1);
+    try { await reload(); }
+    finally {
+      refreshInFlight.current = false;
+      if (active()) setRefreshing(false);
+    }
+  };
 
   return (
     <SafeAreaScreen scroll header={<AppHeader subtitle="Đồng bộ" />}>
       <CrewContentTransition ready>
-      <View style={styles.titleRow}>
-        <View style={styles.titleGroup}>
-          <Text style={[typography.titleMd, styles.pageTitle]}>Đồng bộ dữ liệu</Text>
+        <View style={styles.titleRow}>
+          <View style={styles.titleGroup}>
+            <Text style={styles.pageTitle}>Đồng bộ dữ liệu</Text>
+            <Text style={styles.caption}>Chưa xác định trạng thái kết nối</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ"
+            accessibilityState={{ busy: refreshing, disabled: refreshing }} disabled={refreshing} style={styles.refresh} onPress={refresh}>
+            {refreshing ? <ActivityIndicator size="small" color={colors.brandGold} /> : <MaterialIcons name="refresh" size={20} color={colors.brandGold} />}
+            <Text style={styles.label}>{refreshing ? 'Đang đọc…' : 'Tải lại'}</Text>
+          </Pressable>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Tải lại trạng thái đồng bộ" accessibilityState={{busy:refreshing,disabled:refreshing}} disabled={refreshing} style={({ pressed }) => [styles.iconBtn, pressed && styles.refreshPressed]} onPress={refresh}>
-          {refreshing?<ActivityIndicator size="small" color={colors.brandGold}/>:<MaterialIcons name="refresh" size={20} color={colors.brandGold} />}
-          <Text style={styles.refreshLabel}>{refreshing?'Đang đọc…':'Tải lại'}</Text>
-        </Pressable>
-      </View>
 
-      {outboxRows.length > 0 ? <><View style={styles.segments}>
-        {(Object.keys(SEGMENT_LABELS) as SyncSegment[]).map((key) => {
-          const active = key === segment;
-          return (
-            <Pressable
-              key={key}
-              style={[styles.segment, active && styles.segmentActive]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => setSegment(key)}
-            >
-              <Text style={[typography.labelLg, active ? styles.segmentLabelActive : styles.segmentLabel]}>
-                {SEGMENT_LABELS[key]} ({counts[key]})
-              </Text>
+        <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
+        <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
+        <Card style={styles.support}>
+          <Text style={styles.sectionTitle}>Hỗ trợ và khôi phục</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Bàn giao hồ sơ" style={styles.supportRow} onPress={() => {
+            if (active()) router.navigate(CREW_HANDOVER);
+          }}>
+            <MaterialIcons name="lock-outline" size={22} color={colors.brandGold} />
+            <View style={styles.rowBody}>
+              <Text style={styles.label}>Bàn giao hồ sơ</Text>
+              <Text style={styles.caption}>Gửi hoặc nhận hồ sơ đã ký</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color={colors.secondary} />
+          </Pressable>
+          {outboxRows.length > 0 ? <>
+            <Pressable accessibilityRole="button" accessibilityLabel="Hồ sơ cũ cần đối soát" accessibilityState={{ expanded: showLegacy }}
+              style={styles.supportRow} onPress={() => setShowLegacy(value => !value)}>
+              <MaterialIcons name="history" size={22} color={colors.brandGold} />
+              <Text style={[styles.label, styles.rowBody]}>Hồ sơ cũ cần đối soát ({outboxRows.length})</Text>
+              <MaterialIcons name={showLegacy ? 'expand-less' : 'expand-more'} size={22} color={colors.secondary} />
             </Pressable>
-          );
-        })}
-      </View>
-
-      <Card style={styles.statusCard}>
-        <View style={styles.statusHero}>
-          <View style={styles.heroIcon}>
-            <MaterialIcons
-              name="inventory-2"
-              size={28}
-              color={colors.brandGold}
-            />
-          </View>
-          <View style={styles.heroBody}>
-            <Text style={[typography.titleMd, styles.statusText]}>
-              {counts.pending} mục đang chờ đồng bộ
-            </Text>
-            <View style={styles.networkRow}>
-              <MaterialIcons name="help-outline" size={14} color={colors.secondary} />
-              <Text style={[typography.caption, styles.networkText]}>Chưa xác định trạng thái kết nối</Text>
-            </View>
-          </View>
-        </View>
-        <View style={styles.stateGrid}>
-          <View style={styles.stateCell}><Text style={styles.stateValue}>{outboxRows.length}</Text><Text style={styles.stateLabel}>Trên thiết bị</Text></View>
-          <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.pending}</Text><Text style={styles.stateLabel}>Chờ xử lý</Text></View>
-          <View style={styles.stateCell}><Text style={styles.stateValue}>{counts.done}</Text><Text style={styles.stateLabel}>Đã xác nhận</Text></View>
-        </View>
-        {counts.pending > 0 ? (
-          <View style={styles.queueNotice}>
-            <MaterialIcons name="info-outline" size={18} color={colors.secondary} />
-            <Text style={styles.queueNoticeText}>Chưa thể gửi các mục này. Dữ liệu vẫn được giữ trên máy.</Text>
-          </View>
-        ) : null}
-      </Card></> : null}
-
-      <CrewLocalDraftPanel identity={identity} refreshSignal={panelRefreshSignal} />
-      <CrewOfflinePanel identity={identity} refreshSignal={panelRefreshSignal} />
-      <CrewHandoverPanel identity={identity} refreshSignal={panelRefreshSignal} onJournalChanged={refreshAfterHandover} />
-      {outboxRows.length === 0 ? null : segment === 'pending' ? (
-        <>
-          {visibleItems.length > 0 ? (
-            <View style={styles.sectionHeader}>
-              <Text style={[typography.labelLg, styles.sectionTitle]}>Mục chờ gửi ({visibleItems.length})</Text>
-            </View>
-          ) : null}
-
-          {visibleItems.map((item) => (
-            <Card key={item.id ?? item.name} style={styles.itemCard}>
-              <View style={styles.itemTop}>
-                <View style={styles.itemContent}>
-                  <Text style={[typography.labelLg, styles.itemName]}>{item.name}</Text>
-                  <Text style={[typography.caption, styles.itemMeta]}>{item.meta}</Text>
-                </View>
-                <View style={styles.itemSide}>
-                  <StatusBadge status={item.status} />
-                  {item.status === SyncStatus.INVALID ? (
-                    <Pressable accessibilityRole="button" style={({ pressed }) => [styles.retryBtn, pressed && styles.pressed]} onPress={retry}>
-                      <MaterialIcons name="refresh" size={16} color={colors.secondary} />
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-              <Text style={[typography.caption, styles.itemSize]}>{item.size}</Text>
-              {item.progress != null ? (
-                <View style={styles.progressWrap}>
-                  <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${item.progress}%` }]} />
-                  </View>
-                  <Text style={[typography.labelSm, styles.progressText]}>{item.progress}%</Text>
-                </View>
-              ) : null}
-            </Card>
-          ))}
-
-        </>
-      ) : counts.done > 0 ? (
-        <EmptyState
-          icon="sync"
-          title="Kết quả cần đối soát"
-          message="Chưa có biên nhận hợp lệ để xác nhận dữ liệu cũ."
-        />
-      ) : (
-        <EmptyState
-          icon="cloud-off"
-          title="Chưa có dữ liệu"
-          message="Chưa có mục được xác nhận trong danh sách này. Không suy ra toàn bộ dữ liệu đã đồng bộ."
-        />
-      )}
-
-      {toast ? <Toast type="info" message={toast} /> : null}
+            {showLegacy ? <View style={styles.legacyList}>
+              <Text style={styles.caption}>Các mục này được giữ trên máy để kiểm tra với người phụ trách.</Text>
+              {outboxRows.map(row => <View key={row.id} style={styles.legacyItem}>
+                <Text style={styles.label}>{OUTBOX_KIND_LABELS[row.kind] ?? 'Thao tác đã lưu'}</Text>
+                <Text style={styles.caption}>{crewQueueStateLabel(row.stored_status ?? row.status)}</Text>
+                {row.last_error ? <Text style={styles.caption}>Lần xử lý trước chưa hoàn tất.</Text> : null}
+                {!/^[a-f0-9]{64}$/i.test(row.checksum_sha256 ?? '') ? <Text style={styles.caption}>Cần kiểm tra tính toàn vẹn của hồ sơ.</Text> : null}
+              </View>)}
+            </View> : null}
+          </> : null}
+        </Card>
+        {toast ? <Toast type="info" message={toast} /> : null}
       </CrewContentTransition>
     </SafeAreaScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  titleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  titleGroup: {
-    flexGrow: 1,
-    flexBasis: 190,
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  pageTitle: {
-    color: '#192D40',
-    fontSize: 16,
-    lineHeight: 24,
-    flexShrink: 1,
-  },
-  iconBtn: {
-    minWidth: 124,
-    minHeight: 48,
-    maxWidth: '100%',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: 12,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: '#89939F',
-    backgroundColor: '#F7F0DA',
-    borderRadius: radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  refreshLabel: { ...typography.labelLg, color: colors.secondary, flexShrink: 1, textAlign: 'center', lineHeight: 20 },
-  refreshPressed: { backgroundColor: '#F3ECD6' },
-  pressed: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  segments: {
-    flexDirection: 'row',
-    minHeight: 56,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 4,
-    gap: spacing.xs,
-    marginBottom: spacing.lg,
-
-  },
-  segment: {
-    flex: 1,
-    minHeight: 48,
-    padding: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.lg,
-  },
-  segmentActive: {
-    backgroundColor: '#FFF7DF',
-    borderWidth: 1,
-    borderColor: colors.brandGold,
-  },
-  segmentLabel: {
-    fontFamily: 'Roboto',
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.secondary,
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  segmentLabelActive: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.neutral,
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  statusCard: {
-    borderRadius: radius.lg,
-    marginBottom: spacing.lg,
-
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statusHero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  heroIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.full,
-    backgroundColor: '#FEF9E7',
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  heroBody: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  statusText: {
-    color: colors.neutral,
-  },
-  networkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  networkText: {
-    flexShrink: 1,
-    color: colors.secondary,
-  },
-  queueNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md, padding: spacing.sm, borderRadius: radius.md, backgroundColor: '#FFFBF0' },
-  queueNoticeText: { ...typography.caption, color: colors.secondary, flex: 1 },
-  stateGrid: { flexDirection: 'row', marginTop: spacing.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: spacing.sm },
-  stateCell: { flex: 1, alignItems: 'center', gap: 2 },
-  stateValue: { ...typography.titleLg, fontSize: 28, lineHeight: 34, fontVariant: ['tabular-nums'], color: colors.neutral },
-  stateLabel: { ...typography.caption, color: colors.secondary, textAlign: 'center' },
-  actionLine: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.sm, gap: spacing.sm },
-  smallAction: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 40, paddingHorizontal: spacing.sm, borderRadius: radius.md },
-  smallActionText: { ...typography.labelSm, color: colors.secondary },
-  heroDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginTop: spacing.md,
-  },
-  syncBtnWrap: {
-    marginTop: spacing.md,
-  },
-  syncDisabled: {
-    backgroundColor: colors.border,
-    opacity: 1,
-  },
-  syncDisabledText: {
-    color: '#A0AEC0',
-  },
-  syncAllDone: {
-    color: colors.secondary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    color: colors.secondary,
-  },
-  itemCard: {
-    borderRadius: radius.lg,
-    marginBottom: spacing.sm,
-
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  itemTop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  itemContent: {
-    flex: 1,
-  },
-  itemName: {
-    color: colors.neutral,
-  },
-  itemMeta: {
-    color: colors.secondary,
-    marginTop: 2,
-  },
-  itemSide: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  retryBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  itemSize: {
-    color: colors.secondary,
-    marginTop: spacing.xs,
-  },
-  progressWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  progressBar: {
-    flex: 1,
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceAlt,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-  },
-  progressText: {
-    color: colors.primaryDark,
-  },
-  cleanupBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  cleanupPressed: {
-    backgroundColor: colors.surfaceAlt,
-  },
-  cleanupText: {
-    color: colors.primaryDark,
-    letterSpacing: 0.04,
-  },
+  titleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  titleGroup: { flexGrow: 1, flexBasis: 170, flexShrink: 1, gap: spacing.xs },
+  pageTitle: { ...typography.titleLg, color: colors.neutral },
+  refresh: { minWidth: 48, minHeight: 48, flexDirection: 'row', gap: spacing.xs, paddingHorizontal: spacing.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  support: { borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
+  sectionTitle: { ...typography.titleMd, color: colors.neutral },
+  supportRow: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt },
+  rowBody: { flex: 1, gap: spacing.xs },
+  label: { ...typography.labelLg, color: colors.neutral },
+  caption: { ...typography.caption, color: colors.secondary },
+  legacyList: { gap: spacing.sm, padding: spacing.sm },
+  legacyItem: { gap: spacing.xs, borderTopWidth: 1, borderColor: colors.border, paddingTop: spacing.sm },
 });

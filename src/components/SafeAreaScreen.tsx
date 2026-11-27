@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, type LayoutChangeEvent, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../design-tokens';
 
@@ -8,6 +8,8 @@ interface SafeAreaScreenProps {
   scroll?: boolean;
   header?: ReactNode;
   keyboardAware?: boolean;
+  scrollRef?: React.Ref<ScrollViewInstance>;
+  onScrollLayout?: (event: LayoutChangeEvent) => void;
 }
 
 const ProviderInsetsContext = React.createContext(false);
@@ -17,7 +19,7 @@ export function ProviderInsetScreens({ children }: { children: ReactNode }) {
   return <ProviderInsetsContext.Provider value={true}>{children}</ProviderInsetsContext.Provider>;
 }
 
-export function SafeAreaScreen({ children, scroll, header, keyboardAware = false }: SafeAreaScreenProps) {
+export function SafeAreaScreen({ children, scroll, header, keyboardAware = false, scrollRef, onScrollLayout }: SafeAreaScreenProps) {
   const providerInsets = React.useContext(ProviderInsetsContext);
   const insets = useSafeAreaInsets();
   // Crew Android native-stack reattachment can render native SafeAreaView with
@@ -37,6 +39,8 @@ export function SafeAreaScreen({ children, scroll, header, keyboardAware = false
       {header}
       {scroll ? (
         <ScrollView
+          ref={scrollRef}
+          onLayout={onScrollLayout}
           style={styles.scroll}
           contentContainerStyle={[styles.content, styles.scrollContent]}
           showsVerticalScrollIndicator={false}

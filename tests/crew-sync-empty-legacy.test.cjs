@@ -1,20 +1,19 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {screen}=require('./helpers/roadfe-screen.cjs');
-async function mount(rows,read=async()=>rows){
+const same=(a,b)=>!b||['actor','scope','environment','role'].every(key=>a[key]===b[key]);
+async function mount(rows,read=async()=>rows,subscribe){
  const identity={actor:'crew',scope:'session',environment:'test',role:'REPAIR_CREW'};
  const s=screen('app/(crew)/sync.tsx',{expose:'CrewSyncContent',exportName:'CrewSyncContent',props:{identity},modules:{
   'expo-sqlite':{},
   '../../src/components/AppHeader':{AppHeader:'AppHeader'},'../../src/components/Card':{Card:'Card'},
   '../../src/offline/database':{openDatabase:()=>({}),initDatabase:async()=>{}},
-  '../../src/offline/upload-queue':{createQueueReader:()=>({read,cancel(){}}),sameQueueIdentity:()=>true},
+  '../../src/offline/upload-queue':{createQueueReader:()=>({read,cancel(){}}),sameQueueIdentity:same},
   '../../src/api/crewApi':{},'../../src/store/auth':{},
   '../../src/components/crew/CrewLocalDraftPanel':{CrewLocalDraftPanel:'CrewLocalDraftPanel'},
   '../../src/components/crew/CrewOfflinePanel':{CrewOfflinePanel:'CrewOfflinePanel'},
-  '../../src/components/crew/CrewHandoverPanel':{CrewHandoverPanel:'CrewHandoverPanel'},
-  '../../src/components/StatusBadge':{StatusBadge:'StatusBadge'},
-  '../../src/components/EmptyState':{EmptyState:'EmptyState'},
+  '../../src/store/crewHandoverRefresh':{subscribeToCrewHandoverChange:subscribe??(()=>()=>{})},
   '../../src/components/Toast':{Toast:'Toast'},
- }});s.render();await s.flush();return s;
+ }});s.render();await s.flush();return Object.assign(s,{identity});
 }
 test('empty legacy queue does not display unrelated zero totals above current FIELD records',async()=>{
  const s=await mount([]);
@@ -25,9 +24,14 @@ test('empty legacy queue does not display unrelated zero totals above current FI
 });
 test('retained legacy commands remain visible without granting send or ACK authority',async()=>{
  const s=await mount([{id:'old',kind:'FIELD_SUBMISSION',status:'ACKED',attempt:1,max_attempts:3}]);
- assert.equal(s.nodes().filter(n=>n.props.accessibilityRole==='tab').length,2);
- assert.ok(s.nodes().some(n=>n.type==='StatusBadge'));
- assert.equal(s.nodes().some(n=>n.type==='Button'&&n.props.title==='Đồng bộ ngay'),false);
+ const toggle=s.nodes().find(n=>n.props.accessibilityLabel==='Hồ sơ cũ cần đối soát');
+ assert.ok(toggle);assert.equal(toggle.props.accessibilityState.expanded,false);
+ toggle.props.onPress();s.render();
+ const text=JSON.stringify(s.nodes());
+ assert.match(text,/Phản hồi cũ chưa được đối soát/);
+ assert.doesNotMatch(text,/Đã xác nhận|Đồng bộ ngay|Lần thử/);
+ assert.ok(!s.nodes().some(n=>n.type==='CrewHandoverPanel'));
+ assert.equal(s.nodes().filter(n=>n.props.accessibilityLabel==='Bàn giao hồ sơ').length,1);
  s.unmount();
 });
 
@@ -47,18 +51,18 @@ test('refresh labels follow the real pending read, retain content and prevent du
  s.unmount();
 });
 
-test('handover journal changes refresh the queue and child panels only for the active session', async()=>{
- let reads=0;
- const s=await mount([],async()=>{reads++;return [];});
+test('handover journal completion refreshes the focused Sync screen only for the active session', async()=>{
+ let reads=0,listener;
+ const s=await mount([],async()=>{reads++;return [];},notify=>{listener=notify;return()=>{listener=undefined;};});
  const panel=type=>s.nodes().find(n=>n.type===type).props;
  const start=panel('CrewOfflinePanel').refreshSignal;
- panel('CrewHandoverPanel').onJournalChanged();
+ listener({...s.identity,scope:'old'});
+ await s.flush();assert.equal(reads,1);
+ listener(s.identity);
  await s.flush();
  assert.equal(reads,2);
  assert.equal(panel('CrewOfflinePanel').refreshSignal,start+1);
  assert.equal(panel('CrewLocalDraftPanel').refreshSignal,start+1);
- const notify=panel('CrewHandoverPanel').onJournalChanged;
+ s.blur();assert.equal(listener,undefined);
  s.unmount();
- notify();
- assert.equal(reads,2);
 });

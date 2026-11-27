@@ -25,13 +25,18 @@ test('H01B signed-out, restored user without token, wrong role cannot read or wr
 
 for(const role of ['crew','drone'])test('H01B '+role+' Sync actual component guards role and renders corrupt checksum without dispatch',()=>{
  const h=harness(),row={id:randomUUID(),kind:'FIELD_SUBMISSION',status:'BLOCKED_CONTRACT',checksum_sha256:null,attempt:0,max_attempts:5,last_error:null,data_b64:Buffer.from('{"name":{}}').toString('base64')};
- const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:v=>[Array.isArray(v)?[row]:v,()=>{}],useRef:v=>({current:v}),useMemo:f=>f(),useCallback:f=>f,useEffect:()=>{}};
+ let firstCrewToggle=role==='crew';
+ const React={createElement:(type,props,...children)=>({type,props:{...props,children}}),useState:v=>{
+   if(firstCrewToggle&&v===false){firstCrewToggle=false;return [true,()=>{}];}
+   return [Array.isArray(v)?[row]:v,()=>{}];
+ },useRef:v=>({current:v}),useMemo:f=>f(),useCallback:f=>f,useEffect:()=>{}};
  const deps={'react':React,'react-native':{StyleSheet:{create:x=>x},Platform:{select:x=>x.default}},'../../src/design-tokens':{colors:{},typography:{},spacing:{},radius:{}},'../../src/store/auth':{useAuthStore:fn=>fn(h.state())},'../../src/offline/upload-queue':h.q,'../../src/types/enums':{LocalState:{BLOCKED_CONTRACT:'BLOCKED_CONTRACT',ACKED:'ACKED'},SyncStatus:{INVALID:'INVALID'}}};
  deps['../../src/hooks/useOperatorReadScope']={useOperatorReadScope:()=>({key:'fixture',capture:()=>()=>true})};
+ deps['expo-router']={useRouter:()=>({navigate(){}}),useFocusEffect(){}};
  const file='app/('+role+')/sync.tsx',screen=load(deps,file);
  h.set({...h.state(),user:{id:h.actor,role_code:'REPORTER'}});const denied=screen.default();assert.match(JSON.stringify(denied),/Cần phiên/);
  h.set({...h.state(),user:{id:h.actor,role_code:role==='crew'?'REPAIR_CREW':'DRONE_OPERATOR'}});const wrapper=screen.default();assert.equal(typeof wrapper.type,'function');
- const tree=wrapper.type(wrapper.props);assert.match(JSON.stringify(tree),role==='crew'?/Mã kiểm tra dữ liệu chưa hợp lệ/:/SHA-256 chưa hợp lệ/);
+ const tree=wrapper.type(wrapper.props);assert.match(JSON.stringify(tree),role==='crew'?/Cần kiểm tra tính toàn vẹn của hồ sơ/:/SHA-256 chưa hợp lệ/);
  assert.ok(!fs.readFileSync(file,'utf8').includes('/sync/batches'));assert.equal(h.raw.prepare('SELECT COUNT(*) n FROM wire_command').get().n,0);
 });
 

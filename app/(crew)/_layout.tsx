@@ -4,6 +4,7 @@ import { Keyboard, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomNav } from '../../src/components/BottomNav';
 import { ProviderInsetScreens } from '../../src/components/SafeAreaScreen';
+import { CREW_HANDOVER, CREW_SYNC } from '../../src/constants/routes';
 
 const CREW_TABS = [
   { icon: 'home', iconFamily: 'material' as const, label: 'Trang chủ', route: '/(crew)/home' },
@@ -26,7 +27,7 @@ const CREW_TABS = [
       '/(crew)/receiving',
     ],
   },
-  { icon: 'sync', iconFamily: 'material' as const, label: 'Đồng bộ', route: '/(crew)/sync' },
+  { icon: 'sync', iconFamily: 'material' as const, label: 'Đồng bộ', route: CREW_SYNC, activePrefixes: [CREW_SYNC, CREW_HANDOVER] },
   { icon: 'person', iconFamily: 'material' as const, label: 'Hồ sơ', route: '/(crew)/profile' },
 ];
 
@@ -42,6 +43,7 @@ export default function CrewLayout() {
       <CrewScreenShell hideDock={activeRoute === '/(crew)/viewfinder' || activeRoute === '/(crew)/task-map'}>
         <View style={styles.stackArea}>
           <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="handover" dangerouslySingular />
             <Stack.Screen name="field-review" dangerouslySingular={(_name, params) => params?.projectId && params?.id ? `${params.projectId}:${params.id}:${params.supplement === '1' ? 'supplement' : 'normal'}` : undefined} />
           </Stack>
         </View>
