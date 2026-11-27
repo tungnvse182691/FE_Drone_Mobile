@@ -136,7 +136,7 @@ async function finishedForIntake(){
  const h=await started(),finish=await h.workflow.prepareRepairFinish(h.identity,h.runtime);
  await h.workflow.dispatchRepair(h.identity,finish.key,h.runtime);
  const field=claimHarness().m;
- h.workflow=load('src/api/crewRepairWorkflow.ts',{'./crewApi':h.runtime.api,'./crewRepairDraft':load('src/api/crewRepairDraft.ts',{'./crewApi':h.api,'../offline/database':{openDatabase:()=>h.port,initDatabase:async()=>{}}}),'./crewFieldDraft':field,'expo-crypto':{randomUUID:require('node:crypto').randomUUID}});
+ h.workflow=load('src/api/crewRepairWorkflow.ts',{'./crewApi':h.runtime.api,'./crewRepairDraft':load('src/api/crewRepairDraft.ts',{'./crewApi':h.api,'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts',{}),'../offline/database':{openDatabase:()=>h.port,initDatabase:async()=>{}}}),'./crewFieldDraft':field,'expo-crypto':{randomUUID:require('node:crypto').randomUUID}});
  const submissionId=require('node:crypto').randomUUID(),finishAt=new Date().toISOString();
  const body={originId:ids.first,startOriginId:ids.first,parentSubmissionId:null,captureType:'REPAIR_CLAIM',repaired:true,unrepairedReason:null,
   measurements:h.draft().measurements,evidence:[{captureOriginId:ids.capture,fileId:ids.file,purpose:'AFTER',checksumSha256:'a'.repeat(64),mediaType:'image/jpeg',capturedAt:finishAt,attemptChecklist:'POST_REPAIR_CAPTURE'}],locationProof:null};
@@ -310,15 +310,24 @@ test('signed finish root in real SQLite journal prepares and dispatches attempt 
  const h=await finishedForIntake();
  // Remove online T06A_REPAIR_COMMAND rows so SQLite matches a real signed offline REPAIR lifecycle.
  await h.port.runAsync('DELETE FROM local_draft WHERE kind = ?','T06A_REPAIR_COMMAND');
- const finishId=h.claim.repairClaim.finishId,originId=require('node:crypto').randomUUID();
+ const guid=require('node:crypto').randomUUID,finishId=h.claim.repairClaim.finishId,originId=finishId;
+ const registrationId=guid(),deviceId=guid(),snapshotId=guid(),sourceBatchId=guid(),batchId=guid();
+ const identity={...h.identity,role:'REPAIR_CREW'},taskVersion='AAAAAAAAB9E=';
+ const repair={schemaVersion:1,executeAuthority:'REVALIDATE_CURRENT_SOURCE_AT_ADMISSION',taskId:identity.taskId,
+  assignmentId:h.task.assignmentId,crewId:identity.actor,packageId:ids.packageId,itemId:ids.itemId,bindingId:ids.bindingId};
  const signedKey='c10bc:'+JSON.stringify([h.identity.environment,h.identity.actor,'REPAIR_CREW'])+':signed-finish-1';
  const signedRow=(phase,effectId=finishId)=>JSON.stringify({
-  projectId:h.identity.projectId,phase,proof:{kind:'signed-field-batch'},
-  body:JSON.stringify({operations:[{kind:'REPAIR_EXECUTION_FINISH',originId,effectId,taskId:h.identity.taskId,repair:{resourceId:ids.itemId}}]}),
-  verifiedItems:[{originId,effectId,canonicalOriginId:originId,kind:'REPAIR_EXECUTION_FINISH',state:'COMMITTED'}],
-  receipt:{items:[{originId,effectId,canonicalOriginId:originId,kind:'REPAIR_EXECUTION_FINISH',durableAcknowledgment:true,outcome:{id:effectId,itemId:ids.itemId,taskId:h.identity.taskId}}]},
+  projectId:h.identity.projectId,identity,phase,proof:{kind:'signed-field-batch',registrationId,deviceId,sourceBatchId},
+  body:JSON.stringify({batchId:sourceBatchId,sourceDeviceRegistrationId:registrationId,
+   operations:[{kind:'REPAIR_EXECUTION_FINISH',originId,effectId,taskId:identity.taskId,assignmentId:h.task.assignmentId,
+    originalActorId:identity.actor,sourceDeviceId:deviceId,snapshotId,taskVersion,repair:{resourceId:ids.itemId}}]}),
+  verifiedItems:[{originId,effectId,canonicalOriginId:originId,serverBatchId:batchId,kind:'REPAIR_EXECUTION_FINISH',state:'COMMITTED'}],
+  receipt:{batchId,items:[{originId,effectId,canonicalOriginId:originId,kind:'REPAIR_EXECUTION_FINISH',state:'COMMITTED',durableAcknowledgment:true,outcome:{id:effectId,itemId:ids.itemId,taskId:h.identity.taskId}}]},
  });
  const now=new Date().toISOString();
+ const putSource=(key,kind,receipt)=>h.port.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+  key,'C10BC_IMMUTABLE_COMMAND_V1',JSON.stringify({projectId:identity.projectId,identity,phase:'RECONCILED',proof:{kind},receipt}),now,now);
+ await putSource(signedKey+':device','enrollment',{id:registrationId,deviceId,actorId:identity.actor,revokedAt:null});
  // 1. Pending signed batch still blocks attempt fail-closed.
  await h.port.runAsync('INSERT INTO local_draft (id, kind, payload, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',signedKey,'C10BC_IMMUTABLE_COMMAND_V1',signedRow('PENDING'),now,now);
  h.claim.repairClaim.signedFinishOriginId=originId;h.claim.repairClaim.timeBasis='SERVER_RECEIVED';
@@ -329,6 +338,9 @@ test('signed finish root in real SQLite journal prepares and dispatches attempt 
  await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime),/repair_history_requires_reconciliation/);
  // 3. Reconciled signed batch with matching finishId allows online API-157 attempt & dispatch.
  await h.port.runAsync('UPDATE local_draft SET payload = ? WHERE id = ?',signedRow('RECONCILED',finishId),signedKey);
+ await assert.rejects(h.workflow.prepareRepairAttempt(h.identity,h.runtime),/repair_history_requires_reconciliation/);
+ await putSource(signedKey+':snapshot','snapshot',{id:snapshotId,taskId:identity.taskId,assignmentId:h.task.assignmentId,originalActorId:identity.actor,
+  taskVersion,deviceRegistrationId:registrationId,snapshot:{repair}});
  const c=await h.workflow.prepareRepairAttempt(h.identity,h.runtime);
  assert.equal(c.phase,'PREPARED');assert.equal(c.operation,'attempt');
  const done=await h.workflow.dispatchRepair(h.identity,c.key,h.runtime);

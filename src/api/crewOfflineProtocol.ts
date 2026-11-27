@@ -9,6 +9,7 @@ export type Sha256 = (utf8: string) => Promise<string>;
 type Field = readonly [string, string];
 const fields = (text:string):Field[] => text.split(' ').map(x=>x.split(':') as unknown as Field);
 const schemas:Record<string,Field[]> = {
+ attached: fields('batchId:guid sourceDeviceRegistrationId:guid operations:operation[] signature:string'),
  operation: fields('schemaVersion:int originId:guid effectId:guid kind:string originalActorId:guid sourceDeviceId:guid snapshotId:guid taskId:guid assignmentId:guid taskVersion:string corePayloadHash:string dependencies:guid[] claimedFinishedAt:date? fieldStart:start? fieldSubmission:submission? repair:repair? fieldAction:action?'),
  descriptor: fields('originId:guid effectId:guid kind:string envelopeHash:string corePayloadHash:string taskId:guid assignmentId:guid snapshotId:guid repairResourceId:guid?'),
  action: fields('reason:string assignedToUserId:guid? handover:handover?'),
@@ -92,29 +93,47 @@ function snapshotRecord(input:OfflineRecord):OfflineRecord {
  return record(copy(input,0));
 }
 export function serializeOfflineOperation(operation:OfflineRecord):string {return value('operation',operation);}
+export function signedRepairSnapshotMatches(
+  snapshot:OfflineRecord|undefined,operation:OfflineRecord,registrationId:unknown,
+  binding:{actor:string;taskId:string;assignmentId:string;packageId:unknown;itemId:unknown;bindingId:unknown},
+):boolean {
+  if(!snapshot||typeof operation.snapshotId!=='string'||typeof operation.taskVersion!=='string')return false;
+  const repair=(snapshot.snapshot as OfflineRecord|undefined)?.repair as OfflineRecord|undefined;
+  return !!repair&&repair.schemaVersion===1&&repair.executeAuthority==='REVALIDATE_CURRENT_SOURCE_AT_ADMISSION'&&
+    snapshot.id===operation.snapshotId&&snapshot.taskVersion===operation.taskVersion&&snapshot.deviceRegistrationId===registrationId&&
+    snapshot.originalActorId===binding.actor&&snapshot.taskId===binding.taskId&&snapshot.assignmentId===binding.assignmentId&&
+    repair.crewId===binding.actor&&repair.taskId===binding.taskId&&repair.assignmentId===binding.assignmentId&&
+    repair.packageId===binding.packageId&&repair.itemId===binding.itemId&&repair.bindingId===binding.bindingId;
+}
 /** Parse canonical attached JSON while wrapping measurement `value` lexemes as DecimalToken so non-integer and trailing-zero decimals survive JS roundtrips. */
 export function parseOfflineAttachedPreservingDecimals(raw:string):OfflineRecord {
  if(typeof raw!=='string'||raw.length>24*1024*1024)return fail();
  let i=0;const numRe=/-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
- const skip=()=>{while(i<raw.length&&/\s/.test(raw[i]))i++;};
+ const skip=()=>{while(i<raw.length&&/[ \t\r\n]/.test(raw[i]))i++;};
  const str=():string=>{const start=i++;while(i<raw.length){const c=raw[i++];if(c==='\\'){i++;continue;}if(c==='"')return JSON.parse(raw.slice(start,i)) as string;}return fail();};
- const parseVal=(key?:string):unknown=>{
-  skip();if(i>=raw.length)return fail();const c=raw[i];
+ const parseVal=(expected:string|undefined,depth:number):unknown=>{
+  skip();if(i>=raw.length||depth>64)return fail();const c=raw[i];
+  const type=expected?.replace(/\?$/,'');
   if(c==='"')return str();
   if(c==='{'){i++;skip();const obj:OfflineRecord=Object.create(null);if(raw[i]==='}'){i++;return obj;}
-   while(true){skip();if(raw[i]!=='"')return fail();const k=str();skip();if(raw[i++]!==':')return fail();obj[k]=parseVal(k);skip();if(raw[i]==='}'){i++;return obj;}if(raw[i++]!==',')return fail();}
+   while(true){skip();if(raw[i]!=='"')return fail();const k=str();skip();if(raw[i++]!==':'||Object.hasOwn(obj,k))return fail();
+    const fieldType=type?schemas[type]?.find(([name])=>name===k)?.[1]:undefined;
+    obj[k]=parseVal(fieldType,depth+1);skip();if(raw[i]==='}'){i++;return obj;}if(raw[i++]!==',')return fail();}
   }
   if(c==='['){i++;skip();const arr:unknown[]=[];if(raw[i]===']'){i++;return arr;}
-   while(true){arr.push(parseVal());skip();if(raw[i]===']'){i++;return arr;}if(raw[i++]!==',')return fail();}
+   const elementType=type?.endsWith('[]')?type.slice(0,-2):undefined;
+   while(true){arr.push(parseVal(elementType,depth+1));skip();if(raw[i]===']'){i++;return arr;}if(raw[i++]!==',')return fail();}
   }
   if(raw.startsWith('true',i)){i+=4;return true;}
   if(raw.startsWith('false',i)){i+=5;return false;}
   if(raw.startsWith('null',i)){i+=4;return null;}
   numRe.lastIndex=i;const m=numRe.exec(raw);if(!m)return fail();const tok=m[0];i+=tok.length;
-  if(key==='value')return {decimal:tok};
+  if(type==='decimal'){
+   const token={decimal:tok};value('decimal',token);return token;
+  }
   const n=Number(tok);if(!Number.isFinite(n))return fail();return n;
  };
- const root=parseVal();skip();if(i!==raw.length)return fail();return record(root);
+ const root=parseVal('attached',0);skip();if(i!==raw.length)return fail();return record(root);
 }
 async function hash(bytes:string,sha:Sha256):Promise<string> {const h=await sha(bytes);if(!/^[a-f0-9]{64}$/.test(h))return fail();return h;}
 export async function fieldCoreHash(operation:OfflineRecord,sha:Sha256):Promise<string> {

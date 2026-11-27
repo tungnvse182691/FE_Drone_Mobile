@@ -118,7 +118,7 @@ public final class RoadguardOfflineCryptoModule: Module {
 
   private static func isCanonicalUuid(_ value: String) -> Bool {
     guard let u = UUID(uuidString: value) else { return false }
-    return u.uuidString.lowercased() == value
+    return u.uuidString.lowercased() == value && value != "00000000-0000-0000-0000-000000000000"
   }
 
   private static func isValidEnvironmentUri(_ value: String) -> Bool {
@@ -200,9 +200,8 @@ public final class RoadguardOfflineCryptoModule: Module {
         "reason": "BLOCKED_NATIVE_KEY_OR_HARDWARE"
       ]
     }
-    let signExists = (try? loadKeychainData(service: Self.keyLifecycleSuite, account: "\(parsed.prefix).sign")) != nil
-    let agreeExists = (try? loadKeychainData(service: Self.keyLifecycleSuite, account: "\(parsed.prefix).agree")) != nil
-    let level = (signExists && agreeExists) ? "SECURE_ENCLAVE" : "MISSING"
+    let signExists = (try? loadSigningKey(prefix: parsed.prefix)) != nil
+    let agreeExists = (try? loadAgreementKey(prefix: parsed.prefix)) != nil
     let usable = (signExists && agreeExists)
     return [
       "available": true,
@@ -377,7 +376,8 @@ public final class RoadguardOfflineCryptoModule: Module {
     let signKey = try loadSigningKey(prefix: parsed.prefix)
     let signPubB64 = Self.spkiBase64(fromRawXY: signKey.publicKey.rawRepresentation)
 
-    guard let reqData = request.data(using: .utf8),
+    guard request.utf8.count <= 24 * 1024 * 1024,
+          let reqData = request.data(using: .utf8),
           let root = try JSONSerialization.jsonObject(with: reqData) as? [String: Any],
           let headerObj = root["header"] as? [String: Any],
           let payloadB64 = root["payloadBase64"] as? String,
@@ -452,13 +452,14 @@ public final class RoadguardOfflineCryptoModule: Module {
     let myFp = SHA256.hash(data: agreeDer).map { String(format: "%02x", $0) }.joined()
     let trustedKey = try Self.signingPublicKey(fromSpkiBase64: trustedSender)
 
-    guard let envData = envelope.data(using: .utf8),
+    guard envelope.utf8.count <= 24 * 1024 * 1024,
+          let envData = envelope.data(using: .utf8),
           let root = try JSONSerialization.jsonObject(with: envData) as? [String: Any],
           let headerObj = root["header"] as? [String: Any],
           let pNonceB64 = root["payloadNonce"] as? String,
           let ciphertextB64 = root["ciphertext"] as? String,
           let pTagB64 = root["payloadTag"] as? String,
-          let recipients = root["recipients"] as? [[String: Any]],
+          let recipients = root["recipients"] as? [[String: Any]], (1...32).contains(recipients.count),
           let senderPubB64 = root["senderSigningPublicKey"] as? String,
           let sigB64 = root["signature"] as? String,
           let senderKeyFromEnv = try? Self.signingPublicKey(fromSpkiBase64: senderPubB64),
@@ -494,12 +495,12 @@ public final class RoadguardOfflineCryptoModule: Module {
     }
     guard let wrap = selectedWrap,
           let ephB64 = wrap["ephemeralPublicKey"] as? String,
-          let wNonceB64 = wrap["nonce"] as? String, let wNonceData = Data(base64Encoded: wNonceB64),
-          let wKeyB64 = wrap["wrappedKey"] as? String, let wKeyData = Data(base64Encoded: wKeyB64),
-          let wTagB64 = wrap["tag"] as? String, let wTagData = Data(base64Encoded: wTagB64),
-          let pNonceData = Data(base64Encoded: pNonceB64),
-          let cTextData = Data(base64Encoded: ciphertextB64),
-          let pTagData = Data(base64Encoded: pTagB64)
+          let wNonceB64 = wrap["nonce"] as? String, let wNonceData = Data(base64Encoded: wNonceB64), wNonceData.count == 12,
+          let wKeyB64 = wrap["wrappedKey"] as? String, let wKeyData = Data(base64Encoded: wKeyB64), wKeyData.count == 32,
+          let wTagB64 = wrap["tag"] as? String, let wTagData = Data(base64Encoded: wTagB64), wTagData.count == 16,
+          let pNonceData = Data(base64Encoded: pNonceB64), pNonceData.count == 12,
+          let cTextData = Data(base64Encoded: ciphertextB64), (1...Self.maxPayloadBytes).contains(cTextData.count),
+          let pTagData = Data(base64Encoded: pTagB64), pTagData.count == 16
     else {
       throw NativeCryptoError.invalidInput("recipient_key_unavailable")
     }
@@ -541,6 +542,9 @@ public final class RoadguardOfflineCryptoModule: Module {
     let account = "roadguard.media.v1.\(id)"
     let recorded = UserDefaults.standard.bool(forKey: "\(Self.mediaLifecycleSuite).\(id)")
     let existing = try loadKeychainData(service: Self.keychainService, account: account)
+    if let existing, existing.count != 32 {
+      throw NativeCryptoError.lifecycleRecovery("MEDIA_KEY_RECOVERY_REQUIRED")
+    }
     if existing == nil {
       if recorded { throw NativeCryptoError.lifecycleRecovery("MEDIA_KEY_RECOVERY_REQUIRED") }
       UserDefaults.standard.set(true, forKey: "\(Self.mediaLifecycleSuite).\(id)")
@@ -564,44 +568,70 @@ public final class RoadguardOfflineCryptoModule: Module {
   private func sealMediaInternal(binding: String, assetId: String, sourceUri: String) throws -> [String: Any] {
     let id = try parseMediaBinding(binding)
     guard Self.isCanonicalUuid(assetId) else { throw NativeCryptoError.invalidInput("media_asset_invalid") }
-    guard let keyData = try loadKeychainData(service: Self.keychainService, account: "roadguard.media.v1.\(id)") else {
+    guard let keyData = try loadKeychainData(service: Self.keychainService, account: "roadguard.media.v1.\(id)"),
+          keyData.count == 32 else {
       throw NativeCryptoError.lifecycleRecovery("MEDIA_KEY_RECOVERY_REQUIRED")
     }
-    guard let srcUrl = URL(string: sourceUri), srcUrl.isFileURL else {
+    guard let srcUrl = URL(string: sourceUri), srcUrl.isFileURL,
+          (srcUrl.host ?? "").isEmpty, srcUrl.query == nil, srcUrl.fragment == nil else {
       throw NativeCryptoError.invalidInput("media_path_invalid")
     }
-    let resolvedSrc = srcUrl.resolvingSymlinksInPath()
-    let data = try Data(contentsOf: resolvedSrc)
-    guard data.count > 0 else { throw NativeCryptoError.invalidInput("media_size_invalid") }
+    let fm = FileManager.default
+    let docs = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false).resolvingSymlinksInPath()
+    let cache = try fm.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: false).resolvingSymlinksInPath()
+    let allowed = [cache] + ["crew-field", "reporter-photos-v1", "drone-sources-v1"].map { docs.appendingPathComponent($0) }
+    let resolvedSrc = srcUrl.standardizedFileURL.resolvingSymlinksInPath()
+    let values = try resolvedSrc.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+    guard allowed.contains(where: { resolvedSrc.path.hasPrefix($0.path + "/") }), values.isRegularFile == true else {
+      throw NativeCryptoError.invalidInput("media_path_invalid")
+    }
+    guard let size = values.fileSize, size > 0 else { throw NativeCryptoError.invalidInput("media_size_invalid") }
+    let input = try FileHandle(forReadingFrom: resolvedSrc)
+    defer { try? input.close() }
     let key = SymmetricKey(data: keyData)
     let destUrl = try mediaVaultDir(id: id, create: true).appendingPathComponent("\(assetId).rgc")
     guard !FileManager.default.fileExists(atPath: destUrl.path) else {
       throw NativeCryptoError.invalidInput("local_file_destination_invalid")
     }
     var saltNonce = Data(count: 12)
-    _ = saltNonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 12, $0.baseAddress!) }
+    let randomStatus = saltNonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 12, $0.baseAddress!) }
+    guard randomStatus == errSecSuccess else { throw NativeCryptoError.blockedNative("media_nonce_generation_failed") }
     var header = Data(Self.localMediaMagic)
     header.append(saltNonce)
-    var sizeBE = UInt64(data.count).bigEndian
+    var sizeBE = UInt64(size).bigEndian
     header.append(Data(bytes: &sizeBE, count: 8))
-    var outData = Data(header)
-    let chunks = max(1, (data.count + Self.bufferBytes - 1) / Self.bufferBytes)
+    let temporary = destUrl.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).tmp")
+    guard fm.createFile(atPath: temporary.path, contents: nil) else {
+      throw NativeCryptoError.invalidInput("local_file_destination_invalid")
+    }
+    defer { try? fm.removeItem(at: temporary) }
+    let output = try FileHandle(forWritingTo: temporary)
+    defer { try? output.close() }
+    try output.write(contentsOf: header)
+    var digest = SHA256()
     let ctxBytes = Data("\(binding):\(assetId)".utf8)
-    for idx in 0..<chunks {
-      let start = idx * Self.bufferBytes
-      let end = min(data.count, start + Self.bufferBytes)
+    for (idx, start) in stride(from: 0, to: size, by: Self.bufferBytes).enumerated() {
+      let length = min(size - start, Self.bufferBytes)
+      guard var data = try input.read(upToCount: length), data.count == length else {
+        throw NativeCryptoError.invalidInput("media_size_invalid")
+      }
+      defer { data.resetBytes(in: data.startIndex..<data.endIndex) }
       var aad = Data(header)
       aad.append(ctxBytes)
       var idxBE = UInt64(idx).bigEndian
       aad.append(Data(bytes: &idxBE, count: 8))
-      let sealed = try AES.GCM.seal(data.subdata(in: start..<end), using: key, authenticating: aad)
-      outData.append(Data(sealed.nonce))
-      outData.append(sealed.ciphertext)
-      outData.append(sealed.tag)
+      digest.update(data: data)
+      let sealed = try AES.GCM.seal(data, using: key, authenticating: aad)
+      try output.write(contentsOf: Data(sealed.nonce))
+      try output.write(contentsOf: sealed.ciphertext)
+      try output.write(contentsOf: sealed.tag)
     }
-    try outData.write(to: destUrl, options: [.withoutOverwriting])
-    let checksum = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    return ["version": 1, "assetId": assetId, "checksumSha256": checksum, "sizeBytes": data.count]
+    guard try input.read(upToCount: 1)?.isEmpty != false else { throw NativeCryptoError.invalidInput("media_size_invalid") }
+    try output.synchronize()
+    try output.close()
+    try fm.moveItem(at: temporary, to: destUrl)
+    let checksum = digest.finalize().map { String(format: "%02x", $0) }.joined()
+    return ["version": 1, "assetId": assetId, "checksumSha256": checksum, "sizeBytes": size]
   }
 
   private func readMediaRangeInternal(binding: String, assetId: String, offset: Int64, length: Int) throws -> String {
@@ -609,7 +639,8 @@ public final class RoadguardOfflineCryptoModule: Module {
     guard Self.isCanonicalUuid(assetId), offset >= 0, length > 0, length <= Self.maxLocalMediaRead else {
       throw NativeCryptoError.invalidInput("local_file_range_invalid")
     }
-    guard let keyData = try loadKeychainData(service: Self.keychainService, account: "roadguard.media.v1.\(id)") else {
+    guard let keyData = try loadKeychainData(service: Self.keychainService, account: "roadguard.media.v1.\(id)"),
+          keyData.count == 32 else {
       throw NativeCryptoError.lifecycleRecovery("MEDIA_KEY_RECOVERY_REQUIRED")
     }
     let key = SymmetricKey(data: keyData)
@@ -620,8 +651,8 @@ public final class RoadguardOfflineCryptoModule: Module {
       throw NativeCryptoError.invalidInput("local_file_range_invalid")
     }
     guard header.prefix(8) == Self.localMediaMagic else { throw NativeCryptoError.invalidInput("local_file_range_invalid") }
-    let totalSize = header.subdata(in: 20..<28).withUnsafeBytes { $0.load(as: UInt64.self).bigEndian }
-    guard offset <= Int64(totalSize), Int64(length) <= Int64(totalSize) - offset else {
+    let totalSize = header[20..<28].reduce(UInt64(0)) { ($0 << 8) | UInt64($1) }
+    guard totalSize <= UInt64(Int.max), UInt64(offset) <= totalSize, UInt64(length) <= totalSize - UInt64(offset) else {
       throw NativeCryptoError.invalidInput("local_file_range_invalid")
     }
     let firstIdx = Int(offset / Int64(Self.bufferBytes))

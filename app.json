@@ -12,12 +12,12 @@
       "supportsTablet": true,
       "requireFullScreen": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
         "UISupportedInterfaceOrientations": ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
       }
     },
     "android": {
       "package": "com.hoanghai.roadguard",
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -34,8 +34,9 @@
       "expo-camera",
       "expo-location",
       "@react-native-community/datetimepicker",
-      "expo-secure-store",
-      "expo-font"
+      ["expo-secure-store", { "configureAndroidBackup": false }],
+      "expo-font",
+      "./plugins/withRoadGuardAndroidSecurity"
     ]
   }
 }

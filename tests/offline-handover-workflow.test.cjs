@@ -71,6 +71,14 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
   const snapshotId = crypto.randomUUID();
   const originId = crypto.randomUUID();
   const sourceBatchId = crypto.randomUUID();
+  const captureOriginId = crypto.randomUUID();
+  const capturedBytes = crypto.randomBytes(300);
+  const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+  const evidence = {
+    captureOriginId, fileId: null, purpose: 'BEFORE', mediaType: 'image/jpeg',
+    checksumSha256: sha256(capturedBytes), sizeBytes: capturedBytes.length,
+    capturedAt: '2026-11-26T01:00:00Z', attemptChecklist: null,
+  };
 
   // Generate 2 real P-256 keypairs (sender & recipient) via Java JCA
   function genKeyPair() {
@@ -119,6 +127,7 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
 
   // In-memory store per actor
   const journalRows = [];
+  const artifactRows = new Map();
   const makeJournal = (id) => ({
     list: async () => journalRows.filter((r) => r.identity.actor === id.actor && r.projectId === projectId),
     prepare: async (item) => {
@@ -127,10 +136,19 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
       return rec;
     },
     transition: async (rec, phase, receipt) => {
-      const idx = journalRows.findIndex((x) => x.id === rec.id);
       const updated = { ...rec, phase, ...(receipt !== undefined ? { receipt } : {}) };
+      if (rec.proof.kind === 'handover-artifact') {
+        artifactRows.set(rec.id, updated);
+        return updated;
+      }
+      const idx = journalRows.findIndex((x) => x.id === rec.id);
       if (idx >= 0) journalRows[idx] = updated;
       return updated;
+    },
+    readArtifact: async artifactId => artifactRows.get(artifactId),
+    prepareArtifacts: async (source, intents) => {
+      assert.equal(source.phase, 'RECONCILED');
+      for (const item of intents) artifactRows.set(item.id, { ...item, phase: 'PREPARED' });
     },
     checkpoint: async (rec, items) => {
       const idx = journalRows.findIndex((x) => x.id === rec.id);
@@ -153,6 +171,10 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
   const serverGrants = new Map();
   const serverBatches = new Map();
   const serverOrigins = new Map();
+  const serverArtifacts = new Map();
+  const artifactRequests = [];
+  const importRequests = [];
+  let uploadVerified = false;
   let failExportOnce = true;
 
   const client = axios.create({
@@ -193,6 +215,10 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
           if (!o) return Promise.reject({ response: { status: 404, data: { code: 'not_found' } } });
           return { status: 200, data: o, headers: {}, config };
         }
+        const artifact = serverArtifacts.get(u.split('/').at(-1));
+        if (u.includes('/offline/artifacts/') && artifact) {
+          return { status: 200, data: artifact, headers: {}, config };
+        }
       }
       if (config.method === 'post' && u.endsWith('/offline/packages/export')) {
         if (failExportOnce) {
@@ -219,21 +245,44 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
         serverPackages.set(pkgId, stored);
         return { status: 201, data: stored, headers: {}, config };
       }
+      if (config.method === 'post' && u.endsWith('/offline/artifacts')) {
+        const { manifest, manifestSignature, chunkIndex, envelope } = JSON.parse(config.data);
+        const chunk = manifest.chunks[chunkIndex];
+        const artifactIntent = artifactRows.get(chunk.artifactId);
+        assert.equal(artifactIntent.phase, 'IN_FLIGHT');
+        assert.equal(artifactIntent.body, config.data);
+        assert.equal(artifactIntent.key, config.headers.get('Idempotency-Key'));
+        assert.equal(config.data.includes(capturedBytes.toString('base64')), false);
+        const signedManifestJson = handover.canonicalCaptureManifest(manifest);
+        assert.ok(verifyClaim(senderSign.pubB64, signedManifestJson, manifestSignature));
+        const artifact = {
+          id: chunk.artifactId, projectId, parentPackageId: manifest.parentPackageId,
+          captureOriginId, taskId, originalActorId: senderActor, sourceDeviceRegistrationId: senderRegId,
+          chunkIndex, chunkOffset: chunk.offset, chunkLength: chunk.length,
+          plaintextChecksum: chunk.plaintextChecksum, envelopeFingerprint: chunk.envelopeFingerprint,
+          manifestHash: sha256(signedManifestJson), signedManifestJson, manifestSignature,
+          cipherEnvelopeJson: JSON.stringify(envelope),
+        };
+        serverArtifacts.set(artifact.id, artifact);
+        artifactRequests.push([config.data, config.headers.get('Idempotency-Key')]);
+        if (artifactRequests.length === 1) throw Error('artifact_response_lost');
+        return { status: 200, data: artifact, headers: {}, config };
+      }
       if (config.method === 'post' && u.endsWith('/offline/import')) {
         const body = JSON.parse(config.data);
         const grant = serverGrants.get(body.grantId);
         if (!grant) return Promise.reject({ response: { status: 403, data: { code: 'access_forbidden' } } });
         if (grant.revokedAt) return Promise.reject({ response: { status: 403, data: { code: 'handover_grant_revoked' } } });
         if (Date.now() >= Date.parse(grant.expiresAt)) return Promise.reject({ response: { status: 403, data: { code: 'handover_grant_expired' } } });
-        const canonicalOrig = crypto.randomUUID();
+        importRequests.push([config.data, config.headers.get('Idempotency-Key')]);
         const itemReceipt = {
           originId: body.operations[0].originId,
           kind: body.operations[0].kind,
-          state: 'COMMITTED',
-          code: null,
+          state: uploadVerified ? 'COMMITTED' : 'PENDING_DEPENDENCY',
+          code: uploadVerified ? null : 'evidence_upload_required',
           effectId: body.operations[0].effectId,
-          canonicalOriginId: canonicalOrig,
-          durableAcknowledgment: true,
+          canonicalOriginId: uploadVerified ? originId : null,
+          durableAcknowledgment: uploadVerified,
           serverReceivedAt: '2026-11-26T12:00:00Z',
           outcome: null,
           admission: {
@@ -249,7 +298,7 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
             originalActorId: senderActor,
             currentImporterId: recipientActor,
             grantId: grant.id,
-            status: 'COMMITTED',
+            status: uploadVerified ? 'COMMITTED' : 'WAITING_UPLOAD',
             captures: [],
           },
         };
@@ -411,6 +460,27 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
     '../offline/checksum': checksum,
     '../utils/base64': utilsBase64,
     '../utils/uuid': { uuidv4: crypto.randomUUID },
+    './crewFieldDraft': {
+      openFieldRuntime: async context => {
+        assert.equal(context.actor, senderActor);
+        return { historicalRead: async () => ({
+          captures: [{ id: captureOriginId, vault: {}, size: evidence.sizeBytes, checksum: evidence.checksumSha256,
+            purpose: evidence.purpose, mediaType: evidence.mediaType }],
+        }) };
+      },
+    },
+    './crewMediaVault': { readCrewPhotoBytes: async () => Uint8Array.from(capturedBytes) },
+    './uploads': { sha256HexOfBytes: async bytes => sha256(bytes) },
+    './crewOfflineAdmission': {
+      resumeSignedEvidence: async (record, identity) => {
+        assert.equal(identity.actor, recipientActor);
+        assert.equal(record.receipt.items[0].durableAcknowledgment, false);
+        const opened = await handover.readHandoverCapture(record, identity, taskId, evidence);
+        assert.deepEqual(Buffer.from(opened.bytes), capturedBytes);
+        assert.equal(opened.manifest.originalActorId, senderActor);
+        uploadVerified = true;
+      },
+    },
   };
   deps['../offline/crewSignedSync'] = loadTs('src/offline/crewSignedSync.ts', {
     './upload-queue': {},
@@ -436,7 +506,7 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
     schemaVersion: 1,
     originId,
     effectId: originId,
-    kind: 'FIELD_START',
+    kind: 'FIELD_SUBMISSION',
     originalActorId: senderActor,
     sourceDeviceId: senderDeviceId,
     snapshotId,
@@ -445,9 +515,12 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
     taskVersion: 'AAAAAAAAB9E=',
     corePayloadHash: '0'.repeat(64),
     dependencies: [],
-    claimedFinishedAt: null,
-    fieldStart: { originId, claimedAt: '2026-11-26T00:00:00Z', deviceId: senderDeviceId, monotonicMilliseconds: null, bootId: null, offlineProof: null },
-    fieldSubmission: null,
+    claimedFinishedAt: evidence.capturedAt,
+    fieldStart: null,
+    fieldSubmission: {
+      originId, startOriginId: crypto.randomUUID(), parentSubmissionId: null, measurements: [], evidence: [evidence],
+      locationProof: null, captureType: 'FIELD', repaired: null, unrepairedReason: null, deviceId: senderDeviceId,
+    },
     repair: null,
     fieldAction: null,
   };
@@ -508,10 +581,20 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
   await assert.rejects(handover.prepareHandoverPackageExport(currentIdentity, projectId, batchRecord, []), /handover_recipients_required/);
   const exportRec = await handover.prepareHandoverPackageExport(currentIdentity, projectId, batchRecord, [recipCard]);
   assert.equal(exportRec.phase, 'PREPARED');
+  // The previous APK retained recipient fingerprints, without public keys for media sealing.
+  delete exportRec.proof.recipients;
   await assert.rejects(handover.sendHandoverPackageExport(exportRec, currentIdentity), /network_timeout/);
   const afterTimeout = journalRows.find((r) => r.id === exportRec.id);
   assert.equal(afterTimeout.phase, 'UNKNOWN_OUTCOME');
-  const exported = await handover.sendHandoverPackageExport(afterTimeout, currentIdentity);
+  await assert.rejects(handover.sendHandoverPackageExport(afterTimeout, currentIdentity), /handover_recipient_invalid/);
+  const registered = journalRows.find(r => r.id === exportRec.id);
+  assert.equal(registered.phase, 'RECONCILED');
+  await assert.rejects(handover.sendHandoverPackageExport(registered, currentIdentity, [recipCard]), /artifact_response_lost/);
+  assert.equal([...artifactRows.values()][0].phase, 'UNKNOWN_OUTCOME');
+  const exported = await handover.sendHandoverPackageExport(registered, currentIdentity);
+  assert.equal([...artifactRows.values()][0].phase, 'RECONCILED');
+  assert.deepEqual(artifactRequests[0], artifactRequests[1]);
+  assert.equal(serverPackages.size, 1);
   assert.equal(exported.phase, 'RECONCILED');
   const pkgId = exported.proof.packageId;
 
@@ -571,6 +654,9 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
   assert.equal(imported.phase, 'RECONCILED');
   assert.equal(imported.verifiedItems.length, 1);
   assert.equal(imported.verifiedItems[0].originId, originId);
+  assert.equal(serverArtifacts.size, 1);
+  assert.equal(importRequests.length, 2);
+  assert.deepEqual(importRequests[0], importRequests[1]);
 
   // 7. Capture artifact manifest validation & bounds
   const chunkManifest = handover.canonicalCaptureManifest({
@@ -639,7 +725,7 @@ test('Handover 42A discovery, canonical claim, public recipient card, export, op
   };
   const subRec = {
     ...imported,
-    body: JSON.stringify({ batchId: imported.proof.importBatchId, grantId, recipientDeviceRegistrationId: recipientRegId, operations: [subOp] }),
+    body: JSON.stringify({ batchId: imported.proof.importBatchId, packageId: pkgId, grantId, recipientDeviceRegistrationId: recipientRegId, operations: [subOp] }),
   };
   const subItem = { ...importedBatch.items[0], kind: 'FIELD_SUBMISSION', admission: { ...importedBatch.items[0].admission, batchId: imported.proof.importBatchId } };
   assert.equal(admissionMod.validateImportedAdmissionSource(subRec, subItem).admission.grantId, grantId);

@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/auth';
 import { passwordSessionIdentity } from './authApi';
 import { apiClient } from './client';
 import { getOperatorSurveyTaskDetailReal, type SurveyTaskV2ResponseDto } from './droneApi';
+import type { PartUrlIssuance, RetiredPartUrlIssuance } from './uploadPartUrlRenewal';
 
 type Operation = 'accept' | 'decline';
 type Command = { schema: 1; environment: string; actor: string; session: string; taskId: string; projectId: string;
@@ -21,7 +22,7 @@ export type DroneUploadIntent = {
   purpose?: 'SURVEY_VIDEO' | 'TELEMETRY'; mimeType?: 'video/mp4' | 'application/x-subrip';
   body: Record<string, unknown>; uploadId: string | null; fileId: string | null; version: string | null;
   completeRequest?: { version: string; parts: Array<{partNumber: number; etag: string}>; checksumSha256: string };
-  partUrlRequest?: { generation: number; expiresAt?: string };
+  partUrlRequest?: { generation: number; expiresAt?: string; key?: string; partNumbers?: PartUrlIssuance['partNumbers']; history?: RetiredPartUrlIssuance[] };
   cancelRequest?: { requestedAt: string; phase: 'UNKNOWN' | 'CONFIRMED' | 'REJECTED' };
   ifMatch: string | null; parts: DroneUploadPart[]; status: DroneUploadIntentStatus;
   updatedAt: string; receipt: Record<string, unknown> | null; error: { status?: number; code: string; storageCode?: string } | null;

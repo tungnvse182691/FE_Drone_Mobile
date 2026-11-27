@@ -24,6 +24,7 @@ function loadWorkflow(journalFactory, suppliedAuth) {
     './authApi': { passwordSessionIdentity: token => token ? JSON.stringify([id(1), token]) : null },
     './client': { apiClient: { defaults: { baseURL: 'https://fixture.test' } } },
     './droneTaskJournal': { openDroneUploadJournal: journalFactory },
+    './uploadPartUrlRenewal': require('./helpers/upload-part-url-renewal.cjs'),
     './droneApi': {
       createOperatorUploadSessionReal: () => {}, getOperatorUploadSessionReal: () => {}, getOperatorUploadPartUrlsReal: () => {},
       putUploadPartBytesDirect: () => {}, completeOperatorUploadReal: () => {}, getOperatorFileMetadataReal: () => {},

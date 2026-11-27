@@ -67,6 +67,7 @@ function loadCancelWorkflow({ cancel, getSession, intent, onUpdate, onRead }) {
       if (name === './authApi') return { passwordSessionIdentity: token => token ? JSON.stringify([actor, token]) : null };
       if (name === './client') return { apiClient: { defaults: { baseURL: 'https://fixture.test' } } };
       if (name === './droneTaskJournal') return { openDroneUploadJournal: async () => journal };
+      if (name === './uploadPartUrlRenewal') return require('./helpers/upload-part-url-renewal.cjs');
       if (name === './droneApi') return {
         cancelOperatorUploadReal: cancel,
         getOperatorUploadSessionReal: getSession,

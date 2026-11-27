@@ -294,6 +294,9 @@ class UploadFixtureDate extends Date {
 }
 function loadUploadWorkflow(journalFactory, api={}, auth){
  const deps={'../store/auth':{useAuthStore:auth??{getState:()=>({token:'sid',status:'AUTHENTICATED',user:{id:id(1),role_code:'DRONE_OPERATOR'}}),subscribe:()=>()=>{}}},'./authApi':{passwordSessionIdentity:()=>JSON.stringify([id(1),'sid'])},'./client':{apiClient:{defaults:{baseURL:'https://fixture.test'}}},'./droneTaskJournal':{openDroneUploadJournal:journalFactory},'./droneApi':{createOperatorUploadSessionReal:()=>{},getOperatorUploadSessionReal:()=>{},getOperatorUploadPartUrlsReal:()=>{},putUploadPartBytesDirect:()=>{},completeOperatorUploadReal:()=>{},getOperatorFileMetadataReal:()=>{},getOperatorDatasetReal:()=>{},getOperatorDatasetCoverageReal:()=>{},getOperatorSurveyTaskDetailReal:()=>{},...api}};
+ const renewal={exports:{}};
+ vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/uploadPartUrlRenewal.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:renewal,exports:renewal.exports,Date:UploadFixtureDate});
+ deps['./uploadPartUrlRenewal']=renewal.exports;
  const mod={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/api/droneDatasetWorkflow.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:mod,exports:mod.exports,require:n=>{if(!deps[n])throw Error(n);return deps[n];},Date:UploadFixtureDate,Set,Map,JSON});return mod.exports;
 }
 test('Drone upload orchestration persists before transport and distinguishes complete from verified',async()=>{
@@ -380,11 +383,17 @@ test('Operator resumes storage 403 with the same upload and retained part receip
 
 test('Operator persists URL admission before POST and renews an expired admission with a new key',async()=>{
  const f=uploadScenario({uploadId:id(41),fileId:id(42),status:'PARTS_IN_PROGRESS',partUrlRequest:{generation:0,expiresAt:'2020-01-01T00:00:00Z'}});
- f.set('UPLOADING');let key;
+ f.set('UPLOADING');const issued=[];
  const original=f.transport.getPartUrls;
- f.transport.getPartUrls=async(uploadId,numbers,k)=>{assert.ok(f.intent.partUrlRequest);assert.equal(f.intent.partUrlRequest.generation,1);key=k;return original(uploadId,numbers,k);};
+ f.transport.getPartUrls=async(uploadId,numbers,k)=>{
+  assert.equal(f.intent.partUrlRequest.generation,issued.length);
+  issued.push(k);
+  if(issued.length===1)throw {response:{status:409,data:{code:'upload_part_urls_expired',uploadId,partNumbers:numbers,expiresAt:'2020-01-01T00:00:00Z',serverTime:'2026-11-05T00:00:00Z',renewalAllowed:true,sessionStatus:'UPLOADING',reason:'receipt_expired'}}};
+  return original(uploadId,numbers,k);
+ };
  await f.workflow.orchestrateDroneUpload(f.plan,f.transport);
- assert.equal(key,id(40)+':parts:1');
+ assert.deepEqual(issued,[id(40)+':parts:0',id(40)+':parts:1']);
+ assert.equal(f.intent.partUrlRequest.history[0].key,issued[0]);
 });
 test('Operator completion timeout retries immutable completion after GET without rePUT',async()=>{
  const f=uploadScenario(),complete=f.transport.complete;let first=true;

@@ -134,11 +134,6 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
     try {
       await fn();
     } catch (error) {
-      const errObj = error as { message?: string; code?: string; response?: { status?: number; data?: { code?: string } } } | undefined;
-      const safeMsg = typeof errObj?.message === 'string' && /^[a-zA-Z0-9_.: -]{1,80}$/.test(errObj.message) ? errObj.message : 'unknown_error';
-      const safeApiCode = typeof errObj?.response?.data?.code === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(errObj.response.data.code) ? errObj.response.data.code : 'none';
-      const safeStatus = typeof errObj?.response?.status === 'number' ? errObj.response.status : 0;
-      console.warn(`[CrewHandover] failed msg=${safeMsg} apiCode=${safeApiCode} status=${safeStatus}`);
       if (mounted.current && seq === sequence.current && sameQueueIdentity(identity)) {
         setErrorMessage(handoverErrorMessage(error));
       }
@@ -169,7 +164,7 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
       if (!targetBatch) throw Error('handover_source_batch_invalid');
       const card = parsePublicRecipientCard(recipientCardInput.trim());
       const prepared = await prepareHandoverPackageExport(identity, targetBatch.projectId, targetBatch, [card]);
-      const reconciled = await sendHandoverPackageExport(prepared, identity);
+      const reconciled = await sendHandoverPackageExport(prepared, identity, [card]);
       const pkgId = String(reconciled.proof.packageId ?? '');
       const probe = await inspectOfflineDevice(identity);
       const cardSelf = await exportPublicRecipientCard(identity, targetBatch.projectId);
@@ -233,7 +228,7 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
       } else {
         setStatusMessage('Đã gửi nhập bàn giao; còn thao tác chờ xác minh hoặc bổ sung.');
       }
-      setOpenedPackage(null);
+      if(result.phase==='RECONCILED'||result.terminalItems?.length)setOpenedPackage(null);
     });
 
   return (
@@ -443,8 +438,8 @@ export function CrewHandoverPanel({ identity, refreshSignal = 0 }: { identity: Q
               style={styles.input}
             />
             <TextInput
-              accessibilityLabel="Khóa ký công khai người gửi tin cậy"
-              placeholder="Khóa ký công khai SPKI của người gửi tin cậy"
+              accessibilityLabel="Khóa ký công khai để đối chiếu"
+              placeholder="Khóa ký công khai để đối chiếu (tùy chọn)"
               value={trustedSenderInput}
               onChangeText={setTrustedSenderInput}
               autoCapitalize="none"

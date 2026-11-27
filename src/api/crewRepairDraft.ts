@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/auth';
 import { passwordSessionIdentity } from './authApi';
 import { apiClient } from './client';
 import { isCrewResourceId, isRepairItemVersion } from './crewApi';
+import { signedRepairSnapshotMatches, type OfflineRecord } from './crewOfflineProtocol';
 import type { FieldDraft } from './crewFieldDraft';
 
 export interface RepairIdentity {
@@ -71,31 +72,39 @@ function normalizeOptionalFields(input: unknown, optionalKeys: readonly string[]
   return out;
 }
 function normalizeAssessmentTimestamp(v: unknown): unknown {
-  if (v === undefined || v === null) return null;
-  if (typeof v !== 'string') return v;
-  const ms = Date.parse(v);
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : v;
+  if (v == null) return null;
+  const match = typeof v === 'string' && /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,7}))?(Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/.exec(v);
+  if (!match || match[1].startsWith('0000') || /^[+-]14:(?!00)/.test(match[3])) throw Error('repair_payload_invalid');
+  const local = new Date(`${match[1]}Z`);
+  if (!Number.isFinite(local.getTime()) || local.toISOString().slice(0,19) !== match[1]) throw Error('repair_payload_invalid');
+  const utc = new Date(`${match[1]}${match[3]}`).toISOString();
+  if (utc.startsWith('0000') || utc.length !== 24) throw Error('repair_payload_invalid');
+  return `${utc.slice(0,19)}.${(match[2]??'').padEnd(7,'0')}Z`;
+}
+function normalizeAssessmentDecimal(value: unknown): string | null {
+  if (value == null) return null;
+  const decimal = typeof value === 'number' && Number.isFinite(value) ? String(value) :
+    value && typeof value === 'object' && Object.keys(value).length === 1 ? (value as {decimal?:unknown}).decimal : null;
+  if (typeof decimal !== 'string' || !/^-?(?:0|[1-9]\d*)(?:\.\d{1,28})?$/.test(decimal) ||
+      decimal.replace(/[-.]/g,'').length > 28) throw Error('repair_payload_invalid');
+  const normalized = decimal.includes('.') ? decimal.replace(/0+$/,'').replace(/\.$/,'') : decimal;
+  return normalized === '-0' ? '0' : normalized;
 }
 function normalizeAssessmentMeasurements(items: unknown): unknown {
-  if (!Array.isArray(items)) return [];
+  if (!Array.isArray(items)) throw Error('repair_payload_invalid');
   return items.map(item => {
     const normalized = normalizeOptionalFields(item, MEASUREMENT_OPTIONAL);
-    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return normalized;
+    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) throw Error('repair_payload_invalid');
     const m = normalized as Record<string, unknown>;
-    const rawVal = m.value;
-    if (rawVal && typeof rawVal === 'object' && !Array.isArray(rawVal) && typeof (rawVal as {decimal?:unknown}).decimal === 'string') {
-      m.value = Number((rawVal as {decimal:string}).decimal);
-    } else if (rawVal === undefined) {
-      m.value = null;
-    }
+    m.value = normalizeAssessmentDecimal(m.value);
     return m;
   });
 }
 function normalizeAssessmentEvidence(items: unknown): unknown {
-  if (!Array.isArray(items)) return [];
+  if (!Array.isArray(items)) throw Error('repair_payload_invalid');
   return items.map(item => {
     const normalized = normalizeOptionalFields(item, ['attemptChecklist']);
-    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return normalized;
+    if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) throw Error('repair_payload_invalid');
     const e = normalized as Record<string, unknown>;
     e.capturedAt = normalizeAssessmentTimestamp(e.capturedAt);
     return e;
@@ -103,14 +112,15 @@ function normalizeAssessmentEvidence(items: unknown): unknown {
 }
 /** Compare submitted content, excluding transport origin/key/device metadata. */
 export function sameRepairAssessmentSource(a: Record<string,unknown>,b: Record<string,unknown>): boolean {
-  const source=(p:Record<string,unknown>)=>JSON.parse(JSON.stringify({
+  const source=(p:Record<string,unknown>)=>({
     fieldFirstStartId:p.fieldFirstStartId??null,
     measurements:normalizeAssessmentMeasurements(p.measurements??[]),
     evidence:normalizeAssessmentEvidence(p.evidence??[]),
     locationProof:normalizeOptionalFields(p.locationProof??null, POSITION_OPTIONAL),
     stopConditions:p.stopConditions??null,
-  }));
-  return canonical(source(a))===canonical(source(b));
+  });
+  try { return canonical(source(a))===canonical(source(b)); }
+  catch { return false; }
 }
 /** Local edits never grant authority: they invalidate the previous assessment for a new start. */
 export function repairAssessmentMatchesDraft(payload: Record<string,unknown>,draft: FieldDraft): boolean {
@@ -250,7 +260,8 @@ export async function openRepairJournal(identity: RepairIdentity,
         const signedPrefix='c10bc:'+JSON.stringify([context.environment,context.actor,'REPAIR_CREW'])+':';
         const signed=await transaction.getAllAsync<{payload:string}>('SELECT payload FROM local_draft WHERE kind=? AND substr(id,1,?)=?',
           'C10BC_IMMUTABLE_COMMAND_V1',signedPrefix.length,signedPrefix);guard();
-        const signedRepair=signed.map(row=>JSON.parse(row.payload)).filter(r=>r.projectId===record.identity.projectId&&r.proof?.kind==='signed-field-batch'&&
+        const offlineRows=signed.map(row=>JSON.parse(row.payload)).filter(r=>r.projectId===record.identity.projectId);
+        const signedRepair=offlineRows.filter(r=>r.proof?.kind==='signed-field-batch'&&
           (JSON.parse(r.body).operations??[]).some((op:{kind?:string;taskId?:string;repair?:{resourceId?:string}})=>
             ['REPAIR_ASSESSMENT','REPAIR_EXECUTION_START','REPAIR_EXECUTION_FINISH'].includes(String(op.kind))&&op.taskId===record.identity.taskId&&op.repair?.resourceId===record.identity.itemId));
         const onlineFollowup=record.operation==='attempt'||record.operation==='supplement';
@@ -265,16 +276,29 @@ export async function openRepairJournal(identity: RepairIdentity,
           const required = record.operation === 'finish' ? 'start' : 'finish';
           const receiptId = record.operation === 'finish' ? record.payload.executionStartId : record.payload.executionFinishId;
           const signedFinish = record.operation === 'attempt' && stored.length === 0 && signedRepair.some(r => {
-            if (r.phase !== 'RECONCILED') return false;
-            const ops = (JSON.parse(r.body).operations ?? []) as Record<string, unknown>[];
+            const owned=(row:typeof r)=>row.identity?.actor===context.actor&&row.identity?.environment===context.environment&&row.identity?.role==='REPAIR_CREW';
+            const {registrationId,deviceId}=r.proof;
+            const exact=JSON.parse(r.body);
+            if(r.phase!=='RECONCILED'||!owned(r)||!isCrewResourceId(registrationId)||!isCrewResourceId(deviceId)||!isCrewResourceId(exact.batchId)||
+              exact.sourceDeviceRegistrationId!==registrationId||exact.batchId!==r.proof.sourceBatchId||
+              offlineRows.some(row=>row.proof?.kind==='revocation'&&owned(row)&&row.proof.registrationId===registrationId)||
+              !offlineRows.some(row=>row.phase==='RECONCILED'&&row.proof?.kind==='enrollment'&&owned(row)&&
+                row.receipt?.id===registrationId&&row.receipt?.deviceId===deviceId&&row.receipt?.actorId===context.actor&&row.receipt?.revokedAt===null))return false;
+            if(r.identity.scope!==context.scope&&!offlineRows.some(row=>row.phase==='RECONCILED'&&row.proof?.kind==='session-confirm'&&owned(row)&&
+              row.identity.scope===context.scope&&row.proof.confirmedScope===context.scope&&row.proof.registrationId===registrationId))return false;
+            const ops = (exact.operations ?? []) as OfflineRecord[];
             const verified = (r.verifiedItems ?? []) as Record<string, unknown>[];
             const receipts = ((r.receipt as { items?: Record<string, unknown>[] } | undefined)?.items ?? []);
-            return ops.some(op => op.kind === 'REPAIR_EXECUTION_FINISH' && op.effectId === receiptId &&
+            return ops.some(op => op.kind === 'REPAIR_EXECUTION_FINISH' && op.effectId === receiptId && op.originId === receiptId &&
+              op.originalActorId===context.actor&&op.sourceDeviceId===deviceId&&op.assignmentId===record.identity.assignmentId&&
               op.taskId === record.identity.taskId && (op.repair as { resourceId?: string } | undefined)?.resourceId === record.identity.itemId &&
+              offlineRows.some(row=>row.phase==='RECONCILED'&&row.proof?.kind==='snapshot'&&owned(row)&&
+                signedRepairSnapshotMatches(row.receipt,op,registrationId,record.identity))&&
               verified.some(v => v.originId === op.originId && v.effectId === receiptId && v.canonicalOriginId === op.originId &&
+                v.serverBatchId===r.receipt?.batchId&&isCrewResourceId(v.serverBatchId)&&
                 v.kind === 'REPAIR_EXECUTION_FINISH' && ['COMMITTED','REPLAYED'].includes(String(v.state))) &&
               receipts.some(item => item.originId === op.originId && item.effectId === receiptId && item.canonicalOriginId === op.originId &&
-                item.kind === 'REPAIR_EXECUTION_FINISH' && item.durableAcknowledgment === true &&
+                item.kind === 'REPAIR_EXECUTION_FINISH' && ['COMMITTED','REPLAYED'].includes(String(item.state)) && item.durableAcknowledgment === true &&
                 (item.outcome as Record<string, unknown> | undefined)?.id === receiptId &&
                 (item.outcome as Record<string, unknown> | undefined)?.itemId === record.identity.itemId &&
                 (item.outcome as Record<string, unknown> | undefined)?.taskId === record.identity.taskId));

@@ -5,7 +5,7 @@ import { readOfflineResource, validateRepairSnapshot, type OfflineItemReceipt } 
 import { crewReadGuard, currentQueueIdentity } from './crewSafetyWorkflow';
 import { isCrewResourceId, type FieldTaskViewFact } from './crewApi';
 import { openOfflineJournal, sameOfflinePartition } from './crewOfflineJournal';
-import type { OfflineRecord } from './crewOfflineProtocol';
+import { signedRepairSnapshotMatches, type OfflineRecord } from './crewOfflineProtocol';
 
 function failPredecessor(stage:string):never {
   const err=Error('offline_repair_predecessor_required');
@@ -19,6 +19,8 @@ export async function readSignedRepairPredecessor(identity:QueueIdentity,project
   const confirmed=rows.some(row=>row.projectId===projectId&&row.phase==='RECONCILED'&&row.proof.kind==='session-confirm'&&
     sameOfflinePartition(row.identity,identity)&&row.identity.scope===identity.scope&&row.proof.confirmedScope===identity.scope&&row.proof.registrationId===s.registrationId);
   const matches=[];
+  const binding={actor:identity.actor,taskId:s.snapshot.taskId,assignmentId:s.snapshot.assignmentId,
+    packageId:s.repair.packageId,itemId:s.repair.itemId,bindingId:s.repair.bindingId};
   let reason='no_reconciled_batch';
   for(const row of rows){
     if(row.projectId!==projectId||row.phase!=='RECONCILED'||row.proof.kind!=='signed-field-batch')continue;
@@ -30,9 +32,14 @@ export async function readSignedRepairPredecessor(identity:QueueIdentity,project
         if(op.kind===kind&&op.taskId===s.snapshot.taskId)reason='op_mismatch';
         continue;
       }
+      const historical=rows.find(r=>r.projectId===projectId&&r.phase==='RECONCILED'&&r.proof.kind==='snapshot'&&
+        sameOfflinePartition(r.identity,identity)&&(r.receipt as OfflineRecord)?.id===op.snapshotId);
+      if(!signedRepairSnapshotMatches((historical?.receipt??s.snapshot) as OfflineRecord,op,s.registrationId,binding)){
+        reason='snapshot_binding_mismatch';continue;
+      }
       const verified=row.verifiedItems?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&['COMMITTED','REPLAYED'].includes(v.state));
       if(!verified){reason='verified_missing';continue;}
-      const receipt=(row.receipt as {items?:OfflineRecord[]})?.items?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&v.durableAcknowledgment===true);
+      const receipt=(row.receipt as {items?:OfflineRecord[]})?.items?.find(v=>v.originId===op.originId&&v.effectId===effectId&&v.canonicalOriginId===op.originId&&v.kind===kind&&['COMMITTED','REPLAYED'].includes(String(v.state))&&v.durableAcknowledgment===true);
       if(!receipt){reason='receipt_missing';continue;}
       const outcome=receipt.outcome as OfflineRecord|undefined;
       if(outcome?.id===effectId&&outcome.itemId===s.repair.itemId&&outcome.taskId===s.snapshot.taskId)matches.push({op,outcome,scope:row.identity.scope});

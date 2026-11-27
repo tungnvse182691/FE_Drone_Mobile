@@ -3,6 +3,7 @@ import { apiClient } from './client';
 import { passwordSessionIdentity } from './authApi';
 import { cancelOperatorUploadReal, completeOperatorUploadReal, createOperatorUploadSessionReal, getOperatorUploadPartUrlsReal, getOperatorUploadSessionReal, getOperatorFileMetadataReal, putUploadPartBytesDirect, getOperatorDatasetReal, getOperatorDatasetCoverageReal, getOperatorSurveyTaskDetailReal, submitOperatorDatasetReal, type BandScopeDto, type UploadSessionResponseDto, type UploadPartUrlsResponseDto, type FileMetadataResponseDto, type SubmitDatasetRequestDto } from './droneApi';
 import { openDroneUploadJournal, type DroneUploadIntent } from './droneTaskJournal';
+import { expiredPartUrlReceipt, sameUploadPartNumbers, type PartUrlIssuance } from './uploadPartUrlRenewal';
 
 // Neither a seed ID nor a user-entered UUID proves an active aircraft assignment.
 // Also requires immutable durable upload/dataset commands before reopening writes.
@@ -167,28 +168,57 @@ export async function orchestrateDroneUpload(plan: DroneUploadPlan, transport: D
       });
       // URL admission can initialize multipart storage and advance its version.
       let byNumber = new Map<number, {partNumber:number;url:string;expiresAt:string}>();
-      const admit = async (renew = false) => {
+      let renewed = false;
+      const admit = async () => {
         const previous = intent.partUrlRequest;
-        const expired = previous?.expiresAt && Date.parse(previous.expiresAt) <= Date.now() + 60000;
-        const generation = previous ? previous.generation + (renew || expired ? 1 : 0) : 0;
-        await update({partUrlRequest:{generation,...(!renew && !expired && previous?.expiresAt ? {expiresAt:previous.expiresAt} : {})}});
-        const urls = await transport.getPartUrls(intent.uploadId!, parts.map(p=>p.partNumber), `${intent.key}:parts:${generation}`); guard();
+        let generation = previous?.generation ?? 0;
+        const numbers = parts.map(p=>p.partNumber);
+        const expectedKey = () => `${intent.key}:parts:${generation}`;
+        if (previous?.key !== undefined && previous.key !== expectedKey()) throw Error('drone_upload_part_url_invalid');
+        if (previous?.partNumbers !== undefined && !sameUploadPartNumbers(previous.partNumbers,numbers)) throw Error('drone_upload_part_url_invalid');
+        let issuance: PartUrlIssuance = { key: expectedKey(), partNumbers: previous?.partNumbers ?? numbers };
+        // Older records rounded the receipt's expiry to milliseconds. The
+        // exact replay response supplies the authoritative expiry for those rows.
+        if (previous?.partNumbers && previous.expiresAt) issuance.expiresAt = previous.expiresAt;
+        let history = previous?.history ?? [];
+        const persistIssuance = () => update({partUrlRequest:{generation,...issuance,history}});
+        const send = async () => {
+          pause();
+          const result = await transport.getPartUrls(intent.uploadId!,issuance.partNumbers,issuance.key);
+          guard();
+          return result;
+        };
+        if (!previous) await persistIssuance();
+        let urls;
+        try { urls = await send(); }
+        catch (error) {
+          pause();
+          const proof = expiredPartUrlReceipt(error,intent.uploadId!,issuance);
+          if (!proof || renewed) throw error;
+          renewed = true;
+          history = [...history,{...issuance,...(previous?.expiresAt ? {expiresAt:previous.expiresAt} : {}),proof}];
+          generation++;
+          issuance = {key:expectedKey(),partNumbers:issuance.partNumbers};
+          await persistIssuance();
+          urls = await send();
+        }
         byNumber = new Map(urls.parts.map(p=>[p.partNumber,p]));
         if (byNumber.size !== parts.length || urls.parts.length !== parts.length || parts.some(p=>!byNumber.has(p.partNumber)) || urls.parts.some(p=>!Number.isFinite(Date.parse(p.expiresAt)))) throw Error('drone_upload_part_url_invalid');
-        await update({partUrlRequest:{generation,expiresAt:new Date(Math.min(...urls.parts.map(p=>Date.parse(p.expiresAt)))).toISOString()}});
+        issuance.expiresAt = urls.parts.reduce((earliest,part)=>Date.parse(part.expiresAt)<Date.parse(earliest)?part.expiresAt:earliest,urls.parts[0].expiresAt);
+        await persistIssuance();
       };
-      await admit();
       const uploaded: typeof intent.parts = [...(intent.parts ?? [])];
       if (new Set(uploaded.map(p=>p.partNumber)).size !== uploaded.length || uploaded.some(p=>parts[p.partNumber-1]?.sizeBytes !== p.sizeBytes || !text(p.etag))) throw Error('drone_upload_part_receipt_invalid');
+      if (uploaded.length < parts.length) await admit();
       plan.onProgress?.(uploaded.reduce((n,p)=>n+p.sizeBytes,0),plan.file.sizeBytes);
       for (const part of parts) {
         pause(); if (uploaded.some(p=>p.partNumber===part.partNumber)) continue;
         const bytes=await part.read(); guard();
         pause();
         if (bytes.byteLength!==part.sizeBytes) throw Error('drone_upload_part_size_changed');
-        if (Date.parse(intent.partUrlRequest!.expiresAt!) <= Date.now()+60000) await admit(true);
+        if (Date.parse(intent.partUrlRequest!.expiresAt!) <= Date.now()) await admit();
         const url=byNumber.get(part.partNumber);
-        if (!url || !/^https?:\/\//.test(url.url) || !text(url.expiresAt)) throw Error('drone_upload_part_url_invalid');
+        if (!url || !/^https?:\/\//.test(url.url) || Date.parse(url.expiresAt)<=Date.now()) throw Error('drone_upload_part_url_invalid');
         try {
           const etag=await transport.putPart(url.url,bytes,plan.file.mediaType); guard();
           if (!text(etag)) throw Error('drone_upload_part_etag_missing');

@@ -20,6 +20,7 @@ export function validateAdmissionSource(record:OfflineJournalRecord,item:Offline
 
 /** Imported handover admission: preserves originalActorId and requires exact non-null grantId. */
 export function validateImportedAdmissionSource(record:OfflineJournalRecord,item:OfflineItemReceipt) {
+  if(record.proof.kind!=='handover-import')return fail();
   return validateAdmissionRecord(record, item, true);
 }
 
@@ -35,7 +36,9 @@ function validateAdmissionRecord(record:OfflineJournalRecord,item:OfflineItemRec
     a.sourceBatchId!==record.proof.sourceBatchId||a.sourceDeviceRegistrationId!==expectedSourceRegId||
     (!imported && a.sourceDeviceRegistrationId!==record.proof.registrationId)||a.originId!==operation.originId||
     a.taskId!==operation.taskId||a.assignmentId!==operation.assignmentId||a.snapshotId!==operation.snapshotId||
-    a.originalActorId!==operation.originalActorId||(!imported && a.originalActorId!==record.identity.actor)||
+    a.originalActorId!==operation.originalActorId||a.originalActorId!==(imported?record.proof.sourceActorId:record.identity.actor)||
+    (imported&&(body.grantId!==record.proof.grantId||body.batchId!==record.proof.importBatchId||
+      body.packageId!==record.proof.packageId||body.recipientDeviceRegistrationId!==record.proof.registrationId))||
     a.currentImporterId!==record.identity.actor||(imported ? (!guid(a.grantId) || a.grantId!==expectedGrantId) : a.grantId!==null)||
     !['WAITING_UPLOAD','WAITING_VERIFICATION','WAITING_DEPENDENCY','READY','UPLOAD_FAILED','COMMITTED'].includes(a.status))return fail();
   const evidence=evidenceOf(operation);
@@ -62,7 +65,8 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
   crewReadGuard(identity);
   const journal=await openOfflineJournal(identity),rows=await journal.list();crewReadGuard(identity);
   const batch=rows.find(r=>r.id===mapping.batchIntentId);
-  if(!batch||batch.projectId!==draft.projectId||batch.proof.kind!=='signed-field-batch'||batch.phase!=='RECEIVED')return fail();
+  if(!batch||batch.projectId!==draft.projectId||!['signed-field-batch','handover-import'].includes(String(batch.proof.kind))||batch.phase!=='RECEIVED')return fail();
+  const validate=batch.proof.kind==='handover-import'?validateImportedAdmissionSource:validateAdmissionSource;
   if(identity.scope!==draft.scope){
     if(!sameOfflinePartition(batch.identity,identity))return fail();
     const regId=String(batch.proof.registrationId??'');
@@ -72,7 +76,7 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
     if(!confirmed||revoked)return fail();
   }
   const fresh=await readOfflineResource<OfflineItemReceipt>(identity,batch.projectId,'origins',mapping.originId);crewReadGuard(identity);
-  const {operation,admission,evidence}=validateAdmissionSource(batch,fresh);
+  const {operation,admission,evidence}=validate(batch,fresh);
   const declaration=evidence.find(e=>e.captureOriginId===capture.id),remote=admission.captures.find(c=>c.captureOriginId===capture.id);
   if(!declaration||!remote||declaration.fileId!==null||admission.id!==mapping.admissionId||operation.taskId!==draft.taskId||
     capture.cancelState||capture.purpose!==declaration.purpose||capture.checksum!==declaration.checksumSha256||
@@ -101,7 +105,7 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
     const upload=received.receipt as CrewUploadSessionDto;
     if(!upload||!guid(upload.id)||!guid(upload.fileId))return fail();
     const after=await readOfflineResource<OfflineItemReceipt>(identity,batch.projectId,'origins',mapping.originId);crewReadGuard(identity);
-    const confirmed=validateAdmissionSource(batch,after).admission.captures.find(c=>c.captureOriginId===capture.id);
+    const confirmed=validate(batch,after).admission.captures.find(c=>c.captureOriginId===capture.id);
     if(confirmed?.uploadId!==upload.id||confirmed.fileId!==upload.fileId)return fail();
     return upload;
   }};
@@ -112,15 +116,28 @@ export async function admissionCaptureTransport(draft:FieldDraft,capture:FieldCa
 export async function resumeSignedEvidence(record:OfflineJournalRecord,authority:QueueIdentity=record.identity,onStage?:(stage:import('./crewFieldDraft').FieldUploadStage)=>void):Promise<void> {
   if(!sameOfflinePartition(record.identity,authority))return fail();
   crewReadGuard(authority);
-  if(record.phase!=='RECEIVED'||record.proof.kind!=='signed-field-batch')return fail();
+  const imported=record.proof.kind==='handover-import';
+  if(record.phase!=='RECEIVED'||(!imported&&record.proof.kind!=='signed-field-batch'))return fail();
+  if(imported&&record.identity.scope!==authority.scope){
+    const rows=await (await openOfflineJournal(authority)).list();crewReadGuard(authority);
+    if(rows.some(r=>r.projectId===record.projectId&&r.proof.kind==='revocation'&&r.proof.registrationId===record.proof.registrationId)||
+      !rows.some(r=>r.projectId===record.projectId&&r.phase==='RECONCILED'&&r.proof.kind==='session-confirm'&&
+        r.identity.scope===authority.scope&&r.proof.registrationId===record.proof.registrationId))return fail();
+  }
   const receipt=record.receipt as {items:OfflineItemReceipt[]};
   for(const item of receipt.items){
     if(record.terminalItems?.some(t=>t.originId===item.originId)||record.verifiedItems?.some(v=>v.originId===item.originId))continue;
     if(item.durableAcknowledgment||item.state!=='PENDING_DEPENDENCY'||!['evidence_upload_required','evidence_verification_pending'].includes(item.code??''))continue;
     const fresh=await readOfflineResource<OfflineItemReceipt>(authority,record.projectId,'origins',item.originId);crewReadGuard(authority);
     if(fresh.durableAcknowledgment)continue;
-    const {operation,admission,evidence}=validateAdmissionSource(record,fresh);
+    const {operation,admission,evidence}=(imported?validateImportedAdmissionSource:validateAdmissionSource)(record,fresh);
     const context={actor:record.identity.actor,scope:record.identity.scope,environment:record.identity.environment,projectId:record.projectId,taskId:String(operation.taskId)};
+    if(imported){
+      for(const declaration of evidence){
+        if(declaration.fileId===null)await uploadImportedCapture(record,authority,context,item.originId,admission.id,declaration,onStage);
+      }
+      continue;
+    }
     const runtime=await openFieldRuntime(context,authority),draft=await runtime.read();crewReadGuard(authority);
     if(!draft)return fail();assertFieldContext(draft,runtime);
     for(const e of evidence){
@@ -137,4 +154,58 @@ export async function resumeSignedEvidence(record:OfflineJournalRecord,authority
       await uploadFieldCapture(draft,index,runtime,undefined,onStage);crewReadGuard(authority);
     }
   }
+}
+
+/** Recipient transport uses a separate durable ledger. Native plaintext stays in memory for the verified upload. */
+async function uploadImportedCapture(record:OfflineJournalRecord,authority:QueueIdentity,context:import('./crewFieldDraft').FieldContext,
+  originId:string,admissionId:string,declaration:OfflineRecord,onStage?:(stage:import('./crewFieldDraft').FieldUploadStage)=>void){
+  const captureId=declaration.captureOriginId;
+  if(!guid(captureId))return fail();
+  const {readHandoverCapture}=await import('./crewOfflineHandover');
+  const {openDatabase,initDatabase}=await import('../offline/database');
+  const base=await openFieldRuntime(context,authority);crewReadGuard(authority);
+  const db=openDatabase();await initDatabase(db);crewReadGuard(authority);
+  const key='handover-upload:'+JSON.stringify([context.environment,context.actor,context.projectId,record.id,originId,captureId]);
+  const kind='C10BC_HANDOVER_UPLOAD_V1';
+  const row=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',key,kind);crewReadGuard(authority);
+  let previous=row?.payload;
+  let plaintext:Uint8Array|undefined;
+  const runtime:FieldRuntime={...base,read:async()=>previous?JSON.parse(previous) as FieldDraft:null,
+    bytes:async()=>{
+      crewReadGuard(authority);
+      plaintext??=(await readHandoverCapture(record,authority,context.taskId,declaration)).bytes;
+      crewReadGuard(authority);return plaintext;
+    },
+    write:async draft=>{
+      crewReadGuard(authority);assertFieldContext(draft,base);
+      const payload=JSON.stringify(draft),now=new Date().toISOString();
+      await db.withExclusiveTransactionAsync(async tx=>{
+        crewReadGuard(authority);
+        const result=previous===undefined
+          ?await tx.runAsync('INSERT INTO local_draft (id,kind,payload,created_at,updated_at) VALUES (?,?,?,?,?)',key,kind,payload,now,now)
+          :await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',payload,now,key,kind,previous);
+        crewReadGuard(authority);if(result.changes!==1)throw Error('offline_journal_cas_failed');
+      });
+      crewReadGuard(authority);previous=payload;
+    },
+  };
+  try{
+    let draft=await runtime.read();crewReadGuard(authority);
+    if(!draft){
+      const opened=await readHandoverCapture(record,authority,context.taskId,declaration);
+      plaintext=opened.bytes;crewReadGuard(authority);
+      const m=opened.manifest;
+      const capture:FieldCapture={id:captureId,uri:'',purpose:m.purpose,mediaType:m.mediaType,checksum:m.fileChecksum,size:m.fileSize,
+        capturedAt:null,coordinates:null,createKey:uuidv4(),completeKey:uuidv4(),parts:[],localOnly:true,
+        offlineUpload:{batchIntentId:record.id,originId,admissionId,createIntentId:uuidv4()}};
+      draft={...context,captures:[capture],measurements:[],locationProof:null};
+      await runtime.write(draft);
+    }
+    assertFieldContext(draft,runtime);
+    const c=draft.captures[0],link=c?.offlineUpload;
+    if(draft.captures.length!==1||!c||c.vault!==undefined||c.uri!==''||c.id!==captureId||c.checksum!==declaration.checksumSha256||
+      c.mediaType!==declaration.mediaType||c.purpose!==declaration.purpose||(declaration.sizeBytes!=null&&c.size!==declaration.sizeBytes)||
+      !link||link.batchIntentId!==record.id||link.originId!==originId||link.admissionId!==admissionId)return fail();
+    await uploadFieldCapture(draft,0,runtime,undefined,onStage);crewReadGuard(authority);
+  }finally{plaintext?.fill(0);}
 }

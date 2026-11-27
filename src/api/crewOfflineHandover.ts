@@ -20,6 +20,7 @@ import {
 import {
   openOfflineJournal,
   sameOfflinePartition,
+  type OfflineIntent,
   type OfflineJournalRecord,
 } from './crewOfflineJournal';
 import {
@@ -49,6 +50,21 @@ const PACKAGE_SCHEMA = 'huy-final.offline.bundle.v1';
 const MAX_CAPTURE_BYTES = 20 * 1024 * 1024;
 const MAX_CHUNK_BYTES = 16 * 1024 * 1024;
 const MAX_CAPTURE_CHUNKS = 32;
+const ARTIFACT_CHUNK_BYTES = 1024 * 1024;
+
+type HandoverEnvelope = {
+  header: { version: number; payloadSchema: string; packageId: string; projectId: string; originalActorId: string;
+    sourceDeviceId: string; originIds: string[]; payloadSha256: string };
+  payloadNonce: string; ciphertext: string; payloadTag: string; senderSigningPublicKey: string; signature: string;
+  recipients: { actorId: string; deviceId: string; recipientKeyFingerprint: string; ephemeralPublicKey: string;
+    nonce: string; wrappedKey: string; tag: string }[];
+};
+
+type CaptureArtifact = {
+  id: string; projectId: string; parentPackageId: string; captureOriginId: string; taskId: string; originalActorId: string;
+  sourceDeviceRegistrationId: string; chunkIndex: number; chunkOffset: number; chunkLength: number; plaintextChecksum: string;
+  envelopeFingerprint: string; manifestHash: string; signedManifestJson: string; manifestSignature: string; cipherEnvelopeJson: string;
+};
 
 export interface OfflinePublicRecipientCard {
   version: 1;
@@ -290,6 +306,44 @@ export function canonicalCaptureManifest(manifest: OfflineCaptureManifest): stri
   );
 }
 
+// API-114 has ID lookup only. The signed manifest returned by chunk zero supplies the remaining IDs.
+export async function handoverArtifactId(packageId:string,captureId:string,index:number):Promise<string> {
+  const digest=await generateChecksum(JSON.stringify(['roadguard.h5.capture-artifact.id.v1',packageId,captureId,index]));
+  return `${digest.slice(0,8)}-${digest.slice(8,12)}-8${digest.slice(13,16)}-${((parseInt(digest[16],16)&3)|8).toString(16)}${digest.slice(17,20)}-${digest.slice(20,32)}`;
+}
+
+// OfflineCryptoFormat.CanonicalUnsignedPackage property order. Valid fields are ASCII IDs and base64.
+function unsignedEnvelope(e:HandoverEnvelope):string {
+  const {version,payloadSchema,packageId,projectId,originalActorId,sourceDeviceId,originIds,payloadSha256}=e.header;
+  return JSON.stringify({header:{version,payloadSchema,packageId,projectId,originalActorId,sourceDeviceId,originIds,payloadSha256},
+    payloadNonce:e.payloadNonce,ciphertext:e.ciphertext,payloadTag:e.payloadTag,
+    recipients:e.recipients.map(({actorId,deviceId,recipientKeyFingerprint,ephemeralPublicKey,nonce,wrappedKey,tag})=>
+      ({actorId,deviceId,recipientKeyFingerprint,ephemeralPublicKey,nonce,wrappedKey,tag})),senderSigningPublicKey:e.senderSigningPublicKey});
+}
+
+function attachedCaptures(op:OfflineRecord):OfflineRecord[] {
+  const input=(op.fieldSubmission??(op.repair as OfflineRecord|undefined)?.assessment) as OfflineRecord|undefined;
+  return ((input?.evidence??[]) as OfflineRecord[]).filter(e=>e.fileId==null);
+}
+
+function authenticatedPackageEnvelope(pkg:OfflinePackageDetail):HandoverEnvelope {
+  // API-115 returns the envelope accepted by RegisterPackageAsync under the registered source key.
+  const envelope=JSON.parse(pkg.cipherPackageJson) as HandoverEnvelope;
+  if(envelope?.header?.packageId!==pkg.id||envelope.header.projectId!==pkg.projectId||
+    envelope.header.originalActorId!==pkg.originalActorId||envelope.header.payloadSha256!==pkg.payloadHash)throw Error('handover_package_mismatch');
+  offlineSigningPublicKey(envelope.senderSigningPublicKey);
+  return envelope;
+}
+
+async function readActiveHandoverGrant(identity:QueueIdentity,projectId:string,packageId:string,grantId:string,registrationId:string) {
+  const grant=await readOfflineResource<OfflineGrantDetail>(identity,projectId,'grants',grantId);crewReadGuard(identity);
+  if(!grant||grant.id!==grantId||grant.projectId!==projectId||grant.packageId!==packageId||
+    grant.recipientActorId!==identity.actor||grant.recipientDeviceRegistrationId!==registrationId||grant.role!=='RepairCrew')throw Error('handover_grant_mismatch');
+  if(grant.revokedAt)throw Error('handover_grant_revoked');
+  if(!Number.isFinite(Date.parse(grant.expiresAt))||Date.now()>=Date.parse(grant.expiresAt))throw Error('handover_grant_expired');
+  return grant;
+}
+
 /** Seals an existing signed batch into an encrypted handover package for 1..32 recipients and journals export intent. */
 export async function prepareHandoverPackageExport(
   identity: QueueIdentity,
@@ -311,7 +365,9 @@ export async function prepareHandoverPackageExport(
   if (!Array.isArray(recipients) || recipients.length < 1 || recipients.length > 32) {
     throw Error('handover_recipients_required');
   }
-  const normalizedRecipients = recipients.map((r) => parsePublicRecipientCard(JSON.stringify(r)));
+  if(!sameOfflinePartition(identity,sourceBatchRecord.identity))throw Error('handover_source_batch_invalid');
+  const normalizedRecipients = recipients.map((r) => parsePublicRecipientCard(JSON.stringify(r)))
+    .sort((a,b)=>a.keyFingerprint.localeCompare(b.keyFingerprint));
   const idSet = new Set<string>();
   const fpSet = new Set<string>();
   for (const r of normalizedRecipients) {
@@ -454,6 +510,7 @@ export async function prepareHandoverPackageExport(
       payloadHash: payloadSha256,
       descriptors,
       recipientFingerprints: normalizedRecipients.map((r) => r.keyFingerprint),
+      recipients: sealRequest.recipients,
     },
   });
 }
@@ -480,9 +537,25 @@ async function dispatchHandoverPost(record: OfflineJournalRecord, authority: Que
   }
 }
 
+const handoversInProgress=new Set<string>();
+async function withHandoverLock(record:OfflineJournalRecord,send:()=>Promise<OfflineJournalRecord>) {
+  const lock=JSON.stringify([record.identity.environment,record.identity.actor,record.id]);
+  if(handoversInProgress.has(lock))throw Error('field_busy');
+  handoversInProgress.add(lock);
+  try{return await send();}
+  finally{handoversInProgress.delete(lock);}
+}
+
 export async function sendHandoverPackageExport(
   record: OfflineJournalRecord,
   authority: QueueIdentity = record.identity,
+  recipientCards: OfflinePublicRecipientCard[] = [],
+): Promise<OfflineJournalRecord> {
+  return withHandoverLock(record,()=>sendRetainedHandoverExport(record,authority,recipientCards));
+}
+
+async function sendRetainedHandoverExport(
+  record: OfflineJournalRecord, authority: QueueIdentity, recipientCards: OfflinePublicRecipientCard[],
 ): Promise<OfflineJournalRecord> {
   if (authority !== record.identity && !sameOfflinePartition(record.identity, authority)) {
     throw Error('offline_session_changed');
@@ -493,17 +566,123 @@ export async function sendHandoverPackageExport(
   if (record.proof.kind !== 'handover-export' || record.path !== `${base}/packages/export`) {
     throw Error('handover_export_source_required');
   }
-  const current = (await (await openOfflineJournal(authority)).list()).find((r) => r.id === record.id);
+  const journal=await openOfflineJournal(authority);
+  const rows=await journal.list();
+  const current = rows.find((r) => r.id === record.id);
   if (!current || current.body !== record.body || current.key !== record.key || JSON.stringify(current.proof) !== JSON.stringify(record.proof)) {
     throw Error('handover_export_source_changed');
   }
-  if (current.phase === 'RECONCILED') return current;
-  if (current.phase === 'RECEIVED') return reconcileHandoverPackageExport(current, authority);
-  if (!['PREPARED', 'UNKNOWN_OUTCOME'].includes(current.phase)) {
-    throw Error('handover_export_phase_invalid');
+  let exported=current;
+  if(current.phase!=='RECONCILED'){
+    const start=current.phase==='IN_FLIGHT'?await journal.transition(current,'UNKNOWN_OUTCOME'):current;
+    if(!['PREPARED','UNKNOWN_OUTCOME','RECEIVED'].includes(start.phase))throw Error('handover_export_phase_invalid');
+    const received=start.phase==='RECEIVED'?start:await dispatchHandoverPost(start,authority);
+    exported=await reconcileHandoverPackageExport(received,authority);
   }
-  const received = await dispatchHandoverPost(current, authority);
-  return reconcileHandoverPackageExport(received, authority);
+  const source = rows.find(r => r.id === exported.proof.sourceBatchIntentId);
+  if (!source) throw Error('handover_source_batch_invalid');
+  // Older exports retained the signed source and fingerprints, but omitted media metadata.
+  const attached = parseOfflineAttachedPreservingDecimals(source.body) as { operations: OfflineRecord[] };
+  if (attached.operations.some(operation => attachedCaptures(operation).length > 0)) {
+    await exportHandoverMedia(exported, source, authority, attached.operations, recipientCards);
+  }
+  return exported;
+}
+
+async function exportHandoverMedia(
+  exported: OfflineJournalRecord, source: OfflineJournalRecord, identity: QueueIdentity,
+  operations: OfflineRecord[], recipientCards: OfflinePublicRecipientCard[],
+) {
+  const pkg=exported.receipt as OfflinePackageDetail;
+  if(source.proof.kind!=='signed-field-batch'||!sameOfflinePartition(source.identity,identity)||source.projectId!==exported.projectId||
+    source.proof.sourceBatchId!==pkg.sourceBatchId||source.proof.registrationId!==pkg.sourceDeviceRegistrationId||
+    await generateChecksum(source.body)!==pkg.payloadHash)throw Error('handover_source_batch_invalid');
+  crewReadGuard(identity);
+  const parent=authenticatedPackageEnvelope(pkg),native=crewOfflineNative(identity),probe=await inspectOfflineDevice(identity);
+  crewReadGuard(identity);
+  if(!native||probe.deviceId!==parent.header.sourceDeviceId||!probe.capability.signingUsable||!probe.capability.agreementUsable)throw Error('BLOCKED_NATIVE');
+  const local=await readLocalOfflineSources(identity,pkg.projectId,pkg.sourceDeviceRegistrationId,probe.deviceId);
+  crewReadGuard(identity);validateDevice(local.device,identity,pkg.sourceDeviceRegistrationId,probe.deviceId);
+  if(local.device.signingPublicKey!==parent.senderSigningPublicKey)throw Error('offline_device_key_mismatch');
+  const binding=deviceBinding(identity,probe.deviceId);
+  const recipients = (exported.proof.recipients ?? recipientCards.map(card =>
+    parsePublicRecipientCard(JSON.stringify(card)))) as Pick<
+      OfflinePublicRecipientCard, 'actorId' | 'deviceId' | 'encryptionPublicKey' | 'signingPublicKey'
+    >[];
+  const {openFieldRuntime}=await import('./crewFieldDraft');
+  const {readCrewPhotoBytes}=await import('./crewMediaVault');
+  const {sha256HexOfBytes}=await import('./uploads');
+  const journal=await openOfflineJournal(identity);
+  const seen=new Set<string>();
+  for(const operation of operations){
+    for(const evidence of attachedCaptures(operation)){
+      const captureId=requireGuid(evidence.captureOriginId,'handover_artifact_manifest_invalid');
+      if(seen.has(captureId))throw Error('handover_artifact_manifest_invalid');
+      seen.add(captureId);
+      const firstId=await handoverArtifactId(pkg.id,captureId,0);
+      let first=await journal.readArtifact(firstId);
+      if(!first){
+        if (!Array.isArray(recipients) || recipients.length !== parent.recipients.length ||
+            !parent.recipients.every(wrap => recipients.filter(recipient =>
+              recipient.actorId === wrap.actorId && recipient.deviceId === wrap.deviceId &&
+              recipientKeyFingerprint(recipient.encryptionPublicKey) === wrap.recipientKeyFingerprint).length === 1)) {
+          throw Error('handover_recipient_invalid');
+        }
+        const context={actor:source.identity.actor,environment:source.identity.environment,scope:source.identity.scope,
+          projectId:pkg.projectId,taskId:String(operation.taskId)};
+        const runtime=await openFieldRuntime(context,identity);
+        const draft=await runtime.historicalRead?.(context.scope);crewReadGuard(identity);
+        const capture=draft?.captures.find(c=>c.id===captureId);
+        if(!capture?.vault||capture.cancelState||capture.checksum!==evidence.checksumSha256||capture.mediaType!==evidence.mediaType||
+          capture.purpose!==evidence.purpose||(evidence.sizeBytes!=null&&evidence.sizeBytes!==capture.size)||capture.size>MAX_CAPTURE_BYTES)throw Error('handover_artifact_source_missing');
+        const bytes=await readCrewPhotoBytes(context,capture,()=>{crewReadGuard(identity);return true;});
+        try{
+          crewReadGuard(identity);
+          const chunks:OfflineCaptureChunk[]=[],envelopes:HandoverEnvelope[]=[];
+          for(let offset=0;offset<bytes.length;offset+=ARTIFACT_CHUNK_BYTES){
+            const part=bytes.subarray(offset,offset+ARTIFACT_CHUNK_BYTES),index=chunks.length;
+            const artifactId=await handoverArtifactId(pkg.id,captureId,index),plaintextChecksum=await sha256HexOfBytes(part);
+            crewReadGuard(identity);
+            const header={...parent.header,packageId:artifactId,originIds:[captureId],payloadSha256:plaintextChecksum};
+            const envelope=JSON.parse(await native.sealPackage(binding,JSON.stringify({header,payloadBase64:bytesToBase64(part),recipients}))) as HandoverEnvelope;
+            crewReadGuard(identity);
+            const envelopeFingerprint=await sha256HexOfBytes(utf8ToBytes(unsignedEnvelope(envelope)));
+            crewReadGuard(identity);
+            chunks.push({artifactId,index,offset,length:part.length,plaintextChecksum,envelopeFingerprint});
+            envelopes.push(envelope);
+          }
+          const manifest:OfflineCaptureManifest={version:1,parentPackageId:pkg.id,parentManifestHash:pkg.manifestHash,projectId:pkg.projectId,
+            originalActorId:pkg.originalActorId,sourceDeviceRegistrationId:pkg.sourceDeviceRegistrationId,captureOriginId:captureId,
+            taskId:context.taskId,purpose:capture.purpose,mediaType:capture.mediaType as OfflineCaptureManifest['mediaType'],
+            fileSize:bytes.length,fileChecksum:capture.checksum,chunks};
+          const signedManifest=canonicalCaptureManifest(manifest),manifestSignature=await native.signManifest(binding,signedManifest);
+          crewReadGuard(identity);offlineP1363(manifestSignature);
+          if(!await native.verifyManifest(parent.senderSigningPublicKey,signedManifest,manifestSignature))throw Error('offline_signature_self_verify_failed');
+          crewReadGuard(identity);
+          const intents:OfflineIntent[]=chunks.map(chunk=>({id:chunk.artifactId,identity,projectId:pkg.projectId,key:uuidv4(),
+            path:`${offlineProjectPath(pkg.projectId)}/artifacts`,body:JSON.stringify({manifest,manifestSignature,chunkIndex:chunk.index,envelope:envelopes[chunk.index]}),
+            proof:{kind:'handover-artifact',registrationId:pkg.sourceDeviceRegistrationId,exportIntentId:exported.id}}));
+          await journal.prepareArtifacts(exported,intents);
+        }finally{bytes.fill(0);}
+        first=await journal.readArtifact(firstId);
+      }
+      if(!first||first.proof.exportIntentId!==exported.id)throw Error('handover_artifact_manifest_invalid');
+      const {manifest}=JSON.parse(first.body) as {manifest:OfflineCaptureManifest};
+      const canonical=canonicalCaptureManifest(manifest),manifestHash=await generateChecksum(canonical);
+      for(const chunk of manifest.chunks){
+        let record=await journal.readArtifact(chunk.artifactId);
+        if(!record||record.proof.exportIntentId!==exported.id)throw Error('handover_artifact_manifest_invalid');
+        if(record.phase==='RECONCILED')continue;
+        if(record.phase==='IN_FLIGHT')record=await journal.transition(record,'UNKNOWN_OUTCOME');
+        if(record.phase!=='RECEIVED')record=await dispatchHandoverPost(record,identity);
+        const artifact=await readOfflineResource<CaptureArtifact>(identity,pkg.projectId,'artifacts',chunk.artifactId);
+        crewReadGuard(identity);
+        if(artifact.id!==chunk.artifactId||artifact.parentPackageId!==pkg.id||artifact.captureOriginId!==captureId||
+          artifact.manifestHash!==manifestHash||artifact.envelopeFingerprint!==chunk.envelopeFingerprint)throw Error('handover_artifact_readback_mismatch');
+        await journal.transition(record,'RECONCILED');
+      }
+    }
+  }
 }
 
 export async function reconcileHandoverPackageExport(
@@ -564,7 +743,7 @@ export async function inspectAndOpenHandoverPackage(
   if (!isCrewResourceId(projectId) || !isCrewResourceId(packageId) || !isCrewResourceId(grantId)) {
     throw Error('offline_resource_source_required');
   }
-  offlineSigningPublicKey(trustedSenderSigningPublicKey);
+  if(trustedSenderSigningPublicKey)offlineSigningPublicKey(trustedSenderSigningPublicKey);
 
   const native = crewOfflineNative(identity);
   const probe = await inspectOfflineDevice(identity);
@@ -583,22 +762,7 @@ export async function inspectAndOpenHandoverPackage(
     throw Error('offline_device_key_mismatch');
   }
 
-  const grant = await readOfflineResource<OfflineGrantDetail>(identity, projectId, 'grants', grantId);
-  crewReadGuard(identity);
-  if (
-    !grant ||
-    grant.id !== grantId ||
-    grant.projectId !== projectId ||
-    grant.packageId !== packageId ||
-    grant.recipientActorId !== identity.actor ||
-    grant.recipientDeviceRegistrationId !== localRegId
-  ) {
-    throw Error('handover_grant_mismatch');
-  }
-  if (grant.revokedAt) throw Error('handover_grant_revoked');
-  if (!Number.isFinite(Date.parse(grant.expiresAt)) || Date.now() >= Date.parse(grant.expiresAt)) {
-    throw Error('handover_grant_expired');
-  }
+  const grant=await readActiveHandoverGrant(identity,projectId,packageId,grantId,localRegId);
 
   const pkg = await readOfflineResource<OfflinePackageDetail>(identity, projectId, 'packages', packageId);
   crewReadGuard(identity);
@@ -613,11 +777,12 @@ export async function inspectAndOpenHandoverPackage(
     throw Error('handover_package_mismatch');
   }
 
-  const envelopeToOpen = localEnvelopeJson?.trim() || pkg.cipherPackageJson;
+  const registeredEnvelope=authenticatedPackageEnvelope(pkg);
+  const registeredSender=registeredEnvelope.senderSigningPublicKey;
+  if(trustedSenderSigningPublicKey&&trustedSenderSigningPublicKey!==registeredSender)throw Error('handover_source_signature_invalid');
   if (localEnvelopeJson?.trim()) {
-    const a = JSON.parse(localEnvelopeJson) as { signature?: string; header?: { payloadSha256?: string } };
-    const b = JSON.parse(pkg.cipherPackageJson) as { signature?: string; header?: { payloadSha256?: string } };
-    if (a?.signature !== b?.signature || a?.header?.payloadSha256 !== b?.header?.payloadSha256) {
+    const localEnvelope=JSON.parse(localEnvelopeJson) as HandoverEnvelope;
+    if(localEnvelope.signature!==registeredEnvelope.signature||unsignedEnvelope(localEnvelope)!==unsignedEnvelope(registeredEnvelope)){
       throw Error('handover_package_mismatch');
     }
   }
@@ -625,11 +790,11 @@ export async function inspectAndOpenHandoverPackage(
   if ((await generateChecksum(pkg.signedManifestJson)) !== pkg.manifestHash) {
     throw Error('handover_manifest_hash_mismatch');
   }
-  const sourceSigValid = await native.verifyManifest(trustedSenderSigningPublicKey, pkg.signedManifestJson, pkg.sourceSignature);
+  const sourceSigValid = await native.verifyManifest(registeredSender, pkg.signedManifestJson, pkg.sourceSignature);
   crewReadGuard(identity);
   if (!sourceSigValid) throw Error('handover_source_signature_invalid');
 
-  const payloadB64 = await native.openPackage(binding, envelopeToOpen, trustedSenderSigningPublicKey);
+  const payloadB64 = await native.openPackage(binding, pkg.cipherPackageJson, registeredSender);
   crewReadGuard(identity);
   const attachedPayloadJson = bytesToUtf8(offlineBase64BytesUnbounded(payloadB64));
   if ((await generateChecksum(attachedPayloadJson)) !== pkg.payloadHash) {
@@ -659,7 +824,8 @@ export async function inspectAndOpenHandoverPackage(
     crewReadGuard(identity);
   }
   const rebuiltManifest = canonicalOfflineManifest(projectId, pkg.sourceBatchId, pkg.sourceDeviceRegistrationId, descriptors);
-  if (rebuiltManifest !== pkg.signedManifestJson) {
+  if (rebuiltManifest !== pkg.signedManifestJson||
+    `{"batchId":${offlineWebString(pkg.sourceBatchId)},"sourceDeviceRegistrationId":${offlineWebString(pkg.sourceDeviceRegistrationId)},"operations":[${attached.operations.map(serializeOfflineOperation).join(',')}],"signature":${offlineWebString(pkg.sourceSignature)}}`!==attachedPayloadJson) {
     throw Error('handover_manifest_mismatch');
   }
 
@@ -680,8 +846,8 @@ export async function inspectAndOpenHandoverPackage(
   };
 }
 
-function offlineBase64BytesUnbounded(b64: string): Uint8Array {
-  if (!b64 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b64)) {
+function offlineBase64BytesUnbounded(b64: string, maxBytes=16*1024*1024): Uint8Array {
+  if (!b64 || b64.length>4*Math.ceil(maxBytes/3)||!/^[A-Za-z0-9+/]+={0,2}$/.test(b64)||b64.length%4!==0) {
     throw Error('offline_base64_invalid');
   }
   if (b64.length <= 172) return offlineBase64(b64);
@@ -689,6 +855,7 @@ function offlineBase64BytesUnbounded(b64: string): Uint8Array {
   const clean = b64.replace(/=+$/, '');
   const padLen = b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0;
   const out = new Uint8Array(Math.floor((b64.length * 3) / 4) - padLen);
+  if(out.length>maxBytes)throw Error('offline_base64_bound');
   let idx = 0;
   let bits = 0;
   let val = 0;
@@ -700,7 +867,78 @@ function offlineBase64BytesUnbounded(b64: string): Uint8Array {
       out[idx++] = (val >> bits) & 0xff;
     }
   }
+  if(bits&&(val&((1<<bits)-1)))throw Error('offline_base64_noncanonical');
   return out;
+}
+
+export async function readHandoverCapture(record:OfflineJournalRecord,identity:QueueIdentity,taskId:string,evidence:OfflineRecord) {
+  if(record.proof.kind!=='handover-import'||record.phase!=='RECEIVED'||!sameOfflinePartition(record.identity,identity))throw Error('handover_import_source_required');
+  const projectId=record.projectId,packageId=String(record.proof.packageId),registrationId=String(record.proof.registrationId);
+  const grant=await readActiveHandoverGrant(identity,projectId,packageId,String(record.proof.grantId),registrationId);
+  const pkg=await readOfflineResource<OfflinePackageDetail>(identity,projectId,'packages',packageId);crewReadGuard(identity);
+  if(pkg.id!==packageId||pkg.projectId!==projectId||pkg.sourceBatchId!==record.proof.sourceBatchId||pkg.payloadHash!==record.proof.payloadHash||
+    pkg.originalActorId!==record.proof.sourceActorId||pkg.originalActorId!==grant.sourceActorId||
+    pkg.sourceDeviceRegistrationId!==record.proof.sourceDeviceRegistrationId||pkg.sourceDeviceRegistrationId!==grant.sourceDeviceRegistrationId||
+    pkg.manifestHash!==record.proof.manifestHash||pkg.manifestHash!==grant.manifestHash)throw Error('handover_package_mismatch');
+  const parent=authenticatedPackageEnvelope(pkg);
+  const native=crewOfflineNative(identity),probe=await inspectOfflineDevice(identity);crewReadGuard(identity);
+  if(!native||!probe.deviceId||!probe.capability.signingUsable||!probe.capability.agreementUsable)throw Error('BLOCKED_NATIVE');
+  const local=await readLocalOfflineSources(identity,projectId,registrationId,probe.deviceId);crewReadGuard(identity);
+  validateDevice(local.device,identity,registrationId,probe.deviceId);
+  const binding=deviceBinding(identity,probe.deviceId),keys=await native.publicKeys(binding);crewReadGuard(identity);
+  const fingerprint=recipientKeyFingerprint(local.device.encryptionPublicKey);
+  if(keys.signingPublicKey!==local.device.signingPublicKey||keys.encryptionPublicKey!==local.device.encryptionPublicKey||
+    !parent.recipients.some(w=>w.actorId===identity.actor&&w.deviceId===probe.deviceId&&w.recipientKeyFingerprint===fingerprint))throw Error('offline_device_key_mismatch');
+  const captureId=requireGuid(evidence.captureOriginId,'handover_artifact_manifest_invalid');
+  const firstId=await handoverArtifactId(packageId,captureId,0);
+  const readArtifact=async(id:string)=>{
+    try{return await readOfflineResource<CaptureArtifact>(identity,projectId,'artifacts',id);}
+    catch(error){
+      crewReadGuard(identity);
+      if((error as {response?:{status?:number}})?.response?.status===404)throw Error('handover_artifact_waiting');
+      throw error;
+    }
+  };
+  const first=await readArtifact(firstId);crewReadGuard(identity);
+  const {manifest}=JSON.parse(first.signedManifestJson) as {manifest:OfflineCaptureManifest};
+  const canonical=canonicalCaptureManifest(manifest);
+  if(canonical!==first.signedManifestJson||manifest.parentPackageId!==packageId||manifest.parentManifestHash!==pkg.manifestHash||
+    manifest.projectId!==projectId||manifest.originalActorId!==pkg.originalActorId||manifest.sourceDeviceRegistrationId!==pkg.sourceDeviceRegistrationId||
+    manifest.captureOriginId!==captureId||manifest.taskId!==taskId||manifest.purpose!==evidence.purpose||manifest.mediaType!==evidence.mediaType||
+    manifest.fileChecksum!==evidence.checksumSha256||(evidence.sizeBytes!=null&&manifest.fileSize!==evidence.sizeBytes)||
+    manifest.chunks[0].artifactId!==firstId||manifest.chunks.some(c=>c.length>ARTIFACT_CHUNK_BYTES))throw Error('handover_artifact_manifest_invalid');
+  const manifestHash=await generateChecksum(canonical);crewReadGuard(identity);
+  offlineP1363(first.manifestSignature);
+  if(!await native.verifyManifest(parent.senderSigningPublicKey,canonical,first.manifestSignature))throw Error('handover_source_signature_invalid');
+  crewReadGuard(identity);
+  const {sha256HexOfBytes}=await import('./uploads');
+  const bytes=new Uint8Array(manifest.fileSize);
+  try{
+    for(const chunk of manifest.chunks){
+      const artifact=chunk.index===0?first:await readArtifact(chunk.artifactId);crewReadGuard(identity);
+      if(artifact.id!==chunk.artifactId||artifact.projectId!==projectId||artifact.parentPackageId!==packageId||artifact.captureOriginId!==captureId||
+        artifact.taskId!==taskId||artifact.originalActorId!==pkg.originalActorId||artifact.sourceDeviceRegistrationId!==pkg.sourceDeviceRegistrationId||
+        artifact.chunkIndex!==chunk.index||artifact.chunkOffset!==chunk.offset||artifact.chunkLength!==chunk.length||
+        artifact.plaintextChecksum!==chunk.plaintextChecksum||artifact.envelopeFingerprint!==chunk.envelopeFingerprint||
+        artifact.manifestHash!==manifestHash||artifact.signedManifestJson!==canonical||artifact.manifestSignature!==first.manifestSignature||
+        artifact.cipherEnvelopeJson.length>4*Math.ceil(ARTIFACT_CHUNK_BYTES/3)+32768)throw Error('handover_artifact_readback_mismatch');
+      const envelope=JSON.parse(artifact.cipherEnvelopeJson) as HandoverEnvelope,header=envelope.header;
+      if(header.packageId!==chunk.artifactId||header.projectId!==projectId||header.originalActorId!==pkg.originalActorId||
+        header.sourceDeviceId!==parent.header.sourceDeviceId||header.originIds.length!==1||header.originIds[0]!==captureId||
+        header.payloadSha256!==chunk.plaintextChecksum||envelope.senderSigningPublicKey!==parent.senderSigningPublicKey||
+        await sha256HexOfBytes(utf8ToBytes(unsignedEnvelope(envelope)))!==chunk.envelopeFingerprint)throw Error('handover_artifact_readback_mismatch');
+      crewReadGuard(identity);
+      const plaintext=offlineBase64BytesUnbounded(await native.openPackage(binding,artifact.cipherEnvelopeJson,parent.senderSigningPublicKey),chunk.length);
+      try{
+        crewReadGuard(identity);
+        if(plaintext.length!==chunk.length||await sha256HexOfBytes(plaintext)!==chunk.plaintextChecksum)throw Error('handover_artifact_checksum_mismatch');
+        crewReadGuard(identity);bytes.set(plaintext,chunk.offset);
+      }finally{plaintext.fill(0);}
+    }
+    if(await sha256HexOfBytes(bytes)!==manifest.fileChecksum)throw Error('handover_artifact_checksum_mismatch');
+    crewReadGuard(identity);
+    return {bytes,manifest};
+  }catch(error){bytes.fill(0);throw error;}
 }
 
 /** Signs canonical recipient import endorsement and persists durable journal row before POST /offline/import. */
@@ -723,6 +961,12 @@ export async function prepareHandoverImport(
   const local = await readLocalOfflineSources(identity, projectId, opened.localRegistrationId, probe.deviceId);
   crewReadGuard(identity);
   validateDevice(local.device, identity, opened.localRegistrationId, probe.deviceId);
+  const journal=await openOfflineJournal(identity);
+  const existing=(await journal.list()).find(r=>r.projectId===projectId&&r.proof.kind==='handover-import'&&
+    r.proof.packageId===opened.packageDetail.id&&r.proof.grantId===opened.grantDetail.id&&r.proof.registrationId===opened.localRegistrationId&&
+    r.proof.payloadHash===opened.packageDetail.payloadHash);
+  crewReadGuard(identity);
+  if(existing)return existing;
 
   const importBatchId = uuidv4();
   const claim = canonicalRecipientImportClaim({
@@ -750,7 +994,6 @@ export async function prepareHandoverImport(
     `,"operations":[${serializedOps}]` +
     `,"sourceSignature":${offlineWebString(opened.packageDetail.sourceSignature)}` +
     `,"recipientSignature":${offlineWebString(recipientSignature)}}`;
-  const journal = await openOfflineJournal(identity);
   return journal.prepare({
     id: uuidv4(),
     identity,
@@ -778,6 +1021,10 @@ export async function sendHandoverImportIntent(
   record: OfflineJournalRecord,
   authority: QueueIdentity = record.identity,
 ): Promise<OfflineJournalRecord> {
+  return withHandoverLock(record,()=>sendRetainedHandoverImport(record,authority));
+}
+
+async function sendRetainedHandoverImport(record:OfflineJournalRecord,authority:QueueIdentity):Promise<OfflineJournalRecord> {
   if (authority !== record.identity && !sameOfflinePartition(record.identity, authority)) {
     throw Error('offline_session_changed');
   }
@@ -792,7 +1039,7 @@ export async function sendHandoverImportIntent(
     throw Error('handover_import_source_changed');
   }
   if (current.phase === 'RECONCILED') return current;
-  if (current.phase === 'RECEIVED') return reconcileHandoverImport(current, authority);
+  if (current.phase === 'RECEIVED') return continueHandoverImport(current, authority);
   if (!['PREPARED', 'UNKNOWN_OUTCOME', 'IN_FLIGHT'].includes(current.phase)) {
     throw Error('handover_import_phase_invalid');
   }
@@ -800,7 +1047,19 @@ export async function sendHandoverImportIntent(
     ? await (await openOfflineJournal(authority)).transition(current, 'UNKNOWN_OUTCOME')
     : current;
   const received = await dispatchHandoverPost(start, authority);
-  return reconcileHandoverImport(received, authority);
+  return continueHandoverImport(received, authority);
+}
+
+async function continueHandoverImport(record:OfflineJournalRecord,authority:QueueIdentity) {
+  const reconciled=await reconcileHandoverImport(record,authority);crewReadGuard(authority);
+  if(reconciled.phase==='RECONCILED'||reconciled.terminalItems?.length)return reconciled;
+  const pending=(reconciled.receipt as OfflineBatchReceipt).items.some(i=>
+    !reconciled.verifiedItems?.some(v=>v.originId===i.originId)&&!i.durableAcknowledgment&&i.state==='PENDING_DEPENDENCY'&&
+    ['evidence_upload_required','evidence_verification_pending'].includes(i.code??''));
+  if(!pending)return reconciled;
+  await (await import('./crewOfflineAdmission')).resumeSignedEvidence(reconciled,authority);crewReadGuard(authority);
+  const received=await dispatchHandoverPost(reconciled,authority);
+  return reconcileHandoverImport(received,authority);
 }
 
 export async function reconcileHandoverImport(
@@ -819,7 +1078,8 @@ export async function reconcileHandoverImport(
   const readback = await readOfflineResource<OfflineBatchReceipt>(authority, record.projectId, 'batches', received.batchId);
   validateBatch(readback);
   const expected = record.proof.descriptors as OfflineRecord[];
-  if (readback.batchId !== received.batchId || readback.items.length !== expected.length || received.items.length !== expected.length) {
+  if (readback.batchId !== received.batchId || received.batchId!==record.proof.importBatchId||
+    readback.items.length !== expected.length || received.items.length !== expected.length) {
     throw Error('offline_batch_readback_mismatch');
   }
   const journal = await openOfflineJournal(authority);
@@ -832,6 +1092,8 @@ export async function reconcileHandoverImport(
     if (isTerminalOfflineItem(b, d)) {
       const origin = await readOfflineResource<OfflineItemReceipt>(authority, record.projectId, 'origins', String(d.originId));
       crewReadGuard(authority);
+      if(!isTerminalOfflineItem(origin,d)||origin.state!==b.state||origin.code!==b.code||origin.serverReceivedAt!==b.serverReceivedAt)
+        throw Error('offline_origin_readback_mismatch');
       next = await journal.checkpointTerminal(next, {
         originId: origin.originId,
         kind: origin.kind,
@@ -842,7 +1104,13 @@ export async function reconcileHandoverImport(
       });
       continue;
     }
-    if (!isDurableOfflineItem(b, d)) continue;
+    const wasDurable=isDurableOfflineItem(a,d);
+    if((a.durableAcknowledgment||['COMMITTED','REPLAYED'].includes(a.state))&&!wasDurable)throw Error('offline_batch_readback_mismatch');
+    if (!isDurableOfflineItem(b, d)) {
+      if(wasDurable||b.durableAcknowledgment||['COMMITTED','REPLAYED'].includes(b.state))throw Error('offline_batch_readback_mismatch');
+      continue;
+    }
+    if(wasDurable&&a.canonicalOriginId!==b.canonicalOriginId)throw Error('offline_origin_readback_mismatch');
     const origin = await readOfflineResource<OfflineItemReceipt>(authority, record.projectId, 'origins', String(d.originId));
     crewReadGuard(authority);
     if (!isDurableOfflineItem(origin, d) || origin.canonicalOriginId !== b.canonicalOriginId) {
@@ -865,6 +1133,12 @@ export function handoverErrorMessage(error: unknown): string {
   if (apiCode === 'handover_grant_expired' || msg === 'handover_grant_expired') {
     return 'Ủy quyền bàn giao đã hết hạn. Cần xin cấp lại ủy quyền mới.';
   }
+  if(msg==='handover_artifact_waiting')return 'Hồ sơ đang chờ thiết bị gửi đăng ký đủ ảnh mã hóa. Có thể tiếp tục với cùng gói và ủy quyền.';
+  if(msg==='handover_artifact_source_missing')return 'Thiết bị gửi thiếu ảnh gốc trong kho mã hóa. Gói bàn giao vẫn chờ ảnh.';
+  if(['handover_artifact_manifest_invalid','handover_artifact_readback_mismatch','handover_artifact_checksum_mismatch'].includes(msg))
+    return 'Ảnh mã hóa hoặc thông tin đối soát của ảnh không khớp với hồ sơ đã ký.';
+  if(msg==='handover_previous_intent_requires_reconciliation')return 'Đã có lượt bàn giao cho gói thao tác này. Cần đối soát lượt đã lưu trước khi tiếp tục.';
+  if(apiCode==='upload_session_not_uploadable'||msg==='field_upload_not_uploadable')return 'Phiên tải ảnh đã hết hạn hoặc không còn cho phép tải. Hồ sơ đang chờ xử lý.';
   if (apiCode === 'offline_key_revoked' || msg === 'offline_device_invalid_or_revoked') {
     return 'Khóa thiết bị đã bị thu hồi hoặc không còn hiệu lực.';
   }

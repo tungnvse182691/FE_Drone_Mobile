@@ -14,7 +14,7 @@ function harness(options={}){
  let raw=new DatabaseSync(options.file??':memory:');raw.exec('CREATE TABLE IF NOT EXISTS local_draft(id TEXT PRIMARY KEY,kind TEXT,payload TEXT,created_at TEXT,updated_at TEXT)');
  const port={getAllAsync:async(s,...a)=>raw.prepare(s).all(...a),runAsync:async(s,...a)=>{if(saveFail&&s.startsWith('UPDATE'))throw Error('disk');return raw.prepare(s).run(...a);},withExclusiveTransactionAsync:async f=>{raw.exec('BEGIN');try{await f(port);raw.exec('COMMIT');}catch(e){raw.exec('ROLLBACK');throw e;}}};
  const api=load('src/api/crewApi.ts');
- const journal=load('src/api/crewRepairDraft.ts',{'./crewApi':api,'../offline/database':{openDatabase:()=>port,initDatabase:async()=>{}},'./authApi':{},'./client':{}});
+ const journal=load('src/api/crewRepairDraft.ts',{'./crewApi':api,'./crewOfflineProtocol':load('src/api/crewOfflineProtocol.ts'),'../offline/database':{openDatabase:()=>port,initDatabase:async()=>{}},'./authApi':{},'./client':{}});
  const task={id:ids.taskId,projectId:ids.projectId,assignedToUserId:ids.actor,assignmentId:ids.assignmentId,mode:'NORMAL',status:'InProgress',version,firstStartOriginId:ids.first,repairContext:{packageId:ids.packageId,itemId:ids.itemId,bindingId:ids.bindingId,mode:'NORMAL',status:'Assigned',itemVersion:version,repairPlan:'Approved',checklistVersion:'v1'}};
  const calls=[];
  const runtime={current:()=>current,uuid:randomUUID,now:()=>new Date().toISOString(),api:{...api,

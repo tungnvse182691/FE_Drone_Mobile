@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const {randomUUID}=require('node:crypto');
-function load(file, deps={}) { const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,setTimeout,clearTimeout,Uint8Array,URL,AbortController,require:n=>deps[n]??(n==='axios'?require('axios'):new Proxy({},{get:()=>()=>{}}))});return module.exports; }
+function load(file, deps={}) { const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.React,esModuleInterop:true}}).outputText,{module,exports:module.exports,setTimeout,clearTimeout,Uint8Array,URL,AbortController,require:n=>deps[n]??(n==='axios'?require('axios'):n==='./uploadPartUrlRenewal'?load('src/api/uploadPartUrlRenewal.ts'):new Proxy({},{get:()=>()=>{}}))});return module.exports; }
 const actor=randomUUID(),project=randomUUID(),taskId=randomUUID(),assignment=randomUUID(),start=randomUUID();
 const task=()=>({id:taskId,projectId:project,assignedToUserId:actor,assignmentId:assignment,version:'AAAAAAAAB9E=',firstStartOriginId:start,status:'InProgress',purpose:'DefectVerification',requiredMeasurementType:1});
 function api(){return load('src/api/crewApi.ts',{'./client':{apiClient:{}},'./problemDetails':{parseProblemDetails:()=>({})}});}
@@ -86,19 +86,33 @@ test('T05B upload reports real stages without persisting progress or capabilitie
  const h=fieldHarness(),d=measured(h);d.captures[0]={...d.captures[0],upload:undefined,verified:false,createKey:'create',completeKey:'complete',parts:[]};const stages=[];
  await h.m.uploadFieldCapture(d,0,h.runtime,undefined,s=>stages.push(s));assert.deepEqual([...new Set(stages)],['upload_urls','upload_put','upload_complete','upload_verify']);assert.equal(JSON.stringify(h.stored()).includes('upload_urls'),false);
 });
-test('T05B expired issuance renews once within action, persists before POST and retains part/create/complete identities',async()=>{
- const {h,d}=renewalFixture(),keys=[];await h.runtime.write(d);
- h.runtime.api.requestCrewUploadPartUrls=async(id,parts,key)=>{keys.push(key);assert.equal(h.stored().captures[0].partCommands[2].key,key);if(keys.length===1)throw {response:{status:409,data:{code:'duplicate_request'}}};return {parts:[{partNumber:2,url:'signed-private',expiresAt:'2098-01-01T00:00:00Z'}]};};
+const expiredPartReceipt=(uploadId,partNumbers,patch={})=>({response:{status:409,data:{code:'upload_part_urls_expired',uploadId,partNumbers,expiresAt:'2020-01-01T00:00:00.0000001+00:00',serverTime:'2020-01-01T00:00:00.0000002+00:00',renewalAllowed:true,sessionStatus:'UPLOADING',reason:'receipt_expired',...patch}}});
+test('T05B exact legacy issuance renews once, persists before POST and retains part/create/complete identities',async()=>{
+ const {h,d}=renewalFixture(),keys=[];delete d.captures[0].partCommands[2].expiresAt;await h.runtime.write(d);
+ h.runtime.api.requestCrewUploadPartUrls=async(id,parts,key)=>{keys.push(key);assert.equal(h.stored().captures[0].partCommands[2].key,key);if(keys.length===1)throw expiredPartReceipt(id,parts);return {parts:[{partNumber:2,url:'signed-private',expiresAt:'2098-01-01T00:00:00Z'}]};};
  await h.m.uploadFieldCapture(d,0,h.runtime);const c=h.stored().captures[0];assert.equal(keys.length,2);assert.equal(keys[0],'old-issuance');assert.notEqual(keys[1],keys[0]);assert.equal(c.parts[0].etag,'confirmed');assert.equal(c.createKey,'create');assert.equal(c.completeKey,'complete');assert.equal(c.retiredPartCommands[0].key,'old-issuance');assert.equal(c.verified,true);assert.equal(JSON.stringify(c).includes('signed-private'),false);
 });
-for(const fault of ['unknown-expiry','live-issuance','other-code','expired-session','wrong-file','auth','timeout','twice'])test('T05B renewal fails closed and bounded: '+fault,async()=>{
+for(const fault of ['unknown-expiry','live-issuance','other-code','expired-session','wrong-file','auth','timeout','twice','wrong-upload','wrong-parts','not-allowed','bad-time','submillisecond-future','bad-date','terminal','wrong-reason','fingerprint','multipart','503'])test('T05B renewal fails closed and bounded: '+fault,async()=>{
  const {h,d}=renewalFixture();let calls=0;
  if(fault==='unknown-expiry')delete d.captures[0].partCommands[2].expiresAt;
  if(fault==='live-issuance')d.captures[0].partCommands[2].expiresAt='2098-01-01T00:00:00Z';
  if(fault==='expired-session')d.captures[0].upload.expiresAt='2020-01-01T00:00:00Z';
  await h.runtime.write(d);const read=h.runtime.api.getCrewUploadSession;h.runtime.api.getCrewUploadSession=async id=>({...await read(id),...(fault==='wrong-file'?{fileId:randomUUID()}:{})});
- h.runtime.api.requestCrewUploadPartUrls=async()=>{calls++;throw fault==='timeout'?Error('timeout'):{response:{status:fault==='auth'?403:409,data:{code:fault==='other-code'?'concurrency_conflict':'duplicate_request'}}};};
+ h.runtime.api.requestCrewUploadPartUrls=async(id,parts)=>{calls++;
+  const patches={'wrong-upload':{uploadId:randomUUID()},'wrong-parts':{partNumbers:[1]},'not-allowed':{renewalAllowed:false},'bad-time':{serverTime:'2020'},'submillisecond-future':{serverTime:'2020-01-01T00:00:00.0000000Z'},'bad-date':{expiresAt:'2019-02-30T00:00:00Z'},terminal:{sessionStatus:'VERIFYING'},'wrong-reason':{reason:'session_expired'},fingerprint:{code:'idempotency_key_reused'},multipart:{code:'upload_part_urls_multipart_conflict'}};
+  if(fault==='timeout')throw Error('timeout');
+  if(fault==='unknown-expiry'||fault==='other-code'||fault==='auth'||fault==='503')throw {response:{status:fault==='auth'?403:fault==='503'?503:409,data:{code:fault==='other-code'?'concurrency_conflict':'duplicate_request'}}};
+  throw expiredPartReceipt(id,parts,patches[fault]);
+ };
  await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime));const c=h.stored().captures[0];assert.ok(c.parts.some(p=>p.etag==='confirmed'));assert.equal(c.createKey,'create');assert.equal(c.completeKey,'complete');assert.ok(calls<=(fault==='twice'?2:1));if(fault!=='twice')assert.equal(c.partCommands[2].key,'old-issuance');
+});
+test('T05B a lost renewal response replays the persisted key and body after reopening',async()=>{
+ const {h,d}=renewalFixture(),calls=[];delete d.captures[0].partCommands[2].expiresAt;await h.runtime.write(d);
+ h.runtime.api.requestCrewUploadPartUrls=async(id,parts,key)=>{calls.push({id,parts,key});if(calls.length===1)throw expiredPartReceipt(id,parts);if(calls.length===2)throw Error('lost renewal response');return {parts:[{partNumber:2,url:'signed',expiresAt:'2098-01-01T00:00:00Z'}]};};
+ await assert.rejects(()=>h.m.uploadFieldCapture(d,0,h.runtime),/lost renewal response/);
+ await h.m.uploadFieldCapture(h.stored(),0,h.runtime);
+ assert.deepEqual(JSON.parse(JSON.stringify(calls[1])),JSON.parse(JSON.stringify(calls[2])));assert.notEqual(calls[0].key,calls[1].key);
+ assert.equal(h.stored().captures[0].parts[0].etag,'confirmed');
 });
 for(const status of [401,403,412])test('T05B submission '+status+' retains exact command with conservative outcome classification',async()=>{const h=fieldHarness();h.runtime.api.submitFieldTaskReal=async()=>{throw {response:{status}};};await assert.rejects(()=>h.m.submitFieldDraft(measured(h),h.runtime));assert.equal(h.stored().command.phase,status===403?'rejected':'pending');assert.ok(h.stored().command.key);});
 test('T05B ambiguous 409 retains pending command and blocks new payload',async()=>{const h=fieldHarness();h.runtime.api.submitFieldTaskReal=async()=>{throw {response:{status:409}};};await assert.rejects(()=>h.m.submitFieldDraft(measured(h),h.runtime));assert.equal(h.stored().command.phase,'pending');await assert.rejects(()=>h.m.submitFieldDraft(h.stored(),h.runtime));});

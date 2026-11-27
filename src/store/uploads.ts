@@ -30,6 +30,7 @@ import { hasUsableCoordinate } from '../types/position';
 
 import { apiClient } from '../api/client';
 import { passwordSessionIdentity } from '../api/authApi';
+import { expiredPartUrlReceipt, sameUploadPartNumbers, type PartUrlIssuance, type RetiredPartUrlIssuance } from '../api/uploadPartUrlRenewal';
 
 let reporterContextEpoch = 0;
 // Explicit, memory-only access to one previous storage partition. Authentication
@@ -485,35 +486,58 @@ async function runPipeline(item: UploadQueueItem, update: ItemUpdater, transport
   const parts = planUploadParts(bytes.byteLength, current.partSizeBytes);
   const missingParts = parts.filter((part) => !current.partETags[String(part.partNumber)]);
   if (missingParts.length > 0) {
-    const previousExpiry = current.partETags._urlsExpireAt;
-    if (!current.partETags._urlsKey || (previousExpiry && Date.parse(previousExpiry) <= Date.now())) {
-      current = await update({ partETags: { ...current.partETags, _urlsKey: uuidv4(), _urlsExpireAt: '' } });
-    }
-    const urlsResponse = await transport.requestPartUrls(
-      uploadId,
-      { partNumbers: parts.map((part) => part.partNumber) },
-      current.partETags._urlsKey,
-    );
-    const expiries = (urlsResponse.parts ?? []).map(part => part.expiresAt).filter((v): v is string => Boolean(v));
-    if (expiries.length) current = await update({ partETags: { ...current.partETags, _urlsExpireAt: expiries.sort()[0] } });
-    const urlByPartNumber = new Map<number, UploadPartUrlResponseDto>();
-    for (const part of urlsResponse.parts ?? []) {
-      if (typeof part.partNumber === 'number') {
-        urlByPartNumber.set(part.partNumber, part);
+    const numbers = parts.map(part => part.partNumber);
+    const savedNumbers = current.partETags._urlsParts;
+    const partNumbers: number[] = savedNumbers === undefined ? numbers : JSON.parse(savedNumbers);
+    if (!sameUploadPartNumbers(numbers, partNumbers)) throw { code: 'upload_validation_failed' };
+    let issuance: PartUrlIssuance = {
+      key: current.partETags._urlsKey || uuidv4(), partNumbers,
+      expiresAt: current.partETags._urlsExpireAt || undefined,
+    };
+    let history: RetiredPartUrlIssuance[] = JSON.parse(current.partETags._urlsHistory ?? '[]');
+    if (!Array.isArray(history)) throw { code: 'upload_validation_failed' };
+    const persistIssuance = async () => {
+      current = await update({ partETags: {
+        ...current.partETags,
+        _urlsKey: issuance.key,
+        _urlsParts: JSON.stringify(issuance.partNumbers),
+        _urlsExpireAt: issuance.expiresAt ?? '',
+        _urlsHistory: JSON.stringify(history),
+      }});
+    };
+    if (!current.partETags._urlsKey || savedNumbers === undefined) await persistIssuance();
+    let renewed = false;
+    const admit = async () => {
+      const send = () => transport.requestPartUrls(uploadId, { partNumbers: issuance.partNumbers }, issuance.key);
+      let result;
+      try { result = await send(); }
+      catch (error) {
+        assertReporterContext(context);
+        const proof = expiredPartUrlReceipt(error, uploadId, issuance);
+        if (!proof || renewed) throw error;
+        renewed = true;
+        history = [...history, { ...issuance, proof }];
+        issuance = { key: uuidv4(), partNumbers: issuance.partNumbers };
+        await persistIssuance();
+        result = await send();
       }
-    }
+      const issued = result.parts ?? [];
+      if (!sameUploadPartNumbers(issued.map(part => part.partNumber), numbers)) throw { code: 'upload_storage_unavailable', status: 503 };
+      const expiries = issued.map(part => part.expiresAt).filter((value): value is string => value !== undefined);
+      if (expiries.some(expiry => !Number.isFinite(Date.parse(expiry)))) throw { code: 'upload_storage_unavailable', status: 503 };
+      if (expiries.length) {
+        issuance.expiresAt = expiries.reduce((earliest, expiry) => Date.parse(expiry) < Date.parse(earliest) ? expiry : earliest);
+        await persistIssuance();
+      }
+      return new Map<number, UploadPartUrlResponseDto>(issued.flatMap(part =>
+        part.partNumber === undefined ? [] : [[part.partNumber, part]],
+      ));
+    };
+    let urlByPartNumber = await admit();
     for (const range of missingParts) {
       let partUrl = urlByPartNumber.get(range.partNumber);
-      // Earlier parts may consume the remaining URL lifetime on a slow link.
-      // Persist a new command identity only after the previous URL has expired.
       if (partUrl?.expiresAt && Date.parse(partUrl.expiresAt) <= Date.now()) {
-        current = await update({ partETags: { ...current.partETags, _urlsKey: uuidv4(), _urlsExpireAt: '' } });
-        const refreshed = await transport.requestPartUrls(uploadId,
-          { partNumbers: parts.map(part => part.partNumber) }, current.partETags._urlsKey);
-        const expiries = (refreshed.parts ?? []).map(part => part.expiresAt).filter((value): value is string => Boolean(value));
-        if (expiries.length) current = await update({ partETags: { ...current.partETags, _urlsExpireAt: expiries.sort()[0] } });
-        urlByPartNumber.clear();
-        for (const part of refreshed.parts ?? []) if (typeof part.partNumber === 'number') urlByPartNumber.set(part.partNumber, part);
+        urlByPartNumber = await admit();
         partUrl = urlByPartNumber.get(range.partNumber);
         if (partUrl?.expiresAt && Date.parse(partUrl.expiresAt) <= Date.now()) throw { code: 'upload_storage_unavailable', status: 503 };
       }

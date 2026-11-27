@@ -141,6 +141,8 @@ export interface VerifiedOfflineItem {originId:string;effectId:string;canonicalO
 export interface TerminalOfflineItem {originId:string;kind:string;serverBatchId:string;state:'REJECTED'|'CONFLICT'|'STALE_SNAPSHOT';code:string|null;serverReceivedAt:string}
 export interface OfflineJournalRecord extends OfflineIntent {schema:1;phase:OfflinePhase;receipt?:unknown;verifiedItems?:VerifiedOfflineItem[];terminalItems?:TerminalOfflineItem[]}
 const KIND='C10BC_IMMUTABLE_COMMAND_V1';
+const ARTIFACT_KIND='C10BC_HANDOVER_ARTIFACT_V1';
+const rowKind=(r:OfflineIntent)=>r.proof.kind==='handover-artifact'?ARTIFACT_KIND:KIND;
 const guid=(v:string)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)&&v!=='00000000-0000-0000-0000-000000000000';
 function safe(value:unknown,depth=0,seen=new Set<object>()):void {
   if(depth>64)throw Error('offline_journal_invalid');
@@ -205,10 +207,10 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
     if(!sameOfflinePartition(old.identity,owner))return false;
     const all=await rows(tx);
     let regId='';
-    if(old.proof.kind==='signed-field-batch'||old.proof.kind==='handover-export'||old.proof.kind==='handover-import')regId=String(old.proof.registrationId??'');
+    if(['signed-field-batch','handover-export','handover-import','handover-artifact'].includes(String(old.proof.kind)))regId=String(old.proof.registrationId??'');
     else if(old.proof.kind==='admission-upload'){
       const parent=all.find(r=>r.id===old.proof.batchIntentId&&r.projectId===old.projectId&&
-        r.proof.kind==='signed-field-batch'&&sameOfflinePartition(r.identity,owner));
+        ['signed-field-batch','handover-import'].includes(String(r.proof.kind))&&sameOfflinePartition(r.identity,owner));
       regId=String(parent?.proof.registrationId??'');
     }else return false;
     if(!regId)return false;
@@ -246,19 +248,43 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
       const transitions:Record<OfflinePhase,OfflinePhase[]>={PREPARED:['IN_FLIGHT'],IN_FLIGHT:['UNKNOWN_OUTCOME','RECEIVED','REJECTED','CONFLICT'],
         UNKNOWN_OUTCOME:['IN_FLIGHT','RECEIVED','CONFLICT'],RECEIVED:['RECONCILED','IN_FLIGHT'],RECONCILED:[],REJECTED:[],CONFLICT:[]};
       if(!transitions[old.phase]?.includes(phase))throw Error('offline_transition_invalid');
-      if(old.proof.kind==='signed-field-batch'&&old.terminalItems?.length)throw Error('offline_terminal_batch_retained');
+      if((old.proof.kind==='signed-field-batch'||(old.proof.kind==='handover-import'&&phase==='IN_FLIGHT'))&&old.terminalItems?.length)throw Error('offline_terminal_batch_retained');
       const next=decode(JSON.stringify({...old,phase,...(receipt===undefined?{}:{receipt})}));
       await db.withExclusiveTransactionAsync(async tx=>{
         guard();if(binding)await validateDeviceRecovery(tx,old,binding);
         else if(!await canActOnRecord(tx,old))throw Error('offline_session_changed');
-        const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+old.id,KIND);guard();
+        const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+old.id,rowKind(old));guard();
         if(!row||row.payload!==JSON.stringify(old))throw Error('offline_journal_cas_failed');
-        const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,KIND,row.payload);
+        const result=await tx.runAsync('UPDATE local_draft SET payload=?,updated_at=? WHERE id=? AND kind=? AND payload=?',JSON.stringify(next),new Date().toISOString(),prefix+old.id,rowKind(old),row.payload);
         guard();if(result.changes!==1)throw Error('offline_journal_cas_failed');
       });guard();return next;
   };
   return {
     async list(){guard();return rows(db);},
+    async readArtifact(id:string){
+      guard();if(!guid(id))throw Error('offline_intent_invalid');
+      const row=await db.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+id,ARTIFACT_KIND);guard();
+      if(!row)return null;
+      const record=decode(row.payload);
+      if(record.id!==id||rowKind(record)!==ARTIFACT_KIND||!sameOfflinePartition(record.identity,owner))throw Error('offline_owner_invalid');
+      return record;
+    },
+    async prepareArtifacts(source:OfflineJournalRecord,intents:OfflineIntent[]){
+      guard();if(!intents.length||intents.length>32)throw Error('offline_intent_invalid');
+      await db.withExclusiveTransactionAsync(async tx=>{
+        const row=await tx.getFirstAsync<{payload:string}>('SELECT payload FROM local_draft WHERE id=? AND kind=?',prefix+source.id,KIND);guard();
+        if(row?.payload!==JSON.stringify(source)||source.proof.kind!=='handover-export'||source.phase!=='RECONCILED'||!await canActOnRecord(tx,source))throw Error('handover_export_source_changed');
+        const now=new Date().toISOString();
+        for(const intent of intents){
+          const copy=immutable(intent);
+          if(!sameQueueIdentity(copy.identity,owner)||copy.projectId!==source.projectId||rowKind(copy)!==ARTIFACT_KIND||
+            copy.proof.exportIntentId!==source.id||copy.proof.registrationId!==source.proof.registrationId||
+            copy.path!==`/projects/${source.projectId}/offline/artifacts`)throw Error('offline_intent_invalid');
+          const record:OfflineJournalRecord={...copy,schema:1,phase:'PREPARED'};
+          await tx.runAsync('INSERT INTO local_draft (id,kind,payload,created_at,updated_at) VALUES (?,?,?,?,?)',prefix+record.id,ARTIFACT_KIND,JSON.stringify(record),now,now);guard();
+        }
+      });guard();
+    },
     /** Only the signed-batch reconciler supplies authenticated batch + origin GET facts. */
     async checkpointTerminal(old:OfflineJournalRecord,item:TerminalOfflineItem):Promise<OfflineJournalRecord>{
       guard();if(old.phase!=='RECEIVED'||!['signed-field-batch','handover-import'].includes(String(old.proof.kind))||!sameOfflinePartition(old.identity,owner))throw Error('offline_checkpoint_phase');
@@ -301,6 +327,18 @@ export async function openOfflineJournal(identity:QueueIdentity,connection?:SQLi
             immutableBytes({...old,identity:copy.identity})===immutableBytes(copy)&&await canActOnRecord(tx,old);
           if(!crossAdmission&&immutableBytes(old)!==immutableBytes(copy))throw Error('offline_immutable_conflict');
           result=old;return;
+        }
+        if(copy.proof.kind==='handover-import'||copy.proof.kind==='handover-export'){
+          const previous=records.find(r=>r.projectId===copy.projectId&&r.proof.kind===copy.proof.kind&&
+            (copy.proof.kind==='handover-import'?r.proof.sourceBatchId===copy.proof.sourceBatchId&&
+              r.proof.sourceDeviceRegistrationId===copy.proof.sourceDeviceRegistrationId:
+              r.proof.sourceBatchIntentId===copy.proof.sourceBatchIntentId&&JSON.stringify(r.proof.recipientFingerprints)===JSON.stringify(copy.proof.recipientFingerprints)));
+          if(previous){
+            if(!await canActOnRecord(tx,previous)||previous.proof.registrationId!==copy.proof.registrationId||
+              (copy.proof.kind==='handover-import'&&(previous.proof.packageId!==copy.proof.packageId||previous.proof.grantId!==copy.proof.grantId||
+                previous.proof.payloadHash!==copy.proof.payloadHash)))throw Error('handover_previous_intent_requires_reconciliation');
+            result=previous;return;
+          }
         }
         // Resource uniqueness is checked inside the SQLite transaction, across sessions.
         if(copy.proof.kind==='enrollment'&&records.some(r=>r.projectId===copy.projectId&&r.proof.kind==='enrollment'))throw Error('offline_existing_intent_reconciliation_required');

@@ -26,6 +26,7 @@ function harness() {
         getOperatorDatasetCoverageReal:async()=>{calls.push('coverage');return respond('coverage');},
       };
       if(name === './droneTaskJournal') return {openDroneUploadJournal:async()=>{throw Error('final-drone-harness-journal-stub');}};
+      if(name === './uploadPartUrlRenewal') return require('./helpers/upload-part-url-renewal.cjs');
       throw Error(name);
     }});
     Object.assign(api,module.exports);

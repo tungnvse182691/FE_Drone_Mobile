@@ -12,6 +12,7 @@ import { type RepairJournalRecord } from './crewRepairDraft';
 import { readRepairHistory } from './crewRepairHistory';
 import { sealCrewPhoto, readCrewPhotoBytes } from './crewMediaVault';
 import type { MediaVaultReference } from '../offline/mediaVaultAccess';
+import { expiredPartUrlReceipt, sameUploadPartNumbers, type ExpiredPartUrlReceipt, type PartUrlIssuance } from './uploadPartUrlRenewal';
 
 export interface FieldContext { actor: string; scope: string; environment: string; projectId: string; taskId: string }
 export interface FieldCapture {
@@ -21,8 +22,8 @@ export interface FieldCapture {
   createKey: string; completeKey: string; parts: crew.CrewCompletedPartDto[];
   upload?: crew.CrewUploadSessionDto; complete?: { version: string; parts: crew.CrewCompletedPartDto[] };
   completed?: boolean; verified?: boolean;
-  partCommands?: Record<number, { key: string; partNumbers: number[]; expiresAt?: string }>;
-  retiredPartCommands?: { key: string; partNumbers: number[]; status: number }[];
+  partCommands?: Record<number, PartUrlIssuance>;
+  retiredPartCommands?: (PartUrlIssuance & { status: number; proof?: ExpiredPartUrlReceipt })[];
   postRepairCapture?: boolean;
   /** Explicit proof that no upload intent has ever been issued for this capture. */
   localOnly?: boolean;
@@ -534,19 +535,17 @@ async function uploadCapture(draft: FieldDraft,index: number,runtime: FieldRunti
       onStage?.('upload_urls');
       for(let attempt=0;attempt<2;attempt++){
         const issuance=c.partCommands[part];
+        if(!issuance.key||!sameUploadPartNumbers(issuance.partNumbers,[part]))throw Error('field_part_url_missing');
         try{
           urls=await guarded(draft,runtime,()=>runtime.api.requestCrewUploadPartUrls(session.id,issuance.partNumbers,issuance.key));
           break;
         }catch(error){
-          const problem=error as {response?:{status?:number;data?:{code?:string}}};
-          // A generic 409 cannot prove expiry. Legacy intents without an observed
-          // expiry retain their key until the exact cause can be established.
-          if(attempt!==0||problem.response?.status!==409||problem.response.data?.code!=='duplicate_request'||
-            !issuance.expiresAt||!Number.isFinite(Date.parse(issuance.expiresAt))||Date.parse(issuance.expiresAt)>Date.now())throw error;
+          const proof=expiredPartUrlReceipt(error,session.id,issuance);
+          if(attempt!==0||!proof||c.complete)throw error;
           const latest=await guarded(draft,runtime,()=>runtime.api.getCrewUploadSession(session.id));checkCancel();
           if(latest.id!==session.id||latest.fileId!==c.upload.fileId||latest.status!=='UPLOADING'||
-            !Number.isFinite(Date.parse(latest.expiresAt))||Date.parse(latest.expiresAt)<=Date.now()||c.complete)throw error;
-          c.retiredPartCommands??=[];c.retiredPartCommands.push({...issuance,status:409});
+            !Number.isFinite(Date.parse(latest.expiresAt))||Date.parse(latest.expiresAt)<=Date.parse(proof.serverTime))throw error;
+          c.retiredPartCommands??=[];c.retiredPartCommands.push({...issuance,status:409,proof});
           c.partCommands[part]={key:runtime.uuid(),partNumbers:[part]};await persist(draft,runtime);
         }
       }
@@ -872,12 +871,15 @@ export function validateRepairClaimReadback(read: crew.FieldSubmissionViewFact,b
 }
 
 export function fieldErrorMessage(error: unknown): string {
-  const status = (error as {response?:{status?:number}})?.response?.status;
+  const response = (error as {response?:{status?:number;data?:{code?:unknown}}})?.response;
+  const status = response?.status;
   const code = (error as {code?:unknown})?.code;
   const uploadStage = (error as {uploadStage?:unknown})?.uploadStage;
   if (uploadStage === 'upload_put' && status === 403) return 'Dịch vụ lưu ảnh từ chối đường tải. Cần kiểm tra chữ ký, thời hạn và cấu hình endpoint; ảnh và phiên tải cũ được giữ.';
   if (status === 401) return 'Phiên đăng nhập hết hiệu lực. Lệnh cũ được giữ để đối soát.';
   if (status === 403) return 'Không còn quyền trên nhiệm vụ hoặc bằng chứng này.';
+  if (status === 409 && response?.data?.code === 'upload_session_not_uploadable')
+    return 'Phiên tải ảnh không còn cho phép tải. Ảnh và hồ sơ chờ được giữ để đối soát.';
   if (status === 409 || status === 412) return 'Dữ liệu hoặc phiên bản đã thay đổi. Tải lại và đối soát lệnh cũ.';
   if (uploadStage === 'upload_urls') return 'Chưa cấp lại được đường tải ảnh. Phiên tải và ảnh cũ được giữ; cần kiểm tra thời hạn và đối soát trước khi thử lại.';
   if (uploadStage === 'upload_complete') return 'Chưa xác nhận hoàn tất tải ảnh. Các phần đã tải và lệnh hoàn tất được giữ để đối soát.';
